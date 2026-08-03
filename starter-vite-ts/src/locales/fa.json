@@ -1,0 +1,60 @@
+{
+  "app": {
+    "title": "پروتوتایپ جی‌نکست نسخه ۱.۵",
+    "simulatedBadge": "محیط شبیه‌سازی شده",
+    "sharedAdminNotice": "حساب مدیر مشترک پروتوتایپ",
+    "environment": "پروتوتایپ ارزیابی مشتری"
+  },
+  "auth": {
+    "loginTitle": "ورود به سامانه جی‌نکست",
+    "username": "نام کاربری",
+    "password": "رمز عبور",
+    "signIn": "ورود به حساب",
+    "signingIn": "در حال ورود...",
+    "logout": "خروج از حساب",
+    "invalidCredentials": "نام کاربری یا رمز عبور اشتباه است.",
+    "sessionExpired": "نشست شما منقضی شده است. لطفا دوباره وارد شوید."
+  },
+  "nav": {
+    "dashboard": "داشبورد عملیات",
+    "pos": "صندوق فروش POS",
+    "orders": "سفارش‌ها",
+    "dineIn": "سالن و میزها",
+    "kds": "نمایشگر آشپزخانه KDS",
+    "delivery": "ارسال و پیک‌ها",
+    "cashier": "شیفت‌ها و صندوق",
+    "customers": "مشتریان",
+    "catalog": "کالاها و منوها",
+    "pricing": "قیمت‌گذاری",
+    "discounts": "تخفیف‌ها و اعتبارات",
+    "reports": "گزارش‌ها",
+    "simulation": "مرکز شبیه‌سازی",
+    "audit": "ممیزی و سوابق",
+    "settings": "تنظیمات"
+  },
+  "common": {
+    "language": "زبان",
+    "english": "انگلیسی",
+    "persian": "فارسی",
+    "tenant": "سازمان",
+    "branch": "شعبه",
+    "user": "کاربر",
+    "status": "وضعیت",
+    "actions": "عملیات",
+    "refresh": "به‌روزرسانی",
+    "close": "بستن",
+    "save": "ذخیره",
+    "cancel": "انصراف",
+    "confirm": "تایید",
+    "loading": "در حال بارگذاری...",
+    "noData": "داده‌ای یافت نشد."
+  },
+  "dashboard": {
+    "title": "داشبورد عملیات",
+    "welcome": "خوش آمدید",
+    "salesToday": "فروش امروز",
+    "openOrders": "سفارش‌های باز",
+    "activeShifts": "شیفت‌های فعال",
+    "branchHealth": "وضعیت سلامت شعب"
+  }
+}

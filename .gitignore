@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Agent & IDE state
+.gemini/
+.agents/
+.vscode/
+
+# Build & Logs
+dist/
+build/
+*.log
+
+# Environment files
+.env
+.env*.local

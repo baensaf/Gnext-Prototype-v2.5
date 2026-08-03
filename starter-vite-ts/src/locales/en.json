@@ -1,0 +1,60 @@
+{
+  "app": {
+    "title": "Gnext Prototype v1.5",
+    "simulatedBadge": "SIMULATED ENVIRONMENT",
+    "sharedAdminNotice": "Shared Prototype Administrator Account",
+    "environment": "Customer-Validation Prototype"
+  },
+  "auth": {
+    "loginTitle": "Sign in to Gnext",
+    "username": "Username",
+    "password": "Password",
+    "signIn": "Sign In",
+    "signingIn": "Signing in...",
+    "logout": "Sign Out",
+    "invalidCredentials": "Invalid username or password.",
+    "sessionExpired": "Your session has expired. Please sign in again."
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "pos": "POS Cashier",
+    "orders": "Orders",
+    "dineIn": "Dine-in Floor",
+    "kds": "Kitchen KDS",
+    "delivery": "Delivery",
+    "cashier": "Shifts & Cashier",
+    "customers": "Customers",
+    "catalog": "Catalog & Menus",
+    "pricing": "Pricing",
+    "discounts": "Discounts & Credit",
+    "reports": "Reports",
+    "simulation": "Simulation Center",
+    "audit": "Audit Explorer",
+    "settings": "Settings"
+  },
+  "common": {
+    "language": "Language",
+    "english": "English",
+    "persian": "Persian",
+    "tenant": "Tenant",
+    "branch": "Branch",
+    "user": "User",
+    "status": "Status",
+    "actions": "Actions",
+    "refresh": "Refresh",
+    "close": "Close",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "loading": "Loading...",
+    "noData": "No data available."
+  },
+  "dashboard": {
+    "title": "Operations Dashboard",
+    "welcome": "Welcome back",
+    "salesToday": "Today's Sales",
+    "openOrders": "Open Orders",
+    "activeShifts": "Active Shifts",
+    "branchHealth": "Branch System Health"
+  }
+}

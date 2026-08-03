@@ -1,0 +1,11 @@
+# Project Rules & Guidelines
+
+## 1. Source File Protection & Integrity
+- **Do Not Modify External/Reference Source Files**: Do NOT alter, overwrite, or mutate files in external reference repositories or third-party template sources (specifically `D:\Sources\Minimal_TypeScript_v7.7.0-pv519o\vite-ts`).
+- **Read-Only Reference Access**: All reference libraries, templates, and reference source files must be treated as strictly **read-only**.
+- **Preserve Existing Project Code**: Do not edit original source files unless explicitly requested by the user.
+
+## 2. Minimal Theme Components Reference
+- **Canonical Component Path**: Full Minimal Theme UI components, hooks, utilities, layouts, icons, and theme settings are located at:
+  `D:\Sources\Minimal_TypeScript_v7.7.0-pv519o\vite-ts`
+- **Usage Directive**: When developing, creating, refactoring, or extending UI components in this workspace (`d:\VibeCoding\Antigravity\Gnext_Prototype_v1.5`), inspect and reference `D:\Sources\Minimal_TypeScript_v7.7.0-pv519o\vite-ts` to copy or adapt necessary components, styles, types, and architecture into the project workspace.
