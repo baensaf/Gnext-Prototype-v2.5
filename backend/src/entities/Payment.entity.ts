@@ -23,6 +23,18 @@ export class Payment {
   @Column({ type: 'varchar', length: 80, nullable: true })
   reference_number: string;
 
+  @Column({ type: 'uuid', nullable: true })
+  device_id: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  settlement_account_id: string;
+
+  @Column({ type: 'boolean', default: false })
+  is_mobile_pos: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  is_reversed: boolean;
+
   @Column({ type: 'text', nullable: true })
   notes: string;
 

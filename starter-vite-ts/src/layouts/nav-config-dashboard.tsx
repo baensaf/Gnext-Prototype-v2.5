@@ -52,8 +52,15 @@ export const navData: NavSectionProps['data'] = [
       },
       {
         title: 'Active KDS Orders',
-        path: '/app/operations/orders',
+        path: '/app/operations/kds',
         icon: ICONS.kds,
+        info: <Label color="warning">Slice 15</Label>,
+      },
+      {
+        title: 'Refunds & Cancellations',
+        path: '/app/orders/refunds',
+        icon: ICONS.reasons,
+        info: <Label color="error">Slice 13</Label>,
       },
     ],
   },
@@ -66,9 +73,27 @@ export const navData: NavSectionProps['data'] = [
         icon: ICONS.inventory,
       },
       {
+        title: 'Dine-In Floor Plan',
+        path: '/app/operations/dine-in',
+        icon: ICONS.pos,
+        info: <Label color="info">Slice 14</Label>,
+      },
+      {
+        title: 'Delivery & Couriers',
+        path: '/app/operations/delivery',
+        icon: ICONS.kds,
+        info: <Label color="primary">Slice 16</Label>,
+      },
+      {
         title: 'Cash Drawer & EOD',
         path: '/app/operations/cash-drawer',
         icon: ICONS.drawer,
+      },
+      {
+        title: 'Payments & Devices',
+        path: '/app/operations/payments',
+        icon: ICONS.terminal,
+        info: <Label color="success">Slice 12</Label>,
       },
       {
         title: 'Branches & Hours',
@@ -104,6 +129,18 @@ export const navData: NavSectionProps['data'] = [
         title: 'Pricing & Overrides',
         path: '/app/catalog/pricing',
         icon: ICONS.pricing,
+      },
+      {
+        title: 'Menus Composer',
+        path: '/app/catalog/menus',
+        icon: ICONS.catalog,
+        info: <Label color="info">Slice 5</Label>,
+      },
+      {
+        title: 'Availability & Suspensions',
+        path: '/app/catalog/availability',
+        icon: ICONS.options,
+        info: <Label color="warning">Slice 5</Label>,
       },
     ],
   },
@@ -150,6 +187,12 @@ export const navData: NavSectionProps['data'] = [
         title: 'General Settings',
         path: '/app/settings/general',
         icon: ICONS.settings,
+      },
+      {
+        title: 'Approval Policies',
+        path: '/app/settings/approvals',
+        icon: ICONS.reasons,
+        info: <Label color="info">Slice 7</Label>,
       },
       {
         title: 'Reason Codes',

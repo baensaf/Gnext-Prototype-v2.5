@@ -7,15 +7,22 @@ import { BranchesPage } from 'src/pages/operations/branches';
 import { BranchDetailPage } from 'src/pages/operations/branch-detail';
 import { TerminalsPage } from 'src/pages/operations/terminals';
 import { CashDrawerPage } from 'src/pages/operations/cash-drawer';
+import { PaymentsPage } from 'src/pages/operations/payments';
+import { DineInPage } from 'src/pages/operations/dine-in';
+import { KdsPage } from 'src/pages/operations/kds';
+import { DeliveryPage } from 'src/pages/operations/delivery';
 import { InventoryStockPage } from 'src/pages/inventory/stock';
 import { GeneralSettingsPage } from 'src/pages/settings/general';
 import { ReasonCodesPage } from 'src/pages/settings/reasons';
+import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
 import { MediaLocalizationDemoPage } from 'src/pages/simulation/media-localization';
 
 import { CategoriesPage } from 'src/pages/catalog/categories';
 import { ProductsPage } from 'src/pages/catalog/products';
 import { OptionsPage } from 'src/pages/catalog/options';
 import { PricingPage } from 'src/pages/catalog/pricing';
+import { MenusPage } from 'src/pages/catalog/menus';
+import { AvailabilityPage } from 'src/pages/catalog/availability';
 
 import { DiscountRulesPage } from 'src/pages/discounts/rules';
 import { CouponsPage } from 'src/pages/discounts/coupons';
@@ -26,6 +33,7 @@ import { CustomerCreditPage } from 'src/pages/customers/credit';
 
 import { PosOrderPage } from 'src/pages/pos/order';
 import { OrdersWorkflowPage } from 'src/pages/orders/workflow';
+import { RefundsPage } from 'src/pages/orders/refunds';
 import { ReceiptPage } from 'src/pages/pos/receipt';
 
 import { useAuthStore } from 'src/store/useAuthStore';
@@ -83,8 +91,28 @@ export const routesSection: RouteObject[] = [
         element: <OrdersWorkflowPage />,
       },
       {
+        path: 'orders/refunds',
+        element: <RefundsPage />,
+      },
+      {
         path: 'operations/cash-drawer',
         element: <CashDrawerPage />,
+      },
+      {
+        path: 'operations/payments',
+        element: <PaymentsPage />,
+      },
+      {
+        path: 'operations/dine-in',
+        element: <DineInPage />,
+      },
+      {
+        path: 'operations/kds',
+        element: <KdsPage />,
+      },
+      {
+        path: 'operations/delivery',
+        element: <DeliveryPage />,
       },
       {
         path: 'inventory/stock',
@@ -111,6 +139,10 @@ export const routesSection: RouteObject[] = [
         element: <ReasonCodesPage />,
       },
       {
+        path: 'settings/approvals',
+        element: <ApprovalsSettingsPage />,
+      },
+      {
         path: 'catalog/categories',
         element: <CategoriesPage />,
       },
@@ -125,6 +157,14 @@ export const routesSection: RouteObject[] = [
       {
         path: 'catalog/pricing',
         element: <PricingPage />,
+      },
+      {
+        path: 'catalog/menus',
+        element: <MenusPage />,
+      },
+      {
+        path: 'catalog/availability',
+        element: <AvailabilityPage />,
       },
       {
         path: 'discounts/rules',

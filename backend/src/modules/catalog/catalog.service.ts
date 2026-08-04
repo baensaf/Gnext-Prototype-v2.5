@@ -8,6 +8,10 @@ import { OptionItem } from '../../entities/OptionItem.entity';
 import { ProductOptionGroup } from '../../entities/ProductOptionGroup.entity';
 import { PriceGroup } from '../../entities/PriceGroup.entity';
 import { PriceGroupItem } from '../../entities/PriceGroupItem.entity';
+import { Menu } from '../../entities/Menu.entity';
+import { MenuCategory } from '../../entities/MenuCategory.entity';
+import { MenuProduct } from '../../entities/MenuProduct.entity';
+import { ProductAvailability } from '../../entities/ProductAvailability.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 
@@ -21,6 +25,10 @@ export class CatalogService {
     @InjectRepository(ProductOptionGroup) private readonly prodGroupRepo: Repository<ProductOptionGroup>,
     @InjectRepository(PriceGroup) private readonly priceGroupRepo: Repository<PriceGroup>,
     @InjectRepository(PriceGroupItem) private readonly priceItemRepo: Repository<PriceGroupItem>,
+    @InjectRepository(Menu) private readonly menuRepo: Repository<Menu>,
+    @InjectRepository(MenuCategory) private readonly menuCatRepo: Repository<MenuCategory>,
+    @InjectRepository(MenuProduct) private readonly menuProdRepo: Repository<MenuProduct>,
+    @InjectRepository(ProductAvailability) private readonly availRepo: Repository<ProductAvailability>,
     private readonly auditWriter: AuditWriter,
   ) {}
 
@@ -342,16 +350,285 @@ export class CatalogService {
     return saved;
   }
 
-  async getEffectivePrice(tenantId: string, productId: string, priceGroupId?: string) {
+  // Slice 5: Bulk Price Update
+  async bulkUpdatePrices(
+    tenantId: string,
+    params: { price_group_id?: string; category_id?: string; adjustment_type: 'PERCENTAGE' | 'FIXED'; amount: string },
+    correlationId: string,
+  ) {
+    const { price_group_id, category_id, adjustment_type, amount } = params;
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount)) throw new ConflictException('Invalid amount for bulk price update');
+
+    let updatedCount = 0;
+
+    if (price_group_id) {
+      // Bulk update overrides inside a price group
+      let items = await this.priceItemRepo.find({ where: { tenant_id: tenantId, price_group_id } });
+      if (category_id) {
+        const categoryProducts = await this.prodRepo.find({ where: { tenant_id: tenantId, category_id } });
+        const productIds = new Set(categoryProducts.map((p) => p.id));
+        items = items.filter((item) => productIds.has(item.product_id));
+      }
+
+      for (const item of items) {
+        const current = parseFloat(item.override_price);
+        let newPrice = current;
+        if (adjustment_type === 'PERCENTAGE') {
+          newPrice = current * (1 + numAmount / 100);
+        } else {
+          newPrice = current + numAmount;
+        }
+        item.override_price = MoneyUtil.format(Math.max(0, newPrice).toString());
+        await this.priceItemRepo.save(item);
+        updatedCount++;
+      }
+    } else {
+      // Bulk update base prices of products
+      const where: any = { tenant_id: tenantId };
+      if (category_id) where.category_id = category_id;
+      const products = await this.prodRepo.find({ where });
+
+      for (const prod of products) {
+        const current = parseFloat(prod.base_price);
+        let newPrice = current;
+        if (adjustment_type === 'PERCENTAGE') {
+          newPrice = current * (1 + numAmount / 100);
+        } else {
+          newPrice = current + numAmount;
+        }
+        prod.base_price = MoneyUtil.format(Math.max(0, newPrice).toString());
+        await this.prodRepo.save(prod);
+        updatedCount++;
+      }
+    }
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'BULK_PRICE_UPDATE',
+      correlationId,
+      details: { price_group_id, category_id, adjustment_type, amount, updatedCount },
+    });
+
+    return { success: true, updated_count: updatedCount };
+  }
+
+  // Slice 5: Menus Management
+  async getMenus(tenantId: string, branchId?: string, channel?: string) {
+    const where: any = { tenant_id: tenantId };
+    if (branchId) where.branch_id = branchId;
+    if (channel && channel !== 'ALL') where.channel = channel;
+    const menus = await this.menuRepo.find({ where, order: { code: 'ASC' } });
+
+    const result = [];
+    for (const menu of menus) {
+      const categories = await this.menuCatRepo.find({ where: { tenant_id: tenantId, menu_id: menu.id }, order: { sort_order: 'ASC' } });
+      const products = await this.menuProdRepo.find({ where: { tenant_id: tenantId, menu_id: menu.id }, order: { sort_order: 'ASC' } });
+      result.push({ ...menu, categories, products });
+    }
+    return result;
+  }
+
+  async getMenuById(tenantId: string, id: string) {
+    const menu = await this.menuRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!menu) throw new NotFoundException('Menu not found');
+    const categories = await this.menuCatRepo.find({ where: { tenant_id: tenantId, menu_id: id }, order: { sort_order: 'ASC' } });
+    const products = await this.menuProdRepo.find({ where: { tenant_id: tenantId, menu_id: id }, order: { sort_order: 'ASC' } });
+    return { ...menu, categories, products };
+  }
+
+  async createMenu(tenantId: string, data: { code: string; name: string; branch_id?: string; channel?: string; valid_from?: Date; valid_to?: Date }, correlationId: string) {
+    const code = data.code.toUpperCase();
+    const existing = await this.menuRepo.findOne({ where: { tenant_id: tenantId, code } });
+    if (existing) throw new ConflictException(`Menu with code ${code} already exists`);
+
+    const menu = this.menuRepo.create({
+      tenant_id: tenantId,
+      code,
+      name: data.name,
+      branch_id: data.branch_id || null,
+      channel: data.channel || 'ALL',
+      valid_from: data.valid_from || null,
+      valid_to: data.valid_to || null,
+      is_active: true,
+    });
+
+    const saved = await this.menuRepo.save(menu);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'MENU_CREATED',
+      entityType: 'Menu',
+      entityId: saved.id,
+      correlationId,
+      afterData: saved,
+    });
+
+    return saved;
+  }
+
+  async updateMenu(tenantId: string, id: string, data: Partial<Menu>, correlationId: string) {
+    const menu = await this.menuRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!menu) throw new NotFoundException('Menu not found');
+    Object.assign(menu, data);
+    const saved = await this.menuRepo.save(menu);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'MENU_UPDATED',
+      entityType: 'Menu',
+      entityId: id,
+      correlationId,
+      afterData: saved,
+    });
+
+    return saved;
+  }
+
+  async deleteMenu(tenantId: string, id: string, correlationId: string) {
+    const menu = await this.menuRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!menu) throw new NotFoundException('Menu not found');
+    await this.menuRepo.softRemove(menu);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'MENU_DELETED',
+      entityType: 'Menu',
+      entityId: id,
+      correlationId,
+    });
+
+    return { success: true };
+  }
+
+  async addCategoryToMenu(tenantId: string, menuId: string, categoryId: string, sortOrder: number = 0) {
+    let link = await this.menuCatRepo.findOne({ where: { tenant_id: tenantId, menu_id: menuId, category_id: categoryId } });
+    if (!link) {
+      link = this.menuCatRepo.create({ tenant_id: tenantId, menu_id: menuId, category_id: categoryId, sort_order: sortOrder });
+    } else {
+      link.sort_order = sortOrder;
+    }
+    return await this.menuCatRepo.save(link);
+  }
+
+  async addProductToMenu(tenantId: string, menuId: string, productId: string, categoryId?: string, sortOrder: number = 0, overridePrice?: string) {
+    let link = await this.menuProdRepo.findOne({ where: { tenant_id: tenantId, menu_id: menuId, product_id: productId } });
+    if (!link) {
+      link = this.menuProdRepo.create({
+        tenant_id: tenantId,
+        menu_id: menuId,
+        product_id: productId,
+        category_id: categoryId || null,
+        sort_order: sortOrder,
+        override_price: overridePrice ? MoneyUtil.format(overridePrice) : null,
+      });
+    } else {
+      link.sort_order = sortOrder;
+      if (overridePrice !== undefined) link.override_price = overridePrice ? MoneyUtil.format(overridePrice) : null;
+    }
+    return await this.menuProdRepo.save(link);
+  }
+
+  // Slice 5: Product Availability & Temporary Suspension
+  async getAvailabilities(tenantId: string, branchId?: string) {
+    const where: any = { tenant_id: tenantId };
+    if (branchId) where.branch_id = branchId;
+    return await this.availRepo.find({ where });
+  }
+
+  async suspendProduct(tenantId: string, productId: string, branchId?: string, hours: number = 2, reason?: string, correlationId?: string) {
+    let avail = await this.availRepo.findOne({ where: { tenant_id: tenantId, product_id: productId, branch_id: branchId || null } });
+    const suspendedUntil = new Date(Date.now() + hours * 3600 * 1000);
+
+    if (!avail) {
+      avail = this.availRepo.create({
+        tenant_id: tenantId,
+        product_id: productId,
+        branch_id: branchId || null,
+        is_suspended: true,
+        suspended_until: suspendedUntil,
+        reason: reason || 'Temporary item suspension',
+      });
+    } else {
+      avail.is_suspended = true;
+      avail.suspended_until = suspendedUntil;
+      avail.reason = reason || 'Temporary item suspension';
+    }
+
+    const saved = await this.availRepo.save(avail);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'PRODUCT_SUSPENDED',
+      correlationId,
+      details: { productId, branchId, hours, reason, suspendedUntil },
+    });
+
+    return saved;
+  }
+
+  async resumeProduct(tenantId: string, productId: string, branchId?: string, correlationId?: string) {
+    const avail = await this.availRepo.findOne({ where: { tenant_id: tenantId, product_id: productId, branch_id: branchId || null } });
+    if (avail) {
+      avail.is_suspended = false;
+      avail.suspended_until = null;
+      avail.reason = null;
+      await this.availRepo.save(avail);
+    }
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'PRODUCT_RESUMED',
+      correlationId,
+      details: { productId, branchId },
+    });
+
+    return { success: true };
+  }
+
+  // Enhanced Price Diagnostic Resolution
+  async getEffectivePrice(tenantId: string, productId: string, priceGroupId?: string, branchId?: string, channel?: string) {
     const product = await this.getProductById(tenantId, productId);
     let effectivePrice = product.base_price;
+    let resolutionSource: 'MENU_OVERRIDE' | 'PRICE_GROUP' | 'BASE_PRICE' = 'BASE_PRICE';
     let isOverridden = false;
 
-    if (priceGroupId) {
+    // Check 1: Menu specific override
+    if (branchId || channel) {
+      const activeMenus = await this.menuRepo.find({ where: { tenant_id: tenantId, is_active: true } });
+      const matchingMenu = activeMenus.find((m) => (!m.branch_id || m.branch_id === branchId) && (m.channel === 'ALL' || m.channel === channel));
+      if (matchingMenu) {
+        const menuProd = await this.menuProdRepo.findOne({ where: { tenant_id: tenantId, menu_id: matchingMenu.id, product_id: productId } });
+        if (menuProd && menuProd.override_price) {
+          effectivePrice = menuProd.override_price;
+          resolutionSource = 'MENU_OVERRIDE';
+          isOverridden = true;
+        }
+      }
+    }
+
+    // Check 2: Price Group override (if Menu override not hit)
+    if (!isOverridden && priceGroupId) {
       const override = await this.priceItemRepo.findOne({ where: { tenant_id: tenantId, price_group_id: priceGroupId, product_id: productId } });
       if (override) {
         effectivePrice = override.override_price;
+        resolutionSource = 'PRICE_GROUP';
         isOverridden = true;
+      }
+    }
+
+    // Check 3: Availability & Temporary Suspension
+    const avail = await this.availRepo.findOne({ where: { tenant_id: tenantId, product_id: productId } });
+    let isSuspended = false;
+    if (avail && avail.is_suspended) {
+      if (!avail.suspended_until || new Date(avail.suspended_until) > new Date()) {
+        isSuspended = true;
       }
     }
 
@@ -359,8 +636,14 @@ export class CatalogService {
       product_id: productId,
       base_price: product.base_price,
       effective_price: MoneyUtil.format(effectivePrice),
+      resolution_source: resolutionSource,
       is_overridden: isOverridden,
       price_group_id: priceGroupId || null,
+      branch_id: branchId || null,
+      channel: channel || null,
+      is_suspended: isSuspended,
+      suspension_reason: isSuspended ? avail?.reason : null,
     };
   }
 }
+

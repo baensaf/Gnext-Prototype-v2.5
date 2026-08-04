@@ -76,9 +76,15 @@ export class CatalogController {
   }
 
   @Get('products/:id/effective-price')
-  async getEffectivePrice(@Param('id') id: string, @Query('priceGroupId') priceGroupId: string, @Req() req: Request) {
+  async getEffectivePrice(
+    @Param('id') id: string,
+    @Query('priceGroupId') priceGroupId?: string,
+    @Query('branchId') branchId?: string,
+    @Query('channel') channel?: string,
+    @Req() req?: Request,
+  ) {
     const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
-    return await this.catalogService.getEffectivePrice(tenantId, id, priceGroupId);
+    return await this.catalogService.getEffectivePrice(tenantId, id, priceGroupId, branchId, channel);
   }
 
   // Option Groups & Items
@@ -102,7 +108,7 @@ export class CatalogController {
     return await this.catalogService.createOptionItem(tenantId, id, body, correlationId);
   }
 
-  // Price Groups
+  // Price Groups & Bulk Updates
   @Get('price-groups')
   async getPriceGroups(@Req() req: Request) {
     const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
@@ -121,5 +127,83 @@ export class CatalogController {
     const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
     const correlationId = (req as any).correlationId;
     return await this.catalogService.setPriceOverride(tenantId, id, body.productId, body.overridePrice, correlationId);
+  }
+
+  @Post('catalog/prices/bulk-update')
+  async bulkUpdatePrices(@Body() body: { price_group_id?: string; category_id?: string; adjustment_type: 'PERCENTAGE' | 'FIXED'; amount: string }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const correlationId = (req as any).correlationId;
+    return await this.catalogService.bulkUpdatePrices(tenantId, body, correlationId);
+  }
+
+  // Menus
+  @Get('menus')
+  async getMenus(@Query('branchId') branchId: string, @Query('channel') channel: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    return await this.catalogService.getMenus(tenantId, branchId, channel);
+  }
+
+  @Get('menus/:id')
+  async getMenuById(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    return await this.catalogService.getMenuById(tenantId, id);
+  }
+
+  @Post('menus')
+  async createMenu(@Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const correlationId = (req as any).correlationId;
+    return await this.catalogService.createMenu(tenantId, body, correlationId);
+  }
+
+  @Patch('menus/:id')
+  async updateMenu(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const correlationId = (req as any).correlationId;
+    return await this.catalogService.updateMenu(tenantId, id, body, correlationId);
+  }
+
+  @Delete('menus/:id')
+  async deleteMenu(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const correlationId = (req as any).correlationId;
+    return await this.catalogService.deleteMenu(tenantId, id, correlationId);
+  }
+
+  @Post('menus/:id/categories')
+  async addCategoryToMenu(@Param('id') id: string, @Body() body: { categoryId: string; sortOrder?: number }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    return await this.catalogService.addCategoryToMenu(tenantId, id, body.categoryId, body.sortOrder);
+  }
+
+  @Post('menus/:id/products')
+  async addProductToMenu(
+    @Param('id') id: string,
+    @Body() body: { productId: string; categoryId?: string; sortOrder?: number; overridePrice?: string },
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    return await this.catalogService.addProductToMenu(tenantId, id, body.productId, body.categoryId, body.sortOrder, body.overridePrice);
+  }
+
+  // Availability & Suspension
+  @Get('availability')
+  async getAvailabilities(@Query('branchId') branchId: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    return await this.catalogService.getAvailabilities(tenantId, branchId);
+  }
+
+  @Post('availability/suspend')
+  async suspendProduct(@Body() body: { productId: string; branchId?: string; hours?: number; reason?: string }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const correlationId = (req as any).correlationId;
+    return await this.catalogService.suspendProduct(tenantId, body.productId, body.branchId, body.hours, body.reason, correlationId);
+  }
+
+  @Post('availability/resume')
+  async resumeProduct(@Body() body: { productId: string; branchId?: string }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const correlationId = (req as any).correlationId;
+    return await this.catalogService.resumeProduct(tenantId, body.productId, body.branchId, correlationId);
   }
 }

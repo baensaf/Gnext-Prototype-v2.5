@@ -7,13 +7,29 @@ import { OptionItem } from '../../entities/OptionItem.entity';
 import { ProductOptionGroup } from '../../entities/ProductOptionGroup.entity';
 import { PriceGroup } from '../../entities/PriceGroup.entity';
 import { PriceGroupItem } from '../../entities/PriceGroupItem.entity';
+import { Menu } from '../../entities/Menu.entity';
+import { MenuCategory } from '../../entities/MenuCategory.entity';
+import { MenuProduct } from '../../entities/MenuProduct.entity';
+import { ProductAvailability } from '../../entities/ProductAvailability.entity';
 import { CatalogService } from './catalog.service';
 import { CatalogController } from './catalog.controller';
 import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Category, Product, OptionGroup, OptionItem, ProductOptionGroup, PriceGroup, PriceGroupItem]),
+    TypeOrmModule.forFeature([
+      Category,
+      Product,
+      OptionGroup,
+      OptionItem,
+      ProductOptionGroup,
+      PriceGroup,
+      PriceGroupItem,
+      Menu,
+      MenuCategory,
+      MenuProduct,
+      ProductAvailability,
+    ]),
     AuditModule,
   ],
   providers: [CatalogService],

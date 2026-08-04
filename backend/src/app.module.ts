@@ -16,6 +16,25 @@ import { OrderModule } from './modules/order/order.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { CashDrawerModule } from './modules/cash-drawer/cash-drawer.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { ApprovalModule } from './modules/approval/approval.module';
+import { RefundModule } from './modules/refund/refund.module';
+import { DineInModule } from './modules/dine-in/dine-in.module';
+import { KdsModule } from './modules/kds/kds.module';
+import { DeliveryModule } from './modules/delivery/delivery.module';
+
+import { RefundRequest } from './entities/RefundRequest.entity';
+import { RefundItem } from './entities/RefundItem.entity';
+import { RefundAllocation } from './entities/RefundAllocation.entity';
+import { DiningArea } from './entities/DiningArea.entity';
+import { DiningTable } from './entities/DiningTable.entity';
+import { TableSession } from './entities/TableSession.entity';
+import { TableEvent } from './entities/TableEvent.entity';
+import { KitchenStation } from './entities/KitchenStation.entity';
+import { KitchenTicket } from './entities/KitchenTicket.entity';
+import { KitchenTicketItem } from './entities/KitchenTicketItem.entity';
+import { PrinterDevice } from './entities/PrinterDevice.entity';
+import { Courier } from './entities/Courier.entity';
+import { DeliveryAssignment } from './entities/DeliveryAssignment.entity';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 
 import { Tenant } from './entities/Tenant.entity';
@@ -44,6 +63,15 @@ import { OptionItem } from './entities/OptionItem.entity';
 import { ProductOptionGroup } from './entities/ProductOptionGroup.entity';
 import { PriceGroup } from './entities/PriceGroup.entity';
 import { PriceGroupItem } from './entities/PriceGroupItem.entity';
+import { Menu } from './entities/Menu.entity';
+import { MenuCategory } from './entities/MenuCategory.entity';
+import { MenuProduct } from './entities/MenuProduct.entity';
+import { ProductAvailability } from './entities/ProductAvailability.entity';
+
+import { ApprovalRule } from './entities/ApprovalRule.entity';
+import { ApprovalRequest } from './entities/ApprovalRequest.entity';
+import { ApprovalDecision } from './entities/ApprovalDecision.entity';
+import { PinAttemptLog } from './entities/PinAttemptLog.entity';
 
 import { Discount } from './entities/Discount.entity';
 import { Coupon } from './entities/Coupon.entity';
@@ -59,6 +87,10 @@ import { OrderItem } from './entities/OrderItem.entity';
 import { OrderItemOption } from './entities/OrderItemOption.entity';
 
 import { Payment } from './entities/Payment.entity';
+import { SettlementAccount } from './entities/SettlementAccount.entity';
+import { PaymentDevice } from './entities/PaymentDevice.entity';
+import { PaymentAllocation } from './entities/PaymentAllocation.entity';
+import { PaymentAttempt } from './entities/PaymentAttempt.entity';
 
 import { CashDrawerShift } from './entities/CashDrawerShift.entity';
 import { CashDrawerTransaction } from './entities/CashDrawerTransaction.entity';
@@ -87,10 +119,16 @@ import { InventoryTransaction } from './entities/InventoryTransaction.entity';
           Currency, PaymentMethod, ReasonCode,
           FileAsset, LocalizedString,
           Category, Product, OptionGroup, OptionItem, ProductOptionGroup, PriceGroup, PriceGroupItem,
+          Menu, MenuCategory, MenuProduct, ProductAvailability,
+          ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,
           Discount, Coupon,
           CustomerGroup, Customer, CustomerAddress, CustomerCreditAccount, CustomerCreditTransaction,
           OrderHeader, OrderItem, OrderItemOption,
-          Payment,
+          Payment, SettlementAccount, PaymentDevice, PaymentAllocation, PaymentAttempt,
+          RefundRequest, RefundItem, RefundAllocation,
+          DiningArea, DiningTable, TableSession, TableEvent,
+          KitchenStation, KitchenTicket, KitchenTicketItem, PrinterDevice,
+          Courier, DeliveryAssignment,
           CashDrawerShift, CashDrawerTransaction,
           InventoryItem, InventoryTransaction,
         ],
@@ -112,6 +150,11 @@ import { InventoryTransaction } from './entities/InventoryTransaction.entity';
     PaymentModule,
     CashDrawerModule,
     InventoryModule,
+    ApprovalModule,
+    RefundModule,
+    DineInModule,
+    KdsModule,
+    DeliveryModule,
   ],
   controllers: [HealthController],
 })

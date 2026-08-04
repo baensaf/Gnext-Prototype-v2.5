@@ -54,6 +54,58 @@ export interface PriceGroup {
   is_active: boolean;
 }
 
+export interface MenuCategory {
+  id: string;
+  menu_id: string;
+  category_id: string;
+  sort_order: number;
+}
+
+export interface MenuProduct {
+  id: string;
+  menu_id: string;
+  product_id: string;
+  category_id?: string;
+  sort_order: number;
+  override_price?: string;
+}
+
+export interface Menu {
+  id: string;
+  code: string;
+  name: string;
+  branch_id?: string;
+  channel: string;
+  is_active: boolean;
+  valid_from?: string;
+  valid_to?: string;
+  categories?: MenuCategory[];
+  products?: MenuProduct[];
+}
+
+export interface ProductAvailability {
+  id: string;
+  product_id: string;
+  branch_id?: string;
+  channel?: string;
+  is_suspended: boolean;
+  suspended_until?: string;
+  reason?: string;
+}
+
+export interface PriceDiagnostic {
+  product_id: string;
+  base_price: string;
+  effective_price: string;
+  resolution_source: 'MENU_OVERRIDE' | 'PRICE_GROUP' | 'BASE_PRICE';
+  is_overridden: boolean;
+  price_group_id?: string;
+  branch_id?: string;
+  channel?: string;
+  is_suspended: boolean;
+  suspension_reason?: string;
+}
+
 export const catalogApi = {
   getCategories: async (): Promise<Category[]> => {
     const res = await httpClient.get('/api/v1/categories');
@@ -118,6 +170,60 @@ export const catalogApi = {
   },
   setPriceOverride: async (priceGroupId: string, productId: string, overridePrice: string): Promise<any> => {
     const res = await httpClient.post(`/api/v1/price-groups/${priceGroupId}/overrides`, { productId, overridePrice });
+    return res.data;
+  },
+
+  bulkUpdatePrices: async (data: { price_group_id?: string; category_id?: string; adjustment_type: 'PERCENTAGE' | 'FIXED'; amount: string }): Promise<any> => {
+    const res = await httpClient.post('/api/v1/catalog/prices/bulk-update', data);
+    return res.data;
+  },
+
+  // Menus
+  getMenus: async (branchId?: string, channel?: string): Promise<Menu[]> => {
+    const res = await httpClient.get('/api/v1/menus', { params: { branchId, channel } });
+    return res.data;
+  },
+  getMenuById: async (id: string): Promise<Menu> => {
+    const res = await httpClient.get(`/api/v1/menus/${id}`);
+    return res.data;
+  },
+  createMenu: async (data: Partial<Menu>): Promise<Menu> => {
+    const res = await httpClient.post('/api/v1/menus', data);
+    return res.data;
+  },
+  updateMenu: async (id: string, data: Partial<Menu>): Promise<Menu> => {
+    const res = await httpClient.patch(`/api/v1/menus/${id}`, data);
+    return res.data;
+  },
+  deleteMenu: async (id: string): Promise<void> => {
+    await httpClient.delete(`/api/v1/menus/${id}`);
+  },
+  addCategoryToMenu: async (id: string, categoryId: string, sortOrder: number = 0): Promise<any> => {
+    const res = await httpClient.post(`/api/v1/menus/${id}/categories`, { categoryId, sortOrder });
+    return res.data;
+  },
+  addProductToMenu: async (id: string, productId: string, categoryId?: string, sortOrder: number = 0, overridePrice?: string): Promise<any> => {
+    const res = await httpClient.post(`/api/v1/menus/${id}/products`, { productId, categoryId, sortOrder, overridePrice });
+    return res.data;
+  },
+
+  // Availability & Suspension
+  getAvailabilities: async (branchId?: string): Promise<ProductAvailability[]> => {
+    const res = await httpClient.get('/api/v1/availability', { params: { branchId } });
+    return res.data;
+  },
+  suspendProduct: async (productId: string, branchId?: string, hours: number = 2, reason?: string): Promise<any> => {
+    const res = await httpClient.post('/api/v1/availability/suspend', { productId, branchId, hours, reason });
+    return res.data;
+  },
+  resumeProduct: async (productId: string, branchId?: string): Promise<any> => {
+    const res = await httpClient.post('/api/v1/availability/resume', { productId, branchId });
+    return res.data;
+  },
+
+  // Price Diagnostics
+  getEffectivePriceDiagnostic: async (productId: string, priceGroupId?: string, branchId?: string, channel?: string): Promise<PriceDiagnostic> => {
+    const res = await httpClient.get(`/api/v1/products/${productId}/effective-price`, { params: { priceGroupId, branchId, channel } });
     return res.data;
   },
 };

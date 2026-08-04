@@ -126,7 +126,7 @@ export function ReceiptPage() {
                 </Typography>
               </Stack>
 
-              {item.options.map((opt, oIdx) => (
+              {item.options?.map((opt, oIdx) => (
                 <Stack key={oIdx} direction="row" sx={{ justifyContent: 'space-between', pl: 1 }}>
                   <Typography variant="caption" sx={{ fontFamily: 'inherit', color: '#444' }}>
                     + {opt.name}

@@ -20,6 +20,12 @@ export class AdminUser {
   @Column({ type: 'boolean', default: true })
   is_active: boolean;
 
+  @Column({ type: 'varchar', length: 32, default: 'CASHIER' })
+  role: string;
+
+  @Column({ type: 'text', nullable: true })
+  pin_hash: string;
+
   @Column({ type: 'varchar', length: 5, default: 'fa' })
   preferred_locale: string;
 
