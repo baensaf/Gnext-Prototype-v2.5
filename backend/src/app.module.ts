@@ -21,6 +21,10 @@ import { RefundModule } from './modules/refund/refund.module';
 import { DineInModule } from './modules/dine-in/dine-in.module';
 import { KdsModule } from './modules/kds/kds.module';
 import { DeliveryModule } from './modules/delivery/delivery.module';
+import { KioskModule } from './modules/kiosk/kiosk.module';
+import { SimulationModule } from './modules/simulation/simulation.module';
+import { OfflineSyncModule } from './modules/offline-sync/offline-sync.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 import { RefundRequest } from './entities/RefundRequest.entity';
 import { RefundItem } from './entities/RefundItem.entity';
@@ -33,8 +37,6 @@ import { KitchenStation } from './entities/KitchenStation.entity';
 import { KitchenTicket } from './entities/KitchenTicket.entity';
 import { KitchenTicketItem } from './entities/KitchenTicketItem.entity';
 import { PrinterDevice } from './entities/PrinterDevice.entity';
-import { Courier } from './entities/Courier.entity';
-import { DeliveryAssignment } from './entities/DeliveryAssignment.entity';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 
 import { Tenant } from './entities/Tenant.entity';
@@ -92,11 +94,19 @@ import { PaymentDevice } from './entities/PaymentDevice.entity';
 import { PaymentAllocation } from './entities/PaymentAllocation.entity';
 import { PaymentAttempt } from './entities/PaymentAttempt.entity';
 
+import { Courier } from './entities/Courier.entity';
+import { DeliveryAssignment } from './entities/DeliveryAssignment.entity';
+import { CourierSettlement } from './entities/CourierSettlement.entity';
+import { CourierSettlementLine } from './entities/CourierSettlementLine.entity';
+
 import { CashDrawerShift } from './entities/CashDrawerShift.entity';
 import { CashDrawerTransaction } from './entities/CashDrawerTransaction.entity';
 
 import { InventoryItem } from './entities/InventoryItem.entity';
 import { InventoryTransaction } from './entities/InventoryTransaction.entity';
+import { IntegrationLog } from './entities/IntegrationLog.entity';
+import { OfflineQueueItem } from './entities/OfflineQueueItem.entity';
+import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
 
 @Module({
   imports: [
@@ -128,9 +138,10 @@ import { InventoryTransaction } from './entities/InventoryTransaction.entity';
           RefundRequest, RefundItem, RefundAllocation,
           DiningArea, DiningTable, TableSession, TableEvent,
           KitchenStation, KitchenTicket, KitchenTicketItem, PrinterDevice,
-          Courier, DeliveryAssignment,
+          Courier, DeliveryAssignment, CourierSettlement, CourierSettlementLine,
           CashDrawerShift, CashDrawerTransaction,
-          InventoryItem, InventoryTransaction,
+          InventoryItem, InventoryTransaction, IntegrationLog,
+          OfflineQueueItem, SyncConflictRecord,
         ],
         synchronize: false, // Mandatory AD-02
         logging: config.get<string>('NODE_ENV') === 'development' ? ['error', 'warn'] : false,
@@ -155,6 +166,10 @@ import { InventoryTransaction } from './entities/InventoryTransaction.entity';
     DineInModule,
     KdsModule,
     DeliveryModule,
+    KioskModule,
+    SimulationModule,
+    OfflineSyncModule,
+    ReportsModule,
   ],
   controllers: [HealthController],
 })

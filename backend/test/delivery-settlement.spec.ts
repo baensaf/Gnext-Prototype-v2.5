@@ -1,0 +1,207 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { DeliveryService } from '../src/modules/delivery/delivery.service';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Courier } from '../src/entities/Courier.entity';
+import { DeliveryAssignment } from '../src/entities/DeliveryAssignment.entity';
+import { OrderHeader } from '../src/entities/OrderHeader.entity';
+import { CourierSettlement } from '../src/entities/CourierSettlement.entity';
+import { CourierSettlementLine } from '../src/entities/CourierSettlementLine.entity';
+import { Payment } from '../src/entities/Payment.entity';
+import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
+import { ApprovalRequest } from '../src/entities/ApprovalRequest.entity';
+import { AuditWriter } from '../src/modules/audit/audit-writer.service';
+import { ConflictException, BadRequestException } from '@nestjs/common';
+
+describe('DeliveryService (Courier Settlement)', () => {
+  let service: DeliveryService;
+  let courierRepo: any;
+  let assignmentRepo: any;
+  let orderRepo: any;
+  let settlementRepo: any;
+  let settlementLineRepo: any;
+  let paymentRepo: any;
+  let paymentMethodRepo: any;
+  let approvalRepo: any;
+  let auditWriter: any;
+
+  beforeEach(async () => {
+    courierRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
+    assignmentRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
+    orderRepo = { findOne: jest.fn(), save: jest.fn() };
+    settlementRepo = { findOne: jest.fn(), find: jest.fn(), count: jest.fn(), create: jest.fn(), save: jest.fn() };
+    settlementLineRepo = { findOne: jest.fn(), find: jest.fn(), count: jest.fn(), create: jest.fn(), save: jest.fn() };
+    paymentRepo = { find: jest.fn() };
+    paymentMethodRepo = { findOne: jest.fn() };
+    approvalRepo = { findOne: jest.fn() };
+    auditWriter = { write: jest.fn() };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        DeliveryService,
+        { provide: getRepositoryToken(Courier), useValue: courierRepo },
+        { provide: getRepositoryToken(DeliveryAssignment), useValue: assignmentRepo },
+        { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
+        { provide: getRepositoryToken(CourierSettlement), useValue: settlementRepo },
+        { provide: getRepositoryToken(CourierSettlementLine), useValue: settlementLineRepo },
+        { provide: getRepositoryToken(Payment), useValue: paymentRepo },
+        { provide: getRepositoryToken(PaymentMethod), useValue: paymentMethodRepo },
+        { provide: getRepositoryToken(ApprovalRequest), useValue: approvalRepo },
+        { provide: AuditWriter, useValue: auditWriter },
+      ],
+    }).compile();
+
+    service = module.get<DeliveryService>(DeliveryService);
+  });
+
+  it('should preview courier settlement with separate expected cash and expected POS amounts', async () => {
+    courierRepo.findOne.mockResolvedValue({ id: 'c-1', name: 'Courier 1', code: 'C01' });
+    assignmentRepo.find.mockResolvedValue([
+      { id: 'asgn-1', order_id: 'ord-1', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '10.00', is_settled: false },
+      { id: 'asgn-2', order_id: 'ord-2', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '15.00', is_settled: false },
+    ]);
+    settlementLineRepo.findOne.mockResolvedValue(null);
+
+    orderRepo.findOne.mockImplementation(({ where }: any) => {
+      if (where.id === 'ord-1') return Promise.resolve({ id: 'ord-1', order_number: 'ORD-1001', total_amount: '100.00' });
+      if (where.id === 'ord-2') return Promise.resolve({ id: 'ord-2', order_number: 'ORD-1002', total_amount: '200.00' });
+      return Promise.resolve(null);
+    });
+
+    paymentRepo.find.mockImplementation(({ where }: any) => {
+      if (where.order_id === 'ord-1') return Promise.resolve([{ payment_method_id: 'pm-cash', amount: '100.00', status: 'COMPLETED' }]);
+      if (where.order_id === 'ord-2') return Promise.resolve([{ payment_method_id: 'pm-card', amount: '200.00', status: 'COMPLETED' }]);
+      return Promise.resolve([]);
+    });
+
+    paymentMethodRepo.findOne.mockImplementation(({ where }: any) => {
+      if (where.id === 'pm-cash') return Promise.resolve({ id: 'pm-cash', kind: 'CASH', code: 'CASH' });
+      if (where.id === 'pm-card') return Promise.resolve({ id: 'pm-card', kind: 'NETWORK_POS', code: 'CARD' });
+      return Promise.resolve(null);
+    });
+
+    const preview = await service.previewSettlement('t-1', 'c-1');
+
+    expect(preview.line_count).toBe(2);
+    expect(preview.expected_cash_amount).toBe('100.00');
+    expect(preview.expected_pos_amount).toBe('200.00');
+    expect(preview.net_settlement_amount).toBe('300.00');
+  });
+
+  it('should throw ConflictException if trying to include an already settled delivery assignment', async () => {
+    courierRepo.findOne.mockResolvedValue({ id: 'c-1', name: 'Courier 1' });
+    assignmentRepo.find.mockResolvedValue([
+      { id: 'asgn-settled', order_id: 'ord-1', courier_id: 'c-1', is_settled: true },
+    ]);
+
+    await expect(service.previewSettlement('t-1', 'c-1')).rejects.toThrow(ConflictException);
+  });
+
+  it('should create a DRAFT courier settlement batch', async () => {
+    courierRepo.findOne.mockResolvedValue({ id: 'c-1', name: 'Courier 1', code: 'C01' });
+    assignmentRepo.find.mockResolvedValue([
+      { id: 'asgn-1', order_id: 'ord-1', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '10.00', is_settled: false },
+    ]);
+    settlementLineRepo.findOne.mockResolvedValue(null);
+    orderRepo.findOne.mockResolvedValue({ id: 'ord-1', order_number: 'ORD-1001', total_amount: '100.00' });
+    paymentRepo.find.mockResolvedValue([{ payment_method_id: 'pm-cash', amount: '100.00' }]);
+    paymentMethodRepo.findOne.mockResolvedValue({ id: 'pm-cash', kind: 'CASH', code: 'CASH' });
+
+    settlementRepo.create.mockImplementation((dto: any) => dto);
+    settlementRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'settle-1' }));
+    settlementLineRepo.create.mockImplementation((dto: any) => dto);
+    settlementLineRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'line-1' }));
+
+    const result = await service.createSettlement('t-1', 'user-1', { courier_id: 'c-1' });
+
+    expect(result.status).toBe('DRAFT');
+    expect(result.expected_cash_amount).toBe('100.00');
+    expect(result.lines.length).toBe(1);
+    expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'COURIER_SETTLEMENT_CREATED' }));
+  });
+
+  it('should calculate cash and POS discrepancy on settlement update', async () => {
+    const settlement = {
+      id: 'settle-1',
+      tenant_id: 't-1',
+      status: 'DRAFT',
+      expected_cash_amount: '100.00',
+      actual_cash_amount: '100.00',
+      expected_pos_amount: '200.00',
+      actual_pos_amount: '200.00',
+      cash_discrepancy_amount: '0.00',
+      pos_discrepancy_amount: '0.00',
+      total_compensation_amount: '0.00',
+      total_adjustment_amount: '0.00',
+      net_settlement_amount: '300.00',
+    };
+    settlementRepo.findOne.mockResolvedValue(settlement);
+    settlementLineRepo.find.mockResolvedValue([]);
+    settlementRepo.save.mockImplementation((s: any) => Promise.resolve(s));
+
+    const updated = await service.updateSettlement('t-1', 'settle-1', {
+      actual_cash_amount: 90,
+      actual_pos_amount: 200,
+      total_compensation_amount: 5,
+    });
+
+    expect(updated.cash_discrepancy_amount).toBe('-10.00');
+    expect(updated.pos_discrepancy_amount).toBe('0.00');
+    expect(updated.net_settlement_amount).toBe('295.00');
+  });
+
+  it('should require approval when closing settlement with a discrepancy', async () => {
+    const settlement = {
+      id: 'settle-1',
+      tenant_id: 't-1',
+      status: 'UNDER_REVIEW',
+      cash_discrepancy_amount: '-10.00',
+      pos_discrepancy_amount: '0.00',
+    };
+    settlementRepo.findOne.mockResolvedValue(settlement);
+    approvalRepo.findOne.mockResolvedValue(null);
+
+    await expect(service.closeSettlement('t-1', 'settle-1', 'user-1')).rejects.toThrow(BadRequestException);
+  });
+
+  it('should close settlement when approved and mark delivery assignments as settled', async () => {
+    const settlement = {
+      id: 'settle-1',
+      tenant_id: 't-1',
+      status: 'UNDER_REVIEW',
+      cash_discrepancy_amount: '0.00',
+      pos_discrepancy_amount: '0.00',
+    };
+    settlementRepo.findOne.mockResolvedValue(settlement);
+    settlementRepo.save.mockImplementation((s: any) => Promise.resolve(s));
+    settlementLineRepo.find.mockResolvedValue([{ id: 'line-1', delivery_assignment_id: 'asgn-1' }]);
+    
+    const assignment = { id: 'asgn-1', is_settled: false, settlement_id: null };
+    assignmentRepo.findOne.mockResolvedValue(assignment);
+    assignmentRepo.save.mockImplementation((a: any) => Promise.resolve(a));
+
+    const closed = await service.closeSettlement('t-1', 'settle-1', 'user-1');
+
+    expect(closed.status).toBe('CLOSED');
+    expect(assignmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ is_settled: true, settlement_id: 'settle-1' }));
+  });
+
+  it('should reverse a closed settlement and unlock delivery assignments', async () => {
+    const settlement = {
+      id: 'settle-1',
+      tenant_id: 't-1',
+      status: 'CLOSED',
+    };
+    settlementRepo.findOne.mockResolvedValue(settlement);
+    settlementRepo.save.mockImplementation((s: any) => Promise.resolve(s));
+    settlementLineRepo.find.mockResolvedValue([{ id: 'line-1', delivery_assignment_id: 'asgn-1' }]);
+
+    const assignment = { id: 'asgn-1', is_settled: true, settlement_id: 'settle-1' };
+    assignmentRepo.findOne.mockResolvedValue(assignment);
+    assignmentRepo.save.mockImplementation((a: any) => Promise.resolve(a));
+
+    const reversed = await service.reverseSettlement('t-1', 'settle-1', 'user-1', 'Data correction');
+
+    expect(reversed.status).toBe('REVERSED');
+    expect(assignmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ is_settled: false, settlement_id: null }));
+  });
+});

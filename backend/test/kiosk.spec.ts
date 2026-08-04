@@ -1,0 +1,151 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { KioskService } from '../src/modules/kiosk/kiosk.service';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Category } from '../src/entities/Category.entity';
+import { Product } from '../src/entities/Product.entity';
+import { OptionGroup } from '../src/entities/OptionGroup.entity';
+import { OptionItem } from '../src/entities/OptionItem.entity';
+import { ProductOptionGroup } from '../src/entities/ProductOptionGroup.entity';
+import { Branch } from '../src/entities/Branch.entity';
+import { TenantSetting } from '../src/entities/TenantSetting.entity';
+import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
+import { OrderHeader } from '../src/entities/OrderHeader.entity';
+import { OrderItem } from '../src/entities/OrderItem.entity';
+import { OrderItemOption } from '../src/entities/OrderItemOption.entity';
+import { Payment } from '../src/entities/Payment.entity';
+import { Customer } from '../src/entities/Customer.entity';
+import { AuditWriter } from '../src/modules/audit/audit-writer.service';
+import { ForbiddenException, BadRequestException } from '@nestjs/common';
+
+describe('KioskService (Unit)', () => {
+  let service: KioskService;
+  let categoryRepo: any;
+  let productRepo: any;
+  let optionGroupRepo: any;
+  let optionItemRepo: any;
+  let productOptionGroupRepo: any;
+  let branchRepo: any;
+  let settingRepo: any;
+  let paymentMethodRepo: any;
+  let orderRepo: any;
+  let orderItemRepo: any;
+  let orderItemOptionRepo: any;
+  let paymentRepo: any;
+  let customerRepo: any;
+  let auditWriter: any;
+
+  beforeEach(async () => {
+    categoryRepo = { find: jest.fn() };
+    productRepo = { find: jest.fn(), findOne: jest.fn() };
+    optionGroupRepo = { find: jest.fn() };
+    optionItemRepo = { find: jest.fn(), findOne: jest.fn() };
+    productOptionGroupRepo = { find: jest.fn() };
+    branchRepo = { find: jest.fn(), findOne: jest.fn() };
+    settingRepo = { findOne: jest.fn() };
+    paymentMethodRepo = { find: jest.fn(), findOne: jest.fn() };
+    orderRepo = { create: jest.fn(), save: jest.fn(), findOne: jest.fn() };
+    orderItemRepo = { create: jest.fn(), save: jest.fn() };
+    orderItemOptionRepo = { create: jest.fn(), save: jest.fn() };
+    paymentRepo = { create: jest.fn(), save: jest.fn() };
+    customerRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
+    auditWriter = { write: jest.fn() };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        KioskService,
+        { provide: getRepositoryToken(Category), useValue: categoryRepo },
+        { provide: getRepositoryToken(Product), useValue: productRepo },
+        { provide: getRepositoryToken(OptionGroup), useValue: optionGroupRepo },
+        { provide: getRepositoryToken(OptionItem), useValue: optionItemRepo },
+        { provide: getRepositoryToken(ProductOptionGroup), useValue: productOptionGroupRepo },
+        { provide: getRepositoryToken(Branch), useValue: branchRepo },
+        { provide: getRepositoryToken(TenantSetting), useValue: settingRepo },
+        { provide: getRepositoryToken(PaymentMethod), useValue: paymentMethodRepo },
+        { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
+        { provide: getRepositoryToken(OrderItem), useValue: orderItemRepo },
+        { provide: getRepositoryToken(OrderItemOption), useValue: orderItemOptionRepo },
+        { provide: getRepositoryToken(Payment), useValue: paymentRepo },
+        { provide: getRepositoryToken(Customer), useValue: customerRepo },
+        { provide: AuditWriter, useValue: auditWriter },
+      ],
+    }).compile();
+
+    service = module.get<KioskService>(KioskService);
+  });
+
+  it('should return aggregated kiosk bootstrap context with channel KIOSK', async () => {
+    branchRepo.find.mockResolvedValue([{ id: 'br-1', code: 'BR01', name: 'Main Branch', currency_code: 'USD' }]);
+    categoryRepo.find.mockResolvedValue([{ id: 'cat-1', name: 'Burgers' }]);
+    productRepo.find.mockResolvedValue([{ id: 'prod-1', name: 'Cheeseburger', base_price: '10.00' }]);
+    optionGroupRepo.find.mockResolvedValue([]);
+    optionItemRepo.find.mockResolvedValue([]);
+    productOptionGroupRepo.find.mockResolvedValue([]);
+    paymentMethodRepo.find.mockResolvedValue([{ id: 'pm-1', code: 'CARD', name: 'Card Terminal', kind: 'NETWORK_POS' }]);
+    settingRepo.findOne.mockResolvedValue({ key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'OPTIONAL' });
+
+    const result = await service.getBootstrapContext('t-1');
+
+    expect(result.channel).toBe('KIOSK');
+    expect(result.customer_identity_policy).toBe('OPTIONAL');
+    expect(result.categories.length).toBe(1);
+    expect(result.products.length).toBe(1);
+    expect(result.payment_methods.length).toBe(1);
+  });
+
+  it('should enforce required customer phone when identity policy is REQUIRED', async () => {
+    settingRepo.findOne.mockResolvedValue({ key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'REQUIRED' });
+
+    await expect(
+      service.createKioskOrder('t-1', {
+        branch_id: 'br-1',
+        order_type: 'TAKEAWAY',
+        items: [{ product_id: 'prod-1', quantity: 1 }],
+      }),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('should create a valid kiosk order with tax calculation', async () => {
+    settingRepo.findOne.mockResolvedValue({ key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'OPTIONAL' });
+    productRepo.findOne.mockResolvedValue({ id: 'prod-1', name: 'Burger', base_price: '10.00' });
+
+    orderRepo.create.mockImplementation((dto: any) => dto);
+    orderRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'ord-kiosk-1' }));
+    orderItemRepo.create.mockImplementation((dto: any) => dto);
+    orderItemRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'item-1' }));
+
+    const order = await service.createKioskOrder('t-1', {
+      branch_id: 'br-1',
+      order_type: 'DINE_IN',
+      items: [{ product_id: 'prod-1', quantity: 2 }],
+    });
+
+    expect(order.subtotal_amount).toBe('20.0000');
+    expect(order.tax_amount).toBe('1.8000');
+    expect(order.total_amount).toBe('21.8000');
+    expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'KIOSK_ORDER_CREATED' }));
+  });
+
+  it('should process kiosk terminal payment and return simulated receipt', async () => {
+    orderRepo.findOne.mockResolvedValue({
+      id: 'ord-kiosk-1',
+      tenant_id: 't-1',
+      order_number: 'KOS-1001',
+      order_type: 'TAKEAWAY',
+      total_amount: '21.80',
+      paid_amount: '0.00',
+      due_amount: '21.80',
+    });
+
+    paymentMethodRepo.find.mockResolvedValue([{ id: 'pm-card', name: 'Card Terminal', kind: 'NETWORK_POS' }]);
+    paymentRepo.create.mockImplementation((dto: any) => dto);
+    paymentRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'pay-1' }));
+    orderRepo.save.mockImplementation((o: any) => Promise.resolve(o));
+
+    const res = await service.processKioskPayment('t-1', { order_id: 'ord-kiosk-1' });
+
+    expect(res.success).toBe(true);
+    expect(res.receipt.status).toBe('PAID & SENT TO KITCHEN');
+    expect(res.order.status).toBe('READY');
+    expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'KIOSK_PAYMENT_PROCESSED' }));
+  });
+});

@@ -51,6 +51,12 @@ export const navData: NavSectionProps['data'] = [
         info: <Label color="success">NEW</Label>,
       },
       {
+        title: 'Self-Service Kiosk',
+        path: '/app/kiosk',
+        icon: ICONS.pos,
+        info: <Label color="primary">Slice 18</Label>,
+      },
+      {
         title: 'Active KDS Orders',
         path: '/app/operations/kds',
         icon: ICONS.kds,
@@ -85,6 +91,18 @@ export const navData: NavSectionProps['data'] = [
         info: <Label color="primary">Slice 16</Label>,
       },
       {
+        title: 'Courier Settlements',
+        path: '/app/operations/settlements',
+        icon: ICONS.reasons,
+        info: <Label color="success">Slice 17</Label>,
+      },
+      {
+        title: 'Offline & Sync Engine',
+        path: '/app/simulation/offline-sync',
+        icon: ICONS.terminal,
+        info: <Label color="warning">Slice 20</Label>,
+      },
+      {
         title: 'Cash Drawer & EOD',
         path: '/app/operations/cash-drawer',
         icon: ICONS.drawer,
@@ -104,6 +122,12 @@ export const navData: NavSectionProps['data'] = [
         title: 'Terminals Registry',
         path: '/app/operations/terminals',
         icon: ICONS.terminal,
+      },
+      {
+        title: 'Simulation Center',
+        path: '/app/simulation/center',
+        icon: ICONS.terminal,
+        info: <Label color="info">Slice 19</Label>,
       },
     ],
   },
@@ -203,6 +227,23 @@ export const navData: NavSectionProps['data'] = [
         title: 'Media & Localization',
         path: '/app/simulation/media-localization',
         icon: ICONS.media,
+      },
+    ],
+  },
+  {
+    subheader: 'Analytics & Compliance',
+    items: [
+      {
+        title: 'Reports Catalog & Analytics',
+        path: '/app/reports/catalog',
+        icon: ICONS.dashboard,
+        info: <Label color="info">Slice 21</Label>,
+      },
+      {
+        title: 'Audit & System Alerts',
+        path: '/app/operations/audit',
+        icon: ICONS.reasons,
+        info: <Label color="warning">Slice 21</Label>,
       },
     ],
   },

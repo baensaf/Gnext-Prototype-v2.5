@@ -4,20 +4,34 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Courier } from '../src/entities/Courier.entity';
 import { DeliveryAssignment } from '../src/entities/DeliveryAssignment.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
+import { CourierSettlement } from '../src/entities/CourierSettlement.entity';
+import { CourierSettlementLine } from '../src/entities/CourierSettlementLine.entity';
+import { Payment } from '../src/entities/Payment.entity';
+import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
+import { ApprovalRequest } from '../src/entities/ApprovalRequest.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
-import { BadRequestException } from '@nestjs/common';
 
 describe('DeliveryService (Unit)', () => {
   let service: DeliveryService;
   let courierRepo: any;
   let assignmentRepo: any;
   let orderRepo: any;
+  let settlementRepo: any;
+  let settlementLineRepo: any;
+  let paymentRepo: any;
+  let paymentMethodRepo: any;
+  let approvalRepo: any;
   let auditWriter: any;
 
   beforeEach(async () => {
     courierRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
     assignmentRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
     orderRepo = { findOne: jest.fn(), save: jest.fn() };
+    settlementRepo = { findOne: jest.fn(), find: jest.fn(), count: jest.fn(), create: jest.fn(), save: jest.fn() };
+    settlementLineRepo = { findOne: jest.fn(), find: jest.fn(), count: jest.fn(), create: jest.fn(), save: jest.fn() };
+    paymentRepo = { find: jest.fn() };
+    paymentMethodRepo = { findOne: jest.fn() };
+    approvalRepo = { findOne: jest.fn() };
     auditWriter = { write: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -26,6 +40,11 @@ describe('DeliveryService (Unit)', () => {
         { provide: getRepositoryToken(Courier), useValue: courierRepo },
         { provide: getRepositoryToken(DeliveryAssignment), useValue: assignmentRepo },
         { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
+        { provide: getRepositoryToken(CourierSettlement), useValue: settlementRepo },
+        { provide: getRepositoryToken(CourierSettlementLine), useValue: settlementLineRepo },
+        { provide: getRepositoryToken(Payment), useValue: paymentRepo },
+        { provide: getRepositoryToken(PaymentMethod), useValue: paymentMethodRepo },
+        { provide: getRepositoryToken(ApprovalRequest), useValue: approvalRepo },
         { provide: AuditWriter, useValue: auditWriter },
       ],
     }).compile();

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Query, Body, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Query, Body, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { DeliveryService } from './delivery.service';
 
@@ -48,5 +48,84 @@ export class DeliveryController {
     const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
     const correlationId = (req as any).correlationId;
     return await this.deliveryService.updateAssignmentStatus(tenantId, assignmentId, body.status, body.failureReason, correlationId);
+  }
+
+  // --- SLICE 17: COURIER SETTLEMENT ENDPOINTS ---
+
+  @Get('settlements/unsettled-summary')
+  async getUnsettledSummary(@Query('branchId') branchId: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    return await this.deliveryService.getUnsettledSummary(tenantId, branchId);
+  }
+
+  @Post('settlements/preview')
+  async previewSettlement(@Body() body: { courier_id: string; assignment_ids?: string[] }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    return await this.deliveryService.previewSettlement(tenantId, body.courier_id, body.assignment_ids);
+  }
+
+  @Get('settlements')
+  async getSettlements(
+    @Query('courierId') courierId: string,
+    @Query('status') status: string,
+    @Query('branchId') branchId: string,
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    return await this.deliveryService.getSettlements(tenantId, courierId, status, branchId);
+  }
+
+  @Post('settlements')
+  async createSettlement(
+    @Body() body: { courier_id: string; branch_id?: string; assignment_ids?: string[]; notes?: string },
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const userId = (req as any).user?.id || 'admin-user-id';
+    const correlationId = (req as any).correlationId;
+    return await this.deliveryService.createSettlement(tenantId, userId, body, correlationId);
+  }
+
+  @Get('settlements/:id')
+  async getSettlementDetail(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    return await this.deliveryService.getSettlementDetail(tenantId, id);
+  }
+
+  @Patch('settlements/:id')
+  async updateSettlement(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const correlationId = (req as any).correlationId;
+    return await this.deliveryService.updateSettlement(tenantId, id, body, correlationId);
+  }
+
+  @Post('settlements/:id/review')
+  async reviewSettlement(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const userId = (req as any).user?.id || 'admin-user-id';
+    const correlationId = (req as any).correlationId;
+    return await this.deliveryService.reviewSettlement(tenantId, id, userId, correlationId);
+  }
+
+  @Post('settlements/:id/close')
+  async closeSettlement(@Param('id') id: string, @Body() body: { approval_request_id?: string }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const userId = (req as any).user?.id || 'admin-user-id';
+    const correlationId = (req as any).correlationId;
+    return await this.deliveryService.closeSettlement(tenantId, id, userId, body?.approval_request_id, correlationId);
+  }
+
+  @Post('settlements/:id/reverse')
+  async reverseSettlement(@Param('id') id: string, @Body() body: { reason?: string }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const userId = (req as any).user?.id || 'admin-user-id';
+    const correlationId = (req as any).correlationId;
+    return await this.deliveryService.reverseSettlement(tenantId, id, userId, body?.reason, correlationId);
+  }
+
+  @Get('settlements/:id/statement')
+  async getStatement(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    return await this.deliveryService.getStatement(tenantId, id);
   }
 }

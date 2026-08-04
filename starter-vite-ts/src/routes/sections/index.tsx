@@ -11,6 +11,7 @@ import { PaymentsPage } from 'src/pages/operations/payments';
 import { DineInPage } from 'src/pages/operations/dine-in';
 import { KdsPage } from 'src/pages/operations/kds';
 import { DeliveryPage } from 'src/pages/operations/delivery';
+import { CourierSettlementsPage } from 'src/pages/operations/settlements';
 import { InventoryStockPage } from 'src/pages/inventory/stock';
 import { GeneralSettingsPage } from 'src/pages/settings/general';
 import { ReasonCodesPage } from 'src/pages/settings/reasons';
@@ -35,6 +36,11 @@ import { PosOrderPage } from 'src/pages/pos/order';
 import { OrdersWorkflowPage } from 'src/pages/orders/workflow';
 import { RefundsPage } from 'src/pages/orders/refunds';
 import { ReceiptPage } from 'src/pages/pos/receipt';
+import { KioskPage } from 'src/pages/pos/kiosk';
+import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
+import { OfflineSyncPage } from 'src/pages/simulation/offline-sync';
+import { ReportViewerPage } from 'src/pages/reports/report-viewer';
+import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
 
 import { useAuthStore } from 'src/store/useAuthStore';
 import { useEffect } from 'react';
@@ -83,6 +89,10 @@ export const routesSection: RouteObject[] = [
         element: <PosOrderPage />,
       },
       {
+        path: 'kiosk',
+        element: <KioskPage />,
+      },
+      {
         path: 'pos/receipt/:id',
         element: <ReceiptPage />,
       },
@@ -113,6 +123,26 @@ export const routesSection: RouteObject[] = [
       {
         path: 'operations/delivery',
         element: <DeliveryPage />,
+      },
+      {
+        path: 'operations/settlements',
+        element: <CourierSettlementsPage />,
+      },
+      {
+        path: 'simulation/center',
+        element: <SimulationCenterPage />,
+      },
+      {
+        path: 'simulation/offline-sync',
+        element: <OfflineSyncPage />,
+      },
+      {
+        path: 'reports/catalog',
+        element: <ReportViewerPage />,
+      },
+      {
+        path: 'operations/audit',
+        element: <AuditExplorerPage />,
       },
       {
         path: 'inventory/stock',

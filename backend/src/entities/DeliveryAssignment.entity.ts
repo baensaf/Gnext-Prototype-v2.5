@@ -35,6 +35,12 @@ export class DeliveryAssignment {
   @Column({ type: 'text', nullable: true })
   failure_reason: string;
 
+  @Column({ type: 'boolean', default: false })
+  is_settled: boolean;
+
+  @Column({ type: 'uuid', nullable: true })
+  settlement_id: string;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 
