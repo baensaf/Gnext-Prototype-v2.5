@@ -9,8 +9,12 @@ const icon = (name: string) => (
 
 const ICONS = {
   dashboard: icon('ic-dashboard'),
+  pos: icon('ic-cart'),
+  kds: icon('ic-kanban'),
   store: icon('ic-banking'),
   terminal: icon('ic-booking'),
+  drawer: icon('ic-invoice'),
+  inventory: icon('ic-analytics'),
   catalog: icon('ic-product'),
   category: icon('ic-folder'),
   options: icon('ic-params'),
@@ -37,8 +41,35 @@ export const navData: NavSectionProps['data'] = [
     ],
   },
   {
-    subheader: 'Operations',
+    subheader: 'POS & Orders',
     items: [
+      {
+        title: 'POS Register',
+        path: '/app/pos/order',
+        icon: ICONS.pos,
+        info: <Label color="success">NEW</Label>,
+      },
+      {
+        title: 'Active KDS Orders',
+        path: '/app/operations/orders',
+        icon: ICONS.kds,
+      },
+    ],
+  },
+  {
+    subheader: 'Operations & Stock',
+    items: [
+      {
+        title: 'Inventory Stock & Alerts',
+        path: '/app/inventory/stock',
+        icon: ICONS.inventory,
+        info: <Label color="error">ALERT</Label>,
+      },
+      {
+        title: 'Cash Drawer & EOD',
+        path: '/app/operations/cash-drawer',
+        icon: ICONS.drawer,
+      },
       {
         title: 'Branches & Hours',
         path: '/app/operations/branches',

@@ -12,6 +12,10 @@ import { LocalizationModule } from './modules/localization/localization.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { DiscountsModule } from './modules/discounts/discounts.module';
 import { CustomerModule } from './modules/customer/customer.module';
+import { OrderModule } from './modules/order/order.module';
+import { PaymentModule } from './modules/payment/payment.module';
+import { CashDrawerModule } from './modules/cash-drawer/cash-drawer.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 
 import { Tenant } from './entities/Tenant.entity';
@@ -50,6 +54,18 @@ import { CustomerAddress } from './entities/CustomerAddress.entity';
 import { CustomerCreditAccount } from './entities/CustomerCreditAccount.entity';
 import { CustomerCreditTransaction } from './entities/CustomerCreditTransaction.entity';
 
+import { OrderHeader } from './entities/OrderHeader.entity';
+import { OrderItem } from './entities/OrderItem.entity';
+import { OrderItemOption } from './entities/OrderItemOption.entity';
+
+import { Payment } from './entities/Payment.entity';
+
+import { CashDrawerShift } from './entities/CashDrawerShift.entity';
+import { CashDrawerTransaction } from './entities/CashDrawerTransaction.entity';
+
+import { InventoryItem } from './entities/InventoryItem.entity';
+import { InventoryTransaction } from './entities/InventoryTransaction.entity';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -73,6 +89,10 @@ import { CustomerCreditTransaction } from './entities/CustomerCreditTransaction.
           Category, Product, OptionGroup, OptionItem, ProductOptionGroup, PriceGroup, PriceGroupItem,
           Discount, Coupon,
           CustomerGroup, Customer, CustomerAddress, CustomerCreditAccount, CustomerCreditTransaction,
+          OrderHeader, OrderItem, OrderItemOption,
+          Payment,
+          CashDrawerShift, CashDrawerTransaction,
+          InventoryItem, InventoryTransaction,
         ],
         synchronize: false, // Mandatory AD-02
         logging: config.get<string>('NODE_ENV') === 'development' ? ['error', 'warn'] : false,
@@ -88,6 +108,10 @@ import { CustomerCreditTransaction } from './entities/CustomerCreditTransaction.
     CatalogModule,
     DiscountsModule,
     CustomerModule,
+    OrderModule,
+    PaymentModule,
+    CashDrawerModule,
+    InventoryModule,
   ],
   controllers: [HealthController],
 })

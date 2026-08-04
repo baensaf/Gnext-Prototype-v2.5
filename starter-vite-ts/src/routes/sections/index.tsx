@@ -6,6 +6,8 @@ import { DashboardPage } from 'src/pages/dashboard';
 import { BranchesPage } from 'src/pages/operations/branches';
 import { BranchDetailPage } from 'src/pages/operations/branch-detail';
 import { TerminalsPage } from 'src/pages/operations/terminals';
+import { CashDrawerPage } from 'src/pages/operations/cash-drawer';
+import { InventoryStockPage } from 'src/pages/inventory/stock';
 import { GeneralSettingsPage } from 'src/pages/settings/general';
 import { ReasonCodesPage } from 'src/pages/settings/reasons';
 import { MediaLocalizationDemoPage } from 'src/pages/simulation/media-localization';
@@ -20,6 +22,10 @@ import { CouponsPage } from 'src/pages/discounts/coupons';
 
 import { CustomersPage } from 'src/pages/customers/directory';
 import { CustomerGroupsPage } from 'src/pages/customers/groups';
+
+import { PosOrderPage } from 'src/pages/pos/order';
+import { OrdersWorkflowPage } from 'src/pages/orders/workflow';
+import { ReceiptPage } from 'src/pages/pos/receipt';
 
 import { useAuthStore } from 'src/store/useAuthStore';
 import { useEffect } from 'react';
@@ -62,6 +68,26 @@ export const routesSection: RouteObject[] = [
       {
         path: 'dashboard',
         element: <DashboardPage />,
+      },
+      {
+        path: 'pos/order',
+        element: <PosOrderPage />,
+      },
+      {
+        path: 'pos/receipt/:id',
+        element: <ReceiptPage />,
+      },
+      {
+        path: 'operations/orders',
+        element: <OrdersWorkflowPage />,
+      },
+      {
+        path: 'operations/cash-drawer',
+        element: <CashDrawerPage />,
+      },
+      {
+        path: 'inventory/stock',
+        element: <InventoryStockPage />,
       },
       {
         path: 'operations/branches',
