@@ -22,6 +22,7 @@ import { CouponsPage } from 'src/pages/discounts/coupons';
 
 import { CustomersPage } from 'src/pages/customers/directory';
 import { CustomerGroupsPage } from 'src/pages/customers/groups';
+import { CustomerCreditPage } from 'src/pages/customers/credit';
 
 import { PosOrderPage } from 'src/pages/pos/order';
 import { OrdersWorkflowPage } from 'src/pages/orders/workflow';
@@ -136,6 +137,10 @@ export const routesSection: RouteObject[] = [
       {
         path: 'customers',
         element: <CustomersPage />,
+      },
+      {
+        path: 'customers/credit',
+        element: <CustomerCreditPage />,
       },
       {
         path: 'customers/groups',

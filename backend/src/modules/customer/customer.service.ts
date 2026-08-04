@@ -235,4 +235,124 @@ export class CustomerService {
 
     return { account, transaction: savedTx };
   }
+
+  async postRepayment(
+    tenantId: string,
+    customerId: string,
+    data: { amount: string; note?: string; reference_id?: string },
+    correlationId: string,
+  ) {
+    return await this.postCreditTransaction(
+      tenantId,
+      customerId,
+      {
+        transaction_type: 'CHARGE',
+        amount: data.amount,
+        note: data.note || 'Credit account repayment top-up',
+        reference_id: data.reference_id,
+      },
+      correlationId,
+    );
+  }
+
+  async postAdjustment(
+    tenantId: string,
+    customerId: string,
+    data: { amount: string; note?: string; reference_id?: string },
+    correlationId: string,
+  ) {
+    return await this.postCreditTransaction(
+      tenantId,
+      customerId,
+      {
+        transaction_type: 'ADJUSTMENT',
+        amount: data.amount,
+        note: data.note || 'Credit balance manual adjustment',
+        reference_id: data.reference_id,
+      },
+      correlationId,
+    );
+  }
+
+  async getCreditStatement(tenantId: string, customerId: string) {
+    const customer = await this.getCustomerById(tenantId, customerId);
+    const { account, transactions } = await this.getCreditAccount(tenantId, customerId);
+
+    const availableCredit = MoneyUtil.add(account.credit_limit, account.current_balance);
+
+    return {
+      customer: {
+        id: customer.id,
+        code: customer.code,
+        name: `${customer.first_name} ${customer.last_name}`,
+        mobile: customer.mobile,
+      },
+      credit_account: {
+        ...account,
+        available_credit: availableCredit,
+      },
+      transactions: transactions.map((t) => ({
+        id: t.id,
+        transaction_type: t.transaction_type,
+        amount: t.amount,
+        note: t.note,
+        reference_id: t.reference_id,
+        recorded_at: t.recorded_at,
+      })),
+    };
+  }
+
+  async getCreditAgingReport(tenantId: string) {
+    const accounts = await this.accountRepo.find({ where: { tenant_id: tenantId } });
+    const customers = await this.customerRepo.find({ where: { tenant_id: tenantId } });
+    const custMap = new Map(customers.map((c) => [c.id, c]));
+
+    const agingBuckets = await Promise.all(
+      accounts.map(async (acc) => {
+        const cust = custMap.get(acc.customer_id);
+        const txs = await this.txRepo.find({ where: { tenant_id: tenantId, account_id: acc.id } });
+
+        let current = '0.0000'; // 0-30 days
+        let days30 = '0.0000';  // 31-60 days
+        let days60 = '0.0000';  // 61-90 days
+        let days90Plus = '0.0000'; // 90+ days
+
+        const now = new Date().getTime();
+
+        txs.forEach((t) => {
+          if (t.transaction_type === 'DEBIT') {
+            const ageDays = (now - new Date(t.recorded_at).getTime()) / (1000 * 3600 * 24);
+            if (ageDays <= 30) {
+              current = MoneyUtil.add(current, t.amount);
+            } else if (ageDays <= 60) {
+              days30 = MoneyUtil.add(days30, t.amount);
+            } else if (ageDays <= 90) {
+              days60 = MoneyUtil.add(days60, t.amount);
+            } else {
+              days90Plus = MoneyUtil.add(days90Plus, t.amount);
+            }
+          }
+        });
+
+        const availableCredit = MoneyUtil.add(acc.credit_limit, acc.current_balance);
+
+        return {
+          customer_id: acc.customer_id,
+          customer_name: cust ? `${cust.first_name} ${cust.last_name}` : 'Unknown Customer',
+          customer_code: cust ? cust.code : 'UNKNOWN',
+          credit_limit: acc.credit_limit,
+          current_balance: acc.current_balance,
+          available_credit: availableCredit,
+          aging: {
+            current_0_30: current,
+            days_31_60: days30,
+            days_61_90: days60,
+            days_90_plus: days90Plus,
+          },
+        };
+      }),
+    );
+
+    return agingBuckets;
+  }
 }

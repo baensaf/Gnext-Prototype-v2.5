@@ -88,4 +88,26 @@ export const customerApi = {
     const res = await httpClient.post(`/api/v1/customers/${customerId}/credit-account/transactions`, data);
     return res.data;
   },
+  postRepayment: async (
+    customerId: string,
+    data: { amount: string; note?: string; reference_id?: string },
+  ): Promise<{ account: CustomerCreditAccount; transaction: CustomerCreditTransaction }> => {
+    const res = await httpClient.post(`/api/v1/customers/${customerId}/credit-account/repayments`, data);
+    return res.data;
+  },
+  postAdjustment: async (
+    customerId: string,
+    data: { amount: string; note?: string; reference_id?: string },
+  ): Promise<{ account: CustomerCreditAccount; transaction: CustomerCreditTransaction }> => {
+    const res = await httpClient.post(`/api/v1/customers/${customerId}/credit-account/adjustments`, data);
+    return res.data;
+  },
+  getCreditStatement: async (customerId: string): Promise<any> => {
+    const res = await httpClient.get(`/api/v1/customers/${customerId}/credit-account/statement`);
+    return res.data;
+  },
+  getCreditAgingReport: async (): Promise<any[]> => {
+    const res = await httpClient.get('/api/v1/customers/credit/aging');
+    return res.data;
+  },
 };

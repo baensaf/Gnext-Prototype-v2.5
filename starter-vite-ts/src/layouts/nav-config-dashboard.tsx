@@ -22,6 +22,7 @@ const ICONS = {
   discounts: icon('ic-label'),
   coupons: icon('ic-order'),
   customers: icon('ic-user'),
+  credit: icon('ic-banking'),
   customerGroups: icon('ic-job'),
   settings: icon('ic-params'),
   reasons: icon('ic-lock'),
@@ -63,7 +64,6 @@ export const navData: NavSectionProps['data'] = [
         title: 'Inventory Stock & Alerts',
         path: '/app/inventory/stock',
         icon: ICONS.inventory,
-        info: <Label color="error">ALERT</Label>,
       },
       {
         title: 'Cash Drawer & EOD',
@@ -123,12 +123,18 @@ export const navData: NavSectionProps['data'] = [
     ],
   },
   {
-    subheader: 'CRM & Accounts',
+    subheader: 'CRM & Credit Accounts',
     items: [
       {
-        title: 'Customers Directory',
+        title: 'Customer Directory',
         path: '/app/customers',
         icon: ICONS.customers,
+      },
+      {
+        title: 'Credit Accounts & Aging',
+        path: '/app/customers/credit',
+        icon: ICONS.credit,
+        info: <Label color="success">LEDGER</Label>,
       },
       {
         title: 'Customer Groups',

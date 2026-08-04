@@ -25,6 +25,12 @@ export class CustomerController {
     return await this.customerService.getCustomers(tenantId, search);
   }
 
+  @Get('customers/credit/aging')
+  async getCreditAgingReport(@Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    return await this.customerService.getCreditAgingReport(tenantId);
+  }
+
   @Get('customers/:id')
   async getCustomerById(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
@@ -56,10 +62,30 @@ export class CustomerController {
     return await this.customerService.getCreditAccount(tenantId, id);
   }
 
+  @Get('customers/:id/credit-account/statement')
+  async getCreditStatement(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    return await this.customerService.getCreditStatement(tenantId, id);
+  }
+
   @Post('customers/:id/credit-account/transactions')
   async postCreditTransaction(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
     const correlationId = (req as any).correlationId;
     return await this.customerService.postCreditTransaction(tenantId, id, body, correlationId);
+  }
+
+  @Post('customers/:id/credit-account/repayments')
+  async postRepayment(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const correlationId = (req as any).correlationId;
+    return await this.customerService.postRepayment(tenantId, id, body, correlationId);
+  }
+
+  @Post('customers/:id/credit-account/adjustments')
+  async postAdjustment(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const correlationId = (req as any).correlationId;
+    return await this.customerService.postAdjustment(tenantId, id, body, correlationId);
   }
 }

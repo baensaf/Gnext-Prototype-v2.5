@@ -20,6 +20,15 @@ export class CustomerCreditAccount {
   @Column({ type: 'boolean', default: false })
   is_blocked: boolean;
 
+  @Column({ type: 'varchar', length: 16, default: 'FINITE' })
+  mode: string; // FINITE, UNLIMITED, POLICY
+
+  @Column({ type: 'varchar', length: 16, default: 'ACTIVE' })
+  status: string; // ACTIVE, SUSPENDED, CLOSED
+
+  @Column({ type: 'text', nullable: true })
+  policy_note: string;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 
