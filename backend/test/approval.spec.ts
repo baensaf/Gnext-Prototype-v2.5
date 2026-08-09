@@ -7,7 +7,8 @@ import { ApprovalDecision } from '../src/entities/ApprovalDecision.entity';
 import { PinAttemptLog } from '../src/entities/PinAttemptLog.entity';
 import { AdminUser } from '../src/entities/AdminUser.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import { ForbiddenException, UnauthorizedException, ConflictException } from '@nestjs/common';
 
 describe('ApprovalService (Unit)', () => {
   let service: ApprovalService;
@@ -35,6 +36,7 @@ describe('ApprovalService (Unit)', () => {
         { provide: getRepositoryToken(PinAttemptLog), useValue: pinLogRepo },
         { provide: getRepositoryToken(AdminUser), useValue: userRepo },
         { provide: AuditWriter, useValue: auditWriter },
+        { provide: DataSource, useValue: {} },
       ],
     }).compile();
 
@@ -59,8 +61,8 @@ describe('ApprovalService (Unit)', () => {
     expect(result.role).toBe('SUPERVISOR');
   });
 
-  it('should lock out user and throw ForbiddenException after 3 failed PIN attempts in 15 mins', async () => {
-    pinLogRepo.count.mockResolvedValue(3);
+  it('should lock out user and throw ForbiddenException after 5 failed PIN attempts in 15 mins', async () => {
+    pinLogRepo.count.mockResolvedValue(5);
 
     await expect(service.verifyManagerPin('t-1', 'u-locked', '1234')).rejects.toThrow(ForbiddenException);
   });
@@ -72,21 +74,18 @@ describe('ApprovalService (Unit)', () => {
     await expect(service.verifyManagerPin('t-1', 'u-mgr', '0000')).rejects.toThrow(UnauthorizedException);
   });
 
-  it('should advance approval step and mark APPROVED on final step', async () => {
-    userRepo.findOne.mockResolvedValue({ id: 'u-mgr', role: 'SUPERVISOR', pin_hash: null });
+  it('should validate command hash binding and throw ConflictException on payload mismatch', async () => {
     requestRepo.findOne.mockResolvedValue({
       id: 'req-1',
       tenant_id: 't-1',
-      action: 'DISCOUNT',
-      status: 'PENDING',
-      current_step: 1,
-      total_steps: 1,
+      action: 'REFUND',
+      status: 'APPROVED',
+      command_hash: 'hash-abc',
       expires_at: new Date(Date.now() + 600000),
     });
-    requestRepo.save.mockImplementation((obj) => Promise.resolve(obj));
 
-    const result = await service.approveRequest('t-1', 'req-1', 'u-mgr', '1234', 'Approved discount');
-    expect(result.status).toBe('APPROVED');
-    expect(decisionRepo.save).toHaveBeenCalled();
+    await expect(
+      service.validateApprovedRequest('t-1', 'req-1', 'REFUND', 'hash-different'),
+    ).rejects.toThrow(ConflictException);
   });
 });

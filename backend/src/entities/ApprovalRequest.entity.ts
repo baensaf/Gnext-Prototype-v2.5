@@ -23,6 +23,9 @@ export class ApprovalRequest {
   @Column({ type: 'uuid' })
   requester_user_id: string;
 
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  command_hash: string;
+
   @Column({ type: 'varchar', length: 32, default: 'PENDING' }) // PENDING, APPROVED, REJECTED, EXPIRED, CANCELLED
   status: string;
 

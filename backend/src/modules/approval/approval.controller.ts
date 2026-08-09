@@ -19,6 +19,14 @@ export class ApprovalController {
     return await this.approvalService.createOrUpdateRule(tenantId, body, correlationId);
   }
 
+  @Post('user-pin')
+  async setUserPin(@Body() body: { userId?: string; pin: string }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = body.userId || (req as any).user?.id || 'd3b07384-d113-4603-9a3d-3c220f86fb04';
+    const correlationId = (req as any).correlationId;
+    return await this.approvalService.setUserPin(tenantId, userId, body.pin, correlationId);
+  }
+
   @Post('verify-pin')
   async verifyPin(@Body() body: { userId?: string; pin: string; actionName?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
