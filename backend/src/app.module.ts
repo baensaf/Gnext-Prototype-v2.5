@@ -92,9 +92,17 @@ import { Coupon } from './entities/Coupon.entity';
 
 import { CustomerGroup } from './entities/CustomerGroup.entity';
 import { Customer } from './entities/Customer.entity';
+import { CustomerPhone } from './entities/CustomerPhone.entity';
 import { CustomerAddress } from './entities/CustomerAddress.entity';
 import { CustomerCreditAccount } from './entities/CustomerCreditAccount.entity';
 import { CustomerCreditTransaction } from './entities/CustomerCreditTransaction.entity';
+import { CustomFieldDefinition } from './entities/CustomFieldDefinition.entity';
+import { CustomerCustomValue } from './entities/CustomerCustomValue.entity';
+import { CustomerTag } from './entities/CustomerTag.entity';
+import { CustomerTagLink } from './entities/CustomerTagLink.entity';
+import { CustomerSegment } from './entities/CustomerSegment.entity';
+import { CustomerConsent } from './entities/CustomerConsent.entity';
+import { CustomerMerge } from './entities/CustomerMerge.entity';
 
 import { OrderHeader } from './entities/OrderHeader.entity';
 import { OrderItem } from './entities/OrderItem.entity';
@@ -145,7 +153,9 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
           Menu, MenuCategory, MenuProduct, ProductAvailability,
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,
           Discount, Coupon,
-          CustomerGroup, Customer, CustomerAddress, CustomerCreditAccount, CustomerCreditTransaction,
+          CustomerGroup, Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CustomerCreditTransaction,
+          CustomFieldDefinition, CustomerCustomValue, CustomerTag, CustomerTagLink, CustomerSegment,
+          CustomerConsent, CustomerMerge,
           OrderHeader, OrderItem, OrderItemOption,
           Payment, SettlementAccount, PaymentDevice, PaymentAllocation, PaymentAttempt,
           RefundRequest, RefundItem, RefundAllocation,
