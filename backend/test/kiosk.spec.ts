@@ -148,4 +148,39 @@ describe('KioskService (Unit)', () => {
     expect(res.order.status).toBe('READY');
     expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'KIOSK_PAYMENT_PROCESSED' }));
   });
+
+  it('should ignore client-supplied unit price and use authoritative database price', async () => {
+    settingRepo.findOne.mockResolvedValue({ key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'OPTIONAL' });
+    productRepo.findOne.mockResolvedValue({ id: 'prod-1', name: 'Burger', base_price: '15.00' });
+
+    orderRepo.create.mockImplementation((dto: any) => dto);
+    orderRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'ord-kiosk-2' }));
+    orderItemRepo.create.mockImplementation((dto: any) => dto);
+    orderItemRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'item-2' }));
+
+    const order = await service.createKioskOrder('t-1', {
+      branch_id: 'br-1',
+      order_type: 'TAKEAWAY',
+      items: [{ product_id: 'prod-1', quantity: 1, unit_price: 1.00 /* Malicious client override attempt */ }],
+    });
+
+    // Should use authoritative base_price 15.00, NOT client override 1.00
+    expect(order.subtotal_amount).toBe('15.0000');
+    expect(order.tax_amount).toBe('1.3500');
+    expect(order.total_amount).toBe('16.3500');
+  });
+
+  it('should return existing order on duplicate submit with idempotency key', async () => {
+    const existingOrder = { id: 'ord-existing', order_number: 'KOS-IDEM-01', total_amount: '16.3500' };
+    orderRepo.findOne.mockResolvedValue(existingOrder);
+
+    const result = await service.createKioskOrder('t-1', {
+      branch_id: 'br-1',
+      order_type: 'TAKEAWAY',
+      idempotency_key: 'KOS-IDEM-01',
+      items: [{ product_id: 'prod-1', quantity: 1 }],
+    });
+
+    expect(result.id).toBe('ord-existing');
+  });
 });

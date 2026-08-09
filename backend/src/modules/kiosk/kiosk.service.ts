@@ -101,6 +101,10 @@ export class KioskService {
         ? { id: branch.id, code: branch.code, name: branch.name, currency_code: branch.currency_code || 'USD' }
         : null,
       customer_identity_policy: customerIdentityPolicy,
+      simulatedCapabilities: {
+        simulated_card_terminal: true,
+        simulated_receipt_printer: true,
+      },
       categories,
       products: catalogProducts,
       payment_methods: paymentMethods.map((pm) => ({
@@ -120,6 +124,7 @@ export class KioskService {
       order_type: 'DINE_IN' | 'TAKEAWAY';
       customer_name?: string;
       customer_phone?: string;
+      idempotency_key?: string;
       items: Array<{
         product_id: string;
         quantity: number;
@@ -137,6 +142,18 @@ export class KioskService {
   ) {
     if (!data.items || data.items.length === 0) {
       throw new BadRequestException('Kiosk order must contain at least one item');
+    }
+
+    // Idempotency check: if an order with same idempotency key or correlation ID exists, return it
+    if (data.idempotency_key || correlationId) {
+      const existing = await this.orderRepo.findOne({
+        where: [
+          { tenant_id: tenantId, channel: 'KIOSK', order_number: data.idempotency_key },
+          { tenant_id: tenantId, channel: 'KIOSK', notes: `IDEM:${data.idempotency_key}` },
+        ],
+        relations: ['items', 'items.options'],
+      });
+      if (existing) return existing;
     }
 
     const identityPolicySetting = await this.settingRepo.findOne({
@@ -175,11 +192,13 @@ export class KioskService {
       branch_id: data.branch_id,
       terminal_id: data.terminal_id || null,
       order_number: orderNum,
+      channel: 'KIOSK',
       order_type: data.order_type || 'TAKEAWAY',
+      state: 'SUBMITTED' as any,
       status: 'SUBMITTED',
       fulfillment_status: 'PENDING',
       customer_id: customerId,
-      notes: data.notes || 'Kiosk Self-Service Order',
+      notes: data.idempotency_key ? `IDEM:${data.idempotency_key}` : (data.notes || 'Kiosk Self-Service Order'),
       subtotal_amount: '0.0000',
       tax_amount: '0.0000',
       discount_amount: '0.0000',
@@ -195,6 +214,7 @@ export class KioskService {
       const product = await this.productRepo.findOne({ where: { id: itemInput.product_id, tenant_id: tenantId } });
       if (!product) throw new NotFoundException(`Product ${itemInput.product_id} not found`);
 
+      // Authoritative pricing: Ignore any client-supplied unit_price or additional_price
       const basePrice = parseFloat(product.base_price || '0');
       let itemOptionsPrice = 0;
       const optionsToSave = [];
@@ -202,7 +222,7 @@ export class KioskService {
       if (itemInput.options && itemInput.options.length > 0) {
         for (const opt of itemInput.options) {
           const optionItem = await this.optionItemRepo.findOne({ where: { id: opt.option_item_id } });
-          const optPrice = optionItem ? parseFloat(optionItem.price_delta || '0') : (opt.additional_price || 0);
+          const optPrice = optionItem ? parseFloat(optionItem.price_delta || '0') : 0;
           itemOptionsPrice += optPrice;
 
           optionsToSave.push({
@@ -275,13 +295,39 @@ export class KioskService {
       payment_method_id?: string;
       amount?: number;
       terminal_id?: string;
+      idempotency_key?: string;
     },
     correlationId?: string,
   ) {
     const order = await this.orderRepo.findOne({ where: { id: data.order_id, tenant_id: tenantId } });
     if (!order) throw new NotFoundException('Order not found');
 
-    const totalToPay = data.amount || parseFloat(order.total_amount || '0');
+    // Idempotency check: if order is already paid, return existing payment & receipt
+    if (order.status === 'READY' || parseFloat(order.due_amount || '0') <= 0.01) {
+      const existingPayment = await this.paymentRepo.findOne({
+        where: { tenant_id: tenantId, order_id: order.id },
+        order: { initiated_at: 'DESC' },
+      });
+
+      return {
+        success: true,
+        payment: existingPayment,
+        order,
+        receipt: {
+          header: 'GNEXT KIOSK SELF-SERVICE RECEIPT (SIMULATED CARD TERMINAL)',
+          order_number: order.order_number,
+          order_type: order.order_type,
+          date: new Date(),
+          reference_number: existingPayment ? existingPayment.reference : `POS-KOS-${order.id.slice(-6)}`,
+          total_paid: parseFloat(order.total_amount || '0').toFixed(2),
+          payment_method: 'Simulated Card Terminal',
+          status: 'PAID & SENT TO KITCHEN',
+          hardware_status: 'SIMULATED NETWORK POS OK',
+        },
+      };
+    }
+
+    const totalToPay = parseFloat(order.due_amount || order.total_amount || '0');
 
     let paymentMethod = null;
     if (data.payment_method_id) {
@@ -304,6 +350,7 @@ export class KioskService {
       status: 'SUCCEEDED',
       reference: refNum,
       business_date: new Date().toISOString().slice(0, 10),
+      idempotency_key: data.idempotency_key || null,
     });
 
     const savedPayment = await this.paymentRepo.save(payment);
@@ -313,10 +360,9 @@ export class KioskService {
 
     order.paid_amount = currentPaid.toFixed(4);
     order.due_amount = currentDue.toFixed(4);
-    if (currentDue <= 0.01) {
-      order.status = 'READY';
-      order.fulfillment_status = 'PREPARING';
-    }
+    order.status = 'READY';
+    order.state = 'READY' as any;
+    order.fulfillment_status = 'PREPARING';
 
     const updatedOrder = await this.orderRepo.save(order);
 
@@ -333,14 +379,15 @@ export class KioskService {
       payment: savedPayment,
       order: updatedOrder,
       receipt: {
-        header: 'GNEXT KIOSK SELF-SERVICE RECEIPT',
+        header: 'GNEXT KIOSK SELF-SERVICE RECEIPT (SIMULATED CARD TERMINAL)',
         order_number: updatedOrder.order_number,
         order_type: updatedOrder.order_type,
         date: new Date(),
         reference_number: refNum,
         total_paid: totalToPay.toFixed(2),
-        payment_method: paymentMethod ? paymentMethod.name : 'Card Terminal',
+        payment_method: paymentMethod ? paymentMethod.name : 'Simulated Card Terminal',
         status: 'PAID & SENT TO KITCHEN',
+        hardware_status: 'SIMULATED NETWORK POS OK',
       },
     };
   }
