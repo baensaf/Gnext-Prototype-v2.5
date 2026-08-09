@@ -45,6 +45,7 @@ import { DiningArea } from './entities/DiningArea.entity';
 import { DiningTable } from './entities/DiningTable.entity';
 import { TableSession } from './entities/TableSession.entity';
 import { TableEvent } from './entities/TableEvent.entity';
+import { TableOccupancyEvent } from './entities/TableOccupancyEvent.entity';
 import { KitchenStation } from './entities/KitchenStation.entity';
 import { KitchenTicket } from './entities/KitchenTicket.entity';
 import { KitchenTicketItem } from './entities/KitchenTicketItem.entity';
@@ -173,7 +174,7 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
           OrderHeader, OrderItem, OrderItemOption, OrderAdjustment, OrderNote, OrderLink, OrderStateEvent, OrderSequence,
           Payment, SettlementAccount, PaymentDevice, PaymentAllocation, PaymentAttempt,
           RefundRequest, RefundItem, RefundAllocation, Refund,
-          DiningArea, DiningTable, TableSession, TableEvent,
+          DiningArea, DiningTable, TableSession, TableEvent, TableOccupancyEvent,
           KitchenStation, KitchenTicket, KitchenTicketItem, PrinterDevice,
           Courier, DeliveryAssignment, CourierSettlement, CourierSettlementLine,
           CashierShift, CashMovement, BusinessDayClose, CashDrawerShift, CashDrawerTransaction,

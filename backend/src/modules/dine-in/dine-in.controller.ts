@@ -1,62 +1,107 @@
-import { Controller, Get, Post, Param, Query, Body, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { DineInService } from './dine-in.service';
+import { CreateSectionDto, UpdateSectionDto, CreateTableDto, UpdateTableDto, MoveTableDto, MergeOrdersDto } from './dtos/dine-in.dto';
 
-@Controller('api/v1/dine-in')
+@Controller(['api/v1/dining', 'api/v1/dine-in'])
 export class DineInController {
   constructor(private readonly dineInService: DineInService) {}
 
-  @Get('areas')
-  async getAreas(@Query('branchId') branchId: string, @Req() req: Request) {
+  // Sections / Areas
+  @Get(['sections', 'areas'])
+  async getSections(@Query('branchId') branchId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.dineInService.getAreas(tenantId, branchId);
+    return await this.dineInService.getSections(tenantId, branchId);
   }
 
-  @Post('areas')
-  async createArea(@Body() body: any, @Req() req: Request) {
+  @Post(['sections', 'areas'])
+  async createSection(@Body() body: CreateSectionDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
-    return await this.dineInService.createArea(tenantId, body, correlationId);
+    return await this.dineInService.createSection(tenantId, body, correlationId);
   }
 
-  @Get('tables')
-  async getTables(@Query('areaId') areaId: string, @Req() req: Request) {
+  @Patch('sections/:id')
+  async updateSection(@Param('id') id: string, @Body() body: UpdateSectionDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.dineInService.getTables(tenantId, areaId);
+    const correlationId = (req as any).correlationId;
+    return await this.dineInService.updateSection(tenantId, id, body, correlationId);
+  }
+
+  @Delete('sections/:id')
+  async archiveSection(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.dineInService.archiveSection(tenantId, id, correlationId);
+  }
+
+  // Tables
+  @Get('tables')
+  async getTables(@Query() query: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const areaId = query.areaId || query.sectionId || query.dining_area_id;
+    return await this.dineInService.getTables(tenantId, { ...query, areaId });
   }
 
   @Post('tables')
-  async createTable(@Body() body: any, @Req() req: Request) {
+  async createTable(@Body() body: CreateTableDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.dineInService.createTable(tenantId, body, correlationId);
   }
 
-  @Get('floor-plan')
-  async getFloorPlan(@Query('branchId') branchId: string, @Req() req: Request) {
+  @Patch('tables/:id')
+  async updateTable(@Param('id') id: string, @Body() body: UpdateTableDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.dineInService.getFloorPlan(tenantId, branchId);
+    const correlationId = (req as any).correlationId;
+    return await this.dineInService.updateTable(tenantId, id, body, correlationId);
   }
 
+  @Delete('tables/:id')
+  async archiveTable(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.dineInService.archiveTable(tenantId, id, correlationId);
+  }
+
+  // Floor Plan
+  @Get(['floor', 'floor-plan'])
+  async getFloorPlan(@Query() query: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const branchId = query.branchId;
+    const sectionId = query.sectionId || query.areaId;
+    const status = query.status;
+    return await this.dineInService.getFloorPlan(tenantId, branchId, sectionId, status);
+  }
+
+  // Move table
+  @Post(['orders/:orderId/move-table', 'tables/:orderId/move'])
+  async moveTable(
+    @Param('orderId') orderId: string,
+    @Body() body: MoveTableDto,
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    const correlationId = (req as any).correlationId;
+    return await this.dineInService.moveTable(tenantId, orderId, body.targetTableId, body.guestCount, userId, correlationId);
+  }
+
+  // Merge orders
+  @Post(['orders/merge', 'tables/merge-orders'])
+  async mergeOrders(@Body() body: MergeOrdersDto, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    const correlationId = (req as any).correlationId;
+    return await this.dineInService.mergeOrders(tenantId, body, userId, correlationId);
+  }
+
+  // Legacy table session helpers for backward compatibility
   @Post('tables/:id/seat')
   async seatGuests(@Param('id') tableId: string, @Body() body: { guestCount: number; orderId?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.dineInService.seatGuests(tenantId, tableId, body.guestCount, body.orderId, correlationId);
-  }
-
-  @Post('tables/:id/transfer')
-  async transferTable(@Param('id') sourceTableId: string, @Body() body: { targetTableId: string }, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.dineInService.transferTable(tenantId, sourceTableId, body.targetTableId, correlationId);
-  }
-
-  @Post('tables/merge')
-  async mergeTables(@Body() body: { sourceTableId: string; targetTableId: string }, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.dineInService.mergeTables(tenantId, body.sourceTableId, body.targetTableId, correlationId);
   }
 
   @Post('tables/:id/release')

@@ -21,7 +21,11 @@ import { DiscountEvaluationService } from '../discounts/discount-evaluation.serv
 import { OrderSequenceService } from './order-sequence.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { OutboxWriter } from '../outbox/outbox-writer.service';
+import Decimal from 'decimal.js';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { DiningTable } from '../../entities/DiningTable.entity';
+import { TableOccupancyEvent } from '../../entities/TableOccupancyEvent.entity';
+import { SplitOrderDto, TransferItemsDto } from '../dine-in/dtos/dine-in.dto';
 import {
   OrderCreateDto,
   OrderUpdateDto,
@@ -656,4 +660,395 @@ export class OrderService {
         throw new BadRequestException(`Unknown order state action: ${action}`);
     }
   }
+
+  public async recalculateOrderTotals(tenantId: string, order: OrderHeader, em: EntityManager): Promise<OrderHeader> {
+    const items = await em.find(OrderItem, { where: { order_id: order.id, tenant_id: tenantId } });
+    let subtotal = '0.0000';
+    let modifierTotal = '0.0000';
+
+    for (const item of items) {
+      const lineBase = MoneyUtil.multiply(item.unit_price, item.quantity);
+      item.base_total = lineBase;
+      item.line_total = MoneyUtil.add(lineBase, item.modifier_total || '0.0000');
+      subtotal = MoneyUtil.add(subtotal, item.line_total);
+      modifierTotal = MoneyUtil.add(modifierTotal, item.modifier_total || '0.0000');
+      await em.save(OrderItem, item);
+    }
+
+    order.subtotal = subtotal;
+    order.subtotal_amount = subtotal;
+    order.modifier_total = modifierTotal;
+
+    const netBeforeTax = MoneyUtil.subtract(
+      MoneyUtil.add(MoneyUtil.add(order.subtotal, order.packaging_total || '0.0000'), order.delivery_fee || '0.0000'),
+      order.discount_total || '0.0000',
+    );
+    const grandTotal = MoneyUtil.add(netBeforeTax, order.tax_total || '0.0000');
+    order.grand_total = MoneyUtil.greaterThan(grandTotal, '0.0000') ? grandTotal : '0.0000';
+    order.total_amount = order.grand_total;
+
+    const outstanding = MoneyUtil.subtract(order.grand_total, order.paid_total || '0.0000');
+    order.outstanding_total = MoneyUtil.greaterThan(outstanding, '0.0000') ? outstanding : '0.0000';
+    order.due_amount = order.outstanding_total;
+    order.quote_version = String(Date.now());
+
+    return await em.save(OrderHeader, order);
+  }
+
+  async splitOrder(tenantId: string, sourceOrderId: string, dto: SplitOrderDto, userId?: string, correlationId?: string) {
+    return await this.dataSource.transaction(async (em) => {
+      const lockIds = Array.from(new Set([sourceOrderId, dto.targetTableId].filter(Boolean) as string[])).sort();
+      for (const id of lockIds) {
+        if (id === sourceOrderId) {
+          await em.findOne(OrderHeader, { where: { id, tenant_id: tenantId }, lock: { mode: 'pessimistic_write' } });
+        } else {
+          await em.findOne(DiningTable, { where: { id, tenant_id: tenantId }, lock: { mode: 'pessimistic_write' } });
+        }
+      }
+
+      const sourceOrder = await em.findOne(OrderHeader, {
+        where: { id: sourceOrderId, tenant_id: tenantId },
+        relations: ['items', 'items.options'],
+      });
+      if (!sourceOrder) throw new NotFoundException(`Order ${sourceOrderId} not found`);
+
+      if (['COMPLETED', 'CANCELLED'].includes(sourceOrder.state)) {
+        throw new BadRequestException(`Cannot split order in state ${sourceOrder.state}`);
+      }
+
+      if (!dto.lines || dto.lines.length === 0) {
+        throw new BadRequestException('At least one item line must be specified to split order');
+      }
+
+      const childOrderNumber = await this.sequenceService.generateOrderNumber(tenantId, em);
+
+      let targetTableNumber = sourceOrder.table_number;
+      if (dto.targetTableId) {
+        const targetTbl = await em.findOne(DiningTable, { where: { id: dto.targetTableId, tenant_id: tenantId } });
+        if (targetTbl) targetTableNumber = targetTbl.table_number;
+      }
+
+      const childOrder = em.create(OrderHeader, {
+        tenant_id: tenantId,
+        branch_id: sourceOrder.branch_id,
+        terminal_id: sourceOrder.terminal_id,
+        shift_id: sourceOrder.shift_id,
+        order_number: childOrderNumber,
+        channel: sourceOrder.channel,
+        order_type: 'DINE_IN',
+        state: 'DRAFT' as OrderState,
+        status: 'DRAFT',
+        currency_code: sourceOrder.currency_code,
+        quote_version: '1',
+        customer_id: sourceOrder.customer_id,
+        table_id: dto.targetTableId || sourceOrder.table_id,
+        table_number: targetTableNumber,
+        guest_count: sourceOrder.guest_count,
+        business_date: sourceOrder.business_date,
+        parent_order_id: sourceOrder.id,
+        created_by: userId || null,
+      });
+      const savedChildOrder = await em.save(OrderHeader, childOrder);
+
+      let newLineNo = 1;
+      for (const splitLine of dto.lines) {
+        const sourceItem = (sourceOrder.items || []).find((i) => i.id === splitLine.orderItemId);
+        if (!sourceItem) {
+          throw new BadRequestException(`Order item ${splitLine.orderItemId} not found on order ${sourceOrderId}`);
+        }
+
+        const splitQty = new Decimal(splitLine.quantity);
+        const currentQty = new Decimal(sourceItem.quantity);
+
+        if (splitQty.lte(0) || splitQty.gt(currentQty)) {
+          throw new BadRequestException(`Invalid split quantity ${splitLine.quantity} for item ${sourceItem.id} (current: ${sourceItem.quantity})`);
+        }
+
+        if (splitQty.equals(currentQty)) {
+          sourceItem.order_id = savedChildOrder.id;
+          sourceItem.line_number = newLineNo++;
+          await em.save(OrderItem, sourceItem);
+        } else {
+          const remainingQty = currentQty.minus(splitQty);
+          sourceItem.quantity = remainingQty.toFixed(4);
+          sourceItem.base_total = MoneyUtil.multiply(sourceItem.unit_price, sourceItem.quantity);
+          sourceItem.line_total = MoneyUtil.add(sourceItem.base_total, sourceItem.modifier_total || '0.0000');
+          await em.save(OrderItem, sourceItem);
+
+          const newItem = em.create(OrderItem, {
+            tenant_id: tenantId,
+            order_id: savedChildOrder.id,
+            line_number: newLineNo++,
+            product_id: sourceItem.product_id,
+            variant_id: sourceItem.variant_id,
+            product_code: sourceItem.product_code,
+            product_name: sourceItem.product_name,
+            variant_name: sourceItem.variant_name,
+            quantity: splitQty.toFixed(4),
+            unit_price: sourceItem.unit_price,
+            base_total: MoneyUtil.multiply(sourceItem.unit_price, splitQty.toFixed(4)),
+            modifier_total: sourceItem.modifier_total,
+            discount_total: '0.0000',
+            tax_total: '0.0000',
+            packaging_total: '0.0000',
+            line_total: MoneyUtil.add(MoneyUtil.multiply(sourceItem.unit_price, splitQty.toFixed(4)), sourceItem.modifier_total || '0.0000'),
+            notes: sourceItem.notes,
+            state: sourceItem.state,
+          });
+          const savedNewItem = await em.save(OrderItem, newItem);
+
+          if (sourceItem.options && sourceItem.options.length > 0) {
+            for (const opt of sourceItem.options) {
+              const newOpt = em.create(OrderItemOption, {
+                tenant_id: tenantId,
+                order_item_id: savedNewItem.id,
+                option_item_id: opt.option_item_id,
+                option_group_name: opt.option_group_name || '',
+                option_item_name: opt.option_item_name || '',
+                price_delta: opt.price_delta || '0.0000',
+              });
+              await em.save(OrderItemOption, newOpt);
+            }
+          }
+        }
+      }
+
+      const link = em.create(OrderLink, {
+        tenant_id: tenantId,
+        from_order_id: sourceOrder.id,
+        to_order_id: savedChildOrder.id,
+        link_type: 'SPLIT',
+        details: { splitLines: dto.lines },
+      });
+      await em.save(OrderLink, link);
+
+      const updatedSource = await this.recalculateOrderTotals(tenantId, sourceOrder, em);
+      const updatedChild = await this.recalculateOrderTotals(tenantId, savedChildOrder, em);
+
+      if (dto.targetTableId) {
+        const occ = em.create(TableOccupancyEvent, {
+          tenant_id: tenantId,
+          table_id: dto.targetTableId,
+          order_id: savedChildOrder.id,
+          from_table_id: sourceOrder.table_id || undefined,
+          event_type: 'SPLIT',
+          guest_count: sourceOrder.guest_count || 1,
+          occurred_by: userId || null,
+          details: { sourceOrderId: sourceOrder.id, newOrderId: savedChildOrder.id },
+        });
+        await em.save(TableOccupancyEvent, occ);
+      }
+
+      await this.auditWriter.write({
+        tenantId,
+        actorType: userId ? 'ADMIN' : 'SYSTEM',
+        actorId: userId,
+        action: 'ORDER_SPLIT',
+        entityType: 'Order',
+        entityId: sourceOrder.id,
+        correlationId,
+        details: { childOrderId: savedChildOrder.id, childOrderNumber },
+      });
+
+      return { source: updatedSource, newOrder: updatedChild };
+    });
+  }
+
+  async transferItems(tenantId: string, dto: TransferItemsDto, userId?: string, correlationId?: string) {
+    return await this.dataSource.transaction(async (em) => {
+      const sortedOrderIds = [dto.sourceOrderId, dto.targetOrderId].sort();
+      for (const id of sortedOrderIds) {
+        await em.findOne(OrderHeader, { where: { id, tenant_id: tenantId }, lock: { mode: 'pessimistic_write' } });
+      }
+
+      const sourceOrder = await em.findOne(OrderHeader, {
+        where: { id: dto.sourceOrderId, tenant_id: tenantId },
+        relations: ['items', 'items.options'],
+      });
+      const targetOrder = await em.findOne(OrderHeader, {
+        where: { id: dto.targetOrderId, tenant_id: tenantId },
+        relations: ['items', 'items.options'],
+      });
+
+      if (!sourceOrder || !targetOrder) {
+        throw new NotFoundException('Source or target order not found');
+      }
+
+      if (sourceOrder.branch_id !== targetOrder.branch_id || sourceOrder.currency_code !== targetOrder.currency_code) {
+        throw new BadRequestException('Source and target orders must have the same branch and currency');
+      }
+
+      if (['COMPLETED', 'CANCELLED'].includes(sourceOrder.state) || ['COMPLETED', 'CANCELLED'].includes(targetOrder.state)) {
+        throw new BadRequestException('Cannot transfer items to/from completed or cancelled orders');
+      }
+
+      let targetLineNo = (targetOrder.items || []).length + 1;
+      for (const transferLine of dto.lines) {
+        const sourceItem = (sourceOrder.items || []).find((i) => i.id === transferLine.orderItemId);
+        if (!sourceItem) {
+          throw new BadRequestException(`Item ${transferLine.orderItemId} not found on source order`);
+        }
+
+        const qtyToTransfer = new Decimal(transferLine.quantity);
+        const currentQty = new Decimal(sourceItem.quantity);
+
+        if (qtyToTransfer.lte(0) || qtyToTransfer.gt(currentQty)) {
+          throw new BadRequestException(`Invalid transfer quantity ${transferLine.quantity}`);
+        }
+
+        if (qtyToTransfer.equals(currentQty)) {
+          sourceItem.order_id = targetOrder.id;
+          sourceItem.line_number = targetLineNo++;
+          await em.save(OrderItem, sourceItem);
+        } else {
+          const remainingQty = currentQty.minus(qtyToTransfer);
+          sourceItem.quantity = remainingQty.toFixed(4);
+          sourceItem.base_total = MoneyUtil.multiply(sourceItem.unit_price, sourceItem.quantity);
+          sourceItem.line_total = MoneyUtil.add(sourceItem.base_total, sourceItem.modifier_total || '0.0000');
+          await em.save(OrderItem, sourceItem);
+
+          const newItem = em.create(OrderItem, {
+            tenant_id: tenantId,
+            order_id: targetOrder.id,
+            line_number: targetLineNo++,
+            product_id: sourceItem.product_id,
+            variant_id: sourceItem.variant_id,
+            product_code: sourceItem.product_code,
+            product_name: sourceItem.product_name,
+            variant_name: sourceItem.variant_name,
+            quantity: qtyToTransfer.toFixed(4),
+            unit_price: sourceItem.unit_price,
+            base_total: MoneyUtil.multiply(sourceItem.unit_price, qtyToTransfer.toFixed(4)),
+            modifier_total: sourceItem.modifier_total,
+            discount_total: '0.0000',
+            tax_total: '0.0000',
+            packaging_total: '0.0000',
+            line_total: MoneyUtil.add(MoneyUtil.multiply(sourceItem.unit_price, qtyToTransfer.toFixed(4)), sourceItem.modifier_total || '0.0000'),
+            notes: sourceItem.notes,
+            state: sourceItem.state,
+          });
+          const savedNewItem = await em.save(OrderItem, newItem);
+
+          if (sourceItem.options && sourceItem.options.length > 0) {
+            for (const opt of sourceItem.options) {
+              const newOpt = em.create(OrderItemOption, {
+                tenant_id: tenantId,
+                order_item_id: savedNewItem.id,
+                option_item_id: opt.option_item_id,
+                option_group_name: opt.option_group_name || '',
+                option_item_name: opt.option_item_name || '',
+                price_delta: opt.price_delta || '0.0000',
+              });
+              await em.save(OrderItemOption, newOpt);
+            }
+          }
+        }
+      }
+
+      const link = em.create(OrderLink, {
+        tenant_id: tenantId,
+        from_order_id: sourceOrder.id,
+        to_order_id: targetOrder.id,
+        link_type: 'TRANSFER',
+        details: { lines: dto.lines, reason: dto.reason },
+      });
+      await em.save(OrderLink, link);
+
+      const updatedSource = await this.recalculateOrderTotals(tenantId, sourceOrder, em);
+      const updatedTarget = await this.recalculateOrderTotals(tenantId, targetOrder, em);
+
+      await this.auditWriter.write({
+        tenantId,
+        actorType: userId ? 'ADMIN' : 'SYSTEM',
+        actorId: userId,
+        action: 'ORDER_ITEMS_TRANSFERRED',
+        entityType: 'Order',
+        entityId: sourceOrder.id,
+        correlationId,
+        details: { targetOrderId: targetOrder.id, reason: dto.reason },
+      });
+
+      return { source: updatedSource, target: updatedTarget };
+    });
+  }
+
+  async getGuestBill(tenantId: string, id: string, locale: string = 'en') {
+    const order = await this.getOrderById(tenantId, id);
+    const isFa = locale === 'fa';
+
+    const formattedItems = (order.items || [])
+      .map((i) => {
+        return `
+          <tr>
+            <td style="padding:8px; border-bottom:1px solid #eee;">${i.product_name} ${i.variant_name ? `(${i.variant_name})` : ''}</td>
+            <td style="padding:8px; border-bottom:1px solid #eee; text-align:center;">${i.quantity}</td>
+            <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">${i.unit_price} ${order.currency_code}</td>
+            <td style="padding:8px; border-bottom:1px solid #eee; text-align:right;">${i.line_total} ${order.currency_code}</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html dir="${isFa ? 'rtl' : 'ltr'}">
+      <head>
+        <meta charset="utf-8" />
+        <title>${isFa ? 'صورتحساب مشتری' : 'Guest Bill'} #${order.order_number}</title>
+        <style>
+          body { font-family: system-ui, sans-serif; padding: 20px; color: #333; }
+          .bill-card { max-width: 450px; margin: 0 auto; border: 1px solid #ccc; padding: 20px; border-radius: 8px; }
+          .header { text-align: center; border-bottom: 2px dashed #bbb; padding-bottom: 15px; margin-bottom: 15px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+          .totals-row { display: flex; justify-content: space-between; padding: 4px 0; }
+          .grand-total { font-weight: bold; font-size: 1.2em; border-top: 2px solid #333; padding-top: 8px; margin-top: 8px; }
+        </style>
+      </head>
+      <body>
+        <div class="bill-card">
+          <div class="header">
+            <h2>${isFa ? 'پیش‌فاکتور میز' : 'Guest Bill'}</h2>
+            <p>${isFa ? 'شماره سفارش' : 'Order'}: #${order.order_number}</p>
+            ${order.table_number ? `<p>${isFa ? 'شماره میز' : 'Table'}: ${order.table_number}</p>` : ''}
+            <p>${isFa ? 'تاریخ' : 'Date'}: ${new Date().toLocaleString()}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align:${isFa ? 'right' : 'left'};">${isFa ? 'کالا' : 'Item'}</th>
+                <th>${isFa ? 'تعداد' : 'Qty'}</th>
+                <th style="text-align:right;">${isFa ? 'قیمت' : 'Price'}</th>
+                <th style="text-align:right;">${isFa ? 'جمع' : 'Total'}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${formattedItems}
+            </tbody>
+          </table>
+          <div class="totals-row">
+            <span>${isFa ? 'جمع کل' : 'Subtotal'}:</span>
+            <span>${order.subtotal} ${order.currency_code}</span>
+          </div>
+          ${order.discount_total && order.discount_total !== '0.0000' ? `
+          <div class="totals-row" style="color:red;">
+            <span>${isFa ? 'تخفیف' : 'Discount'}:</span>
+            <span>-${order.discount_total} ${order.currency_code}</span>
+          </div>` : ''}
+          ${order.tax_total && order.tax_total !== '0.0000' ? `
+          <div class="totals-row">
+            <span>${isFa ? 'مالیات' : 'Tax'}:</span>
+            <span>+${order.tax_total} ${order.currency_code}</span>
+          </div>` : ''}
+          <div class="totals-row grand-total">
+            <span>${isFa ? 'مبلغ قابل پرداخت' : 'Grand Total'}:</span>
+            <span>${order.grand_total} ${order.currency_code}</span>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return { html, order };
+  }
 }
+

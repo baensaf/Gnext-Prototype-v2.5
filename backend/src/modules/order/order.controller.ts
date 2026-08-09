@@ -12,6 +12,7 @@ import {
   OrderCancelDto,
   OrderReopenDto,
 } from './dtos/order.dto';
+import { SplitOrderDto, TransferItemsDto } from '../dine-in/dtos/dine-in.dto';
 
 @Controller('api/v1/orders')
 export class OrdersController {
@@ -135,5 +136,27 @@ export class OrdersController {
   async getOrderHistory(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.orderService.getOrderHistory(tenantId, id);
+  }
+
+  @Post(':id/split')
+  async splitOrder(@Param('id') id: string, @Body() body: SplitOrderDto, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    const correlationId = (req as any).correlationId;
+    return await this.orderService.splitOrder(tenantId, id, body, userId, correlationId);
+  }
+
+  @Post('transfer-items')
+  async transferItems(@Body() body: TransferItemsDto, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    const correlationId = (req as any).correlationId;
+    return await this.orderService.transferItems(tenantId, body, userId, correlationId);
+  }
+
+  @Get(':id/guest-bill')
+  async getGuestBill(@Param('id') id: string, @Query('locale') locale: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.orderService.getGuestBill(tenantId, id, locale || 'en');
   }
 }
