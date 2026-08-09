@@ -41,15 +41,17 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       if (typeof resObj === 'string') {
         detail = resObj;
       } else if (typeof resObj === 'object' && resObj !== null) {
-        code = resObj.code || code;
+        code = resObj.code || (status === 400 ? 'BAD_REQUEST' : status === 409 ? 'VERSION_CONFLICT' : code);
         title = resObj.title || exception.message || title;
-        detail = resObj.detail || resObj.message || detail;
+        detail = resObj.detail || (typeof resObj.message === 'string' ? resObj.message : detail);
         type = resObj.type || type;
 
         if (Array.isArray(resObj.message)) {
           fieldErrors = resObj.message.map((msg: any) => {
             if (typeof msg === 'string') {
-              return { field: 'body', code: 'INVALID', message: msg };
+              const parts = msg.split(' ');
+              const field = parts[0] || 'body';
+              return { field, code: 'INVALID', message: msg };
             }
             return msg;
           });
@@ -58,10 +60,12 @@ export class ProblemDetailsFilter implements ExceptionFilter {
           status = HttpStatus.BAD_REQUEST;
         } else if (resObj.fieldErrors) {
           fieldErrors = resObj.fieldErrors;
+          code = resObj.code || 'VALIDATION_FAILED';
         }
       }
     } else if (exception instanceof Error) {
-      detail = exception.message;
+      // Internal error: do not leak raw stack traces or internal DB query errors
+      detail = process.env.NODE_ENV === 'development' ? exception.message : 'An internal server error occurred.';
     }
 
     const problemDetails: ProblemDetailsResponse = {

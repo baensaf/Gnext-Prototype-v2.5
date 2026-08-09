@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Param, Body, Query, Req, Header } from '@nestjs/common';
 import { Request } from 'express';
 import { InventoryService } from './inventory.service';
+import { PostInventoryTxDto } from '../../common/dto/inventory.dto';
 
 @Controller('api/v1/inventory')
 export class InventoryController {
@@ -22,7 +23,7 @@ export class InventoryController {
 
   @Post('transactions')
   @Header('X-V5-Preview', 'true')
-  async postTransaction(@Body() body: any, @Req() req: Request) {
+  async postTransaction(@Body() body: PostInventoryTxDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.inventoryService.postTransaction(tenantId, body, correlationId);
