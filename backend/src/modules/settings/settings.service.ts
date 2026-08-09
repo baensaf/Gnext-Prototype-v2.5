@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
@@ -17,6 +17,49 @@ export class SettingsService {
     private readonly auditWriter: AuditWriter,
   ) {}
 
+  validateGroupSettingValue(key: string, value: Record<string, any>) {
+    if (!value || typeof value !== 'object') {
+      throw new BadRequestException(`Setting group ${key} value must be an object`);
+    }
+
+    const group = key.toUpperCase();
+    if (group === 'TAX') {
+      if (value.tax_enabled !== undefined && typeof value.tax_enabled !== 'boolean') {
+        throw new BadRequestException('TAX setting property tax_enabled must be a boolean');
+      }
+      if (value.prices_include_tax !== undefined && typeof value.prices_include_tax !== 'boolean') {
+        throw new BadRequestException('TAX setting property prices_include_tax must be a boolean');
+      }
+    } else if (group === 'POS') {
+      if (value.allow_negative_inventory !== undefined && typeof value.allow_negative_inventory !== 'boolean') {
+        throw new BadRequestException('POS setting property allow_negative_inventory must be a boolean');
+      }
+      if (value.max_discount_percentage !== undefined) {
+        const disc = Number(value.max_discount_percentage);
+        if (isNaN(disc) || disc < 0 || disc > 100) {
+          throw new BadRequestException('POS setting property max_discount_percentage must be between 0 and 100');
+        }
+      }
+    } else if (group === 'FINANCIAL') {
+      if (value.base_currency !== undefined && (typeof value.base_currency !== 'string' || value.base_currency.length !== 3)) {
+        throw new BadRequestException('FINANCIAL setting property base_currency must be a 3-letter currency code');
+      }
+      if (value.fiscal_year_start_month !== undefined) {
+        const m = Number(value.fiscal_year_start_month);
+        if (!Number.isInteger(m) || m < 1 || m > 12) {
+          throw new BadRequestException('FINANCIAL setting property fiscal_year_start_month must be an integer between 1 and 12');
+        }
+      }
+    } else if (group === 'SYSTEM') {
+      if (value.auto_logout_minutes !== undefined) {
+        const mins = Number(value.auto_logout_minutes);
+        if (isNaN(mins) || mins < 0) {
+          throw new BadRequestException('SYSTEM setting property auto_logout_minutes must be >= 0');
+        }
+      }
+    }
+  }
+
   async getSettings(tenantId: string) {
     const settings = await this.settingRepo.find({ where: { tenant_id: tenantId } });
     const result: Record<string, any> = {};
@@ -27,6 +70,8 @@ export class SettingsService {
   }
 
   async updateSetting(tenantId: string, key: string, value: Record<string, any>, correlationId: string) {
+    this.validateGroupSettingValue(key, value);
+
     let setting = await this.settingRepo.findOne({ where: { tenant_id: tenantId, key } });
     const before = setting ? { ...setting } : null;
 
@@ -121,7 +166,7 @@ export class SettingsService {
 
     const method = this.methodRepo.create({
       tenant_id: tenantId,
-      code: data.code.toUpperCase(),
+      code: data.code ? data.code.toUpperCase() : 'UNKNOWN',
       name: data.name,
       kind: data.kind || 'CASH',
       currency_code: data.currency_code || 'IRR',

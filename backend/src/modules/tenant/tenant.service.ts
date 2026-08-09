@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tenant } from '../../entities/Tenant.entity';
@@ -7,6 +7,7 @@ import { BranchOperatingHour } from '../../entities/BranchOperatingHour.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { BranchStatusSnapshot } from '../../entities/BranchStatusSnapshot.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
 
 @Injectable()
 export class TenantService {
@@ -44,11 +45,29 @@ export class TenantService {
     return updated;
   }
 
-  async getBranches(tenantId: string) {
-    return await this.branchRepo.find({
-      where: { tenant_id: tenantId },
-      order: { code: 'ASC' },
-    });
+  async getBranches(tenantId: string, query?: PaginationQueryDto & { search?: string }): Promise<PagedResponse<Branch> | Branch[]> {
+    if (!query || (!query.page && !query.limit && !query.search)) {
+      return await this.branchRepo.find({
+        where: { tenant_id: tenantId },
+        order: { code: 'ASC' },
+      });
+    }
+
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const qb = this.branchRepo.createQueryBuilder('b')
+      .where('b.tenant_id = :tenantId', { tenantId });
+
+    if (query.search) {
+      qb.andWhere('(LOWER(b.name) LIKE :search OR LOWER(b.code) LIKE :search)', { search: `%${query.search.toLowerCase()}%` });
+    }
+
+    qb.orderBy('b.code', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [items, total] = await qb.getManyAndCount();
+    return createPagedResponse(items, total, page, limit);
   }
 
   async getBranchById(tenantId: string, branchId: string) {
@@ -144,7 +163,18 @@ export class TenantService {
 
   async updateBranchHours(tenantId: string, branchId: string, hours: Array<{ day_of_week: number; open_time?: string; close_time?: string; is_closed?: boolean; spans_midnight?: boolean }>, correlationId: string) {
     await this.getBranchById(tenantId, branchId);
+
     for (const h of hours) {
+      if (h.day_of_week < 0 || h.day_of_week > 6) {
+        throw new BadRequestException(`Invalid day_of_week ${h.day_of_week}. Must be 0-6.`);
+      }
+
+      if (!h.is_closed && h.open_time && h.close_time && !h.spans_midnight) {
+        if (h.open_time >= h.close_time) {
+          throw new BadRequestException(`Operating open_time (${h.open_time}) must be earlier than close_time (${h.close_time}) unless spans_midnight is true.`);
+        }
+      }
+
       let hourRow = await this.hoursRepo.findOne({ where: { tenant_id: tenantId, branch_id: branchId, day_of_week: h.day_of_week } });
       if (!hourRow) {
         hourRow = this.hoursRepo.create({ tenant_id: tenantId, branch_id: branchId, day_of_week: h.day_of_week });
@@ -183,12 +213,18 @@ export class TenantService {
     const existing = await this.terminalRepo.findOne({ where: { tenant_id: tenantId, branch_id: data.branch_id, code: data.code } });
     if (existing) throw new ConflictException(`Terminal code ${data.code} already exists for this branch`);
 
+    const allowedTypes = ['CASHIER', 'KITCHEN_DISPLAY', 'SELF_KIOSK', 'MOBILE_POS'];
+    const terminalType = (data.terminal_type || 'CASHIER').toUpperCase();
+    if (!allowedTypes.includes(terminalType)) {
+      throw new BadRequestException(`Terminal type ${data.terminal_type} is invalid. Allowed: ${allowedTypes.join(', ')}`);
+    }
+
     const terminal = this.terminalRepo.create({
       tenant_id: tenantId,
       branch_id: data.branch_id,
       code: data.code.toUpperCase(),
       name: data.name,
-      terminal_type: data.terminal_type || 'CASHIER',
+      terminal_type: terminalType,
       is_active: true,
     });
 

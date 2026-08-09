@@ -15,13 +15,38 @@ export interface UploadedFileDto {
 
 @Injectable()
 export class MediaService {
-  private readonly uploadDir = path.join(process.cwd(), 'uploads');
+  private get uploadDir(): string {
+    const dir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    return dir;
+  }
 
   constructor(
     @InjectRepository(FileAsset) private readonly assetRepo: Repository<FileAsset>,
-  ) {
-    if (!fs.existsSync(this.uploadDir)) {
-      fs.mkdirSync(this.uploadDir, { recursive: true });
+  ) {}
+
+  validateMagicHeader(buffer: Buffer, mimeType: string) {
+    if (!buffer || buffer.length < 4) {
+      throw new BadRequestException('Invalid or empty file buffer');
+    }
+
+    const hex = buffer.toString('hex', 0, 8).toLowerCase();
+    let isValid = false;
+
+    if (mimeType === 'image/png' && hex.startsWith('89504e47')) {
+      isValid = true;
+    } else if ((mimeType === 'image/jpeg' || mimeType === 'image/jpg') && hex.startsWith('ffd8ff')) {
+      isValid = true;
+    } else if (mimeType === 'application/pdf' && hex.startsWith('25504446')) {
+      isValid = true;
+    } else if (mimeType === 'image/webp' && hex.startsWith('52494646')) { // RIFF
+      isValid = true;
+    }
+
+    if (!isValid) {
+      throw new BadRequestException(`File magic number signature does not match declared MIME type: ${mimeType}`);
     }
   }
 
@@ -30,14 +55,26 @@ export class MediaService {
       throw new BadRequestException('No file uploaded');
     }
 
+    const maxSizeBytes = 5 * 1024 * 1024; // 5MB limit per specification
+    if (file.size > maxSizeBytes || file.buffer.length > maxSizeBytes) {
+      throw new BadRequestException(`File size exceeds 5MB limit. Received ${file.size} bytes.`);
+    }
+
+    const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'application/pdf'];
+    if (!allowedMimeTypes.includes(file.mimetype.toLowerCase())) {
+      throw new BadRequestException(`MIME type ${file.mimetype} is not allowed. Allowed types: ${allowedMimeTypes.join(', ')}`);
+    }
+
+    this.validateMagicHeader(file.buffer, file.mimetype.toLowerCase());
+
     const sha256 = crypto.createHash('sha256').update(file.buffer).digest('hex');
     const ext = path.extname(file.originalname) || '.bin';
-    const filename = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
-    const filePath = path.join(this.uploadDir, filename);
+    const opaqueFilename = `${sha256.substring(0, 16)}-${Date.now()}${ext}`;
+    const filePath = path.join(this.uploadDir, opaqueFilename);
 
     await fs.promises.writeFile(filePath, file.buffer);
 
-    const relativeUrlPath = `/uploads/${filename}`;
+    const relativeUrlPath = `/uploads/${opaqueFilename}`;
 
     const asset = this.assetRepo.create({
       tenant_id: tenantId,
@@ -63,7 +100,7 @@ export class MediaService {
 
   async getFileById(tenantId: string, fileId: string) {
     const asset = await this.assetRepo.findOne({ where: { id: fileId, tenant_id: tenantId } });
-    if (!asset) throw new NotFoundException('File asset not found');
+    if (!asset) throw new NotFoundException('File asset not found or unauthorized cross-tenant access');
     return {
       id: asset.id,
       url: asset.file_path,

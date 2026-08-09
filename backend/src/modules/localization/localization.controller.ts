@@ -1,5 +1,5 @@
-import { Controller, Get, Put, Query, Body, Req } from '@nestjs/common';
-import { Request } from 'express';
+import { Controller, Get, Put, Post, Query, Body, Req, Res, Header } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { LocalizationService } from './localization.service';
 
 @Controller('api/v1/localization')
@@ -30,5 +30,20 @@ export class LocalizationController {
   async upsertStrings(@Body() body: { strings: any[] }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.localizationService.upsertStrings(tenantId, body.strings || []);
+  }
+
+  @Get('translations/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="translations.csv"')
+  async exportCsv(@Req() req: Request, @Res() res: Response) {
+    const tenantId = (req as any).tenantId;
+    const csvContent = await this.localizationService.exportCsv(tenantId);
+    return res.status(200).send(csvContent);
+  }
+
+  @Post('translations/import')
+  async importCsv(@Body() body: { csv: string }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.localizationService.importCsv(tenantId, body.csv || '');
   }
 }
