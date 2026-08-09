@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Param, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { OfflineSyncService } from './offline-sync.service';
 
@@ -16,10 +16,12 @@ export class OfflineSyncController {
   async toggleConnectivity(
     @Body('branchId') branchId: string,
     @Body('isOnline') isOnline: boolean,
+    @Body('agentVersion') agentVersion: string,
+    @Body('agentHealth') agentHealth: string,
     @Req() req: Request,
   ) {
     const tenantId = (req as any).tenantId;
-    return await this.syncService.toggleConnectivity(tenantId, branchId, isOnline);
+    return await this.syncService.toggleConnectivity(tenantId, branchId, isOnline, agentVersion, agentHealth);
   }
 
   @Post('queue')
@@ -29,11 +31,40 @@ export class OfflineSyncController {
     return await this.syncService.enqueueOfflineItem(tenantId, body, correlationId);
   }
 
+  @Post('offline/operations')
+  async enqueueOfflineOperation(@Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    const data = {
+      branch_id: body.branchId || body.branch_id || 'default-branch',
+      terminal_id: body.terminalId || body.terminal_id,
+      entity_type: body.operationType || body.entity_type || 'ORDER',
+      payload: body.payload,
+      client_version: body.localVersion || body.client_version || 1,
+      dedupe_key: body.dedupeKey || body.dedupe_key,
+    };
+    return await this.syncService.enqueueOfflineItem(tenantId, data, correlationId);
+  }
+
   @Post('trigger')
   async triggerSyncWorker(@Body('branchId') branchId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.syncService.triggerSyncWorker(tenantId, branchId, correlationId);
+  }
+
+  @Post('queue/:id/retry')
+  async cloneDlqItemParam(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.syncService.cloneDlqItem(tenantId, id, correlationId);
+  }
+
+  @Post('retry-dlq')
+  async cloneDlqItemBody(@Body('queue_item_id') queueItemId: string, @Body('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.syncService.cloneDlqItem(tenantId, queueItemId || id, correlationId);
   }
 
   @Get('queue')

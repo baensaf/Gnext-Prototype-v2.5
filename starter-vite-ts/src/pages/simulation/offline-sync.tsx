@@ -17,6 +17,7 @@ import {
   TableBody,
   TableCell,
   TableHead,
+  TextField,
   Typography,
   DialogTitle,
   DialogContent,
@@ -30,10 +31,12 @@ export function OfflineSyncPage() {
   const [queueItems, setQueueItems] = useState<any[]>([]);
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [workerResult, setWorkerResult] = useState<any>(null);
 
   // Conflict Resolution Modal
   const [activeConflict, setActiveConflict] = useState<any>(null);
   const [selectedStrategy, setSelectedStrategy] = useState<'ACCEPT_CLIENT' | 'ACCEPT_SERVER' | 'MANUAL_OVERRIDE'>('ACCEPT_CLIENT');
+  const [customOverrideJson, setCustomOverrideJson] = useState<string>('{}');
 
   const fetchSyncData = async () => {
     setLoading(true);
@@ -86,7 +89,7 @@ export function OfflineSyncPage() {
     }
   };
 
-  const handleEnqueueSampleOrder = async (simulateConflict: boolean = false) => {
+  const handleEnqueueSampleOrder = async (scenario: 'NORMAL' | 'CONFLICT' | 'DLQ' | 'DEDUPE') => {
     setLoading(true);
     try {
       const payload: any = {
@@ -94,18 +97,30 @@ export function OfflineSyncPage() {
         items: [{ name: 'Cheeseburger', qty: 1, price: '12.00' }],
         total: '12.00',
       };
-      if (simulateConflict) {
+      let dedupeKey: string | undefined = undefined;
+
+      if (scenario === 'CONFLICT') {
         payload.simulate_conflict = 'PRICE_MISMATCH';
+      } else if (scenario === 'DLQ') {
+        payload.simulate_dlq = true;
+      } else if (scenario === 'DEDUPE') {
+        dedupeKey = 'DEDUPE-FIXED-KEY-101';
       }
 
-      await axios.post('/api/v1/sync/queue', {
+      const res = await axios.post('/api/v1/sync/queue', {
         branch_id: 'default-branch',
         entity_type: 'ORDER',
         payload,
+        dedupe_key: dedupeKey,
       });
+
+      if (res.data?.is_duplicate) {
+        alert('Duplicate operation detected! Active queue item returned.');
+      }
+
       fetchSyncData();
-    } catch (err) {
-      alert('Enqueue failed');
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Enqueue failed');
     } finally {
       setLoading(false);
     }
@@ -115,10 +130,22 @@ export function OfflineSyncPage() {
     setLoading(true);
     try {
       const res = await axios.post('/api/v1/sync/trigger', { branchId: 'default-branch' });
-      alert(`Sync Worker Complete! Processed: ${res.data.processed_count}, Synced: ${res.data.synced_count}, Conflicts: ${res.data.conflict_count}`);
+      setWorkerResult(res.data);
       fetchSyncData();
-    } catch (err) {
-      alert('Sync worker failed');
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Sync worker failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCloneDlqItem = async (queueItemId: string) => {
+    setLoading(true);
+    try {
+      await axios.post(`/api/v1/sync/queue/${queueItemId}/retry`);
+      fetchSyncData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to clone DLQ item');
     } finally {
       setLoading(false);
     }
@@ -128,14 +155,26 @@ export function OfflineSyncPage() {
     if (!activeConflict) return;
     setLoading(true);
     try {
+      let overridePayload: any = undefined;
+      if (selectedStrategy === 'MANUAL_OVERRIDE') {
+        try {
+          overridePayload = JSON.parse(customOverrideJson);
+        } catch (e) {
+          alert('Invalid JSON in override payload editor');
+          setLoading(false);
+          return;
+        }
+      }
+
       await axios.post('/api/v1/sync/resolve-conflict', {
         conflict_id: activeConflict.id,
         resolution_strategy: selectedStrategy,
+        override_payload: overridePayload,
       });
       setActiveConflict(null);
       fetchSyncData();
-    } catch (err) {
-      alert('Failed to resolve conflict');
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to resolve conflict');
     } finally {
       setLoading(false);
     }
@@ -167,11 +206,28 @@ export function OfflineSyncPage() {
           Branch Connectivity Mode: {isOnline ? 'Online Connected' : 'Offline Disconnected'}
         </Typography>
         <Typography variant="body2">
-          {isOnline
-            ? 'Transactions pass directly to server. Background sync worker is ready.'
-            : 'All POS & Kiosk transactions are stored in local offline queue until re-connected.'}
+          Agent Version: <strong>{syncStatus?.agent_version || 'v1.5.0-sim'}</strong> | Health: <strong>{syncStatus?.agent_health || 'HEALTHY'}</strong>
+        </Typography>
+        <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+          Last Sync: {syncStatus?.last_synced_at ? new Date(syncStatus.last_synced_at).toLocaleString() : 'Never'} | Offline Since: {syncStatus?.offline_since ? new Date(syncStatus.offline_since).toLocaleString() : 'N/A'}
         </Typography>
       </Alert>
+
+      {workerResult && (
+        <Alert severity={workerResult.advanced_last_sync ? 'success' : 'warning'} sx={{ mb: 3, borderRadius: 3 }} onClose={() => setWorkerResult(null)}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+            Sync Worker Run Results: {workerResult.advanced_last_sync ? '100% Batch Succeeded (Last Sync Advanced)' : 'Batch Included Conflicts/Failures (Last Sync Preserved)'}
+          </Typography>
+          <Typography variant="body2">
+            Processed: {workerResult.processed_count} | Synced: {workerResult.synced_count} | Conflicts: {workerResult.conflict_count} | DLQ Failures: {workerResult.dlq_count}
+          </Typography>
+          {workerResult.category_counts && (
+            <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+              Categories: Orders: {workerResult.category_counts.orders}, Payments: {workerResult.category_counts.payments}, Refunds: {workerResult.category_counts.refunds}, Customers: {workerResult.category_counts.customers}
+            </Typography>
+          )}
+        </Alert>
+      )}
 
       {/* Sync Overview & Worker Controls */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -185,9 +241,9 @@ export function OfflineSyncPage() {
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <Card sx={{ p: 3, borderRadius: 3, textAlign: 'center' }}>
-            <Typography color="text.secondary">Detected Sync Conflicts</Typography>
+            <Typography color="text.secondary">DLQ / Failed Items</Typography>
             <Typography variant="h3" color="error.main" sx={{ fontWeight: 'bold' }}>
-              {syncStatus?.conflict_count ?? 0}
+              {syncStatus?.dlq_count ?? 0}
             </Typography>
           </Card>
         </Grid>
@@ -196,29 +252,20 @@ export function OfflineSyncPage() {
             <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
               Sync Engine & Queue Controls
             </Typography>
-            <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap' }}>
-              <Button
-                variant="outlined"
-                color="secondary"
-                onClick={() => handleEnqueueSampleOrder(false)}
-                disabled={loading}
-              >
-                Enqueue Offline POS Order
+            <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', gap: 1.5 }}>
+              <Button variant="outlined" color="primary" onClick={() => handleEnqueueSampleOrder('NORMAL')} disabled={loading}>
+                + Offline Order
               </Button>
-              <Button
-                variant="outlined"
-                color="warning"
-                onClick={() => handleEnqueueSampleOrder(true)}
-                disabled={loading}
-              >
-                Enqueue Price Conflict Order
+              <Button variant="outlined" color="warning" onClick={() => handleEnqueueSampleOrder('CONFLICT')} disabled={loading}>
+                + Price Conflict
               </Button>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleTriggerSyncWorker}
-                disabled={loading}
-              >
+              <Button variant="outlined" color="error" onClick={() => handleEnqueueSampleOrder('DLQ')} disabled={loading}>
+                + DLQ Failure
+              </Button>
+              <Button variant="outlined" color="info" onClick={() => handleEnqueueSampleOrder('DEDUPE')} disabled={loading}>
+                + Dedupe Key Order
+              </Button>
+              <Button variant="contained" color="primary" onClick={handleTriggerSyncWorker} disabled={loading}>
                 Trigger Sync Worker
               </Button>
             </Stack>
@@ -238,9 +285,10 @@ export function OfflineSyncPage() {
                 <TableCell sx={{ fontWeight: 'bold' }}>Item ID</TableCell>
                 <TableCell sx={{ fontWeight: 'bold' }}>Entity Type</TableCell>
                 <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Dedupe Key</TableCell>
                 <TableCell sx={{ fontWeight: 'bold' }}>Retries</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Conflict / Detail</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Created At</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Conflict / Error</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -261,13 +309,22 @@ export function OfflineSyncPage() {
                           ? 'warning'
                           : item.status === 'CONFLICT'
                           ? 'error'
+                          : item.status === 'DLQ_FAILED'
+                          ? 'error'
                           : 'default'
                       }
                     />
                   </TableCell>
+                  <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{item.dedupe_key || '-'}</TableCell>
                   <TableCell>{item.retry_count}</TableCell>
                   <TableCell>{item.conflict_reason || '-'}</TableCell>
-                  <TableCell>{new Date(item.created_at).toLocaleString()}</TableCell>
+                  <TableCell>
+                    {item.status === 'DLQ_FAILED' && (
+                      <Button size="small" variant="contained" color="secondary" onClick={() => handleCloneDlqItem(item.id)} disabled={loading}>
+                        Clone for Retry
+                      </Button>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -314,6 +371,7 @@ export function OfflineSyncPage() {
                       onClick={() => {
                         setActiveConflict(conf);
                         setSelectedStrategy('ACCEPT_CLIENT');
+                        setCustomOverrideJson(JSON.stringify(conf.client_state, null, 2));
                       }}
                     >
                       Resolve Diff
@@ -337,7 +395,7 @@ export function OfflineSyncPage() {
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, color: 'primary.main' }}>
-                    Client State (Offline POS):
+                    Client State (Local Original):
                   </Typography>
                   <Paper sx={{ p: 2, bgcolor: 'background.neutral', fontFamily: 'monospace' }} variant="outlined">
                     <pre style={{ margin: 0 }}>{JSON.stringify(activeConflict.client_state, null, 2)}</pre>
@@ -346,7 +404,7 @@ export function OfflineSyncPage() {
 
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, color: 'secondary.main' }}>
-                    Server State (Central DB):
+                    Server State (Cloud Original):
                   </Typography>
                   <Paper sx={{ p: 2, bgcolor: 'background.neutral', fontFamily: 'monospace' }} variant="outlined">
                     <pre style={{ margin: 0 }}>{JSON.stringify(activeConflict.server_state, null, 2)}</pre>
@@ -358,22 +416,46 @@ export function OfflineSyncPage() {
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
                   Choose Resolution Strategy:
                 </Typography>
-                <Stack direction="row" spacing={2}>
+                <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
                   <Button
                     variant={selectedStrategy === 'ACCEPT_CLIENT' ? 'contained' : 'outlined'}
                     color="primary"
                     onClick={() => setSelectedStrategy('ACCEPT_CLIENT')}
                   >
-                    Accept Client Version
+                    Accept Local Version
                   </Button>
                   <Button
                     variant={selectedStrategy === 'ACCEPT_SERVER' ? 'contained' : 'outlined'}
                     color="secondary"
                     onClick={() => setSelectedStrategy('ACCEPT_SERVER')}
                   >
-                    Accept Server Version
+                    Accept Cloud Version
+                  </Button>
+                  <Button
+                    variant={selectedStrategy === 'MANUAL_OVERRIDE' ? 'contained' : 'outlined'}
+                    color="warning"
+                    onClick={() => setSelectedStrategy('MANUAL_OVERRIDE')}
+                  >
+                    Merged / Manual Override
                   </Button>
                 </Stack>
+
+                {selectedStrategy === 'MANUAL_OVERRIDE' && (
+                  <Box sx={{ mt: 2 }}>
+                    <Alert severity="warning" sx={{ mb: 2 }}>
+                      Financial payloads must obey domain validation rules. Arbitrary or unvalidated financial JSON will be rejected.
+                    </Alert>
+                    <TextField
+                      fullWidth
+                      multiline
+                      rows={6}
+                      label="Merged Domain Payload (JSON)"
+                      value={customOverrideJson}
+                      onChange={(e) => setCustomOverrideJson(e.target.value)}
+                      sx={{ fontFamily: 'monospace' }}
+                    />
+                  </Box>
+                )}
               </Box>
             </DialogContent>
             <DialogActions>

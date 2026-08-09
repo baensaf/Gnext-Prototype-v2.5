@@ -35,6 +35,9 @@ export class OfflineQueueItem {
   @Column({ type: 'integer', nullable: true })
   server_version: number;
 
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  dedupe_key: string;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 
