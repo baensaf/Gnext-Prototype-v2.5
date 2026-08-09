@@ -1,11 +1,13 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HealthController } from './modules/health/health.controller';
 import { SessionGuard } from './common/guards/session.guard';
 import { CsrfGuard } from './common/guards/csrf.guard';
 import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
+import { IdempotencyService } from './common/services/idempotency.service';
+import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
 import { AuthModule } from './modules/auth/auth.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { OutboxModule } from './modules/outbox/outbox.module';
@@ -179,10 +181,11 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
     OfflineSyncModule,
     ReportsModule,
     ImportExportModule,
-    TypeOrmModule.forFeature([AdminUser, Session]),
+    TypeOrmModule.forFeature([AdminUser, Session, IdempotencyRecord]),
   ],
   controllers: [HealthController],
   providers: [
+    IdempotencyService,
     {
       provide: APP_GUARD,
       useClass: SessionGuard,
@@ -190,6 +193,10 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
     {
       provide: APP_GUARD,
       useClass: CsrfGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: IdempotencyInterceptor,
     },
   ],
 })
