@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Category } from '../../entities/Category.entity';
@@ -14,6 +14,7 @@ import { MenuProduct } from '../../entities/MenuProduct.entity';
 import { ProductAvailability } from '../../entities/ProductAvailability.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
 
 @Injectable()
 export class CatalogService {
@@ -33,8 +34,25 @@ export class CatalogService {
   ) {}
 
   // Categories
-  async getCategories(tenantId: string) {
-    return await this.catRepo.find({ where: { tenant_id: tenantId }, order: { sort_order: 'ASC', code: 'ASC' } });
+  async getCategories(tenantId: string, query?: PaginationQueryDto & { search?: string }): Promise<PagedResponse<Category> | Category[]> {
+    if (!query || (!query.page && !query.limit && !query.search)) {
+      return await this.catRepo.find({ where: { tenant_id: tenantId }, order: { sort_order: 'ASC', code: 'ASC' } });
+    }
+
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const qb = this.catRepo.createQueryBuilder('c').where('c.tenant_id = :tenantId', { tenantId });
+
+    if (query.search) {
+      qb.andWhere('(LOWER(c.name) LIKE :search OR LOWER(c.code) LIKE :search)', { search: `%${query.search.toLowerCase()}%` });
+    }
+
+    qb.orderBy('c.sort_order', 'ASC').addOrderBy('c.code', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [items, total] = await qb.getManyAndCount();
+    return createPagedResponse(items, total, page, limit);
   }
 
   async createCategory(tenantId: string, data: { code: string; name: string; parent_id?: string; sort_order?: number; image_asset_id?: string }, correlationId: string) {
@@ -107,10 +125,31 @@ export class CatalogService {
   }
 
   // Products
-  async getProducts(tenantId: string, categoryId?: string) {
-    const where: any = { tenant_id: tenantId };
-    if (categoryId) where.category_id = categoryId;
-    return await this.prodRepo.find({ where, order: { code: 'ASC' } });
+  async getProducts(tenantId: string, categoryId?: string, query?: PaginationQueryDto & { search?: string }): Promise<PagedResponse<Product> | Product[]> {
+    if (!query || (!query.page && !query.limit && !query.search)) {
+      const where: any = { tenant_id: tenantId };
+      if (categoryId) where.category_id = categoryId;
+      return await this.prodRepo.find({ where, order: { code: 'ASC' } });
+    }
+
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const qb = this.prodRepo.createQueryBuilder('p').where('p.tenant_id = :tenantId', { tenantId });
+
+    if (categoryId) {
+      qb.andWhere('p.category_id = :categoryId', { categoryId });
+    }
+
+    if (query.search) {
+      qb.andWhere('(LOWER(p.name) LIKE :search OR LOWER(p.code) LIKE :search OR LOWER(p.sku) LIKE :search)', { search: `%${query.search.toLowerCase()}%` });
+    }
+
+    qb.orderBy('p.code', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [items, total] = await qb.getManyAndCount();
+    return createPagedResponse(items, total, page, limit);
   }
 
   async getProductById(tenantId: string, id: string) {
@@ -214,14 +253,37 @@ export class CatalogService {
   }
 
   // Option Groups & Items
-  async getOptionGroups(tenantId: string) {
-    const groups = await this.groupRepo.find({ where: { tenant_id: tenantId }, order: { code: 'ASC' } });
-    const result = [];
+  async getOptionGroups(tenantId: string, query?: PaginationQueryDto & { search?: string }): Promise<PagedResponse<any> | any[]> {
+    if (!query || (!query.page && !query.limit && !query.search)) {
+      const groups = await this.groupRepo.find({ where: { tenant_id: tenantId }, order: { code: 'ASC' } });
+      const result = [];
+      for (const g of groups) {
+        const items = await this.itemRepo.find({ where: { option_group_id: g.id, tenant_id: tenantId }, order: { sort_order: 'ASC' } });
+        result.push({ ...g, items });
+      }
+      return result;
+    }
+
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const qb = this.groupRepo.createQueryBuilder('g').where('g.tenant_id = :tenantId', { tenantId });
+
+    if (query.search) {
+      qb.andWhere('(LOWER(g.name) LIKE :search OR LOWER(g.code) LIKE :search)', { search: `%${query.search.toLowerCase()}%` });
+    }
+
+    qb.orderBy('g.code', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [groups, total] = await qb.getManyAndCount();
+    const itemsList = [];
     for (const g of groups) {
       const items = await this.itemRepo.find({ where: { option_group_id: g.id, tenant_id: tenantId }, order: { sort_order: 'ASC' } });
-      result.push({ ...g, items });
+      itemsList.push({ ...g, items });
     }
-    return result;
+
+    return createPagedResponse(itemsList, total, page, limit);
   }
 
   async createOptionGroup(tenantId: string, data: { code: string; name: string; min_selection?: number; max_selection?: number; is_required?: boolean }, correlationId: string) {
@@ -229,12 +291,19 @@ export class CatalogService {
     const existing = await this.groupRepo.findOne({ where: { tenant_id: tenantId, code } });
     if (existing) throw new ConflictException(`Option group ${code} already exists`);
 
+    const min = data.min_selection ?? 0;
+    const max = data.max_selection ?? 1;
+
+    if (min < 0 || max < min) {
+      throw new BadRequestException(`Invalid modifier selections. min_selection (${min}) must be >= 0 and <= max_selection (${max}).`);
+    }
+
     const group = this.groupRepo.create({
       tenant_id: tenantId,
       code,
       name: data.name,
-      min_selection: data.min_selection ?? 0,
-      max_selection: data.max_selection ?? 1,
+      min_selection: min,
+      max_selection: max,
       is_required: data.is_required ?? false,
     });
 
@@ -350,7 +419,7 @@ export class CatalogService {
     return saved;
   }
 
-  // Slice 5: Bulk Price Update
+  // Bulk Price Update
   async bulkUpdatePrices(
     tenantId: string,
     params: { price_group_id?: string; category_id?: string; adjustment_type: 'PERCENTAGE' | 'FIXED'; amount: string },
@@ -414,7 +483,7 @@ export class CatalogService {
     return { success: true, updated_count: updatedCount };
   }
 
-  // Slice 5: Menus Management
+  // Menus Management
   async getMenus(tenantId: string, branchId?: string, channel?: string) {
     const where: any = { tenant_id: tenantId };
     if (branchId) where.branch_id = branchId;
@@ -533,7 +602,7 @@ export class CatalogService {
     return await this.menuProdRepo.save(link);
   }
 
-  // Slice 5: Product Availability & Temporary Suspension
+  // Product Availability & Temporary Suspension
   async getAvailabilities(tenantId: string, branchId?: string) {
     const where: any = { tenant_id: tenantId };
     if (branchId) where.branch_id = branchId;
@@ -565,7 +634,7 @@ export class CatalogService {
       tenantId,
       actorType: 'ADMIN',
       action: 'PRODUCT_SUSPENDED',
-      correlationId,
+      correlationId: correlationId || '00000000-0000-0000-0000-000000000000',
       details: { productId, branchId, hours, reason, suspendedUntil },
     });
 
@@ -585,7 +654,7 @@ export class CatalogService {
       tenantId,
       actorType: 'ADMIN',
       action: 'PRODUCT_RESUMED',
-      correlationId,
+      correlationId: correlationId || '00000000-0000-0000-0000-000000000000',
       details: { productId, branchId },
     });
 
@@ -646,4 +715,3 @@ export class CatalogService {
     };
   }
 }
-

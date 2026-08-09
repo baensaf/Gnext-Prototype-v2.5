@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { CatalogService } from './catalog.service';
+import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 @Controller('api/v1')
 export class CatalogController {
@@ -8,9 +9,9 @@ export class CatalogController {
 
   // Categories
   @Get('categories')
-  async getCategories(@Req() req: Request) {
+  async getCategories(@Query() query: PaginationQueryDto & { search?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.catalogService.getCategories(tenantId);
+    return await this.catalogService.getCategories(tenantId, query);
   }
 
   @Post('categories')
@@ -36,9 +37,13 @@ export class CatalogController {
 
   // Products
   @Get('products')
-  async getProducts(@Query('categoryId') categoryId: string, @Req() req: Request) {
+  async getProducts(
+    @Query('categoryId') categoryId?: string,
+    @Query() query?: PaginationQueryDto & { search?: string },
+    @Req() req?: Request,
+  ) {
     const tenantId = (req as any).tenantId;
-    return await this.catalogService.getProducts(tenantId, categoryId);
+    return await this.catalogService.getProducts(tenantId, categoryId, query);
   }
 
   @Get('products/:id')
@@ -89,9 +94,9 @@ export class CatalogController {
 
   // Option Groups & Items
   @Get('option-groups')
-  async getOptionGroups(@Req() req: Request) {
+  async getOptionGroups(@Query() query: PaginationQueryDto & { search?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.catalogService.getOptionGroups(tenantId);
+    return await this.catalogService.getOptionGroups(tenantId, query);
   }
 
   @Post('option-groups')
