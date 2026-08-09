@@ -1,10 +1,8 @@
 import { DataSource } from 'typeorm';
 import { AppDataSource } from '../src/data-source';
 import { Tenant } from '../src/entities/Tenant.entity';
-import { AdminUser } from '../src/entities/AdminUser.entity';
 import { Branch } from '../src/entities/Branch.entity';
-import { Terminal } from '../src/entities/Terminal.entity';
-import { OrderHeader } from '../src/entities/OrderHeader.entity';
+import { OrderHeader, OrderState } from '../src/entities/OrderHeader.entity';
 import { OrderItem } from '../src/entities/OrderItem.entity';
 import { Payment } from '../src/entities/Payment.entity';
 import { Refund } from '../src/entities/Refund.entity';
@@ -17,7 +15,6 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
   let testBranchId: string;
 
   beforeAll(async () => {
-    // Ensure DB_PORT is set to 5433 for disposable postgres
     process.env.DB_PORT = process.env.DB_PORT || '5433';
     process.env.DB_NAME = process.env.DB_NAME || 'appdb_test';
     process.env.DB_USER = process.env.DB_USER || 'postgres';
@@ -74,18 +71,17 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
           branch_id: testBranchId,
           order_number: orderNumber,
           order_type: 'DINE_IN',
+          state: 'DRAFT' as OrderState,
           status: 'DRAFT',
-          payment_status: 'UNPAID',
-          fulfillment_status: 'PENDING',
           currency_code: 'IRR',
           subtotal: '100000.0000',
-          total_tax: '9000.0000',
-          total_discount: '0.0000',
+          tax_total: '9000.0000',
+          discount_total: '0.0000',
+          grand_total: '109000.0000',
           total_amount: '109000.0000',
         });
         await transactionalEntityManager.save(OrderHeader, newOrder);
 
-        // Force intentional transaction failure
         throw new Error('INTENTIONAL_TRANSACTION_ROLLBACK_TEST_ERROR');
       });
     } catch (err: any) {
@@ -95,7 +91,6 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
     expect(caughtError).not.toBeNull();
     expect(caughtError.message).toBe('INTENTIONAL_TRANSACTION_ROLLBACK_TEST_ERROR');
 
-    // Verify order was NOT persisted to PostgreSQL
     const found = await orderRepo.findOne({ where: { tenant_id: testTenantId, order_number: orderNumber } });
     expect(found).toBeNull();
   });
@@ -106,24 +101,25 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
 
     const rec1 = idempotencyRepo.create({
       tenant_id: testTenantId,
-      user_id: '00000000-0000-0000-0000-000000000001',
-      idempotency_key: key,
-      request_hash: 'hash-abc-123',
-      request_path: '/api/v1/orders',
-      status_code: 201,
+      scope: 'ORDERS',
+      key: key,
+      request_hash: 'hash-abc-123-0000000000000000000000000000000000000000000000000000',
+      status: 'SUCCEEDED',
+      response_status: 201,
       response_body: { orderId: 'ord-123' },
+      expires_at: new Date(Date.now() + 86400000),
     });
     await idempotencyRepo.save(rec1);
 
-    // Concurrent duplicate insertion attempt
     const rec2 = idempotencyRepo.create({
       tenant_id: testTenantId,
-      user_id: '00000000-0000-0000-0000-000000000001',
-      idempotency_key: key,
-      request_hash: 'hash-abc-123',
-      request_path: '/api/v1/orders',
-      status_code: 201,
+      scope: 'ORDERS',
+      key: key,
+      request_hash: 'hash-abc-123-0000000000000000000000000000000000000000000000000000',
+      status: 'SUCCEEDED',
+      response_status: 201,
       response_body: { orderId: 'ord-123' },
+      expires_at: new Date(Date.now() + 86400000),
     });
 
     let duplicateErr: any = null;
@@ -134,7 +130,7 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
     }
 
     expect(duplicateErr).not.toBeNull();
-    expect(duplicateErr.code).toBe('23505'); // Postgres unique constraint violation code
+    expect(duplicateErr.code).toBe('23505');
   });
 
   it('3. Real PostgreSQL Pessimistic Row Locking: SELECT FOR UPDATE locks row during transaction', async () => {
@@ -173,80 +169,78 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
 
     const orderNo = `ORD-FLOW-${Date.now()}`;
 
-    // Step A: Create Order Header & Items
-    const order = orderRepo.create({
+    const orderToCreate = orderRepo.create({
       tenant_id: testTenantId,
       branch_id: testBranchId,
       order_number: orderNo,
       order_type: 'TAKEAWAY',
+      state: 'SUBMITTED' as OrderState,
       status: 'SUBMITTED',
-      payment_status: 'UNPAID',
-      fulfillment_status: 'PENDING',
       currency_code: 'IRR',
       subtotal: '200000.0000',
-      total_tax: '18000.0000',
-      total_discount: '0.0000',
+      tax_total: '18000.0000',
+      discount_total: '0.0000',
+      grand_total: '218000.0000',
       total_amount: '218000.0000',
     });
-    const savedOrder = await orderRepo.save(order);
+    const savedOrder = await orderRepo.save(orderToCreate);
 
-    const item = itemRepo.create({
+    const itemToCreate = itemRepo.create({
       tenant_id: testTenantId,
       order_id: savedOrder.id,
       product_code: 'PROD-CHEESEBURGER',
       product_name: 'Cheeseburger Special',
-      quantity: 1,
+      quantity: '1.0000',
       unit_price: '200000.0000',
       subtotal: '200000.0000',
       tax_amount: '18000.0000',
       total_amount: '218000.0000',
     });
-    await itemRepo.save(item);
+    await itemRepo.save(itemToCreate);
 
-    // Step B: Post Payment
     const paymentNo = `PAY-${Date.now()}`;
-    const payment = paymentRepo.create({
+    const paymentToCreate = paymentRepo.create({
       tenant_id: testTenantId,
       order_id: savedOrder.id,
       payment_number: paymentNo,
       method_id: '00000000-0000-0000-0000-000000000002',
       method_kind: 'CASH',
-      status: 'POSTED',
+      status: 'SUCCEEDED',
       amount: '218000.0000',
       currency_code: 'IRR',
       business_date: '2026-08-09',
     });
-    const savedPayment = await paymentRepo.save(payment);
+    const savedPayment = await paymentRepo.save(paymentToCreate);
 
-    savedOrder.payment_status = 'PAID';
+    savedOrder.state = 'COMPLETED' as OrderState;
     savedOrder.status = 'COMPLETED';
+    savedOrder.paid_total = '218000.0000';
     await orderRepo.save(savedOrder);
 
-    // Step C: Execute Refund
     const refundNo = `REF-${Date.now()}`;
-    const refund = refundRepo.create({
+    const refundToCreate = refundRepo.create({
       tenant_id: testTenantId,
       order_id: savedOrder.id,
       refund_number: refundNo,
-      status: 'POSTED',
+      status: 'SUCCEEDED',
       method_id: '00000000-0000-0000-0000-000000000002',
       method_kind: 'CASH',
       amount: '218000.0000',
       currency_code: 'IRR',
       reason_text: 'Customer requested full refund',
     });
-    const savedRefund = await refundRepo.save(refund);
+    const savedRefund = await refundRepo.save(refundToCreate);
 
-    savedOrder.payment_status = 'REFUNDED';
+    savedOrder.state = 'CANCELLED' as OrderState;
+    savedOrder.status = 'CANCELLED';
     await orderRepo.save(savedOrder);
 
-    // Verify persisted state in PostgreSQL
     const finalOrder = await orderRepo.findOne({ where: { id: savedOrder.id } });
     const finalPayment = await paymentRepo.findOne({ where: { id: savedPayment.id } });
     const finalRefund = await refundRepo.findOne({ where: { id: savedRefund.id } });
 
-    expect(finalOrder?.payment_status).toBe('REFUNDED');
-    expect(finalPayment?.status).toBe('POSTED');
+    expect(finalOrder?.state).toBe('CANCELLED');
+    expect(finalPayment?.status).toBe('SUCCEEDED');
     expect(finalRefund?.amount).toBe('218000.0000');
   });
 });
