@@ -297,12 +297,13 @@ export class KioskService {
     const payment = this.paymentRepo.create({
       tenant_id: tenantId,
       order_id: order.id,
-      payment_method_id: paymentMethod ? paymentMethod.id : 'default-pm',
+      payment_number: `PAY-KOS-${Date.now()}`,
+      method_id: paymentMethod ? paymentMethod.id : 'default-pm',
+      method_kind: paymentMethod ? paymentMethod.kind : 'CARD',
       amount: totalToPay.toFixed(4),
-      status: 'COMPLETED',
-      reference_number: refNum,
-      is_mobile_pos: false,
-      recorded_at: new Date(),
+      status: 'SUCCEEDED',
+      reference: refNum,
+      business_date: new Date().toISOString().slice(0, 10),
     });
 
     const savedPayment = await this.paymentRepo.save(payment);

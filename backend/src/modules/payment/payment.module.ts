@@ -12,6 +12,7 @@ import { PaymentAttempt } from '../../entities/PaymentAttempt.entity';
 import { PaymentService } from './payment.service';
 import { PaymentController } from './payment.controller';
 import { CustomerModule } from '../customer/customer.module';
+import { CashierModule } from '../cashier/cashier.module';
 import { AuditModule } from '../audit/audit.module';
 
 @Module({
@@ -28,6 +29,7 @@ import { AuditModule } from '../audit/audit.module';
       PaymentAttempt,
     ]),
     CustomerModule,
+    CashierModule,
     AuditModule,
   ],
   providers: [PaymentService],

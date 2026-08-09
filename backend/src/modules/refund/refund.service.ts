@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { RefundRequest } from '../../entities/RefundRequest.entity';
 import { RefundItem } from '../../entities/RefundItem.entity';
 import { RefundAllocation } from '../../entities/RefundAllocation.entity';
@@ -93,7 +93,7 @@ export class RefundService {
     }
 
     // Check payments made on order
-    const payments = await this.paymentRepo.find({ where: { tenant_id: tenantId, order_id: order.id, is_reversed: false } });
+    const payments = await this.paymentRepo.find({ where: { tenant_id: tenantId, order_id: order.id, status: In(['SUCCEEDED', 'COMPLETED']) as any } });
 
     // Same-tender default vs Alternative tender override check
     if (data.alternative_payment_method_id) {
@@ -135,7 +135,7 @@ export class RefundService {
       if (MoneyUtil.lessThan(remainingToRefund, '0.0001')) break;
       const refundAllocAmt = MoneyUtil.lessThan(remainingToRefund, p.amount) ? remainingToRefund : p.amount;
 
-      const methodId = data.alternative_payment_method_id || p.payment_method_id;
+      const methodId = data.alternative_payment_method_id || p.method_id || (p as any).payment_method_id;
       const method = await this.methodRepo.findOne({ where: { id: methodId, tenant_id: tenantId } });
 
       const refundAlloc = this.allocRepo.create({
@@ -151,11 +151,13 @@ export class RefundService {
       const negPayment = this.paymentRepo.create({
         tenant_id: tenantId,
         order_id: order.id,
-        payment_method_id: methodId,
+        payment_number: `REF-PAY-${Date.now()}`,
+        method_id: methodId,
+        method_kind: method?.kind || 'CASH',
         amount: `-${refundAllocAmt}`,
-        status: 'COMPLETED',
-        notes: `Refund #${savedReq.code}`,
-        is_reversed: false,
+        status: 'SUCCEEDED',
+        business_date: new Date().toISOString().slice(0, 10),
+        reference: `Refund #${savedReq.code}`,
       });
       await this.paymentRepo.save(negPayment);
 

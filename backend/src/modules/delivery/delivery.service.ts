@@ -190,7 +190,7 @@ export class DeliveryService {
   // --- SLICE 17: COURIER SETTLEMENT LOGIC ---
 
   private async calculatePaymentBreakdown(orderId: string, defaultTotal: number) {
-    const payments = await this.paymentRepo.find({ where: { order_id: orderId, status: 'COMPLETED' } });
+    const payments = await this.paymentRepo.find({ where: { order_id: orderId, status: In(['SUCCEEDED', 'COMPLETED']) as any } });
     let expCash = 0;
     let expPos = 0;
     let primaryMethod = 'CASH';
@@ -200,8 +200,8 @@ export class DeliveryService {
         let isCash = false;
         if ((p as any).payment_method_code) {
           isCash = (p as any).payment_method_code === 'CASH';
-        } else if (p.payment_method_id) {
-          const pm = await this.paymentMethodRepo.findOne({ where: { id: p.payment_method_id } });
+        } else if (p.method_id || (p as any).payment_method_id) {
+          const pm = await this.paymentMethodRepo.findOne({ where: { id: p.method_id || (p as any).payment_method_id } });
           if (pm && (pm.kind === 'CASH' || pm.code === 'CASH')) {
             isCash = true;
           }
