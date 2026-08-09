@@ -9,21 +9,21 @@ export class InventoryController {
   @Get('items')
   @Header('X-V5-Preview', 'true')
   async getInventoryItems(@Query('branchId') branchId: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.inventoryService.getInventoryItems(tenantId, branchId);
   }
 
   @Get('alerts')
   @Header('X-V5-Preview', 'true')
   async getLowStockAlerts(@Query('branchId') branchId: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.inventoryService.getLowStockAlerts(tenantId, branchId);
   }
 
   @Post('transactions')
   @Header('X-V5-Preview', 'true')
   async postTransaction(@Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.inventoryService.postTransaction(tenantId, body, correlationId);
   }
@@ -31,7 +31,7 @@ export class InventoryController {
   @Get('items/:id/transactions')
   @Header('X-V5-Preview', 'true')
   async getTransactions(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.inventoryService.getTransactions(tenantId, id);
   }
 }

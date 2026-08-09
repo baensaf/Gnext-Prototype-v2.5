@@ -1,7 +1,9 @@
 import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { DataSource } from 'typeorm';
+import { Public } from '../../common/decorators/public.decorator';
 
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(private readonly dataSource: DataSource) {}
@@ -31,7 +33,7 @@ export class HealthController {
         database: 'disconnected',
         timestamp: new Date().toISOString(),
       });
-    } catch (err) {
+    } catch (err: any) {
       return res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
         status: 'not_ready',
         error: err.message,

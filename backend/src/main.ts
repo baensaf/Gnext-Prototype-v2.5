@@ -2,19 +2,28 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ProblemDetailsFilter } from './common/filters/problem-details.filter';
 import * as cookieParser from 'cookie-parser';
-import * as express from 'express';
-import * as path from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  const allowedOrigins = [
+    process.env.FRONTEND_URL || 'http://localhost:3030',
+    'http://localhost:3000',
+    'http://127.0.0.1:3030',
+  ];
+
   app.enableCors({
-    origin: true,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   });
 
   app.use(cookieParser());
-  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
   app.useGlobalFilters(new ProblemDetailsFilter());
 
   const port = process.env.PORT || 3100;

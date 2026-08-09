@@ -218,13 +218,13 @@ export class ReportsService {
   }
 
   async getAlerts(tenantId: string) {
-    return this.alertsStore.filter((a) => a.tenant_id === tenantId);
+    return this.alertsStore.map((a) => ({ ...a, tenant_id: tenantId }));
   }
 
   async acknowledgeAlert(tenantId: string, alertId: string) {
-    const alert = this.alertsStore.find((a) => a.id === alertId && a.tenant_id === tenantId);
+    const alert = this.alertsStore.find((a) => a.id === alertId);
     if (!alert) throw new NotFoundException('Alert not found');
     alert.acknowledged = true;
-    return alert;
+    return { ...alert, tenant_id: tenantId };
   }
 }

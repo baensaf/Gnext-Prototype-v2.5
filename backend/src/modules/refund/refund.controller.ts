@@ -8,19 +8,19 @@ export class RefundController {
 
   @Get('refunds')
   async getRefunds(@Query('orderId') orderId: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.refundService.getRefunds(tenantId, orderId);
   }
 
   @Get('refunds/:id')
   async getRefundById(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.refundService.getRefundById(tenantId, id);
   }
 
   @Post('refunds')
   async createRefund(@Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     const requesterUserId = (req as any).user?.id || 'd3b07384-d113-4603-9a3d-3c220f86fb04';
     const correlationId = (req as any).correlationId;
     return await this.refundService.createRefund(tenantId, requesterUserId, body, correlationId);
@@ -28,7 +28,7 @@ export class RefundController {
 
   @Post('orders/:id/cancel-paid')
   async cancelPaidOrder(@Param('id') id: string, @Body() body: { reason?: string; pin?: string }, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     const requesterUserId = (req as any).user?.id || 'd3b07384-d113-4603-9a3d-3c220f86fb04';
     const correlationId = (req as any).correlationId;
     return await this.refundService.cancelPaidOrder(tenantId, requesterUserId, id, body?.reason || 'Customer cancellation', body?.pin, correlationId);

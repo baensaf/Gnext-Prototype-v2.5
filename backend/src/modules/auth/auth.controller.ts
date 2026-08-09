@@ -1,11 +1,13 @@
 import { Controller, Post, Get, Body, Req, Res, HttpStatus } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
+import { Public } from '../../common/decorators/public.decorator';
 
 @Controller('api/v1/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Public()
   @Post('login')
   async login(
     @Body() body: { username?: string; password?: string },

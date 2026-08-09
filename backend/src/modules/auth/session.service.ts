@@ -19,13 +19,13 @@ export class SessionService {
     return randomBytes(32).toString('hex');
   }
 
-  generateCsrfToken(): string {
-    return randomBytes(32).toString('hex');
+  deriveCsrfToken(rawToken: string): string {
+    return createHash('sha256').update(rawToken + ':csrf_v15_secret').digest('hex');
   }
 
   async createSession(userId: string, ip?: string, userAgent?: string): Promise<{ session: Session; rawToken: string; rawCsrfToken: string }> {
     const rawToken = this.generateToken();
-    const rawCsrfToken = this.generateCsrfToken();
+    const rawCsrfToken = this.deriveCsrfToken(rawToken);
     const tokenHash = this.hashToken(rawToken);
     const csrfHash = this.hashToken(rawCsrfToken);
 
@@ -61,10 +61,10 @@ export class SessionService {
     return session;
   }
 
-  validateCsrfToken(session: Session, rawCsrfToken: string): boolean {
-    if (!rawCsrfToken || !session || !session.csrf_hash) return false;
-    const computedHash = this.hashToken(rawCsrfToken);
-    return computedHash === session.csrf_hash;
+  validateCsrfToken(rawToken: string, rawCsrfToken: string): boolean {
+    if (!rawToken || !rawCsrfToken) return false;
+    const expected = this.deriveCsrfToken(rawToken);
+    return rawCsrfToken === expected;
   }
 
   async revokeSession(rawToken: string): Promise<void> {

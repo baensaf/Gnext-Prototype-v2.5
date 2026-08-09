@@ -8,83 +8,83 @@ export class CustomerController {
 
   @Get('customer-groups')
   async getCustomerGroups(@Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.customerService.getCustomerGroups(tenantId);
   }
 
   @Post('customer-groups')
   async createCustomerGroup(@Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.customerService.createCustomerGroup(tenantId, body, correlationId);
   }
 
   @Get('customers')
   async getCustomers(@Query('search') search: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.customerService.getCustomers(tenantId, search);
   }
 
   @Get('customers/credit/aging')
   async getCreditAgingReport(@Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.customerService.getCreditAgingReport(tenantId);
   }
 
   @Get('customers/:id')
   async getCustomerById(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.customerService.getCustomerById(tenantId, id);
   }
 
   @Post('customers')
   async createCustomer(@Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.customerService.createCustomer(tenantId, body, correlationId);
   }
 
   @Get('customers/:id/addresses')
   async getAddressesByCustomer(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.customerService.getAddressesByCustomer(tenantId, id);
   }
 
   @Post('customers/:id/addresses')
   async createAddress(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.customerService.createAddress(tenantId, id, body);
   }
 
   @Get('customers/:id/credit-account')
   async getCreditAccount(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.customerService.getCreditAccount(tenantId, id);
   }
 
   @Get('customers/:id/credit-account/statement')
   async getCreditStatement(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.customerService.getCreditStatement(tenantId, id);
   }
 
   @Post('customers/:id/credit-account/transactions')
   async postCreditTransaction(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.customerService.postCreditTransaction(tenantId, id, body, correlationId);
   }
 
   @Post('customers/:id/credit-account/repayments')
   async postRepayment(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.customerService.postRepayment(tenantId, id, body, correlationId);
   }
 
   @Post('customers/:id/credit-account/adjustments')
   async postAdjustment(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.customerService.postAdjustment(tenantId, id, body, correlationId);
   }

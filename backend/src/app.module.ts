@@ -1,7 +1,11 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HealthController } from './modules/health/health.controller';
+import { SessionGuard } from './common/guards/session.guard';
+import { CsrfGuard } from './common/guards/csrf.guard';
+import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
 import { AuthModule } from './modules/auth/auth.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { OutboxModule } from './modules/outbox/outbox.module';
@@ -175,11 +179,22 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
     OfflineSyncModule,
     ReportsModule,
     ImportExportModule,
+    TypeOrmModule.forFeature([AdminUser, Session]),
   ],
   controllers: [HealthController],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: SessionGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: CsrfGuard,
+    },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+    consumer.apply(RequestContextMiddleware).forRoutes('*');
   }
 }

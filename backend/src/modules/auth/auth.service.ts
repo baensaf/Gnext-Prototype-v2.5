@@ -139,7 +139,7 @@ export class AuthService {
             timeZone: tenant.time_zone,
           }
         : null,
-      csrfToken: rawToken ? this.sessionService.generateCsrfToken() : null, // or current session token hash reference
+      csrfToken: rawToken ? this.sessionService.deriveCsrfToken(rawToken) : null,
     };
   }
 

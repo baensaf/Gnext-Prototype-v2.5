@@ -16,7 +16,7 @@ export class ImportExportController {
     @Body('fileContent') fileContentString?: string,
     @Req() req?: Request,
   ) {
-    const tenantId = (req as any)?.tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any)?.tenantId;
 
     let content = fileContentString;
     let originalName = 'import_file.csv';
@@ -76,7 +76,7 @@ export class ImportExportController {
 
   @Post('system/reset')
   async resetSystemData(@Req() req: Request) {
-    const tenantId = (req as any)?.tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any)?.tenantId;
     const userId = (req as any)?.user?.id || '00000000-0000-0000-0000-000000000001';
     const result = await this.importExportService.systemReset(tenantId, userId);
     return { success: true, data: result };

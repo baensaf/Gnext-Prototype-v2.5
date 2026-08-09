@@ -17,7 +17,7 @@ export class SimulationController {
     @Headers('x-snappfood-signature') signature: string,
     @Req() req: Request,
   ) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     const rawBody = JSON.stringify(body);
     return await this.simulationService.handleSnappfoodWebhook(tenantId, rawBody, body, signature, 'snappfood-secret-key-123', correlationId);
@@ -25,21 +25,21 @@ export class SimulationController {
 
   @Post('snappfood/generate')
   async generateSnappfoodOrder(@Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.simulationService.generateSnappfoodOrder(tenantId, body, correlationId);
   }
 
   @Post('snappfood/action')
   async triggerSnappfoodAction(@Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.simulationService.triggerSnappfoodAction(tenantId, body, correlationId);
   }
 
   @Post('tara/command')
   async executeTaraCommand(@Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.simulationService.executeTaraCommand(tenantId, body, correlationId);
   }
@@ -50,7 +50,7 @@ export class SimulationController {
     @Query('status') status: string,
     @Req() req: Request,
   ) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.simulationService.getLogs(tenantId, provider, status);
   }
 }

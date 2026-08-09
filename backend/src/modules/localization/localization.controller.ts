@@ -12,7 +12,7 @@ export class LocalizationController {
     @Query('entityId') entityId: string,
     @Req() req: Request,
   ) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.localizationService.getStringsForEntity(tenantId, entityType, entityId);
   }
 
@@ -22,13 +22,13 @@ export class LocalizationController {
     @Query('entityId') entityId: string,
     @Req() req: Request,
   ) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.localizationService.getBilingualMap(tenantId, entityType, entityId);
   }
 
   @Put('strings')
   async upsertStrings(@Body() body: { strings: any[] }, @Req() req: Request) {
-    const tenantId = (req as any).tenantId || 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
+    const tenantId = (req as any).tenantId;
     return await this.localizationService.upsertStrings(tenantId, body.strings || []);
   }
 }
