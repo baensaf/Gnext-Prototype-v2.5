@@ -6,12 +6,29 @@ node_modules/
 .gemini/
 .agents/
 .vscode/
+.idea/
 
 # Build & Logs
 dist/
 build/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Environment files
 .env
 .env*.local
+!.env.example
+
+# Runtime uploads & seed assets
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/seed-assets/*
+!backend/seed-assets/.gitkeep
+
+# Database & OS artifacts
+*.sqlite
+*.db
+.DS_Store
+Thumbs.db
