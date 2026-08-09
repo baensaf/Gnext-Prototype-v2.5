@@ -56,6 +56,10 @@ export class MoneyUtil {
     return new Decimal(a || 0).greaterThanOrEqualTo(new Decimal(b || 0));
   }
 
+  static abs(val: string | number, decimals: number = 4): string {
+    return new Decimal(val || 0).abs().toFixed(decimals);
+  }
+
   static notEqual(a: string | number, b: string | number): boolean {
     return !new Decimal(a || 0).equals(new Decimal(b || 0));
   }

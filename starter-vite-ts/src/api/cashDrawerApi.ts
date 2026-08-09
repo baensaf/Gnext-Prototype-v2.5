@@ -1,11 +1,12 @@
 import { httpClient } from './httpClient';
+import { shiftApi } from './shiftApi';
 
 export interface CashDrawerShift {
   id: string;
-  tenant_id: string;
+  tenant_id?: string;
   branch_id: string;
   terminal_id: string;
-  user_id: string;
+  user_id?: string;
   shift_number: string;
   opened_at: string;
   closed_at?: string;
@@ -19,7 +20,7 @@ export interface CashDrawerShift {
 
 export interface CashDrawerTransaction {
   id: string;
-  tenant_id: string;
+  tenant_id?: string;
   shift_id: string;
   transaction_type: string;
   amount: string;
@@ -45,21 +46,73 @@ export interface ActiveShiftResponse {
 
 export const cashDrawerApi = {
   getActiveShift: async (branchId?: string, terminalId?: string): Promise<ActiveShiftResponse | null> => {
-    const res = await httpClient.get('/api/v1/cash-drawer/shifts/active', {
-      params: { branchId, terminalId },
-    });
-    return res.data;
+    try {
+      const shift = await shiftApi.getCurrentShift(terminalId);
+      const stmt = await shiftApi.getShiftStatement(shift.id);
+
+      const legacyShift: CashDrawerShift = {
+        id: shift.id,
+        branch_id: shift.branch_id,
+        terminal_id: shift.terminal_id,
+        shift_number: shift.shift_number,
+        opened_at: shift.opened_at,
+        closed_at: shift.closed_at,
+        opening_float: stmt.openingFloat,
+        expected_cash: stmt.expectedCash,
+        actual_cash: stmt.actualCash || undefined,
+        over_short_amount: stmt.shortOver || '0.0000',
+        status: shift.state,
+      };
+
+      const legacyTxs: CashDrawerTransaction[] = (stmt.movements || []).map((m) => ({
+        id: m.id,
+        shift_id: m.shift_id,
+        transaction_type: m.type,
+        amount: m.amount,
+        reason_code_id: m.reason_code_id,
+        note: m.reason_text || m.reference,
+        recorded_at: m.posted_at,
+      }));
+
+      const summary: ShiftSummary = {
+        opening_float: stmt.openingFloat,
+        cash_sales: stmt.cashSales,
+        pay_in: stmt.paidIn,
+        pay_out: stmt.paidOut,
+        safe_drop: '0.0000',
+        expected_cash: stmt.expectedCash,
+      };
+
+      return { shift: legacyShift, transactions: legacyTxs, summary };
+    } catch (err: any) {
+      if (err.status === 404 || err.response?.status === 404) return null;
+      throw err;
+    }
   },
+
   openShift: async (data: {
     branch_id: string;
     terminal_id: string;
-    user_id: string;
+    user_id?: string;
     opening_float: string;
     notes?: string;
   }): Promise<CashDrawerShift> => {
-    const res = await httpClient.post('/api/v1/cash-drawer/shifts/open', data);
-    return res.data;
+    const shift = await shiftApi.openShift({
+      terminalId: data.terminal_id,
+      openingCash: data.opening_float,
+    });
+    return {
+      id: shift.id,
+      branch_id: shift.branch_id,
+      terminal_id: shift.terminal_id,
+      shift_number: shift.shift_number,
+      opened_at: shift.opened_at,
+      opening_float: shift.opening_cash || data.opening_float,
+      expected_cash: shift.opening_cash || data.opening_float,
+      status: shift.state,
+    };
   },
+
   postTransaction: async (
     shiftId: string,
     data: {
@@ -69,9 +122,24 @@ export const cashDrawerApi = {
       note?: string;
     },
   ): Promise<CashDrawerTransaction> => {
-    const res = await httpClient.post(`/api/v1/cash-drawer/shifts/${shiftId}/transactions`, data);
-    return res.data;
+    const moveType = data.transaction_type === 'PAY_OUT' ? 'PAID_OUT' : 'PAID_IN';
+    const move = await shiftApi.recordMovement(shiftId, {
+      type: moveType,
+      amount: data.amount,
+      reasonCodeId: data.reason_code_id,
+      reason: data.note,
+    });
+    return {
+      id: move.id,
+      shift_id: move.shift_id,
+      transaction_type: move.type,
+      amount: move.amount,
+      reason_code_id: move.reason_code_id,
+      note: move.reason_text || move.reference,
+      recorded_at: move.posted_at,
+    };
   },
+
   closeShift: async (
     shiftId: string,
     data: {
@@ -79,7 +147,42 @@ export const cashDrawerApi = {
       notes?: string;
     },
   ): Promise<{ shift: CashDrawerShift; summary: ShiftSummary; overShort: string }> => {
-    const res = await httpClient.post(`/api/v1/cash-drawer/shifts/${shiftId}/close`, data);
-    return res.data;
+    let stmt: any;
+    try {
+      stmt = await shiftApi.beginClose(shiftId);
+    } catch (e) {
+      // If already in closing review, proceed to close
+    }
+
+    const closedStmt = await shiftApi.closeShift(shiftId, {
+      actualCash: data.actual_cash,
+      reason: data.notes,
+      previewVersion: stmt?.previewVersion,
+    });
+
+    const shiftRes: CashDrawerShift = {
+      id: closedStmt.shiftId,
+      branch_id: closedStmt.branchId,
+      terminal_id: closedStmt.terminalId,
+      shift_number: closedStmt.shiftNumber,
+      opened_at: closedStmt.openedAt,
+      closed_at: closedStmt.closedAt,
+      opening_float: closedStmt.openingFloat,
+      expected_cash: closedStmt.expectedCash,
+      actual_cash: closedStmt.actualCash || data.actual_cash,
+      over_short_amount: closedStmt.shortOver || '0.0000',
+      status: closedStmt.state,
+    };
+
+    const summary: ShiftSummary = {
+      opening_float: closedStmt.openingFloat,
+      cash_sales: closedStmt.cashSales,
+      pay_in: closedStmt.paidIn,
+      pay_out: closedStmt.paidOut,
+      safe_drop: '0.0000',
+      expected_cash: closedStmt.expectedCash,
+    };
+
+    return { shift: shiftRes, summary, overShort: closedStmt.shortOver || '0.0000' };
   },
 };

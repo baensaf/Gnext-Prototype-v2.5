@@ -1,0 +1,124 @@
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  IsInt,
+  IsNumberString,
+  IsIn,
+} from 'class-validator';
+
+export class ShiftOpenDto {
+  @IsUUID()
+  terminalId: string;
+
+  @IsOptional()
+  @IsString()
+  currencyCode?: string;
+
+  @IsOptional()
+  @IsNumberString()
+  openingCash?: string;
+
+  @IsOptional()
+  @IsNumberString()
+  openingFloat?: string;
+
+  @IsOptional()
+  @IsString()
+  businessDate?: string;
+}
+
+export class CashMovementDto {
+  @IsString()
+  @IsIn(['PAID_IN', 'PAID_OUT'])
+  type: 'PAID_IN' | 'PAID_OUT';
+
+  @IsNumberString()
+  amount: string;
+
+  @IsOptional()
+  @IsUUID()
+  reasonCodeId?: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @IsOptional()
+  @IsString()
+  reasonText?: string;
+
+  @IsOptional()
+  @IsString()
+  reference?: string;
+
+  @IsOptional()
+  @IsInt()
+  version?: number;
+}
+
+export class ShiftBeginCloseDto {
+  @IsOptional()
+  @IsInt()
+  version?: number;
+}
+
+export class ShiftReturnToOpenDto {
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @IsOptional()
+  @IsInt()
+  version?: number;
+}
+
+export class ShiftCloseDto {
+  @IsNumberString()
+  actualCash: string;
+
+  @IsOptional()
+  @IsUUID()
+  reasonCodeId?: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @IsOptional()
+  @IsUUID()
+  approvalRequestId?: string;
+
+  @IsOptional()
+  @IsString()
+  previewVersion?: string;
+
+  @IsOptional()
+  @IsInt()
+  version?: number;
+}
+
+export class BusinessDayCloseDto {
+  @IsUUID()
+  branchId: string;
+
+  @IsString()
+  businessDate: string;
+
+  @IsOptional()
+  @IsString()
+  currencyCode?: string;
+}
+
+export class BusinessDayReopenDto {
+  @IsString()
+  reason: string;
+
+  @IsUUID()
+  approvalRequestId: string;
+
+  @IsOptional()
+  @IsInt()
+  version?: number;
+}

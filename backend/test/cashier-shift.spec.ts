@@ -1,0 +1,185 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import { ShiftService } from '../src/modules/cashier/shift.service';
+import { BusinessDayService } from '../src/modules/cashier/business-day.service';
+import { CashierShift } from '../src/entities/CashierShift.entity';
+import { CashMovement } from '../src/entities/CashMovement.entity';
+import { BusinessDayClose } from '../src/entities/BusinessDayClose.entity';
+import { Terminal } from '../src/entities/Terminal.entity';
+import { Payment } from '../src/entities/Payment.entity';
+import { OrderHeader } from '../src/entities/OrderHeader.entity';
+import { AuditWriter } from '../src/modules/audit/audit-writer.service';
+
+describe('Cashier Shift & Business Day Suite (R13)', () => {
+  let shiftService: ShiftService;
+  let dayService: BusinessDayService;
+
+  let shiftRepo: any;
+  let movementRepo: any;
+  let terminalRepo: any;
+  let paymentRepo: any;
+  let orderRepo: any;
+  let dayCloseRepo: any;
+  let auditWriter: any;
+  let dataSource: any;
+
+  beforeEach(async () => {
+    shiftRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() };
+    movementRepo = { find: jest.fn().mockResolvedValue([]), create: jest.fn(), save: jest.fn() };
+    terminalRepo = { findOne: jest.fn() };
+    paymentRepo = { find: jest.fn().mockResolvedValue([]) };
+    orderRepo = { find: jest.fn().mockResolvedValue([]) };
+    dayCloseRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() };
+    auditWriter = { write: jest.fn() };
+
+    const mockEntityManager: any = {
+      create: jest.fn((entityClass, data) => ({ ...data })),
+      save: jest.fn((entityClass, data) => Promise.resolve(data || entityClass)),
+      findOne: jest.fn((entityClass, options) => {
+        if (entityClass === Terminal) return terminalRepo.findOne(options);
+        if (entityClass === CashierShift) return shiftRepo.findOne(options);
+        if (entityClass === BusinessDayClose) return dayCloseRepo.findOne(options);
+        return null;
+      }),
+      find: jest.fn((entityClass, options) => {
+        if (entityClass === CashMovement) return movementRepo.find(options);
+        if (entityClass === CashierShift) return shiftRepo.find ? shiftRepo.find(options) : [];
+        if (entityClass === OrderHeader) return orderRepo.find(options);
+        return [];
+      }),
+      delete: jest.fn(),
+    };
+
+    dataSource = {
+      transaction: jest.fn(async (cb) => await cb(mockEntityManager)),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ShiftService,
+        BusinessDayService,
+        { provide: getRepositoryToken(CashierShift), useValue: shiftRepo },
+        { provide: getRepositoryToken(CashMovement), useValue: movementRepo },
+        { provide: getRepositoryToken(Terminal), useValue: terminalRepo },
+        { provide: getRepositoryToken(Payment), useValue: paymentRepo },
+        { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
+        { provide: getRepositoryToken(BusinessDayClose), useValue: dayCloseRepo },
+        { provide: AuditWriter, useValue: auditWriter },
+        { provide: DataSource, useValue: dataSource },
+      ],
+    }).compile();
+
+    shiftService = module.get<ShiftService>(ShiftService);
+    dayService = module.get<BusinessDayService>(BusinessDayService);
+  });
+
+  describe('Shift Open & Concurrent Lock (R13)', () => {
+    it('should throw ConflictException if terminal already has an active open shift', async () => {
+      terminalRepo.findOne.mockResolvedValue({ id: 'term-1', branch_id: 'b-1' });
+      shiftRepo.findOne.mockResolvedValue({ id: 'shf-1', shift_number: 'SHF-100', state: 'OPEN' });
+
+      await expect(
+        shiftService.openShift('t-1', { terminalId: 'term-1', openingCash: '50000.0000' }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should open shift successfully and record OPENING_FLOAT movement', async () => {
+      terminalRepo.findOne.mockResolvedValue({ id: 'term-1', branch_id: 'b-1' });
+      shiftRepo.findOne.mockResolvedValue(null);
+
+      const result = await shiftService.openShift('t-1', { terminalId: 'term-1', openingCash: '50000.0000' });
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('Physical Cash Calculations & Movement Semantics (R13)', () => {
+    it('should calculate expected cash strictly from persisted cash movements', async () => {
+      const shift = { id: 'shf-1', tenant_id: 't-1', state: 'OPEN', currency_code: 'IRR' };
+      shiftRepo.findOne.mockResolvedValue(shift);
+
+      movementRepo.find.mockResolvedValue([
+        { type: 'OPENING_FLOAT', amount: '50000.0000' },
+        { type: 'CASH_PAYMENT', amount: '30000.0000' },
+        { type: 'CASH_REFUND', amount: '-5000.0000' },
+        { type: 'PAID_IN', amount: '10000.0000' },
+        { type: 'PAID_OUT', amount: '-15000.0000' },
+      ]);
+
+      const statement = await shiftService.getShiftStatement('t-1', 'shf-1');
+      // expected = 50,000 + 30,000 - 5,000 + 10,000 - 15,000 = 70,000
+      expect(statement.expectedCash).toBe('70000.0000');
+    });
+
+    it('should throw BadRequestException for paid-out movement with non-positive amount', async () => {
+      shiftRepo.findOne.mockResolvedValue({ id: 'shf-1', tenant_id: 't-1', state: 'OPEN' });
+
+      await expect(
+        shiftService.recordMovement('t-1', 'shf-1', { type: 'PAID_OUT', amount: '0.0000' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('Shift Close & Stale Preview Version (R13)', () => {
+    it('should begin close, generate preview_version, and transition to CLOSING_REVIEW', async () => {
+      const shift = { id: 'shf-1', tenant_id: 't-1', state: 'OPEN' };
+      shiftRepo.findOne.mockResolvedValue(shift);
+
+      const preview = await shiftService.beginClose('t-1', 'shf-1');
+      expect(shift.state).toBe('CLOSING_REVIEW');
+      expect(preview.previewVersion).toBeDefined();
+    });
+
+    it('should throw ConflictException STALE_PREVIEW if previewVersion differs', async () => {
+      const shift = { id: 'shf-1', tenant_id: 't-1', state: 'CLOSING_REVIEW', preview_version: 'prev-v2' };
+      shiftRepo.findOne.mockResolvedValue(shift);
+
+      await expect(
+        shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000', previewVersion: 'prev-v1-stale' }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should throw BadRequestException if nonzero cash discrepancy lacks reason', async () => {
+      const shift = { id: 'shf-1', tenant_id: 't-1', state: 'CLOSING_REVIEW', preview_version: 'prev-v1' };
+      shiftRepo.findOne.mockResolvedValue(shift);
+      movementRepo.find.mockResolvedValue([{ type: 'OPENING_FLOAT', amount: '50000.0000' }]);
+
+      // Actual 60,000 vs Expected 50,000 = +10,000 short_over without reason
+      await expect(
+        shiftService.closeShift('t-1', 'shf-1', { actualCash: '60000.0000', previewVersion: 'prev-v1' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should close shift successfully when actual matches expected or discrepancy is reasoned', async () => {
+      const shift = { id: 'shf-1', tenant_id: 't-1', state: 'CLOSING_REVIEW', preview_version: 'prev-v1' };
+      shiftRepo.findOne.mockResolvedValue(shift);
+      movementRepo.find.mockResolvedValue([{ type: 'OPENING_FLOAT', amount: '50000.0000' }]);
+
+      const statement = await shiftService.closeShift('t-1', 'shf-1', {
+        actualCash: '50000.0000',
+        previewVersion: 'prev-v1',
+      });
+      expect(shift.state).toBe('CLOSED');
+      expect(statement.actualCash).toBe('50000.0000');
+    });
+  });
+
+  describe('Business Day Close & Reopen Rules (R13)', () => {
+    it('should throw BadRequestException if active cashier shifts exist on business day close', async () => {
+      shiftRepo.find = jest.fn().mockResolvedValue([{ id: 'shf-open', state: 'OPEN' }]);
+
+      await expect(
+        dayService.closeBusinessDay('t-1', { branchId: 'b-1', businessDate: '2026-08-09' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if business day reopen lacks approvalRequestId', async () => {
+      dayCloseRepo.findOne.mockResolvedValue({ id: 'day-1', tenant_id: 't-1', status: 'CLOSED' });
+
+      await expect(
+        dayService.reopenBusinessDay('t-1', 'day-1', { reason: 'Audit correction', approvalRequestId: '' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+});

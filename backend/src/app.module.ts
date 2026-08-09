@@ -28,6 +28,7 @@ import { RefundModule } from './modules/refund/refund.module';
 import { DineInModule } from './modules/dine-in/dine-in.module';
 import { KdsModule } from './modules/kds/kds.module';
 import { DeliveryModule } from './modules/delivery/delivery.module';
+import { CashierModule } from './modules/cashier/cashier.module';
 import { KioskModule } from './modules/kiosk/kiosk.module';
 import { SimulationModule } from './modules/simulation/simulation.module';
 import { OfflineSyncModule } from './modules/offline-sync/offline-sync.module';
@@ -127,6 +128,9 @@ import { DeliveryAssignment } from './entities/DeliveryAssignment.entity';
 import { CourierSettlement } from './entities/CourierSettlement.entity';
 import { CourierSettlementLine } from './entities/CourierSettlementLine.entity';
 
+import { CashierShift } from './entities/CashierShift.entity';
+import { CashMovement } from './entities/CashMovement.entity';
+import { BusinessDayClose } from './entities/BusinessDayClose.entity';
 import { CashDrawerShift } from './entities/CashDrawerShift.entity';
 import { CashDrawerTransaction } from './entities/CashDrawerTransaction.entity';
 
@@ -170,7 +174,7 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
           DiningArea, DiningTable, TableSession, TableEvent,
           KitchenStation, KitchenTicket, KitchenTicketItem, PrinterDevice,
           Courier, DeliveryAssignment, CourierSettlement, CourierSettlementLine,
-          CashDrawerShift, CashDrawerTransaction,
+          CashierShift, CashMovement, BusinessDayClose, CashDrawerShift, CashDrawerTransaction,
           InventoryItem, InventoryTransaction, IntegrationLog,
           OfflineQueueItem, SyncConflictRecord,
           ImportJob, ImportRow,
@@ -193,6 +197,7 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
     OrderModule,
     PaymentModule,
     CashDrawerModule,
+    CashierModule,
     InventoryModule,
     ApprovalModule,
     RefundModule,
