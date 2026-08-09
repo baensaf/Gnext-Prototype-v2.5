@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Body, Param, Query, Req } from '@nestjs/common';
-import { Request } from 'express';
+import { Controller, Get, Post, Delete, Body, Param, Query, Req, Res } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { ReportsService } from './reports.service';
 
 @Controller('api/v1/reports')
@@ -11,14 +11,26 @@ export class ReportsController {
     return await this.reportsService.getCatalog();
   }
 
+  @Get('dashboard-summary')
+  async getDashboardSummary(@Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.reportsService.getDashboardSummary(tenantId);
+  }
+
   @Post('query')
-  async queryReport(@Body('reportCode') reportCode: string, @Body('filters') filters: any, @Req() req: Request) {
+  async queryReportPost(@Body('reportCode') reportCode: string, @Body('filters') filters: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.reportsService.queryReport(tenantId, reportCode, filters);
   }
 
+  @Get(':reportCode')
+  async queryReportGet(@Param('reportCode') reportCode: string, @Query() query: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.reportsService.queryReport(tenantId, reportCode, query);
+  }
+
   @Post('export')
-  async exportReport(
+  async exportReportPost(
     @Body('reportCode') reportCode: string,
     @Body('filters') filters: any,
     @Body('format') format: 'CSV' | 'XLSX',
@@ -26,6 +38,43 @@ export class ReportsController {
   ) {
     const tenantId = (req as any).tenantId;
     return await this.reportsService.exportReport(tenantId, reportCode, filters, format || 'CSV');
+  }
+
+  @Post(':reportCode/exports')
+  async exportReportPath(
+    @Param('reportCode') reportCode: string,
+    @Body() body: any,
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    const format = body.format || 'CSV';
+    const filters = body.filters || {};
+    return await this.reportsService.exportReport(tenantId, reportCode, filters, format);
+  }
+
+  @Get('report-exports/:id')
+  async getExportJob(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.reportsService.getExportJob(tenantId, id);
+  }
+
+  @Get('saved-views')
+  async getSavedViews(@Query('reportCode') reportCode: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.reportsService.getSavedViews(tenantId, reportCode);
+  }
+
+  @Post('saved-views')
+  async createSavedView(@Body() dto: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).userId;
+    return await this.reportsService.createSavedView(tenantId, userId, dto);
+  }
+
+  @Delete('saved-views/:id')
+  async deleteSavedView(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.reportsService.deleteSavedView(tenantId, id);
   }
 
   @Get('audit')
@@ -43,6 +92,7 @@ export class ReportsController {
   @Post('alerts/:id/acknowledge')
   async acknowledgeAlert(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.reportsService.acknowledgeAlert(tenantId, id);
+    const userId = (req as any).userId;
+    return await this.reportsService.acknowledgeAlert(tenantId, id, userId);
   }
 }

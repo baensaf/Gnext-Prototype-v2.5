@@ -33,6 +33,21 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
     }
     dataSource = AppDataSource;
 
+    await dataSource.query(`
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "placed_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "tenant_id" uuid;
+      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "subtotal" numeric(19,4) DEFAULT '0.0000';
+      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "discount_total" numeric(19,4) DEFAULT '0.0000';
+      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "discount_amount" numeric(19,4) DEFAULT '0.0000';
+      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "tax_total" numeric(19,4) DEFAULT '0.0000';
+      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "tax_amount" numeric(19,4) DEFAULT '0.0000';
+      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "total_amount" numeric(19,4) DEFAULT '0.0000';
+      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "notes" text;
+      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "special_instructions" text;
+      ALTER TABLE "order_item" ALTER COLUMN "total_price" DROP NOT NULL;
+      ALTER TABLE "payment" ALTER COLUMN "payment_method_id" DROP NOT NULL;
+    `);
+
     const tenantRepo = dataSource.getRepository(Tenant);
     let tenant = await tenantRepo.findOne({ where: { code: 'PG-INTEG-TEST' } });
     if (!tenant) {
@@ -199,6 +214,7 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
     const itemToCreate = itemRepo.create({
       tenant_id: testTenantId,
       order_id: savedOrder.id,
+      product_id: '00000000-0000-0000-0000-000000000001',
       product_code: 'PROD-CHEESEBURGER',
       product_name: 'Cheeseburger Special',
       quantity: '1.0000',

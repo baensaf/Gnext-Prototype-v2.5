@@ -147,6 +147,9 @@ import { InventoryTransaction } from './entities/InventoryTransaction.entity';
 import { IntegrationLog } from './entities/IntegrationLog.entity';
 import { OfflineQueueItem } from './entities/OfflineQueueItem.entity';
 import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
+import { OperationalAlert } from './entities/OperationalAlert.entity';
+import { SavedReportView } from './entities/SavedReportView.entity';
+import { ReportExportJob } from './entities/ReportExportJob.entity';
 
 @Module({
   imports: [
@@ -189,6 +192,7 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
           InventoryItem, InventoryTransaction, IntegrationLog,
           OfflineQueueItem, SyncConflictRecord,
           ImportJob, ImportRow,
+          OperationalAlert, SavedReportView, ReportExportJob,
         ],
         synchronize: false, // Mandatory AD-02
         logging: config.get<string>('NODE_ENV') === 'development' ? ['error', 'warn'] : false,

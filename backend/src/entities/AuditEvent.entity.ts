@@ -8,6 +8,9 @@ export class AuditEvent {
   @Column({ type: 'uuid' })
   tenant_id: string;
 
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  event_type: string;
+
   @Column({ type: 'varchar', length: 30 })
   actor_type: string; // ADMIN, APPROVER_PROFILE, SYSTEM, SIMULATOR, WEBHOOK
 
@@ -26,7 +29,7 @@ export class AuditEvent {
   @Column({ type: 'uuid', nullable: true })
   branch_id: string;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: 'uuid', nullable: true })
   correlation_id: string;
 
   @Column({ type: 'varchar', length: 45, nullable: true })

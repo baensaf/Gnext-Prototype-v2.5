@@ -29,6 +29,7 @@
     "class-validator": "^0.14.1",
     "cookie-parser": "^1.4.7",
     "decimal.js": "^10.4.3",
+    "exceljs": "^4.4.0",
     "i18next": "^24.2.0",
     "i18next-fs-backend": "^2.6.0",
     "pg": "^8.13.1",
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@nestjs/testing": "^10.4.15",
     "@types/cookie-parser": "^1.4.8",
+    "@types/exceljs": "^0.5.3",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.10.2",

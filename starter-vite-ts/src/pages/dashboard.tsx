@@ -1,5 +1,6 @@
 import type { Branch } from 'src/api/tenantApi';
 
+import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
@@ -31,9 +32,20 @@ export function DashboardPage() {
   const { t } = useTranslation();
   const { tenant, user } = useAuthStore();
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [kpis, setKpis] = useState<any>({
+    sales_today: '0.00',
+    open_orders_count: 0,
+    active_shifts_count: 0,
+    open_alerts_count: 0,
+    branch_health_percentage: 100,
+  });
 
   useEffect(() => {
     tenantApi.getBranches().then(setBranches).catch(() => {});
+    axios
+      .get('/api/v1/reports/dashboard-summary')
+      .then((res) => setKpis(res.data))
+      .catch(() => {});
   }, []);
 
   return (
@@ -58,7 +70,7 @@ export function DashboardPage() {
                     {t('dashboard.salesToday')}
                   </Typography>
                   <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 0.5 }}>
-                    0 IRR
+                    {kpis.sales_today} IRR
                   </Typography>
                 </Box>
                 <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'primary.light', color: 'primary.main' }}>
@@ -78,7 +90,7 @@ export function DashboardPage() {
                     {t('dashboard.openOrders')}
                   </Typography>
                   <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 0.5 }}>
-                    0
+                    {kpis.open_orders_count}
                   </Typography>
                 </Box>
                 <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'info.light', color: 'info.main' }}>
@@ -98,7 +110,7 @@ export function DashboardPage() {
                     {t('dashboard.activeShifts')}
                   </Typography>
                   <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 0.5 }}>
-                    0
+                    {kpis.active_shifts_count}
                   </Typography>
                 </Box>
                 <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'warning.light', color: 'warning.main' }}>
@@ -118,7 +130,7 @@ export function DashboardPage() {
                     {t('dashboard.branchHealth')}
                   </Typography>
                   <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'success.main', mt: 0.5 }}>
-                    100%
+                    {kpis.branch_health_percentage}%
                   </Typography>
                 </Box>
                 <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'success.light', color: 'success.main' }}>
@@ -175,3 +187,5 @@ export function DashboardPage() {
     </Box>
   );
 }
+
+export default DashboardPage;
