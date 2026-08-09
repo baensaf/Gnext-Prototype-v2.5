@@ -4,6 +4,7 @@ import { DiningArea } from '../../entities/DiningArea.entity';
 import { DiningTable } from '../../entities/DiningTable.entity';
 import { TableSession } from '../../entities/TableSession.entity';
 import { TableEvent } from '../../entities/TableEvent.entity';
+import { TableOccupancyEvent } from '../../entities/TableOccupancyEvent.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { DineInService } from './dine-in.service';
 import { DineInController } from './dine-in.controller';
@@ -16,6 +17,7 @@ import { AuditModule } from '../audit/audit.module';
       DiningTable,
       TableSession,
       TableEvent,
+      TableOccupancyEvent,
       OrderHeader,
     ]),
     AuditModule,

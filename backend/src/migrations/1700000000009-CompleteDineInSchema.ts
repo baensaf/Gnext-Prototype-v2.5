@@ -21,6 +21,33 @@ export class CompleteDineInSchema1700000000009 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
+      ALTER TABLE "dining_area"
+        ADD COLUMN IF NOT EXISTS "tenant_id" uuid,
+        ADD COLUMN IF NOT EXISTS "code" varchar(32),
+        ADD COLUMN IF NOT EXISTS "sort_order" integer NOT NULL DEFAULT 1,
+        ADD COLUMN IF NOT EXISTS "is_active" boolean NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now();
+
+      ALTER TABLE "dining_table"
+        ADD COLUMN IF NOT EXISTS "tenant_id" uuid,
+        ADD COLUMN IF NOT EXISTS "dining_area_id" uuid,
+        ADD COLUMN IF NOT EXISTS "code" varchar(32),
+        ADD COLUMN IF NOT EXISTS "seating_capacity" integer NOT NULL DEFAULT 4,
+        ADD COLUMN IF NOT EXISTS "shape" varchar(32) NOT NULL DEFAULT 'RECTANGLE',
+        ADD COLUMN IF NOT EXISTS "pos_x" integer NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS "pos_y" integer NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS "is_active" boolean NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now();
+
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='dining_table' AND column_name='area_id') THEN
+          UPDATE "dining_table" SET "dining_area_id" = "area_id" WHERE "dining_area_id" IS NULL;
+        END IF;
+      END $$;
+    `);
+
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS "IDX_table_occupancy_event_table_time"
       ON "table_occupancy_event" ("tenant_id", "table_id", "occurred_at");
     `);

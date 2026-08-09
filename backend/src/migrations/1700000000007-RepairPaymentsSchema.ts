@@ -70,6 +70,26 @@ export class RepairPaymentsSchema1700000000007 implements MigrationInterface {
         CONSTRAINT "PK_payment" PRIMARY KEY ("id"),
         CONSTRAINT "UQ_payment_number" UNIQUE ("tenant_id", "payment_number")
       );
+
+      ALTER TABLE "payment"
+        ADD COLUMN IF NOT EXISTS "payment_number" character varying(40),
+        ADD COLUMN IF NOT EXISTS "method_id" uuid,
+        ADD COLUMN IF NOT EXISTS "method_kind" character varying(30) DEFAULT 'CASH',
+        ADD COLUMN IF NOT EXISTS "currency_code" character varying(3) DEFAULT 'IRR',
+        ADD COLUMN IF NOT EXISTS "device_id" uuid,
+        ADD COLUMN IF NOT EXISTS "settlement_account_id" uuid,
+        ADD COLUMN IF NOT EXISTS "reference" character varying(160),
+        ADD COLUMN IF NOT EXISTS "receipt_number" character varying(80),
+        ADD COLUMN IF NOT EXISTS "shift_id" uuid,
+        ADD COLUMN IF NOT EXISTS "business_date" character varying(10) DEFAULT '2026-08-09',
+        ADD COLUMN IF NOT EXISTS "idempotency_key" character varying(160),
+        ADD COLUMN IF NOT EXISTS "original_payment_id" uuid,
+        ADD COLUMN IF NOT EXISTS "correction_group_id" uuid,
+        ADD COLUMN IF NOT EXISTS "failure_code" character varying(80),
+        ADD COLUMN IF NOT EXISTS "failure_message" text,
+        ADD COLUMN IF NOT EXISTS "initiated_at" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+        ADD COLUMN IF NOT EXISTS "posted_at" TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1;
     `);
 
     await queryRunner.query(`
