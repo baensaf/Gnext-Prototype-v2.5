@@ -100,6 +100,7 @@ import { CustomerPhone } from './entities/CustomerPhone.entity';
 import { CustomerAddress } from './entities/CustomerAddress.entity';
 import { CustomerCreditAccount } from './entities/CustomerCreditAccount.entity';
 import { CustomerCreditTransaction } from './entities/CustomerCreditTransaction.entity';
+import { CreditEntry } from './entities/CreditEntry.entity';
 import { CustomFieldDefinition } from './entities/CustomFieldDefinition.entity';
 import { CustomerCustomValue } from './entities/CustomerCustomValue.entity';
 import { CustomerTag } from './entities/CustomerTag.entity';
@@ -165,7 +166,7 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
           Menu, MenuCategory, MenuProduct, ProductAvailability,
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,
           Discount, Coupon, DiscountCampaign, DiscountScope, DiscountUsage,
-          CustomerGroup, Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CustomerCreditTransaction,
+          CustomerGroup, Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CustomerCreditTransaction, CreditEntry,
           CustomFieldDefinition, CustomerCustomValue, CustomerTag, CustomerTagLink, CustomerSegment,
           CustomerConsent, CustomerMerge,
           OrderHeader, OrderItem, OrderItemOption, OrderAdjustment, OrderNote, OrderLink, OrderStateEvent, OrderSequence,
