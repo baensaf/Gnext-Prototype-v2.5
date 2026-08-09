@@ -57,6 +57,19 @@ export class SettingsService {
           throw new BadRequestException('SYSTEM setting property auto_logout_minutes must be >= 0');
         }
       }
+    } else if (group === 'DISCOUNTS') {
+      if (value.cashierMaxDiscountPercent !== undefined) {
+        const pct = Number(value.cashierMaxDiscountPercent);
+        if (isNaN(pct) || pct < 0 || pct > 100) {
+          throw new BadRequestException('DISCOUNTS setting property cashierMaxDiscountPercent must be between 0 and 100');
+        }
+      }
+      if (value.cashierMaxFixedDeduction !== undefined) {
+        const amt = Number(value.cashierMaxFixedDeduction);
+        if (isNaN(amt) || amt < 0) {
+          throw new BadRequestException('DISCOUNTS setting property cashierMaxFixedDeduction must be >= 0');
+        }
+      }
     }
   }
 

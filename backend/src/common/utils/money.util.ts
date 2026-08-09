@@ -44,8 +44,20 @@ export class MoneyUtil {
     return new Decimal(a || 0).lessThan(new Decimal(b || 0));
   }
 
+  static lessThanOrEqual(a: string | number, b: string | number): boolean {
+    return new Decimal(a || 0).lessThanOrEqualTo(new Decimal(b || 0));
+  }
+
   static greaterThan(a: string | number, b: string | number): boolean {
     return new Decimal(a || 0).greaterThan(new Decimal(b || 0));
+  }
+
+  static greaterThanOrEqual(a: string | number, b: string | number): boolean {
+    return new Decimal(a || 0).greaterThanOrEqualTo(new Decimal(b || 0));
+  }
+
+  static notEqual(a: string | number, b: string | number): boolean {
+    return !new Decimal(a || 0).equals(new Decimal(b || 0));
   }
 
   /**

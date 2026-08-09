@@ -1,4 +1,4 @@
-import type { Coupon, Discount, CouponValidationResult } from 'src/api/discountsApi';
+import type { Coupon, DiscountCampaign, CouponValidationResult } from 'src/api/discountsApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
@@ -37,7 +37,7 @@ export function CouponsPage() {
   const { t } = useTranslation();
 
   const [coupons, setCoupons] = useState<Coupon[]>([]);
-  const [discounts, setDiscounts] = useState<Discount[]>([]);
+  const [discounts, setDiscounts] = useState<DiscountCampaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,7 +81,9 @@ export function CouponsPage() {
     try {
       await discountsApi.createCoupon({
         code,
+        campaign_id: discountId,
         discount_id: discountId,
+        max_uses: maxRedemptions,
         max_redemptions: maxRedemptions,
       });
       setDrawerOpen(false);
@@ -102,7 +104,7 @@ export function CouponsPage() {
       const res = await discountsApi.validateCoupon(testCouponCode, testOrderTotal);
       setValidationResult(res);
     } catch (err: any) {
-      setTestError(err.detail || 'Coupon validation failed');
+      setTestError(err.detail || err.message || 'Coupon validation failed');
     }
   };
 
@@ -111,10 +113,10 @@ export function CouponsPage() {
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Coupons & Validation Studio
+            Coupons & Voucher Management
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage promotional coupon codes, redemptions, and test redemption rules
+            Manage single-use and multi-use coupon codes bound to campaign rules
           </Typography>
         </Box>
         <Button
@@ -123,7 +125,7 @@ export function CouponsPage() {
           onClick={() => setDrawerOpen(true)}
           sx={{ fontWeight: 'bold' }}
         >
-          Create Coupon Code
+          Create Coupon
         </Button>
       </Stack>
 
@@ -133,119 +135,108 @@ export function CouponsPage() {
         </Alert>
       )}
 
-      <Grid container spacing={3}>
-        {/* Coupons List */}
-        <Grid size={{ xs: 12, md: 7 }}>
-          <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
-            <CardContent sx={{ p: 0 }}>
-              <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Coupon Code</TableCell>
-                      <TableCell>Linked Discount Rule</TableCell>
-                      <TableCell align="center">Redemptions</TableCell>
-                      <TableCell>Status</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {coupons.map((c) => {
-                      const discObj = discounts.find((d) => d.id === c.discount_id);
-                      return (
-                        <TableRow key={c.id}>
-                          <TableCell><code>{c.code}</code></TableCell>
-                          <TableCell sx={{ fontWeight: 'bold' }}>
-                            {discObj ? `${discObj.name} (${discObj.code})` : '—'}
-                          </TableCell>
-                          <TableCell align="center">
-                            <Chip
-                              label={`${c.current_redemptions} / ${c.max_redemptions || '∞'}`}
-                              size="small"
-                              color="info"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              label={c.is_active ? 'Active' : 'Archived'}
-                              color={c.is_active ? 'success' : 'default'}
-                              size="small"
-                            />
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        </Grid>
+      {/* Interactive Coupon Validation Test Bench */}
+      <Card sx={{ mb: 4, borderRadius: 3, bgcolor: 'background.neutral', boxShadow: 1 }}>
+        <CardContent>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <ConfirmationNumberIcon color="primary" /> Interactive Coupon Validation Test Bench
+          </Typography>
+          <form onSubmit={handleTestValidate}>
+            <Stack spacing={2} sx={{ flexDirection: { xs: 'column', sm: 'row' }, alignItems: 'center' }}>
+              <Box sx={{ flex: 1, width: '100%' }}>
+                <TextField
+                  label="Test Coupon Code"
+                  fullWidth
+                  size="small"
+                  value={testCouponCode}
+                  onChange={(e) => setTestCouponCode(e.target.value.toUpperCase())}
+                />
+              </Box>
+              <Box sx={{ flex: 1, width: '100%' }}>
+                <TextField
+                  label="Simulated Subtotal (IRR)"
+                  type="number"
+                  fullWidth
+                  size="small"
+                  value={testOrderTotal}
+                  onChange={(e) => setTestOrderTotal(e.target.value)}
+                />
+              </Box>
+              <Box sx={{ width: { xs: '100%', sm: 'auto' } }}>
+                <Button type="submit" variant="contained" color="secondary" fullWidth sx={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                  Validate Coupon Code
+                </Button>
+              </Box>
+            </Stack>
+          </form>
 
-        {/* Coupon Test Bench */}
-        <Grid size={{ xs: 12, md: 5 }}>
-          <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ConfirmationNumberIcon color="primary" />
-                Coupon Validation Test bench
+          {validationResult && (
+            <Alert icon={<CheckCircleIcon fontSize="inherit" />} severity="success" sx={{ mt: 2, borderRadius: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                Coupon VALID! Applied Deduction: -{Number(validationResult.calculatedAmount).toLocaleString()} IRR
               </Typography>
+              <Typography variant="caption">
+                Rule: <strong>{validationResult.discount.name}</strong> ({validationResult.discount.calculation_type})
+              </Typography>
+            </Alert>
+          )}
 
-              <form onSubmit={handleTestValidate}>
-                <Stack spacing={2}>
-                  <TextField
-                    label="Coupon Code"
-                    placeholder="e.g. WELCOME500K"
-                    required
-                    fullWidth
-                    value={testCouponCode}
-                    onChange={(e) => setTestCouponCode(e.target.value.toUpperCase())}
-                  />
+          {testError && (
+            <Alert severity="error" sx={{ mt: 2, borderRadius: 2 }}>
+              {testError}
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
 
-                  <TextField
-                    label="Simulated Order Subtotal (IRR)"
-                    type="number"
-                    required
-                    fullWidth
-                    value={testOrderTotal}
-                    onChange={(e) => setTestOrderTotal(e.target.value)}
-                  />
-
-                  <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>
-                    Validate Coupon
-                  </Button>
-                </Stack>
-              </form>
-
-              {testError && (
-                <Alert severity="error" sx={{ mt: 3 }}>
-                  {testError}
-                </Alert>
-              )}
-
-              {validationResult && (
-                <Box sx={{ mt: 3, p: 2, bgcolor: 'success.light', borderRadius: 2, color: 'success.dark' }}>
-                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
-                    <CheckCircleIcon color="success" />
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                      Coupon Code Validated!
-                    </Typography>
-                  </Stack>
-
-                  <Typography variant="body2">
-                    Coupon: <strong>{validationResult.coupon.code}</strong>
-                  </Typography>
-                  <Typography variant="body2">
-                    Rule: <strong>{validationResult.discount.name}</strong> ({validationResult.discount.calculation_type})
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 1, color: 'primary.dark' }}>
-                    Deduction Amount: -{Number(validationResult.calculatedAmount).toLocaleString()} IRR
-                  </Typography>
-                </Box>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
+        <CardContent sx={{ p: 0 }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Coupon Code</TableCell>
+                  <TableCell>Linked Campaign Rule</TableCell>
+                  <TableCell align="center">Uses / Max Limit</TableCell>
+                  <TableCell>Status</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {coupons.map((c) => {
+                  const cId = c.campaign_id || c.discount_id;
+                  const discObj = discounts.find((d) => d.id === cId);
+                  const currentUses = c.uses_count ?? c.current_redemptions ?? 0;
+                  const maxUses = c.max_uses ?? c.max_redemptions;
+                  return (
+                    <TableRow key={c.id}>
+                      <TableCell sx={{ fontWeight: 'bold', fontSize: '1.05rem' }}>
+                        <code>{c.code}</code>
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>
+                        {discObj ? `${discObj.name} (${discObj.code})` : cId}
+                      </TableCell>
+                      <TableCell align="center">
+                        <Chip
+                          label={`${currentUses} / ${maxUses ? maxUses : 'Unlimited'}`}
+                          size="small"
+                          color={maxUses && currentUses >= maxUses ? 'error' : 'default'}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={c.is_active ? 'Active' : 'Disabled'}
+                          color={c.is_active ? 'success' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
 
       {/* Create Coupon Drawer */}
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
@@ -256,8 +247,8 @@ export function CouponsPage() {
           <form onSubmit={handleCreate}>
             <Stack spacing={2.5}>
               <TextField
-                label="Coupon Code"
-                placeholder="e.g. SUMMER2026"
+                label="Coupon Code (Auto Uppercase)"
+                placeholder="e.g. WELCOME500K"
                 required
                 fullWidth
                 value={code}
@@ -265,26 +256,26 @@ export function CouponsPage() {
               />
 
               <FormControl fullWidth required>
-                <InputLabel>Linked Discount Rule</InputLabel>
+                <InputLabel>Target Discount Campaign Rule</InputLabel>
                 <Select
                   value={discountId}
-                  label="Linked Discount Rule"
+                  label="Target Discount Campaign Rule"
                   onChange={(e) => setDiscountId(e.target.value)}
                 >
                   {discounts.map((d) => (
                     <MenuItem key={d.id} value={d.id}>
-                      {d.name} ({d.code})
+                      {d.code} - {d.name}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
 
               <TextField
-                label="Max Redemptions Cap"
+                label="Max Allowed Redemptions"
                 type="number"
                 fullWidth
                 value={maxRedemptions || ''}
-                onChange={(e) => setMaxRedemptions(parseInt(e.target.value, 10) || undefined)}
+                onChange={(e) => setMaxRedemptions(e.target.value ? Number(e.target.value) : undefined)}
               />
 
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>

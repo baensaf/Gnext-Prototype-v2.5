@@ -201,13 +201,34 @@ export function PosOrderPage() {
   const handleApplyCoupon = async () => {
     if (!couponCode) return;
     try {
-      const res = await discountsApi.validateCoupon(couponCode, cartSubtotal.toString());
-      setAppliedDiscountAmount(Number(res.calculatedAmount));
-      setCouponMessage(`Applied ${res.discount.name} (-${Number(res.calculatedAmount).toLocaleString()} IRR)`);
-      setError(null);
+      const quoteRes = await discountsApi.quoteDiscounts({
+        orderDraft: {
+          branchId: selectedBranchId,
+          customerId: selectedCustomerId || undefined,
+          orderType,
+          items: cart.map((ci) => ({
+            productId: ci.product.id,
+            unitPrice: (ci.product.base_price || (ci.product as any).price || '0').toString(),
+            quantity: ci.quantity.toString(),
+          })),
+        },
+        couponCode,
+      });
+
+      const discAmount = Number(quoteRes.discountTotal || 0);
+      setAppliedDiscountAmount(discAmount);
+      const applied = quoteRes.consideredDiscounts.find((d) => d.status === 'APPLIED');
+      if (applied) {
+        setCouponMessage(`Applied ${applied.campaignName} (-${discAmount.toLocaleString()} IRR)`);
+        setError(null);
+      } else {
+        const rejected = quoteRes.consideredDiscounts.find((d) => d.status === 'REJECTED');
+        setCouponMessage(null);
+        setError(rejected?.rejectionReason || 'Coupon code is invalid or inactive');
+      }
     } catch (err: any) {
       setCouponMessage(null);
-      setError(err.detail || 'Failed to apply coupon code');
+      setError(err.detail || err.message || 'Failed to apply coupon code');
     }
   };
 

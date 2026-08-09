@@ -89,6 +89,9 @@ import { PinAttemptLog } from './entities/PinAttemptLog.entity';
 
 import { Discount } from './entities/Discount.entity';
 import { Coupon } from './entities/Coupon.entity';
+import { DiscountCampaign } from './entities/DiscountCampaign.entity';
+import { DiscountScope } from './entities/DiscountScope.entity';
+import { DiscountUsage } from './entities/DiscountUsage.entity';
 
 import { CustomerGroup } from './entities/CustomerGroup.entity';
 import { Customer } from './entities/Customer.entity';
@@ -152,7 +155,7 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
           PriceEntry, PriceGroupBranch, PriceBulkJob,
           Menu, MenuCategory, MenuProduct, ProductAvailability,
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,
-          Discount, Coupon,
+          Discount, Coupon, DiscountCampaign, DiscountScope, DiscountUsage,
           CustomerGroup, Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CustomerCreditTransaction,
           CustomFieldDefinition, CustomerCustomValue, CustomerTag, CustomerTagLink, CustomerSegment,
           CustomerConsent, CustomerMerge,

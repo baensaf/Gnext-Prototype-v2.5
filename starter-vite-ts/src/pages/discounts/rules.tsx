@@ -1,4 +1,4 @@
-import type { Discount } from 'src/api/discountsApi';
+import type { DiscountCampaign } from 'src/api/discountsApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
@@ -37,7 +37,7 @@ import { discountsApi } from 'src/api/discountsApi';
 export function DiscountRulesPage() {
   const { t } = useTranslation();
 
-  const [discounts, setDiscounts] = useState<Discount[]>([]);
+  const [discounts, setDiscounts] = useState<DiscountCampaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,12 +45,14 @@ export function DiscountRulesPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
-  const [kind, setKind] = useState<'MANUAL' | 'AUTOMATIC_RULE' | 'COUPON'>('MANUAL');
-  const [calcType, setCalcType] = useState<'PERCENTAGE' | 'FIXED_AMOUNT'>('PERCENTAGE');
-  const [value, setValue] = useState('0.1000');
-  const [minOrderTotal, setMinOrderTotal] = useState('0');
-  const [requiresReason, setRequiresReason] = useState(true);
-  const [requiresManagerApproval, setRequiresManagerApproval] = useState(true);
+  const [discountType, setDiscountType] = useState<'PERCENTAGE' | 'FIXED_AMOUNT' | 'FREE_ITEM' | 'FREE_DELIVERY'>('PERCENTAGE');
+  const [percentage, setPercentage] = useState('10.00');
+  const [amount, setAmount] = useState('50000.0000');
+  const [priority, setPriority] = useState(30);
+  const [stackingGroup, setStackingGroup] = useState('DEFAULT');
+  const [isStackable, setIsStackable] = useState(true);
+  const [couponRequired, setCouponRequired] = useState(false);
+  const [minSubtotal, setMinSubtotal] = useState('0');
 
   const loadData = async () => {
     setLoading(true);
@@ -75,12 +77,14 @@ export function DiscountRulesPage() {
       await discountsApi.createDiscount({
         code,
         name,
-        kind,
-        calculation_type: calcType,
-        value,
-        min_order_total: minOrderTotal,
-        requires_reason: requiresReason,
-        requires_manager_approval: requiresManagerApproval,
+        discount_type: discountType,
+        percentage: discountType === 'PERCENTAGE' ? percentage : undefined,
+        amount: discountType === 'FIXED_AMOUNT' ? amount : undefined,
+        priority,
+        stacking_group: stackingGroup,
+        is_stackable: isStackable,
+        coupon_required: couponRequired,
+        minimum_subtotal: minSubtotal,
       });
       setDrawerOpen(false);
       resetForm();
@@ -93,12 +97,14 @@ export function DiscountRulesPage() {
   const resetForm = () => {
     setCode('');
     setName('');
-    setKind('MANUAL');
-    setCalcType('PERCENTAGE');
-    setValue('0.1000');
-    setMinOrderTotal('0');
-    setRequiresReason(true);
-    setRequiresManagerApproval(true);
+    setDiscountType('PERCENTAGE');
+    setPercentage('10.00');
+    setAmount('50000.0000');
+    setPriority(30);
+    setStackingGroup('DEFAULT');
+    setIsStackable(true);
+    setCouponRequired(false);
+    setMinSubtotal('0');
   };
 
   const handleArchive = async (id: string, discName: string) => {
@@ -112,11 +118,19 @@ export function DiscountRulesPage() {
     }
   };
 
-  const formatValue = (d: Discount) => {
-    if (d.calculation_type === 'PERCENTAGE') {
-      return `${(Number(d.value) * 100).toFixed(0)}%`;
+  const formatValue = (d: DiscountCampaign) => {
+    const dType = d.discount_type || (d as any).calculation_type;
+    const val = d.percentage || d.amount || (d as any).value || '0';
+    if (dType === 'PERCENTAGE') {
+      return `${Number(val).toFixed(0)}%`;
     }
-    return `${Number(d.value).toLocaleString()} IRR`;
+    if (dType === 'FREE_DELIVERY') {
+      return 'Free Delivery';
+    }
+    if (dType === 'FREE_ITEM') {
+      return 'Free Item Reward';
+    }
+    return `${Number(val).toLocaleString()} IRR`;
   };
 
   return (
@@ -124,10 +138,10 @@ export function DiscountRulesPage() {
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Discount Rules & Promotions
+            Discount Rules & Campaigns
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Configure percentage, fixed amount, manual cashier overrides, and promotion constraints
+            Configure percentage, fixed amount, priority stacking groups, coupons, and promotion constraints
           </Typography>
         </Box>
         <Button
@@ -136,7 +150,7 @@ export function DiscountRulesPage() {
           onClick={() => setDrawerOpen(true)}
           sx={{ fontWeight: 'bold' }}
         >
-          Create Discount Rule
+          Create Campaign Rule
         </Button>
       </Stack>
 
@@ -153,12 +167,12 @@ export function DiscountRulesPage() {
               <TableHead>
                 <TableRow>
                   <TableCell>Code</TableCell>
-                  <TableCell>Discount Rule Name</TableCell>
-                  <TableCell>Kind</TableCell>
+                  <TableCell>Campaign Name</TableCell>
                   <TableCell>Type</TableCell>
                   <TableCell align="right">Value</TableCell>
-                  <TableCell align="center">Reason Req.</TableCell>
-                  <TableCell align="center">Approval Req.</TableCell>
+                  <TableCell align="center">Priority</TableCell>
+                  <TableCell align="center">Stackable</TableCell>
+                  <TableCell align="center">Coupon Req.</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell align="center">Actions</TableCell>
                 </TableRow>
@@ -169,21 +183,21 @@ export function DiscountRulesPage() {
                     <TableCell><code>{d.code}</code></TableCell>
                     <TableCell sx={{ fontWeight: 'bold' }}>{d.name}</TableCell>
                     <TableCell>
-                      <Chip label={d.kind} size="small" variant="outlined" />
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={d.calculation_type} size="small" color="info" />
+                      <Chip label={d.discount_type || (d as any).calculation_type} size="small" color="info" />
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                       {formatValue(d)}
                     </TableCell>
                     <TableCell align="center">
-                      <Chip label={d.requires_reason ? 'Yes' : 'No'} size="small" />
+                      <Chip label={`P${d.priority ?? 30}`} size="small" variant="outlined" />
+                    </TableCell>
+                    <TableCell align="center">
+                      <Chip label={d.is_stackable ?? true ? 'Yes' : 'No'} size="small" />
                     </TableCell>
                     <TableCell align="center">
                       <Chip
-                        label={d.requires_manager_approval ? 'Manager' : 'Cashier'}
-                        color={d.requires_manager_approval ? 'warning' : 'default'}
+                        label={d.coupon_required ? 'Coupon' : 'Automatic'}
+                        color={d.coupon_required ? 'warning' : 'default'}
                         size="small"
                       />
                     </TableCell>
@@ -213,14 +227,14 @@ export function DiscountRulesPage() {
 
       {/* Create Discount Drawer */}
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <Box sx={{ width: 420, p: 3 }}>
+        <Box sx={{ width: 440, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Create Discount Rule
+            Create Campaign Rule
           </Typography>
           <form onSubmit={handleCreate}>
             <Stack spacing={2.5}>
               <TextField
-                label="Discount Code"
+                label="Campaign Code"
                 placeholder="e.g. DISC-15PCT"
                 required
                 fullWidth
@@ -228,8 +242,8 @@ export function DiscountRulesPage() {
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
               />
               <TextField
-                label="Discount Display Name"
-                placeholder="e.g. 15% Manager Special Discount"
+                label="Campaign Display Name"
+                placeholder="e.g. 15% Summer Special Promotion"
                 required
                 fullWidth
                 value={name}
@@ -237,68 +251,84 @@ export function DiscountRulesPage() {
               />
 
               <FormControl fullWidth required>
-                <InputLabel>Discount Kind</InputLabel>
+                <InputLabel>Discount Type</InputLabel>
                 <Select
-                  value={kind}
-                  label="Discount Kind"
-                  onChange={(e) => setKind(e.target.value as any)}
+                  value={discountType}
+                  label="Discount Type"
+                  onChange={(e) => setDiscountType(e.target.value as any)}
                 >
-                  <MenuItem value="MANUAL">MANUAL (Cashier/Manager Applied)</MenuItem>
-                  <MenuItem value="AUTOMATIC_RULE">AUTOMATIC_RULE (Triggered by cart)</MenuItem>
-                  <MenuItem value="COUPON">COUPON (Code Linked)</MenuItem>
+                  <MenuItem value="PERCENTAGE">PERCENTAGE</MenuItem>
+                  <MenuItem value="FIXED_AMOUNT">FIXED_AMOUNT</MenuItem>
+                  <MenuItem value="FREE_DELIVERY">FREE_DELIVERY</MenuItem>
+                  <MenuItem value="FREE_ITEM">FREE_ITEM</MenuItem>
                 </Select>
               </FormControl>
 
-              <FormControl fullWidth required>
-                <InputLabel>Calculation Type</InputLabel>
-                <Select
-                  value={calcType}
-                  label="Calculation Type"
-                  onChange={(e) => setCalcType(e.target.value as any)}
-                >
-                  <MenuItem value="PERCENTAGE">PERCENTAGE (e.g. 0.1000 = 10%)</MenuItem>
-                  <MenuItem value="FIXED_AMOUNT">FIXED_AMOUNT (e.g. 500000 IRR)</MenuItem>
-                </Select>
-              </FormControl>
+              {discountType === 'PERCENTAGE' && (
+                <TextField
+                  label="Percentage Value (%)"
+                  required
+                  fullWidth
+                  value={percentage}
+                  onChange={(e) => setPercentage(e.target.value)}
+                />
+              )}
+
+              {discountType === 'FIXED_AMOUNT' && (
+                <TextField
+                  label="Fixed Amount (IRR)"
+                  required
+                  fullWidth
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+              )}
 
               <TextField
-                label={calcType === 'PERCENTAGE' ? 'Percentage Value (e.g. 0.1500 for 15%)' : 'Fixed Amount (IRR)'}
-                required
-                fullWidth
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-              />
-
-              <TextField
-                label="Min Order Subtotal Threshold (IRR)"
+                label="Priority (Lower number evaluates first, e.g. 10, 20, 30)"
                 type="number"
                 fullWidth
-                value={minOrderTotal}
-                onChange={(e) => setMinOrderTotal(e.target.value)}
+                value={priority}
+                onChange={(e) => setPriority(Number(e.target.value))}
+              />
+
+              <TextField
+                label="Stacking Group"
+                fullWidth
+                value={stackingGroup}
+                onChange={(e) => setStackingGroup(e.target.value)}
+              />
+
+              <TextField
+                label="Min Order Subtotal (IRR)"
+                type="number"
+                fullWidth
+                value={minSubtotal}
+                onChange={(e) => setMinSubtotal(e.target.value)}
               />
 
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={requiresReason}
-                    onChange={(e) => setRequiresReason(e.target.checked)}
+                    checked={isStackable}
+                    onChange={(e) => setIsStackable(e.target.checked)}
                   />
                 }
-                label="Requires Reason Code Selection"
+                label="Allow Stacking with other campaigns"
               />
 
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={requiresManagerApproval}
-                    onChange={(e) => setRequiresManagerApproval(e.target.checked)}
+                    checked={couponRequired}
+                    onChange={(e) => setCouponRequired(e.target.checked)}
                   />
                 }
-                label="Requires Manager Approval PIN"
+                label="Requires Coupon Code Input"
               />
 
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>
-                Save Discount Rule
+                Save Campaign Rule
               </Button>
             </Stack>
           </form>

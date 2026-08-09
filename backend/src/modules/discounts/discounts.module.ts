@@ -1,18 +1,30 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Discount } from '../../entities/Discount.entity';
+import { DiscountCampaign } from '../../entities/DiscountCampaign.entity';
+import { DiscountScope } from '../../entities/DiscountScope.entity';
 import { Coupon } from '../../entities/Coupon.entity';
+import { DiscountUsage } from '../../entities/DiscountUsage.entity';
+import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { DiscountsService } from './discounts.service';
+import { DiscountEvaluationService } from './discount-evaluation.service';
 import { DiscountsController } from './discounts.controller';
 import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Discount, Coupon]),
+    TypeOrmModule.forFeature([
+      Discount,
+      DiscountCampaign,
+      DiscountScope,
+      Coupon,
+      DiscountUsage,
+      TenantSetting,
+    ]),
     AuditModule,
   ],
-  providers: [DiscountsService],
+  providers: [DiscountsService, DiscountEvaluationService],
   controllers: [DiscountsController],
-  exports: [DiscountsService],
+  exports: [DiscountsService, DiscountEvaluationService],
 })
 export class DiscountsModule {}

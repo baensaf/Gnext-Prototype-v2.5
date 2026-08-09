@@ -8,23 +8,38 @@ export class Coupon {
   @Column({ type: 'uuid' })
   tenant_id: string;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: 'uuid', nullable: true })
+  campaign_id: string;
+
+  @Column({ type: 'uuid', nullable: true })
   discount_id: string;
 
   @Column({ type: 'varchar', length: 32 })
   code: string;
 
   @Column({ type: 'integer', nullable: true })
-  max_redemptions: number;
+  max_uses: number | null;
+
+  @Column({ type: 'integer', nullable: true })
+  max_redemptions: number | null;
+
+  @Column({ type: 'integer', default: 0 })
+  uses_count: number;
 
   @Column({ type: 'integer', default: 0 })
   current_redemptions: number;
 
   @Column({ type: 'timestamptz', nullable: true })
-  starts_at: Date;
+  effective_from: Date | null;
 
   @Column({ type: 'timestamptz', nullable: true })
-  expires_at: Date;
+  starts_at: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  effective_to: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  expires_at: Date | null;
 
   @Column({ type: 'boolean', default: true })
   is_active: boolean;
@@ -47,3 +62,4 @@ export class Coupon {
   @VersionColumn({ default: 1 })
   version: number;
 }
+
