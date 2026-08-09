@@ -62,7 +62,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     try {
       const o = await orderApi.getOrderById(orderId);
       setOrder(o);
-      setPayAmount(o.due_amount);
+      setPayAmount(o.due_amount || o.outstanding_total || '0');
 
       const pms = await settingsApi.getPaymentMethods();
       setPaymentMethods(pms.filter((m) => m.is_active));

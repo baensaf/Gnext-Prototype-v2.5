@@ -256,8 +256,9 @@ export function PosOrderPage() {
         })),
       };
 
-      const res = await orderApi.createOrder(orderPayload);
-      setPlacedOrder(res);
+      const draft = await orderApi.createOrder(orderPayload);
+      const submitted = await orderApi.submitOrder(draft.id);
+      setPlacedOrder(submitted);
       setCart([]);
       setCouponCode('');
       setAppliedDiscountAmount(0);

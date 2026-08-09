@@ -110,6 +110,11 @@ import { CustomerMerge } from './entities/CustomerMerge.entity';
 import { OrderHeader } from './entities/OrderHeader.entity';
 import { OrderItem } from './entities/OrderItem.entity';
 import { OrderItemOption } from './entities/OrderItemOption.entity';
+import { OrderAdjustment } from './entities/OrderAdjustment.entity';
+import { OrderNote } from './entities/OrderNote.entity';
+import { OrderLink } from './entities/OrderLink.entity';
+import { OrderStateEvent } from './entities/OrderStateEvent.entity';
+import { OrderSequence } from './entities/OrderSequence.entity';
 
 import { Payment } from './entities/Payment.entity';
 import { SettlementAccount } from './entities/SettlementAccount.entity';
@@ -159,7 +164,7 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
           CustomerGroup, Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CustomerCreditTransaction,
           CustomFieldDefinition, CustomerCustomValue, CustomerTag, CustomerTagLink, CustomerSegment,
           CustomerConsent, CustomerMerge,
-          OrderHeader, OrderItem, OrderItemOption,
+          OrderHeader, OrderItem, OrderItemOption, OrderAdjustment, OrderNote, OrderLink, OrderStateEvent, OrderSequence,
           Payment, SettlementAccount, PaymentDevice, PaymentAllocation, PaymentAttempt,
           RefundRequest, RefundItem, RefundAllocation,
           DiningArea, DiningTable, TableSession, TableEvent,
