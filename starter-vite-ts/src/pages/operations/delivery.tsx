@@ -1,34 +1,37 @@
+import type { Courier, DeliveryAssignment } from 'src/api/deliveryApi';
+
 import React, { useState, useEffect } from 'react';
+
+import PhoneIcon from '@mui/icons-material/Phone';
+import CancelIcon from '@mui/icons-material/Cancel';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import TwoWheelerIcon from '@mui/icons-material/TwoWheeler';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import {
   Box,
-  Typography,
   Card,
-  CardContent,
-  Button,
-  Stack,
   Chip,
+  Grid,
+  Stack,
+  Alert,
+  Paper,
+  Button,
   Dialog,
+  Drawer,
+  Divider,
+  MenuItem,
+  TextField,
+  Typography,
+  CardContent,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  MenuItem,
-  Alert,
-  Grid,
-  Paper,
-  Drawer,
-  Divider,
 } from '@mui/material';
-import TwoWheelerIcon from '@mui/icons-material/TwoWheeler';
-import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import CancelIcon from '@mui/icons-material/Cancel';
-import PhoneIcon from '@mui/icons-material/Phone';
-import LocationOnIcon from '@mui/icons-material/LocationOn';
 
-import { deliveryApi, Courier, DeliveryAssignment } from 'src/api/deliveryApi';
+import { deliveryApi } from 'src/api/deliveryApi';
 
 export function DeliveryPage() {
   const [couriers, setCouriers] = useState<Courier[]>([]);
@@ -178,7 +181,7 @@ export function DeliveryPage() {
             <Paper variant="outlined" sx={{ p: 5, textAlign: 'center' }}>
               <LocalShippingIcon sx={{ fontSize: 60, color: 'text.secondary', mb: 1 }} />
               <Typography variant="h6" color="text.secondary">
-                No active delivery orders. Click "Dispatch Order" to assign a courier.
+                No active delivery orders. Click &quot;Dispatch Order&quot; to assign a courier.
               </Typography>
             </Paper>
           ) : (
@@ -266,7 +269,7 @@ export function DeliveryPage() {
             {couriers.length === 0 ? (
               <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
-                  No couriers registered. Click "Add Courier".
+                  No couriers registered. Click &quot;Add Courier&quot;.
                 </Typography>
               </Paper>
             ) : (

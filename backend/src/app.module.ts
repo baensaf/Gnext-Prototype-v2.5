@@ -25,6 +25,9 @@ import { KioskModule } from './modules/kiosk/kiosk.module';
 import { SimulationModule } from './modules/simulation/simulation.module';
 import { OfflineSyncModule } from './modules/offline-sync/offline-sync.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { ImportExportModule } from './modules/import-export/import-export.module';
+import { ImportJob } from './entities/ImportJob.entity';
+import { ImportRow } from './entities/ImportRow.entity';
 
 import { RefundRequest } from './entities/RefundRequest.entity';
 import { RefundItem } from './entities/RefundItem.entity';
@@ -142,6 +145,7 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
           CashDrawerShift, CashDrawerTransaction,
           InventoryItem, InventoryTransaction, IntegrationLog,
           OfflineQueueItem, SyncConflictRecord,
+          ImportJob, ImportRow,
         ],
         synchronize: false, // Mandatory AD-02
         logging: config.get<string>('NODE_ENV') === 'development' ? ['error', 'warn'] : false,
@@ -170,6 +174,7 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
     SimulationModule,
     OfflineSyncModule,
     ReportsModule,
+    ImportExportModule,
   ],
   controllers: [HealthController],
 })

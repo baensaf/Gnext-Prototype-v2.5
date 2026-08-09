@@ -1,35 +1,37 @@
+import type { DiningArea, DiningTable } from 'src/api/dineInApi';
+
 import React, { useState, useEffect } from 'react';
+
+import AddIcon from '@mui/icons-material/Add';
+import PeopleIcon from '@mui/icons-material/People';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import TableBarIcon from '@mui/icons-material/TableBar';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import {
   Box,
-  Typography,
+  Tab,
   Card,
-  CardContent,
-  Button,
-  Stack,
   Chip,
+  Tabs,
+  Grid,
+  Stack,
+  Alert,
+  Paper,
+  Button,
   Dialog,
+  Drawer,
+  MenuItem,
+  TextField,
+  Typography,
+  CardContent,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  MenuItem,
-  Alert,
-  Tabs,
-  Tab,
-  Grid,
-  Paper,
-  Drawer,
 } from '@mui/material';
-import TableBarIcon from '@mui/icons-material/TableBar';
-import PeopleIcon from '@mui/icons-material/People';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import AddIcon from '@mui/icons-material/Add';
-import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
-import MergeTypeIcon from '@mui/icons-material/MergeType';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
-import { dineInApi, DiningArea, DiningTable } from 'src/api/dineInApi';
+import { dineInApi } from 'src/api/dineInApi';
 
 export function DineInPage() {
   const [areas, setAreas] = useState<DiningArea[]>([]);
@@ -202,7 +204,7 @@ export function DineInPage() {
           <Grid size={12}>
             <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
               <Typography variant="body1" color="text.secondary">
-                No dining tables configured in this area. Click "Add Table" to create your restaurant layout.
+                No dining tables configured in this area. Click &quot;Add Table&quot; to create your restaurant layout.
               </Typography>
             </Paper>
           </Grid>

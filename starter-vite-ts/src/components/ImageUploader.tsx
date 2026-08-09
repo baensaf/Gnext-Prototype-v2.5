@@ -1,20 +1,21 @@
+import type { FileAssetDto } from 'src/api/mediaApi';
+
 import React, { useState } from 'react';
-import {
-  Box,
-  Button,
-  Typography,
-  Stack,
-  Card,
-  CardMedia,
-  CardContent,
-  CircularProgress,
-  Alert,
-  Chip,
-} from '@mui/material';
+
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import {
+  Box,
+  Card,
+  Stack,
+  Alert,
+  Button,
+  CardMedia,
+  Typography,
+  CircularProgress,
+} from '@mui/material';
 
-import { mediaApi, FileAssetDto } from 'src/api/mediaApi';
+import { mediaApi } from 'src/api/mediaApi';
 
 interface ImageUploaderProps {
   value?: string;
@@ -44,7 +45,7 @@ export function ImageUploader({ value, onUploadSuccess, label = 'Upload Image' }
     try {
       const result = await mediaApi.uploadFile(file);
       setAsset(result);
-      setPreviewUrl(`http://localhost:3000${result.url}`);
+      setPreviewUrl(`http://localhost:3100${result.url}`);
       if (onUploadSuccess) {
         onUploadSuccess(result);
       }

@@ -1,31 +1,30 @@
 import React, { useState, useEffect } from 'react';
+
+import PaymentsIcon from '@mui/icons-material/Payments';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import {
   Box,
-  Typography,
   Card,
-  CardContent,
-  Button,
-  Stack,
   Chip,
+  Grid,
+  Stack,
   Alert,
+  Paper,
+  Table,
+  Button,
   Dialog,
+  TableRow,
+  TextField,
+  TableBody,
+  TableCell,
+  TableHead,
+  Typography,
+  CardContent,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
   TableContainer,
-  TableHead,
-  TableRow,
-  Grid,
-  Divider,
 } from '@mui/material';
-import PaymentsIcon from '@mui/icons-material/Payments';
-import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 
 import { customerApi } from 'src/api/customerApi';
 

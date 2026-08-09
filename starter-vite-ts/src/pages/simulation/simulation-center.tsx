@@ -1,31 +1,31 @@
+import axios from 'axios';
 import React, { useState, useEffect } from 'react';
+
 import {
   Box,
+  Tab,
   Card,
-  CardContent,
-  Typography,
   Grid,
-  Button,
+  Chip,
+  Tabs,
   Table,
+  Paper,
+  Stack,
+  Alert,
+  Button,
+  Dialog,
+  Divider,
+  TableRow,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  Dialog,
+  TextField,
+  Typography,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  Tabs,
-  Tab,
-  Stack,
-  Alert,
-  Divider,
+  TableContainer,
 } from '@mui/material';
-import axios from 'axios';
 
 export function SimulationCenterPage() {
   const [activeTab, setActiveTab] = useState<number>(0);
@@ -223,7 +223,7 @@ export function SimulationCenterPage() {
                 </Stack>
               ) : (
                 <Typography color="text.secondary" align="center" sx={{ py: 8 }}>
-                  No simulation run yet. Click "Generate Test Snappfood Order" to execute.
+                  No simulation run yet. Click &quot;Generate Test Snappfood Order&quot; to execute.
                 </Typography>
               )}
             </Card>

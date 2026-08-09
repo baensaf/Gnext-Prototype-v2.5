@@ -1,25 +1,26 @@
+import axios from 'axios';
 import React, { useState, useEffect } from 'react';
+
 import {
   Box,
   Card,
-  Typography,
+  Chip,
   Table,
+  Paper,
+  Stack,
+  Alert,
+  Dialog,
+  Button,
+  TableRow,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  Dialog,
+  Typography,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Button,
-  Stack,
-  Alert,
+  TableContainer,
 } from '@mui/material';
-import axios from 'axios';
 
 export function AuditExplorerPage() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);

@@ -1,33 +1,33 @@
+import type { Branch } from 'src/api/tenantApi';
+import type { Menu, Product, Category } from 'src/api/catalogApi';
+
 import React, { useState, useEffect } from 'react';
-import {
-  Box,
-  Typography,
-  Card,
-  CardContent,
-  Button,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  Drawer,
-  TextField,
-  MenuItem,
-  Alert,
-  IconButton,
-  Grid,
-} from '@mui/material';
+
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import {
+  Box,
+  Chip,
+  Stack,
+  Table,
+  Paper,
+  Alert,
+  Button,
+  Drawer,
+  TableRow,
+  MenuItem,
+  TableBody,
+  TableCell,
+  TableHead,
+  TextField,
+  Typography,
+  IconButton,
+  TableContainer,
+} from '@mui/material';
 
-import { catalogApi, Menu, Category, Product } from 'src/api/catalogApi';
-import { tenantApi, Branch } from 'src/api/tenantApi';
+import { tenantApi } from 'src/api/tenantApi';
+import { catalogApi } from 'src/api/catalogApi';
 
 export function MenusPage() {
   const [menus, setMenus] = useState<Menu[]>([]);
@@ -165,7 +165,7 @@ export function MenusPage() {
                 <TableRow>
                   <TableCell colSpan={7} align="center">
                     <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
-                      No menus created yet. Click "Create Menu" to build your first channel or branch menu.
+                      No menus created yet. Click &quot;Create Menu&quot; to build your first channel or branch menu.
                     </Typography>
                   </TableCell>
                 </TableRow>

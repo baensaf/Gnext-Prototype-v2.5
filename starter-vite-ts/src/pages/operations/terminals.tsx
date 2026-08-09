@@ -1,36 +1,37 @@
+import type { Branch, Terminal } from 'src/api/tenantApi';
+
 import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import {
-  Box,
-  Typography,
-  Card,
-  CardContent,
-  Button,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  IconButton,
-  Drawer,
-  TextField,
-  MenuItem,
-  Alert,
-  FormControl,
-  InputLabel,
-  Select,
-} from '@mui/material';
+
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
+import {
+  Box,
+  Card,
+  Chip,
+  Stack,
+  Table,
+  Paper,
+  Alert,
+  Button,
+  Drawer,
+  Select,
+  TableRow,
+  MenuItem,
+  TableBody,
+  TableCell,
+  TableHead,
+  TextField,
+  Typography,
+  IconButton,
+  InputLabel,
+  CardContent,
+  FormControl,
+  TableContainer,
+} from '@mui/material';
 
-import { tenantApi, Terminal, Branch } from 'src/api/tenantApi';
+import { tenantApi } from 'src/api/tenantApi';
 
 export function TerminalsPage() {
-  const { t } = useTranslation();
 
   const [terminals, setTerminals] = useState<Terminal[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);

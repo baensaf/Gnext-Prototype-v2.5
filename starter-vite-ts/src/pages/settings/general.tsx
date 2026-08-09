@@ -1,31 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import type { Currency } from 'src/api/settingsApi';
+
 import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from 'react';
+
+import SaveIcon from '@mui/icons-material/Save';
 import {
   Box,
-  Typography,
   Card,
-  CardContent,
-  Button,
+  Chip,
   Stack,
   Table,
+  Paper,
+  Alert,
+  Button,
+  Switch,
+  TableRow,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  Switch,
   TextField,
-  Alert,
-  Divider,
+  Typography,
+  CardContent,
+  TableContainer,
 } from '@mui/material';
-import SaveIcon from '@mui/icons-material/Save';
-import AddIcon from '@mui/icons-material/Add';
 
-import { useAuthStore } from 'src/store/useAuthStore';
-import { settingsApi, Currency } from 'src/api/settingsApi';
 import { tenantApi } from 'src/api/tenantApi';
+import { settingsApi } from 'src/api/settingsApi';
+import { useAuthStore } from 'src/store/useAuthStore';
 
 export function GeneralSettingsPage() {
   const { t } = useTranslation();

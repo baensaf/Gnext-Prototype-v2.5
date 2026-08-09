@@ -1,30 +1,31 @@
+import type { ApprovalRule, ApprovalRequest } from 'src/api/approvalApi';
+
 import React, { useState, useEffect } from 'react';
-import {
-  Box,
-  Typography,
-  Card,
-  CardContent,
-  Button,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  Drawer,
-  TextField,
-  MenuItem,
-  Alert,
-  IconButton,
-} from '@mui/material';
+
+import EditIcon from '@mui/icons-material/Edit';
 import ShieldIcon from '@mui/icons-material/Shield';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import EditIcon from '@mui/icons-material/Edit';
+import {
+  Box,
+  Chip,
+  Stack,
+  Table,
+  Paper,
+  Alert,
+  Button,
+  Drawer,
+  TableRow,
+  MenuItem,
+  TableBody,
+  TableCell,
+  TableHead,
+  TextField,
+  Typography,
+  IconButton,
+  TableContainer,
+} from '@mui/material';
 
-import { approvalApi, ApprovalRule, ApprovalRequest } from 'src/api/approvalApi';
+import { approvalApi } from 'src/api/approvalApi';
 
 const DEFAULT_ACTIONS = [
   { code: 'DISCOUNT', label: 'Manual Cashier Discount (%)' },

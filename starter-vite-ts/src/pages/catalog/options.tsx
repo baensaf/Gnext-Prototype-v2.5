@@ -1,35 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import type { OptionGroup } from 'src/api/catalogApi';
+
 import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from 'react';
+
+import AddIcon from '@mui/icons-material/Add';
 import {
   Box,
-  Typography,
   Card,
-  CardContent,
-  Button,
+  Chip,
+  Grid,
   Stack,
   Table,
+  Paper,
+  Alert,
+  Button,
+  Drawer,
+  Dialog,
+  TableRow,
+  Checkbox,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  IconButton,
-  Drawer,
   TextField,
-  FormControlLabel,
-  Checkbox,
-  Alert,
-  Dialog,
+  Typography,
+  CardContent,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Grid,
+  TableContainer,
+  FormControlLabel,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
 
-import { catalogApi, OptionGroup } from 'src/api/catalogApi';
+import { catalogApi } from 'src/api/catalogApi';
 
 export function OptionsPage() {
   const { t } = useTranslation();

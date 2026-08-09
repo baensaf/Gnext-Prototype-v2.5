@@ -1,32 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import type { Branch } from 'src/api/tenantApi';
+
 import { useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from 'react';
+
+import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import {
   Box,
-  Typography,
   Card,
-  CardContent,
-  Button,
+  Chip,
   Stack,
   Table,
+  Paper,
+  Alert,
+  Button,
+  Drawer,
+  TableRow,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  IconButton,
-  Drawer,
   TextField,
-  Alert,
+  Typography,
+  IconButton,
+  CardContent,
+  TableContainer,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import DeleteIcon from '@mui/icons-material/Delete';
 
-import { tenantApi, Branch } from 'src/api/tenantApi';
+import { tenantApi } from 'src/api/tenantApi';
 
 export function BranchesPage() {
   const { t } = useTranslation();
@@ -131,7 +133,7 @@ export function BranchesPage() {
                 {branches.length === 0 && !loading && (
                   <TableRow>
                     <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
-                      No branches found. Click "Create Branch" to add one.
+                      No branches found. Click &quot;Create Branch&quot; to add one.
                     </TableCell>
                   </TableRow>
                 )}

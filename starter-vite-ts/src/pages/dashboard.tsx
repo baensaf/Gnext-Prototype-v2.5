@@ -1,27 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import type { Branch } from 'src/api/tenantApi';
+
 import { useTranslation } from 'react-i18next';
-import {
-  Box,
-  Typography,
-  Grid,
-  Card,
-  CardContent,
-  Stack,
-  Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-} from '@mui/material';
+import React, { useState, useEffect } from 'react';
+
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
-import StorefrontIcon from '@mui/icons-material/Storefront';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import {
+  Box,
+  Grid,
+  Card,
+  Chip,
+  Stack,
+  Table,
+  Paper,
+  TableRow,
+  TableBody,
+  TableCell,
+  TableHead,
+  Typography,
+  CardContent,
+  TableContainer,
+} from '@mui/material';
+
+import { tenantApi } from 'src/api/tenantApi';
 import { useAuthStore } from 'src/store/useAuthStore';
-import { tenantApi, Branch } from 'src/api/tenantApi';
 
 export function DashboardPage() {
   const { t } = useTranslation();

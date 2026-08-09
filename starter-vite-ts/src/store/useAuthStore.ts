@@ -1,5 +1,8 @@
+import type { ProblemDetails } from 'src/api/httpClient';
+
 import { create } from 'zustand';
-import { httpClient, setCsrfToken, ProblemDetails } from 'src/api/httpClient';
+
+import { httpClient, setCsrfToken } from 'src/api/httpClient';
 import i18n, { updateDocumentDirection } from 'src/locales/i18n';
 
 export interface UserState {
@@ -41,7 +44,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   tenant: null,
   csrfToken: null,
   isAuthenticated: false,
-  isLoading: true,
+  isLoading: false,
   error: null,
   locale: localStorage.getItem('gnext_locale') || 'fa',
   direction: (localStorage.getItem('gnext_locale') || 'fa') === 'fa' ? 'rtl' : 'ltr',

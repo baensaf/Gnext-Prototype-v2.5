@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
+
+import LockIcon from '@mui/icons-material/Lock';
 import {
+  Box,
+  Stack,
+  Alert,
   Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   TextField,
   Typography,
-  Stack,
-  Alert,
-  Box,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
-import LockIcon from '@mui/icons-material/Lock';
+
 import { approvalApi } from 'src/api/approvalApi';
 
 interface ApprovalModalProps {

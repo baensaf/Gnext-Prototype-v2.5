@@ -1,36 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import type { Payment } from 'src/api/paymentApi';
+import type { OrderHeader } from 'src/api/orderApi';
+import type { PaymentMethod } from 'src/api/settingsApi';
+
 import { useNavigate } from 'react-router';
+import React, { useState, useEffect } from 'react';
+
+import PrintIcon from '@mui/icons-material/Print';
+import PaymentIcon from '@mui/icons-material/Payment';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
   Box,
-  Typography,
+  Chip,
   Stack,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Alert,
   Paper,
   Table,
+  Dialog,
+  Button,
+  Select,
+  Divider,
+  MenuItem,
+  TableRow,
+  TextField,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
-  TableRow,
-  Chip,
-  Divider,
+  Typography,
+  InputLabel,
+  DialogTitle,
+  FormControl,
+  DialogContent,
+  DialogActions,
+  TableContainer,
 } from '@mui/material';
-import PaymentIcon from '@mui/icons-material/Payment';
-import PrintIcon from '@mui/icons-material/Print';
 
-import { orderApi, OrderHeader } from 'src/api/orderApi';
-import { paymentApi, Payment } from 'src/api/paymentApi';
-import { settingsApi, PaymentMethod } from 'src/api/settingsApi';
+import { orderApi } from 'src/api/orderApi';
+import { paymentApi } from 'src/api/paymentApi';
+import { settingsApi } from 'src/api/settingsApi';
 
 interface CheckoutModalProps {
   open: boolean;

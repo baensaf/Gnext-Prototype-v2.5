@@ -1,49 +1,53 @@
 import type { RouteObject } from 'react-router';
+
+import { useEffect } from 'react';
 import { Navigate } from 'react-router';
+
 import { LoginPage } from 'src/pages/login';
 import { AppShell } from 'src/layouts/AppShell';
-import { DashboardPage } from 'src/pages/dashboard';
-import { BranchesPage } from 'src/pages/operations/branches';
-import { BranchDetailPage } from 'src/pages/operations/branch-detail';
-import { TerminalsPage } from 'src/pages/operations/terminals';
-import { CashDrawerPage } from 'src/pages/operations/cash-drawer';
-import { PaymentsPage } from 'src/pages/operations/payments';
-import { DineInPage } from 'src/pages/operations/dine-in';
+import { KioskPage } from 'src/pages/pos/kiosk';
 import { KdsPage } from 'src/pages/operations/kds';
-import { DeliveryPage } from 'src/pages/operations/delivery';
-import { CourierSettlementsPage } from 'src/pages/operations/settlements';
-import { InventoryStockPage } from 'src/pages/inventory/stock';
-import { GeneralSettingsPage } from 'src/pages/settings/general';
-import { ReasonCodesPage } from 'src/pages/settings/reasons';
-import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
-import { MediaLocalizationDemoPage } from 'src/pages/simulation/media-localization';
-
-import { CategoriesPage } from 'src/pages/catalog/categories';
-import { ProductsPage } from 'src/pages/catalog/products';
+import { PosOrderPage } from 'src/pages/pos/order';
+import { MenusPage } from 'src/pages/catalog/menus';
+import { DashboardPage } from 'src/pages/dashboard';
+import { ReceiptPage } from 'src/pages/pos/receipt';
+import { useAuthStore } from 'src/store/useAuthStore';
+import { RefundsPage } from 'src/pages/orders/refunds';
 import { OptionsPage } from 'src/pages/catalog/options';
 import { PricingPage } from 'src/pages/catalog/pricing';
-import { MenusPage } from 'src/pages/catalog/menus';
-import { AvailabilityPage } from 'src/pages/catalog/availability';
-
-import { DiscountRulesPage } from 'src/pages/discounts/rules';
+import { SettingsHubPage } from 'src/pages/settings/hub';
+import { ProductsPage } from 'src/pages/catalog/products';
 import { CouponsPage } from 'src/pages/discounts/coupons';
-
+import { DineInPage } from 'src/pages/operations/dine-in';
+import { DataResetPage } from 'src/pages/tools/data-reset';
+import { BranchesPage } from 'src/pages/operations/branches';
+import { DeliveryPage } from 'src/pages/operations/delivery';
+import { PaymentsPage } from 'src/pages/operations/payments';
+import { ReasonCodesPage } from 'src/pages/settings/reasons';
+import { CategoriesPage } from 'src/pages/catalog/categories';
 import { CustomersPage } from 'src/pages/customers/directory';
-import { CustomerGroupsPage } from 'src/pages/customers/groups';
-import { CustomerCreditPage } from 'src/pages/customers/credit';
-
-import { PosOrderPage } from 'src/pages/pos/order';
+import { DiscountRulesPage } from 'src/pages/discounts/rules';
+import { InventoryStockPage } from 'src/pages/inventory/stock';
+import { TerminalsPage } from 'src/pages/operations/terminals';
 import { OrdersWorkflowPage } from 'src/pages/orders/workflow';
-import { RefundsPage } from 'src/pages/orders/refunds';
-import { ReceiptPage } from 'src/pages/pos/receipt';
-import { KioskPage } from 'src/pages/pos/kiosk';
-import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
-import { OfflineSyncPage } from 'src/pages/simulation/offline-sync';
+import { CustomerCreditPage } from 'src/pages/customers/credit';
+import { CustomerGroupsPage } from 'src/pages/customers/groups';
+import { GeneralSettingsPage } from 'src/pages/settings/general';
+import { ImportWizardPage } from 'src/pages/tools/import-wizard';
+import { AvailabilityPage } from 'src/pages/catalog/availability';
+import { CashDrawerPage } from 'src/pages/operations/cash-drawer';
 import { ReportViewerPage } from 'src/pages/reports/report-viewer';
+import { OfflineSyncPage } from 'src/pages/simulation/offline-sync';
+import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
+import { BranchDetailPage } from 'src/pages/operations/branch-detail';
 import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
+import { CourierSettlementsPage } from 'src/pages/operations/settlements';
+import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
+import { MediaLocalizationDemoPage } from 'src/pages/simulation/media-localization';
 
-import { useAuthStore } from 'src/store/useAuthStore';
-import { useEffect } from 'react';
+
+
+
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, fetchMe, isLoading } = useAuthStore();
@@ -67,6 +71,14 @@ export const routesSection: RouteObject[] = [
   {
     path: '/',
     element: <Navigate to="/app/dashboard" replace />,
+  },
+  {
+    path: '/operations/orders',
+    element: <Navigate to="/app/operations/orders" replace />,
+  },
+  {
+    path: '/orders',
+    element: <Navigate to="/app/operations/orders" replace />,
   },
   {
     path: '/login',
@@ -109,10 +121,6 @@ export const routesSection: RouteObject[] = [
         element: <CashDrawerPage />,
       },
       {
-        path: 'operations/payments',
-        element: <PaymentsPage />,
-      },
-      {
         path: 'operations/dine-in',
         element: <DineInPage />,
       },
@@ -133,10 +141,6 @@ export const routesSection: RouteObject[] = [
         element: <SimulationCenterPage />,
       },
       {
-        path: 'simulation/offline-sync',
-        element: <OfflineSyncPage />,
-      },
-      {
         path: 'reports/catalog',
         element: <ReportViewerPage />,
       },
@@ -147,30 +151,6 @@ export const routesSection: RouteObject[] = [
       {
         path: 'inventory/stock',
         element: <InventoryStockPage />,
-      },
-      {
-        path: 'operations/branches',
-        element: <BranchesPage />,
-      },
-      {
-        path: 'operations/branches/:id',
-        element: <BranchDetailPage />,
-      },
-      {
-        path: 'operations/terminals',
-        element: <TerminalsPage />,
-      },
-      {
-        path: 'settings/general',
-        element: <GeneralSettingsPage />,
-      },
-      {
-        path: 'settings/reasons',
-        element: <ReasonCodesPage />,
-      },
-      {
-        path: 'settings/approvals',
-        element: <ApprovalsSettingsPage />,
       },
       {
         path: 'catalog/categories',
@@ -219,6 +199,80 @@ export const routesSection: RouteObject[] = [
       {
         path: 'simulation/media-localization',
         element: <MediaLocalizationDemoPage />,
+      },
+      /* Settings Hub & Sub-pages */
+      {
+        path: 'settings',
+        element: <SettingsHubPage />,
+      },
+      {
+        path: 'settings/general',
+        element: <GeneralSettingsPage />,
+      },
+      {
+        path: 'settings/branches',
+        element: <BranchesPage />,
+      },
+      {
+        path: 'settings/branches/:id',
+        element: <BranchDetailPage />,
+      },
+      {
+        path: 'settings/terminals',
+        element: <TerminalsPage />,
+      },
+      {
+        path: 'settings/payments',
+        element: <PaymentsPage />,
+      },
+      {
+        path: 'settings/approvals',
+        element: <ApprovalsSettingsPage />,
+      },
+      {
+        path: 'settings/reasons',
+        element: <ReasonCodesPage />,
+      },
+      {
+        path: 'settings/offline-sync',
+        element: <OfflineSyncPage />,
+      },
+      {
+        path: 'settings/import-wizard',
+        element: <ImportWizardPage />,
+      },
+      {
+        path: 'settings/data-reset',
+        element: <DataResetPage />,
+      },
+      /* Legacy Route Redirects for Backwards Compatibility */
+      {
+        path: 'operations/branches',
+        element: <Navigate to="/app/settings/branches" replace />,
+      },
+      {
+        path: 'operations/branches/:id',
+        element: <Navigate to="/app/settings/branches" replace />,
+      },
+      {
+        path: 'operations/terminals',
+        element: <Navigate to="/app/settings/terminals" replace />,
+      },
+      {
+        path: 'operations/payments',
+        element: <Navigate to="/app/settings/payments" replace />,
+      },
+      {
+        path: 'simulation/offline-sync',
+        element: <Navigate to="/app/settings/offline-sync" replace />,
+      },
+      {
+        path: 'tools/import-wizard',
+        element: <Navigate to="/app/settings/import-wizard" replace />,
+      },
+      {
+        path: 'tools/data-reset',
+        element: <Navigate to="/app/settings/data-reset" replace />,
       },
       {
         path: '*',

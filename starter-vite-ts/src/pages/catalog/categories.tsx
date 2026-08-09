@@ -1,29 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import type { Category } from 'src/api/catalogApi';
+
 import { useTranslation } from 'react-i18next';
-import {
-  Box,
-  Typography,
-  Card,
-  CardContent,
-  Button,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  IconButton,
-  Drawer,
-  TextField,
-  Alert,
-} from '@mui/material';
+import React, { useState, useEffect } from 'react';
+
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
+import {
+  Box,
+  Card,
+  Chip,
+  Stack,
+  Table,
+  Paper,
+  Alert,
+  Button,
+  Drawer,
+  TableRow,
+  TableBody,
+  TableCell,
+  TableHead,
+  TextField,
+  Typography,
+  IconButton,
+  CardContent,
+  TableContainer,
+} from '@mui/material';
 
-import { catalogApi, Category } from 'src/api/catalogApi';
+import { catalogApi } from 'src/api/catalogApi';
 
 export function CategoriesPage() {
   const { t } = useTranslation();

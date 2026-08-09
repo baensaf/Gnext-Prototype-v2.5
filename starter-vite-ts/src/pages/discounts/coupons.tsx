@@ -1,34 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import type { Coupon, Discount, CouponValidationResult } from 'src/api/discountsApi';
+
 import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from 'react';
+
+import AddIcon from '@mui/icons-material/Add';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
 import {
   Box,
-  Typography,
   Card,
-  CardContent,
-  Button,
+  Chip,
+  Grid,
   Stack,
   Table,
+  Paper,
+  Alert,
+  Button,
+  Drawer,
+  Select,
+  TableRow,
+  MenuItem,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  Drawer,
   TextField,
-  MenuItem,
-  Alert,
-  FormControl,
+  Typography,
   InputLabel,
-  Select,
-  Grid,
+  CardContent,
+  FormControl,
+  TableContainer,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
-import { discountsApi, Coupon, Discount, CouponValidationResult } from 'src/api/discountsApi';
+import { discountsApi } from 'src/api/discountsApi';
 
 export function CouponsPage() {
   const { t } = useTranslation();

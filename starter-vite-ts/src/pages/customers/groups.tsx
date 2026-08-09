@@ -1,33 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import type { PriceGroup } from 'src/api/catalogApi';
+import type { Discount } from 'src/api/discountsApi';
+import type { CustomerGroup } from 'src/api/customerApi';
+
 import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from 'react';
+
+import AddIcon from '@mui/icons-material/Add';
 import {
   Box,
-  Typography,
   Card,
-  CardContent,
-  Button,
+  Chip,
   Stack,
   Table,
+  Paper,
+  Alert,
+  Button,
+  Drawer,
+  Select,
+  TableRow,
+  MenuItem,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  Drawer,
   TextField,
-  MenuItem,
-  Alert,
-  FormControl,
+  Typography,
   InputLabel,
-  Select,
+  CardContent,
+  FormControl,
+  TableContainer,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
 
-import { customerApi, CustomerGroup } from 'src/api/customerApi';
-import { catalogApi, PriceGroup } from 'src/api/catalogApi';
-import { discountsApi, Discount } from 'src/api/discountsApi';
+import { catalogApi } from 'src/api/catalogApi';
+import { customerApi } from 'src/api/customerApi';
+import { discountsApi } from 'src/api/discountsApi';
 
 export function CustomerGroupsPage() {
   const { t } = useTranslation();

@@ -30,6 +30,8 @@ export interface OrderHeader {
   order_type: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY' | 'AGGREGATOR';
   status: 'DRAFT' | 'SUBMITTED' | 'KITCHEN_PREPARING' | 'READY' | 'COMPLETED' | 'CANCELLED' | 'REFUNDED';
   customer_id?: string;
+  customer_name?: string;
+  customer_mobile?: string;
   coupon_code?: string;
   subtotal_amount: string;
   tax_amount: string;

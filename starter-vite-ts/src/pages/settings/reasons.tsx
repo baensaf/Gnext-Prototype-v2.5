@@ -1,30 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import type { ReasonCode } from 'src/api/settingsApi';
+
 import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from 'react';
+
+import AddIcon from '@mui/icons-material/Add';
 import {
   Box,
-  Typography,
   Card,
-  CardContent,
-  Button,
+  Chip,
   Stack,
   Table,
+  Paper,
+  Alert,
+  Button,
+  Drawer,
+  Switch,
+  TableRow,
+  Checkbox,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  Drawer,
   TextField,
+  Typography,
+  CardContent,
+  TableContainer,
   FormControlLabel,
-  Checkbox,
-  Alert,
-  Switch,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
 
-import { settingsApi, ReasonCode } from 'src/api/settingsApi';
+import { settingsApi } from 'src/api/settingsApi';
 
 const DOMAIN_OPTIONS = [
   'ORDER_CANCEL',

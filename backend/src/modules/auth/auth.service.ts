@@ -84,6 +84,7 @@ export class AuthService {
         displayName: user.display_name,
         preferredLocale: user.preferred_locale,
         tenantId: user.tenant_id,
+        role: user.role,
       },
       tenant: tenant
         ? {
@@ -126,6 +127,7 @@ export class AuthService {
         displayName: user.display_name,
         preferredLocale: user.preferred_locale,
         tenantId: user.tenant_id,
+        role: user.role,
       },
       tenant: tenant
         ? {

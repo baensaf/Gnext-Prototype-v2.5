@@ -1,5 +1,7 @@
 import type { NavSectionProps } from 'src/components/nav-section';
+
 import { CONFIG } from 'src/global-config';
+
 import { Label } from 'src/components/label';
 import { SvgColor } from 'src/components/svg-color';
 
@@ -51,6 +53,11 @@ export const navData: NavSectionProps['data'] = [
         info: <Label color="success">NEW</Label>,
       },
       {
+        title: 'Orders Workflow Board',
+        path: '/app/operations/orders',
+        icon: ICONS.kds,
+      },
+      {
         title: 'Self-Service Kiosk',
         path: '/app/kiosk',
         icon: ICONS.pos,
@@ -97,31 +104,9 @@ export const navData: NavSectionProps['data'] = [
         info: <Label color="success">Slice 17</Label>,
       },
       {
-        title: 'Offline & Sync Engine',
-        path: '/app/simulation/offline-sync',
-        icon: ICONS.terminal,
-        info: <Label color="warning">Slice 20</Label>,
-      },
-      {
         title: 'Cash Drawer & EOD',
         path: '/app/operations/cash-drawer',
         icon: ICONS.drawer,
-      },
-      {
-        title: 'Payments & Devices',
-        path: '/app/operations/payments',
-        icon: ICONS.terminal,
-        info: <Label color="success">Slice 12</Label>,
-      },
-      {
-        title: 'Branches & Hours',
-        path: '/app/operations/branches',
-        icon: ICONS.store,
-      },
-      {
-        title: 'Terminals Registry',
-        path: '/app/operations/terminals',
-        icon: ICONS.terminal,
       },
       {
         title: 'Simulation Center',
@@ -205,28 +190,13 @@ export const navData: NavSectionProps['data'] = [
     ],
   },
   {
-    subheader: 'Settings & Tools',
+    subheader: 'System Settings',
     items: [
       {
-        title: 'General Settings',
-        path: '/app/settings/general',
+        title: 'Settings Hub',
+        path: '/app/settings',
         icon: ICONS.settings,
-      },
-      {
-        title: 'Approval Policies',
-        path: '/app/settings/approvals',
-        icon: ICONS.reasons,
-        info: <Label color="info">Slice 7</Label>,
-      },
-      {
-        title: 'Reason Codes',
-        path: '/app/settings/reasons',
-        icon: ICONS.reasons,
-      },
-      {
-        title: 'Media & Localization',
-        path: '/app/simulation/media-localization',
-        icon: ICONS.media,
+        info: <Label color="primary">HUB</Label>,
       },
     ],
   },

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
+
 import { KitchenStation } from '../../entities/KitchenStation.entity';
 import { KitchenTicket } from '../../entities/KitchenTicket.entity';
 import { KitchenTicketItem } from '../../entities/KitchenTicketItem.entity';
@@ -132,6 +133,17 @@ export class KdsService {
   }
 
   async getKdsTickets(tenantId: string, stationId?: string, isBumped?: boolean) {
+    // Auto-generate tickets for active orders without kitchen tickets
+    const activeOrders = await this.orderRepo.find({
+      where: { tenant_id: tenantId, status: In(['SUBMITTED', 'KITCHEN_PREPARING']) },
+    });
+    for (const order of activeOrders) {
+      const existing = await this.ticketRepo.findOne({ where: { tenant_id: tenantId, order_id: order.id } });
+      if (!existing) {
+        await this.generateTicketsForOrder(tenantId, order.id, 'auto-kds-sync');
+      }
+    }
+
     const where: any = { tenant_id: tenantId };
     if (stationId) where.station_id = stationId;
 

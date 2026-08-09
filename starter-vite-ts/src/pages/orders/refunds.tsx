@@ -1,33 +1,31 @@
+import type { RefundRequest } from 'src/api/refundApi';
+
 import React, { useState, useEffect } from 'react';
+
+import RefreshIcon from '@mui/icons-material/Refresh';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
   Box,
-  Typography,
-  Card,
-  CardContent,
-  Button,
+  Chip,
   Stack,
   Table,
+  Paper,
+  Alert,
+  Button,
+  Dialog,
+  TableRow,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  Alert,
+  Typography,
   IconButton,
-  Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  MenuItem,
+  TableContainer,
 } from '@mui/material';
-import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import VisibilityIcon from '@mui/icons-material/Visibility';
 
-import { refundApi, RefundRequest } from 'src/api/refundApi';
+import { refundApi } from 'src/api/refundApi';
 
 export function RefundsPage() {
   const [refunds, setRefunds] = useState<RefundRequest[]>([]);

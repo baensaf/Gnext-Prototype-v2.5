@@ -1,38 +1,42 @@
-import React, { useState, useEffect } from 'react';
+import type { Product, Category, OptionGroup } from 'src/api/catalogApi';
+
 import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from 'react';
+
+import AddIcon from '@mui/icons-material/Add';
+import TuneIcon from '@mui/icons-material/Tune';
+import DeleteIcon from '@mui/icons-material/Delete';
 import {
   Box,
-  Typography,
   Card,
-  CardContent,
-  Button,
+  Chip,
   Stack,
   Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Paper,
-  Chip,
-  IconButton,
-  Drawer,
-  TextField,
-  MenuItem,
   Alert,
-  FormControl,
-  InputLabel,
+  Button,
+  Drawer,
   Select,
   Dialog,
+  TableRow,
+  MenuItem,
+  TableBody,
+  TableCell,
+  TableHead,
+  TextField,
+  Typography,
+  IconButton,
+  InputLabel,
+  CardContent,
+  FormControl,
   DialogTitle,
   DialogContent,
   DialogActions,
+  TableContainer,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import DeleteIcon from '@mui/icons-material/Delete';
-import TuneIcon from '@mui/icons-material/Tune';
 
-import { catalogApi, Product, Category, OptionGroup } from 'src/api/catalogApi';
+import { catalogApi } from 'src/api/catalogApi';
+
 import { ImageUploader } from 'src/components/ImageUploader';
 
 export function ProductsPage() {

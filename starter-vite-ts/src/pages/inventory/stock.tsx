@@ -1,37 +1,42 @@
+import type { Branch } from 'src/api/tenantApi';
+import type { ReasonCode } from 'src/api/settingsApi';
+import type { InventoryItem, InventoryTransaction } from 'src/api/inventoryApi';
+
 import React, { useState, useEffect } from 'react';
+
+import AddBoxIcon from '@mui/icons-material/AddBox';
+import WarningIcon from '@mui/icons-material/Warning';
+import HistoryIcon from '@mui/icons-material/History';
 import {
   Box,
-  Typography,
   Card,
-  CardContent,
-  Button,
-  Stack,
   Chip,
+  Stack,
   Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Paper,
   Table,
+  Button,
+  Dialog,
+  Select,
+  MenuItem,
+  TableRow,
+  TextField,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
-  TableRow,
+  Typography,
+  InputLabel,
+  CardContent,
+  DialogTitle,
+  FormControl,
+  DialogContent,
+  DialogActions,
+  TableContainer,
 } from '@mui/material';
-import WarningIcon from '@mui/icons-material/Warning';
-import AddBoxIcon from '@mui/icons-material/AddBox';
-import HistoryIcon from '@mui/icons-material/History';
 
-import { inventoryApi, InventoryItem, InventoryTransaction } from 'src/api/inventoryApi';
-import { settingsApi, ReasonCode } from 'src/api/settingsApi';
-import { tenantApi, Branch } from 'src/api/tenantApi';
+import { tenantApi } from 'src/api/tenantApi';
+import { settingsApi } from 'src/api/settingsApi';
+import { inventoryApi } from 'src/api/inventoryApi';
 
 export function InventoryStockPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);

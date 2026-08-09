@@ -1,35 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import type { Discount } from 'src/api/discountsApi';
+
 import { useTranslation } from 'react-i18next';
-import {
-  Box,
-  Typography,
-  Card,
-  CardContent,
-  Button,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  IconButton,
-  Drawer,
-  TextField,
-  MenuItem,
-  FormControlLabel,
-  Checkbox,
-  Alert,
-  FormControl,
-  InputLabel,
-  Select,
-} from '@mui/material';
+import React, { useState, useEffect } from 'react';
+
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
+import {
+  Box,
+  Card,
+  Chip,
+  Stack,
+  Table,
+  Paper,
+  Alert,
+  Button,
+  Drawer,
+  Select,
+  TableRow,
+  MenuItem,
+  Checkbox,
+  TableBody,
+  TableCell,
+  TableHead,
+  TextField,
+  Typography,
+  IconButton,
+  InputLabel,
+  CardContent,
+  FormControl,
+  TableContainer,
+  FormControlLabel,
+} from '@mui/material';
 
-import { discountsApi, Discount } from 'src/api/discountsApi';
+import { discountsApi } from 'src/api/discountsApi';
 
 export function DiscountRulesPage() {
   const { t } = useTranslation();

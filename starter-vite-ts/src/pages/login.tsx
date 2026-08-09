@@ -1,29 +1,40 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from 'react';
+
+import LanguageIcon from '@mui/icons-material/Language';
 import {
   Box,
-  TextField,
-  Button,
-  Typography,
-  Alert,
   Chip,
+  Alert,
   Stack,
-  IconButton,
+  Button,
   Tooltip,
+  TextField,
+  Typography,
+  IconButton,
 } from '@mui/material';
-import LanguageIcon from '@mui/icons-material/Language';
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import { AuthSplitLayout } from 'src/layouts/auth-split';
+
 import { useAuthStore } from 'src/store/useAuthStore';
+import { AuthSplitLayout } from 'src/layouts/auth-split';
 
 export function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { login, isLoading, error, locale, setLocale, clearError } = useAuthStore();
+  const { login, isLoading, error, locale, setLocale, clearError, isAuthenticated, fetchMe } = useAuthStore();
 
   const [username, setUsername] = useState('admin@gnext.local');
   const [password, setPassword] = useState('GnextDemo!2026');
+
+  useEffect(() => {
+    fetchMe();
+  }, [fetchMe]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/app/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,35 +1,35 @@
+import type { Branch } from 'src/api/tenantApi';
+import type { PaymentDevice, SettlementAccount } from 'src/api/paymentApi';
+
 import React, { useState, useEffect } from 'react';
-import {
-  Box,
-  Typography,
-  Card,
-  CardContent,
-  Button,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  Drawer,
-  TextField,
-  MenuItem,
-  Alert,
-  Tabs,
-  Tab,
-  IconButton,
-} from '@mui/material';
+
+import AddIcon from '@mui/icons-material/Add';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import AddIcon from '@mui/icons-material/Add';
-import ReplayIcon from '@mui/icons-material/Replay';
+import {
+  Box,
+  Tab,
+  Chip,
+  Tabs,
+  Stack,
+  Table,
+  Paper,
+  Alert,
+  Button,
+  Drawer,
+  TableRow,
+  MenuItem,
+  TableBody,
+  TableCell,
+  TableHead,
+  TextField,
+  Typography,
+  TableContainer,
+} from '@mui/material';
 
-import { paymentApi, PaymentDevice, SettlementAccount } from 'src/api/paymentApi';
-import { tenantApi, Branch } from 'src/api/tenantApi';
+import { tenantApi } from 'src/api/tenantApi';
+import { paymentApi } from 'src/api/paymentApi';
 
 export function PaymentsPage() {
   const [tabIndex, setTabIndex] = useState(0);
@@ -179,7 +179,7 @@ export function PaymentsPage() {
                 <TableRow>
                   <TableCell colSpan={7} align="center">
                     <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
-                      No payment devices registered yet. Click "Register Device" to add your physical or mobile POS.
+                      No payment devices registered yet. Click &quot;Register Device&quot; to add your physical or mobile POS.
                     </Typography>
                   </TableCell>
                 </TableRow>

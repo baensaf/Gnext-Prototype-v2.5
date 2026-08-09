@@ -1,35 +1,36 @@
+import type { KitchenTicket, KitchenStation} from 'src/api/kdsApi';
+
 import React, { useState, useEffect } from 'react';
+
+import UndoIcon from '@mui/icons-material/Undo';
+import PrintIcon from '@mui/icons-material/Print';
+import CheckIcon from '@mui/icons-material/Check';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import SoupKitchenIcon from '@mui/icons-material/SoupKitchen';
+import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import {
   Box,
-  Typography,
+  Tab,
   Card,
-  CardContent,
-  Button,
-  Stack,
   Chip,
+  Tabs,
+  Grid,
+  Stack,
+  Alert,
+  Paper,
+  Button,
   Dialog,
+  Drawer,
+  Divider,
+  Typography,
+  IconButton,
+  CardContent,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  MenuItem,
-  Alert,
-  Tabs,
-  Tab,
-  Grid,
-  Paper,
-  Drawer,
-  IconButton,
-  Divider,
 } from '@mui/material';
-import SoupKitchenIcon from '@mui/icons-material/SoupKitchen';
-import PrintIcon from '@mui/icons-material/Print';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import CheckIcon from '@mui/icons-material/Check';
-import UndoIcon from '@mui/icons-material/Undo';
-import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 
-import { kdsApi, KitchenStation, KitchenTicket, PrinterDevice } from 'src/api/kdsApi';
+import { kdsApi } from 'src/api/kdsApi';
 
 export function KdsPage() {
   const [stations, setStations] = useState<KitchenStation[]>([]);

@@ -1,33 +1,35 @@
+import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
+
 import {
   Box,
+  Tab,
   Card,
-  CardContent,
-  Typography,
   Grid,
-  Button,
+  Chip,
+  Tabs,
   Table,
+  Paper,
+  Stack,
+  Button,
+  Dialog,
+  Divider,
+  TableRow,
+  Checkbox,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  Dialog,
+  TextField,
+  Typography,
+  CardContent,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  Tabs,
-  Tab,
-  Checkbox,
-  Divider,
-  Stack,
+  TableContainer,
 } from '@mui/material';
+
 import { Iconify } from 'src/components/iconify';
-import axios from 'axios';
-import { useTranslation } from 'react-i18next';
 
 interface CourierUnsettledSummary {
   courier_id: string;
@@ -97,12 +99,24 @@ export function CourierSettlementsPage() {
   const fetchData = async () => {
     try {
       const summaryRes = await axios.get('/api/v1/delivery/settlements/unsettled-summary');
-      setUnsettledSummaries(summaryRes.data || []);
+      const summaryArray = Array.isArray(summaryRes.data)
+        ? summaryRes.data
+        : Array.isArray(summaryRes.data?.data)
+        ? summaryRes.data.data
+        : [];
+      setUnsettledSummaries(summaryArray);
 
       const batchesRes = await axios.get('/api/v1/delivery/settlements');
-      setBatches(batchesRes.data || []);
+      const batchesArray = Array.isArray(batchesRes.data)
+        ? batchesRes.data
+        : Array.isArray(batchesRes.data?.data)
+        ? batchesRes.data.data
+        : [];
+      setBatches(batchesArray);
     } catch (err) {
       console.error('Error fetching settlement data:', err);
+      setUnsettledSummaries([]);
+      setBatches([]);
     }
   };
 
@@ -269,7 +283,7 @@ export function CourierSettlementsPage() {
       {/* TAB 0: Unsettled Couriers Overview */}
       {tabValue === 0 && (
         <Grid container spacing={3}>
-          {unsettledSummaries.map((summary) => (
+          {(Array.isArray(unsettledSummaries) ? unsettledSummaries : []).map((summary) => (
             <Grid key={summary.courier_id} size={{ xs: 12, sm: 6, md: 4 }}>
               <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
                 <CardContent>
@@ -354,7 +368,7 @@ export function CourierSettlementsPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {batches.map((b) => (
+                {(Array.isArray(batches) ? batches : []).map((b) => (
                   <TableRow key={b.id} hover>
                     <TableCell sx={{ fontWeight: 'bold' }}>{b.settlement_number}</TableCell>
                     <TableCell>

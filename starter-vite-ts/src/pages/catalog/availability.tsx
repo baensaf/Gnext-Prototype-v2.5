@@ -1,34 +1,35 @@
+import type { Branch } from 'src/api/tenantApi';
+import type { Product, ProductAvailability } from 'src/api/catalogApi';
+
 import React, { useState, useEffect } from 'react';
+
+import RefreshIcon from '@mui/icons-material/Refresh';
+import PlayCircleIcon from '@mui/icons-material/PlayCircle';
+import PauseCircleIcon from '@mui/icons-material/PauseCircle';
 import {
   Box,
-  Typography,
-  Card,
-  CardContent,
-  Button,
+  Chip,
   Stack,
   Table,
+  Paper,
+  Alert,
+  Button,
+  Dialog,
+  TableRow,
+  MenuItem,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  Dialog,
+  TextField,
+  Typography,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  MenuItem,
-  Alert,
-  Grid,
+  TableContainer,
 } from '@mui/material';
-import PauseCircleIcon from '@mui/icons-material/PauseCircle';
-import PlayCircleIcon from '@mui/icons-material/PlayCircle';
-import RefreshIcon from '@mui/icons-material/Refresh';
 
-import { catalogApi, Product, ProductAvailability } from 'src/api/catalogApi';
-import { tenantApi, Branch } from 'src/api/tenantApi';
+import { tenantApi } from 'src/api/tenantApi';
+import { catalogApi } from 'src/api/catalogApi';
 
 export function AvailabilityPage() {
   const [products, setProducts] = useState<Product[]>([]);

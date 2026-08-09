@@ -1,18 +1,21 @@
+import type { ReceiptData } from 'src/api/paymentApi';
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import {
-  Box,
-  Typography,
-  Paper,
-  Button,
-  Stack,
-  Divider,
-  Alert,
-} from '@mui/material';
+
 import PrintIcon from '@mui/icons-material/Print';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import {
+  Box,
+  Paper,
+  Stack,
+  Alert,
+  Button,
+  Divider,
+  Typography,
+} from '@mui/material';
 
-import { paymentApi, ReceiptData } from 'src/api/paymentApi';
+import { paymentApi } from 'src/api/paymentApi';
 
 export function ReceiptPage() {
   const { id } = useParams<{ id: string }>();

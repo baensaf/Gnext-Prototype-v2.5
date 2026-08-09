@@ -1,28 +1,29 @@
+import axios from 'axios';
 import React, { useState, useEffect } from 'react';
+
 import {
   Box,
   Card,
-  Typography,
   Grid,
-  Button,
+  Chip,
   Table,
+  Paper,
+  Stack,
+  Alert,
+  Button,
+  Dialog,
+  Switch,
+  TableRow,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  Dialog,
+  Typography,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Stack,
-  Alert,
-  Switch,
+  TableContainer,
   FormControlLabel,
 } from '@mui/material';
-import axios from 'axios';
 
 export function OfflineSyncPage() {
   const [syncStatus, setSyncStatus] = useState<any>(null);
@@ -42,11 +43,25 @@ export function OfflineSyncPage() {
         axios.get('/api/v1/sync/queue'),
         axios.get('/api/v1/sync/conflicts'),
       ]);
-      setSyncStatus(statusRes.data);
-      setQueueItems(queueRes.data);
-      setConflicts(conflictRes.data);
+      setSyncStatus(statusRes.data || null);
+
+      const qData = Array.isArray(queueRes.data)
+        ? queueRes.data
+        : Array.isArray(queueRes.data?.data)
+        ? queueRes.data.data
+        : [];
+      setQueueItems(qData);
+
+      const cData = Array.isArray(conflictRes.data)
+        ? conflictRes.data
+        : Array.isArray(conflictRes.data?.data)
+        ? conflictRes.data.data
+        : [];
+      setConflicts(cData);
     } catch (err) {
       console.error('Failed to load sync data:', err);
+      setQueueItems([]);
+      setConflicts([]);
     } finally {
       setLoading(false);
     }
@@ -214,7 +229,7 @@ export function OfflineSyncPage() {
       {/* Pending / Synced Queue Table */}
       <Card sx={{ p: 3, borderRadius: 3, mb: 3 }}>
         <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-          Offline Transaction Queue ({queueItems.length} items)
+          Offline Transaction Queue ({(Array.isArray(queueItems) ? queueItems : []).length} items)
         </Typography>
         <TableContainer component={Paper} variant="outlined">
           <Table size="small">
@@ -229,7 +244,7 @@ export function OfflineSyncPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {queueItems.map((item) => (
+              {(Array.isArray(queueItems) ? queueItems : []).map((item) => (
                 <TableRow key={item.id} hover>
                   <TableCell sx={{ fontFamily: 'monospace' }}>{item.id.slice(0, 8)}...</TableCell>
                   <TableCell>
@@ -263,7 +278,7 @@ export function OfflineSyncPage() {
       {/* Conflicts Table */}
       <Card sx={{ p: 3, borderRadius: 3 }}>
         <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-          Sync Conflict Resolution Center ({conflicts.length} records)
+          Sync Conflict Resolution Center ({(Array.isArray(conflicts) ? conflicts : []).length} records)
         </Typography>
         <TableContainer component={Paper} variant="outlined">
           <Table size="small">
@@ -277,7 +292,7 @@ export function OfflineSyncPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {conflicts.map((conf) => (
+              {(Array.isArray(conflicts) ? conflicts : []).map((conf) => (
                 <TableRow key={conf.id} hover>
                   <TableCell sx={{ fontFamily: 'monospace' }}>{conf.id.slice(0, 8)}...</TableCell>
                   <TableCell>

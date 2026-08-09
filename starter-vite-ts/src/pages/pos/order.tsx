@@ -1,42 +1,48 @@
-import React, { useState, useEffect } from 'react';
+import type { Branch } from 'src/api/tenantApi';
+import type { OrderHeader } from 'src/api/orderApi';
+import type { Customer } from 'src/api/customerApi';
+import type { Product, Category, OptionItem, OptionGroup } from 'src/api/catalogApi';
+
 import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from 'react';
+
+import AddIcon from '@mui/icons-material/Add';
+import RemoveIcon from '@mui/icons-material/Remove';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import {
   Box,
-  Typography,
+  Tab,
   Card,
-  CardContent,
-  Button,
+  Tabs,
+  Grid,
   Stack,
-  Chip,
-  IconButton,
-  TextField,
-  MenuItem,
   Alert,
-  FormControl,
-  InputLabel,
+  Paper,
+  Button,
   Select,
   Dialog,
+  Divider,
+  MenuItem,
+  Checkbox,
+  TextField,
+  Typography,
+  IconButton,
+  InputLabel,
+  CardContent,
+  FormControl,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Divider,
-  Paper,
-  Tabs,
-  Tab,
-  Checkbox,
   FormControlLabel,
-  Grid,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import RemoveIcon from '@mui/icons-material/Remove';
-import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
-import { catalogApi, Product, Category, OptionGroup, OptionItem } from 'src/api/catalogApi';
-import { customerApi, Customer } from 'src/api/customerApi';
+import { orderApi } from 'src/api/orderApi';
+import { tenantApi } from 'src/api/tenantApi';
+import { catalogApi } from 'src/api/catalogApi';
+import { customerApi } from 'src/api/customerApi';
 import { discountsApi } from 'src/api/discountsApi';
-import { orderApi, OrderHeader } from 'src/api/orderApi';
-import { tenantApi, Branch } from 'src/api/tenantApi';
+
 import { CheckoutModal } from 'src/components/CheckoutModal';
 
 interface CartItem {

@@ -1,37 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import type { Product, Category, PriceGroup } from 'src/api/catalogApi';
+
 import { useTranslation } from 'react-i18next';
-import {
-  Box,
-  Typography,
-  Card,
-  CardContent,
-  Button,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Drawer,
-  TextField,
-  MenuItem,
-  Alert,
-  FormControl,
-  InputLabel,
-  Select,
-  Grid,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-} from '@mui/material';
+import React, { useState, useEffect } from 'react';
+
 import AddIcon from '@mui/icons-material/Add';
 import SaveIcon from '@mui/icons-material/Save';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import {
+  Box,
+  Card,
+  Stack,
+  Table,
+  Paper,
+  Alert,
+  Button,
+  Drawer,
+  Select,
+  Dialog,
+  TableRow,
+  MenuItem,
+  TableBody,
+  TableCell,
+  TableHead,
+  TextField,
+  Typography,
+  InputLabel,
+  CardContent,
+  FormControl,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TableContainer,
+} from '@mui/material';
 
-import { catalogApi, PriceGroup, Product, Category } from 'src/api/catalogApi';
+import { catalogApi } from 'src/api/catalogApi';
 
 export function PricingPage() {
   const { t } = useTranslation();

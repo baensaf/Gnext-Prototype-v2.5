@@ -1,21 +1,23 @@
+import type { FileAssetDto } from 'src/api/mediaApi';
+
 import React, { useState } from 'react';
+
+import SaveIcon from '@mui/icons-material/Save';
 import {
   Box,
-  Typography,
   Card,
-  CardContent,
-  Stack,
-  Button,
-  Alert,
-  Divider,
   Grid,
+  Stack,
+  Alert,
+  Button,
+  Typography,
+  CardContent,
 } from '@mui/material';
-import SaveIcon from '@mui/icons-material/Save';
+
+import { localizationApi } from 'src/api/localizationApi';
 
 import { ImageUploader } from 'src/components/ImageUploader';
 import { BilingualInput } from 'src/components/BilingualInput';
-import { mediaApi, FileAssetDto } from 'src/api/mediaApi';
-import { localizationApi } from 'src/api/localizationApi';
 
 export function MediaLocalizationDemoPage() {
   const [productTitleFa, setProductTitleFa] = useState('همبرگر مخصوص اسپشال');

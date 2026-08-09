@@ -1,50 +1,51 @@
+import type {
+  Customer,
+  CustomerGroup,
+  CustomerAddress,
+  CustomerCreditAccount,
+  CustomerCreditTransaction} from 'src/api/customerApi';
+
 import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+
+import AddIcon from '@mui/icons-material/Add';
+import HomeIcon from '@mui/icons-material/Home';
+import SearchIcon from '@mui/icons-material/Search';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import {
   Box,
-  Typography,
   Card,
-  CardContent,
-  Button,
+  Chip,
+  Grid,
   Stack,
   Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Paper,
-  Chip,
-  IconButton,
-  Drawer,
-  TextField,
-  MenuItem,
   Alert,
-  FormControl,
-  InputLabel,
+  Button,
+  Drawer,
   Select,
   Dialog,
+  TableRow,
+  MenuItem,
+  TableBody,
+  TableCell,
+  TableHead,
+  TextField,
+  Typography,
+  IconButton,
+  InputLabel,
+  CardContent,
+  FormControl,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Grid,
+  TableContainer,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import HomeIcon from '@mui/icons-material/Home';
-import SearchIcon from '@mui/icons-material/Search';
 
 import {
-  customerApi,
-  Customer,
-  CustomerGroup,
-  CustomerCreditAccount,
-  CustomerCreditTransaction,
-  CustomerAddress,
+  customerApi
 } from 'src/api/customerApi';
 
 export function CustomersPage() {
-  const { t } = useTranslation();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([]);

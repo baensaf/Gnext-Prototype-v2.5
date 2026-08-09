@@ -1,41 +1,46 @@
+import type { ReasonCode } from 'src/api/settingsApi';
+import type { Branch, Terminal } from 'src/api/tenantApi';
+import type { ActiveShiftResponse } from 'src/api/cashDrawerApi';
+
 import React, { useState, useEffect } from 'react';
-import {
-  Box,
-  Typography,
-  Card,
-  CardContent,
-  Button,
-  Stack,
-  Chip,
-  Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Grid,
-  Divider,
-} from '@mui/material';
-import LockOpenIcon from '@mui/icons-material/LockOpen';
+
 import LockIcon from '@mui/icons-material/Lock';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import RemoveCircleIcon from '@mui/icons-material/RemoveCircle';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import {
+  Box,
+  Card,
+  Chip,
+  Grid,
+  Stack,
+  Alert,
+  Paper,
+  Table,
+  Button,
+  Dialog,
+  Select,
+  Divider,
+  MenuItem,
+  TableRow,
+  TextField,
+  TableBody,
+  TableCell,
+  TableHead,
+  Typography,
+  InputLabel,
+  CardContent,
+  DialogTitle,
+  FormControl,
+  DialogContent,
+  DialogActions,
+  TableContainer,
+} from '@mui/material';
 
-import { cashDrawerApi, ActiveShiftResponse } from 'src/api/cashDrawerApi';
-import { settingsApi, ReasonCode } from 'src/api/settingsApi';
-import { tenantApi, Branch, Terminal } from 'src/api/tenantApi';
+import { tenantApi } from 'src/api/tenantApi';
+import { settingsApi } from 'src/api/settingsApi';
+import { cashDrawerApi } from 'src/api/cashDrawerApi';
 
 export function CashDrawerPage() {
   const [activeShiftData, setActiveShiftData] = useState<ActiveShiftResponse | null>(null);

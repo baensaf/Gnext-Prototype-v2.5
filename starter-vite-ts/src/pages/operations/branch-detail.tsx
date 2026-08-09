@@ -1,29 +1,32 @@
+import type { Branch, BranchOperatingHour } from 'src/api/tenantApi';
+
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { useTranslation } from 'react-i18next';
+
+import SaveIcon from '@mui/icons-material/Save';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import {
   Box,
-  Typography,
   Card,
-  CardContent,
-  Button,
   Stack,
   Table,
+  Paper,
+  Alert,
+  Button,
+  Switch,
+  TableRow,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
-  TableRow,
-  Paper,
-  Switch,
   TextField,
-  Alert,
+  Typography,
   IconButton,
+  CardContent,
+  TableContainer,
 } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import SaveIcon from '@mui/icons-material/Save';
 
-import { tenantApi, Branch, BranchOperatingHour } from 'src/api/tenantApi';
+import { tenantApi } from 'src/api/tenantApi';
 
 const DAY_NAMES = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 

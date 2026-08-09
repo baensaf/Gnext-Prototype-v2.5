@@ -1,4 +1,6 @@
-import axios, { AxiosError, AxiosRequestConfig } from 'axios';
+import type { AxiosError} from 'axios';
+
+import axios from 'axios';
 
 export interface ProblemDetails {
   type: string;
@@ -20,7 +22,7 @@ export const setCsrfToken = (token: string | null) => {
 export const getCsrfToken = () => csrfTokenInMemory;
 
 export const httpClient = axios.create({
-  baseURL: 'http://localhost:3000',
+  baseURL: 'http://localhost:3100',
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
