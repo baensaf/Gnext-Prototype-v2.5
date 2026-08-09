@@ -1,11 +1,84 @@
-import { Controller, Get, Post, Param, Query, Body, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Req, Sse } from '@nestjs/common';
 import { Request } from 'express';
-import { KdsService } from './kds.service';
+import { Observable, interval } from 'rxjs';
+import { map } from 'rxjs/operators';
+import { KdsService, MessageEvent } from './kds.service';
 
 @Controller('api/v1/kds')
 export class KdsController {
   constructor(private readonly kdsService: KdsService) {}
 
+  // SSE Events Stream
+  @Sse('events')
+  sendEvents(): Observable<MessageEvent> {
+    return this.kdsService.getEventStream();
+  }
+
+  // Board View
+  @Get('board')
+  async getKdsBoard(
+    @Query('branchId') branchId: string,
+    @Query('stationIds') stationIdsStr: string,
+    @Query('state') state: string,
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    const stationIds = stationIdsStr ? stationIdsStr.split(',') : undefined;
+    return await this.kdsService.getKdsBoard(tenantId, branchId, stationIds, state);
+  }
+
+  @Get('tickets')
+  async getKdsTickets(@Query('stationId') stationId: string, @Query('isBumped') isBumped: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.kdsService.getKdsTickets(tenantId, stationId, isBumped === 'true');
+  }
+
+  // Ticket Actions
+  @Post('tickets/:id/start')
+  async startTicket(@Param('id') ticketId: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).userId;
+    return await this.kdsService.startTicket(tenantId, ticketId, userId);
+  }
+
+  @Post('tickets/:id/bump')
+  async bumpTicket(@Param('id') ticketId: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    const userId = (req as any).userId;
+    return await this.kdsService.bumpTicket(tenantId, ticketId, correlationId, userId);
+  }
+
+  @Post('tickets/:id/recall')
+  async recallTicket(@Param('id') ticketId: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    const userId = (req as any).userId;
+    return await this.kdsService.recallTicket(tenantId, ticketId, correlationId, userId);
+  }
+
+  @Post('tickets/:id/priority')
+  async setPriority(@Param('id') ticketId: string, @Body() body: { priority: number }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).userId;
+    return await this.kdsService.setTicketPriority(tenantId, ticketId, body.priority || 0, userId);
+  }
+
+  @Post('ticket-items/:id/state')
+  async updateItemState(@Param('id') itemId: string, @Body() body: { state: string }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).userId;
+    return await this.kdsService.updateItemStatus(tenantId, itemId, body.state, userId);
+  }
+
+  @Post('tickets/items/:itemId/status')
+  async updateItemStatusLegacy(@Param('itemId') itemId: string, @Body() body: { status: string }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).userId;
+    return await this.kdsService.updateItemStatus(tenantId, itemId, body.status, userId);
+  }
+
+  // Stations CRUD
   @Get('stations')
   async getStations(@Query('branchId') branchId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -19,48 +92,59 @@ export class KdsController {
     return await this.kdsService.createStation(tenantId, body, correlationId);
   }
 
-  @Get('printers')
-  async getPrinters(@Query('branchId') branchId: string, @Req() req: Request) {
+  @Patch('stations/:id')
+  async updateStation(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.kdsService.getPrinters(tenantId, branchId);
+    return await this.kdsService.updateStation(tenantId, id, body);
   }
 
-  @Post('printers')
-  async createPrinter(@Body() body: any, @Req() req: Request) {
+  @Delete('stations/:id')
+  async deleteStation(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.kdsService.createPrinter(tenantId, body, correlationId);
+    return await this.kdsService.deleteStation(tenantId, id);
   }
 
-  @Get('tickets')
-  async getKdsTickets(@Query('stationId') stationId: string, @Query('isBumped') isBumped: string, @Req() req: Request) {
+  // Screens CRUD
+  @Get('screens')
+  async getScreens(@Query('branchId') branchId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.kdsService.getKdsTickets(tenantId, stationId, isBumped === 'true');
+    return await this.kdsService.getScreens(tenantId, branchId);
   }
 
-  @Post('tickets/:id/bump')
-  async bumpTicket(@Param('id') ticketId: string, @Req() req: Request) {
+  @Post('screens')
+  async createScreen(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.kdsService.bumpTicket(tenantId, ticketId, correlationId);
+    return await this.kdsService.createScreen(tenantId, body);
   }
 
-  @Post('tickets/:id/recall')
-  async recallTicket(@Param('id') ticketId: string, @Req() req: Request) {
+  @Patch('screens/:id')
+  async updateScreen(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.kdsService.recallTicket(tenantId, ticketId, correlationId);
+    return await this.kdsService.updateScreen(tenantId, id, body);
   }
 
-  @Post('tickets/items/:itemId/status')
-  async updateItemStatus(@Param('itemId') itemId: string, @Body() body: { status: 'PENDING' | 'COOKING' | 'DONE' }, @Req() req: Request) {
+  @Delete('screens/:id')
+  async deleteScreen(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.kdsService.updateItemStatus(tenantId, itemId, body.status);
+    return await this.kdsService.deleteScreen(tenantId, id);
   }
 
-  @Post('printers/simulate-print')
-  async simulatePrint(@Body() body: { ticket_id?: string; order_id?: string; paper_width_mm?: number }, @Req() req: Request) {
+  // Routing Rules CRUD
+  @Get('routing-rules')
+  async getRoutingRules(@Query('branchId') branchId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.kdsService.simulatePrint(tenantId, body);
+    return await this.kdsService.getRoutingRules(tenantId, branchId);
+  }
+
+  @Post('routing-rules')
+  async createRoutingRule(@Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.kdsService.createRoutingRule(tenantId, body);
+  }
+
+  @Delete('routing-rules/:id')
+  async deleteRoutingRule(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.kdsService.deleteRoutingRule(tenantId, id);
   }
 }

@@ -27,6 +27,7 @@ import { ApprovalModule } from './modules/approval/approval.module';
 import { RefundModule } from './modules/refund/refund.module';
 import { DineInModule } from './modules/dine-in/dine-in.module';
 import { KdsModule } from './modules/kds/kds.module';
+import { PrintingModule } from './modules/printing/printing.module';
 import { DeliveryModule } from './modules/delivery/delivery.module';
 import { CashierModule } from './modules/cashier/cashier.module';
 import { KioskModule } from './modules/kiosk/kiosk.module';
@@ -47,9 +48,18 @@ import { TableSession } from './entities/TableSession.entity';
 import { TableEvent } from './entities/TableEvent.entity';
 import { TableOccupancyEvent } from './entities/TableOccupancyEvent.entity';
 import { KitchenStation } from './entities/KitchenStation.entity';
+import { KdsScreen } from './entities/KdsScreen.entity';
+import { KdsRoutingRule } from './entities/KdsRoutingRule.entity';
 import { KitchenTicket } from './entities/KitchenTicket.entity';
 import { KitchenTicketItem } from './entities/KitchenTicketItem.entity';
+import { KdsEvent } from './entities/KdsEvent.entity';
+import { Printer } from './entities/Printer.entity';
 import { PrinterDevice } from './entities/PrinterDevice.entity';
+import { PrinterGroup } from './entities/PrinterGroup.entity';
+import { PrinterGroupMember } from './entities/PrinterGroupMember.entity';
+import { PrintRoute } from './entities/PrintRoute.entity';
+import { PrintJob } from './entities/PrintJob.entity';
+import { PrintAttempt } from './entities/PrintAttempt.entity';
 
 import { Tenant } from './entities/Tenant.entity';
 import { AdminUser } from './entities/AdminUser.entity';
@@ -66,10 +76,8 @@ import { TenantSetting } from './entities/TenantSetting.entity';
 import { Currency } from './entities/Currency.entity';
 import { PaymentMethod } from './entities/PaymentMethod.entity';
 import { ReasonCode } from './entities/ReasonCode.entity';
-
 import { FileAsset } from './entities/FileAsset.entity';
 import { LocalizedString } from './entities/LocalizedString.entity';
-
 import { Category } from './entities/Category.entity';
 import { Product } from './entities/Product.entity';
 import { OptionGroup } from './entities/OptionGroup.entity';
@@ -84,18 +92,15 @@ import { Menu } from './entities/Menu.entity';
 import { MenuCategory } from './entities/MenuCategory.entity';
 import { MenuProduct } from './entities/MenuProduct.entity';
 import { ProductAvailability } from './entities/ProductAvailability.entity';
-
 import { ApprovalRule } from './entities/ApprovalRule.entity';
 import { ApprovalRequest } from './entities/ApprovalRequest.entity';
 import { ApprovalDecision } from './entities/ApprovalDecision.entity';
 import { PinAttemptLog } from './entities/PinAttemptLog.entity';
-
 import { Discount } from './entities/Discount.entity';
 import { Coupon } from './entities/Coupon.entity';
 import { DiscountCampaign } from './entities/DiscountCampaign.entity';
 import { DiscountScope } from './entities/DiscountScope.entity';
 import { DiscountUsage } from './entities/DiscountUsage.entity';
-
 import { CustomerGroup } from './entities/CustomerGroup.entity';
 import { Customer } from './entities/Customer.entity';
 import { CustomerPhone } from './entities/CustomerPhone.entity';
@@ -110,7 +115,6 @@ import { CustomerTagLink } from './entities/CustomerTagLink.entity';
 import { CustomerSegment } from './entities/CustomerSegment.entity';
 import { CustomerConsent } from './entities/CustomerConsent.entity';
 import { CustomerMerge } from './entities/CustomerMerge.entity';
-
 import { OrderHeader } from './entities/OrderHeader.entity';
 import { OrderItem } from './entities/OrderItem.entity';
 import { OrderItemOption } from './entities/OrderItemOption.entity';
@@ -119,24 +123,20 @@ import { OrderNote } from './entities/OrderNote.entity';
 import { OrderLink } from './entities/OrderLink.entity';
 import { OrderStateEvent } from './entities/OrderStateEvent.entity';
 import { OrderSequence } from './entities/OrderSequence.entity';
-
 import { Payment } from './entities/Payment.entity';
 import { SettlementAccount } from './entities/SettlementAccount.entity';
 import { PaymentDevice } from './entities/PaymentDevice.entity';
 import { PaymentAllocation } from './entities/PaymentAllocation.entity';
 import { PaymentAttempt } from './entities/PaymentAttempt.entity';
-
 import { Courier } from './entities/Courier.entity';
 import { DeliveryAssignment } from './entities/DeliveryAssignment.entity';
 import { CourierSettlement } from './entities/CourierSettlement.entity';
 import { CourierSettlementLine } from './entities/CourierSettlementLine.entity';
-
 import { CashierShift } from './entities/CashierShift.entity';
 import { CashMovement } from './entities/CashMovement.entity';
 import { BusinessDayClose } from './entities/BusinessDayClose.entity';
 import { CashDrawerShift } from './entities/CashDrawerShift.entity';
 import { CashDrawerTransaction } from './entities/CashDrawerTransaction.entity';
-
 import { InventoryItem } from './entities/InventoryItem.entity';
 import { InventoryTransaction } from './entities/InventoryTransaction.entity';
 import { IntegrationLog } from './entities/IntegrationLog.entity';
@@ -147,6 +147,7 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: ['.env.local', '.env'],
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -154,9 +155,9 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
       useFactory: (config: ConfigService) => ({
         type: 'postgres',
         host: config.get<string>('DB_HOST', 'localhost'),
-        port: parseInt(config.get<string>('DB_PORT', '5432'), 10),
-        username: config.get<string>('DB_USER', 'admin'),
-        password: config.get<string>('DB_PASSWORD', 'admin'),
+        port: config.get<number>('DB_PORT', 5432),
+        username: config.get<string>('DB_USERNAME', 'postgres'),
+        password: config.get<string>('DB_PASSWORD', 'postgres'),
         database: config.get<string>('DB_NAME', 'appdb'),
         entities: [
           Tenant, AdminUser, Session, AuditEvent, OutboxEvent, IdempotencyRecord,
@@ -175,7 +176,8 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
           Payment, SettlementAccount, PaymentDevice, PaymentAllocation, PaymentAttempt,
           RefundRequest, RefundItem, RefundAllocation, Refund,
           DiningArea, DiningTable, TableSession, TableEvent, TableOccupancyEvent,
-          KitchenStation, KitchenTicket, KitchenTicketItem, PrinterDevice,
+          KitchenStation, KdsScreen, KdsRoutingRule, KitchenTicket, KitchenTicketItem, KdsEvent,
+          Printer, PrinterDevice, PrinterGroup, PrinterGroupMember, PrintRoute, PrintJob, PrintAttempt,
           Courier, DeliveryAssignment, CourierSettlement, CourierSettlementLine,
           CashierShift, CashMovement, BusinessDayClose, CashDrawerShift, CashDrawerTransaction,
           InventoryItem, InventoryTransaction, IntegrationLog,
@@ -206,6 +208,7 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
     RefundModule,
     DineInModule,
     KdsModule,
+    PrintingModule,
     DeliveryModule,
     KioskModule,
     SimulationModule,

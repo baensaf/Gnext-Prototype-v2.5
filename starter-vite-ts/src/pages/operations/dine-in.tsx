@@ -1,5 +1,5 @@
-import type { DiningArea, DiningTable } from 'src/api/dineInApi';
 import type { OrderHeader } from 'src/api/orderApi';
+import type { DiningArea, DiningTable } from 'src/api/dineInApi';
 
 import React, { useState, useEffect } from 'react';
 
@@ -10,8 +10,8 @@ import TableBarIcon from '@mui/icons-material/TableBar';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import CallSplitIcon from '@mui/icons-material/CallSplit';
-import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import {
   Box,
@@ -26,19 +26,19 @@ import {
   Button,
   Dialog,
   Drawer,
+  Tooltip,
   MenuItem,
   TextField,
   Typography,
+  IconButton,
   CardContent,
   DialogTitle,
   DialogContent,
   DialogActions,
-  IconButton,
-  Tooltip,
 } from '@mui/material';
 
-import { dineInApi } from 'src/api/dineInApi';
 import { orderApi } from 'src/api/orderApi';
+import { dineInApi } from 'src/api/dineInApi';
 
 export function DineInPage() {
   const [areas, setAreas] = useState<DiningArea[]>([]);

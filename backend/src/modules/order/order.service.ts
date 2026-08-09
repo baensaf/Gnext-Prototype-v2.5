@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityManager } from 'typeorm';
@@ -21,6 +22,8 @@ import { DiscountEvaluationService } from '../discounts/discount-evaluation.serv
 import { OrderSequenceService } from './order-sequence.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { OutboxWriter } from '../outbox/outbox-writer.service';
+import { KdsService } from '../kds/kds.service';
+import { PrintQueueService } from '../printing/print-queue.service';
 import Decimal from 'decimal.js';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { DiningTable } from '../../entities/DiningTable.entity';
@@ -68,6 +71,8 @@ export class OrderService {
     private readonly auditWriter: AuditWriter,
     private readonly outboxWriter: OutboxWriter,
     private readonly dataSource: DataSource,
+    @Optional() private readonly kdsService?: KdsService,
+    @Optional() private readonly printQueueService?: PrintQueueService,
   ) {}
 
   async getOrders(tenantId: string, query: any) {
@@ -254,7 +259,7 @@ export class OrderService {
   }
 
   async submitOrder(tenantId: string, id: string, dto: OrderSubmitDto, userId?: string, correlationId?: string) {
-    return await this.dataSource.transaction(async (em) => {
+    const res = await this.dataSource.transaction(async (em) => {
       const order = await em.findOne(OrderHeader, {
         where: { id, tenant_id: tenantId },
         relations: ['items', 'items.options'],
@@ -388,6 +393,25 @@ export class OrderService {
         relations: ['items', 'items.options', 'adjustments', 'notes', 'stateEvents'],
       });
     });
+
+    if (this.kdsService) {
+      try {
+        await this.kdsService.generateTicketsForOrder(tenantId, id, correlationId);
+      } catch (e) {
+        // KDS side effect error must not fail submit
+      }
+    }
+
+    if (this.printQueueService) {
+      try {
+        await this.printQueueService.enqueueOrderPrintJobs(tenantId, id, 'CUSTOMER_RECEIPT', false, undefined, userId);
+        await this.printQueueService.enqueueOrderPrintJobs(tenantId, id, 'KITCHEN_TICKET', false, undefined, userId);
+      } catch (e) {
+        // Printing side effect error must not fail submit
+      }
+    }
+
+    return res;
   }
 
   async transitionState(

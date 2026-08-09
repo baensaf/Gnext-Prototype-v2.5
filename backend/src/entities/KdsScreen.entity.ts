@@ -1,15 +1,18 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from 'typeorm';
 
-@Entity('kitchen_station')
-export class KitchenStation {
+@Entity('kds_screen')
+export class KdsScreen {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ type: 'uuid' })
   tenant_id: string;
 
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ type: 'uuid' })
   branch_id: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  terminal_id?: string;
 
   @Column({ type: 'varchar', length: 32 })
   code: string;
@@ -17,11 +20,8 @@ export class KitchenStation {
   @Column({ type: 'varchar', length: 160 })
   name: string;
 
-  @Column({ type: 'varchar', length: 32, default: 'HOT_KITCHEN' }) // HOT_KITCHEN, COLD_KITCHEN, BAR, BAKERY, PACKAGING
-  station_type: string;
-
-  @Column({ type: 'int', default: 10 })
-  target_minutes: number;
+  @Column({ type: 'jsonb', default: [] })
+  station_ids: string[];
 
   @Column({ type: 'boolean', default: true })
   is_active: boolean;

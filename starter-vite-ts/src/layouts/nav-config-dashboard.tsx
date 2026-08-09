@@ -104,6 +104,24 @@ export const navData: NavSectionProps['data'] = [
         icon: ICONS.drawer,
       },
       {
+        title: 'KDS Configuration',
+        path: '/app/operations/kds-configuration',
+        icon: ICONS.kds,
+        info: <Label color="primary">Slice 18</Label>,
+      },
+      {
+        title: 'Printers & Routes',
+        path: '/app/operations/printers',
+        icon: ICONS.terminal,
+        info: <Label color="primary">Slice 18</Label>,
+      },
+      {
+        title: 'Print Queue & Reprint',
+        path: '/app/operations/print-queue',
+        icon: ICONS.drawer,
+        info: <Label color="primary">Slice 18</Label>,
+      },
+      {
         title: 'Simulation Center',
         path: '/app/simulation/center',
         icon: ICONS.terminal,

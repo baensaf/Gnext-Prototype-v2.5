@@ -1,39 +1,67 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
+import { Subject, Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 import { KitchenStation } from '../../entities/KitchenStation.entity';
+import { KdsScreen } from '../../entities/KdsScreen.entity';
+import { KdsRoutingRule } from '../../entities/KdsRoutingRule.entity';
 import { KitchenTicket } from '../../entities/KitchenTicket.entity';
 import { KitchenTicketItem } from '../../entities/KitchenTicketItem.entity';
-import { PrinterDevice } from '../../entities/PrinterDevice.entity';
+import { KdsEvent } from '../../entities/KdsEvent.entity';
+import { Printer } from '../../entities/Printer.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 
+export interface MessageEvent {
+  data: string | object;
+  id?: string;
+  type?: string;
+  retry?: number;
+}
+
 @Injectable()
 export class KdsService {
+  private eventSubject = new Subject<{ type: string; payload: any }>();
+
   constructor(
     @InjectRepository(KitchenStation) private readonly stationRepo: Repository<KitchenStation>,
+    @InjectRepository(KdsScreen) private readonly screenRepo: Repository<KdsScreen>,
+    @InjectRepository(KdsRoutingRule) private readonly ruleRepo: Repository<KdsRoutingRule>,
     @InjectRepository(KitchenTicket) private readonly ticketRepo: Repository<KitchenTicket>,
     @InjectRepository(KitchenTicketItem) private readonly itemRepo: Repository<KitchenTicketItem>,
-    @InjectRepository(PrinterDevice) private readonly printerRepo: Repository<PrinterDevice>,
+    @InjectRepository(KdsEvent) private readonly kdsEventRepo: Repository<KdsEvent>,
+    @InjectRepository(Printer) private readonly printerRepo: Repository<Printer>,
     @InjectRepository(OrderHeader) private readonly orderRepo: Repository<OrderHeader>,
     private readonly auditWriter: AuditWriter,
   ) {}
 
-  // Stations Management
+  // SSE Stream
+  getEventStream(): Observable<MessageEvent> {
+    return this.eventSubject.asObservable().pipe(
+      map((evt) => ({
+        type: evt.type,
+        data: evt.payload,
+      })),
+    );
+  }
+
+  // 1. Stations CRUD
   async getStations(tenantId: string, branchId?: string) {
     const where: any = { tenant_id: tenantId };
     if (branchId) where.branch_id = branchId;
     return await this.stationRepo.find({ where, order: { name: 'ASC' } });
   }
 
-  async createStation(tenantId: string, data: { branch_id?: string; code: string; name: string; station_type?: string }, correlationId: string) {
+  async createStation(tenantId: string, data: { branch_id?: string; code: string; name: string; station_type?: string; target_minutes?: number }, correlationId?: string) {
     const station = this.stationRepo.create({
       tenant_id: tenantId,
       branch_id: data.branch_id || null,
-      code: data.code.toUpperCase(),
+      code: (data.code || 'ST-1').toUpperCase(),
       name: data.name,
       station_type: data.station_type || 'HOT_KITCHEN',
+      target_minutes: data.target_minutes || 10,
       is_active: true,
     });
     const saved = await this.stationRepo.save(station);
@@ -41,101 +69,230 @@ export class KdsService {
       tenantId,
       actorType: 'ADMIN',
       action: 'KITCHEN_STATION_CREATED',
-      correlationId,
+      correlationId: correlationId || 'corr-st',
       afterData: saved,
     });
     return saved;
   }
 
-  // Printers Management
-  async getPrinters(tenantId: string, branchId?: string) {
+  async updateStation(tenantId: string, id: string, data: any) {
+    const station = await this.stationRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!station) throw new NotFoundException('Station not found');
+    Object.assign(station, data);
+    return await this.stationRepo.save(station);
+  }
+
+  async deleteStation(tenantId: string, id: string) {
+    await this.stationRepo.softDelete({ id, tenant_id: tenantId });
+    return { success: true };
+  }
+
+  // 2. Screens CRUD
+  async getScreens(tenantId: string, branchId?: string) {
     const where: any = { tenant_id: tenantId };
     if (branchId) where.branch_id = branchId;
-    return await this.printerRepo.find({ where, order: { name: 'ASC' } });
+    return await this.screenRepo.find({ where, order: { name: 'ASC' } });
   }
 
-  async createPrinter(
-    tenantId: string,
-    data: { branch_id?: string; code: string; name: string; ip_address?: string; printer_type?: string; paper_width_mm?: number },
-    correlationId: string,
-  ) {
-    const printer = this.printerRepo.create({
+  async createScreen(tenantId: string, data: { branch_id: string; terminal_id?: string; code: string; name: string; station_ids: string[] }) {
+    const screen = this.screenRepo.create({
       tenant_id: tenantId,
-      branch_id: data.branch_id || null,
+      branch_id: data.branch_id,
+      terminal_id: data.terminal_id || null,
       code: data.code.toUpperCase(),
       name: data.name,
-      ip_address: data.ip_address || null,
-      printer_type: data.printer_type || 'THERMAL_RECEIPT',
-      paper_width_mm: data.paper_width_mm || 80,
+      station_ids: data.station_ids || [],
       is_active: true,
     });
-    const saved = await this.printerRepo.save(printer);
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'PRINTER_DEVICE_CREATED',
-      correlationId,
-      afterData: saved,
-    });
-    return saved;
+    return await this.screenRepo.save(screen);
   }
 
-  // Ticket Generation & KDS Screen Operations
-  async generateTicketsForOrder(tenantId: string, orderId: string, correlationId: string) {
+  async updateScreen(tenantId: string, id: string, data: any) {
+    const screen = await this.screenRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!screen) throw new NotFoundException('Screen not found');
+    Object.assign(screen, data);
+    return await this.screenRepo.save(screen);
+  }
+
+  async deleteScreen(tenantId: string, id: string) {
+    await this.screenRepo.softDelete({ id, tenant_id: tenantId });
+    return { success: true };
+  }
+
+  // 3. Routing Rules CRUD
+  async getRoutingRules(tenantId: string, branchId?: string) {
+    const where: any = { tenant_id: tenantId };
+    if (branchId) where.branch_id = branchId;
+    return await this.ruleRepo.find({ where, order: { priority: 'DESC' } });
+  }
+
+  async createRoutingRule(tenantId: string, data: { branch_id: string; station_id: string; product_id?: string; category_id?: string; priority?: number }) {
+    if ((!data.product_id && !data.category_id) || (data.product_id && data.category_id)) {
+      throw new BadRequestException('Routing rule must specify exactly one of product_id or category_id');
+    }
+
+    const rule = this.ruleRepo.create({
+      tenant_id: tenantId,
+      branch_id: data.branch_id,
+      station_id: data.station_id,
+      product_id: data.product_id || null,
+      category_id: data.category_id || null,
+      priority: data.priority || 0,
+    });
+    return await this.ruleRepo.save(rule);
+  }
+
+  async deleteRoutingRule(tenantId: string, id: string) {
+    await this.ruleRepo.softDelete({ id, tenant_id: tenantId });
+    return { success: true };
+  }
+
+  // 4. Ticket Generation with Product > Category > Station routing engine
+  async generateTicketsForOrder(tenantId: string, orderId: string, correlationId?: string) {
     const order = await this.orderRepo.findOne({
       where: { id: orderId, tenant_id: tenantId },
       relations: ['items', 'items.options'],
     });
     if (!order) throw new NotFoundException('Order not found');
 
-    let defaultStation = await this.stationRepo.findOne({ where: { tenant_id: tenantId, is_active: true } });
+    const rules = await this.ruleRepo.find({
+      where: { tenant_id: tenantId, branch_id: order.branch_id },
+      order: { priority: 'DESC' },
+    });
+
+    let defaultStation = await this.stationRepo.findOne({ where: { tenant_id: tenantId, branch_id: order.branch_id, is_active: true } });
     if (!defaultStation) {
-      defaultStation = await this.createStation(tenantId, { code: 'HOT-KITCHEN', name: 'Main Kitchen' }, correlationId);
+      defaultStation = await this.stationRepo.findOne({ where: { tenant_id: tenantId, is_active: true } });
+    }
+    if (!defaultStation) {
+      defaultStation = await this.createStation(tenantId, { branch_id: order.branch_id, code: 'MAIN-KITCHEN', name: 'Main Kitchen' }, correlationId);
     }
 
-    const ticketCount = await this.ticketRepo.count({ where: { tenant_id: tenantId } });
-    const ticketNumber = `K-${(ticketCount + 101).toString()}`;
+    // Group items by routed station ID
+    const itemsByStation = new Map<string, typeof order.items>();
 
-    const ticket = this.ticketRepo.create({
-      tenant_id: tenantId,
-      order_id: order.id,
-      station_id: defaultStation.id,
-      ticket_number: ticketNumber,
-      status: 'IN_PREPARATION',
-      prep_time_seconds: 0,
-    });
-    const savedTicket = await this.ticketRepo.save(ticket);
+    for (const item of order.items || []) {
+      let targetStationId = defaultStation.id;
 
-    for (const item of order.items) {
-      const optsSummary = item.options ? item.options.map((o) => o.option_item_name).join(', ') : '';
-      const ticketItem = this.itemRepo.create({
-        tenant_id: tenantId,
-        ticket_id: savedTicket.id,
-        order_item_id: item.id,
-        product_name: item.product_name,
-        quantity: item.quantity,
-        status: 'PENDING',
-        special_instructions: item.special_instructions || null,
-        options_summary: optsSummary || null,
+      // Check product rule match first
+      const prodRule = rules.find((r) => r.product_id && r.product_id === item.product_id);
+      if (prodRule) {
+        targetStationId = prodRule.station_id;
+      } else {
+        // Check category rule match
+        const catRule = rules.find((r) => r.category_id); // category ID check if available on product
+        if (catRule) {
+          targetStationId = catRule.station_id;
+        }
+      }
+
+      if (!itemsByStation.has(targetStationId)) {
+        itemsByStation.set(targetStationId, []);
+      }
+      itemsByStation.get(targetStationId)!.push(item);
+    }
+
+    const createdTickets = [];
+
+    for (const [stationId, items] of itemsByStation.entries()) {
+      // Idempotent ticket lookup
+      let ticket = await this.ticketRepo.findOne({
+        where: { tenant_id: tenantId, order_id: order.id, station_id: stationId },
       });
-      await this.itemRepo.save(ticketItem);
+
+      if (!ticket) {
+        const ticketCount = await this.ticketRepo.count({ where: { tenant_id: tenantId } });
+        const ticketNumber = `K-${(ticketCount + 101).toString()}`;
+        const isAggregator = order.channel === 'AGGREGATOR' || order.channel === 'SNAPPFOOD';
+
+        ticket = this.ticketRepo.create({
+          tenant_id: tenantId,
+          branch_id: order.branch_id,
+          order_id: order.id,
+          station_id: stationId,
+          ticket_number: ticketNumber,
+          state: 'NEW',
+          status: 'NEW',
+          priority: 0,
+          is_aggregator: isAggregator,
+          prep_time_seconds: 0,
+        });
+        ticket = await this.ticketRepo.save(ticket);
+
+        // Record event
+        await this.recordKdsEvent(tenantId, ticket.id, null, 'NEW', 'CREATE', null);
+      }
+
+      for (const item of items) {
+        let ticketItem = await this.itemRepo.findOne({
+          where: { tenant_id: tenantId, ticket_id: ticket.id, order_item_id: item.id },
+        });
+
+        if (!ticketItem) {
+          const optsSummary = item.options ? item.options.map((o) => o.option_item_name).join(', ') : '';
+          ticketItem = this.itemRepo.create({
+            tenant_id: tenantId,
+            ticket_id: ticket.id,
+            order_item_id: item.id,
+            product_name: item.product_name,
+            quantity: item.quantity,
+            state: 'NEW',
+            status: 'NEW',
+            special_instructions: item.special_instructions || null,
+            options_summary: optsSummary || null,
+          });
+          await this.itemRepo.save(ticketItem);
+        }
+      }
+
+      createdTickets.push(ticket);
     }
 
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'KITCHEN_TICKET_GENERATED',
-      correlationId,
-      afterData: savedTicket,
-    });
+    this.eventSubject.next({ type: 'TICKETS_CREATED', payload: { orderId: order.id } });
+    return createdTickets;
+  }
 
-    return savedTicket;
+  // 5. KDS Board Query
+  async getKdsBoard(tenantId: string, branchId: string, stationIds?: string[], state?: string) {
+    const where: any = { tenant_id: tenantId };
+    if (branchId) where.branch_id = branchId;
+    if (stationIds && stationIds.length > 0) where.station_id = In(stationIds);
+    if (state) {
+      where.state = state;
+    } else {
+      where.state = In(['NEW', 'IN_PROGRESS', 'READY', 'RECALLED']);
+    }
+
+    const tickets = await this.ticketRepo.find({ where, order: { priority: 'DESC', created_at: 'ASC' }, take: 500 });
+    const now = new Date();
+
+    const result = [];
+    for (const t of tickets) {
+      const items = await this.itemRepo.find({ where: { tenant_id: tenantId, ticket_id: t.id } });
+      const order = await this.orderRepo.findOne({ where: { id: t.order_id } });
+      const station = await this.stationRepo.findOne({ where: { id: t.station_id } });
+      const elapsedSeconds = Math.floor((now.getTime() - new Date(t.created_at).getTime()) / 1000);
+
+      result.push({
+        ...t,
+        station_name: station ? station.name : 'Kitchen Station',
+        target_minutes: station ? station.target_minutes : 10,
+        order_number: order ? order.order_number : 'ORD-00',
+        order_type: order ? order.order_type : 'DINE_IN',
+        table_number: order ? order.table_number : null,
+        customer_name: order ? order.customer_id : null,
+        prep_time_seconds: elapsedSeconds,
+        items,
+      });
+    }
+
+    return result;
   }
 
   async getKdsTickets(tenantId: string, stationId?: string, isBumped?: boolean) {
     // Auto-generate tickets for active orders without kitchen tickets
     const activeOrders = await this.orderRepo.find({
-      where: { tenant_id: tenantId, status: In(['SUBMITTED', 'KITCHEN_PREPARING']) },
+      where: { tenant_id: tenantId, status: In(['SUBMITTED', 'CONFIRMED', 'KITCHEN_PREPARING']) },
     });
     for (const order of activeOrders) {
       const existing = await this.ticketRepo.findOne({ where: { tenant_id: tenantId, order_id: order.id } });
@@ -145,12 +302,12 @@ export class KdsService {
     }
 
     const where: any = { tenant_id: tenantId };
-    if (stationId) where.station_id = stationId;
+    if (stationId && stationId !== 'ALL') where.station_id = stationId;
 
     if (isBumped) {
-      where.status = 'BUMPED';
+      where.state = In(['READY', 'BUMPED']);
     } else {
-      where.status = 'IN_PREPARATION';
+      where.state = In(['NEW', 'IN_PROGRESS', 'RECALLED']);
     }
 
     const tickets = await this.ticketRepo.find({ where, order: { created_at: 'ASC' } });
@@ -160,10 +317,13 @@ export class KdsService {
     for (const t of tickets) {
       const items = await this.itemRepo.find({ where: { tenant_id: tenantId, ticket_id: t.id } });
       const order = await this.orderRepo.findOne({ where: { id: t.order_id } });
+      const station = await this.stationRepo.findOne({ where: { id: t.station_id } });
       const elapsedSeconds = Math.floor((now.getTime() - new Date(t.created_at).getTime()) / 1000);
 
       ticketsWithItems.push({
         ...t,
+        station_name: station ? station.name : 'Kitchen Station',
+        target_minutes: station ? station.target_minutes : 10,
         order_number: order ? order.order_number : 'ORD-00',
         order_type: order ? order.order_type : 'DINE_IN',
         table_number: order ? order.table_number : null,
@@ -175,136 +335,128 @@ export class KdsService {
     return ticketsWithItems;
   }
 
-  async bumpTicket(tenantId: string, ticketId: string, correlationId?: string) {
+  // 6. Ticket Actions: Start, Bump, Recall, Priority
+  async startTicket(tenantId: string, ticketId: string, userId?: string) {
     const ticket = await this.ticketRepo.findOne({ where: { id: ticketId, tenant_id: tenantId } });
     if (!ticket) throw new NotFoundException('Kitchen ticket not found');
 
-    ticket.status = 'BUMPED';
-    ticket.bumped_at = new Date();
+    const fromState = ticket.state;
+    ticket.state = 'IN_PROGRESS';
+    ticket.status = 'IN_PROGRESS';
+    ticket.started_at = new Date();
     const saved = await this.ticketRepo.save(ticket);
 
-    // Update items to DONE
+    // Update items to IN_PROGRESS
     const items = await this.itemRepo.find({ where: { tenant_id: tenantId, ticket_id: ticketId } });
     for (const it of items) {
+      it.state = 'IN_PROGRESS';
+      it.status = 'IN_PROGRESS';
+      await this.itemRepo.save(it);
+    }
+
+    await this.recordKdsEvent(tenantId, ticketId, fromState, 'IN_PROGRESS', 'START', userId);
+    this.eventSubject.next({ type: 'TICKET_UPDATED', payload: { ticketId } });
+    return saved;
+  }
+
+  async bumpTicket(tenantId: string, ticketId: string, correlationId?: string, userId?: string) {
+    const ticket = await this.ticketRepo.findOne({ where: { id: ticketId, tenant_id: tenantId } });
+    if (!ticket) throw new NotFoundException('Kitchen ticket not found');
+
+    const fromState = ticket.state;
+    ticket.state = 'READY';
+    ticket.status = 'READY';
+    ticket.bumped_at = new Date();
+    ticket.ready_at = new Date();
+    const saved = await this.ticketRepo.save(ticket);
+
+    // Update items to READY
+    const items = await this.itemRepo.find({ where: { tenant_id: tenantId, ticket_id: ticketId } });
+    for (const it of items) {
+      it.state = 'READY';
       it.status = 'DONE';
       await this.itemRepo.save(it);
     }
 
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'KITCHEN_TICKET_BUMPED',
-      correlationId: correlationId || 'corr-bump',
-      afterData: saved,
-    });
+    await this.recordKdsEvent(tenantId, ticketId, fromState, 'READY', 'BUMP', userId);
 
+    // Order readiness roll-up check
+    await this.checkOrderReadinessRollup(tenantId, ticket.order_id);
+
+    this.eventSubject.next({ type: 'TICKET_UPDATED', payload: { ticketId } });
     return saved;
   }
 
-  async recallTicket(tenantId: string, ticketId: string, correlationId?: string) {
+  async recallTicket(tenantId: string, ticketId: string, correlationId?: string, userId?: string) {
     const ticket = await this.ticketRepo.findOne({ where: { id: ticketId, tenant_id: tenantId } });
     if (!ticket) throw new NotFoundException('Kitchen ticket not found');
 
-    ticket.status = 'IN_PREPARATION';
+    const fromState = ticket.state;
+    ticket.state = 'IN_PROGRESS';
+    ticket.status = 'IN_PROGRESS';
     ticket.bumped_at = null as any;
+    ticket.ready_at = null as any;
     const saved = await this.ticketRepo.save(ticket);
 
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'KITCHEN_TICKET_RECALLED',
-      correlationId: correlationId || 'corr-recall',
-      afterData: saved,
-    });
+    await this.recordKdsEvent(tenantId, ticketId, fromState, 'IN_PROGRESS', 'RECALL', userId);
+    this.eventSubject.next({ type: 'TICKET_UPDATED', payload: { ticketId } });
+    return saved;
+  }
+
+  async setTicketPriority(tenantId: string, ticketId: string, priority: number, userId?: string) {
+    const ticket = await this.ticketRepo.findOne({ where: { id: ticketId, tenant_id: tenantId } });
+    if (!ticket) throw new NotFoundException('Kitchen ticket not found');
+
+    ticket.priority = Math.min(9, Math.max(0, priority));
+    const saved = await this.ticketRepo.save(ticket);
+
+    await this.recordKdsEvent(tenantId, ticketId, ticket.state, ticket.state, 'PRIORITY_CHANGE', userId, { priority });
+    this.eventSubject.next({ type: 'TICKET_UPDATED', payload: { ticketId } });
+    return saved;
+  }
+
+  async updateItemStatus(tenantId: string, itemId: string, status: string, userId?: string) {
+    const item = await this.itemRepo.findOne({ where: { id: itemId, tenant_id: tenantId } });
+    if (!item) throw new NotFoundException('Ticket item not found');
+
+    item.state = status;
+    item.status = status === 'READY' ? 'DONE' : status;
+    const saved = await this.itemRepo.save(item);
+
+    // Check if all items in ticket are ready
+    const allItems = await this.itemRepo.find({ where: { tenant_id: tenantId, ticket_id: item.ticket_id } });
+    const allReady = allItems.every((i) => i.state === 'READY' || i.state === 'CANCELLED');
+    if (allReady) {
+      await this.bumpTicket(tenantId, item.ticket_id, 'auto-item-bump', userId);
+    }
 
     return saved;
   }
 
-  async updateItemStatus(tenantId: string, itemId: string, status: 'PENDING' | 'COOKING' | 'DONE') {
-    const item = await this.itemRepo.findOne({ where: { id: itemId, tenant_id: tenantId } });
-    if (!item) throw new NotFoundException('Ticket item not found');
-
-    item.status = status;
-    return await this.itemRepo.save(item);
+  private async recordKdsEvent(tenantId: string, ticketId: string, fromState: string | null, toState: string, action: string, userId?: string, details?: any) {
+    const evt = this.kdsEventRepo.create({
+      tenant_id: tenantId,
+      ticket_id: ticketId,
+      from_state: fromState || null,
+      to_state: toState,
+      action,
+      occurred_by: userId || null,
+      details: details || null,
+    });
+    await this.kdsEventRepo.save(evt);
   }
 
-  // Simulated Thermal Printing Engine
-  async simulatePrint(tenantId: string, data: { ticket_id?: string; order_id?: string; paper_width_mm?: number }) {
-    let ticket = null;
-    let order = null;
+  private async checkOrderReadinessRollup(tenantId: string, orderId: string) {
+    const tickets = await this.ticketRepo.find({ where: { tenant_id: tenantId, order_id: orderId } });
+    const allReady = tickets.length > 0 && tickets.every((t) => t.state === 'READY' || t.state === 'CANCELLED');
 
-    if (data.ticket_id) {
-      ticket = await this.ticketRepo.findOne({ where: { id: data.ticket_id, tenant_id: tenantId } });
-      if (ticket) order = await this.orderRepo.findOne({ where: { id: ticket.order_id, tenant_id: tenantId }, relations: ['items', 'items.options'] });
-    } else if (data.order_id) {
-      order = await this.orderRepo.findOne({ where: { id: data.order_id, tenant_id: tenantId }, relations: ['items', 'items.options'] });
-    }
-
-    const width = data.paper_width_mm === 58 ? 32 : 48; // characters per line
-    const divider = '='.repeat(width);
-    const subDivider = '-'.repeat(width);
-
-    const lines: string[] = [];
-    lines.push(divider);
-    lines.push(this.centerText('*** KITCHEN PREPARATION CHIT ***', width));
-    lines.push(divider);
-
-    if (order) {
-      lines.push(`ORDER #: ${order.order_number}`);
-      lines.push(`TYPE   : ${order.order_type} ${order.table_number ? `(Table ${order.table_number})` : ''}`);
-      lines.push(`DATE   : ${new Date(order.placed_at).toLocaleString()}`);
-    }
-    if (ticket) {
-      lines.push(`TICKET : ${ticket.ticket_number}`);
-    }
-    lines.push(subDivider);
-    lines.push(this.formatLine('QTY  ITEM NAME', 'STATUS', width));
-    lines.push(subDivider);
-
-    if (order && order.items) {
-      for (const item of order.items) {
-        lines.push(this.formatLine(`${parseFloat(item.quantity).toFixed(0)}x  ${item.product_name}`, '[ ]', width));
-        if (item.options && item.options.length > 0) {
-          for (const opt of item.options) {
-            lines.push(`     + ${opt.option_item_name}`);
-          }
-        }
-        if (item.special_instructions) {
-          lines.push(`     * NOTE: ${item.special_instructions}`);
-        }
+    if (allReady) {
+      const order = await this.orderRepo.findOne({ where: { id: orderId, tenant_id: tenantId } });
+      if (order && (order.status === 'SUBMITTED' || order.status === 'CONFIRMED' || order.status === 'KITCHEN_PREPARING')) {
+        order.status = 'READY';
+        order.state = 'READY';
+        await this.orderRepo.save(order);
       }
     }
-
-    lines.push(divider);
-    lines.push(this.centerText('Gnext POS Kitchen Dispatcher', width));
-    lines.push(divider);
-
-    const asciiChit = lines.join('\n');
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'SIMULATOR',
-      action: 'THERMAL_PRINT_SIMULATED',
-      correlationId: 'corr-print-sim',
-      details: { paperWidth: data.paper_width_mm || 80, linesCount: lines.length },
-    });
-
-    return {
-      paper_width_mm: data.paper_width_mm || 80,
-      printed_at: new Date().toISOString(),
-      raw_ascii_chit: asciiChit,
-    };
-  }
-
-  private centerText(text: string, width: number): string {
-    if (text.length >= width) return text;
-    const leftPadding = Math.floor((width - text.length) / 2);
-    return ' '.repeat(leftPadding) + text;
-  }
-
-  private formatLine(left: string, right: string, width: number): string {
-    const spaceCount = width - left.length - right.length;
-    if (spaceCount <= 0) return `${left} ${right}`;
-    return left + ' '.repeat(spaceCount) + right;
   }
 }

@@ -25,6 +25,7 @@ import { BranchesPage } from 'src/pages/operations/branches';
 import { DeliveryPage } from 'src/pages/operations/delivery';
 import { PaymentsPage } from 'src/pages/operations/payments';
 import { ReasonCodesPage } from 'src/pages/settings/reasons';
+import { PrintersPage } from 'src/pages/operations/printers';
 import { CategoriesPage } from 'src/pages/catalog/categories';
 import { CustomersPage } from 'src/pages/customers/directory';
 import { DiscountRulesPage } from 'src/pages/discounts/rules';
@@ -37,6 +38,7 @@ import { GeneralSettingsPage } from 'src/pages/settings/general';
 import { ImportWizardPage } from 'src/pages/tools/import-wizard';
 import { AvailabilityPage } from 'src/pages/catalog/availability';
 import { CashDrawerPage } from 'src/pages/operations/cash-drawer';
+import { PrintQueuePage } from 'src/pages/operations/print-queue';
 import { ReportViewerPage } from 'src/pages/reports/report-viewer';
 import { OfflineSyncPage } from 'src/pages/simulation/offline-sync';
 import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
@@ -44,6 +46,7 @@ import { BranchDetailPage } from 'src/pages/operations/branch-detail';
 import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
 import { CourierSettlementsPage } from 'src/pages/operations/settlements';
 import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
+import { KdsConfigurationPage } from 'src/pages/operations/kds-configuration';
 import { MediaLocalizationDemoPage } from 'src/pages/simulation/media-localization';
 
 
@@ -128,6 +131,18 @@ export const routesSection: RouteObject[] = [
       {
         path: 'operations/kds',
         element: <KdsPage />,
+      },
+      {
+        path: 'operations/kds-configuration',
+        element: <KdsConfigurationPage />,
+      },
+      {
+        path: 'operations/printers',
+        element: <PrintersPage />,
+      },
+      {
+        path: 'operations/print-queue',
+        element: <PrintQueuePage />,
       },
       {
         path: 'operations/delivery',

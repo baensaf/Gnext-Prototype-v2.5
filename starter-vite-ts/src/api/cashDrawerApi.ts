@@ -1,4 +1,3 @@
-import { httpClient } from './httpClient';
 import { shiftApi } from './shiftApi';
 
 export interface CashDrawerShift {
