@@ -27,9 +27,24 @@ export class RepairCustomerCreditSchema1700000000006 implements MigrationInterfa
       );
     `);
 
-    await queryRunner.query(`
+      ALTER TABLE "credit_account"
+        ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE NULL;
+
+      ALTER TABLE "idempotency_record"
+        ALTER COLUMN "idempotency_key" DROP NOT NULL,
+        ALTER COLUMN "response_code" DROP NOT NULL,
+        ADD COLUMN IF NOT EXISTS "scope" character varying(80),
+        ADD COLUMN IF NOT EXISTS "key" character varying(160),
+        ADD COLUMN IF NOT EXISTS "status" character varying(20) DEFAULT 'PENDING',
+        ADD COLUMN IF NOT EXISTS "response_status" integer,
+        ADD COLUMN IF NOT EXISTS "expires_at" TIMESTAMP WITH TIME ZONE;
+
       CREATE INDEX IF NOT EXISTS "IDX_credit_account_customer_status"
       ON "credit_account" ("tenant_id", "customer_id", "status");
+
+    await queryRunner.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "UQ_idempotency_record_tenant_scope_key"
+      ON "idempotency_record" ("tenant_id", "scope", "key");
     `);
 
     // 2. Create credit_entry table

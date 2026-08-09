@@ -104,19 +104,48 @@ export class RebuildOrderAggregateSchema1700000000004 implements MigrationInterf
 
     // 6. Update order_header columns for full specification alignment
     await queryRunner.query(`
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "shift_id" uuid;
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "channel" character varying(32) NOT NULL DEFAULT 'POS';
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "order_type" character varying(30) NOT NULL DEFAULT 'DINE_IN';
       ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "state" character varying(30) NOT NULL DEFAULT 'DRAFT';
       ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "quote_version" character varying(40) NOT NULL DEFAULT '1';
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "customer_address_id" uuid;
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "table_id" uuid;
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "table_number" character varying(20);
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "guest_count" integer;
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "price_group_id" uuid;
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "discount_id" uuid;
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "coupon_code" character varying(32);
       ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "currency_code" character varying(3) NOT NULL DEFAULT 'IRR';
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "business_date" character varying(10);
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "subtotal" numeric(19,4) NOT NULL DEFAULT '0.0000';
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "subtotal_amount" numeric(19,4) NOT NULL DEFAULT '0.0000';
       ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "modifier_total" numeric(19,4) NOT NULL DEFAULT '0.0000';
       ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "packaging_total" numeric(19,4) NOT NULL DEFAULT '0.0000';
       ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "delivery_fee" numeric(19,4) NOT NULL DEFAULT '0.0000';
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "discount_total" numeric(19,4) NOT NULL DEFAULT '0.0000';
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "discount_amount" numeric(19,4) NOT NULL DEFAULT '0.0000';
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "tax_total" numeric(19,4) NOT NULL DEFAULT '0.0000';
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "tax_amount" numeric(19,4) NOT NULL DEFAULT '0.0000';
       ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "grand_total" numeric(19,4) NOT NULL DEFAULT '0.0000';
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "total_amount" numeric(19,4) NOT NULL DEFAULT '0.0000';
       ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "paid_total" numeric(19,4) NOT NULL DEFAULT '0.0000';
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "paid_amount" numeric(19,4) NOT NULL DEFAULT '0.0000';
       ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "refunded_total" numeric(19,4) NOT NULL DEFAULT '0.0000';
       ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "outstanding_total" numeric(19,4) NOT NULL DEFAULT '0.0000';
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "due_amount" numeric(19,4) NOT NULL DEFAULT '0.0000';
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "status" character varying(30) NOT NULL DEFAULT 'DRAFT';
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "fulfillment_status" character varying(30) NOT NULL DEFAULT 'PENDING';
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "notes" text;
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "cancellation_reason_code_id" uuid;
       ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "submitted_at" TIMESTAMP WITH TIME ZONE;
       ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "completed_at" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "cancelled_at" TIMESTAMP WITH TIME ZONE;
       ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "parent_order_id" uuid;
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "created_by" uuid;
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "updated_by" uuid;
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "version" integer NOT NULL DEFAULT 1;
     `);
 
     await queryRunner.query(`
