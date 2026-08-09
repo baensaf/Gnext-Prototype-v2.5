@@ -13,6 +13,7 @@ import { MenuCategory } from '../src/entities/MenuCategory.entity';
 import { MenuProduct } from '../src/entities/MenuProduct.entity';
 import { ProductAvailability } from '../src/entities/ProductAvailability.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
+import { PricingService } from '../src/modules/pricing/pricing.service';
 
 describe('CatalogService (Unit)', () => {
   let service: CatalogService;
@@ -24,6 +25,7 @@ describe('CatalogService (Unit)', () => {
   let menuProdRepo: any;
   let availRepo: any;
   let auditWriter: any;
+  let pricingService: any;
 
   beforeEach(async () => {
     prodRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), softRemove: jest.fn() };
@@ -34,6 +36,10 @@ describe('CatalogService (Unit)', () => {
     menuProdRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
     availRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
     auditWriter = { write: jest.fn() };
+    pricingService = {
+      resolvePrice: jest.fn().mockResolvedValue({ amount: '1500000.0000', resolutionSource: 'BASE_PRICE', isOverridden: false }),
+      bulkCommit: jest.fn().mockResolvedValue({ success: true, updated_count: 2, affected_rows: 2, job_id: 'job-1' }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -50,6 +56,7 @@ describe('CatalogService (Unit)', () => {
         { provide: getRepositoryToken(MenuProduct), useValue: menuProdRepo },
         { provide: getRepositoryToken(ProductAvailability), useValue: availRepo },
         { provide: AuditWriter, useValue: auditWriter },
+        { provide: PricingService, useValue: pricingService },
       ],
     }).compile();
 
@@ -58,9 +65,7 @@ describe('CatalogService (Unit)', () => {
 
   it('should return base_price when no priceGroup or menu override exists', async () => {
     prodRepo.findOne.mockResolvedValue({ id: 'p-1', base_price: '1500000.0000' });
-    menuRepo.find.mockResolvedValue([]);
-    priceItemRepo.findOne.mockResolvedValue(null);
-    availRepo.findOne.mockResolvedValue(null);
+    pricingService.resolvePrice.mockResolvedValue({ amount: '1500000.0000', resolutionSource: 'BASE_PRICE', isOverridden: false });
 
     const result = await service.getEffectivePrice('t-1', 'p-1', 'pg-1');
     expect(result.effective_price).toBe('1500000.0000');
@@ -70,9 +75,7 @@ describe('CatalogService (Unit)', () => {
 
   it('should return override_price when priceGroup override exists', async () => {
     prodRepo.findOne.mockResolvedValue({ id: 'p-1', base_price: '1500000.0000' });
-    menuRepo.find.mockResolvedValue([]);
-    priceItemRepo.findOne.mockResolvedValue({ override_price: '1300000.0000' });
-    availRepo.findOne.mockResolvedValue(null);
+    pricingService.resolvePrice.mockResolvedValue({ amount: '1300000.0000', resolutionSource: 'PRICE_GROUP', isOverridden: true });
 
     const result = await service.getEffectivePrice('t-1', 'p-1', 'pg-vip');
     expect(result.effective_price).toBe('1300000.0000');
@@ -82,10 +85,7 @@ describe('CatalogService (Unit)', () => {
 
   it('should prioritize menu override over priceGroup override', async () => {
     prodRepo.findOne.mockResolvedValue({ id: 'p-1', base_price: '1500000.0000' });
-    menuRepo.find.mockResolvedValue([{ id: 'm-1', branch_id: 'b-1', channel: 'DELIVERY', is_active: true }]);
-    menuProdRepo.findOne.mockResolvedValue({ override_price: '1100000.0000' });
-    priceItemRepo.findOne.mockResolvedValue({ override_price: '1300000.0000' });
-    availRepo.findOne.mockResolvedValue(null);
+    pricingService.resolvePrice.mockResolvedValue({ amount: '1100000.0000', resolutionSource: 'MENU_OVERRIDE', isOverridden: true });
 
     const result = await service.getEffectivePrice('t-1', 'p-1', 'pg-vip', 'b-1', 'DELIVERY');
     expect(result.effective_price).toBe('1100000.0000');
@@ -95,8 +95,7 @@ describe('CatalogService (Unit)', () => {
 
   it('should indicate item suspension when ProductAvailability is suspended', async () => {
     prodRepo.findOne.mockResolvedValue({ id: 'p-1', base_price: '1500000.0000' });
-    menuRepo.find.mockResolvedValue([]);
-    priceItemRepo.findOne.mockResolvedValue(null);
+    pricingService.resolvePrice.mockResolvedValue({ amount: '1500000.0000', resolutionSource: 'BASE_PRICE', isOverridden: false });
     availRepo.findOne.mockResolvedValue({ is_suspended: true, suspended_until: new Date(Date.now() + 3600000), reason: 'Out of stock' });
 
     const result = await service.getEffectivePrice('t-1', 'p-1');
@@ -105,11 +104,6 @@ describe('CatalogService (Unit)', () => {
   });
 
   it('should perform bulk price updates on products', async () => {
-    prodRepo.find.mockResolvedValue([
-      { id: 'p-1', base_price: '100.0000' },
-      { id: 'p-2', base_price: '200.0000' },
-    ]);
-
     const result = await service.bulkUpdatePrices(
       't-1',
       { adjustment_type: 'PERCENTAGE', amount: '10' },
@@ -118,7 +112,5 @@ describe('CatalogService (Unit)', () => {
 
     expect(result.success).toBe(true);
     expect(result.updated_count).toBe(2);
-    expect(prodRepo.save).toHaveBeenCalledTimes(2);
   });
 });
-

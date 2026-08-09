@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Category } from '../../entities/Category.entity';
@@ -15,6 +15,7 @@ import { ProductAvailability } from '../../entities/ProductAvailability.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
+import { PricingService } from '../pricing/pricing.service';
 
 @Injectable()
 export class CatalogService {
@@ -31,6 +32,7 @@ export class CatalogService {
     @InjectRepository(MenuProduct) private readonly menuProdRepo: Repository<MenuProduct>,
     @InjectRepository(ProductAvailability) private readonly availRepo: Repository<ProductAvailability>,
     private readonly auditWriter: AuditWriter,
+    @Inject(forwardRef(() => PricingService)) private readonly pricingService: PricingService,
   ) {}
 
   // Categories
@@ -156,7 +158,6 @@ export class CatalogService {
     const prod = await this.prodRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!prod) throw new NotFoundException('Product not found');
 
-    // Fetch attached option groups
     const optionGroupLinks = (await this.prodGroupRepo.find({
       where: { tenant_id: tenantId, product_id: id },
       order: { sort_order: 'ASC' },
@@ -188,7 +189,7 @@ export class CatalogService {
       sku: data.sku || null,
       barcode: data.barcode || null,
       description: data.description || null,
-      tax_rate: data.tax_rate || '0.1000', // Default 10% VAT
+      tax_rate: data.tax_rate || '0.1000',
       image_asset_id: data.image_asset_id || null,
       is_active: true,
     });
@@ -425,62 +426,7 @@ export class CatalogService {
     params: { price_group_id?: string; category_id?: string; adjustment_type: 'PERCENTAGE' | 'FIXED'; amount: string },
     correlationId: string,
   ) {
-    const { price_group_id, category_id, adjustment_type, amount } = params;
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount)) throw new ConflictException('Invalid amount for bulk price update');
-
-    let updatedCount = 0;
-
-    if (price_group_id) {
-      // Bulk update overrides inside a price group
-      let items = await this.priceItemRepo.find({ where: { tenant_id: tenantId, price_group_id } });
-      if (category_id) {
-        const categoryProducts = await this.prodRepo.find({ where: { tenant_id: tenantId, category_id } });
-        const productIds = new Set(categoryProducts.map((p) => p.id));
-        items = items.filter((item) => productIds.has(item.product_id));
-      }
-
-      for (const item of items) {
-        const current = parseFloat(item.override_price);
-        let newPrice = current;
-        if (adjustment_type === 'PERCENTAGE') {
-          newPrice = current * (1 + numAmount / 100);
-        } else {
-          newPrice = current + numAmount;
-        }
-        item.override_price = MoneyUtil.format(Math.max(0, newPrice).toString());
-        await this.priceItemRepo.save(item);
-        updatedCount++;
-      }
-    } else {
-      // Bulk update base prices of products
-      const where: any = { tenant_id: tenantId };
-      if (category_id) where.category_id = category_id;
-      const products = await this.prodRepo.find({ where });
-
-      for (const prod of products) {
-        const current = parseFloat(prod.base_price);
-        let newPrice = current;
-        if (adjustment_type === 'PERCENTAGE') {
-          newPrice = current * (1 + numAmount / 100);
-        } else {
-          newPrice = current + numAmount;
-        }
-        prod.base_price = MoneyUtil.format(Math.max(0, newPrice).toString());
-        await this.prodRepo.save(prod);
-        updatedCount++;
-      }
-    }
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'BULK_PRICE_UPDATE',
-      correlationId,
-      details: { price_group_id, category_id, adjustment_type, amount, updatedCount },
-    });
-
-    return { success: true, updated_count: updatedCount };
+    return await this.pricingService.bulkCommit(tenantId, params as any, correlationId);
   }
 
   // Menus Management
@@ -661,38 +607,16 @@ export class CatalogService {
     return { success: true };
   }
 
-  // Enhanced Price Diagnostic Resolution
+  // Enhanced Price Resolution via PricingService
   async getEffectivePrice(tenantId: string, productId: string, priceGroupId?: string, branchId?: string, channel?: string) {
+    const resolved = await this.pricingService.resolvePrice(tenantId, {
+      productId,
+      priceGroupId,
+      branchId,
+      channel,
+    });
+
     const product = await this.getProductById(tenantId, productId);
-    let effectivePrice = product.base_price;
-    let resolutionSource: 'MENU_OVERRIDE' | 'PRICE_GROUP' | 'BASE_PRICE' = 'BASE_PRICE';
-    let isOverridden = false;
-
-    // Check 1: Menu specific override
-    if (branchId || channel) {
-      const activeMenus = await this.menuRepo.find({ where: { tenant_id: tenantId, is_active: true } });
-      const matchingMenu = activeMenus.find((m) => (!m.branch_id || m.branch_id === branchId) && (m.channel === 'ALL' || m.channel === channel));
-      if (matchingMenu) {
-        const menuProd = await this.menuProdRepo.findOne({ where: { tenant_id: tenantId, menu_id: matchingMenu.id, product_id: productId } });
-        if (menuProd && menuProd.override_price) {
-          effectivePrice = menuProd.override_price;
-          resolutionSource = 'MENU_OVERRIDE';
-          isOverridden = true;
-        }
-      }
-    }
-
-    // Check 2: Price Group override (if Menu override not hit)
-    if (!isOverridden && priceGroupId) {
-      const override = await this.priceItemRepo.findOne({ where: { tenant_id: tenantId, price_group_id: priceGroupId, product_id: productId } });
-      if (override) {
-        effectivePrice = override.override_price;
-        resolutionSource = 'PRICE_GROUP';
-        isOverridden = true;
-      }
-    }
-
-    // Check 3: Availability & Temporary Suspension
     const avail = await this.availRepo.findOne({ where: { tenant_id: tenantId, product_id: productId } });
     let isSuspended = false;
     if (avail && avail.is_suspended) {
@@ -704,9 +628,9 @@ export class CatalogService {
     return {
       product_id: productId,
       base_price: product.base_price,
-      effective_price: MoneyUtil.format(effectivePrice),
-      resolution_source: resolutionSource,
-      is_overridden: isOverridden,
+      effective_price: resolved.amount,
+      resolution_source: resolved.resolutionSource,
+      is_overridden: resolved.isOverridden,
       price_group_id: priceGroupId || null,
       branch_id: branchId || null,
       channel: channel || null,

@@ -16,6 +16,7 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { MediaModule } from './modules/media/media.module';
 import { LocalizationModule } from './modules/localization/localization.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
+import { PricingModule } from './modules/pricing/pricing.module';
 import { DiscountsModule } from './modules/discounts/discounts.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { OrderModule } from './modules/order/order.module';
@@ -46,7 +47,6 @@ import { KitchenStation } from './entities/KitchenStation.entity';
 import { KitchenTicket } from './entities/KitchenTicket.entity';
 import { KitchenTicketItem } from './entities/KitchenTicketItem.entity';
 import { PrinterDevice } from './entities/PrinterDevice.entity';
-import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 
 import { Tenant } from './entities/Tenant.entity';
 import { AdminUser } from './entities/AdminUser.entity';
@@ -74,6 +74,9 @@ import { OptionItem } from './entities/OptionItem.entity';
 import { ProductOptionGroup } from './entities/ProductOptionGroup.entity';
 import { PriceGroup } from './entities/PriceGroup.entity';
 import { PriceGroupItem } from './entities/PriceGroupItem.entity';
+import { PriceEntry } from './entities/PriceEntry.entity';
+import { PriceGroupBranch } from './entities/PriceGroupBranch.entity';
+import { PriceBulkJob } from './entities/PriceBulkJob.entity';
 import { Menu } from './entities/Menu.entity';
 import { MenuCategory } from './entities/MenuCategory.entity';
 import { MenuProduct } from './entities/MenuProduct.entity';
@@ -138,6 +141,7 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
           Currency, PaymentMethod, ReasonCode,
           FileAsset, LocalizedString,
           Category, Product, OptionGroup, OptionItem, ProductOptionGroup, PriceGroup, PriceGroupItem,
+          PriceEntry, PriceGroupBranch, PriceBulkJob,
           Menu, MenuCategory, MenuProduct, ProductAvailability,
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,
           Discount, Coupon,
@@ -165,6 +169,7 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
     MediaModule,
     LocalizationModule,
     CatalogModule,
+    PricingModule,
     DiscountsModule,
     CustomerModule,
     OrderModule,
