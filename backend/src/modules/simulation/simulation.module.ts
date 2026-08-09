@@ -7,6 +7,7 @@ import { Product } from '../../entities/Product.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { SimulationService } from './simulation.service';
 import { SimulationController } from './simulation.controller';
+import { SimulatedWebhooksController } from './simulated-webhooks.controller';
 import { AuditModule } from '../audit/audit.module';
 
 @Module({
@@ -21,7 +22,7 @@ import { AuditModule } from '../audit/audit.module';
     AuditModule,
   ],
   providers: [SimulationService],
-  controllers: [SimulationController],
+  controllers: [SimulationController, SimulatedWebhooksController],
   exports: [SimulationService],
 })
 export class SimulationModule {}

@@ -116,6 +116,31 @@ describe('SimulationService (Unit)', () => {
     expect(res.success).toBe(true);
     expect(res.status).toBe('CREDIT_RESERVED');
     expect(res.reserved_amount).toBe(150.0);
+    expect(res.simulated).toBe(true);
     expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'TARA_COMMAND_RESERVE_CREDIT' }));
+  });
+
+  it('should reject webhooks with timestamp skew > 5 minutes', async () => {
+    const payload = { event_id: 'evt-skewed', order_code: 'SF-SKEW' };
+    const rawBody = JSON.stringify(payload);
+    const secret = 'snappfood-secret-key-123';
+    const oldTimestamp = (Date.now() - 10 * 60 * 1000).toString(); // 10 minutes ago
+    const validSig = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+
+    await expect(
+      service.handleSnappfoodWebhook('t-1', rawBody, payload, validSig, oldTimestamp),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('should handle Tara failure scenarios deterministically', async () => {
+    const res = await service.executeTaraCommand('t-1', {
+      operation: 'CREATE',
+      amount: 500.0,
+      scenarioId: 'tara-declined',
+    });
+
+    expect(res.success).toBe(false);
+    expect(res.status).toBe('FAILED');
+    expect(res.error_code).toBe('INSUFFICIENT_CREDIT');
   });
 });

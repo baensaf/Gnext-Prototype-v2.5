@@ -20,15 +20,40 @@ export class SimulationService {
     private readonly auditWriter: AuditWriter,
   ) {}
 
-  verifyHmacSignature(rawBody: string, signature: string, secret: string = 'snappfood-secret-key-123'): boolean {
+  verifyHmacSignature(rawBody: string, signature: string, secret: string = 'snappfood-secret-key-123', timestamp?: string): boolean {
     if (!signature) return false;
-    const computed = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
-    const bufComputed = Buffer.from(computed);
-    const bufSignature = Buffer.from(signature);
-    if (bufComputed.length !== bufSignature.length) {
-      return false;
+
+    // Check timestamp skew (5 minutes = 300,000 ms)
+    if (timestamp) {
+      let timestampMs = 0;
+      if (!isNaN(Number(timestamp))) {
+        timestampMs = Number(timestamp);
+      } else {
+        timestampMs = new Date(timestamp).getTime();
+      }
+      if (!isNaN(timestampMs)) {
+        const skew = Math.abs(Date.now() - timestampMs);
+        if (skew > 300 * 1000) {
+          throw new BadRequestException('WEBHOOK_TIMESTAMP_INVALID: Webhook timestamp skew exceeds 5-minute limit');
+        }
+      }
     }
-    return crypto.timingSafeEqual(bufComputed, bufSignature);
+
+    const payloadToSign = timestamp ? `${timestamp}.${rawBody}` : rawBody;
+    const computed = crypto.createHmac('sha256', secret).update(payloadToSign).digest('hex');
+    const rawComputed = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+
+    const bufComputed = Buffer.from(computed);
+    const bufRawComputed = Buffer.from(rawComputed);
+    const bufSignature = Buffer.from(signature);
+
+    if (bufSignature.length === bufComputed.length && crypto.timingSafeEqual(bufComputed, bufSignature)) {
+      return true;
+    }
+    if (bufSignature.length === bufRawComputed.length && crypto.timingSafeEqual(bufRawComputed, bufSignature)) {
+      return true;
+    }
+    return false;
   }
 
   async handleSnappfoodWebhook(
@@ -36,14 +61,16 @@ export class SimulationService {
     rawBody: string,
     payload: any,
     signature?: string,
+    timestamp?: string,
     secret: string = 'snappfood-secret-key-123',
     correlationId?: string,
   ) {
-    const idempotencyKey = payload.event_id || payload.order_id || `snapp-${payload.id || Date.now()}`;
+    const corrId = correlationId || `corr-snapp-${Date.now()}`;
+    const idempotencyKey = payload.event_id || payload.order_id || `snapp-${payload.id || '1001'}`;
 
-    // Verify HMAC if signature provided
+    // Verify HMAC and timestamp skew if signature provided
     if (signature) {
-      const isValid = this.verifyHmacSignature(rawBody, signature, secret);
+      const isValid = this.verifyHmacSignature(rawBody, signature, secret, timestamp);
       if (!isValid) {
         await this.logRepo.save(
           this.logRepo.create({
@@ -55,10 +82,10 @@ export class SimulationService {
             is_duplicate: false,
             status: 'REJECTED',
             request_payload: payload,
-            error_message: 'Invalid HMAC signature',
+            error_message: 'Invalid Snappfood HMAC signature',
           }),
         );
-        throw new BadRequestException('Invalid Snappfood HMAC signature');
+        throw new BadRequestException('WEBHOOK_SIGNATURE_INVALID: Invalid Snappfood HMAC signature');
       }
     }
 
@@ -83,6 +110,8 @@ export class SimulationService {
       );
 
       return {
+        simulated: true,
+        correlationId: corrId,
         success: true,
         duplicate: true,
         message: 'Duplicate Snappfood webhook event ignored (exactly-once enforced)',
@@ -90,11 +119,11 @@ export class SimulationService {
       };
     }
 
-    // Process & Map Order
+    // Process & Map Order deterministically without Math.random()
     const branches = await this.branchRepo.find({ where: { tenant_id: tenantId } });
     const branchId = payload.branch_id || (branches[0] ? branches[0].id : 'branch-1');
 
-    const orderNum = `SNP-${payload.order_code || Date.now().toString().slice(-6)}`;
+    const orderNum = `SNP-${payload.order_code || payload.event_id || '1001'}`;
     const itemsInput = payload.items || [
       { product_name: 'Snappfood Combo Meal', quantity: 1, price: 15.0 },
     ];
@@ -160,11 +189,13 @@ export class SimulationService {
       tenantId,
       actorType: 'SYSTEM',
       action: 'SNAPPFOOD_WEBHOOK_PROCESSED',
-      correlationId: correlationId || 'corr-snapp-webhook',
+      correlationId: corrId,
       afterData: { order_id: savedHeader.id, idempotencyKey },
     });
 
     return {
+      simulated: true,
+      correlationId: corrId,
       success: true,
       duplicate: false,
       order: savedHeader,
@@ -173,10 +204,11 @@ export class SimulationService {
   }
 
   async generateSnappfoodOrder(tenantId: string, data: any, correlationId?: string) {
-    const eventId = `snapp-evt-${Date.now()}`;
+    const seed = data?.seed || '1001';
+    const eventId = `snapp-evt-${seed}`;
     const payload = {
       event_id: eventId,
-      order_code: `SF-${Math.floor(1000 + Math.random() * 9000)}`,
+      order_code: `SF-${seed}`,
       branch_id: data?.branch_id,
       customer: {
         name: data?.customer_name || 'Snappfood Customer',
@@ -192,77 +224,179 @@ export class SimulationService {
     const rawBody = JSON.stringify(payload);
     const signature = crypto.createHmac('sha256', 'snappfood-secret-key-123').update(rawBody).digest('hex');
 
-    return await this.handleSnappfoodWebhook(tenantId, rawBody, payload, signature, 'snappfood-secret-key-123', correlationId);
+    return await this.handleSnappfoodWebhook(tenantId, rawBody, payload, signature, undefined, 'snappfood-secret-key-123', correlationId);
+  }
+
+  async triggerSnappfoodDuplicate(tenantId: string, logId?: string, correlationId?: string) {
+    const log = logId ? await this.logRepo.findOne({ where: { id: logId, tenant_id: tenantId } }) : null;
+    const idempotencyKey = log ? log.idempotency_key : `snapp-evt-1001`;
+
+    const duplicateLog = await this.logRepo.save(
+      this.logRepo.create({
+        tenant_id: tenantId,
+        provider: 'SNAPPFOOD',
+        event_type: 'DUPLICATE_REJECTED',
+        hmac_signature: log?.hmac_signature || 'simulated-valid-hmac',
+        idempotency_key: idempotencyKey,
+        is_duplicate: true,
+        status: 'SUCCESS',
+        request_payload: log?.request_payload || { event_id: idempotencyKey },
+        response_payload: { message: 'Duplicate webhook receipt generated (simulated)' },
+      }),
+    );
+
+    return {
+      simulated: true,
+      correlationId: correlationId || `corr-snapp-dup-${Date.now()}`,
+      success: true,
+      duplicate: true,
+      message: 'Duplicate webhook receipt replayed successfully',
+      log_id: duplicateLog.id,
+    };
   }
 
   async triggerSnappfoodAction(
     tenantId: string,
-    data: { order_id: string; action: 'ACCEPT' | 'PREPARING' | 'DELIVERED' | 'CANCELLED'; reason?: string },
+    data: { order_id?: string; orderId?: string; action: 'PICK' | 'ACCEPT' | 'PREPARING' | 'REJECT' | 'MODIFY' | 'DELIVERED' | 'CANCEL' | 'CANCELLED' | 'RECOVER'; reason?: string; scenarioId?: string },
     correlationId?: string,
   ) {
-    const order = await this.orderRepo.findOne({ where: { id: data.order_id, tenant_id: tenantId } });
-    if (!order) throw new NotFoundException('Order not found');
+    const orderId = data.order_id || data.orderId;
+    const order = orderId ? await this.orderRepo.findOne({ where: { id: orderId, tenant_id: tenantId } }) : null;
 
-    if (data.action === 'ACCEPT' || data.action === 'PREPARING') {
-      order.fulfillment_status = 'PREPARING';
-      order.status = 'KITCHEN_PREPARING';
-    } else if (data.action === 'DELIVERED') {
-      order.fulfillment_status = 'DELIVERED';
-      order.status = 'COMPLETED';
-    } else if (data.action === 'CANCELLED') {
-      order.fulfillment_status = 'CANCELLED';
-      order.status = 'CANCELLED';
+    const action = data.action;
+    if (order) {
+      if (action === 'ACCEPT' || action === 'PREPARING' || action === 'PICK') {
+        order.fulfillment_status = 'PREPARING';
+        order.status = 'KITCHEN_PREPARING';
+      } else if (action === 'DELIVERED') {
+        order.fulfillment_status = 'DELIVERED';
+        order.status = 'COMPLETED';
+      } else if (action === 'CANCEL' || action === 'CANCELLED' || action === 'REJECT') {
+        order.fulfillment_status = 'CANCELLED';
+        order.status = 'CANCELLED';
+      } else if (action === 'RECOVER') {
+        order.fulfillment_status = 'PENDING';
+        order.status = 'SUBMITTED';
+      }
+      await this.orderRepo.save(order);
     }
 
-    const saved = await this.orderRepo.save(order);
-
-    await this.logRepo.save(
+    const savedLog = await this.logRepo.save(
       this.logRepo.create({
         tenant_id: tenantId,
         provider: 'SNAPPFOOD',
-        event_type: `ACTION_${data.action}`,
+        event_type: `ACTION_${action}`,
         is_duplicate: false,
         status: 'SUCCESS',
         request_payload: data,
-        response_payload: { order_id: saved.id, new_status: saved.status },
+        response_payload: { order_id: orderId, new_status: order ? order.status : 'PROCESSED' },
       }),
     );
 
+    const corrId = correlationId || `corr-snapp-action-${Date.now()}`;
     await this.auditWriter.write({
       tenantId,
       actorType: 'SYSTEM',
-      action: `SNAPPFOOD_ACTION_${data.action}`,
-      correlationId: correlationId || 'corr-snapp-action',
-      afterData: saved,
+      action: `SNAPPFOOD_ACTION_${action}`,
+      correlationId: corrId,
+      afterData: order || { action },
     });
 
-    return saved;
+    return {
+      simulated: true,
+      correlationId: corrId,
+      success: true,
+      action,
+      order,
+      log_id: savedLog.id,
+    };
+  }
+
+  async triggerCatalogSync(tenantId: string, data: { branchId?: string; direction?: 'PUSH' | 'RECOVER'; entityTypes?: string[]; scenarioId?: string }, correlationId?: string) {
+    const corrId = correlationId || `corr-cat-sync-${Date.now()}`;
+    const log = await this.logRepo.save(
+      this.logRepo.create({
+        tenant_id: tenantId,
+        provider: 'SNAPPFOOD',
+        event_type: `CATALOG_SYNC_${data.direction || 'PUSH'}`,
+        is_duplicate: false,
+        status: 'SUCCESS',
+        request_payload: data,
+        response_payload: { status: 'SYNC_QUEUED', synced_entities: data.entityTypes || ['PRODUCTS', 'CATEGORIES'] },
+      }),
+    );
+
+    return {
+      simulated: true,
+      correlationId: corrId,
+      success: true,
+      direction: data.direction || 'PUSH',
+      synced_entities: data.entityTypes || ['PRODUCTS', 'CATEGORIES'],
+      log_id: log.id,
+    };
   }
 
   async executeTaraCommand(
     tenantId: string,
-    data: { command: 'INSPECT_ELIGIBILITY' | 'RESERVE_CREDIT' | 'SETTLE_TRANSACTION' | 'CANCEL_RESERVATION'; customer_national_id?: string; amount?: number; reservation_id?: string },
+    data: {
+      command?: 'INSPECT_ELIGIBILITY' | 'RESERVE_CREDIT' | 'SETTLE_TRANSACTION' | 'CANCEL_RESERVATION';
+      operation?: 'VALIDATE' | 'CREATE' | 'CONFIRM' | 'REVERSE' | 'REFUND' | 'SETTLE' | 'RECONCILE';
+      customer_national_id?: string;
+      amount?: number;
+      reservation_id?: string;
+      scenarioId?: string;
+    },
     correlationId?: string,
   ) {
+    const corrId = correlationId || `corr-tara-${Date.now()}`;
+    const op = data.operation || data.command || 'VALIDATE';
     const amount = data.amount || 100.0;
-    const resId = data.reservation_id || `TARA-RES-${Date.now().toString().slice(-6)}`;
+    const resId = data.reservation_id || `TARA-RES-1001`;
+
+    if (data.scenarioId === 'tara-declined' || data.scenarioId === 'failure') {
+      const failLog = await this.logRepo.save(
+        this.logRepo.create({
+          tenant_id: tenantId,
+          provider: 'TARA_PAY',
+          event_type: `TARA_${op}_FAILED`,
+          is_duplicate: false,
+          status: 'FAILED',
+          request_payload: data,
+          error_message: 'Tara BNPL credit reservation declined due to insufficient limit',
+        }),
+      );
+
+      return {
+        simulated: true,
+        correlationId: corrId,
+        success: false,
+        status: 'FAILED',
+        error_code: 'INSUFFICIENT_CREDIT',
+        message: 'Tara BNPL credit reservation declined due to insufficient limit',
+        log_id: failLog.id,
+      };
+    }
 
     let responsePayload: any = {};
-    if (data.command === 'INSPECT_ELIGIBILITY') {
+    if (op === 'VALIDATE' || op === 'INSPECT_ELIGIBILITY') {
       responsePayload = { eligible: true, max_credit: 5000.0, national_id: data.customer_national_id || '0012345678' };
-    } else if (data.command === 'RESERVE_CREDIT') {
+    } else if (op === 'CREATE' || op === 'RESERVE_CREDIT') {
       responsePayload = { reservation_id: resId, reserved_amount: amount, status: 'CREDIT_RESERVED', expires_in_seconds: 600 };
-    } else if (data.command === 'SETTLE_TRANSACTION') {
-      responsePayload = { transaction_id: `TARA-TX-${Date.now().toString().slice(-6)}`, reservation_id: resId, status: 'SETTLED_SUCCESS' };
-    } else {
+    } else if (op === 'CONFIRM' || op === 'SETTLE' || op === 'SETTLE_TRANSACTION') {
+      responsePayload = { transaction_id: `TARA-TX-1001`, reservation_id: resId, status: 'SETTLED_SUCCESS' };
+    } else if (op === 'REVERSE' || op === 'CANCEL_RESERVATION') {
       responsePayload = { reservation_id: resId, status: 'RESERVATION_CANCELLED' };
+    } else if (op === 'REFUND') {
+      responsePayload = { refund_id: `TARA-REF-1001`, reservation_id: resId, status: 'REFUNDED' };
+    } else {
+      responsePayload = { reconciliation_id: `TARA-REC-1001`, status: 'RECONCILED' };
     }
 
     const logEntry = await this.logRepo.save(
       this.logRepo.create({
         tenant_id: tenantId,
         provider: 'TARA_PAY',
-        event_type: `TARA_${data.command}`,
+        event_type: `TARA_${op}`,
         is_duplicate: false,
         status: 'SUCCESS',
         request_payload: data,
@@ -273,12 +407,12 @@ export class SimulationService {
     await this.auditWriter.write({
       tenantId,
       actorType: 'SYSTEM',
-      action: `TARA_COMMAND_${data.command}`,
-      correlationId: correlationId || 'corr-tara',
+      action: `TARA_COMMAND_${op}`,
+      correlationId: corrId,
       afterData: responsePayload,
     });
 
-    return { success: true, ...responsePayload, log_id: logEntry.id };
+    return { simulated: true, correlationId: corrId, success: true, ...responsePayload, log_id: logEntry.id };
   }
 
   async getScenarios() {
@@ -302,6 +436,12 @@ export class SimulationService {
         description: 'Simulates Tara BNPL eligibility check, credit reservation, and settlement.',
       },
       {
+        id: 'tara-declined',
+        provider: 'TARA_PAY',
+        title: 'Tara BNPL Credit Declined',
+        description: 'Simulates Tara BNPL transaction failure due to insufficient credit.',
+      },
+      {
         id: 'printer-outage',
         provider: 'PRINTER',
         title: 'Kitchen Printer Outage & Spooler Fallback',
@@ -310,11 +450,34 @@ export class SimulationService {
     ];
   }
 
+  async createScenario(tenantId: string, data: any) {
+    return {
+      id: `scen-${Date.now()}`,
+      provider: data.provider || 'CUSTOM',
+      title: data.title || 'Custom Scenario',
+      description: data.description || 'Custom simulation scenario',
+    };
+  }
+
+  async updateScenario(tenantId: string, id: string, data: any) {
+    return { id, ...data };
+  }
+
+  async deleteScenario(tenantId: string, id: string) {
+    return { success: true, id };
+  }
+
   async getLogs(tenantId: string, provider?: string, status?: string) {
     const where: any = { tenant_id: tenantId };
     if (provider) where.provider = provider;
     if (status) where.status = status;
 
     return await this.logRepo.find({ where, order: { created_at: 'DESC' }, take: 100 });
+  }
+
+  async getLogDetail(tenantId: string, id: string) {
+    const log = await this.logRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!log) throw new NotFoundException('Simulation log not found');
+    return log;
   }
 }
