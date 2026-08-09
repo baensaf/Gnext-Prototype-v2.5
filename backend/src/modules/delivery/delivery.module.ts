@@ -8,6 +8,12 @@ import { CourierSettlementLine } from '../../entities/CourierSettlementLine.enti
 import { Payment } from '../../entities/Payment.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { ApprovalRequest } from '../../entities/ApprovalRequest.entity';
+import { DeliveryZone } from '../../entities/DeliveryZone.entity';
+import { CourierAttendance } from '../../entities/CourierAttendance.entity';
+import { CourierTerminalAssignment } from '../../entities/CourierTerminalAssignment.entity';
+import { Delivery } from '../../entities/Delivery.entity';
+import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
+import { Terminal } from '../../entities/Terminal.entity';
 import { DeliveryService } from './delivery.service';
 import { DeliveryController } from './delivery.controller';
 import { AuditModule } from '../audit/audit.module';
@@ -23,6 +29,12 @@ import { AuditModule } from '../audit/audit.module';
       Payment,
       PaymentMethod,
       ApprovalRequest,
+      DeliveryZone,
+      CourierAttendance,
+      CourierTerminalAssignment,
+      Delivery,
+      DeliveryEvent,
+      Terminal,
     ]),
     AuditModule,
   ],

@@ -132,6 +132,11 @@ import { Courier } from './entities/Courier.entity';
 import { DeliveryAssignment } from './entities/DeliveryAssignment.entity';
 import { CourierSettlement } from './entities/CourierSettlement.entity';
 import { CourierSettlementLine } from './entities/CourierSettlementLine.entity';
+import { DeliveryZone } from './entities/DeliveryZone.entity';
+import { CourierAttendance } from './entities/CourierAttendance.entity';
+import { CourierTerminalAssignment } from './entities/CourierTerminalAssignment.entity';
+import { Delivery } from './entities/Delivery.entity';
+import { DeliveryEvent } from './entities/DeliveryEvent.entity';
 import { CashierShift } from './entities/CashierShift.entity';
 import { CashMovement } from './entities/CashMovement.entity';
 import { BusinessDayClose } from './entities/BusinessDayClose.entity';
@@ -179,6 +184,7 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
           KitchenStation, KdsScreen, KdsRoutingRule, KitchenTicket, KitchenTicketItem, KdsEvent,
           Printer, PrinterDevice, PrinterGroup, PrinterGroupMember, PrintRoute, PrintJob, PrintAttempt,
           Courier, DeliveryAssignment, CourierSettlement, CourierSettlementLine,
+          DeliveryZone, CourierAttendance, CourierTerminalAssignment, Delivery, DeliveryEvent,
           CashierShift, CashMovement, BusinessDayClose, CashDrawerShift, CashDrawerTransaction,
           InventoryItem, InventoryTransaction, IntegrationLog,
           OfflineQueueItem, SyncConflictRecord,

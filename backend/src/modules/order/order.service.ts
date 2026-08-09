@@ -24,6 +24,7 @@ import { AuditWriter } from '../audit/audit-writer.service';
 import { OutboxWriter } from '../outbox/outbox-writer.service';
 import { KdsService } from '../kds/kds.service';
 import { PrintQueueService } from '../printing/print-queue.service';
+import { DeliveryService } from '../delivery/delivery.service';
 import Decimal from 'decimal.js';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { DiningTable } from '../../entities/DiningTable.entity';
@@ -73,6 +74,7 @@ export class OrderService {
     private readonly dataSource: DataSource,
     @Optional() private readonly kdsService?: KdsService,
     @Optional() private readonly printQueueService?: PrintQueueService,
+    @Optional() private readonly deliveryService?: DeliveryService,
   ) {}
 
   async getOrders(tenantId: string, query: any) {
@@ -408,6 +410,14 @@ export class OrderService {
         await this.printQueueService.enqueueOrderPrintJobs(tenantId, id, 'KITCHEN_TICKET', false, undefined, userId);
       } catch (e) {
         // Printing side effect error must not fail submit
+      }
+    }
+
+    if (this.deliveryService && res && res.order_type === 'DELIVERY') {
+      try {
+        await this.deliveryService.createDeliveryForOrder(tenantId, id);
+      } catch (e) {
+        // Delivery side effect error must not fail submit
       }
     }
 

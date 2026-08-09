@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, Not } from 'typeorm';
 import { Courier } from '../../entities/Courier.entity';
 import { DeliveryAssignment } from '../../entities/DeliveryAssignment.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
@@ -9,6 +9,12 @@ import { CourierSettlementLine } from '../../entities/CourierSettlementLine.enti
 import { Payment } from '../../entities/Payment.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { ApprovalRequest } from '../../entities/ApprovalRequest.entity';
+import { DeliveryZone } from '../../entities/DeliveryZone.entity';
+import { CourierAttendance } from '../../entities/CourierAttendance.entity';
+import { CourierTerminalAssignment } from '../../entities/CourierTerminalAssignment.entity';
+import { Delivery, DeliveryState } from '../../entities/Delivery.entity';
+import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
+import { Terminal } from '../../entities/Terminal.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 
 @Injectable()
@@ -22,19 +28,98 @@ export class DeliveryService {
     @InjectRepository(Payment) private readonly paymentRepo: Repository<Payment>,
     @InjectRepository(PaymentMethod) private readonly paymentMethodRepo: Repository<PaymentMethod>,
     @InjectRepository(ApprovalRequest) private readonly approvalRepo: Repository<ApprovalRequest>,
+    @InjectRepository(DeliveryZone) private readonly zoneRepo: Repository<DeliveryZone>,
+    @InjectRepository(CourierAttendance) private readonly attendanceRepo: Repository<CourierAttendance>,
+    @InjectRepository(CourierTerminalAssignment) private readonly terminalAssignRepo: Repository<CourierTerminalAssignment>,
+    @InjectRepository(Delivery) private readonly deliveryRepo: Repository<Delivery>,
+    @InjectRepository(DeliveryEvent) private readonly deliveryEventRepo: Repository<DeliveryEvent>,
+    @InjectRepository(Terminal) private readonly terminalRepo: Repository<Terminal>,
     private readonly auditWriter: AuditWriter,
   ) {}
 
+  // --- 1. DELIVERY ZONES ---
+  async getZones(tenantId: string, branchId?: string) {
+    const where: any = { tenant_id: tenantId, is_active: true };
+    if (branchId) where.branch_id = branchId;
+    return await this.zoneRepo.find({ where, order: { name: 'ASC' } });
+  }
+
+  async createZone(tenantId: string, data: { branch_id: string; code: string; name: string; fee?: number; estimated_minutes?: number; polygon?: any; postal_prefixes?: string[] }) {
+    const existing = await this.zoneRepo.findOne({ where: { tenant_id: tenantId, branch_id: data.branch_id, code: data.code.toUpperCase() } });
+    if (existing) throw new ConflictException(`Delivery zone code ${data.code} already exists for this branch`);
+
+    const zone = this.zoneRepo.create({
+      tenant_id: tenantId,
+      branch_id: data.branch_id,
+      code: data.code.toUpperCase(),
+      name: data.name,
+      fee: (data.fee || 0).toFixed(4),
+      estimated_minutes: data.estimated_minutes || 30,
+      polygon: data.polygon || null,
+      postal_prefixes: data.postal_prefixes || null,
+      is_active: true,
+    });
+    const saved = await this.zoneRepo.save(zone);
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'DELIVERY_ZONE_CREATED',
+      correlationId: 'corr-zone-create',
+      afterData: saved,
+    });
+    return saved;
+  }
+
+  async deleteZone(tenantId: string, id: string) {
+    const zone = await this.zoneRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!zone) throw new NotFoundException('Delivery zone not found');
+
+    await this.zoneRepo.softDelete(id);
+    return { success: true };
+  }
+
+  // --- 2. COURIERS & ATTENDANCE ---
   async getCouriers(tenantId: string, branchId?: string) {
     const where: any = { tenant_id: tenantId, is_active: true };
     if (branchId) where.branch_id = branchId;
-    return await this.courierRepo.find({ where, order: { name: 'ASC' } });
+    const couriers = await this.courierRepo.find({ where, order: { name: 'ASC' } });
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const enriched = [];
+
+    for (const c of couriers) {
+      const attendance = await this.attendanceRepo.findOne({
+        where: { tenant_id: tenantId, courier_id: c.id, date: todayStr },
+        order: { created_at: 'DESC' },
+      });
+      const terminalAssign = await this.terminalAssignRepo.findOne({
+        where: { tenant_id: tenantId, courier_id: c.id, is_active: true },
+      });
+      const activeDeliveryCount = await this.deliveryRepo.count({
+        where: { tenant_id: tenantId, courier_id: c.id, state: In(['ASSIGNED', 'PICKED_UP', 'EN_ROUTE']) },
+      });
+
+      let terminalName = null;
+      if (terminalAssign) {
+        const term = await this.terminalRepo.findOne({ where: { id: terminalAssign.terminal_id } });
+        if (term) terminalName = term.name || term.code;
+      }
+
+      enriched.push({
+        ...c,
+        attendance: attendance || { status: 'CHECKED_OUT', availability_status: 'OFF_LINE' },
+        active_terminal: terminalAssign ? { ...terminalAssign, terminal_name: terminalName } : null,
+        active_delivery_count: activeDeliveryCount,
+      });
+    }
+
+    return enriched;
   }
 
   async createCourier(
     tenantId: string,
-    data: { branch_id?: string; code: string; name: string; phone?: string; vehicle_type?: string },
-    correlationId: string,
+    data: { branch_id?: string; code: string; name: string; phone?: string; vehicle_type?: string; compensation_per_delivery?: number },
+    correlationId: string = 'corr-courier-create',
   ) {
     const courier = this.courierRepo.create({
       tenant_id: tenantId,
@@ -43,6 +128,7 @@ export class DeliveryService {
       name: data.name,
       phone: data.phone || null,
       vehicle_type: data.vehicle_type || 'MOTORCYCLE',
+      compensation_per_delivery: (data.compensation_per_delivery || 0).toFixed(4),
       status: 'AVAILABLE',
       is_active: true,
     });
@@ -73,121 +159,381 @@ export class DeliveryService {
     return saved;
   }
 
-  async assignOrder(
+  async recordAttendance(
     tenantId: string,
-    orderId: string,
-    courierId: string,
-    deliveryFee?: number,
-    tipAmount?: number,
-    correlationId?: string,
+    data: { courier_id: string; branch_id: string; status: 'CHECKED_IN' | 'CHECKED_OUT' | 'PAUSED'; availability_status?: 'AVAILABLE' | 'BUSY' | 'OFF_LINE' },
   ) {
-    const order = await this.orderRepo.findOne({ where: { id: orderId, tenant_id: tenantId } });
-    if (!order) throw new NotFoundException('Order not found');
-
-    const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
+    const courier = await this.courierRepo.findOne({ where: { id: data.courier_id, tenant_id: tenantId } });
     if (!courier) throw new NotFoundException('Courier not found');
-    if (courier.status === 'INACTIVE') throw new BadRequestException('Courier is inactive');
 
-    const assignment = this.assignmentRepo.create({
-      tenant_id: tenantId,
-      order_id: orderId,
-      courier_id: courierId,
-      status: 'ASSIGNED',
-      assigned_at: new Date(),
-      delivery_fee: (deliveryFee || 0).toFixed(2),
-      tip_amount: (tipAmount || 0).toFixed(2),
-      is_settled: false,
-    });
-    const savedAssignment = await this.assignmentRepo.save(assignment);
-
-    courier.status = 'ON_DELIVERY';
-    await this.courierRepo.save(courier);
-
-    order.fulfillment_status = 'OUT_FOR_DELIVERY';
-    await this.orderRepo.save(order);
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'DELIVERY_ORDER_ASSIGNED',
-      correlationId: correlationId || 'corr-assign',
-      afterData: savedAssignment,
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let attendance = await this.attendanceRepo.findOne({
+      where: { tenant_id: tenantId, courier_id: data.courier_id, date: todayStr },
     });
 
-    return savedAssignment;
-  }
-
-  async getAssignments(tenantId: string, branchId?: string, statusFilter?: string) {
-    const where: any = { tenant_id: tenantId };
-    if (statusFilter) where.status = statusFilter;
-
-    const assignments = await this.assignmentRepo.find({ where, order: { created_at: 'DESC' } });
-    const result = [];
-
-    for (const a of assignments) {
-      const courier = await this.courierRepo.findOne({ where: { id: a.courier_id } });
-      const order = await this.orderRepo.findOne({ where: { id: a.order_id } });
-
-      result.push({
-        ...a,
-        courier_name: courier ? courier.name : 'Unknown Courier',
-        courier_phone: courier ? courier.phone : '',
-        courier_vehicle: courier ? courier.vehicle_type : 'MOTORCYCLE',
-        order_number: order ? order.order_number : 'ORD-00',
-        customer_name: order ? (order as any).customer_name || 'Guest Customer' : 'Guest Customer',
-        customer_phone: order ? (order as any).customer_phone || '' : '',
-        delivery_address: order ? (order as any).delivery_address || 'Standard Address' : 'Standard Address',
-        order_total: order ? order.total_amount : '0.00',
+    if (!attendance) {
+      attendance = this.attendanceRepo.create({
+        tenant_id: tenantId,
+        courier_id: data.courier_id,
+        branch_id: data.branch_id || courier.branch_id || '00000000-0000-0000-0000-000000000000',
+        date: todayStr,
+        status: data.status,
+        availability_status: data.availability_status || (data.status === 'CHECKED_IN' ? 'AVAILABLE' : 'OFF_LINE'),
+        checked_in_at: new Date(),
       });
-    }
-
-    return result;
-  }
-
-  async updateAssignmentStatus(
-    tenantId: string,
-    assignmentId: string,
-    status: 'ASSIGNED' | 'PICKED_UP' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'FAILED' | 'RETURNED',
-    failureReason?: string,
-    correlationId?: string,
-  ) {
-    const assignment = await this.assignmentRepo.findOne({ where: { id: assignmentId, tenant_id: tenantId } });
-    if (!assignment) throw new NotFoundException('Delivery assignment not found');
-
-    assignment.status = status;
-    if (status === 'PICKED_UP') assignment.picked_up_at = new Date();
-    if (status === 'DELIVERED') assignment.delivered_at = new Date();
-    if (status === 'FAILED' || status === 'RETURNED') assignment.failure_reason = failureReason || 'Undelivered';
-
-    const saved = await this.assignmentRepo.save(assignment);
-
-    if (['DELIVERED', 'FAILED', 'RETURNED'].includes(status)) {
-      const courier = await this.courierRepo.findOne({ where: { id: assignment.courier_id } });
-      if (courier) {
-        courier.status = 'AVAILABLE';
-        await this.courierRepo.save(courier);
+    } else {
+      attendance.status = data.status;
+      if (data.availability_status) {
+        attendance.availability_status = data.availability_status;
+      } else if (data.status === 'CHECKED_OUT') {
+        attendance.availability_status = 'OFF_LINE';
+        attendance.checked_out_at = new Date();
       }
     }
 
-    const order = await this.orderRepo.findOne({ where: { id: assignment.order_id } });
-    if (order) {
-      if (status === 'DELIVERED') order.fulfillment_status = 'DELIVERED';
-      if (status === 'FAILED') order.fulfillment_status = 'CANCELLED';
-      await this.orderRepo.save(order);
-    }
+    const saved = await this.attendanceRepo.save(attendance);
+
+    courier.status = data.status === 'CHECKED_IN' ? 'AVAILABLE' : 'INACTIVE';
+    await this.courierRepo.save(courier);
 
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
-      action: 'DELIVERY_STATUS_UPDATED',
-      correlationId: correlationId || 'corr-delivery-status',
+      action: 'COURIER_ATTENDANCE_UPDATED',
+      correlationId: 'corr-courier-attendance',
       afterData: saved,
     });
 
     return saved;
   }
 
-  // --- SLICE 17: COURIER SETTLEMENT LOGIC ---
+  async setCourierAvailability(tenantId: string, courierId: string, availabilityStatus: 'AVAILABLE' | 'BUSY' | 'OFF_LINE') {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let attendance = await this.attendanceRepo.findOne({
+      where: { tenant_id: tenantId, courier_id: courierId, date: todayStr },
+    });
+
+    if (!attendance) {
+      throw new BadRequestException('Courier is not checked in today. Please check in first.');
+    }
+
+    attendance.availability_status = availabilityStatus;
+    const saved = await this.attendanceRepo.save(attendance);
+    return saved;
+  }
+
+  // --- 3. MOBILE TERMINAL ASSIGNMENT ---
+  async assignMobileTerminal(tenantId: string, courierId: string, terminalId: string) {
+    const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
+    if (!courier) throw new NotFoundException('Courier not found');
+
+    const terminal = await this.terminalRepo.findOne({ where: { id: terminalId, tenant_id: tenantId } });
+    if (!terminal) throw new NotFoundException('Terminal not found');
+
+    const existingTerminalAssign = await this.terminalAssignRepo.findOne({
+      where: { tenant_id: tenantId, terminal_id: terminalId, is_active: true, courier_id: Not(courierId) },
+    });
+    if (existingTerminalAssign) {
+      throw new BadRequestException(`Mobile POS terminal ${terminal.name || terminal.code} is already assigned to another active courier`);
+    }
+
+    const activeAssigns = await this.terminalAssignRepo.find({
+      where: { tenant_id: tenantId, courier_id: courierId, is_active: true },
+    });
+    for (const a of activeAssigns) {
+      a.is_active = false;
+      a.unassigned_at = new Date();
+      await this.terminalAssignRepo.save(a);
+    }
+
+    const newAssign = this.terminalAssignRepo.create({
+      tenant_id: tenantId,
+      courier_id: courierId,
+      terminal_id: terminalId,
+      assigned_at: new Date(),
+      is_active: true,
+    });
+    const saved = await this.terminalAssignRepo.save(newAssign);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'COURIER_TERMINAL_ASSIGNED',
+      correlationId: 'corr-terminal-assign',
+      afterData: saved,
+    });
+
+    return saved;
+  }
+
+  async unassignMobileTerminal(tenantId: string, courierId: string) {
+    const activeAssigns = await this.terminalAssignRepo.find({
+      where: { tenant_id: tenantId, courier_id: courierId, is_active: true },
+    });
+    for (const a of activeAssigns) {
+      a.is_active = false;
+      a.unassigned_at = new Date();
+      await this.terminalAssignRepo.save(a);
+    }
+    return { success: true };
+  }
+
+  // --- 4. DELIVERY EXECUTION & STATE MACHINE ---
+  async createDeliveryForOrder(tenantId: string, orderId: string, zoneId?: string, addressSnapshot?: any) {
+    const existing = await this.deliveryRepo.findOne({ where: { tenant_id: tenantId, order_id: orderId } });
+    if (existing) return existing;
+
+    const order = await this.orderRepo.findOne({ where: { id: orderId, tenant_id: tenantId } });
+    if (!order) throw new NotFoundException(`Order ${orderId} not found`);
+
+    let zoneFee = '0.0000';
+    if (zoneId) {
+      const zone = await this.zoneRepo.findOne({ where: { id: zoneId, tenant_id: tenantId } });
+      if (zone) zoneFee = zone.fee;
+    }
+
+    const delivery = this.deliveryRepo.create({
+      tenant_id: tenantId,
+      order_id: orderId,
+      zone_id: zoneId || null,
+      state: 'UNASSIGNED',
+      fee: zoneFee || order.delivery_fee || '0.0000',
+      currency_code: order.currency_code || 'IRR',
+      address_snapshot: addressSnapshot || { street: 'Main St', recipient_name: 'Customer' },
+    });
+    const saved = await this.deliveryRepo.save(delivery);
+
+    await this.logDeliveryEvent(tenantId, saved.id, 'NONE', 'UNASSIGNED', 'Delivery order submitted');
+    return saved;
+  }
+
+  async assignCourier(tenantId: string, deliveryId: string, courierId: string, userId?: string) {
+    const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId, tenant_id: tenantId } });
+    if (!delivery) throw new NotFoundException('Delivery not found');
+
+    const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
+    if (!courier) throw new NotFoundException('Courier not found');
+    if (!courier.is_active) throw new BadRequestException('Courier profile is inactive');
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const attendance = await this.attendanceRepo.findOne({
+      where: { tenant_id: tenantId, courier_id: courierId, date: todayStr },
+    });
+    if (!attendance || attendance.status !== 'CHECKED_IN') {
+      throw new BadRequestException(`Courier ${courier.name} is not checked in today`);
+    }
+
+    if (attendance.availability_status !== 'AVAILABLE') {
+      throw new BadRequestException(`Courier ${courier.name} is currently ${attendance.availability_status}`);
+    }
+
+    const activeCount = await this.deliveryRepo.count({
+      where: { tenant_id: tenantId, courier_id: courierId, state: In(['ASSIGNED', 'PICKED_UP', 'EN_ROUTE']) },
+    });
+    if (activeCount >= 5) {
+      throw new BadRequestException(`Courier ${courier.name} has reached maximum active delivery capacity (5)`);
+    }
+
+    const fromState = delivery.state;
+    delivery.courier_id = courierId;
+    delivery.state = 'ASSIGNED';
+    delivery.assigned_at = new Date();
+
+    const saved = await this.deliveryRepo.save(delivery);
+    await this.logDeliveryEvent(tenantId, saved.id, fromState, 'ASSIGNED', `Assigned to ${courier.name}`, userId);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: userId ? 'ADMIN' : 'SYSTEM',
+      actorId: userId,
+      action: 'DELIVERY_COURIER_ASSIGNED',
+      correlationId: 'corr-assign-courier',
+      details: { deliveryId, courierId, courierName: courier.name },
+    });
+
+    return saved;
+  }
+
+  async departDelivery(tenantId: string, deliveryId: string, userId?: string) {
+    const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId, tenant_id: tenantId } });
+    if (!delivery) throw new NotFoundException('Delivery not found');
+
+    const fromState = delivery.state;
+    delivery.state = 'EN_ROUTE';
+    delivery.picked_up_at = new Date();
+
+    const saved = await this.deliveryRepo.save(delivery);
+    await this.logDeliveryEvent(tenantId, saved.id, fromState, 'EN_ROUTE', 'Courier departed with delivery package', userId);
+
+    const order = await this.orderRepo.findOne({ where: { id: delivery.order_id, tenant_id: tenantId } });
+    if (order) {
+      order.state = 'OUT_FOR_DELIVERY';
+      order.status = 'OUT_FOR_DELIVERY';
+      order.fulfillment_status = 'OUT_FOR_DELIVERY';
+      await this.orderRepo.save(order);
+    }
+
+    return saved;
+  }
+
+  async completeDelivery(tenantId: string, deliveryId: string, data?: { cashCollected?: number; posAmount?: number }, userId?: string) {
+    const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId, tenant_id: tenantId } });
+    if (!delivery) throw new NotFoundException('Delivery not found');
+
+    const fromState = delivery.state;
+    delivery.state = 'DELIVERED';
+    delivery.delivered_at = new Date();
+
+    const payments = await this.paymentRepo.find({ where: { order_id: delivery.order_id, tenant_id: tenantId } });
+    let cashExp = 0;
+    let posExp = 0;
+
+    for (const p of payments) {
+      if ((p as any).payment_method_code === 'CASH') {
+        cashExp += parseFloat(p.amount || '0');
+      } else {
+        posExp += parseFloat(p.amount || '0');
+      }
+    }
+
+    if (data?.cashCollected !== undefined) cashExp = data.cashCollected;
+    if (data?.posAmount !== undefined) posExp = data.posAmount;
+
+    delivery.cash_expected = cashExp.toFixed(4);
+    delivery.mobile_pos_expected = posExp.toFixed(4);
+
+    if (delivery.courier_id) {
+      const courier = await this.courierRepo.findOne({ where: { id: delivery.courier_id } });
+      if (courier) {
+        delivery.compensation_amount = courier.compensation_per_delivery || '0.0000';
+      }
+    }
+
+    const saved = await this.deliveryRepo.save(delivery);
+    await this.logDeliveryEvent(tenantId, saved.id, fromState, 'DELIVERED', 'Delivery successfully completed', userId);
+
+    const order = await this.orderRepo.findOne({ where: { id: delivery.order_id, tenant_id: tenantId } });
+    if (order) {
+      order.state = 'COMPLETED';
+      order.status = 'COMPLETED';
+      order.fulfillment_status = 'DELIVERED';
+      order.completed_at = new Date();
+      await this.orderRepo.save(order);
+    }
+
+    return saved;
+  }
+
+  async failDelivery(tenantId: string, deliveryId: string, reason: string, userId?: string) {
+    const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId, tenant_id: tenantId } });
+    if (!delivery) throw new NotFoundException('Delivery not found');
+
+    const fromState = delivery.state;
+    delivery.state = 'FAILED';
+    delivery.failure_reason = reason || 'Delivery attempt failed';
+
+    const saved = await this.deliveryRepo.save(delivery);
+    await this.logDeliveryEvent(tenantId, saved.id, fromState, 'FAILED', `Delivery failed: ${reason}`, userId);
+
+    const order = await this.orderRepo.findOne({ where: { id: delivery.order_id, tenant_id: tenantId } });
+    if (order) {
+      order.state = 'READY';
+      order.status = 'READY';
+      await this.orderRepo.save(order);
+    }
+
+    return saved;
+  }
+
+  async requeueDelivery(tenantId: string, deliveryId: string, userId?: string) {
+    const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId, tenant_id: tenantId } });
+    if (!delivery) throw new NotFoundException('Delivery not found');
+
+    const fromState = delivery.state;
+    delivery.state = 'UNASSIGNED';
+    delivery.courier_id = null;
+    delivery.failure_reason = null;
+
+    const saved = await this.deliveryRepo.save(delivery);
+    await this.logDeliveryEvent(tenantId, saved.id, fromState, 'UNASSIGNED', 'Delivery requeued for dispatch', userId);
+    return saved;
+  }
+
+  async getDeliveries(tenantId: string, branchId?: string, state?: string) {
+    const where: any = { tenant_id: tenantId };
+    if (state) where.state = state;
+
+    const deliveries = await this.deliveryRepo.find({ where, order: { created_at: 'DESC' } });
+    const result = [];
+
+    for (const d of deliveries) {
+      const order = await this.orderRepo.findOne({ where: { id: d.order_id } });
+      const courier = d.courier_id ? await this.courierRepo.findOne({ where: { id: d.courier_id } }) : null;
+      const zone = d.zone_id ? await this.zoneRepo.findOne({ where: { id: d.zone_id } }) : null;
+
+      result.push({
+        ...d,
+        order_number: order ? order.order_number : 'ORD-00',
+        grand_total: order ? order.grand_total : '0.0000',
+        customer_name: order ? (order as any).customer_name || 'Customer' : 'Customer',
+        courier_name: courier ? courier.name : 'Unassigned',
+        courier_phone: courier ? courier.phone : '',
+        zone_name: zone ? zone.name : 'Default Zone',
+      });
+    }
+
+    return result;
+  }
+
+  async getDeliveryEvents(tenantId: string, deliveryId: string) {
+    return await this.deliveryEventRepo.find({
+      where: { tenant_id: tenantId, delivery_id: deliveryId },
+      order: { occurred_at: 'ASC' },
+    });
+  }
+
+  private async logDeliveryEvent(tenantId: string, deliveryId: string, fromState: string, toState: string, reason?: string, userId?: string) {
+    const event = this.deliveryEventRepo.create({
+      tenant_id: tenantId,
+      delivery_id: deliveryId,
+      from_state: fromState,
+      to_state: toState,
+      reason: reason || null,
+      occurred_by: userId || null,
+    });
+    await this.deliveryEventRepo.save(event);
+  }
+
+  // --- LEGACY ASSIGNMENT BACKWARDS COMPATIBILITY & COURIER SETTLEMENTS ---
+  async assignOrder(tenantId: string, orderId: string, courierId: string, deliveryFee?: number, tipAmount?: number, correlationId?: string) {
+    let delivery = await this.deliveryRepo.findOne({ where: { tenant_id: tenantId, order_id: orderId } });
+    if (!delivery) {
+      delivery = await this.createDeliveryForOrder(tenantId, orderId);
+    }
+    return await this.assignCourier(tenantId, delivery.id, courierId);
+  }
+
+  async getAssignments(tenantId: string, branchId?: string, statusFilter?: string) {
+    return await this.getDeliveries(tenantId, branchId, statusFilter);
+  }
+
+  async updateAssignmentStatus(tenantId: string, assignmentId: string, status: string, failureReason?: string, correlationId?: string) {
+    if (status === 'EN_ROUTE' || status === 'PICKED_UP') {
+      return await this.departDelivery(tenantId, assignmentId);
+    }
+    if (status === 'DELIVERED') {
+      return await this.completeDelivery(tenantId, assignmentId);
+    }
+    if (status === 'FAILED') {
+      return await this.failDelivery(tenantId, assignmentId, failureReason || 'Failed');
+    }
+    const delivery = await this.deliveryRepo.findOne({ where: { id: assignmentId, tenant_id: tenantId } });
+    if (delivery) {
+      delivery.state = status as any;
+      return await this.deliveryRepo.save(delivery);
+    }
+    throw new NotFoundException('Delivery not found');
+  }
 
   private async calculatePaymentBreakdown(orderId: string, defaultTotal: number) {
     const payments = await this.paymentRepo.find({ where: { order_id: orderId, status: In(['SUCCEEDED', 'COMPLETED']) as any } });
@@ -226,37 +572,35 @@ export class DeliveryService {
     const summary = [];
 
     for (const courier of couriers) {
-      const unsettledAssignments = await this.assignmentRepo.find({
+      const unsettledDeliveries = await this.deliveryRepo.find({
         where: {
           tenant_id: tenantId,
           courier_id: courier.id,
-          is_settled: false,
-          status: In(['DELIVERED', 'FAILED', 'RETURNED']),
+          state: 'DELIVERED',
         },
       });
 
       let totalExpectedCash = 0;
       let totalExpectedPos = 0;
       let totalDeliveryFees = 0;
+      let totalCompensation = 0;
 
-      for (const a of unsettledAssignments) {
-        totalDeliveryFees += parseFloat(a.delivery_fee || '0');
-        const order = await this.orderRepo.findOne({ where: { id: a.order_id } });
-        const defaultTotal = parseFloat(order?.total_amount || '0');
-        const breakdown = await this.calculatePaymentBreakdown(a.order_id, defaultTotal);
-
-        totalExpectedCash += breakdown.expCash;
-        totalExpectedPos += breakdown.expPos;
+      for (const d of unsettledDeliveries) {
+        totalDeliveryFees += parseFloat(d.fee || '0');
+        totalExpectedCash += parseFloat(d.cash_expected || '0');
+        totalExpectedPos += parseFloat(d.mobile_pos_expected || '0');
+        totalCompensation += parseFloat(d.compensation_amount || '0');
       }
 
       summary.push({
         courier_id: courier.id,
         courier_name: courier.name,
-        courier_code: courier.code,
-        unsettled_count: unsettledAssignments.length,
-        expected_cash: totalExpectedCash.toFixed(2),
-        expected_pos: totalExpectedPos.toFixed(2),
-        total_delivery_fees: totalDeliveryFees.toFixed(2),
+        unsettled_orders_count: unsettledDeliveries.length,
+        total_delivery_fees: totalDeliveryFees.toFixed(4),
+        total_expected_cash: totalExpectedCash.toFixed(4),
+        total_expected_pos: totalExpectedPos.toFixed(4),
+        total_compensation: totalCompensation.toFixed(4),
+        net_due_amount: (totalExpectedCash + totalExpectedPos - totalCompensation).toFixed(4),
       });
     }
 
@@ -267,140 +611,98 @@ export class DeliveryService {
     const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
     if (!courier) throw new NotFoundException('Courier not found');
 
-    let assignments: DeliveryAssignment[];
+    const where: any = {
+      tenant_id: tenantId,
+      courier_id: courierId,
+      status: In(['DELIVERED', 'FAILED', 'RETURNED']),
+    };
     if (assignmentIds && assignmentIds.length > 0) {
-      assignments = await this.assignmentRepo.find({
-        where: { tenant_id: tenantId, courier_id: courierId, id: In(assignmentIds) },
-      });
-    } else {
-      assignments = await this.assignmentRepo.find({
-        where: {
-          tenant_id: tenantId,
-          courier_id: courierId,
-          is_settled: false,
-          status: In(['DELIVERED', 'FAILED', 'RETURNED']),
-        },
-      });
+      where.id = In(assignmentIds);
     }
 
+    const assignments = await this.assignmentRepo.find({ where });
     for (const a of assignments) {
       if (a.is_settled) {
         throw new ConflictException(`Assignment ${a.id} is already settled`);
       }
-      const existingLine = await this.settlementLineRepo.findOne({
-        where: { delivery_assignment_id: a.id },
-      });
-      if (existingLine) {
-        const batch = await this.settlementRepo.findOne({ where: { id: existingLine.settlement_id } });
-        if (batch && batch.status !== 'REVERSED') {
-          throw new ConflictException(`Assignment ${a.id} is already linked to non-reversed settlement ${batch.settlement_number}`);
-        }
-      }
     }
 
-    const lines = [];
-    let expectedCashSum = 0;
-    let expectedPosSum = 0;
-    let deliveryFeesSum = 0;
+    let expCash = 0;
+    let expPos = 0;
+    let totalFee = 0;
 
     for (const a of assignments) {
+      totalFee += parseFloat(a.delivery_fee || '0');
       const order = await this.orderRepo.findOne({ where: { id: a.order_id } });
-      const defaultTotal = parseFloat(order?.total_amount || '0');
-      const breakdown = await this.calculatePaymentBreakdown(a.order_id, defaultTotal);
+      const breakdown = await this.calculatePaymentBreakdown(a.order_id, parseFloat(order?.total_amount || '0'));
+      expCash += breakdown.expCash;
+      expPos += breakdown.expPos;
+    }
 
-      expectedCashSum += breakdown.expCash;
-      expectedPosSum += breakdown.expPos;
-      deliveryFeesSum += parseFloat(a.delivery_fee || '0');
+    return {
+      courier_id: courierId,
+      courier_name: courier.name,
+      line_count: assignments.length,
+      expected_cash_amount: expCash.toFixed(2),
+      expected_pos_amount: expPos.toFixed(2),
+      total_delivery_fees: totalFee.toFixed(2),
+      net_settlement_amount: (expCash + expPos).toFixed(2),
+      assignment_ids: assignments.map((a) => a.id),
+    };
+  }
 
-      lines.push({
-        delivery_assignment_id: a.id,
-        order_id: a.order_id,
-        order_number: order?.order_number || 'ORD-UNKNOWN',
-        delivery_status: a.status,
+  async createSettlement(tenantId: string, userId: string, data: { courier_id: string; branch_id?: string; assignment_ids?: string[]; notes?: string }, correlationId?: string) {
+    const preview = await this.previewSettlement(tenantId, data.courier_id, data.assignment_ids);
+    const courier = await this.courierRepo.findOne({ where: { id: data.courier_id } });
+
+    const settlementNumber = `SET-${Date.now().toString().slice(-6)}`;
+
+    const settlement = this.settlementRepo.create({
+      tenant_id: tenantId,
+      branch_id: data.branch_id || courier?.branch_id || '00000000-0000-0000-0000-000000000000',
+      courier_id: data.courier_id,
+      settlement_number: settlementNumber,
+      settlement_date: new Date(),
+      status: 'DRAFT',
+      expected_cash_amount: preview.expected_cash_amount,
+      actual_cash_amount: preview.expected_cash_amount,
+      expected_pos_amount: preview.expected_pos_amount,
+      actual_pos_amount: preview.expected_pos_amount,
+      cash_discrepancy_amount: '0.00',
+      pos_discrepancy_amount: '0.00',
+      total_compensation_amount: '0.00',
+      total_adjustment_amount: '0.00',
+      net_settlement_amount: preview.net_settlement_amount,
+      created_by_user_id: userId,
+      notes: data.notes || null,
+    });
+
+    const savedSettlement = await this.settlementRepo.save(settlement);
+    const lines = [];
+
+    for (const asgnId of preview.assignment_ids) {
+      const asgn = await this.assignmentRepo.findOne({ where: { id: asgnId } });
+      if (!asgn) continue;
+
+      const order = await this.orderRepo.findOne({ where: { id: asgn.order_id } });
+      const breakdown = await this.calculatePaymentBreakdown(asgn.order_id, parseFloat(order?.total_amount || '0'));
+
+      const line = this.settlementLineRepo.create({
+        settlement_id: savedSettlement.id,
+        delivery_assignment_id: asgn.id,
+        order_id: asgn.order_id,
+        order_number: order?.order_number || 'ORD-00',
+        delivery_status: asgn.status || 'DELIVERED',
         payment_method_code: breakdown.primaryMethod,
         expected_cash: breakdown.expCash.toFixed(2),
         actual_cash: breakdown.expCash.toFixed(2),
         expected_pos: breakdown.expPos.toFixed(2),
         actual_pos: breakdown.expPos.toFixed(2),
+        delivery_fee_amount: asgn.delivery_fee || '0.00',
         receipt_verified: true,
-        delivery_fee_amount: parseFloat(a.delivery_fee || '0').toFixed(2),
-        commission_amount: '0.00',
-        notes: null,
       });
-    }
-
-    return {
-      courier_id: courier.id,
-      courier_name: courier.name,
-      courier_code: courier.code,
-      line_count: lines.length,
-      expected_cash_amount: expectedCashSum.toFixed(2),
-      actual_cash_amount: expectedCashSum.toFixed(2),
-      cash_discrepancy_amount: '0.00',
-      expected_pos_amount: expectedPosSum.toFixed(2),
-      actual_pos_amount: expectedPosSum.toFixed(2),
-      pos_discrepancy_amount: '0.00',
-      total_compensation_amount: '0.00',
-      total_adjustment_amount: '0.00',
-      net_settlement_amount: (expectedCashSum + expectedPosSum).toFixed(2),
-      lines,
-    };
-  }
-
-  async createSettlement(
-    tenantId: string,
-    userId: string,
-    data: { courier_id: string; branch_id?: string; assignment_ids?: string[]; notes?: string },
-    correlationId?: string,
-  ) {
-    const preview = await this.previewSettlement(tenantId, data.courier_id, data.assignment_ids);
-    if (preview.lines.length === 0) {
-      throw new BadRequestException('No eligible unsettled delivery assignments for this courier');
-    }
-
-    const settleNum = `SETTLE-${Date.now().toString().slice(-6)}`;
-
-    const settlement = this.settlementRepo.create({
-      tenant_id: tenantId,
-      branch_id: data.branch_id || null,
-      courier_id: data.courier_id,
-      settlement_number: settleNum,
-      status: 'DRAFT',
-      settlement_date: new Date(),
-      expected_cash_amount: preview.expected_cash_amount,
-      actual_cash_amount: preview.actual_cash_amount,
-      cash_discrepancy_amount: '0.00',
-      expected_pos_amount: preview.expected_pos_amount,
-      actual_pos_amount: preview.actual_pos_amount,
-      pos_discrepancy_amount: '0.00',
-      total_compensation_amount: '0.00',
-      total_adjustment_amount: '0.00',
-      net_settlement_amount: preview.net_settlement_amount,
-      notes: data.notes || null,
-      created_by_user_id: userId || null,
-    });
-
-    const savedSettlement = await this.settlementRepo.save(settlement);
-
-    const createdLines = [];
-    for (const l of preview.lines) {
-      const line = this.settlementLineRepo.create({
-        settlement_id: savedSettlement.id,
-        delivery_assignment_id: l.delivery_assignment_id,
-        order_id: l.order_id,
-        order_number: l.order_number,
-        delivery_status: l.delivery_status,
-        payment_method_code: l.payment_method_code,
-        expected_cash: l.expected_cash,
-        actual_cash: l.actual_cash,
-        expected_pos: l.expected_pos,
-        actual_pos: l.actual_pos,
-        receipt_verified: true,
-        delivery_fee_amount: l.delivery_fee_amount,
-        commission_amount: '0.00',
-        notes: null,
-      });
-      createdLines.push(await this.settlementLineRepo.save(line));
+      const savedLine = await this.settlementLineRepo.save(line);
+      lines.push(savedLine);
     }
 
     await this.auditWriter.write({
@@ -408,109 +710,30 @@ export class DeliveryService {
       actorType: 'ADMIN',
       action: 'COURIER_SETTLEMENT_CREATED',
       correlationId: correlationId || 'corr-settle-create',
-      afterData: { settlement: savedSettlement, lineCount: createdLines.length },
+      afterData: savedSettlement,
     });
 
-    return { ...savedSettlement, lines: createdLines };
+    return { ...savedSettlement, lines };
   }
 
-  async getSettlements(tenantId: string, courierId?: string, status?: string, branchId?: string) {
-    const where: any = { tenant_id: tenantId };
-    if (courierId) where.courier_id = courierId;
-    if (status) where.status = status;
-    if (branchId) where.branch_id = branchId;
-
-    const settlements = await this.settlementRepo.find({ where, order: { created_at: 'DESC' } });
-    const result = [];
-
-    for (const s of settlements) {
-      const courier = await this.courierRepo.findOne({ where: { id: s.courier_id } });
-      const lineCount = await this.settlementLineRepo.count({ where: { settlement_id: s.id } });
-      result.push({
-        ...s,
-        courier_name: courier ? courier.name : 'Unknown Courier',
-        courier_code: courier ? courier.code : 'COURIER',
-        line_count: lineCount,
-      });
-    }
-
-    return result;
-  }
-
-  async getSettlementDetail(tenantId: string, settlementId: string) {
-    const settlement = await this.settlementRepo.findOne({ where: { id: settlementId, tenant_id: tenantId } });
+  async updateSettlement(tenantId: string, id: string, data: any, correlationId?: string) {
+    const settlement = await this.settlementRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!settlement) throw new NotFoundException('Settlement not found');
-
-    const courier = await this.courierRepo.findOne({ where: { id: settlement.courier_id } });
-    const lines = await this.settlementLineRepo.find({ where: { settlement_id: settlement.id }, order: { created_at: 'ASC' } });
-
-    return {
-      ...settlement,
-      courier_name: courier ? courier.name : 'Unknown Courier',
-      courier_code: courier ? courier.code : 'COURIER',
-      lines,
-    };
-  }
-
-  async updateSettlement(
-    tenantId: string,
-    settlementId: string,
-    data: {
-      actual_cash_amount?: number;
-      actual_pos_amount?: number;
-      total_compensation_amount?: number;
-      total_adjustment_amount?: number;
-      notes?: string;
-      lines?: Array<{ id: string; actual_cash?: number; actual_pos?: number; receipt_verified?: boolean; notes?: string }>;
-    },
-    correlationId?: string,
-  ) {
-    const settlement = await this.settlementRepo.findOne({ where: { id: settlementId, tenant_id: tenantId } });
-    if (!settlement) throw new NotFoundException('Settlement not found');
-    if (['CLOSED', 'REVERSED'].includes(settlement.status)) {
-      throw new BadRequestException(`Cannot update settlement in ${settlement.status} state`);
-    }
-
-    if (data.notes !== undefined) settlement.notes = data.notes;
-
-    if (data.lines && data.lines.length > 0) {
-      for (const lineUpdate of data.lines) {
-        const line = await this.settlementLineRepo.findOne({ where: { id: lineUpdate.id, settlement_id: settlement.id } });
-        if (line) {
-          if (lineUpdate.actual_cash !== undefined) line.actual_cash = lineUpdate.actual_cash.toFixed(2);
-          if (lineUpdate.actual_pos !== undefined) line.actual_pos = lineUpdate.actual_pos.toFixed(2);
-          if (lineUpdate.receipt_verified !== undefined) line.receipt_verified = lineUpdate.receipt_verified;
-          if (lineUpdate.notes !== undefined) line.notes = lineUpdate.notes;
-          await this.settlementLineRepo.save(line);
-        }
-      }
-    }
-
-    const lines = await this.settlementLineRepo.find({ where: { settlement_id: settlement.id } });
-    let sumActualCash = 0;
-    let sumActualPos = 0;
-    for (const l of lines) {
-      sumActualCash += parseFloat(l.actual_cash || '0');
-      sumActualPos += parseFloat(l.actual_pos || '0');
-    }
 
     if (data.actual_cash_amount !== undefined) {
-      settlement.actual_cash_amount = data.actual_cash_amount.toFixed(2);
-    } else {
-      settlement.actual_cash_amount = sumActualCash.toFixed(2);
+      settlement.actual_cash_amount = parseFloat(data.actual_cash_amount).toFixed(2);
     }
-
     if (data.actual_pos_amount !== undefined) {
-      settlement.actual_pos_amount = data.actual_pos_amount.toFixed(2);
-    } else {
-      settlement.actual_pos_amount = sumActualPos.toFixed(2);
+      settlement.actual_pos_amount = parseFloat(data.actual_pos_amount).toFixed(2);
     }
-
     if (data.total_compensation_amount !== undefined) {
-      settlement.total_compensation_amount = data.total_compensation_amount.toFixed(2);
+      settlement.total_compensation_amount = parseFloat(data.total_compensation_amount).toFixed(2);
     }
     if (data.total_adjustment_amount !== undefined) {
-      settlement.total_adjustment_amount = data.total_adjustment_amount.toFixed(2);
+      settlement.total_adjustment_amount = parseFloat(data.total_adjustment_amount).toFixed(2);
+    }
+    if (data.notes !== undefined) {
+      settlement.notes = data.notes;
     }
 
     const expCash = parseFloat(settlement.expected_cash_amount || '0');
@@ -522,10 +745,9 @@ export class DeliveryService {
 
     settlement.cash_discrepancy_amount = (actCash - expCash).toFixed(2);
     settlement.pos_discrepancy_amount = (actPos - expPos).toFixed(2);
-    settlement.net_settlement_amount = (actCash + actPos + comp - adj).toFixed(2);
+    settlement.net_settlement_amount = (actCash + actPos - comp + adj).toFixed(2);
 
     const saved = await this.settlementRepo.save(settlement);
-
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
@@ -534,66 +756,39 @@ export class DeliveryService {
       afterData: saved,
     });
 
-    return { ...saved, lines };
-  }
-
-  async reviewSettlement(tenantId: string, settlementId: string, userId: string, correlationId?: string) {
-    const settlement = await this.settlementRepo.findOne({ where: { id: settlementId, tenant_id: tenantId } });
-    if (!settlement) throw new NotFoundException('Settlement not found');
-    if (settlement.status !== 'DRAFT') {
-      throw new BadRequestException('Only DRAFT settlements can be moved to UNDER_REVIEW');
-    }
-
-    settlement.status = 'UNDER_REVIEW';
-    settlement.reviewed_by_user_id = userId || null;
-    const saved = await this.settlementRepo.save(settlement);
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'COURIER_SETTLEMENT_REVIEWED',
-      correlationId: correlationId || 'corr-settle-review',
-      afterData: saved,
-    });
-
     return saved;
   }
 
-  async closeSettlement(tenantId: string, settlementId: string, userId: string, approvalRequestId?: string, correlationId?: string) {
-    const settlement = await this.settlementRepo.findOne({ where: { id: settlementId, tenant_id: tenantId } });
+  async closeSettlement(tenantId: string, id: string, userId: string, correlationId?: string) {
+    const settlement = await this.settlementRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!settlement) throw new NotFoundException('Settlement not found');
-    if (['CLOSED', 'REVERSED'].includes(settlement.status)) {
-      throw new BadRequestException(`Settlement is already ${settlement.status}`);
-    }
 
     const cashDisc = parseFloat(settlement.cash_discrepancy_amount || '0');
     const posDisc = parseFloat(settlement.pos_discrepancy_amount || '0');
-    const hasDiscrepancy = Math.abs(cashDisc) > 0.01 || Math.abs(posDisc) > 0.01;
 
-    if (hasDiscrepancy && !approvalRequestId && !settlement.approval_request_id) {
-      const req = await this.approvalRepo.findOne({
-        where: { tenant_id: tenantId, entity_type: 'COURIER_SETTLEMENT', entity_id: settlement.id, status: 'APPROVED' },
+    if (cashDisc !== 0 || posDisc !== 0) {
+      const approval = await this.approvalRepo.findOne({
+        where: { tenant_id: tenantId, entity_type: 'CourierSettlement', entity_id: id, status: 'APPROVED' },
       });
-      if (!req) {
-        throw new BadRequestException('Settlement has cash/POS discrepancy and requires manager approval');
+      if (!approval) {
+        throw new BadRequestException('Settlement has discrepancy and requires explicit approval before closing');
       }
-      settlement.approval_request_id = req.id;
-    } else if (approvalRequestId) {
-      settlement.approval_request_id = approvalRequestId;
     }
 
     settlement.status = 'CLOSED';
     settlement.closed_at = new Date();
-    settlement.closed_by_user_id = userId || null;
-    const saved = await this.settlementRepo.save(settlement);
 
-    const lines = await this.settlementLineRepo.find({ where: { settlement_id: settlement.id } });
+    const saved = await this.settlementRepo.save(settlement);
+    const lines = await this.settlementLineRepo.find({ where: { settlement_id: id } });
+
     for (const l of lines) {
-      const assignment = await this.assignmentRepo.findOne({ where: { id: l.delivery_assignment_id } });
-      if (assignment) {
-        assignment.is_settled = true;
-        assignment.settlement_id = settlement.id;
-        await this.assignmentRepo.save(assignment);
+      if (l.delivery_assignment_id) {
+        const asgn = await this.assignmentRepo.findOne({ where: { id: l.delivery_assignment_id } });
+        if (asgn) {
+          asgn.is_settled = true;
+          asgn.settlement_id = id;
+          await this.assignmentRepo.save(asgn);
+        }
       }
     }
 
@@ -608,24 +803,23 @@ export class DeliveryService {
     return saved;
   }
 
-  async reverseSettlement(tenantId: string, settlementId: string, userId: string, reason?: string, correlationId?: string) {
-    const settlement = await this.settlementRepo.findOne({ where: { id: settlementId, tenant_id: tenantId } });
+  async reverseSettlement(tenantId: string, id: string, userId: string, reason?: string, correlationId?: string) {
+    const settlement = await this.settlementRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!settlement) throw new NotFoundException('Settlement not found');
-    if (settlement.status !== 'CLOSED') {
-      throw new BadRequestException('Only CLOSED settlements can be reversed');
-    }
 
     settlement.status = 'REVERSED';
-    if (reason) settlement.notes = (settlement.notes ? settlement.notes + ` | ` : '') + `Reversed: ${reason}`;
-    const saved = await this.settlementRepo.save(settlement);
 
-    const lines = await this.settlementLineRepo.find({ where: { settlement_id: settlement.id } });
+    const saved = await this.settlementRepo.save(settlement);
+    const lines = await this.settlementLineRepo.find({ where: { settlement_id: id } });
+
     for (const l of lines) {
-      const assignment = await this.assignmentRepo.findOne({ where: { id: l.delivery_assignment_id } });
-      if (assignment) {
-        assignment.is_settled = false;
-        assignment.settlement_id = null;
-        await this.assignmentRepo.save(assignment);
+      if (l.delivery_assignment_id) {
+        const asgn = await this.assignmentRepo.findOne({ where: { id: l.delivery_assignment_id } });
+        if (asgn) {
+          asgn.is_settled = false;
+          asgn.settlement_id = null;
+          await this.assignmentRepo.save(asgn);
+        }
       }
     }
 
@@ -640,27 +834,25 @@ export class DeliveryService {
     return saved;
   }
 
-  async getStatement(tenantId: string, settlementId: string) {
-    const detail = await this.getSettlementDetail(tenantId, settlementId);
+  async getSettlements(tenantId: string, courierId?: string, status?: string, branchId?: string) {
+    const where: any = { tenant_id: tenantId };
+    if (courierId) where.courier_id = courierId;
+    if (status) where.status = status;
+    if (branchId) where.branch_id = branchId;
+    return await this.settlementRepo.find({ where, order: { created_at: 'DESC' } });
+  }
+
+  async getSettlementDetail(tenantId: string, id: string) {
+    const settlement = await this.settlementRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!settlement) throw new NotFoundException('Settlement not found');
+
+    const lines = await this.settlementLineRepo.find({ where: { settlement_id: id } });
+    const courier = await this.courierRepo.findOne({ where: { id: settlement.courier_id } });
+
     return {
-      statement_title: `Courier Settlement Statement - ${detail.settlement_number}`,
-      settlement_number: detail.settlement_number,
-      settlement_date: detail.settlement_date,
-      courier_name: detail.courier_name,
-      courier_code: detail.courier_code,
-      status: detail.status,
-      summary: {
-        expected_cash_amount: detail.expected_cash_amount,
-        actual_cash_amount: detail.actual_cash_amount,
-        cash_discrepancy_amount: detail.cash_discrepancy_amount,
-        expected_pos_amount: detail.expected_pos_amount,
-        actual_pos_amount: detail.actual_pos_amount,
-        pos_discrepancy_amount: detail.pos_discrepancy_amount,
-        total_compensation_amount: detail.total_compensation_amount,
-        total_adjustment_amount: detail.total_adjustment_amount,
-        net_settlement_amount: detail.net_settlement_amount,
-      },
-      lines: detail.lines,
+      ...settlement,
+      courier_name: courier ? courier.name : 'Unknown Courier',
+      lines,
     };
   }
 }

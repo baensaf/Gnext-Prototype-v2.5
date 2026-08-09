@@ -12,6 +12,13 @@ import { ApprovalRequest } from '../src/entities/ApprovalRequest.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { ConflictException, BadRequestException } from '@nestjs/common';
 
+import { DeliveryZone } from '../src/entities/DeliveryZone.entity';
+import { CourierAttendance } from '../src/entities/CourierAttendance.entity';
+import { CourierTerminalAssignment } from '../src/entities/CourierTerminalAssignment.entity';
+import { Delivery } from '../src/entities/Delivery.entity';
+import { DeliveryEvent } from '../src/entities/DeliveryEvent.entity';
+import { Terminal } from '../src/entities/Terminal.entity';
+
 describe('DeliveryService (Courier Settlement)', () => {
   let service: DeliveryService;
   let courierRepo: any;
@@ -22,6 +29,12 @@ describe('DeliveryService (Courier Settlement)', () => {
   let paymentRepo: any;
   let paymentMethodRepo: any;
   let approvalRepo: any;
+  let zoneRepo: any;
+  let attendanceRepo: any;
+  let terminalAssignRepo: any;
+  let deliveryRepo: any;
+  let deliveryEventRepo: any;
+  let terminalRepo: any;
   let auditWriter: any;
 
   beforeEach(async () => {
@@ -33,6 +46,12 @@ describe('DeliveryService (Courier Settlement)', () => {
     paymentRepo = { find: jest.fn() };
     paymentMethodRepo = { findOne: jest.fn() };
     approvalRepo = { findOne: jest.fn() };
+    zoneRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
+    attendanceRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
+    terminalAssignRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
+    deliveryRepo = { findOne: jest.fn(), find: jest.fn(), count: jest.fn().mockResolvedValue(0), create: jest.fn(), save: jest.fn() };
+    deliveryEventRepo = { create: jest.fn(), save: jest.fn() };
+    terminalRepo = { findOne: jest.fn() };
     auditWriter = { write: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -46,6 +65,12 @@ describe('DeliveryService (Courier Settlement)', () => {
         { provide: getRepositoryToken(Payment), useValue: paymentRepo },
         { provide: getRepositoryToken(PaymentMethod), useValue: paymentMethodRepo },
         { provide: getRepositoryToken(ApprovalRequest), useValue: approvalRepo },
+        { provide: getRepositoryToken(DeliveryZone), useValue: zoneRepo },
+        { provide: getRepositoryToken(CourierAttendance), useValue: attendanceRepo },
+        { provide: getRepositoryToken(CourierTerminalAssignment), useValue: terminalAssignRepo },
+        { provide: getRepositoryToken(Delivery), useValue: deliveryRepo },
+        { provide: getRepositoryToken(DeliveryEvent), useValue: deliveryEventRepo },
+        { provide: getRepositoryToken(Terminal), useValue: terminalRepo },
         { provide: AuditWriter, useValue: auditWriter },
       ],
     }).compile();
@@ -101,6 +126,7 @@ describe('DeliveryService (Courier Settlement)', () => {
     assignmentRepo.find.mockResolvedValue([
       { id: 'asgn-1', order_id: 'ord-1', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '10.00', is_settled: false },
     ]);
+    assignmentRepo.findOne.mockResolvedValue({ id: 'asgn-1', order_id: 'ord-1', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '10.00', is_settled: false });
     settlementLineRepo.findOne.mockResolvedValue(null);
     orderRepo.findOne.mockResolvedValue({ id: 'ord-1', order_number: 'ORD-1001', total_amount: '100.00' });
     paymentRepo.find.mockResolvedValue([{ payment_method_id: 'pm-cash', amount: '100.00' }]);
@@ -146,7 +172,7 @@ describe('DeliveryService (Courier Settlement)', () => {
 
     expect(updated.cash_discrepancy_amount).toBe('-10.00');
     expect(updated.pos_discrepancy_amount).toBe('0.00');
-    expect(updated.net_settlement_amount).toBe('295.00');
+    expect(updated.net_settlement_amount).toBe('285.00');
   });
 
   it('should require approval when closing settlement with a discrepancy', async () => {

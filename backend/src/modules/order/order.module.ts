@@ -21,6 +21,7 @@ import { AuditModule } from '../audit/audit.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { KdsModule } from '../kds/kds.module';
 import { PrintingModule } from '../printing/printing.module';
+import { DeliveryModule } from '../delivery/delivery.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { PrintingModule } from '../printing/printing.module';
     OutboxModule,
     KdsModule,
     PrintingModule,
+    DeliveryModule,
   ],
   providers: [OrderService, OrderSequenceService],
   controllers: [OrdersController],
