@@ -230,4 +230,56 @@ describe('DeliveryService (Courier Settlement)', () => {
     expect(reversed.status).toBe('REVERSED');
     expect(assignmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ is_settled: false, settlement_id: null }));
   });
+
+  it('should handle review and return state transitions (DRAFT <-> UNDER_REVIEW)', async () => {
+    const draftSettlement = { id: 'settle-1', tenant_id: 't-1', status: 'DRAFT' };
+    settlementRepo.findOne.mockResolvedValue(draftSettlement);
+    settlementRepo.save.mockImplementation((s: any) => Promise.resolve(s));
+
+    const reviewed = await service.reviewSettlement('t-1', 'settle-1', 'user-1');
+    expect(reviewed.status).toBe('UNDER_REVIEW');
+
+    const underReviewSettlement = { id: 'settle-1', tenant_id: 't-1', status: 'UNDER_REVIEW' };
+    settlementRepo.findOne.mockResolvedValue(underReviewSettlement);
+
+    const returned = await service.returnSettlement('t-1', 'settle-1', 'user-1', 'Needs verification');
+    expect(returned.status).toBe('DRAFT');
+  });
+
+  it('should enforce immutability on CLOSED settlements when updating', async () => {
+    const closedSettlement = { id: 'settle-closed', tenant_id: 't-1', status: 'CLOSED' };
+    settlementRepo.findOne.mockResolvedValue(closedSettlement);
+
+    await expect(service.updateSettlement('t-1', 'settle-closed', { actual_cash_amount: 500 })).rejects.toThrow(BadRequestException);
+  });
+
+  it('should generate settlement statement DTO', async () => {
+    const settlement = {
+      id: 'settle-1',
+      tenant_id: 't-1',
+      courier_id: 'c-1',
+      settlement_number: 'SET-1001',
+      settlement_date: new Date(),
+      status: 'CLOSED',
+      expected_cash_amount: '100.00',
+      actual_cash_amount: '100.00',
+      cash_discrepancy_amount: '0.00',
+      expected_pos_amount: '200.00',
+      actual_pos_amount: '200.00',
+      pos_discrepancy_amount: '0.00',
+      total_compensation_amount: '15.00',
+      total_adjustment_amount: '0.00',
+      net_settlement_amount: '285.00',
+    };
+    settlementRepo.findOne.mockResolvedValue(settlement);
+    settlementLineRepo.find.mockResolvedValue([{ id: 'line-1', order_number: 'ORD-1001' }]);
+    courierRepo.findOne.mockResolvedValue({ id: 'c-1', name: 'Courier Ali', code: 'C01' });
+
+    const statement = await service.getSettlementStatement('t-1', 'settle-1');
+
+    expect(statement.settlement_number).toBe('SET-1001');
+    expect(statement.courier.name).toBe('Courier Ali');
+    expect(statement.summary.net_settlement_amount).toBe('285.00');
+    expect(statement.lines.length).toBe(1);
+  });
 });

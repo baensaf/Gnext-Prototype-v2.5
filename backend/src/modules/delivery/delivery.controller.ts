@@ -155,4 +155,112 @@ export class DeliveryController {
     const tenantId = (req as any).tenantId;
     return await this.deliveryService.getUnsettledSummary(tenantId, branchId);
   }
+
+  @Get('settlements/preview')
+  async previewSettlementGet(
+    @Query('courierId') courierId: string,
+    @Query('branchId') branchId: string,
+    @Query('dateFrom') dateFrom: string,
+    @Query('dateTo') dateTo: string,
+    @Query('currency') currency: string,
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    return await this.deliveryService.previewSettlement(tenantId, courierId, undefined, branchId, dateFrom, dateTo, currency);
+  }
+
+  @Post('settlements/preview')
+  async previewSettlementPost(@Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const courierId = body.courier_id || body.courierId;
+    const lineIds = body.assignment_ids || body.lineIds;
+    const branchId = body.branch_id || body.branchId;
+    return await this.deliveryService.previewSettlement(tenantId, courierId, lineIds, branchId, body.dateFrom, body.dateTo, body.currency);
+  }
+
+  @Get('settlements')
+  async getSettlements(
+    @Query('courierId') courierId: string,
+    @Query('status') status: string,
+    @Query('branchId') branchId: string,
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    return await this.deliveryService.getSettlements(tenantId, courierId, status, branchId);
+  }
+
+  @Post('settlements')
+  async createSettlement(@Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || '00000000-0000-0000-0000-000000000000';
+    const correlationId = (req as any).correlationId;
+    const courierId = body.courier_id || body.courierId;
+    const branchId = body.branch_id || body.branchId;
+    const lineIds = body.assignment_ids || body.lineIds;
+    return await this.deliveryService.createSettlement(
+      tenantId,
+      userId,
+      {
+        courier_id: courierId,
+        branch_id: branchId,
+        dateFrom: body.dateFrom,
+        dateTo: body.dateTo,
+        currency: body.currency,
+        assignment_ids: lineIds,
+        notes: body.notes,
+      },
+      correlationId,
+    );
+  }
+
+  @Get('settlements/:id')
+  async getSettlementDetail(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.deliveryService.getSettlementDetail(tenantId, id);
+  }
+
+  @Patch('settlements/:id')
+  async updateSettlement(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.deliveryService.updateSettlement(tenantId, id, body, correlationId);
+  }
+
+  @Post('settlements/:id/review')
+  async reviewSettlement(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || '00000000-0000-0000-0000-000000000000';
+    const correlationId = (req as any).correlationId;
+    return await this.deliveryService.reviewSettlement(tenantId, id, userId, correlationId);
+  }
+
+  @Post('settlements/:id/return')
+  async returnSettlement(@Param('id') id: string, @Body() body: { reason?: string }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || '00000000-0000-0000-0000-000000000000';
+    const correlationId = (req as any).correlationId;
+    return await this.deliveryService.returnSettlement(tenantId, id, userId, body?.reason, correlationId);
+  }
+
+  @Post('settlements/:id/close')
+  async closeSettlement(@Param('id') id: string, @Body() body: { reasonCodeId?: string; reason?: string; approvalRequestId?: string }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || '00000000-0000-0000-0000-000000000000';
+    const correlationId = (req as any).correlationId;
+    return await this.deliveryService.closeSettlement(tenantId, id, userId, body?.approvalRequestId, correlationId);
+  }
+
+  @Post('settlements/:id/reverse')
+  async reverseSettlement(@Param('id') id: string, @Body() body: { reasonCodeId?: string; reason?: string; approvalRequestId?: string }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || '00000000-0000-0000-0000-000000000000';
+    const correlationId = (req as any).correlationId;
+    return await this.deliveryService.reverseSettlement(tenantId, id, userId, body?.reason, correlationId);
+  }
+
+  @Get('settlements/:id/statement')
+  async getSettlementStatement(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.deliveryService.getSettlementStatement(tenantId, id);
+  }
 }

@@ -159,6 +159,52 @@ export const deliveryApi = {
     return res.data;
   },
 
+  // Settlements
+  getUnsettledSummary: async (branchId?: string): Promise<any[]> => {
+    const res = await httpClient.get('/api/v1/courier-settlements/unsettled-summary', { params: { branchId } });
+    return res.data;
+  },
+  previewSettlement: async (courierId: string, lineIds?: string[]): Promise<any> => {
+    const res = await httpClient.post('/api/v1/courier-settlements/preview', { courier_id: courierId, lineIds });
+    return res.data;
+  },
+  getSettlements: async (courierId?: string, status?: string, branchId?: string): Promise<any[]> => {
+    const res = await httpClient.get('/api/v1/courier-settlements', { params: { courierId, status, branchId } });
+    return res.data;
+  },
+  createSettlement: async (data: { courier_id: string; assignment_ids?: string[]; notes?: string }): Promise<any> => {
+    const res = await httpClient.post('/api/v1/courier-settlements', data);
+    return res.data;
+  },
+  getSettlementDetail: async (id: string): Promise<any> => {
+    const res = await httpClient.get(`/api/v1/courier-settlements/${id}`);
+    return res.data;
+  },
+  updateSettlement: async (id: string, data: any): Promise<any> => {
+    const res = await httpClient.patch(`/api/v1/courier-settlements/${id}`, data);
+    return res.data;
+  },
+  reviewSettlement: async (id: string): Promise<any> => {
+    const res = await httpClient.post(`/api/v1/courier-settlements/${id}/review`);
+    return res.data;
+  },
+  returnSettlement: async (id: string, reason?: string): Promise<any> => {
+    const res = await httpClient.post(`/api/v1/courier-settlements/${id}/return`, { reason });
+    return res.data;
+  },
+  closeSettlement: async (id: string, approvalRequestId?: string): Promise<any> => {
+    const res = await httpClient.post(`/api/v1/courier-settlements/${id}/close`, { approvalRequestId });
+    return res.data;
+  },
+  reverseSettlement: async (id: string, reason?: string): Promise<any> => {
+    const res = await httpClient.post(`/api/v1/courier-settlements/${id}/reverse`, { reason });
+    return res.data;
+  },
+  getSettlementStatement: async (id: string): Promise<any> => {
+    const res = await httpClient.get(`/api/v1/courier-settlements/${id}/statement`);
+    return res.data;
+  },
+
   // Legacy fallback
   getAssignments: async (branchId?: string, status?: string): Promise<any[]> => {
     const res = await httpClient.get('/api/v1/delivery/assignments', { params: { branchId, status } });

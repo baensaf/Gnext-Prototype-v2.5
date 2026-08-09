@@ -16,6 +16,7 @@ import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { DeliveryService } from './delivery.service';
 import { DeliveryController } from './delivery.controller';
+import { CourierSettlementsController } from './courier-settlements.controller';
 import { AuditModule } from '../audit/audit.module';
 
 @Module({
@@ -39,7 +40,7 @@ import { AuditModule } from '../audit/audit.module';
     AuditModule,
   ],
   providers: [DeliveryService],
-  controllers: [DeliveryController],
+  controllers: [DeliveryController, CourierSettlementsController],
   exports: [DeliveryService],
 })
 export class DeliveryModule {}

@@ -607,9 +607,28 @@ export class DeliveryService {
     return summary;
   }
 
-  async previewSettlement(tenantId: string, courierId: string, assignmentIds?: string[]) {
+  async previewSettlement(tenantId: string, courierId: string, assignmentIds?: string[], branchId?: string, dateFrom?: string, dateTo?: string, currency?: string) {
     const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
     if (!courier) throw new NotFoundException('Courier not found');
+
+    // Find active or closed non-reversed settlements to exclude already reserved lines
+    const existingSettlements = (await this.settlementRepo.find({
+      where: { tenant_id: tenantId, status: In(['DRAFT', 'UNDER_REVIEW', 'CLOSED']) },
+    })) || [];
+    const reservedLineAssignmentIds = new Set<string>();
+    if (existingSettlements && existingSettlements.length > 0) {
+      const activeSettlementIds = existingSettlements.map((s) => s.id);
+      const existingLines = (await this.settlementLineRepo.find({
+        where: { settlement_id: In(activeSettlementIds) },
+      })) || [];
+      if (existingLines && existingLines.length > 0) {
+        for (const line of existingLines) {
+          if (line.delivery_assignment_id) {
+            reservedLineAssignmentIds.add(line.delivery_assignment_id);
+          }
+        }
+      }
+    }
 
     const where: any = {
       tenant_id: tenantId,
@@ -625,13 +644,17 @@ export class DeliveryService {
       if (a.is_settled) {
         throw new ConflictException(`Assignment ${a.id} is already settled`);
       }
+      if (reservedLineAssignmentIds.has(a.id)) {
+        throw new ConflictException(`Assignment ${a.id} is already reserved in an active or closed settlement`);
+      }
     }
+    const eligibleAssignments = assignments;
 
     let expCash = 0;
     let expPos = 0;
     let totalFee = 0;
 
-    for (const a of assignments) {
+    for (const a of eligibleAssignments) {
       totalFee += parseFloat(a.delivery_fee || '0');
       const order = await this.orderRepo.findOne({ where: { id: a.order_id } });
       const breakdown = await this.calculatePaymentBreakdown(a.order_id, parseFloat(order?.total_amount || '0'));
@@ -642,17 +665,23 @@ export class DeliveryService {
     return {
       courier_id: courierId,
       courier_name: courier.name,
-      line_count: assignments.length,
+      courier_code: courier.code,
+      line_count: eligibleAssignments.length,
       expected_cash_amount: expCash.toFixed(2),
       expected_pos_amount: expPos.toFixed(2),
       total_delivery_fees: totalFee.toFixed(2),
       net_settlement_amount: (expCash + expPos).toFixed(2),
-      assignment_ids: assignments.map((a) => a.id),
+      assignment_ids: eligibleAssignments.map((a) => a.id),
     };
   }
 
-  async createSettlement(tenantId: string, userId: string, data: { courier_id: string; branch_id?: string; assignment_ids?: string[]; notes?: string }, correlationId?: string) {
-    const preview = await this.previewSettlement(tenantId, data.courier_id, data.assignment_ids);
+  async createSettlement(
+    tenantId: string,
+    userId: string,
+    data: { courier_id: string; branch_id?: string; dateFrom?: string; dateTo?: string; currency?: string; assignment_ids?: string[]; notes?: string },
+    correlationId?: string,
+  ) {
+    const preview = await this.previewSettlement(tenantId, data.courier_id, data.assignment_ids, data.branch_id, data.dateFrom, data.dateTo, data.currency);
     const courier = await this.courierRepo.findOne({ where: { id: data.courier_id } });
 
     const settlementNumber = `SET-${Date.now().toString().slice(-6)}`;
@@ -720,6 +749,23 @@ export class DeliveryService {
     const settlement = await this.settlementRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!settlement) throw new NotFoundException('Settlement not found');
 
+    if (settlement.status === 'CLOSED' || settlement.status === 'REVERSED') {
+      throw new BadRequestException(`Settlement is ${settlement.status} and cannot be modified. Closed/reversed batches are immutable.`);
+    }
+
+    if (data.lines && Array.isArray(data.lines)) {
+      for (const lineData of data.lines) {
+        if (!lineData.id) continue;
+        const line = await this.settlementLineRepo.findOne({ where: { id: lineData.id, settlement_id: id } });
+        if (line) {
+          if (lineData.actual_cash !== undefined) line.actual_cash = parseFloat(lineData.actual_cash).toFixed(2);
+          if (lineData.actual_pos !== undefined) line.actual_pos = parseFloat(lineData.actual_pos).toFixed(2);
+          if (lineData.receipt_verified !== undefined) line.receipt_verified = Boolean(lineData.receipt_verified);
+          await this.settlementLineRepo.save(line);
+        }
+      }
+    }
+
     if (data.actual_cash_amount !== undefined) {
       settlement.actual_cash_amount = parseFloat(data.actual_cash_amount).toFixed(2);
     }
@@ -759,17 +805,72 @@ export class DeliveryService {
     return saved;
   }
 
-  async closeSettlement(tenantId: string, id: string, userId: string, correlationId?: string) {
+  async reviewSettlement(tenantId: string, id: string, userId: string, correlationId?: string) {
     const settlement = await this.settlementRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!settlement) throw new NotFoundException('Settlement not found');
+
+    if (settlement.status !== 'DRAFT') {
+      throw new BadRequestException(`Only DRAFT settlements can be moved to UNDER_REVIEW (current status: ${settlement.status})`);
+    }
+
+    settlement.status = 'UNDER_REVIEW';
+    settlement.reviewed_by_user_id = userId;
+    const saved = await this.settlementRepo.save(settlement);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'COURIER_SETTLEMENT_REVIEWED',
+      correlationId: correlationId || 'corr-settle-review',
+      afterData: saved,
+    });
+
+    return saved;
+  }
+
+  async returnSettlement(tenantId: string, id: string, userId: string, reason?: string, correlationId?: string) {
+    const settlement = await this.settlementRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!settlement) throw new NotFoundException('Settlement not found');
+
+    if (settlement.status !== 'UNDER_REVIEW') {
+      throw new BadRequestException(`Only UNDER_REVIEW settlements can be returned to DRAFT (current status: ${settlement.status})`);
+    }
+
+    settlement.status = 'DRAFT';
+    settlement.notes = reason ? `[Returned]: ${reason} | ${settlement.notes || ''}` : settlement.notes;
+    const saved = await this.settlementRepo.save(settlement);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'COURIER_SETTLEMENT_RETURNED',
+      correlationId: correlationId || 'corr-settle-return',
+      afterData: saved,
+    });
+
+    return saved;
+  }
+
+  async closeSettlement(tenantId: string, id: string, userId: string, approvalRequestId?: string, correlationId?: string) {
+    const settlement = await this.settlementRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!settlement) throw new NotFoundException('Settlement not found');
+
+    if (settlement.status === 'CLOSED' || settlement.status === 'REVERSED') {
+      throw new BadRequestException(`Settlement is already ${settlement.status}`);
+    }
 
     const cashDisc = parseFloat(settlement.cash_discrepancy_amount || '0');
     const posDisc = parseFloat(settlement.pos_discrepancy_amount || '0');
 
     if (cashDisc !== 0 || posDisc !== 0) {
-      const approval = await this.approvalRepo.findOne({
-        where: { tenant_id: tenantId, entity_type: 'CourierSettlement', entity_id: id, status: 'APPROVED' },
-      });
+      let approval = null;
+      if (approvalRequestId) {
+        approval = await this.approvalRepo.findOne({ where: { id: approvalRequestId, tenant_id: tenantId, status: 'APPROVED' } });
+      } else {
+        approval = await this.approvalRepo.findOne({
+          where: { tenant_id: tenantId, entity_type: 'CourierSettlement', entity_id: id, status: 'APPROVED' },
+        });
+      }
       if (!approval) {
         throw new BadRequestException('Settlement has discrepancy and requires explicit approval before closing');
       }
@@ -777,6 +878,8 @@ export class DeliveryService {
 
     settlement.status = 'CLOSED';
     settlement.closed_at = new Date();
+    settlement.closed_by_user_id = userId;
+    if (approvalRequestId) settlement.approval_request_id = approvalRequestId;
 
     const saved = await this.settlementRepo.save(settlement);
     const lines = await this.settlementLineRepo.find({ where: { settlement_id: id } });
@@ -807,7 +910,12 @@ export class DeliveryService {
     const settlement = await this.settlementRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!settlement) throw new NotFoundException('Settlement not found');
 
+    if (settlement.status !== 'CLOSED') {
+      throw new BadRequestException(`Only CLOSED settlements can be reversed (current status: ${settlement.status})`);
+    }
+
     settlement.status = 'REVERSED';
+    settlement.notes = reason ? `[Reversed]: ${reason} | ${settlement.notes || ''}` : settlement.notes;
 
     const saved = await this.settlementRepo.save(settlement);
     const lines = await this.settlementLineRepo.find({ where: { settlement_id: id } });
@@ -839,7 +947,19 @@ export class DeliveryService {
     if (courierId) where.courier_id = courierId;
     if (status) where.status = status;
     if (branchId) where.branch_id = branchId;
-    return await this.settlementRepo.find({ where, order: { created_at: 'DESC' } });
+    const settlements = await this.settlementRepo.find({ where, order: { created_at: 'DESC' } });
+    const result = [];
+    for (const s of settlements) {
+      const courier = await this.courierRepo.findOne({ where: { id: s.courier_id } });
+      const lineCount = await this.settlementLineRepo.count({ where: { settlement_id: s.id } });
+      result.push({
+        ...s,
+        courier_name: courier ? courier.name : 'Unknown Courier',
+        courier_code: courier ? courier.code : '',
+        line_count: lineCount,
+      });
+    }
+    return result;
   }
 
   async getSettlementDetail(tenantId: string, id: string) {
@@ -852,7 +972,36 @@ export class DeliveryService {
     return {
       ...settlement,
       courier_name: courier ? courier.name : 'Unknown Courier',
+      courier_code: courier ? courier.code : '',
       lines,
+    };
+  }
+
+  async getSettlementStatement(tenantId: string, id: string) {
+    const detail = await this.getSettlementDetail(tenantId, id);
+    return {
+      settlement_number: detail.settlement_number,
+      settlement_date: detail.settlement_date,
+      status: detail.status,
+      tenant_id: tenantId,
+      courier: {
+        id: detail.courier_id,
+        name: detail.courier_name,
+        code: detail.courier_code,
+      },
+      summary: {
+        expected_cash_amount: detail.expected_cash_amount,
+        actual_cash_amount: detail.actual_cash_amount,
+        cash_discrepancy_amount: detail.cash_discrepancy_amount,
+        expected_pos_amount: detail.expected_pos_amount,
+        actual_pos_amount: detail.actual_pos_amount,
+        pos_discrepancy_amount: detail.pos_discrepancy_amount,
+        total_compensation_amount: detail.total_compensation_amount,
+        total_adjustment_amount: detail.total_adjustment_amount,
+        net_settlement_amount: detail.net_settlement_amount,
+      },
+      lines: detail.lines,
+      generated_at: new Date().toISOString(),
     };
   }
 }
