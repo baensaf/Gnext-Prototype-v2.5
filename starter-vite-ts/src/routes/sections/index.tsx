@@ -3,6 +3,7 @@ import type { RouteObject } from 'react-router';
 import { useEffect } from 'react';
 import { Navigate } from 'react-router';
 
+import Page404 from 'src/pages/error/404';
 import { LoginPage } from 'src/pages/login';
 import { AppShell } from 'src/layouts/AppShell';
 import { KioskPage } from 'src/pages/pos/kiosk';
@@ -276,12 +277,12 @@ export const routesSection: RouteObject[] = [
       },
       {
         path: '*',
-        element: <DashboardPage />,
+        element: <Page404 />,
       },
     ],
   },
   {
     path: '*',
-    element: <Navigate to="/app/dashboard" replace />,
+    element: <Page404 />,
   },
 ];

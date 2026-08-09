@@ -2,6 +2,7 @@ import type { Branch } from 'src/api/tenantApi';
 import type { ReasonCode } from 'src/api/settingsApi';
 import type { InventoryItem, InventoryTransaction } from 'src/api/inventoryApi';
 
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
 import AddBoxIcon from '@mui/icons-material/AddBox';
@@ -39,6 +40,7 @@ import { settingsApi } from 'src/api/settingsApi';
 import { inventoryApi } from 'src/api/inventoryApi';
 
 export function InventoryStockPage() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [alerts, setAlerts] = useState<InventoryItem[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -128,9 +130,18 @@ export function InventoryStockPage() {
     <Box>
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Multi-Branch Stock & Low-Stock Alerts
-          </Typography>
+          <Stack direction="row" spacing={1.5} sx={{ mb: 0.5, alignItems: 'center' }}>
+            <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+              Multi-Branch Stock & Low-Stock Alerts
+            </Typography>
+            <Chip
+              label={t('nav.v5Preview', 'V5 Preview')}
+              color="info"
+              variant="filled"
+              size="small"
+              sx={{ fontWeight: 'bold' }}
+            />
+          </Stack>
           <Typography variant="body2" color="text.secondary">
             Inventory stock levels, reorder threshold alerts, and waste/adjustment tracking
           </Typography>
@@ -150,6 +161,11 @@ export function InventoryStockPage() {
           </Select>
         </FormControl>
       </Stack>
+
+      {/* V5 Preview Isolation Notice Banner */}
+      <Alert severity="info" variant="outlined" sx={{ mb: 3, borderRadius: 2, fontWeight: 500 }}>
+        {t('inventory.v5Banner', 'V5 Preview Module: Inventory stock management is retained for V5 preview. It does not affect v1.5 catalog availability, order submission, KDS, reports, or financial calculations.')}
+      </Alert>
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>

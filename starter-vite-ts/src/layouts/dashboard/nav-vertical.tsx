@@ -55,7 +55,7 @@ export function NavVertical({
           sx={{ px: 2, flex: '1 1 auto' }}
         />
 
-        {slots?.bottomArea ?? <NavUpgrade />}
+        {slots?.bottomArea}
       </Scrollbar>
     </>
   );

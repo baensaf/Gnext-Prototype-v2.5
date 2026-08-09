@@ -31,7 +31,17 @@
     "reports": "Reports",
     "simulation": "Simulation Center",
     "audit": "Audit Explorer",
-    "settings": "Settings"
+    "settings": "Settings",
+    "v5GroupHeader": "Future — V5 Preview",
+    "v5Preview": "V5 Preview"
+  },
+  "inventory": {
+    "v5Banner": "V5 Preview Module: Inventory stock management is retained for V5 preview. It does not affect v1.5 catalog availability, order submission, KDS, reports, or financial calculations."
+  },
+  "error": {
+    "pageNotFound": "404 — Page Not Found",
+    "notFoundMessage": "Sorry, we couldn’t find the page you’re looking for. Be sure to check your URL.",
+    "backToHome": "Go to Dashboard"
   },
   "common": {
     "language": "Language",

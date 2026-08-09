@@ -78,13 +78,8 @@ export const navData: NavSectionProps['data'] = [
     ],
   },
   {
-    subheader: 'Operations & Stock',
+    subheader: 'Operations',
     items: [
-      {
-        title: 'Inventory Stock & Alerts',
-        path: '/app/inventory/stock',
-        icon: ICONS.inventory,
-      },
       {
         title: 'Dine-In Floor Plan',
         path: '/app/operations/dine-in',
@@ -214,6 +209,17 @@ export const navData: NavSectionProps['data'] = [
         path: '/app/operations/audit',
         icon: ICONS.reasons,
         info: <Label color="warning">Slice 21</Label>,
+      },
+    ],
+  },
+  {
+    subheader: 'Future — V5 Preview',
+    items: [
+      {
+        title: 'Inventory Stock & Alerts',
+        path: '/app/inventory/stock',
+        icon: ICONS.inventory,
+        info: <Label color="info">V5 Preview</Label>,
       },
     ],
   },
