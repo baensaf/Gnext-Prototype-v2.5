@@ -1,7 +1,7 @@
 import { Controller, Post, Get, Body, Req, Query, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
-import { ImportExportService } from './import-export.service';
+import { ImportExportService, AutoMapResult } from './import-export.service';
 import { ImportEntityType } from '../../entities/ImportJob.entity';
 
 @Controller('api/v1')

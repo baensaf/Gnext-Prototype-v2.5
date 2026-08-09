@@ -8,7 +8,7 @@ import { Product } from '../../entities/Product.entity';
 import { Category } from '../../entities/Category.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 
-interface AutoMapResult {
+export interface AutoMapResult {
   header: string;
   mappedField: string | null;
   confidence: number;
