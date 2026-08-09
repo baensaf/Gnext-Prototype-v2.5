@@ -40,6 +40,7 @@ import { ImportRow } from './entities/ImportRow.entity';
 import { RefundRequest } from './entities/RefundRequest.entity';
 import { RefundItem } from './entities/RefundItem.entity';
 import { RefundAllocation } from './entities/RefundAllocation.entity';
+import { Refund } from './entities/Refund.entity';
 import { DiningArea } from './entities/DiningArea.entity';
 import { DiningTable } from './entities/DiningTable.entity';
 import { TableSession } from './entities/TableSession.entity';
@@ -171,7 +172,7 @@ import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
           CustomerConsent, CustomerMerge,
           OrderHeader, OrderItem, OrderItemOption, OrderAdjustment, OrderNote, OrderLink, OrderStateEvent, OrderSequence,
           Payment, SettlementAccount, PaymentDevice, PaymentAllocation, PaymentAttempt,
-          RefundRequest, RefundItem, RefundAllocation,
+          RefundRequest, RefundItem, RefundAllocation, Refund,
           DiningArea, DiningTable, TableSession, TableEvent,
           KitchenStation, KitchenTicket, KitchenTicketItem, PrinterDevice,
           Courier, DeliveryAssignment, CourierSettlement, CourierSettlementLine,

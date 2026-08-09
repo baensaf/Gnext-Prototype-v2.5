@@ -1,109 +1,164 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { RefundService } from '../src/modules/refund/refund.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { RefundRequest } from '../src/entities/RefundRequest.entity';
-import { RefundItem } from '../src/entities/RefundItem.entity';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import { RefundService } from '../src/modules/refund/refund.service';
+import { Refund } from '../src/entities/Refund.entity';
 import { RefundAllocation } from '../src/entities/RefundAllocation.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { OrderItem } from '../src/entities/OrderItem.entity';
 import { Payment } from '../src/entities/Payment.entity';
 import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
-import { CustomerService } from '../src/modules/customer/customer.service';
-import { ApprovalService } from '../src/modules/approval/approval.service';
+import { ShiftService } from '../src/modules/cashier/shift.service';
+import { CreditService } from '../src/modules/customer/credit.service';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
-import { BadRequestException } from '@nestjs/common';
 
-describe('RefundService (Unit)', () => {
+describe('Refunds & Paid-Order Cancellation Suite (R16)', () => {
   let service: RefundService;
-  let requestRepo: any;
-  let itemRepo: any;
+  let refundRepo: any;
   let allocRepo: any;
   let orderRepo: any;
-  let orderItemRepo: any;
+  let itemRepo: any;
   let paymentRepo: any;
   let methodRepo: any;
-  let customerService: any;
-  let approvalService: any;
+  let shiftService: any;
+  let creditService: any;
   let auditWriter: any;
+  let dataSource: any;
 
   beforeEach(async () => {
-    requestRepo = { findOne: jest.fn(), find: jest.fn(), count: jest.fn().mockResolvedValue(0), create: jest.fn(), save: jest.fn() };
-    itemRepo = { find: jest.fn(), create: jest.fn(), save: jest.fn() };
-    allocRepo = { find: jest.fn(), create: jest.fn(), save: jest.fn() };
+    refundRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), find: jest.fn().mockResolvedValue([]), createQueryBuilder: jest.fn() };
+    allocRepo = { create: jest.fn(), save: jest.fn() };
     orderRepo = { findOne: jest.fn(), save: jest.fn() };
-    orderItemRepo = { find: jest.fn() };
-    paymentRepo = { find: jest.fn(), create: jest.fn(), save: jest.fn() };
+    itemRepo = { find: jest.fn().mockResolvedValue([]) };
+    paymentRepo = { find: jest.fn().mockResolvedValue([]) };
     methodRepo = { findOne: jest.fn() };
-    customerService = { postCreditTransaction: jest.fn() };
-    approvalService = { verifyManagerPin: jest.fn() };
+    shiftService = { getCurrentShift: jest.fn(), recordCashRefundMovement: jest.fn() };
+    creditService = { getAccountByCustomer: jest.fn(), postRepayment: jest.fn() };
     auditWriter = { write: jest.fn() };
+
+    const mockQueryBuilder: any = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getCount: jest.fn().mockResolvedValue(0),
+    };
+
+    const entityStore = new Map<string, any>();
+
+    const mockEntityManager: any = {
+      create: jest.fn((entityClass, data) => {
+        const id = data.id || `mock-ref-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+        const entity = { id, ...data };
+        entityStore.set(id, entity);
+        return entity;
+      }),
+      save: jest.fn((entityClass, data) => {
+        const entity = data || entityClass;
+        if (entity && entity.id) entityStore.set(entity.id, entity);
+        return Promise.resolve(entity);
+      }),
+      findOne: jest.fn(async (entityClass, options) => {
+        if (entityClass === OrderHeader) return await orderRepo.findOne(options);
+        if (entityClass === Refund) {
+          const targetId = options?.where?.id;
+          if (targetId && entityStore.has(targetId)) return entityStore.get(targetId);
+          return await refundRepo.findOne(options);
+        }
+        if (entityClass === PaymentMethod) return await methodRepo.findOne(options);
+        return null;
+      }),
+      find: jest.fn(async (entityClass, options) => {
+        if (entityClass === Payment) return await paymentRepo.find(options);
+        if (entityClass === Refund) return await refundRepo.find(options);
+        return [];
+      }),
+      createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+    };
+
+    dataSource = {
+      transaction: jest.fn(async (cb) => await cb(mockEntityManager)),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RefundService,
-        { provide: getRepositoryToken(RefundRequest), useValue: requestRepo },
-        { provide: getRepositoryToken(RefundItem), useValue: itemRepo },
+        { provide: getRepositoryToken(Refund), useValue: refundRepo },
         { provide: getRepositoryToken(RefundAllocation), useValue: allocRepo },
         { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
-        { provide: getRepositoryToken(OrderItem), useValue: orderItemRepo },
+        { provide: getRepositoryToken(OrderItem), useValue: itemRepo },
         { provide: getRepositoryToken(Payment), useValue: paymentRepo },
         { provide: getRepositoryToken(PaymentMethod), useValue: methodRepo },
-        { provide: CustomerService, useValue: customerService },
-        { provide: ApprovalService, useValue: approvalService },
+        { provide: ShiftService, useValue: shiftService },
+        { provide: CreditService, useValue: creditService },
         { provide: AuditWriter, useValue: auditWriter },
+        { provide: DataSource, useValue: dataSource },
       ],
     }).compile();
 
     service = module.get<RefundService>(RefundService);
   });
 
-  it('should process full refund and restore customer credit if paid via PM-CUSTOMER-CREDIT', async () => {
-    orderRepo.findOne.mockResolvedValue({
-      id: 'ord-ref-1',
-      order_number: 'ORD-100',
-      paid_amount: '500.0000',
-      due_amount: '0.0000',
-      customer_id: 'cust-credit-1',
-      status: 'COMPLETED',
-      items: [],
+  describe('Refundable Balance & Allocation Rules (R16)', () => {
+    it('should throw BadRequestException if requested refund amount exceeds remaining refundable balance', async () => {
+      const order = { id: 'ord-1', state: 'COMPLETED', refunded_total: '0.0000' };
+      const payment = { id: 'pay-1', amount: '50000.0000', status: 'SUCCEEDED', method_id: 'pm-cash' };
+      const method = { id: 'pm-cash', kind: 'CASH', is_active: true };
+
+      orderRepo.findOne.mockResolvedValue(order);
+      paymentRepo.find.mockResolvedValue([payment]);
+      methodRepo.findOne.mockResolvedValue(method);
+
+      // Available = 50,000. Attempting refund of 60,000
+      await expect(
+        service.createRefundIntent('t-1', 'ord-1', { amount: '60000.0000', reason: 'Customer return' }),
+      ).rejects.toThrow(BadRequestException);
     });
-    orderRepo.save.mockImplementation((o) => Promise.resolve(o));
 
-    paymentRepo.find.mockResolvedValue([
-      { id: 'pay-credit', payment_method_id: 'pm-credit-id', amount: '500.0000', is_reversed: false },
-    ]);
+    it('should throw BadRequestException for ordinary refund on non-COMPLETED order', async () => {
+      const order = { id: 'ord-1', state: 'SUBMITTED', refunded_total: '0.0000' };
+      orderRepo.findOne.mockResolvedValue(order);
 
-    methodRepo.findOne.mockResolvedValue({ id: 'pm-credit-id', code: 'PM-CUSTOMER-CREDIT', is_active: true });
-
-    requestRepo.create.mockImplementation((dto) => dto);
-    requestRepo.save.mockImplementation((dto) => Promise.resolve({ ...dto, id: 'ref-1', code: 'REF-1001' }));
-    allocRepo.create.mockImplementation((dto) => dto);
-    paymentRepo.create.mockImplementation((dto) => dto);
-
-    const result = await service.createRefund(
-      't-1',
-      'u-cashier',
-      { order_id: 'ord-ref-1', refund_type: 'FULL', note: 'Customer returned item' },
-      'corr-ref-1',
-    );
-
-    expect(result.refund_request.total_refund_amount).toBe('500.0000');
-    expect(customerService.postCreditTransaction).toHaveBeenCalledWith(
-      't-1',
-      'cust-credit-1',
-      expect.objectContaining({ transaction_type: 'CREDIT', amount: '500.0000' }),
-      'corr-ref-1',
-    );
+      await expect(
+        service.createRefundIntent('t-1', 'ord-1', { amount: '10000.0000', reason: 'Customer return' }),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
-  it('should enforce Manager PIN when cancelling paid order post-preparation window', async () => {
-    orderRepo.findOne.mockResolvedValue({
-      id: 'ord-kitchen',
-      paid_amount: '100.0000',
-      due_amount: '0.0000',
-      status: 'IN_PREPARATION',
-    });
+  describe('Alternative Method Policy (R16)', () => {
+    it('should throw ForbiddenException if alternative method refund lacks approved approvalRequestId', async () => {
+      const order = { id: 'ord-1', state: 'COMPLETED', refunded_total: '0.0000' };
+      const posPayment = { id: 'pay-pos', amount: '50000.0000', status: 'SUCCEEDED', method_id: 'pm-pos' };
+      const cashMethod = { id: 'pm-cash', kind: 'CASH', is_active: true };
 
-    await expect(service.cancelPaidOrder('t-1', 'u-cashier', 'ord-kitchen', 'Customer left')).rejects.toThrow(BadRequestException);
+      orderRepo.findOne.mockResolvedValue(order);
+      paymentRepo.find.mockResolvedValue([posPayment]);
+      methodRepo.findOne.mockResolvedValue(cashMethod);
+
+      // Attempting POS-to-CASH refund without approvalRequestId
+      await expect(
+        service.createRefundIntent('t-1', 'ord-1', {
+          amount: '50000.0000',
+          reason: 'Alternative tender refund',
+          targetMethodId: 'pm-cash',
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('Paid-Order Cancellation Orchestration (R16)', () => {
+    it('should process refund before cancelling order during paid order cancellation', async () => {
+      const order = { id: 'ord-1', state: 'SUBMITTED', refunded_total: '0.0000', currency_code: 'IRR', terminal_id: 'term-1' };
+      const cashPayment = { id: 'pay-1', amount: '50000.0000', status: 'SUCCEEDED', method_id: 'pm-cash' };
+      const cashMethod = { id: 'pm-cash', kind: 'CASH', is_active: true };
+
+      orderRepo.findOne.mockResolvedValue(order);
+      paymentRepo.find.mockResolvedValue([cashPayment]);
+      methodRepo.findOne.mockResolvedValue(cashMethod);
+      shiftService.getCurrentShift.mockResolvedValue({ id: 'shf-1' });
+
+      const cancelledOrder = await service.cancelPaidOrder('t-1', 'ord-1', { reason: 'Out of stock' });
+      expect(cancelledOrder.state).toBe('CANCELLED');
+      expect(shiftService.recordCashRefundMovement).toHaveBeenCalled();
+    });
   });
 });
