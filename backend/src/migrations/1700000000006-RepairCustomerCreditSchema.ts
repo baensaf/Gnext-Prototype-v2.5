@@ -27,6 +27,7 @@ export class RepairCustomerCreditSchema1700000000006 implements MigrationInterfa
       );
     `);
 
+    await queryRunner.query(`
       ALTER TABLE "credit_account"
         ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE NULL;
 
@@ -41,6 +42,7 @@ export class RepairCustomerCreditSchema1700000000006 implements MigrationInterfa
 
       CREATE INDEX IF NOT EXISTS "IDX_credit_account_customer_status"
       ON "credit_account" ("tenant_id", "customer_id", "status");
+    `);
 
     await queryRunner.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS "UQ_idempotency_record_tenant_scope_key"

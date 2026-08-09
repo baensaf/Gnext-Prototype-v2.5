@@ -448,14 +448,18 @@ export class OfflineSyncService {
     const queueItem = await this.queueRepo.findOne({ where: { id: conflict.queue_item_id } });
     if (!queueItem) throw new NotFoundException('Associated queue item not found');
 
-    if (data.resolution_strategy === 'MANUAL_OVERRIDE') {
+    const strategyUpper = (data.resolution_strategy || 'LOCAL').toUpperCase();
+
+    if (strategyUpper === 'MANUAL_OVERRIDE' || strategyUpper === 'MERGED') {
       const override = data.override_payload || conflict.client_state;
       this.validateDomainPayload(queueItem.entity_type, override);
       queueItem.payload = override;
-    } else if (data.resolution_strategy === 'ACCEPT_SERVER') {
+    } else if (strategyUpper === 'ACCEPT_SERVER' || strategyUpper === 'CLOUD') {
       queueItem.payload = conflict.server_state;
-    } else if (data.resolution_strategy === 'ACCEPT_CLIENT') {
+    } else if (strategyUpper === 'ACCEPT_CLIENT' || strategyUpper === 'LOCAL') {
       queueItem.payload = conflict.client_state;
+    } else {
+      throw new BadRequestException(`Unsupported resolution strategy: ${data.resolution_strategy}`);
     }
 
     conflict.resolution_strategy = data.resolution_strategy;

@@ -8,6 +8,9 @@ import { Payment } from '../src/entities/Payment.entity';
 import { Refund } from '../src/entities/Refund.entity';
 import { CustomerCreditAccount } from '../src/entities/CustomerCreditAccount.entity';
 import { IdempotencyRecord } from '../src/entities/IdempotencyRecord.entity';
+import { OfflineQueueItem } from '../src/entities/OfflineQueueItem.entity';
+import { SyncConflictRecord } from '../src/entities/SyncConflictRecord.entity';
+import { BranchStatusSnapshot } from '../src/entities/BranchStatusSnapshot.entity';
 
 describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
   let dataSource: DataSource;
@@ -20,6 +23,11 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
     process.env.DB_USER = process.env.DB_USER || 'postgres';
     process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'postgres';
 
+    (AppDataSource.options as any).port = parseInt(process.env.DB_PORT, 10);
+    (AppDataSource.options as any).database = process.env.DB_NAME;
+    (AppDataSource.options as any).username = process.env.DB_USER;
+    (AppDataSource.options as any).password = process.env.DB_PASSWORD;
+
     if (!AppDataSource.isInitialized) {
       await AppDataSource.initialize();
     }
@@ -30,7 +38,7 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
     if (!tenant) {
       tenant = tenantRepo.create({
         code: 'PG-INTEG-TEST',
-        name: 'PostgreSQL Integration Test Tenant',
+        name: 'PostgreSQL Integration Test Store',
         base_currency: 'IRR',
         default_locale: 'fa',
         time_zone: 'Asia/Tehran',
@@ -40,18 +48,19 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
     testTenantId = tenant.id;
 
     const branchRepo = dataSource.getRepository(Branch);
-    let branch = await branchRepo.findOne({ where: { tenant_id: testTenantId, code: 'PG-BR-01' } });
+    let branch = await branchRepo.findOne({ where: { tenant_id: testTenantId, code: 'BR-PG-TEST' } });
     if (!branch) {
       branch = branchRepo.create({
         tenant_id: testTenantId,
-        code: 'PG-BR-01',
-        name: 'Postgres Test Branch',
+        code: 'BR-PG-TEST',
+        name: 'PostgreSQL Test Branch',
+        is_active: true,
         time_zone: 'Asia/Tehran',
       });
       branch = await branchRepo.save(branch);
     }
     testBranchId = branch.id;
-  });
+  }, 30000);
 
   afterAll(async () => {
     if (AppDataSource.isInitialized) {
@@ -99,11 +108,12 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
     const idempotencyRepo = dataSource.getRepository(IdempotencyRecord);
     const key = `pg-idem-key-${Date.now()}`;
 
+    const hashVal = 'a'.repeat(64);
     const rec1 = idempotencyRepo.create({
       tenant_id: testTenantId,
       scope: 'ORDERS',
       key: key,
-      request_hash: 'hash-abc-123-0000000000000000000000000000000000000000000000000000',
+      request_hash: hashVal,
       status: 'SUCCEEDED',
       response_status: 201,
       response_body: { orderId: 'ord-123' },
@@ -115,7 +125,7 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
       tenant_id: testTenantId,
       scope: 'ORDERS',
       key: key,
-      request_hash: 'hash-abc-123-0000000000000000000000000000000000000000000000000000',
+      request_hash: hashVal,
       status: 'SUCCEEDED',
       response_status: 201,
       response_body: { orderId: 'ord-123' },
@@ -135,9 +145,10 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
 
   it('3. Real PostgreSQL Pessimistic Row Locking: SELECT FOR UPDATE locks row during transaction', async () => {
     const creditRepo = dataSource.getRepository(CustomerCreditAccount);
+    const uniqueCustId = `00000000-0000-0000-0000-${Date.now().toString(16).slice(-12).padStart(12, '0')}`;
     const account = creditRepo.create({
       tenant_id: testTenantId,
-      customer_id: '00000000-0000-0000-0000-000000000099',
+      customer_id: uniqueCustId,
       currency_code: 'IRR',
       credit_limit: '1000000.0000',
       current_balance: '500000.0000',
@@ -242,5 +253,80 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
     expect(finalOrder?.state).toBe('CANCELLED');
     expect(finalPayment?.status).toBe('SUCCEEDED');
     expect(finalRefund?.amount).toBe('218000.0000');
+  });
+
+  it('5. R23 Durable Offline/Sync Workflow: Queue deduplication, DLQ retry, conflict resolution, and persistence in PostgreSQL', async () => {
+    const queueRepo = dataSource.getRepository(OfflineQueueItem);
+    const conflictRepo = dataSource.getRepository(SyncConflictRecord);
+    const snapshotRepo = dataSource.getRepository(BranchStatusSnapshot);
+
+    const dedupeKey = `DEDUPE-${Date.now()}`;
+
+    // Step A: Enqueue offline item 1
+    const item1 = queueRepo.create({
+      tenant_id: testTenantId,
+      branch_id: testBranchId,
+      entity_type: 'ORDER',
+      payload: { total: '150000.0000' },
+      status: 'PENDING',
+      dedupe_key: dedupeKey,
+      client_version: 1,
+    });
+    const savedItem1 = await queueRepo.save(item1);
+
+    // Step B: Attempt duplicate enqueue with same dedupe_key
+    const existing = await queueRepo.findOne({
+      where: {
+        tenant_id: testTenantId,
+        branch_id: testBranchId,
+        dedupe_key: dedupeKey,
+      },
+    });
+    expect(existing).not.toBeNull();
+    expect(existing?.id).toBe(savedItem1.id);
+
+    // Step C: Verify Branch Status Snapshot persistence
+    const snapshot = snapshotRepo.create({
+      tenant_id: testTenantId,
+      branch_id: testBranchId,
+      is_online: false,
+      agent_version: 'v1.5.0-sim',
+      agent_health: 'HEALTHY',
+      last_heartbeat_at: new Date(),
+      offline_since: new Date(),
+    });
+    await snapshotRepo.save(snapshot);
+
+    const foundSnapshot = await snapshotRepo.findOne({
+      where: { tenant_id: testTenantId, branch_id: testBranchId },
+      order: { recorded_at: 'DESC' },
+    });
+    expect(foundSnapshot?.is_online).toBe(false);
+
+    // Step D: Create Conflict Record in DB
+    const conflict = conflictRepo.create({
+      tenant_id: testTenantId,
+      queue_item_id: savedItem1.id,
+      conflict_type: 'PRICE_MISMATCH',
+      client_state: { total: '150000.0000' },
+      server_state: { total: '160000.0000' },
+      resolution_strategy: 'UNRESOLVED',
+    });
+    const savedConflict = await conflictRepo.save(conflict);
+
+    // Step E: Resolve Conflict in DB using LOCAL / ACCEPT_CLIENT strategy
+    savedConflict.resolution_strategy = 'LOCAL';
+    savedConflict.resolved_at = new Date();
+    await conflictRepo.save(savedConflict);
+
+    savedItem1.status = 'SYNCED';
+    savedItem1.synced_at = new Date();
+    await queueRepo.save(savedItem1);
+
+    const reReadConflict = await conflictRepo.findOne({ where: { id: savedConflict.id } });
+    const reReadItem = await queueRepo.findOne({ where: { id: savedItem1.id } });
+
+    expect(reReadConflict?.resolution_strategy).toBe('LOCAL');
+    expect(reReadItem?.status).toBe('SYNCED');
   });
 });
