@@ -11,11 +11,17 @@ export interface AuditWriteOptions {
   entityType?: string;
   entityId?: string;
   branchId?: string;
-  correlationId: string;
+  correlationId?: string;
   ip?: string;
   beforeData?: Record<string, any>;
   afterData?: Record<string, any>;
   details?: Record<string, any>;
+}
+
+function sanitizeUuid(val?: string): string | null {
+  if (!val) return null;
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+  return isUuid ? val : null;
 }
 
 @Injectable()
@@ -28,13 +34,14 @@ export class AuditWriter {
   async write(options: AuditWriteOptions): Promise<AuditEvent> {
     const event = this.auditRepo.create({
       tenant_id: options.tenantId,
+      event_type: options.action,
       actor_type: options.actorType,
-      actor_id: options.actorId || null,
+      actor_id: sanitizeUuid(options.actorId),
       action: options.action,
       entity_type: options.entityType || null,
-      entity_id: options.entityId || null,
-      branch_id: options.branchId || null,
-      correlation_id: options.correlationId,
+      entity_id: sanitizeUuid(options.entityId),
+      branch_id: sanitizeUuid(options.branchId),
+      correlation_id: sanitizeUuid(options.correlationId),
       ip: options.ip || null,
       before_data: options.beforeData || null,
       after_data: options.afterData || null,
@@ -46,13 +53,14 @@ export class AuditWriter {
   async writeInTransaction(manager: EntityManager, options: AuditWriteOptions): Promise<AuditEvent> {
     const event = manager.create(AuditEvent, {
       tenant_id: options.tenantId,
+      event_type: options.action,
       actor_type: options.actorType,
-      actor_id: options.actorId || null,
+      actor_id: sanitizeUuid(options.actorId),
       action: options.action,
       entity_type: options.entityType || null,
-      entity_id: options.entityId || null,
-      branch_id: options.branchId || null,
-      correlation_id: options.correlationId,
+      entity_id: sanitizeUuid(options.entityId),
+      branch_id: sanitizeUuid(options.branchId),
+      correlation_id: sanitizeUuid(options.correlationId),
       ip: options.ip || null,
       before_data: options.beforeData || null,
       after_data: options.afterData || null,

@@ -1,10 +1,40 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, LessThanOrEqual, IsNull, Or } from 'typeorm';
 import { OfflineQueueItem } from '../../entities/OfflineQueueItem.entity';
 import { SyncConflictRecord } from '../../entities/SyncConflictRecord.entity';
 import { BranchStatusSnapshot } from '../../entities/BranchStatusSnapshot.entity';
+import { SyncCategoryLog } from '../../entities/SyncCategoryLog.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
+
+const ALLOWED_ENTITY_TYPES = new Set([
+  'ORDER',
+  'PAYMENT',
+  'REFUND',
+  'CASH_SHIFT',
+  'CUSTOMER',
+  'CATALOG',
+  'PRICE_UPDATE',
+  'SETTING',
+  'COURIER',
+]);
+
+const FINANCIAL_ENTITY_TYPES = new Set(['ORDER', 'PAYMENT', 'REFUND', 'CASH_SHIFT']);
+
+const DISALLOWED_FINANCIAL_KEYS = [
+  'total',
+  'amount',
+  'price',
+  'unit_price',
+  'balance',
+  'opening_balance',
+  'line_total',
+  'tax_amount',
+  'discount_amount',
+  'grand_total',
+  'paid_total',
+];
 
 @Injectable()
 export class OfflineSyncService {
@@ -12,62 +42,47 @@ export class OfflineSyncService {
     @InjectRepository(OfflineQueueItem) private readonly queueRepo: Repository<OfflineQueueItem>,
     @InjectRepository(SyncConflictRecord) private readonly conflictRepo: Repository<SyncConflictRecord>,
     @InjectRepository(BranchStatusSnapshot) private readonly branchStatusRepo: Repository<BranchStatusSnapshot>,
+    @InjectRepository(SyncCategoryLog) private readonly categoryLogRepo: Repository<SyncCategoryLog>,
     private readonly auditWriter: AuditWriter,
   ) {}
 
   private validateDomainPayload(entityType: string, payload: any) {
-    if (!payload || typeof payload !== 'object') {
-      throw new BadRequestException(`Invalid payload for domain operation: payload must be an object`);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new BadRequestException('Invalid payload for domain operation: payload must be an object');
+    }
+
+    const typeUpper = (entityType || '').toUpperCase().trim();
+
+    if (!ALLOWED_ENTITY_TYPES.has(typeUpper)) {
+      throw new BadRequestException(
+        `Invalid entity_type: '${entityType}'. Must be a closed domain-specific offline operation.`,
+      );
     }
 
     if (payload.arbitrary_financial_json === true || payload.is_corrupt === true) {
-      throw new BadRequestException(`Invalid payload for domain operation: arbitrary or corrupt financial JSON rejected`);
+      throw new BadRequestException('Invalid payload for domain operation: arbitrary or corrupt financial JSON rejected');
     }
 
-    const typeUpper = (entityType || 'ORDER').toUpperCase();
+    if (FINANCIAL_ENTITY_TYPES.has(typeUpper)) {
+      for (const key of DISALLOWED_FINANCIAL_KEYS) {
+        if (payload[key] !== undefined) {
+          throw new BadRequestException(
+            `Financial operations (${typeUpper}) must be references to valid domain commands/records and must not accept client-authoritative amounts, prices, totals, or balances (field '${key}' rejected).`,
+          );
+        }
+      }
 
-    if (typeUpper === 'ORDER') {
-      if (payload.total !== undefined) {
-        const val = Number(payload.total);
-        if (isNaN(val) || val < 0) {
-          throw new BadRequestException(`Invalid payload for ORDER: total must be non-negative numeric value`);
-        }
-      }
-      if (payload.amount !== undefined) {
-        const val = Number(payload.amount);
-        if (isNaN(val) || val < 0) {
-          throw new BadRequestException(`Invalid payload for ORDER: amount must be non-negative numeric value`);
-        }
-      }
       if (Array.isArray(payload.items)) {
         for (const item of payload.items) {
-          if (item.price !== undefined) {
-            const p = Number(item.price);
-            if (isNaN(p) || p < 0) {
-              throw new BadRequestException(`Invalid payload for ORDER: item price must be non-negative numeric value`);
+          if (item && typeof item === 'object') {
+            for (const key of DISALLOWED_FINANCIAL_KEYS) {
+              if (item[key] !== undefined) {
+                throw new BadRequestException(
+                  `Financial operations (${typeUpper}) line items must not accept client-authoritative amounts or prices (field '${key}' rejected).`,
+                );
+              }
             }
           }
-        }
-      }
-    } else if (typeUpper === 'PAYMENT') {
-      if (payload.amount !== undefined) {
-        const val = Number(payload.amount);
-        if (isNaN(val) || val <= 0) {
-          throw new BadRequestException(`Invalid payload for PAYMENT: amount must be positive numeric value`);
-        }
-      }
-    } else if (typeUpper === 'REFUND') {
-      if (payload.amount !== undefined) {
-        const val = Number(payload.amount);
-        if (isNaN(val) || val <= 0) {
-          throw new BadRequestException(`Invalid payload for REFUND: amount must be positive numeric value`);
-        }
-      }
-    } else if (typeUpper === 'CASH_SHIFT') {
-      if (payload.opening_balance !== undefined) {
-        const val = Number(payload.opening_balance);
-        if (isNaN(val) || val < 0) {
-          throw new BadRequestException(`Invalid payload for CASH_SHIFT: balance must be valid numeric value`);
         }
       }
     }
@@ -87,7 +102,7 @@ export class OfflineSyncService {
         agent_version: 'v1.5.0-sim',
         agent_health: 'HEALTHY',
         last_heartbeat_at: new Date(),
-        last_sync_at: new Date(),
+        last_sync_at: null,
         offline_since: null,
         details: { initialized: true },
       });
@@ -194,7 +209,7 @@ export class OfflineSyncService {
     },
     correlationId?: string,
   ) {
-    const entityType = data.entity_type || 'ORDER';
+    const entityType = (data.entity_type || 'ORDER').toUpperCase().trim();
     this.validateDomainPayload(entityType, data.payload);
 
     if (data.dedupe_key) {
@@ -228,110 +243,240 @@ export class OfflineSyncService {
       client_version: data.client_version || 1,
       dedupe_key: data.dedupe_key || null,
       synced_at: snapshot.is_online ? new Date() : null,
+      attempt_count: 0,
+      retry_count: 0,
     });
 
-    const saved = await this.queueRepo.save(item);
+    try {
+      const saved = await this.queueRepo.save(item);
 
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'SYSTEM',
-      action: 'OFFLINE_ITEM_ENQUEUED',
-      correlationId: correlationId || 'corr-queue-enqueue',
-      afterData: {
-        item_id: saved.id,
-        status: saved.status,
-        entity_type: saved.entity_type,
-        dedupe_key: saved.dedupe_key,
-      },
-    });
+      await this.auditWriter.write({
+        tenantId,
+        actorType: 'SYSTEM',
+        action: 'OFFLINE_ITEM_ENQUEUED',
+        correlationId: correlationId || 'corr-queue-enqueue',
+        afterData: {
+          item_id: saved.id,
+          status: saved.status,
+          entity_type: saved.entity_type,
+          dedupe_key: saved.dedupe_key,
+        },
+      });
 
-    return saved;
+      return saved;
+    } catch (err: any) {
+      // Handle PostgreSQL duplicate-key race condition on active dedupe index (code 23505)
+      if (err?.code === '23505' && data.dedupe_key) {
+        const existing = await this.queueRepo.findOne({
+          where: {
+            tenant_id: tenantId,
+            branch_id: data.branch_id,
+            dedupe_key: data.dedupe_key,
+            status: In(['PENDING', 'SYNCING', 'CONFLICT']),
+          },
+        });
+        if (existing) {
+          return {
+            ...existing,
+            is_duplicate: true,
+          };
+        }
+      }
+      throw err;
+    }
   }
 
   async triggerSyncWorker(tenantId: string, branchId: string = 'default-branch', correlationId?: string) {
-    const pendingItems = await this.queueRepo.find({
-      where: {
-        tenant_id: tenantId,
-        branch_id: branchId,
-        status: In(['PENDING', 'SYNCING']),
-      },
-      order: { created_at: 'ASC' },
-    });
+    const workerId = `worker-${Math.random().toString(36).substring(2, 9)}`;
+    const now = new Date();
+
+    // Claim pending rows transactionally with FOR UPDATE SKIP LOCKED
+    // also recovering expired claims safely (claim_expires_at < NOW)
+    let claimedItems: OfflineQueueItem[] = [];
+
+    const queryRunner = this.queueRepo.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const isPostgres = queryRunner.connection?.driver?.options?.type === 'postgres';
+      if (isPostgres) {
+        const rows = await queryRunner.query(
+          `SELECT id FROM "offline_queue_item"
+           WHERE "tenant_id" = $1 AND "branch_id" = $2
+             AND "status" IN ('PENDING', 'SYNCING')
+             AND ("next_attempt_at" IS NULL OR "next_attempt_at" <= $3)
+             AND ("claim_expires_at" IS NULL OR "claim_expires_at" < $3 OR "status" = 'PENDING')
+           ORDER BY "created_at" ASC
+           LIMIT 50
+           FOR UPDATE SKIP LOCKED`,
+          [tenantId, branchId, now],
+        );
+
+        const ids = rows.map((r: any) => r.id);
+        if (ids.length > 0) {
+          const claimExpiresAt = new Date(now.getTime() + 30000); // 30 second claim window
+          await queryRunner.query(
+            `UPDATE "offline_queue_item"
+             SET "status" = 'SYNCING',
+                 "claimed_by" = $1,
+                 "claimed_at" = $2,
+                 "claim_expires_at" = $3
+             WHERE id = ANY($4)`,
+            [workerId, now, claimExpiresAt, ids],
+          );
+
+          claimedItems = await queryRunner.manager.find(OfflineQueueItem, {
+            where: { id: In(ids) },
+            order: { created_at: 'ASC' },
+          });
+        }
+      } else {
+        // Fallback for non-PostgreSQL / unit tests
+        claimedItems = await this.queueRepo.find({
+          where: {
+            tenant_id: tenantId,
+            branch_id: branchId,
+            status: In(['PENDING', 'SYNCING']),
+          },
+          order: { created_at: 'ASC' },
+        });
+
+        for (const item of claimedItems) {
+          item.status = 'SYNCING';
+          item.claimed_by = workerId;
+          item.claimed_at = now;
+          item.claim_expires_at = new Date(now.getTime() + 30000);
+          await this.queueRepo.save(item);
+        }
+      }
+
+      await queryRunner.commitTransaction();
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
 
     let syncedCount = 0;
     let conflictCount = 0;
     let dlqCount = 0;
 
-    const categoryCounts: Record<string, number> = {
-      menus: 0,
-      prices: 0,
-      customers: 0,
-      orders: 0,
-      payments: 0,
-      refunds: 0,
-      approvals: 0,
-      settings: 0,
-      courier: 0,
-    };
+    const categoryCounts: Record<string, { processed: number; synced: number; conflict: number; dlq: number }> = {};
 
-    for (const item of pendingItems) {
-      item.status = 'SYNCING';
-      item.retry_count += 1;
-      await this.queueRepo.save(item);
+    const batchId = randomUUID();
 
-      const typeUpper = (item.entity_type || 'ORDER').toUpperCase();
+    for (const item of claimedItems) {
+      const typeUpper = (item.entity_type || 'ORDER').toUpperCase().trim();
+      let catKey = typeUpper;
+      if (typeUpper.includes('PRICE')) catKey = 'PRICE';
+      else if (typeUpper.includes('MENU') || typeUpper.includes('CATALOG')) catKey = 'CATALOG';
+      else if (typeUpper.includes('CONFIG') || typeUpper.includes('SETTING')) catKey = 'SETTING';
 
-      if (item.payload?.simulate_dlq || item.payload?.simulate_failure || item.retry_count > 3) {
+      if (!categoryCounts[catKey]) {
+        categoryCounts[catKey] = { processed: 0, synced: 0, conflict: 0, dlq: 0 };
+      }
+      categoryCounts[catKey].processed += 1;
+
+      item.attempt_count = (item.attempt_count || item.retry_count || 0) + 1;
+      item.retry_count = item.attempt_count;
+
+      const isConflict =
+        item.payload?.simulate_conflict ||
+        (item.payload?.cloud_version && (item.client_version || 1) < item.payload.cloud_version);
+
+      if (item.payload?.simulate_dlq || item.payload?.simulate_failure || item.attempt_count > 3) {
         item.status = 'DLQ_FAILED';
-        item.conflict_reason = item.payload?.simulate_failure
+        item.failure_reason = item.payload?.simulate_failure
           ? `Simulated worker failure: ${item.payload.simulate_failure}`
-          : `Retry count exceeded maximum limit (DLQ)`;
+          : 'Attempt count exceeded maximum limit (DLQ)';
+        item.conflict_reason = item.failure_reason;
+        item.claimed_by = null;
+        item.claimed_at = null;
+        item.claim_expires_at = null;
         await this.queueRepo.save(item);
+
         dlqCount += 1;
-      } else if (item.payload?.simulate_conflict) {
-        const conflictType = item.payload.simulate_conflict;
+        categoryCounts[catKey].dlq += 1;
+      } else if (isConflict) {
+        const conflictType = item.payload?.simulate_conflict || 'VERSION_MISMATCH';
         item.status = 'CONFLICT';
         item.conflict_reason = `Sync conflict detected: ${conflictType}`;
+        item.claimed_by = null;
+        item.claimed_at = null;
+        item.claim_expires_at = null;
         const savedItem = await this.queueRepo.save(item);
+
+        const cloudVersion = item.payload?.cloud_version || (item.client_version || 1) + 1;
+        const serverState = item.payload?.cloud_original || {
+          server_price: '25.00',
+          available_stock: 0,
+          server_version: cloudVersion,
+          server_timestamp: new Date().toISOString(),
+        };
 
         const conflictRecord = this.conflictRepo.create({
           tenant_id: tenantId,
           queue_item_id: savedItem.id,
           conflict_type: conflictType,
           client_state: item.payload,
-          server_state: {
-            server_price: '25.00',
-            available_stock: 0,
-            server_version: (item.client_version || 1) + 1,
-            server_timestamp: new Date().toISOString(),
-          },
+          server_state: serverState,
+          local_original: item.payload,
+          cloud_original: serverState,
+          local_version: item.client_version || 1,
+          cloud_version: cloudVersion,
           resolution_strategy: 'UNRESOLVED',
+          resolution_result: null,
         });
         await this.conflictRepo.save(conflictRecord);
+
         conflictCount += 1;
+        categoryCounts[catKey].conflict += 1;
+      } else if (item.payload?.simulate_retry_error) {
+        // Schedule retry with backoff
+        item.status = 'PENDING';
+        item.next_attempt_at = new Date(Date.now() + 5000 * item.attempt_count);
+        item.failure_reason = 'Simulated transient network error; retry scheduled';
+        item.claimed_by = null;
+        item.claimed_at = null;
+        item.claim_expires_at = null;
+        await this.queueRepo.save(item);
       } else {
         item.status = 'SYNCED';
         item.synced_at = new Date();
+        item.claimed_by = null;
+        item.claimed_at = null;
+        item.claim_expires_at = null;
+        item.failure_reason = null;
         await this.queueRepo.save(item);
-        syncedCount += 1;
 
-        if (typeUpper === 'ORDER') categoryCounts.orders += 1;
-        else if (typeUpper === 'PAYMENT') categoryCounts.payments += 1;
-        else if (typeUpper === 'REFUND') categoryCounts.refunds += 1;
-        else if (typeUpper === 'CUSTOMER') categoryCounts.customers += 1;
-        else if (typeUpper.includes('PRICE')) categoryCounts.prices += 1;
-        else if (typeUpper.includes('MENU') || typeUpper.includes('CATALOG')) categoryCounts.menus += 1;
-        else if (typeUpper.includes('APPROVAL')) categoryCounts.approvals += 1;
-        else if (typeUpper.includes('CONFIG') || typeUpper.includes('SETTING')) categoryCounts.settings += 1;
-        else if (typeUpper.includes('COURIER')) categoryCounts.courier += 1;
-        else categoryCounts.orders += 1;
+        syncedCount += 1;
+        categoryCounts[catKey].synced += 1;
       }
+    }
+
+    // Persist incremental category logs/metrics in sync_category_log table
+    for (const [catName, counts] of Object.entries(categoryCounts)) {
+      const catLog = this.categoryLogRepo.create({
+        tenant_id: tenantId,
+        branch_id: branchId,
+        batch_id: batchId,
+        category: catName,
+        processed_count: counts.processed,
+        synced_count: counts.synced,
+        conflict_count: counts.conflict,
+        dlq_count: counts.dlq,
+      });
+      await this.categoryLogRepo.save(catLog);
     }
 
     const latestSnapshot = await this.getLatestBranchSnapshot(tenantId, branchId);
     let updatedLastSyncAt = latestSnapshot.last_sync_at;
 
-    const allSucceeded = pendingItems.length > 0 && syncedCount === pendingItems.length && conflictCount === 0 && dlqCount === 0;
+    // Advance last_sync_at ONLY if every selected item in the batch succeeded without conflict or DLQ
+    const allSucceeded = claimedItems.length > 0 && syncedCount === claimedItems.length && conflictCount === 0 && dlqCount === 0;
+
     if (allSucceeded) {
       updatedLastSyncAt = new Date();
       const syncSnapshot = this.branchStatusRepo.create({
@@ -345,6 +490,7 @@ export class OfflineSyncService {
         offline_since: null,
         details: {
           last_batch_synced_count: syncedCount,
+          last_batch_id: batchId,
           last_batch_categories: categoryCounts,
         },
       });
@@ -357,7 +503,8 @@ export class OfflineSyncService {
       action: 'OFFLINE_SYNC_WORKER_EXECUTED',
       correlationId: correlationId || 'corr-sync-worker',
       afterData: {
-        processed_count: pendingItems.length,
+        batch_id: batchId,
+        processed_count: claimedItems.length,
         synced_count: syncedCount,
         conflict_count: conflictCount,
         dlq_count: dlqCount,
@@ -368,7 +515,8 @@ export class OfflineSyncService {
 
     return {
       success: true,
-      processed_count: pendingItems.length,
+      batch_id: batchId,
+      processed_count: claimedItems.length,
       synced_count: syncedCount,
       conflict_count: conflictCount,
       dlq_count: dlqCount,
@@ -383,7 +531,7 @@ export class OfflineSyncService {
     if (!item) throw new NotFoundException(`Queue item ${queueItemId} not found`);
 
     if (item.status !== 'DLQ_FAILED') {
-      throw new BadRequestException(`Only items in DLQ_FAILED state can be cloned for retry`);
+      throw new BadRequestException('Only items in DLQ_FAILED state can be cloned for retry');
     }
 
     const cleanPayload = { ...item.payload };
@@ -397,7 +545,13 @@ export class OfflineSyncService {
       entity_type: item.entity_type,
       payload: cleanPayload,
       status: 'PENDING',
+      attempt_count: 0,
       retry_count: 0,
+      next_attempt_at: null,
+      claimed_by: null,
+      claimed_at: null,
+      claim_expires_at: null,
+      failure_reason: null,
       conflict_reason: null,
       client_version: item.client_version,
       dedupe_key: item.dedupe_key ? `${item.dedupe_key}-retry-${Date.now()}` : null,
@@ -436,7 +590,7 @@ export class OfflineSyncService {
     tenantId: string,
     data: {
       conflict_id: string;
-      resolution_strategy: 'ACCEPT_CLIENT' | 'ACCEPT_SERVER' | 'MANUAL_OVERRIDE';
+      resolution_strategy: 'ACCEPT_CLIENT' | 'ACCEPT_SERVER' | 'MANUAL_OVERRIDE' | 'LOCAL' | 'CLOUD' | 'MERGED';
       override_payload?: any;
     },
     userId?: string,
@@ -448,27 +602,40 @@ export class OfflineSyncService {
     const queueItem = await this.queueRepo.findOne({ where: { id: conflict.queue_item_id } });
     if (!queueItem) throw new NotFoundException('Associated queue item not found');
 
-    const strategyUpper = (data.resolution_strategy || 'LOCAL').toUpperCase();
+    const strategyUpper = (data.resolution_strategy || 'LOCAL').toUpperCase().trim();
+    const entityTypeUpper = (queueItem.entity_type || 'ORDER').toUpperCase().trim();
+
+    // REJECT MERGED FINANCIAL RESOLUTION
+    if ((strategyUpper === 'MANUAL_OVERRIDE' || strategyUpper === 'MERGED') && FINANCIAL_ENTITY_TYPES.has(entityTypeUpper)) {
+      throw new BadRequestException(
+        `Merged resolution for financial operations (${entityTypeUpper}) is rejected and must be routed only through domain correction commands.`,
+      );
+    }
+
+    let resolvedPayload: any;
 
     if (strategyUpper === 'MANUAL_OVERRIDE' || strategyUpper === 'MERGED') {
-      const override = data.override_payload || conflict.client_state;
+      const override = data.override_payload || conflict.local_original || conflict.client_state;
       this.validateDomainPayload(queueItem.entity_type, override);
-      queueItem.payload = override;
+      resolvedPayload = override;
     } else if (strategyUpper === 'ACCEPT_SERVER' || strategyUpper === 'CLOUD') {
-      queueItem.payload = conflict.server_state;
+      resolvedPayload = conflict.cloud_original || conflict.server_state;
     } else if (strategyUpper === 'ACCEPT_CLIENT' || strategyUpper === 'LOCAL') {
-      queueItem.payload = conflict.client_state;
+      resolvedPayload = conflict.local_original || conflict.client_state;
     } else {
       throw new BadRequestException(`Unsupported resolution strategy: ${data.resolution_strategy}`);
     }
 
     conflict.resolution_strategy = data.resolution_strategy;
+    conflict.resolution_result = resolvedPayload;
     conflict.resolved_at = new Date();
     conflict.resolved_by = userId || null;
     await this.conflictRepo.save(conflict);
 
+    queueItem.payload = resolvedPayload;
     queueItem.status = 'SYNCED';
     queueItem.synced_at = new Date();
+    queueItem.conflict_reason = null;
     const updatedQueueItem = await this.queueRepo.save(queueItem);
 
     await this.auditWriter.write({

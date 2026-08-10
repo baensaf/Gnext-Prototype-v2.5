@@ -4,20 +4,41 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { OfflineQueueItem } from '../src/entities/OfflineQueueItem.entity';
 import { SyncConflictRecord } from '../src/entities/SyncConflictRecord.entity';
 import { BranchStatusSnapshot } from '../src/entities/BranchStatusSnapshot.entity';
+import { SyncCategoryLog } from '../src/entities/SyncCategoryLog.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 
 describe('OfflineSyncService (Unit & Integration)', () => {
   let service: OfflineSyncService;
   let queueRepo: any;
   let conflictRepo: any;
   let branchStatusRepo: any;
+  let categoryLogRepo: any;
   let auditWriter: any;
 
   beforeEach(async () => {
-    queueRepo = { count: jest.fn(), find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
+    queueRepo = {
+      count: jest.fn(),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+      manager: {
+        connection: {
+          driver: { options: { type: 'sqlite' } },
+          createQueryRunner: () => ({
+            connect: jest.fn(),
+            startTransaction: jest.fn(),
+            commitTransaction: jest.fn(),
+            rollbackTransaction: jest.fn(),
+            release: jest.fn(),
+          }),
+        },
+      },
+    };
     conflictRepo = { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
     branchStatusRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
+    categoryLogRepo = { create: jest.fn(), save: jest.fn() };
     auditWriter = { write: jest.fn() };
 
     let latestSnapshot: any = null;
@@ -31,6 +52,8 @@ describe('OfflineSyncService (Unit & Integration)', () => {
       return Promise.resolve(latestSnapshot);
     });
     branchStatusRepo.findOne.mockImplementation(() => Promise.resolve(latestSnapshot));
+    categoryLogRepo.create.mockImplementation((dto: any) => dto);
+    categoryLogRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'cat-1' }));
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -38,6 +61,7 @@ describe('OfflineSyncService (Unit & Integration)', () => {
         { provide: getRepositoryToken(OfflineQueueItem), useValue: queueRepo },
         { provide: getRepositoryToken(SyncConflictRecord), useValue: conflictRepo },
         { provide: getRepositoryToken(BranchStatusSnapshot), useValue: branchStatusRepo },
+        { provide: getRepositoryToken(SyncCategoryLog), useValue: categoryLogRepo },
         { provide: AuditWriter, useValue: auditWriter },
       ],
     }).compile();
@@ -68,12 +92,24 @@ describe('OfflineSyncService (Unit & Integration)', () => {
     const res = await service.enqueueOfflineItem('t-1', {
       branch_id: 'br-1',
       entity_type: 'ORDER',
-      payload: { total: '25.00' },
+      payload: { order_id: 'ord-100', product_id: 'prod-1', quantity: 2 },
       dedupe_key: 'KEY-123',
     });
 
     expect((res as any).is_duplicate).toBe(true);
     expect(res.id).toBe('existing-item-1');
+  });
+
+  it('should reject client-authoritative financial amounts/prices in enqueueOfflineItem', async () => {
+    branchStatusRepo.findOne.mockResolvedValue({ is_online: false });
+
+    await expect(
+      service.enqueueOfflineItem('t-1', {
+        branch_id: 'br-1',
+        entity_type: 'ORDER',
+        payload: { order_id: 'ord-101', total: '50.00' },
+      }),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('should reject arbitrary or corrupt financial JSON in enqueueOfflineItem', async () => {
@@ -83,15 +119,15 @@ describe('OfflineSyncService (Unit & Integration)', () => {
       service.enqueueOfflineItem('t-1', {
         branch_id: 'br-1',
         entity_type: 'ORDER',
-        payload: { arbitrary_financial_json: true, total: '-50.00' },
+        payload: { arbitrary_financial_json: true, order_id: 'ord-102' },
       }),
     ).rejects.toThrow(BadRequestException);
   });
 
   it('should trigger sync worker, process queue items, and update DLQ state on retry limit', async () => {
     const pendingItems = [
-      { id: 'q-1', tenant_id: 't-1', branch_id: 'br-1', entity_type: 'ORDER', payload: { total: '15.00' }, retry_count: 0, status: 'PENDING' },
-      { id: 'q-2', tenant_id: 't-1', branch_id: 'br-1', entity_type: 'ORDER', payload: { total: '20.00', simulate_dlq: true }, retry_count: 0, status: 'PENDING' },
+      { id: 'q-1', tenant_id: 't-1', branch_id: 'br-1', entity_type: 'ORDER', payload: { order_id: 'ord-1' }, retry_count: 0, status: 'PENDING' },
+      { id: 'q-2', tenant_id: 't-1', branch_id: 'br-1', entity_type: 'ORDER', payload: { order_id: 'ord-2', simulate_dlq: true }, retry_count: 0, status: 'PENDING' },
     ];
 
     queueRepo.find.mockResolvedValue(pendingItems);
@@ -107,7 +143,7 @@ describe('OfflineSyncService (Unit & Integration)', () => {
 
   it('should advance last_sync_at only when all batch items succeed', async () => {
     const pendingItems = [
-      { id: 'q-1', tenant_id: 't-1', branch_id: 'br-1', entity_type: 'ORDER', payload: { total: '15.00' }, retry_count: 0, status: 'PENDING' },
+      { id: 'q-1', tenant_id: 't-1', branch_id: 'br-1', entity_type: 'ORDER', payload: { order_id: 'ord-1' }, retry_count: 0, status: 'PENDING' },
     ];
 
     queueRepo.find.mockResolvedValue(pendingItems);
@@ -126,7 +162,7 @@ describe('OfflineSyncService (Unit & Integration)', () => {
       tenant_id: 't-1',
       branch_id: 'br-1',
       entity_type: 'ORDER',
-      payload: { total: '30.00' },
+      payload: { order_id: 'ord-3' },
       status: 'DLQ_FAILED',
       client_version: 1,
     });
@@ -144,8 +180,10 @@ describe('OfflineSyncService (Unit & Integration)', () => {
       tenant_id: 't-1',
       queue_item_id: 'q-2',
       conflict_type: 'PRICE_MISMATCH',
-      client_state: { total: '20.00' },
-      server_state: { total: '25.00' },
+      local_original: { order_id: 'ord-2' },
+      cloud_original: { order_id: 'ord-2' },
+      client_state: { order_id: 'ord-2' },
+      server_state: { order_id: 'ord-2' },
     });
 
     queueRepo.findOne.mockResolvedValue({
@@ -153,26 +191,28 @@ describe('OfflineSyncService (Unit & Integration)', () => {
       tenant_id: 't-1',
       entity_type: 'ORDER',
       status: 'CONFLICT',
-      payload: { total: '20.00' },
+      payload: { order_id: 'ord-2' },
     });
 
     await expect(
       service.resolveConflict('t-1', {
         conflict_id: 'conf-1',
-        resolution_strategy: 'MANUAL_OVERRIDE',
-        override_payload: { arbitrary_financial_json: true },
+        resolution_strategy: 'MERGED',
+        override_payload: { order_id: 'ord-2' },
       }),
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('should resolve sync conflict using ACCEPT_CLIENT strategy', async () => {
+  it('should resolve sync conflict using ACCEPT_CLIENT / LOCAL strategy', async () => {
     conflictRepo.findOne.mockResolvedValue({
       id: 'conf-1',
       tenant_id: 't-1',
       queue_item_id: 'q-2',
       conflict_type: 'PRICE_MISMATCH',
-      client_state: { total: '20.00' },
-      server_state: { total: '25.00' },
+      local_original: { order_id: 'ord-2' },
+      cloud_original: { order_id: 'ord-2' },
+      client_state: { order_id: 'ord-2' },
+      server_state: { order_id: 'ord-2' },
     });
 
     queueRepo.findOne.mockResolvedValue({
@@ -180,7 +220,7 @@ describe('OfflineSyncService (Unit & Integration)', () => {
       tenant_id: 't-1',
       entity_type: 'ORDER',
       status: 'CONFLICT',
-      payload: { total: '20.00' },
+      payload: { order_id: 'ord-2' },
     });
 
     const res = await service.resolveConflict('t-1', {

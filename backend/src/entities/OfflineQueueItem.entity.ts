@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
 
 @Entity('offline_queue_item')
 export class OfflineQueueItem {
@@ -15,7 +15,7 @@ export class OfflineQueueItem {
   terminal_id: string;
 
   @Column({ type: 'varchar', length: 64 })
-  entity_type: string; // ORDER, PAYMENT, CASH_SHIFT, INVENTORY_ADJUSTMENT
+  entity_type: string; // ORDER, PAYMENT, REFUND, CASH_SHIFT, CUSTOMER, CATALOG, PRICE_UPDATE, SETTING, COURIER
 
   @Column({ type: 'jsonb' })
   payload: any;
@@ -26,8 +26,26 @@ export class OfflineQueueItem {
   @Column({ type: 'integer', default: 0 })
   retry_count: number;
 
+  @Column({ type: 'integer', default: 0 })
+  attempt_count: number;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  next_attempt_at: Date | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  claimed_by: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  claimed_at: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  claim_expires_at: Date | null;
+
   @Column({ type: 'text', nullable: true })
-  conflict_reason: string;
+  failure_reason: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  conflict_reason: string | null;
 
   @Column({ type: 'integer', default: 1 })
   client_version: number;
@@ -36,11 +54,11 @@ export class OfflineQueueItem {
   server_version: number;
 
   @Column({ type: 'varchar', length: 128, nullable: true })
-  dedupe_key: string;
+  dedupe_key: string | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 
   @Column({ type: 'timestamptz', nullable: true })
-  synced_at: Date;
+  synced_at: Date | null;
 }

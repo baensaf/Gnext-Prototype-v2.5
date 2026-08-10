@@ -151,6 +151,8 @@ import { OperationalAlert } from './entities/OperationalAlert.entity';
 import { SavedReportView } from './entities/SavedReportView.entity';
 import { ReportExportJob } from './entities/ReportExportJob.entity';
 
+import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -190,7 +192,7 @@ import { ReportExportJob } from './entities/ReportExportJob.entity';
           DeliveryZone, CourierAttendance, CourierTerminalAssignment, Delivery, DeliveryEvent,
           CashierShift, CashMovement, BusinessDayClose, CashDrawerShift, CashDrawerTransaction,
           InventoryItem, InventoryTransaction, IntegrationLog,
-          OfflineQueueItem, SyncConflictRecord,
+          OfflineQueueItem, SyncConflictRecord, SyncCategoryLog,
           ImportJob, ImportRow,
           OperationalAlert, SavedReportView, ReportExportJob,
         ],
