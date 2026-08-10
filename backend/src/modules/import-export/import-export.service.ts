@@ -469,7 +469,7 @@ export class ImportExportService {
 
     await this.dataSource.transaction(async (manager) => {
       for (const table of resetTables) {
-        await manager.query(`DELETE FROM "${table}" WHERE tenant_id = $1 OR 1=1`, [tenantId]);
+        await manager.query(`DELETE FROM "${table}" WHERE tenant_id = $1`, [tenantId]);
       }
     });
 
