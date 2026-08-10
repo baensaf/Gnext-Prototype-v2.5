@@ -14,6 +14,9 @@ export class ReasonCode {
   @Column({ type: 'varchar', length: 160 })
   name: string;
 
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  type: string;
+
   @Column({ type: 'varchar', array: true, default: '{}' })
   applies_to: string[];
 

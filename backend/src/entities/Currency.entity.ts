@@ -14,6 +14,9 @@ export class Currency {
   @Column({ type: 'varchar', length: 8 })
   symbol: string;
 
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  name: string;
+
   @Column({ type: 'smallint', default: 0 })
   decimal_precision: number;
 

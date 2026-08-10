@@ -29,6 +29,55 @@ export class CompleteR24ReportsAlertsExportsSchema1700000000014 implements Migra
       ALTER TABLE "cashier_shift" ADD COLUMN IF NOT EXISTS "closing_note" text;
       ALTER TABLE "cashier_shift" ADD COLUMN IF NOT EXISTS "notes" text;
 
+      ALTER TABLE "terminal" ADD COLUMN IF NOT EXISTS "terminal_type" varchar(20) DEFAULT 'CASHIER';
+      ALTER TABLE "terminal" ADD COLUMN IF NOT EXISTS "last_seen_at" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE "terminal" ADD COLUMN IF NOT EXISTS "created_by" uuid;
+      ALTER TABLE "terminal" ADD COLUMN IF NOT EXISTS "updated_by" uuid;
+      ALTER TABLE "terminal" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE "terminal" ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1;
+
+      ALTER TABLE "payment_method" ADD COLUMN IF NOT EXISTS "kind" varchar(30) DEFAULT 'CASH';
+      ALTER TABLE "payment_method" ADD COLUMN IF NOT EXISTS "currency_code" char(3);
+      ALTER TABLE "payment_method" ADD COLUMN IF NOT EXISTS "requires_reference" boolean DEFAULT false;
+      ALTER TABLE "payment_method" ADD COLUMN IF NOT EXISTS "requires_device" boolean DEFAULT false;
+      ALTER TABLE "payment_method" ADD COLUMN IF NOT EXISTS "allows_refund" boolean DEFAULT true;
+      ALTER TABLE "payment_method" ADD COLUMN IF NOT EXISTS "allows_alternative_refund" boolean DEFAULT false;
+      ALTER TABLE "payment_method" ADD COLUMN IF NOT EXISTS "sort_order" integer DEFAULT 0;
+      ALTER TABLE "payment_method" ADD COLUMN IF NOT EXISTS "created_by" uuid;
+      ALTER TABLE "payment_method" ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+      ALTER TABLE "payment_method" ADD COLUMN IF NOT EXISTS "updated_by" uuid;
+      ALTER TABLE "payment_method" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE "payment_method" ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1;
+
+      ALTER TABLE "category" ADD COLUMN IF NOT EXISTS "parent_id" uuid;
+      ALTER TABLE "category" ADD COLUMN IF NOT EXISTS "sort_order" integer DEFAULT 0;
+      ALTER TABLE "category" ADD COLUMN IF NOT EXISTS "image_asset_id" uuid;
+      ALTER TABLE "category" ADD COLUMN IF NOT EXISTS "created_by" uuid;
+      ALTER TABLE "category" ADD COLUMN IF NOT EXISTS "updated_by" uuid;
+      ALTER TABLE "category" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE "category" ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1;
+
+      ALTER TABLE "product" ADD COLUMN IF NOT EXISTS "sku" varchar(64);
+      ALTER TABLE "product" ADD COLUMN IF NOT EXISTS "barcode" varchar(64);
+      ALTER TABLE "product" ADD COLUMN IF NOT EXISTS "description" text;
+      ALTER TABLE "product" ADD COLUMN IF NOT EXISTS "unit_of_measure" varchar(20) DEFAULT 'UNIT';
+      ALTER TABLE "product" ADD COLUMN IF NOT EXISTS "image_asset_id" uuid;
+      ALTER TABLE "product" ADD COLUMN IF NOT EXISTS "base_price" numeric(19,4) DEFAULT '0.0000';
+      ALTER TABLE "product" ADD COLUMN IF NOT EXISTS "created_by" uuid;
+      ALTER TABLE "product" ADD COLUMN IF NOT EXISTS "updated_by" uuid;
+      ALTER TABLE "product" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE "product" ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1;
+
+      ALTER TABLE "reason_code" ADD COLUMN IF NOT EXISTS "type" varchar(50);
+      ALTER TABLE "reason_code" ALTER COLUMN "type" DROP NOT NULL;
+      ALTER TABLE "reason_code" ADD COLUMN IF NOT EXISTS "applies_to" text[] DEFAULT '{}';
+      ALTER TABLE "reason_code" ADD COLUMN IF NOT EXISTS "requires_note" boolean DEFAULT false;
+      ALTER TABLE "reason_code" ADD COLUMN IF NOT EXISTS "created_by" uuid;
+      ALTER TABLE "reason_code" ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+      ALTER TABLE "reason_code" ADD COLUMN IF NOT EXISTS "updated_by" uuid;
+      ALTER TABLE "reason_code" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE "reason_code" ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1;
+
       ALTER TABLE "customer" ADD COLUMN IF NOT EXISTS "code" varchar(32);
       ALTER TABLE "customer" ADD COLUMN IF NOT EXISTS "first_name" varchar(80);
       ALTER TABLE "customer" ADD COLUMN IF NOT EXISTS "last_name" varchar(80);
@@ -40,6 +89,23 @@ export class CompleteR24ReportsAlertsExportsSchema1700000000014 implements Migra
       ALTER TABLE "customer" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE;
       ALTER TABLE "customer" ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1;
 
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "id" uuid DEFAULT gen_random_uuid();
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "tenant_id" uuid;
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "name" varchar(64);
+      ALTER TABLE "currency" ALTER COLUMN "name" DROP NOT NULL;
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "decimal_precision" smallint DEFAULT 0;
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "rounding_increment" numeric(19,4) DEFAULT '1.0000';
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "is_enabled" boolean DEFAULT true;
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "is_base" boolean DEFAULT false;
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "created_by" uuid;
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "updated_by" uuid;
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1;
+
+      ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "system" varchar(32);
+      ALTER TABLE "integration_log" ALTER COLUMN "system" DROP NOT NULL;
       ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "provider" varchar(64);
       ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "event_type" varchar(64);
       ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "hmac_signature" varchar(128);
@@ -63,6 +129,19 @@ export class CompleteR24ReportsAlertsExportsSchema1700000000014 implements Migra
       ALTER TABLE "audit_event" ADD COLUMN IF NOT EXISTS "after_data" jsonb;
       ALTER TABLE "audit_event" ADD COLUMN IF NOT EXISTS "details" jsonb;
       ALTER TABLE "audit_event" ADD COLUMN IF NOT EXISTS "occurred_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+      ALTER TABLE "inventory_item" ADD COLUMN IF NOT EXISTS "product_code" varchar(32);
+      ALTER TABLE "inventory_item" ADD COLUMN IF NOT EXISTS "product_name" varchar(160);
+      ALTER TABLE "inventory_item" ADD COLUMN IF NOT EXISTS "created_by" uuid;
+      ALTER TABLE "inventory_item" ADD COLUMN IF NOT EXISTS "updated_by" uuid;
+      ALTER TABLE "inventory_item" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE "inventory_item" ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1;
+
+      ALTER TABLE "inventory_transaction" ADD COLUMN IF NOT EXISTS "created_by" uuid;
+      ALTER TABLE "inventory_transaction" ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+      ALTER TABLE "inventory_transaction" ADD COLUMN IF NOT EXISTS "updated_by" uuid;
+      ALTER TABLE "inventory_transaction" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE "inventory_transaction" ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1;
     `);
 
     await queryRunner.query(`

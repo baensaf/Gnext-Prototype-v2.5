@@ -73,6 +73,19 @@ describe('R24 Reports, Alerts, Exports & Audit Verification Suite', () => {
       ALTER TABLE "customer" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE;
       ALTER TABLE "customer" ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1;
 
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "id" uuid DEFAULT gen_random_uuid();
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "tenant_id" uuid;
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "decimal_precision" smallint DEFAULT 0;
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "rounding_increment" numeric(19,4) DEFAULT '1.0000';
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "is_enabled" boolean DEFAULT true;
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "is_base" boolean DEFAULT false;
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "created_by" uuid;
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "updated_by" uuid;
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1;
+
       ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "provider" varchar(64);
       ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "event_type" varchar(64);
       ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "hmac_signature" varchar(128);

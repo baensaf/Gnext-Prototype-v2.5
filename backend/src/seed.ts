@@ -7,9 +7,11 @@ const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin@gnext.local';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'GnextDemo!2026';
 const APPROVER_PIN = process.env.APPROVER_PIN || '2468';
 
-async function seed() {
+export async function runSeed() {
   console.log('Connecting to database via AppDataSource (synchronize: false)...');
-  await AppDataSource.initialize();
+  if (!AppDataSource.isInitialized) {
+    await AppDataSource.initialize();
+  }
 
   const tenantRepo = AppDataSource.getRepository('Tenant');
   const adminRepo = AppDataSource.getRepository('AdminUser');
@@ -239,10 +241,14 @@ async function seed() {
   }
 
   console.log('Database seed execution completed successfully.');
-  await AppDataSource.destroy();
 }
 
-seed().catch((err) => {
-  console.error('Seed failed:', err);
-  process.exit(1);
-});
+if (require.main === module) {
+  runSeed()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error('Seed failed:', err);
+      process.exit(1);
+    });
+}
+
