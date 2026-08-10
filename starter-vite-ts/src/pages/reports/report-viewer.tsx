@@ -1,5 +1,5 @@
 import axios from 'axios';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import {
   Box,
@@ -35,16 +35,16 @@ export function ReportViewerPage() {
   const [endDate, setEndDate] = useState('');
   const [savedViewName, setSavedViewName] = useState('');
 
-  const fetchCatalog = async () => {
+  const fetchCatalog = useCallback(async () => {
     try {
       const res = await axios.get('/api/v1/reports/catalog');
       setCatalog(res.data);
     } catch (err) {
       console.error('Failed to load report catalog:', err);
     }
-  };
+  }, []);
 
-  const fetchSavedViews = async () => {
+  const fetchSavedViews = useCallback(async () => {
     try {
       const res = await axios.get('/api/v1/reports/saved-views', {
         params: { reportCode: selectedReportCode },
@@ -53,9 +53,9 @@ export function ReportViewerPage() {
     } catch (err) {
       console.error('Failed to load saved views:', err);
     }
-  };
+  }, [selectedReportCode]);
 
-  const handleRunQuery = async () => {
+  const handleRunQuery = useCallback(async () => {
     setLoading(true);
     try {
       const res = await axios.post('/api/v1/reports/query', {
@@ -63,12 +63,12 @@ export function ReportViewerPage() {
         filters: { startDate, endDate },
       });
       setReportResult(res.data);
-    } catch (err) {
+    } catch {
       alert('Failed to query report');
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedReportCode, startDate, endDate]);
 
   const handleSaveView = async () => {
     if (!savedViewName) return;
@@ -80,7 +80,7 @@ export function ReportViewerPage() {
       });
       setSavedViewName('');
       fetchSavedViews();
-    } catch (err) {
+    } catch {
       alert('Failed to save view');
     }
   };
@@ -111,7 +111,7 @@ export function ReportViewerPage() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } catch (err) {
+    } catch {
       alert('Export failed');
     }
   };
@@ -119,12 +119,12 @@ export function ReportViewerPage() {
   useEffect(() => {
     fetchCatalog();
     handleRunQuery();
-  }, []);
+  }, [fetchCatalog, handleRunQuery]);
 
   useEffect(() => {
     handleRunQuery();
     fetchSavedViews();
-  }, [selectedReportCode]);
+  }, [selectedReportCode, handleRunQuery, fetchSavedViews]);
 
   const headers = reportResult?.rows?.length > 0 ? Object.keys(reportResult.rows[0]) : [];
 

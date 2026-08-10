@@ -35,7 +35,7 @@ export function AvailabilityPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [availabilities, setAvailabilities] = useState<ProductAvailability[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Suspend Dialog

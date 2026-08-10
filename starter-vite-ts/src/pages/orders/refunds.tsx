@@ -29,7 +29,7 @@ import { refundApi } from 'src/api/refundApi';
 
 export function RefundsPage() {
   const [refunds, setRefunds] = useState<RefundRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [selectedRefund, setSelectedRefund] = useState<any | null>(null);
@@ -57,7 +57,7 @@ export function RefundsPage() {
       const data = await refundApi.getRefundById(id);
       setSelectedRefund(data);
       setDetailModalOpen(true);
-    } catch (err: any) {
+    } catch {
       setError('Failed to view refund details');
     }
   };

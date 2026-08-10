@@ -1,8 +1,8 @@
 import type { Branch, BranchOperatingHour } from 'src/api/tenantApi';
 
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -33,7 +33,7 @@ const DAY_NAMES = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thur
 export function BranchDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
 
   const [branch, setBranch] = useState<Branch | null>(null);
   const [hours, setHours] = useState<BranchOperatingHour[]>([]);
@@ -41,7 +41,7 @@ export function BranchDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     try {
@@ -54,11 +54,11 @@ export function BranchDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     loadData();
-  }, [id]);
+  }, [loadData]);
 
   const handleHourChange = (dayIndex: number, field: keyof BranchOperatingHour, value: any) => {
     setHours((prev) =>

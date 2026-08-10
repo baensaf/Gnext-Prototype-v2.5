@@ -1,7 +1,7 @@
 import type { Product, Category, PriceGroup } from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import SaveIcon from '@mui/icons-material/Save';
@@ -36,14 +36,14 @@ import {
 import { catalogApi } from 'src/api/catalogApi';
 
 export function PricingPage() {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
 
   const [priceGroups, setPriceGroups] = useState<PriceGroup[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedPriceGroupId, setSelectedPriceGroupId] = useState<string>('');
   const [overridePrices, setOverridePrices] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -58,7 +58,7 @@ export function PricingPage() {
   const [bulkAdjustmentType, setBulkAdjustmentType] = useState<'PERCENTAGE' | 'FIXED'>('PERCENTAGE');
   const [bulkAmount, setBulkAmount] = useState('10');
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const pgs = await catalogApi.getPriceGroups();
@@ -76,11 +76,11 @@ export function PricingPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedPriceGroupId]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();

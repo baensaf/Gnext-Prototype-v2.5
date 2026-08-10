@@ -1,6 +1,6 @@
 import type { KitchenTicket, KitchenStation } from 'src/api/kdsApi';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import UndoIcon from '@mui/icons-material/Undo';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -39,15 +39,15 @@ export function KdsPage() {
   const [stations, setStations] = useState<KitchenStation[]>([]);
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
   const [selectedStationId, setSelectedStationId] = useState<string>('ALL');
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [recallDrawerOpen, setRecallDrawerOpen] = useState(false);
+  const [_recallDrawerOpen, setRecallDrawerOpen] = useState(false);
   const [priorityDialogOpen, setPriorityDialogOpen] = useState(false);
   const [selectedTicketForPriority, setSelectedTicketForPriority] = useState<KitchenTicket | null>(null);
   const [priorityValue, setPriorityValue] = useState<number>(0);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [stList, tkList] = await Promise.all([
@@ -62,13 +62,13 @@ export function KdsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedStationId]);
 
   useEffect(() => {
     loadData();
     const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
-  }, [selectedStationId]);
+  }, [loadData]);
 
   const handleStartTicket = async (ticketId: string) => {
     try {

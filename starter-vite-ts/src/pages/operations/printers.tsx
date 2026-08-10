@@ -42,7 +42,7 @@ export function PrintersPage() {
   const [printers, setPrinters] = useState<PrinterDevice[]>([]);
   const [groups, setGroups] = useState<PrinterGroup[]>([]);
   const [routes, setRoutes] = useState<PrintRoute[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Dialogs

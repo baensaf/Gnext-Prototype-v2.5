@@ -5,7 +5,7 @@ import type {
   CustomerCreditAccount,
   CustomerCreditTransaction} from 'src/api/customerApi';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import HomeIcon from '@mui/icons-material/Home';
@@ -50,7 +50,7 @@ export function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([]);
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Form state
@@ -78,7 +78,7 @@ export function CustomersPage() {
   const [addrTitle, setAddrTitle] = useState('Home');
   const [addrText, setAddrText] = useState('');
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const cList = await customerApi.getCustomers(search || undefined);
@@ -91,11 +91,11 @@ export function CustomersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search]);
 
   useEffect(() => {
     loadData();
-  }, [search]);
+  }, [loadData]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -26,7 +26,7 @@ export function AuditExplorerPage() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [inspectingLog, setInspectingLog] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const [_loading, setLoading] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -52,7 +52,7 @@ export function AuditExplorerPage() {
     try {
       await axios.post(`/api/v1/reports/alerts/${id}/acknowledge`);
       fetchData();
-    } catch (err) {
+    } catch {
       alert('Failed to acknowledge alert');
     }
   };

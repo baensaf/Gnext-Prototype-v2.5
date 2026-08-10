@@ -45,7 +45,7 @@ export function KdsConfigurationPage() {
   const [rules, setRules] = useState<KdsRoutingRule[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Dialogs

@@ -35,12 +35,12 @@ import { customerApi } from 'src/api/customerApi';
 import { discountsApi } from 'src/api/discountsApi';
 
 export function CustomerGroupsPage() {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
 
   const [groups, setGroups] = useState<CustomerGroup[]>([]);
   const [priceGroups, setPriceGroups] = useState<PriceGroup[]>([]);
   const [discounts, setDiscounts] = useState<Discount[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Form state

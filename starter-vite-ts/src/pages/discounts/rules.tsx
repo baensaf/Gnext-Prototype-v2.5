@@ -35,10 +35,10 @@ import {
 import { discountsApi } from 'src/api/discountsApi';
 
 export function DiscountRulesPage() {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
 
   const [discounts, setDiscounts] = useState<DiscountCampaign[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Form state

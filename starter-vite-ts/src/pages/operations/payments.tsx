@@ -36,7 +36,7 @@ export function PaymentsPage() {
   const [devices, setDevices] = useState<PaymentDevice[]>([]);
   const [accounts, setAccounts] = useState<SettlementAccount[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Device Form Drawer

@@ -2,7 +2,7 @@ import type { ReasonCode } from 'src/api/settingsApi';
 import type { Branch, Terminal } from 'src/api/tenantApi';
 import type { ActiveShiftResponse } from 'src/api/cashDrawerApi';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
@@ -47,7 +47,7 @@ export function CashDrawerPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [terminals, setTerminals] = useState<Terminal[]>([]);
   const [reasonCodes, setReasonCodes] = useState<ReasonCode[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Open Shift Dialog
@@ -68,7 +68,7 @@ export function CashDrawerPage() {
   const [actualCashInput, setActualCashInput] = useState('');
   const [closeNotes, setCloseNotes] = useState('');
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const active = await cashDrawerApi.getActiveShift();
@@ -90,11 +90,11 @@ export function CashDrawerPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [openBranchId, openTerminalId]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const handleOpenShift = async (e: React.FormEvent) => {
     e.preventDefault();

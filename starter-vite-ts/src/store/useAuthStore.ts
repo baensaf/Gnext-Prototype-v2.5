@@ -84,7 +84,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     set({ isLoading: true });
     try {
       await httpClient.post('/api/v1/auth/logout');
-    } catch (_) {
+    } catch {
       // Ignore logout API error
     } finally {
       setCsrfToken(null);
@@ -120,7 +120,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       if (user?.preferredLocale) {
         await get().setLocale(user.preferredLocale);
       }
-    } catch (_) {
+    } catch {
       set({
         user: null,
         tenant: null,
@@ -142,7 +142,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (get().isAuthenticated) {
       try {
         await httpClient.post('/api/v1/auth/change-language', { locale });
-      } catch (_) {
+      } catch {
         // Suppress failure
       }
     }

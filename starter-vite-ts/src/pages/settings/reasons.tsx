@@ -42,10 +42,10 @@ const DOMAIN_OPTIONS = [
 ];
 
 export function ReasonCodesPage() {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
 
   const [reasons, setReasons] = useState<ReasonCode[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);

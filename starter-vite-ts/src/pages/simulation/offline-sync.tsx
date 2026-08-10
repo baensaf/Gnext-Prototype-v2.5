@@ -82,7 +82,7 @@ export function OfflineSyncPage() {
         isOnline,
       });
       fetchSyncData();
-    } catch (err) {
+    } catch {
       alert('Failed to toggle connectivity');
     } finally {
       setLoading(false);
@@ -159,7 +159,7 @@ export function OfflineSyncPage() {
       if (selectedStrategy === 'MANUAL_OVERRIDE') {
         try {
           overridePayload = JSON.parse(customOverrideJson);
-        } catch (e) {
+        } catch {
           alert('Invalid JSON in override payload editor');
           setLoading(false);
           return;

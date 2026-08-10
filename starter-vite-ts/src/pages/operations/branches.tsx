@@ -31,7 +31,7 @@ import {
 import { tenantApi } from 'src/api/tenantApi';
 
 export function BranchesPage() {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
   const navigate = useNavigate();
 
   const [branches, setBranches] = useState<Branch[]>([]);

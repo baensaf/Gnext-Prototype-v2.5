@@ -1,6 +1,6 @@
 import type { Branch, Terminal } from 'src/api/tenantApi';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -45,7 +45,7 @@ export function TerminalsPage() {
   const [terminalType, setTerminalType] = useState<'CASHIER' | 'KIOSK' | 'KDS'>('CASHIER');
   const [branchId, setBranchId] = useState('');
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const bList = await tenantApi.getBranches();
@@ -58,11 +58,11 @@ export function TerminalsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedBranchId]);
 
   useEffect(() => {
     loadData();
-  }, [selectedBranchId]);
+  }, [loadData]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

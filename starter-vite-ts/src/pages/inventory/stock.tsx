@@ -3,7 +3,7 @@ import type { ReasonCode } from 'src/api/settingsApi';
 import type { InventoryItem, InventoryTransaction } from 'src/api/inventoryApi';
 
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import AddBoxIcon from '@mui/icons-material/AddBox';
 import WarningIcon from '@mui/icons-material/Warning';
@@ -46,7 +46,7 @@ export function InventoryStockPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [reasonCodes, setReasonCodes] = useState<ReasonCode[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Post Transaction Modal
@@ -61,7 +61,7 @@ export function InventoryStockPage() {
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [itemHistory, setItemHistory] = useState<InventoryTransaction[]>([]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const bList = await tenantApi.getBranches();
@@ -81,11 +81,11 @@ export function InventoryStockPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedBranchId]);
 
   useEffect(() => {
     loadData();
-  }, [selectedBranchId]);
+  }, [loadData]);
 
   const handleOpenTxDialog = (item: InventoryItem) => {
     setSelectedItem(item);

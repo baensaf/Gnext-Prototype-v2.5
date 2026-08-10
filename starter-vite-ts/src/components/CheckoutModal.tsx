@@ -3,7 +3,7 @@ import type { OrderHeader } from 'src/api/orderApi';
 import type { PaymentMethod } from 'src/api/settingsApi';
 
 import { useNavigate } from 'react-router';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import PrintIcon from '@mui/icons-material/Print';
 import PaymentIcon from '@mui/icons-material/Payment';
@@ -54,9 +54,9 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const [payAmount, setPayAmount] = useState('');
   const [refNumber, setRefNumber] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [_loading, setLoading] = useState(false);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!orderId) return;
     setLoading(true);
     try {
@@ -78,13 +78,13 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     } finally {
       setLoading(false);
     }
-  };
+  }, [orderId, selectedMethodId]);
 
   useEffect(() => {
     if (open && orderId) {
       loadData();
     }
-  }, [open, orderId]);
+  }, [open, orderId, loadData]);
 
   const handleAddPayment = async (e: React.FormEvent) => {
     e.preventDefault();

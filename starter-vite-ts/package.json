@@ -21,7 +21,8 @@
     "re:build-npm": "npm run clean && npm install && npm run build",
     "tsc:watch": "tsc --noEmit --watch",
     "tsc:print": "tsc --showConfig",
-    "tsc:check": "tsc --noEmit --pretty"
+    "tsc:check": "tsc --noEmit --pretty",
+    "test:e2e": "playwright test"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -70,6 +71,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "@playwright/test": "^1.62.1",
     "@types/autosuggest-highlight": "^3.2.3",
     "@types/node": "^25.6.2",
     "@types/nprogress": "^0.2.3",

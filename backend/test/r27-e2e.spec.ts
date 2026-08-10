@@ -40,43 +40,7 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
     dataSource = moduleRef.get<DataSource>(DataSource);
     reportsService = moduleRef.get<ReportsService>(ReportsService);
 
-    await dataSource.query(`
-      ALTER TABLE "order_header" ADD COLUMN IF NOT EXISTS "placed_at" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
-      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "tenant_id" uuid;
-      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "subtotal" numeric(19,4) DEFAULT '0.0000';
-      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "discount_total" numeric(19,4) DEFAULT '0.0000';
-      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "discount_amount" numeric(19,4) DEFAULT '0.0000';
-      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "tax_total" numeric(19,4) DEFAULT '0.0000';
-      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "tax_amount" numeric(19,4) DEFAULT '0.0000';
-      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "total_amount" numeric(19,4) DEFAULT '0.0000';
-      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "notes" text;
-      ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "special_instructions" text;
-      ALTER TABLE "order_item" ALTER COLUMN "total_price" DROP NOT NULL;
-      ALTER TABLE "payment" ALTER COLUMN "payment_method_id" DROP NOT NULL;
-      ALTER TABLE "cashier_shift" ADD COLUMN IF NOT EXISTS "user_id" uuid;
-      ALTER TABLE "cashier_shift" ADD COLUMN IF NOT EXISTS "opened_by" uuid;
-      ALTER TABLE "cashier_shift" ADD COLUMN IF NOT EXISTS "closed_by" uuid;
-      ALTER TABLE "cashier_shift" ADD COLUMN IF NOT EXISTS "opening_cash" numeric(19,4) DEFAULT '0.0000';
-      ALTER TABLE "cashier_shift" ADD COLUMN IF NOT EXISTS "opening_float" numeric(19,4) DEFAULT '0.0000';
-      ALTER TABLE "cashier_shift" ADD COLUMN IF NOT EXISTS "expected_cash" numeric(19,4);
-      ALTER TABLE "cashier_shift" ADD COLUMN IF NOT EXISTS "actual_cash" numeric(19,4);
-      ALTER TABLE "cashier_shift" ADD COLUMN IF NOT EXISTS "short_over" numeric(19,4);
-      ALTER TABLE "cashier_shift" ADD COLUMN IF NOT EXISTS "over_short_amount" numeric(19,4);
-      ALTER TABLE "cashier_shift" ADD COLUMN IF NOT EXISTS "closing_note" text;
-      ALTER TABLE "cashier_shift" ADD COLUMN IF NOT EXISTS "notes" text;
-
-      ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "system" varchar(32);
-      ALTER TABLE "integration_log" ALTER COLUMN "system" DROP NOT NULL;
-      ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "provider" varchar(64);
-      ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "event_type" varchar(64);
-      ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "hmac_signature" varchar(128);
-      ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "idempotency_key" varchar(128);
-      ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "is_duplicate" boolean DEFAULT false;
-      ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "status" varchar(32) DEFAULT 'SUCCESS';
-      ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "request_payload" jsonb;
-      ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "response_payload" jsonb;
-      ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "error_message" text;
-    `);
+    await dataSource.runMigrations();
 
     // Setup unique fixture tenant per run
     const tenantRepo = dataSource.getRepository(Tenant);

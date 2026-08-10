@@ -1,6 +1,6 @@
 import type { PrintJob } from 'src/api/kdsApi';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import PrintIcon from '@mui/icons-material/Print';
 import ReplayIcon from '@mui/icons-material/Replay';
@@ -37,10 +37,10 @@ import { kdsApi } from 'src/api/kdsApi';
 
 export function PrintQueuePage() {
   const [jobs, setJobs] = useState<PrintJob[]>([]);
-  const [total, setTotal] = useState(0);
+  const [_total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [docTypeFilter, setDocTypeFilter] = useState<string>('');
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Preview & Outcome Modals
@@ -48,9 +48,9 @@ export function PrintQueuePage() {
 
   const [outcomeJob, setOutcomeJob] = useState<PrintJob | null>(null);
   const [outcomeVal, setOutcomeVal] = useState<'SUCCESS' | 'FAILED'>('SUCCESS');
-  const [useFallback, setUseFallback] = useState(true);
+  const [useFallback, _setUseFallback] = useState(true);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const res = await kdsApi.getPrintJobs({
@@ -65,13 +65,13 @@ export function PrintQueuePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter, docTypeFilter]);
 
   useEffect(() => {
     loadData();
     const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
-  }, [statusFilter, docTypeFilter]);
+  }, [loadData]);
 
   const handleSimulateOutcome = async () => {
     if (!outcomeJob) return;

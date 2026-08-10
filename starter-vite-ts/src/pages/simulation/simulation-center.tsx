@@ -29,7 +29,7 @@ import {
 
 export function SimulationCenterPage() {
   const [activeTab, setActiveTab] = useState<number>(0);
-  const [scenarios, setScenarios] = useState<any[]>([]);
+  const [_scenarios, setScenarios] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 

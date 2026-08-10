@@ -29,10 +29,10 @@ import {
 import { catalogApi } from 'src/api/catalogApi';
 
 export function CategoriesPage() {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
 
   const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);

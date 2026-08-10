@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class R23OfflineSyncCorrections1700000000014 implements MigrationInterface {
-  name = 'R23OfflineSyncCorrections1700000000014';
+export class R23OfflineSyncCorrections1700000000015 implements MigrationInterface {
+  name = 'R23OfflineSyncCorrections1700000000015';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Add missing retry scheduling, worker claiming, and failure columns to offline_queue_item
@@ -54,9 +54,27 @@ export class R23OfflineSyncCorrections1700000000014 implements MigrationInterfac
       CREATE INDEX IF NOT EXISTS "IDX_sync_category_log_tenant_batch"
       ON "sync_category_log" ("tenant_id", "branch_id", "batch_id");
     `);
+
+    // 5. Create approval_rule table
+    await queryRunner.query(`
+      CREATE TABLE IF NOT EXISTS "approval_rule" (
+        "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+        "tenant_id" uuid NOT NULL,
+        "action" varchar(64) NOT NULL,
+        "threshold_type" varchar(32) NOT NULL DEFAULT 'PERCENTAGE',
+        "threshold_value" numeric(19,4) NOT NULL DEFAULT '0.0000',
+        "required_steps" integer NOT NULL DEFAULT 1,
+        "approver_role" varchar(32) NOT NULL DEFAULT 'SUPERVISOR',
+        "is_active" boolean NOT NULL DEFAULT true,
+        "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        CONSTRAINT "PK_approval_rule" PRIMARY KEY ("id")
+      );
+    `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`DROP TABLE IF EXISTS "approval_rule";`);
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_sync_category_log_tenant_batch";`);
     await queryRunner.query(`DROP TABLE IF EXISTS "sync_category_log";`);
     await queryRunner.query(`

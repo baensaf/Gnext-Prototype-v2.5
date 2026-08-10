@@ -34,10 +34,10 @@ import {
 import { catalogApi } from 'src/api/catalogApi';
 
 export function OptionsPage() {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
 
   const [optionGroups, setOptionGroups] = useState<OptionGroup[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Group Form

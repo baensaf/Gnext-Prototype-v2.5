@@ -154,7 +154,7 @@ export function CourierSettlementsPage() {
       setCompAmount(res.data.total_compensation_amount || '0.00');
       setAdjAmount(res.data.total_adjustment_amount || '0.00');
       setDetailDialogOpen(true);
-    } catch (err) {
+    } catch {
       alert('Failed to load settlement details');
     }
   };
@@ -190,7 +190,7 @@ export function CourierSettlementsPage() {
       setEditableLines(res.data.lines || []);
       alert('Settlement draft updated successfully.');
       fetchData();
-    } catch (err) {
+    } catch {
       alert('Failed to update settlement draft');
     }
   };
@@ -203,7 +203,7 @@ export function CourierSettlementsPage() {
       setActiveSettlementDetail(res.data);
       alert('Settlement status moved to UNDER_REVIEW');
       fetchData();
-    } catch (err) {
+    } catch {
       alert('Error changing status to review');
     }
   };
@@ -230,7 +230,7 @@ export function CourierSettlementsPage() {
       alert('Settlement reversed successfully.');
       setDetailDialogOpen(false);
       fetchData();
-    } catch (err) {
+    } catch {
       alert('Error reversing settlement');
     }
   };
@@ -240,7 +240,7 @@ export function CourierSettlementsPage() {
       const res = await axios.get(`/api/v1/delivery/settlements/${settlementId}/statement`);
       setStatementData(res.data);
       setStatementModalOpen(true);
-    } catch (err) {
+    } catch {
       alert('Failed to load statement payload');
     }
   };

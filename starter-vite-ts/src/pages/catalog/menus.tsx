@@ -32,9 +32,9 @@ import { catalogApi } from 'src/api/catalogApi';
 export function MenusPage() {
   const [menus, setMenus] = useState<Menu[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [_categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Menu Creation Drawer

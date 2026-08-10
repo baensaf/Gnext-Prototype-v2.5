@@ -33,11 +33,11 @@ import {
 import { discountsApi } from 'src/api/discountsApi';
 
 export function CouponsPage() {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
 
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [discounts, setDiscounts] = useState<DiscountCampaign[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Form state

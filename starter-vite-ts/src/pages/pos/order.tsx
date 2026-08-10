@@ -53,7 +53,7 @@ interface CartItem {
 }
 
 export function PosOrderPage() {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
@@ -97,7 +97,7 @@ export function PosOrderPage() {
 
       const custs = await customerApi.getCustomers();
       setCustomers(custs);
-    } catch (err: any) {
+    } catch {
       setError('Failed to load POS catalog data');
     }
   };
@@ -113,7 +113,7 @@ export function PosOrderPage() {
       const groups = await catalogApi.getOptionGroups();
       setOptionGroups(groups);
       setOptionDialogOpen(true);
-    } catch (err: any) {
+    } catch {
       // Add directly without options
       addToCart(p, []);
     }

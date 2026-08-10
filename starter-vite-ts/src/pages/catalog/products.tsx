@@ -1,7 +1,7 @@
 import type { Product, Category, OptionGroup } from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import TuneIcon from '@mui/icons-material/Tune';
@@ -40,13 +40,13 @@ import { catalogApi } from 'src/api/catalogApi';
 import { ImageUploader } from 'src/components/ImageUploader';
 
 export function ProductsPage() {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [allOptionGroups, setAllOptionGroups] = useState<OptionGroup[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Form state
@@ -66,7 +66,7 @@ export function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedOptionGroupId, setSelectedOptionGroupId] = useState('');
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const cList = await catalogApi.getCategories();
@@ -81,11 +81,11 @@ export function ProductsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCategoryId]);
 
   useEffect(() => {
     loadData();
-  }, [selectedCategoryId]);
+  }, [loadData]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -44,7 +44,7 @@ export function DineInPage() {
   const [areas, setAreas] = useState<DiningArea[]>([]);
   const [tables, setTables] = useState<DiningTable[]>([]);
   const [selectedAreaId, setSelectedAreaId] = useState<string>('ALL');
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Seat Guests Modal

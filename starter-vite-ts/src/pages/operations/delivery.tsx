@@ -52,9 +52,9 @@ export function DeliveryPage() {
   const [zones, setZones] = useState<DeliveryZone[]>([]);
   const [terminals, setTerminals] = useState<any[]>([]);
   const [selectedEvents, setSelectedEvents] = useState<DeliveryEvent[]>([]);
-  const [eventDeliveryId, setEventDeliveryId] = useState<string | null>(null);
+  const [_eventDeliveryId, setEventDeliveryId] = useState<string | null>(null);
 
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Dialogs
@@ -191,7 +191,7 @@ export function DeliveryPage() {
     }
   };
 
-  const handleSetAvailability = async (courierId: string, availability: 'AVAILABLE' | 'BUSY' | 'OFF_LINE') => {
+  const _handleSetAvailability = async (courierId: string, availability: 'AVAILABLE' | 'BUSY' | 'OFF_LINE') => {
     try {
       await deliveryApi.setAvailability(courierId, availability);
       loadData();

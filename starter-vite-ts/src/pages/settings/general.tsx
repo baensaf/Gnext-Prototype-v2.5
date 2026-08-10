@@ -7,6 +7,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import {
   Box,
   Card,
+  Grid,
   Chip,
   Stack,
   Table,
@@ -29,7 +30,7 @@ import { settingsApi } from 'src/api/settingsApi';
 import { useAuthStore } from 'src/store/useAuthStore';
 
 export function GeneralSettingsPage() {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
   const { tenant } = useAuthStore();
 
   const [tenantName, setTenantName] = useState(tenant?.name || 'Gnext Prototype');
@@ -202,6 +203,3 @@ export function GeneralSettingsPage() {
     </Box>
   );
 }
-
-// Grid helper import
-import { Grid } from '@mui/material';

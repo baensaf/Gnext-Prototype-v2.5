@@ -40,7 +40,7 @@ const DEFAULT_ACTIONS = [
 export function ApprovalsSettingsPage() {
   const [rules, setRules] = useState<ApprovalRule[]>([]);
   const [requests, setRequests] = useState<ApprovalRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 

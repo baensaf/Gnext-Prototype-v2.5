@@ -149,7 +149,7 @@ export const cashDrawerApi = {
     let stmt: any;
     try {
       stmt = await shiftApi.beginClose(shiftId);
-    } catch (e) {
+    } catch {
       // If already in closing review, proceed to close
     }
 

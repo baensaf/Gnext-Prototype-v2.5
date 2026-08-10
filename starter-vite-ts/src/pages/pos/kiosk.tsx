@@ -88,7 +88,7 @@ export function KioskPage() {
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
 
   // Active Order & Payment state
-  const [activeOrder, setActiveOrder] = useState<any>(null);
+  const [_activeOrder, setActiveOrder] = useState<any>(null);
   const [receiptData, setReceiptData] = useState<any>(null);
 
   const fetchBootstrap = async () => {
@@ -221,7 +221,7 @@ export function KioskPage() {
         const res = await axios.post('/api/v1/kiosk/pay', { order_id: orderId });
         setReceiptData(res.data.receipt);
         setKioskStep(3);
-      } catch (err) {
+      } catch {
         alert('Terminal Payment Failed');
       }
     }, 3000);
