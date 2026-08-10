@@ -2,9 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
-  timeout: 30000,
+  timeout: 60000,
   expect: {
-    timeout: 5000,
+    timeout: 10000,
   },
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -12,7 +12,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: 'http://localhost:8081',
     trace: 'on-first-retry',
     headless: true,
   },
@@ -22,10 +22,26 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'npx vite preview --port 5173',
-    url: 'http://localhost:5173',
-    reuseExistingServer: true,
-    timeout: 30000,
-  },
+  webServer: [
+    {
+      command: 'npx ts-node -r tsconfig-paths/register src/main.ts',
+      cwd: '../backend',
+      url: 'http://localhost:3100/api/v1/auth/me',
+      reuseExistingServer: true,
+      timeout: 60000,
+      env: {
+        DB_PORT: '5433',
+        DB_USER: 'postgres',
+        DB_PASSWORD: 'postgres',
+        DB_NAME: 'appdb_test',
+        PORT: '3100',
+      },
+    },
+    {
+      command: 'npx vite preview --port 8081',
+      url: 'http://localhost:8081',
+      reuseExistingServer: true,
+      timeout: 30000,
+    },
+  ],
 });

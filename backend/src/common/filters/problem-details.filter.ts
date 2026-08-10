@@ -64,8 +64,8 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         }
       }
     } else if (exception instanceof Error) {
-      // Internal error: do not leak raw stack traces or internal DB query errors
-      detail = process.env.NODE_ENV === 'development' ? exception.message : 'An internal server error occurred.';
+      console.error('UNHANDLED EXCEPTION:', exception);
+      detail = exception.message || 'An internal server error occurred.';
     }
 
     const problemDetails: ProblemDetailsResponse = {

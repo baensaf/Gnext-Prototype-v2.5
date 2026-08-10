@@ -68,7 +68,7 @@ export function LoginPage() {
             sx={{ fontWeight: 'bold' }}
           />
           <Tooltip title={t('common.language')}>
-            <IconButton onClick={handleToggleLanguage} color="primary">
+            <IconButton id="login-language-toggle-btn" onClick={handleToggleLanguage} color="primary">
               <LanguageIcon />
               <Typography variant="caption" sx={{ ml: 0.5, fontWeight: 'bold' }}>
                 {locale.toUpperCase()}
