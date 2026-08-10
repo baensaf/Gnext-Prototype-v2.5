@@ -15,8 +15,26 @@ export class CompleteR24ReportsAlertsExportsSchema1700000000014 implements Migra
       ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "total_amount" numeric(19,4) DEFAULT '0.0000';
       ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "notes" text;
       ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "special_instructions" text;
-      ALTER TABLE "order_item" ALTER COLUMN "total_price" DROP NOT NULL;
-      ALTER TABLE "payment" ALTER COLUMN "payment_method_id" DROP NOT NULL;
+
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'order_item' AND column_name = 'total_price') THEN
+          ALTER TABLE "order_item" ALTER COLUMN "total_price" DROP NOT NULL;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'payment' AND column_name = 'payment_method_id') THEN
+          ALTER TABLE "payment" ALTER COLUMN "payment_method_id" DROP NOT NULL;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'reason_code' AND column_name = 'type') THEN
+          ALTER TABLE "reason_code" ALTER COLUMN "type" DROP NOT NULL;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'currency' AND column_name = 'name') THEN
+          ALTER TABLE "currency" ALTER COLUMN "name" DROP NOT NULL;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'integration_log' AND column_name = 'system') THEN
+          ALTER TABLE "integration_log" ALTER COLUMN "system" DROP NOT NULL;
+        END IF;
+      END $$;
+
       ALTER TABLE "cashier_shift" ADD COLUMN IF NOT EXISTS "user_id" uuid;
       ALTER TABLE "cashier_shift" ADD COLUMN IF NOT EXISTS "opened_by" uuid;
       ALTER TABLE "cashier_shift" ADD COLUMN IF NOT EXISTS "closed_by" uuid;
@@ -69,7 +87,6 @@ export class CompleteR24ReportsAlertsExportsSchema1700000000014 implements Migra
       ALTER TABLE "product" ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1;
 
       ALTER TABLE "reason_code" ADD COLUMN IF NOT EXISTS "type" varchar(50);
-      ALTER TABLE "reason_code" ALTER COLUMN "type" DROP NOT NULL;
       ALTER TABLE "reason_code" ADD COLUMN IF NOT EXISTS "applies_to" text[] DEFAULT '{}';
       ALTER TABLE "reason_code" ADD COLUMN IF NOT EXISTS "requires_note" boolean DEFAULT false;
       ALTER TABLE "reason_code" ADD COLUMN IF NOT EXISTS "created_by" uuid;
@@ -92,7 +109,6 @@ export class CompleteR24ReportsAlertsExportsSchema1700000000014 implements Migra
       ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "id" uuid DEFAULT gen_random_uuid();
       ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "tenant_id" uuid;
       ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "name" varchar(64);
-      ALTER TABLE "currency" ALTER COLUMN "name" DROP NOT NULL;
       ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "decimal_precision" smallint DEFAULT 0;
       ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "rounding_increment" numeric(19,4) DEFAULT '1.0000';
       ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "is_enabled" boolean DEFAULT true;
@@ -105,7 +121,6 @@ export class CompleteR24ReportsAlertsExportsSchema1700000000014 implements Migra
       ALTER TABLE "currency" ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1;
 
       ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "system" varchar(32);
-      ALTER TABLE "integration_log" ALTER COLUMN "system" DROP NOT NULL;
       ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "provider" varchar(64);
       ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "event_type" varchar(64);
       ALTER TABLE "integration_log" ADD COLUMN IF NOT EXISTS "hmac_signature" varchar(128);

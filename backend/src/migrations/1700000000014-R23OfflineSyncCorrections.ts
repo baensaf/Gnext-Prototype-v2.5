@@ -7,6 +7,7 @@ export class R23OfflineSyncCorrections1700000000014 implements MigrationInterfac
     // 1. Add missing retry scheduling, worker claiming, and failure columns to offline_queue_item
     await queryRunner.query(`
       ALTER TABLE "offline_queue_item"
+        ADD COLUMN IF NOT EXISTS "dedupe_key" varchar(128) NULL,
         ADD COLUMN IF NOT EXISTS "attempt_count" integer NOT NULL DEFAULT 0,
         ADD COLUMN IF NOT EXISTS "next_attempt_at" TIMESTAMP WITH TIME ZONE NULL,
         ADD COLUMN IF NOT EXISTS "claimed_by" varchar(128) NULL,

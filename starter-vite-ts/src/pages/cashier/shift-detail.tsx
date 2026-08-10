@@ -1,15 +1,16 @@
-import { useParams, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { useParams, useNavigate } from 'react-router';
+
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import {
-  Container,
-  Typography,
-  Button,
   Card,
   Grid,
-  Stack,
   Chip,
+  Stack,
+  Button,
+  Container,
+  Typography,
 } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
 export function ShiftDetailPage() {
   const { shiftId } = useParams<{ shiftId: string }>();

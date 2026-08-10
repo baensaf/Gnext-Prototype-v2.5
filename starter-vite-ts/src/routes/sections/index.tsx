@@ -33,32 +33,30 @@ import { InventoryStockPage } from 'src/pages/inventory/stock';
 import { TerminalsPage } from 'src/pages/operations/terminals';
 import { OrdersWorkflowPage } from 'src/pages/orders/workflow';
 import { CustomerCreditPage } from 'src/pages/customers/credit';
-import { CustomerGroupsPage } from 'src/pages/customers/groups';
 import { GeneralSettingsPage } from 'src/pages/settings/general';
 import { ImportWizardPage } from 'src/pages/tools/import-wizard';
+import { ShiftDetailPage } from 'src/pages/cashier/shift-detail';
 import { AvailabilityPage } from 'src/pages/catalog/availability';
 import { CashDrawerPage } from 'src/pages/operations/cash-drawer';
 import { PrintQueuePage } from 'src/pages/operations/print-queue';
+/* Detail & Simulation Sub-Pages */
+import { OrdersDetailPage } from 'src/pages/orders/orders-detail';
 import { ReportViewerPage } from 'src/pages/reports/report-viewer';
 import { OfflineSyncPage } from 'src/pages/simulation/offline-sync';
 import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
+import { ProductDetailPage } from 'src/pages/catalog/product-detail';
 import { BranchDetailPage } from 'src/pages/operations/branch-detail';
 import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
+import { CourierDetailPage } from 'src/pages/operations/courier-detail';
+import { CampaignDetailPage } from 'src/pages/discounts/campaign-detail';
 import { CourierSettlementsPage } from 'src/pages/operations/settlements';
+import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
 import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
 import { KdsConfigurationPage } from 'src/pages/operations/kds-configuration';
-import { MediaLocalizationDemoPage } from 'src/pages/simulation/media-localization';
-
-/* Detail & Simulation Sub-Pages */
-import { OrdersDetailPage } from 'src/pages/orders/orders-detail';
-import { CourierDetailPage } from 'src/pages/operations/courier-detail';
 import { SettlementDetailPage } from 'src/pages/operations/settlement-detail';
-import { ShiftDetailPage } from 'src/pages/cashier/shift-detail';
-import { ProductDetailPage } from 'src/pages/catalog/product-detail';
-import { CampaignDetailPage } from 'src/pages/discounts/campaign-detail';
+import { MediaLocalizationDemoPage } from 'src/pages/simulation/media-localization';
 import { SimulationSnappfoodPage } from 'src/pages/simulation/simulation-snappfood';
 import { SimulationPaymentsPrintersPage } from 'src/pages/simulation/simulation-payments-printers';
-import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, fetchMe, isLoading } = useAuthStore();

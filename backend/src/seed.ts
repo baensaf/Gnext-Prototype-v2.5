@@ -68,7 +68,7 @@ export async function runSeed() {
   for (const c of currencies) {
     const existing = await currencyRepo.findOne({ where: { code: c.code } });
     if (!existing) {
-      await currencyRepo.save(currencyRepo.create(c));
+      await currencyRepo.save(currencyRepo.create({ ...c, tenant_id: tenant.id }));
     }
   }
 
@@ -117,9 +117,9 @@ export async function runSeed() {
 
   // 6. Idempotent Payment Methods
   const payMethods = [
-    { tenant_id: tenant.id, code: 'CASH', name: 'Cash', is_active: true },
-    { tenant_id: tenant.id, code: 'CARD_POS', name: 'Bank Card POS', is_active: true },
-    { tenant_id: tenant.id, code: 'CREDIT_ACCOUNT', name: 'Customer Credit Account', is_active: true },
+    { tenant_id: tenant.id, code: 'CASH', name: 'Cash', kind: 'CASH', is_active: true },
+    { tenant_id: tenant.id, code: 'CARD_POS', name: 'Bank Card POS', kind: 'CARD_POS', is_active: true },
+    { tenant_id: tenant.id, code: 'CREDIT_ACCOUNT', name: 'Customer Credit Account', kind: 'CUSTOMER_CREDIT', is_active: true },
   ];
   for (const pm of payMethods) {
     const existing = await payMethodRepo.findOne({ where: { tenant_id: tenant.id, code: pm.code } });

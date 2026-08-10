@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { Container, Typography, Card, Box, Alert, Stack } from '@mui/material';
+
+import { Card, Alert, Stack, Container, Typography } from '@mui/material';
 
 export function SimulationSnappfoodPage() {
   const { t } = useTranslation();

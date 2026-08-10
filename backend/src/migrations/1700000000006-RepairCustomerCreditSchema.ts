@@ -31,9 +31,17 @@ export class RepairCustomerCreditSchema1700000000006 implements MigrationInterfa
       ALTER TABLE "credit_account"
         ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE NULL;
 
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'idempotency_record' AND column_name = 'idempotency_key') THEN
+          ALTER TABLE "idempotency_record" ALTER COLUMN "idempotency_key" DROP NOT NULL;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'idempotency_record' AND column_name = 'response_code') THEN
+          ALTER TABLE "idempotency_record" ALTER COLUMN "response_code" DROP NOT NULL;
+        END IF;
+      END $$;
+
       ALTER TABLE "idempotency_record"
-        ALTER COLUMN "idempotency_key" DROP NOT NULL,
-        ALTER COLUMN "response_code" DROP NOT NULL,
         ADD COLUMN IF NOT EXISTS "scope" character varying(80),
         ADD COLUMN IF NOT EXISTS "key" character varying(160),
         ADD COLUMN IF NOT EXISTS "status" character varying(20) DEFAULT 'PENDING',

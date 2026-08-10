@@ -59,9 +59,19 @@ export class CompleteKdsAndPrintingSchema1700000000010 implements MigrationInter
       ADD COLUMN IF NOT EXISTS "started_at" TIMESTAMP WITH TIME ZONE,
       ADD COLUMN IF NOT EXISTS "ready_at" TIMESTAMP WITH TIME ZONE,
       ADD COLUMN IF NOT EXISTS "version" integer NOT NULL DEFAULT 1;
-    `);
 
-    await queryRunner.query(`
+      UPDATE "kitchen_ticket" kt
+      SET "tenant_id" = oh."tenant_id"
+      FROM "order_header" oh
+      WHERE kt."order_id" = oh."id" AND kt."tenant_id" IS NULL;
+
+      DELETE FROM "kitchen_ticket" a
+      USING "kitchen_ticket" b
+      WHERE a."id" < b."id"
+        AND a."tenant_id" IS NOT DISTINCT FROM b."tenant_id"
+        AND a."order_id" = b."order_id"
+        AND a."station_id" = b."station_id";
+
       CREATE UNIQUE INDEX IF NOT EXISTS "UQ_kds_ticket_order_station"
       ON "kitchen_ticket" ("tenant_id", "order_id", "station_id");
     `);
@@ -76,9 +86,19 @@ export class CompleteKdsAndPrintingSchema1700000000010 implements MigrationInter
       ADD COLUMN IF NOT EXISTS "options_summary" text,
       ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
       ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now();
-    `);
 
-    await queryRunner.query(`
+      UPDATE "kitchen_ticket_item" kti
+      SET "tenant_id" = kt."tenant_id"
+      FROM "kitchen_ticket" kt
+      WHERE kti."ticket_id" = kt."id" AND kti."tenant_id" IS NULL;
+
+      DELETE FROM "kitchen_ticket_item" a
+      USING "kitchen_ticket_item" b
+      WHERE a."id" < b."id"
+        AND a."tenant_id" IS NOT DISTINCT FROM b."tenant_id"
+        AND a."ticket_id" = b."ticket_id"
+        AND a."order_item_id" = b."order_item_id";
+
       CREATE UNIQUE INDEX IF NOT EXISTS "UQ_kds_ticket_item_ticket_order_item"
       ON "kitchen_ticket_item" ("tenant_id", "ticket_id", "order_item_id");
     `);
