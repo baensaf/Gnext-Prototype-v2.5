@@ -49,9 +49,16 @@ import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
 import { KdsConfigurationPage } from 'src/pages/operations/kds-configuration';
 import { MediaLocalizationDemoPage } from 'src/pages/simulation/media-localization';
 
-
-
-
+/* Detail & Simulation Sub-Pages */
+import { OrdersDetailPage } from 'src/pages/orders/orders-detail';
+import { CourierDetailPage } from 'src/pages/operations/courier-detail';
+import { SettlementDetailPage } from 'src/pages/operations/settlement-detail';
+import { ShiftDetailPage } from 'src/pages/cashier/shift-detail';
+import { ProductDetailPage } from 'src/pages/catalog/product-detail';
+import { CampaignDetailPage } from 'src/pages/discounts/campaign-detail';
+import { SimulationSnappfoodPage } from 'src/pages/simulation/simulation-snappfood';
+import { SimulationPaymentsPrintersPage } from 'src/pages/simulation/simulation-payments-printers';
+import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, fetchMe, isLoading } = useAuthStore();
@@ -77,14 +84,6 @@ export const routesSection: RouteObject[] = [
     element: <Navigate to="/app/dashboard" replace />,
   },
   {
-    path: '/operations/orders',
-    element: <Navigate to="/app/operations/orders" replace />,
-  },
-  {
-    path: '/orders',
-    element: <Navigate to="/app/operations/orders" replace />,
-  },
-  {
     path: '/login',
     element: <LoginPage />,
   },
@@ -96,200 +95,87 @@ export const routesSection: RouteObject[] = [
       </ProtectedRoute>
     ),
     children: [
-      {
-        path: 'dashboard',
-        element: <DashboardPage />,
-      },
-      {
-        path: 'pos/order',
-        element: <PosOrderPage />,
-      },
-      {
-        path: 'kiosk',
-        element: <KioskPage />,
-      },
-      {
-        path: 'pos/receipt/:id',
-        element: <ReceiptPage />,
-      },
-      {
-        path: 'operations/orders',
-        element: <OrdersWorkflowPage />,
-      },
-      {
-        path: 'orders/refunds',
-        element: <RefundsPage />,
-      },
-      {
-        path: 'operations/cash-drawer',
-        element: <CashDrawerPage />,
-      },
-      {
-        path: 'operations/dine-in',
-        element: <DineInPage />,
-      },
-      {
-        path: 'operations/kds',
-        element: <KdsPage />,
-      },
-      {
-        path: 'operations/kds-configuration',
-        element: <KdsConfigurationPage />,
-      },
-      {
-        path: 'operations/printers',
-        element: <PrintersPage />,
-      },
-      {
-        path: 'operations/print-queue',
-        element: <PrintQueuePage />,
-      },
-      {
-        path: 'operations/delivery',
-        element: <DeliveryPage />,
-      },
-      {
-        path: 'operations/settlements',
-        element: <CourierSettlementsPage />,
-      },
-      {
-        path: 'simulation/center',
-        element: <SimulationCenterPage />,
-      },
-      {
-        path: 'reports/catalog',
-        element: <ReportViewerPage />,
-      },
-      {
-        path: 'operations/audit',
-        element: <AuditExplorerPage />,
-      },
-      {
-        path: 'inventory/stock',
-        element: <InventoryStockPage />,
-      },
-      {
-        path: 'catalog/categories',
-        element: <CategoriesPage />,
-      },
-      {
-        path: 'catalog/products',
-        element: <ProductsPage />,
-      },
-      {
-        path: 'catalog/options',
-        element: <OptionsPage />,
-      },
-      {
-        path: 'catalog/pricing',
-        element: <PricingPage />,
-      },
-      {
-        path: 'catalog/menus',
-        element: <MenusPage />,
-      },
-      {
-        path: 'catalog/availability',
-        element: <AvailabilityPage />,
-      },
-      {
-        path: 'discounts/rules',
-        element: <DiscountRulesPage />,
-      },
-      {
-        path: 'discounts/coupons',
-        element: <CouponsPage />,
-      },
-      {
-        path: 'customers',
-        element: <CustomersPage />,
-      },
-      {
-        path: 'customers/credit',
-        element: <CustomerCreditPage />,
-      },
-      {
-        path: 'customers/groups',
-        element: <CustomerGroupsPage />,
-      },
-      {
-        path: 'simulation/media-localization',
-        element: <MediaLocalizationDemoPage />,
-      },
-      /* Settings Hub & Sub-pages */
-      {
-        path: 'settings',
-        element: <SettingsHubPage />,
-      },
-      {
-        path: 'settings/general',
-        element: <GeneralSettingsPage />,
-      },
-      {
-        path: 'settings/branches',
-        element: <BranchesPage />,
-      },
-      {
-        path: 'settings/branches/:id',
-        element: <BranchDetailPage />,
-      },
-      {
-        path: 'settings/terminals',
-        element: <TerminalsPage />,
-      },
-      {
-        path: 'settings/payments',
-        element: <PaymentsPage />,
-      },
-      {
-        path: 'settings/approvals',
-        element: <ApprovalsSettingsPage />,
-      },
-      {
-        path: 'settings/reasons',
-        element: <ReasonCodesPage />,
-      },
-      {
-        path: 'settings/offline-sync',
-        element: <OfflineSyncPage />,
-      },
-      {
-        path: 'settings/import-wizard',
-        element: <ImportWizardPage />,
-      },
-      {
-        path: 'settings/data-reset',
-        element: <DataResetPage />,
-      },
-      /* Legacy Route Redirects for Backwards Compatibility */
-      {
-        path: 'operations/branches',
-        element: <Navigate to="/app/settings/branches" replace />,
-      },
-      {
-        path: 'operations/branches/:id',
-        element: <Navigate to="/app/settings/branches" replace />,
-      },
-      {
-        path: 'operations/terminals',
-        element: <Navigate to="/app/settings/terminals" replace />,
-      },
-      {
-        path: 'operations/payments',
-        element: <Navigate to="/app/settings/payments" replace />,
-      },
-      {
-        path: 'simulation/offline-sync',
-        element: <Navigate to="/app/settings/offline-sync" replace />,
-      },
-      {
-        path: 'tools/import-wizard',
-        element: <Navigate to="/app/settings/import-wizard" replace />,
-      },
-      {
-        path: 'tools/data-reset',
-        element: <Navigate to="/app/settings/data-reset" replace />,
-      },
+      /* --- Section 9.1 Exact Canonical Routes --- */
+      { path: 'dashboard', element: <DashboardPage /> },
+      { path: 'pos', element: <PosOrderPage /> },
+      { path: 'kiosk', element: <KioskPage /> },
+      { path: 'orders', element: <OrdersWorkflowPage /> },
+      { path: 'orders/:id', element: <OrdersDetailPage /> },
+      { path: 'dine-in/floor', element: <DineInPage /> },
+      { path: 'kds', element: <KdsPage /> },
+      { path: 'delivery/orders', element: <DeliveryPage /> },
+      { path: 'delivery/couriers', element: <DeliveryPage /> },
+      { path: 'delivery/couriers/:courierId', element: <CourierDetailPage /> },
+      { path: 'delivery/settlements', element: <CourierSettlementsPage /> },
+      { path: 'delivery/settlements/:settlementId', element: <SettlementDetailPage /> },
+      { path: 'cashier/shifts', element: <CashDrawerPage /> },
+      { path: 'cashier/shifts/:shiftId', element: <ShiftDetailPage /> },
+      { path: 'cashier/business-days', element: <CashDrawerPage /> },
+      { path: 'payments', element: <PaymentsPage /> },
+      { path: 'refunds', element: <RefundsPage /> },
+      { path: 'customers', element: <CustomersPage /> },
+      { path: 'customers/:id', element: <CustomersPage /> },
+      { path: 'credit/accounts', element: <CustomerCreditPage /> },
+      { path: 'credit/accounts/:id', element: <CustomerCreditPage /> },
+      { path: 'catalog/categories', element: <CategoriesPage /> },
+      { path: 'catalog/products', element: <ProductsPage /> },
+      { path: 'catalog/products/:id', element: <ProductDetailPage /> },
+      { path: 'catalog/modifiers', element: <OptionsPage /> },
+      { path: 'catalog/menus', element: <MenusPage /> },
+      { path: 'catalog/menus/:id', element: <MenusPage /> },
+      { path: 'catalog/availability', element: <AvailabilityPage /> },
+      { path: 'catalog/import-export', element: <ImportWizardPage /> },
+      { path: 'pricing/price-book', element: <PricingPage /> },
+      { path: 'pricing/price-groups', element: <PricingPage /> },
+      { path: 'pricing/bulk-update', element: <PricingPage /> },
+      { path: 'discounts/campaigns', element: <DiscountRulesPage /> },
+      { path: 'discounts/campaigns/:id', element: <CampaignDetailPage /> },
+      { path: 'discounts/coupons', element: <CouponsPage /> },
+      { path: 'operations/branches', element: <BranchesPage /> },
+      { path: 'operations/branches/:id', element: <BranchDetailPage /> },
+      { path: 'operations/terminals', element: <TerminalsPage /> },
+      { path: 'operations/kds-configuration', element: <KdsConfigurationPage /> },
+      { path: 'operations/printers', element: <PrintersPage /> },
+      { path: 'operations/print-queue', element: <PrintQueuePage /> },
+      { path: 'operations/monitoring', element: <DashboardPage /> },
+      { path: 'simulation', element: <SimulationCenterPage /> },
+      { path: 'simulation/snappfood', element: <SimulationSnappfoodPage /> },
+      { path: 'simulation/payments-printers', element: <SimulationPaymentsPrintersPage /> },
+      { path: 'simulation/offline-sync', element: <OfflineSyncPage /> },
+      { path: 'simulation/logs', element: <SimulationLogsPage /> },
+      { path: 'reports/:reportCode', element: <ReportViewerPage /> },
+      { path: 'audit', element: <AuditExplorerPage /> },
+      { path: 'settings', element: <SettingsHubPage /> },
+      { path: 'settings/general', element: <GeneralSettingsPage /> },
+      { path: 'settings/order-workflow', element: <OrdersWorkflowPage /> },
+      { path: 'settings/discounts-credit', element: <DiscountRulesPage /> },
+      { path: 'settings/payments-refunds', element: <PaymentsPage /> },
+      { path: 'settings/approvals', element: <ApprovalsSettingsPage /> },
+      { path: 'settings/reasons', element: <ReasonCodesPage /> },
+      { path: 'settings/localization', element: <MediaLocalizationDemoPage /> },
+      { path: 'settings/data-reset', element: <DataResetPage /> },
+      { path: 'inventory/stock', element: <InventoryStockPage /> },
+
+      /* --- Legacy Alias Redirects (Section 9.1 Conformance) --- */
+      { path: 'pos/order', element: <Navigate to="/app/pos" replace /> },
+      { path: 'pos/receipt/:id', element: <ReceiptPage /> },
+      { path: 'operations/orders', element: <Navigate to="/app/orders" replace /> },
+      { path: 'operations/dine-in', element: <Navigate to="/app/dine-in/floor" replace /> },
+      { path: 'operations/kds', element: <Navigate to="/app/kds" replace /> },
+      { path: 'operations/delivery', element: <Navigate to="/app/delivery/orders" replace /> },
+      { path: 'operations/settlements', element: <Navigate to="/app/delivery/settlements" replace /> },
+      { path: 'operations/cash-drawer', element: <Navigate to="/app/cashier/shifts" replace /> },
+      { path: 'orders/refunds', element: <Navigate to="/app/refunds" replace /> },
+      { path: 'reports/catalog', element: <Navigate to="/app/reports/sales-summary" replace /> },
+      { path: 'operations/audit', element: <Navigate to="/app/audit" replace /> },
+      { path: 'discounts/rules', element: <Navigate to="/app/discounts/campaigns" replace /> },
+      { path: 'customers/credit', element: <Navigate to="/app/credit/accounts" replace /> },
+      { path: 'customers/groups', element: <CustomersPage /> },
+      { path: 'simulation/center', element: <Navigate to="/app/simulation" replace /> },
+      { path: 'simulation/media-localization', element: <Navigate to="/app/settings/localization" replace /> },
+      { path: 'tools/import-wizard', element: <Navigate to="/app/catalog/import-export" replace /> },
+      { path: 'tools/data-reset', element: <Navigate to="/app/settings/data-reset" replace /> },
+
       {
         path: '*',
         element: <Page404 />,

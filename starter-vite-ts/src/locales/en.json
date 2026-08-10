@@ -17,23 +17,41 @@
   },
   "nav": {
     "dashboard": "Dashboard",
-    "pos": "POS Cashier",
-    "orders": "Orders",
-    "dineIn": "Dine-in Floor",
+    "pos": "POS Register",
+    "orders": "Orders Directory",
+    "dineIn": "Dine-In Floor",
     "kds": "Kitchen KDS",
-    "delivery": "Delivery",
+    "delivery": "Delivery Orders",
+    "couriers": "Couriers Roster",
     "courierSettlements": "Courier Settlements",
-    "cashier": "Shifts & Cashier",
-    "customers": "Customers",
-    "catalog": "Catalog & Menus",
-    "pricing": "Pricing",
-    "discounts": "Discounts & Credit",
-    "reports": "Reports",
+    "cashier": "Cashier Shifts",
+    "businessDays": "Business Days",
+    "payments": "Payment Transactions",
+    "refunds": "Refunds & Returns",
+    "customers": "Customer Directory",
+    "credit": "Credit Accounts & Aging",
+    "catalog": "Master Catalog",
+    "categories": "Categories",
+    "products": "Products Catalog",
+    "modifiers": "Modifiers",
+    "menus": "Menus Composer",
+    "availability": "Availability & Suspensions",
+    "importExport": "Import & Export",
+    "pricing": "Price Book",
+    "priceGroups": "Price Groups",
+    "bulkUpdate": "Bulk Price Update",
+    "discounts": "Discount Campaigns",
+    "coupons": "Coupons Studio",
+    "reports": "Reports & Analytics",
     "simulation": "Simulation Center",
+    "snappfoodSim": "Snappfood Simulator",
+    "hardwareSim": "Payments & Printers",
+    "syncSim": "Offline Sync Simulation",
+    "logsSim": "Integration Logs",
     "audit": "Audit Explorer",
     "settings": "Settings",
     "v5GroupHeader": "Future — V5 Preview",
-    "v5Preview": "V5 Preview"
+    "v5Preview": "V5 Preview — Inventory Stock"
   },
   "inventory": {
     "v5Banner": "V5 Preview Module: Inventory stock management is retained for V5 preview. It does not affect v1.5 catalog availability, order submission, KDS, reports, or financial calculations."
@@ -41,7 +59,10 @@
   "error": {
     "pageNotFound": "404 — Page Not Found",
     "notFoundMessage": "Sorry, we couldn’t find the page you’re looking for. Be sure to check your URL.",
-    "backToHome": "Go to Dashboard"
+    "backToHome": "Go to Dashboard",
+    "retry": "Retry Action",
+    "versionConflict": "409 Version Conflict — Record modified by another user",
+    "staleQuote": "Quote Stale — Prices updated on server"
   },
   "common": {
     "language": "Language",
@@ -58,7 +79,10 @@
     "cancel": "Cancel",
     "confirm": "Confirm",
     "loading": "Loading...",
-    "noData": "No data available."
+    "noData": "No data available.",
+    "back": "Back",
+    "reprint": "Reprint",
+    "cancelOrder": "Cancel Order"
   },
   "dashboard": {
     "title": "Operations Dashboard",
@@ -67,5 +91,65 @@
     "openOrders": "Open Orders",
     "activeShifts": "Active Shifts",
     "branchHealth": "Branch System Health"
+  },
+  "orders": {
+    "detailTitle": "Order Detail",
+    "itemsTitle": "Order Items",
+    "summary": "Order Summary",
+    "subtotal": "Subtotal",
+    "tax": "Tax (9%)",
+    "discount": "Discount",
+    "totalAmount": "Total Amount",
+    "paidAmount": "Paid Amount",
+    "product": "Product",
+    "qty": "Qty",
+    "unitPrice": "Unit Price",
+    "total": "Total"
+  },
+  "delivery": {
+    "courierDetail": "Courier Profile",
+    "courierInfo": "Courier Details",
+    "courierId": "Courier ID",
+    "courierName": "Name",
+    "phone": "Phone",
+    "vehicle": "Vehicle"
+  },
+  "settlements": {
+    "detailTitle": "Courier Settlement",
+    "summary": "Settlement Summary",
+    "expectedCash": "Expected Cash",
+    "actualCash": "Actual Cash",
+    "variance": "Variance"
+  },
+  "cashier": {
+    "shiftDetail": "Shift Detail",
+    "shiftSummary": "Shift Balances",
+    "openingFloat": "Opening Float",
+    "expectedCash": "Expected Cash",
+    "actualCash": "Actual Cash"
+  },
+  "catalog": {
+    "productDetail": "Product Details",
+    "info": "Product Configuration",
+    "productId": "Product ID",
+    "name": "Product Name",
+    "unitPrice": "Base Price"
+  },
+  "discounts": {
+    "campaignDetail": "Discount Campaign",
+    "campaignRules": "Campaign Rules & Limits",
+    "campaignId": "Campaign ID",
+    "name": "Campaign Name"
+  },
+  "simulation": {
+    "snappfoodNotice": "Snappfood Webhook Simulator & Integration Testing Console",
+    "snappfoodTitle": "Snappfood Integration Webhook Test Bench",
+    "snappfoodDesc": "Simulate incoming Snappfood webhooks, order creation events, HMAC signature validation, and duplicate rejection scenarios.",
+    "hardwareNotice": "Payment POS Devices & Kitchen Printer Hardware Simulation Console",
+    "hardwareTitle": "Hardware Failure & Response Simulator",
+    "hardwareDesc": "Simulate mobile POS timeouts, paper-out printer errors, network drops, and device failover rerouting.",
+    "logsNotice": "Integration Execution & Webhook Audit Logs",
+    "logsTitle": "Integration Event Logs",
+    "logsDesc": "Real-time inspection of external provider payloads, HMAC verification logs, and webhook status codes."
   }
 }

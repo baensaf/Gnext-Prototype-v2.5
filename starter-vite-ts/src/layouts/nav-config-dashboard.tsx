@@ -33,7 +33,7 @@ const ICONS = {
 
 export const navData: NavSectionProps['data'] = [
   {
-    subheader: 'Overview',
+    subheader: 'Home',
     items: [
       {
         title: 'Dashboard',
@@ -44,36 +44,28 @@ export const navData: NavSectionProps['data'] = [
     ],
   },
   {
-    subheader: 'POS & Orders',
+    subheader: 'Sell',
     items: [
       {
         title: 'POS Register',
-        path: '/app/pos/order',
+        path: '/app/pos',
         icon: ICONS.pos,
-        info: <Label color="success">NEW</Label>,
+        info: <Label color="success">POS</Label>,
       },
       {
-        title: 'Orders Workflow Board',
-        path: '/app/operations/orders',
+        title: 'Dine-In Floor',
+        path: '/app/dine-in/floor',
+        icon: ICONS.pos,
+      },
+      {
+        title: 'Orders Directory',
+        path: '/app/orders',
         icon: ICONS.kds,
       },
       {
         title: 'Self-Service Kiosk',
         path: '/app/kiosk',
         icon: ICONS.pos,
-        info: <Label color="primary">Slice 18</Label>,
-      },
-      {
-        title: 'Active KDS Orders',
-        path: '/app/operations/kds',
-        icon: ICONS.kds,
-        info: <Label color="warning">Slice 15</Label>,
-      },
-      {
-        title: 'Refunds & Cancellations',
-        path: '/app/orders/refunds',
-        icon: ICONS.reasons,
-        info: <Label color="error">Slice 13</Label>,
       },
     ],
   },
@@ -81,56 +73,84 @@ export const navData: NavSectionProps['data'] = [
     subheader: 'Operations',
     items: [
       {
-        title: 'Dine-In Floor Plan',
-        path: '/app/operations/dine-in',
-        icon: ICONS.pos,
-        info: <Label color="info">Slice 14</Label>,
+        title: 'Kitchen KDS',
+        path: '/app/kds',
+        icon: ICONS.kds,
       },
       {
-        title: 'Delivery & Couriers',
-        path: '/app/operations/delivery',
+        title: 'Delivery Orders',
+        path: '/app/delivery/orders',
         icon: ICONS.kds,
-        info: <Label color="primary">Slice 16</Label>,
+      },
+      {
+        title: 'Couriers Roster',
+        path: '/app/delivery/couriers',
+        icon: ICONS.customers,
       },
       {
         title: 'Courier Settlements',
-        path: '/app/operations/settlements',
+        path: '/app/delivery/settlements',
         icon: ICONS.reasons,
-        info: <Label color="success">Slice 17</Label>,
       },
       {
-        title: 'Cash Drawer & EOD',
-        path: '/app/operations/cash-drawer',
+        title: 'Cashier Shifts',
+        path: '/app/cashier/shifts',
         icon: ICONS.drawer,
+      },
+      {
+        title: 'Business Days',
+        path: '/app/cashier/business-days',
+        icon: ICONS.drawer,
+      },
+      {
+        title: 'Payment Transactions',
+        path: '/app/payments',
+        icon: ICONS.credit,
+      },
+      {
+        title: 'Refunds & Returns',
+        path: '/app/refunds',
+        icon: ICONS.reasons,
       },
       {
         title: 'KDS Configuration',
         path: '/app/operations/kds-configuration',
         icon: ICONS.kds,
-        info: <Label color="primary">Slice 18</Label>,
       },
       {
         title: 'Printers & Routes',
         path: '/app/operations/printers',
         icon: ICONS.terminal,
-        info: <Label color="primary">Slice 18</Label>,
       },
       {
-        title: 'Print Queue & Reprint',
+        title: 'Print Queue',
         path: '/app/operations/print-queue',
         icon: ICONS.drawer,
-        info: <Label color="primary">Slice 18</Label>,
       },
       {
-        title: 'Simulation Center',
-        path: '/app/simulation/center',
-        icon: ICONS.terminal,
-        info: <Label color="info">Slice 19</Label>,
+        title: 'System Monitoring',
+        path: '/app/operations/monitoring',
+        icon: ICONS.dashboard,
       },
     ],
   },
   {
-    subheader: 'Master Catalog',
+    subheader: 'Customers',
+    items: [
+      {
+        title: 'Customer Directory',
+        path: '/app/customers',
+        icon: ICONS.customers,
+      },
+      {
+        title: 'Credit Accounts & Aging',
+        path: '/app/credit/accounts',
+        icon: ICONS.credit,
+      },
+    ],
+  },
+  {
+    subheader: 'Catalog & Pricing',
     items: [
       {
         title: 'Categories',
@@ -143,35 +163,48 @@ export const navData: NavSectionProps['data'] = [
         icon: ICONS.catalog,
       },
       {
-        title: 'Modifier Options',
-        path: '/app/catalog/options',
+        title: 'Modifiers',
+        path: '/app/catalog/modifiers',
         icon: ICONS.options,
-      },
-      {
-        title: 'Pricing & Overrides',
-        path: '/app/catalog/pricing',
-        icon: ICONS.pricing,
       },
       {
         title: 'Menus Composer',
         path: '/app/catalog/menus',
         icon: ICONS.catalog,
-        info: <Label color="info">Slice 5</Label>,
       },
       {
         title: 'Availability & Suspensions',
         path: '/app/catalog/availability',
         icon: ICONS.options,
-        info: <Label color="warning">Slice 5</Label>,
+      },
+      {
+        title: 'Import & Export',
+        path: '/app/catalog/import-export',
+        icon: ICONS.media,
+      },
+      {
+        title: 'Price Book',
+        path: '/app/pricing/price-book',
+        icon: ICONS.pricing,
+      },
+      {
+        title: 'Price Groups',
+        path: '/app/pricing/price-groups',
+        icon: ICONS.pricing,
+      },
+      {
+        title: 'Bulk Price Update',
+        path: '/app/pricing/bulk-update',
+        icon: ICONS.pricing,
       },
     ],
   },
   {
-    subheader: 'Discounts & Marketing',
+    subheader: 'Discounts & Credit',
     items: [
       {
-        title: 'Discount Rules',
-        path: '/app/discounts/rules',
+        title: 'Discount Campaigns',
+        path: '/app/discounts/campaigns',
         icon: ICONS.discounts,
       },
       {
@@ -182,51 +215,97 @@ export const navData: NavSectionProps['data'] = [
     ],
   },
   {
-    subheader: 'CRM & Credit Accounts',
+    subheader: 'Reports',
     items: [
       {
-        title: 'Customer Directory',
-        path: '/app/customers',
-        icon: ICONS.customers,
-      },
-      {
-        title: 'Credit Accounts & Aging',
-        path: '/app/customers/credit',
-        icon: ICONS.credit,
-        info: <Label color="success">LEDGER</Label>,
-      },
-      {
-        title: 'Customer Groups',
-        path: '/app/customers/groups',
-        icon: ICONS.customerGroups,
-      },
-    ],
-  },
-  {
-    subheader: 'System Settings',
-    items: [
-      {
-        title: 'Settings Hub',
-        path: '/app/settings',
-        icon: ICONS.settings,
-        info: <Label color="primary">HUB</Label>,
-      },
-    ],
-  },
-  {
-    subheader: 'Analytics & Compliance',
-    items: [
-      {
-        title: 'Reports Catalog & Analytics',
-        path: '/app/reports/catalog',
+        title: 'Reports & Analytics',
+        path: '/app/reports/sales-summary',
         icon: ICONS.dashboard,
-        info: <Label color="info">Slice 21</Label>,
+      },
+    ],
+  },
+  {
+    subheader: 'Simulation Center',
+    items: [
+      {
+        title: 'Simulation Hub',
+        path: '/app/simulation',
+        icon: ICONS.terminal,
       },
       {
-        title: 'Audit & System Alerts',
-        path: '/app/operations/audit',
+        title: 'Snappfood Simulator',
+        path: '/app/simulation/snappfood',
+        icon: ICONS.terminal,
+      },
+      {
+        title: 'Payments & Printers',
+        path: '/app/simulation/payments-printers',
+        icon: ICONS.terminal,
+      },
+      {
+        title: 'Offline Sync Simulation',
+        path: '/app/simulation/offline-sync',
+        icon: ICONS.terminal,
+      },
+      {
+        title: 'Integration Logs',
+        path: '/app/simulation/logs',
+        icon: ICONS.drawer,
+      },
+    ],
+  },
+  {
+    subheader: 'Audit',
+    items: [
+      {
+        title: 'Audit Explorer',
+        path: '/app/audit',
         icon: ICONS.reasons,
-        info: <Label color="warning">Slice 21</Label>,
+      },
+    ],
+  },
+  {
+    subheader: 'Settings',
+    items: [
+      {
+        title: 'General Settings',
+        path: '/app/settings/general',
+        icon: ICONS.settings,
+      },
+      {
+        title: 'Order Workflow',
+        path: '/app/settings/order-workflow',
+        icon: ICONS.settings,
+      },
+      {
+        title: 'Discounts & Credit',
+        path: '/app/settings/discounts-credit',
+        icon: ICONS.settings,
+      },
+      {
+        title: 'Payments & Refunds',
+        path: '/app/settings/payments-refunds',
+        icon: ICONS.settings,
+      },
+      {
+        title: 'Approvals & Profiles',
+        path: '/app/settings/approvals',
+        icon: ICONS.settings,
+      },
+      {
+        title: 'Reason Codes',
+        path: '/app/settings/reasons',
+        icon: ICONS.settings,
+      },
+      {
+        title: 'Localization & Formats',
+        path: '/app/settings/localization',
+        icon: ICONS.settings,
+      },
+      {
+        title: 'Data Reset',
+        path: '/app/settings/data-reset',
+        icon: ICONS.settings,
       },
     ],
   },
@@ -234,7 +313,7 @@ export const navData: NavSectionProps['data'] = [
     subheader: 'Future — V5 Preview',
     items: [
       {
-        title: 'Inventory Stock & Alerts',
+        title: 'Inventory Stock & Movement',
         path: '/app/inventory/stock',
         icon: ICONS.inventory,
         info: <Label color="info">V5 Preview</Label>,
