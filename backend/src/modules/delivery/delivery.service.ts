@@ -45,7 +45,7 @@ export class DeliveryService {
     return await this.zoneRepo.find({ where, order: { name: 'ASC' } });
   }
 
-  async createZone(tenantId: string, data: { branch_id: string; code: string; name: string; fee?: number; estimated_minutes?: number; polygon?: any; postal_prefixes?: string[] }) {
+  async createZone(tenantId: string, data: { branch_id: string; code: string; name: string; fee?: string | number; estimated_minutes?: number; polygon?: any; postal_prefixes?: string[] }) {
     const existing = await this.zoneRepo.findOne({ where: { tenant_id: tenantId, branch_id: data.branch_id, code: data.code.toUpperCase() } });
     if (existing) throw new ConflictException(`Delivery zone code ${data.code} already exists for this branch`);
 
@@ -54,7 +54,7 @@ export class DeliveryService {
       branch_id: data.branch_id,
       code: data.code.toUpperCase(),
       name: data.name,
-      fee: Number(data.fee || 0).toFixed(4),
+      fee: MoneyUtil.format(data.fee || '0', 4),
       estimated_minutes: data.estimated_minutes || 30,
       polygon: data.polygon || null,
       postal_prefixes: data.postal_prefixes || null,
@@ -119,7 +119,7 @@ export class DeliveryService {
 
   async createCourier(
     tenantId: string,
-    data: { branch_id?: string; code: string; name: string; phone?: string; vehicle_type?: string; compensation_per_delivery?: number },
+    data: { branch_id?: string; code: string; name: string; phone?: string; vehicle_type?: string; compensation_per_delivery?: string | number },
     correlationId: string = 'corr-courier-create',
   ) {
     const courier = this.courierRepo.create({
@@ -129,7 +129,7 @@ export class DeliveryService {
       name: data.name,
       phone: data.phone || null,
       vehicle_type: data.vehicle_type || 'MOTORCYCLE',
-      compensation_per_delivery: Number(data.compensation_per_delivery || 0).toFixed(4),
+      compensation_per_delivery: MoneyUtil.format(data.compensation_per_delivery || '0', 4),
       status: 'AVAILABLE',
       is_active: true,
     });
@@ -353,6 +353,23 @@ export class DeliveryService {
     const saved = await this.deliveryRepo.save(delivery);
     await this.logDeliveryEvent(tenantId, saved.id, fromState, 'ASSIGNED', `Assigned to ${courier.name}`, userId);
 
+    let assignment = await this.assignmentRepo.findOne({ where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: courierId } });
+    if (!assignment) {
+      assignment = this.assignmentRepo.create({
+        tenant_id: tenantId,
+        order_id: delivery.order_id,
+        courier_id: courierId,
+        status: 'ASSIGNED',
+        assigned_at: new Date(),
+        delivery_fee: delivery.fee || '0.00',
+        tip_amount: '0.00',
+      });
+    } else {
+      assignment.status = 'ASSIGNED';
+      assignment.assigned_at = new Date();
+    }
+    await this.assignmentRepo.save(assignment);
+
     await this.auditWriter.write({
       tenantId,
       actorType: userId ? 'ADMIN' : 'SYSTEM',
@@ -375,6 +392,15 @@ export class DeliveryService {
 
     const saved = await this.deliveryRepo.save(delivery);
     await this.logDeliveryEvent(tenantId, saved.id, fromState, 'EN_ROUTE', 'Courier departed with delivery package', userId);
+
+    if (delivery.courier_id) {
+      const assignment = await this.assignmentRepo.findOne({ where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: delivery.courier_id } });
+      if (assignment) {
+        assignment.status = 'DELIVERED';
+        assignment.picked_up_at = new Date();
+        await this.assignmentRepo.save(assignment);
+      }
+    }
 
     const order = await this.orderRepo.findOne({ where: { id: delivery.order_id, tenant_id: tenantId } });
     if (order) {
@@ -423,6 +449,26 @@ export class DeliveryService {
 
     const saved = await this.deliveryRepo.save(delivery);
     await this.logDeliveryEvent(tenantId, saved.id, fromState, 'DELIVERED', 'Delivery successfully completed', userId);
+
+    if (delivery.courier_id) {
+      let assignment = await this.assignmentRepo.findOne({ where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: delivery.courier_id } });
+      if (!assignment) {
+        assignment = this.assignmentRepo.create({
+          tenant_id: tenantId,
+          order_id: delivery.order_id,
+          courier_id: delivery.courier_id,
+          status: 'DELIVERED',
+          assigned_at: delivery.assigned_at || new Date(),
+          delivered_at: new Date(),
+          delivery_fee: delivery.fee || '0.00',
+          tip_amount: '0.00',
+        });
+      } else {
+        assignment.status = 'DELIVERED';
+        assignment.delivered_at = new Date();
+      }
+      await this.assignmentRepo.save(assignment);
+    }
 
     const order = await this.orderRepo.findOne({ where: { id: delivery.order_id, tenant_id: tenantId } });
     if (order) {
@@ -779,6 +825,8 @@ export class DeliveryService {
     }
 
     if (data.lines && Array.isArray(data.lines)) {
+      let linesActCash = '0.00';
+      let linesActPos = '0.00';
       for (const lineData of data.lines) {
         if (!lineData.id) continue;
         const line = await this.settlementLineRepo.findOne({ where: { id: lineData.id, settlement_id: id } });
@@ -787,8 +835,12 @@ export class DeliveryService {
           if (lineData.actual_pos !== undefined) line.actual_pos = MoneyUtil.format(lineData.actual_pos, 2);
           if (lineData.receipt_verified !== undefined) line.receipt_verified = Boolean(lineData.receipt_verified);
           await this.settlementLineRepo.save(line);
+          linesActCash = MoneyUtil.add(linesActCash, line.actual_cash || '0.00', 2);
+          linesActPos = MoneyUtil.add(linesActPos, line.actual_pos || '0.00', 2);
         }
       }
+      if (data.actual_cash_amount === undefined) settlement.actual_cash_amount = linesActCash;
+      if (data.actual_pos_amount === undefined) settlement.actual_pos_amount = linesActPos;
     }
 
     if (data.actual_cash_amount !== undefined) {

@@ -22,11 +22,10 @@ describe('R23 Real PostgreSQL Integration Suite (Port 5433)', () => {
   let testBranchId: string;
 
   beforeAll(async () => {
-    process.env.DB_PORT = process.env.DB_PORT || '5433';
-    process.env.DB_NAME = process.env.DB_NAME || 'appdb_test';
-    process.env.DB_USER = process.env.DB_USER || 'postgres';
-    process.env.DB_USERNAME = process.env.DB_USERNAME || 'postgres';
-    process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'postgres';
+    process.env.DB_PORT = process.env.DB_PORT || '5432';
+    process.env.DB_NAME = process.env.DB_NAME || 'appdb';
+    process.env.DB_USER = process.env.DB_USER || 'admin';
+    process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'admin';
 
     moduleRef = await Test.createTestingModule({
       imports: [AppModule],

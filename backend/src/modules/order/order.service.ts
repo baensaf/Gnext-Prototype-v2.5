@@ -805,7 +805,7 @@ export class OrderService {
           await em.save(OrderItem, sourceItem);
         } else {
           const remainingQty = currentQty.minus(splitQty);
-          sourceItem.quantity = remainingQty.toFixed(4);
+          sourceItem.quantity = MoneyUtil.format(remainingQty, 4);
           sourceItem.base_total = MoneyUtil.multiply(sourceItem.unit_price, sourceItem.quantity);
           sourceItem.line_total = MoneyUtil.add(sourceItem.base_total, sourceItem.modifier_total || '0.0000');
           await em.save(OrderItem, sourceItem);
@@ -819,14 +819,14 @@ export class OrderService {
             product_code: sourceItem.product_code,
             product_name: sourceItem.product_name,
             variant_name: sourceItem.variant_name,
-            quantity: splitQty.toFixed(4),
+            quantity: MoneyUtil.format(splitQty, 4),
             unit_price: sourceItem.unit_price,
-            base_total: MoneyUtil.multiply(sourceItem.unit_price, splitQty.toFixed(4)),
+            base_total: MoneyUtil.multiply(sourceItem.unit_price, MoneyUtil.format(splitQty, 4)),
             modifier_total: sourceItem.modifier_total,
             discount_total: '0.0000',
             tax_total: '0.0000',
             packaging_total: '0.0000',
-            line_total: MoneyUtil.add(MoneyUtil.multiply(sourceItem.unit_price, splitQty.toFixed(4)), sourceItem.modifier_total || '0.0000'),
+            line_total: MoneyUtil.add(MoneyUtil.multiply(sourceItem.unit_price, MoneyUtil.format(splitQty, 4)), sourceItem.modifier_total || '0.0000'),
             notes: sourceItem.notes,
             state: sourceItem.state,
           });
@@ -937,7 +937,7 @@ export class OrderService {
           await em.save(OrderItem, sourceItem);
         } else {
           const remainingQty = currentQty.minus(qtyToTransfer);
-          sourceItem.quantity = remainingQty.toFixed(4);
+          sourceItem.quantity = MoneyUtil.format(remainingQty, 4);
           sourceItem.base_total = MoneyUtil.multiply(sourceItem.unit_price, sourceItem.quantity);
           sourceItem.line_total = MoneyUtil.add(sourceItem.base_total, sourceItem.modifier_total || '0.0000');
           await em.save(OrderItem, sourceItem);
@@ -951,14 +951,14 @@ export class OrderService {
             product_code: sourceItem.product_code,
             product_name: sourceItem.product_name,
             variant_name: sourceItem.variant_name,
-            quantity: qtyToTransfer.toFixed(4),
+            quantity: MoneyUtil.format(qtyToTransfer, 4),
             unit_price: sourceItem.unit_price,
-            base_total: MoneyUtil.multiply(sourceItem.unit_price, qtyToTransfer.toFixed(4)),
+            base_total: MoneyUtil.multiply(sourceItem.unit_price, MoneyUtil.format(qtyToTransfer, 4)),
             modifier_total: sourceItem.modifier_total,
             discount_total: '0.0000',
             tax_total: '0.0000',
             packaging_total: '0.0000',
-            line_total: MoneyUtil.add(MoneyUtil.multiply(sourceItem.unit_price, qtyToTransfer.toFixed(4)), sourceItem.modifier_total || '0.0000'),
+            line_total: MoneyUtil.add(MoneyUtil.multiply(sourceItem.unit_price, MoneyUtil.format(qtyToTransfer, 4)), sourceItem.modifier_total || '0.0000'),
             notes: sourceItem.notes,
             state: sourceItem.state,
           });
@@ -1120,7 +1120,7 @@ export class OrderService {
       );
       tenders = pays.map((p: any) => ({
         payment_method_name: p.method_name || 'Card / Cash',
-        amount: Number(p.amount),
+        amount: MoneyUtil.format(p.amount, 2),
         reference_number: p.reference_number || undefined,
       }));
     } catch {
@@ -1129,11 +1129,11 @@ export class OrderService {
 
     const items = (order.items || []).map((it) => ({
       product_name: it.product_name,
-      quantity: Number(it.quantity),
-      subtotal: Number(it.line_total),
+      quantity: MoneyUtil.format(it.quantity, 4),
+      subtotal: MoneyUtil.format(it.line_total, 2),
       options: (it.options || []).map((opt) => ({
         name: opt.option_item_name,
-        price_delta: Number(opt.price_delta || 0),
+        price_delta: MoneyUtil.format(opt.price_delta || '0', 2),
       })),
     }));
 
@@ -1150,11 +1150,11 @@ export class OrderService {
       },
       items,
       totals: {
-        subtotal_amount: Number(order.subtotal || 0),
-        tax_amount: Number(order.tax_total || 0),
-        discount_amount: Number(order.discount_total || 0),
-        total_amount: Number(order.total_amount || 0),
-        paid_amount: Number(order.paid_amount || 0),
+        subtotal_amount: MoneyUtil.format(order.subtotal || '0', 2),
+        tax_amount: MoneyUtil.format(order.tax_total || '0', 2),
+        discount_amount: MoneyUtil.format(order.discount_total || '0', 2),
+        total_amount: MoneyUtil.format(order.total_amount || '0', 2),
+        paid_amount: MoneyUtil.format(order.paid_amount || '0', 2),
       },
       tenders,
       receipt_footer: {

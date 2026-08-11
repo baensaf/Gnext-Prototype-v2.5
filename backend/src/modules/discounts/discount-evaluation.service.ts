@@ -433,11 +433,11 @@ export class DiscountEvaluationService {
           }
 
           const eligibleIndices: number[] = [];
-          const ratios: number[] = [];
+          const ratios: string[] = [];
           for (let i = 0; i < lineItems.length; i++) {
             if (isCampaignEligibleLine[i] && MoneyUtil.greaterThan(remainingBases[i], '0')) {
               eligibleIndices.push(i);
-              ratios.push(Number(remainingBases[i]));
+              ratios.push(remainingBases[i]);
             }
           }
 
@@ -512,18 +512,20 @@ export class DiscountEvaluationService {
 
       let manualAmount = '0.0000';
       if (manualDiscount.calculation_type === 'PERCENTAGE') {
-        const pct = Number(manualDiscount.value);
-        if (pct > cashierMaxPct && !manualDiscount.approvalRequestId) {
+        const pctStr = String(manualDiscount.value || '0');
+        const maxPctStr = String(cashierMaxPct || '0');
+        if (MoneyUtil.greaterThan(pctStr, maxPctStr) && !manualDiscount.approvalRequestId) {
           approvalRequired = true;
-          approvalReason = `Manual discount ${pct}% exceeds cashier maximum of ${cashierMaxPct}%`;
+          approvalReason = `Manual discount ${pctStr}% exceeds cashier maximum of ${maxPctStr}%`;
         }
-        const pctDec = MoneyUtil.divide(manualDiscount.value, '100');
+        const pctDec = MoneyUtil.divide(manualDiscount.value, '100', 6);
         manualAmount = MoneyUtil.multiply(manualEligibleSubtotal, pctDec);
       } else {
         const fixedVal = MoneyUtil.format(manualDiscount.value);
-        if (MoneyUtil.greaterThan(fixedVal, String(cashierMaxFixed)) && !manualDiscount.approvalRequestId) {
+        const maxFixedStr = String(cashierMaxFixed || '0');
+        if (MoneyUtil.greaterThan(fixedVal, maxFixedStr) && !manualDiscount.approvalRequestId) {
           approvalRequired = true;
-          approvalReason = `Manual discount amount ${fixedVal} IRR exceeds cashier maximum of ${cashierMaxFixed} IRR`;
+          approvalReason = `Manual discount amount ${fixedVal} IRR exceeds cashier maximum of ${maxFixedStr} IRR`;
         }
         manualAmount = MoneyUtil.greaterThan(fixedVal, manualEligibleSubtotal)
           ? manualEligibleSubtotal

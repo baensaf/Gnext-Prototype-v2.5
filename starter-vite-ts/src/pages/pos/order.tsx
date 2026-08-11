@@ -277,9 +277,8 @@ export function PosOrderPage() {
     }
   };
 
-  const filteredProducts = activeTab
-    ? products.filter((p) => p.category_id === activeTab)
-    : products;
+  const matchingProducts = activeTab ? products.filter((p) => p.category_id === activeTab) : products;
+  const filteredProducts = matchingProducts.length > 0 ? matchingProducts : products;
 
   return (
     <Box>

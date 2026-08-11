@@ -5,8 +5,9 @@ import Decimal from 'decimal.js';
 // Setup Decimal configuration for test execution
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
-describe('Frontend Money Conformance & Decimal-Safe Financial Business Logic Spec', () => {
+describe('Fullstack Money Conformance & Decimal-Safe Financial Business Logic Spec', () => {
   const frontendSrcDir = path.resolve(__dirname, '../../starter-vite-ts/src');
+  const backendSrcDir = path.resolve(__dirname, '../src');
 
   /**
    * Helper function to recursively collect all source files
@@ -17,7 +18,7 @@ describe('Frontend Money Conformance & Decimal-Safe Financial Business Logic Spe
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name !== 'node_modules' && entry.name !== 'dist') {
+        if (entry.name !== 'node_modules' && entry.name !== 'dist' && entry.name !== '.git') {
           getAllSourceFiles(fullPath, fileList);
         }
       } else if (entry.isFile() && (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx'))) {
@@ -27,8 +28,8 @@ describe('Frontend Money Conformance & Decimal-Safe Financial Business Logic Spe
     return fileList;
   }
 
-  describe('1. Static Source-Conformance Code Scans', () => {
-    const businessPages = [
+  describe('1. Static Source-Conformance Code Scans (Frontend & Backend)', () => {
+    const frontendBusinessPages = [
       'pages/pos/order.tsx',
       'pages/pos/kiosk.tsx',
       'pages/pos/receipt.tsx',
@@ -43,18 +44,26 @@ describe('Frontend Money Conformance & Decimal-Safe Financial Business Logic Spe
       'components/CheckoutModal.tsx',
     ];
 
-    it('1.1 should verify MoneyUtil exists and formats currency safely without native float conversion', () => {
-      const moneyUtilPath = path.join(frontendSrcDir, 'utils/money.util.ts');
-      expect(fs.existsSync(moneyUtilPath)).toBe(true);
+    it('1.1 should verify MoneyUtil exists and formats currency safely without native float conversion in frontend and backend', () => {
+      const frontendMoneyUtilPath = path.join(frontendSrcDir, 'utils/money.util.ts');
+      const backendMoneyUtilPath = path.join(backendSrcDir, 'common/utils/money.util.ts');
 
-      const content = fs.readFileSync(moneyUtilPath, 'utf8');
-      expect(content).toContain('class MoneyUtil');
-      expect(content).toContain('formatCurrency');
-      expect(content).toContain('Decimal');
+      expect(fs.existsSync(frontendMoneyUtilPath)).toBe(true);
+      expect(fs.existsSync(backendMoneyUtilPath)).toBe(true);
+
+      const frontendContent = fs.readFileSync(frontendMoneyUtilPath, 'utf8');
+      expect(frontendContent).toContain('class MoneyUtil');
+      expect(frontendContent).toContain('formatCurrency');
+      expect(frontendContent).toContain('Decimal');
+
+      const backendContent = fs.readFileSync(backendMoneyUtilPath, 'utf8');
+      expect(backendContent).toContain('class MoneyUtil');
+      expect(backendContent).toContain('formatCurrency');
+      expect(backendContent).toContain('Decimal');
     });
 
-    businessPages.forEach((relPath) => {
-      it(`1.2 should not contain floating-point operations on monetary fields in ${relPath}`, () => {
+    frontendBusinessPages.forEach((relPath) => {
+      it(`1.2 should not contain floating-point operations on monetary fields in frontend ${relPath}`, () => {
         const fullPath = path.join(frontendSrcDir, relPath);
         if (!fs.existsSync(fullPath)) {
           throw new Error(`File ${fullPath} does not exist`);
@@ -71,7 +80,6 @@ describe('Frontend Money Conformance & Decimal-Safe Financial Business Logic Spe
 
         const violations: string[] = [];
         lines.forEach((line, lineIdx) => {
-          // Ignore comments
           const trimmed = line.trim();
           if (trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) return;
 
@@ -84,6 +92,42 @@ describe('Frontend Money Conformance & Decimal-Safe Financial Business Logic Spe
 
         expect(violations).toEqual([]);
       });
+    });
+
+    it('1.3 should scan all backend source files for forbidden monetary floating-point operations', () => {
+      const backendFiles = getAllSourceFiles(backendSrcDir);
+      const forbiddenPatterns = [
+        /parseFloat\(\s*[a-zA-Z0-9_.]*(price|amount|total|balance|tax|discount|fee|cash|compensation)/i,
+        /[a-zA-Z0-9_.]*(price|amount|total|balance|tax|discount|fee|cash|compensation)[a-zA-Z0-9_.]*\.toFixed\(/i,
+        /Number\(\s*[a-zA-Z0-9_.]*(price|amount|total|balance|tax|discount|fee|cash|compensation)[a-zA-Z0-9_.]*\)\s*[+\-*/]/i,
+        /Number\(\s*[a-zA-Z0-9_.]*(price|amount|total|balance|tax|discount|fee|cash|compensation)[a-zA-Z0-9_.]*\)\.toFixed\(/i,
+        /Number\(\s*[a-zA-Z0-9_.]*(price|amount|total|balance|tax|discount|fee|cash|compensation)[a-zA-Z0-9_.]*\)\.toLocaleString\(\)/i,
+      ];
+
+      const violationsByFile: Record<string, string[]> = {};
+
+      backendFiles.forEach((file) => {
+        // Skip money.util.ts itself since it encapsulates decimal.js internal .toFixed()
+        if (file.endsWith('money.util.ts')) return;
+
+        const content = fs.readFileSync(file, 'utf8');
+        const lines = content.split('\n');
+        const relPath = path.relative(backendSrcDir, file);
+
+        lines.forEach((line, lineIdx) => {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) return;
+
+          forbiddenPatterns.forEach((pattern) => {
+            if (pattern.test(line)) {
+              if (!violationsByFile[relPath]) violationsByFile[relPath] = [];
+              violationsByFile[relPath].push(`Line ${lineIdx + 1}: ${line.trim()}`);
+            }
+          });
+        });
+      });
+
+      expect(violationsByFile).toEqual({});
     });
   });
 
@@ -222,6 +266,32 @@ describe('Frontend Money Conformance & Decimal-Safe Financial Business Logic Spe
         .toFixed(2);
 
       expect(netSettlement).toBe('630000.00'); // 330,000 + 350,000 - 45,000 - 5,000 = 630,000
+    });
+  });
+
+  describe('6. Order Receipt & Tender Formatting Invariants', () => {
+    it('6.1 should format receipt totals and tender breakdowns as decimal strings without floating point conversion', () => {
+      const receiptTotals = {
+        subtotal_amount: '450002.00',
+        tax_amount: '45000.20',
+        discount_amount: '50000.00',
+        total_amount: '445002.20',
+        paid_amount: '445002.20',
+      };
+
+      expect(typeof receiptTotals.subtotal_amount).toBe('string');
+      expect(typeof receiptTotals.tax_amount).toBe('string');
+      expect(typeof receiptTotals.discount_amount).toBe('string');
+      expect(typeof receiptTotals.total_amount).toBe('string');
+      expect(typeof receiptTotals.paid_amount).toBe('string');
+
+      // Verify that subtotal + tax - discount == total_amount
+      const computedTotal = new Decimal(receiptTotals.subtotal_amount)
+        .plus(new Decimal(receiptTotals.tax_amount))
+        .minus(new Decimal(receiptTotals.discount_amount))
+        .toFixed(2);
+
+      expect(computedTotal).toBe(receiptTotals.total_amount);
     });
   });
 });

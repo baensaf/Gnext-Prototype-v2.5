@@ -9,7 +9,8 @@ export default async function globalSetup() {
   console.log('[Playwright Global Setup] Initializing disposable PostgreSQL test database...');
   const backendDir = path.resolve(__dirname, '../../backend');
   try {
-    execSync('npx ts-node -r tsconfig-paths/register src/scripts/migration-fresh.ts', {
+    const cmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+    execSync(`${cmd} ts-node -r tsconfig-paths/register src/scripts/migration-fresh.ts`, {
       cwd: backendDir,
       stdio: 'inherit',
     });

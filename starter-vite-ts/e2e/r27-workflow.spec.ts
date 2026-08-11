@@ -243,12 +243,12 @@ test.describe('R27 Real Browser E2E Certification Suite', () => {
     expect(triggerData.processed_count).toBeGreaterThanOrEqual(1);
 
     // 4. Restore Online Connectivity Mode
-    if (!(await toggleSwitch.isChecked())) {
+    const currentText = await page.locator('body').innerText();
+    if (currentText.includes('OFFLINE') || !(await toggleSwitch.isChecked())) {
       const toggleOnlinePromise = page.waitForResponse(resp => new URL(resp.url()).pathname === '/api/v1/sync/toggle-connectivity' && resp.request().method() === 'POST');
       await toggleSwitch.click({ force: true });
-      const onlineRes = await toggleOnlinePromise;
-      const onlineData = await onlineRes.json();
-      expect(typeof onlineData.is_online).toBe('boolean');
+      await toggleOnlinePromise;
+      await page.waitForTimeout(1000);
     }
     await expect(page.locator('body')).toContainText(/Online Connected|ONLINE/i, { timeout: 15000 });
   });

@@ -214,8 +214,12 @@ export class RefundService {
         const alloc = em.create(RefundAllocation, {
           tenant_id: tenantId,
           refund_id: savedRefund.id,
+          refund_request_id: savedRefund.id,
           payment_id: p.id,
+          payment_method_id: p.method_id,
+          original_payment_id: p.id,
           amount: allocAmt,
+          amount_refunded: allocAmt,
         });
         await em.save(RefundAllocation, alloc);
         remainingAlloc = MoneyUtil.subtract(remainingAlloc, allocAmt);
@@ -240,10 +244,14 @@ export class RefundService {
     return await this.dataSource.transaction(async (em) => {
       const refund = await em.findOne(Refund, {
         where: { id, tenant_id: tenantId },
-        relations: ['allocations'],
         lock: { mode: 'pessimistic_write' },
       });
       if (!refund) throw new NotFoundException(`Refund ${id} not found`);
+
+      const allocations = await em.find(RefundAllocation, {
+        where: { refund_id: id, tenant_id: tenantId },
+      });
+      refund.allocations = allocations;
 
       if (refund.status === 'SUCCEEDED') return refund; // Idempotent success
 

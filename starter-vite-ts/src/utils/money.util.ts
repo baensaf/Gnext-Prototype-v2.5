@@ -3,7 +3,7 @@ import Decimal from 'decimal.js';
 // Configure decimal.js for financial precision per AD-04 / Specification §17.13
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
-export type MoneyInput = string | number | null | undefined;
+export type MoneyInput = string | number | Decimal | null | undefined;
 
 export class MoneyUtil {
   static add(a: MoneyInput, b: MoneyInput, decimals: number = 4): string {
@@ -81,14 +81,24 @@ export class MoneyUtil {
     return items.reduce<string>((acc, cur) => MoneyUtil.add(acc, cur, decimals), '0');
   }
 
+  static isValid(val: MoneyInput): boolean {
+    if (val === null || val === undefined || val === '') return false;
+    try {
+      const d = new Decimal(val);
+      return !d.isNaN();
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Allocates a total amount proportionally among ratios without losing precision or pennies.
    * Uses the Hare-Niemeyer (Largest Remainder) method.
    */
-  static allocate(totalAmount: MoneyInput, ratios: number[], decimals: number = 4): string[] {
+  static allocate(totalAmount: MoneyInput, ratios: Array<MoneyInput>, decimals: number = 4): string[] {
     if (ratios.length === 0) return [];
-    const totalRatio = ratios.reduce((sum, r) => sum + r, 0);
-    if (totalRatio <= 0) {
+    const totalRatio = ratios.reduce<Decimal>((sum, r) => sum.plus(new Decimal(r || 0)), new Decimal(0));
+    if (totalRatio.isZero() || totalRatio.isNegative()) {
       throw new Error('Total ratio must be greater than zero');
     }
 
@@ -96,7 +106,7 @@ export class MoneyUtil {
     const unitMultiplier = new Decimal(10).pow(decimals);
     const totalUnits = totalDecimal.times(unitMultiplier).floor();
 
-    const rawShares = ratios.map((r) => totalUnits.times(r).div(totalRatio));
+    const rawShares = ratios.map((r) => totalUnits.times(new Decimal(r || 0)).div(totalRatio));
     const floorShares = rawShares.map((share) => share.floor());
     const allocatedUnitsSum = floorShares.reduce((sum, share) => sum.plus(share), new Decimal(0));
     const remainderUnits = totalUnits.minus(allocatedUnitsSum).toNumber();
@@ -106,7 +116,7 @@ export class MoneyUtil {
       idx,
       remainder: share.minus(floorShares[idx]),
     }));
-    indexedRemainders.sort((a, b) => b.remainder.minus(a.remainder).toNumber());
+    indexedRemainders.sort((a, b) => (b.remainder.minus(a.remainder).isNegative() ? -1 : 1));
 
     const finalShares = [...floorShares];
     for (let i = 0; i < remainderUnits; i++) {

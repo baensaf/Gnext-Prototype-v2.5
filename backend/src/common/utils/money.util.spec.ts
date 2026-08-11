@@ -15,9 +15,36 @@ describe('MoneyUtil Foundations & Allocation Properties', () => {
     expect(MoneyUtil.divide('100.00', '3', 2)).toBe('33.33');
   });
 
-  it('should allocate total amount across ratios without losing pennies (USD 2 decimals)', () => {
+  it('should format currency with comma separation without native float drift', () => {
+    expect(MoneyUtil.formatCurrency('1250000', 0)).toBe('1,250,000');
+    expect(MoneyUtil.formatCurrency('1250000.50', 2)).toBe('1,250,000.50');
+    expect(MoneyUtil.formatCurrency('0', 0)).toBe('0');
+  });
+
+  it('should sum monetary lists accurately', () => {
+    expect(MoneyUtil.sum(['10.50', '20.25', '30.25'], 2)).toBe('61.00');
+  });
+
+  it('should validate decimal strings accurately', () => {
+    expect(MoneyUtil.isValid('100.50')).toBe(true);
+    expect(MoneyUtil.isValid('0')).toBe(true);
+    expect(MoneyUtil.isValid('-50.00')).toBe(true);
+    expect(MoneyUtil.isValid('')).toBe(false);
+    expect(MoneyUtil.isValid(null)).toBe(false);
+    expect(MoneyUtil.isValid('invalid-num')).toBe(false);
+  });
+
+  it('should compare monetary values without float conversion errors', () => {
+    expect(MoneyUtil.lessThan('10.00', '20.00')).toBe(true);
+    expect(MoneyUtil.greaterThan('20.00', '10.00')).toBe(true);
+    expect(MoneyUtil.equals('10.0000', '10.00')).toBe(true);
+    expect(MoneyUtil.isZero('0.0000')).toBe(true);
+    expect(MoneyUtil.isZero('0.0001')).toBe(false);
+  });
+
+  it('should allocate total amount across string/decimal ratios without losing pennies (USD 2 decimals)', () => {
     const total = '100.00';
-    const ratios = [1, 1, 1]; // Split $100 across 3 items
+    const ratios = ['1', '1', '1']; // Split $100 across 3 items
     const shares = MoneyUtil.allocate(total, ratios, 2);
 
     expect(shares).toEqual(['33.34', '33.33', '33.33']);

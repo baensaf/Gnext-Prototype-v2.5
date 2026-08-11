@@ -241,7 +241,7 @@ export class ReportsService {
         const rows = Array.from(productMap.values()).map((p) => ({
           product_id: p.product_id,
           product_name: p.product_name,
-          quantity: parseFloat(p.quantity),
+          quantity: MoneyUtil.format(p.quantity, 4),
           unit_price: p.unit_price,
           gross_sales: p.gross_sales,
           net_sales: p.net_sales,
@@ -253,7 +253,7 @@ export class ReportsService {
           rows,
           summary_totals: {
             total_products: rows.length,
-            quantity: parseFloat(totalQty),
+            quantity: MoneyUtil.format(totalQty, 4),
             gross_sales: totalGross,
             net_sales: totalNet,
           },
@@ -831,7 +831,7 @@ export class ReportsService {
             check_in: a.checked_in_at ? new Date(a.checked_in_at).toLocaleTimeString() : '—',
             check_out: a.checked_out_at ? new Date(a.checked_out_at).toLocaleTimeString() : '—',
             status: a.status || 'CHECKED_IN',
-            duration_hours: hrs.toFixed(1),
+            duration_hours: MoneyUtil.format(hrs, 1),
           };
         });
 
@@ -840,7 +840,7 @@ export class ReportsService {
           rows,
           summary_totals: {
             roster_entries: attendances.length,
-            total_duration_hours: totalHours.toFixed(1),
+            total_duration_hours: MoneyUtil.format(totalHours, 1),
           },
         };
       }

@@ -6,6 +6,7 @@ import { Currency } from '../../entities/Currency.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { ReasonCode } from '../../entities/ReasonCode.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { MoneyUtil } from '../../common/utils/money.util';
 
 @Injectable()
 export class SettingsService {
@@ -35,8 +36,11 @@ export class SettingsService {
         throw new BadRequestException('POS setting property allow_negative_inventory must be a boolean');
       }
       if (value.max_discount_percentage !== undefined) {
-        const disc = Number(value.max_discount_percentage);
-        if (isNaN(disc) || disc < 0 || disc > 100) {
+        if (
+          !MoneyUtil.isValid(value.max_discount_percentage) ||
+          MoneyUtil.lessThan(value.max_discount_percentage, '0') ||
+          MoneyUtil.greaterThan(value.max_discount_percentage, '100')
+        ) {
           throw new BadRequestException('POS setting property max_discount_percentage must be between 0 and 100');
         }
       }
@@ -59,14 +63,19 @@ export class SettingsService {
       }
     } else if (group === 'DISCOUNTS') {
       if (value.cashierMaxDiscountPercent !== undefined) {
-        const pct = Number(value.cashierMaxDiscountPercent);
-        if (isNaN(pct) || pct < 0 || pct > 100) {
+        if (
+          !MoneyUtil.isValid(value.cashierMaxDiscountPercent) ||
+          MoneyUtil.lessThan(value.cashierMaxDiscountPercent, '0') ||
+          MoneyUtil.greaterThan(value.cashierMaxDiscountPercent, '100')
+        ) {
           throw new BadRequestException('DISCOUNTS setting property cashierMaxDiscountPercent must be between 0 and 100');
         }
       }
       if (value.cashierMaxFixedDeduction !== undefined) {
-        const amt = Number(value.cashierMaxFixedDeduction);
-        if (isNaN(amt) || amt < 0) {
+        if (
+          !MoneyUtil.isValid(value.cashierMaxFixedDeduction) ||
+          MoneyUtil.lessThan(value.cashierMaxFixedDeduction, '0')
+        ) {
           throw new BadRequestException('DISCOUNTS setting property cashierMaxFixedDeduction must be >= 0');
         }
       }

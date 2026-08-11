@@ -20,11 +20,11 @@ describe('R24 Reports, Alerts, Exports & Audit Verification Suite', () => {
   let testTenantId: string;
 
   beforeAll(async () => {
-    process.env.DB_PORT = process.env.DB_PORT || '5433';
-    process.env.DB_NAME = process.env.DB_NAME || 'appdb_test';
-    process.env.DB_USER = process.env.DB_USER || 'postgres';
-    process.env.DB_USERNAME = process.env.DB_USERNAME || 'postgres';
-    process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'postgres';
+    process.env.DB_PORT = process.env.DB_PORT || '5432';
+    process.env.DB_NAME = process.env.DB_NAME || 'appdb';
+    process.env.DB_USER = process.env.DB_USER || 'admin';
+    process.env.DB_USERNAME = process.env.DB_USERNAME || 'admin';
+    process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'admin';
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       imports: [AppModule],

@@ -143,8 +143,7 @@ export class PricingService {
 
   async createPriceEntry(tenantId: string, data: Partial<PriceEntry>, correlationId: string) {
     if (data.amount !== undefined) {
-      const amt = Number(data.amount);
-      if (isNaN(amt) || amt < 0) {
+      if (!MoneyUtil.isValid(data.amount) || MoneyUtil.lessThan(data.amount, '0')) {
         throw new BadRequestException('Price amount must be a non-negative number');
       }
     }
@@ -221,10 +220,7 @@ export class PricingService {
     tenantId: string,
     params: { price_group_id?: string; branch_id?: string; category_id?: string; product_ids?: string[]; adjustment_type: 'PERCENTAGE' | 'FIXED' | 'SET'; amount: string; effective_from?: Date },
   ) {
-    try {
-      const adjCheck = new Decimal(params.amount || 0);
-      if (adjCheck.isNaN()) throw new BadRequestException('Invalid bulk adjustment amount');
-    } catch {
+    if (!MoneyUtil.isValid(params.amount)) {
       throw new BadRequestException('Invalid bulk adjustment amount');
     }
 
@@ -240,27 +236,27 @@ export class PricingService {
     const previewItems = [];
     for (const prod of products) {
       const resolved = await this.resolvePrice(tenantId, { productId: prod.id, branchId: params.branch_id, priceGroupId: params.price_group_id });
-      const currentDec = new Decimal(resolved.amount || 0);
-      let newPriceDec: Decimal;
+      const currentPrice = resolved.amount || '0';
+      let newPrice: string;
 
       if (params.adjustment_type === 'PERCENTAGE') {
-        const factor = new Decimal(1).plus(new Decimal(params.amount).div(100));
-        newPriceDec = currentDec.times(factor);
+        const factor = MoneyUtil.add('1', MoneyUtil.divide(params.amount, '100', 6), 6);
+        newPrice = MoneyUtil.multiply(currentPrice, factor, 4);
       } else if (params.adjustment_type === 'FIXED') {
-        newPriceDec = currentDec.plus(new Decimal(params.amount));
+        newPrice = MoneyUtil.add(currentPrice, params.amount, 4);
       } else {
-        newPriceDec = new Decimal(params.amount);
+        newPrice = MoneyUtil.format(params.amount, 4);
       }
 
-      if (newPriceDec.lessThan(0)) {
-        newPriceDec = new Decimal(0);
+      if (MoneyUtil.lessThan(newPrice, '0')) {
+        newPrice = MoneyUtil.format('0', 4);
       }
 
       previewItems.push({
         product_id: prod.id,
         product_name: prod.name,
-        current_price: MoneyUtil.format(currentDec.toFixed(4)),
-        new_price: MoneyUtil.format(newPriceDec.toFixed(4)),
+        current_price: MoneyUtil.format(currentPrice, 4),
+        new_price: MoneyUtil.format(newPrice, 4),
         effective_from: params.effective_from || new Date(),
       });
     }
