@@ -115,6 +115,11 @@ export class RepairPaymentsSchema1700000000007 implements MigrationInterface {
         "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
         CONSTRAINT "PK_payment_allocation" PRIMARY KEY ("id")
       );
+
+      ALTER TABLE "payment_allocation"
+        ADD COLUMN IF NOT EXISTS "amount" numeric(19, 4),
+        ADD COLUMN IF NOT EXISTS "currency_code" character varying(3) DEFAULT 'IRR',
+        ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP WITH TIME ZONE DEFAULT now();
     `);
 
     // 5. Create payment_attempt table
@@ -133,9 +138,20 @@ export class RepairPaymentsSchema1700000000007 implements MigrationInterface {
         "error_code" character varying(80),
         "started_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
         "finished_at" TIMESTAMP WITH TIME ZONE,
-        CONSTRAINT "PK_payment_attempt" PRIMARY KEY ("id"),
-        CONSTRAINT "UQ_payment_attempt_no" UNIQUE ("payment_id", "attempt_no")
+        CONSTRAINT "PK_payment_attempt" PRIMARY KEY ("id")
       );
+
+      ALTER TABLE "payment_attempt"
+        ADD COLUMN IF NOT EXISTS "attempt_no" integer DEFAULT 1,
+        ADD COLUMN IF NOT EXISTS "adapter" character varying(40) DEFAULT 'SYNCHRONOUS',
+        ADD COLUMN IF NOT EXISTS "scenario_id" character varying(40),
+        ADD COLUMN IF NOT EXISTS "status" character varying(30) DEFAULT 'PENDING',
+        ADD COLUMN IF NOT EXISTS "request_snapshot" jsonb,
+        ADD COLUMN IF NOT EXISTS "response_snapshot" jsonb,
+        ADD COLUMN IF NOT EXISTS "external_reference" character varying(160),
+        ADD COLUMN IF NOT EXISTS "error_code" character varying(80),
+        ADD COLUMN IF NOT EXISTS "started_at" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+        ADD COLUMN IF NOT EXISTS "finished_at" TIMESTAMP WITH TIME ZONE;
     `);
   }
 

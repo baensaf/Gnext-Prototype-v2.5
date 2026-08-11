@@ -3,9 +3,17 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 export class SessionSchemaCorrections1700000000016 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='session' AND column_name='token') THEN
+          ALTER TABLE "session" ALTER COLUMN "token" DROP NOT NULL;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='session' AND column_name='tenant_id') THEN
+          ALTER TABLE "session" ALTER COLUMN "tenant_id" DROP NOT NULL;
+        END IF;
+      END $$;
+
       ALTER TABLE "session"
-      ALTER COLUMN "token" DROP NOT NULL,
-      ALTER COLUMN "tenant_id" DROP NOT NULL,
       ADD COLUMN IF NOT EXISTS "token_hash" char(64),
       ADD COLUMN IF NOT EXISTS "csrf_hash" char(64),
       ADD COLUMN IF NOT EXISTS "last_seen_at" timestamptz DEFAULT now(),

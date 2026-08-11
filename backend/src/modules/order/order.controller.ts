@@ -159,4 +159,10 @@ export class OrdersController {
     const tenantId = (req as any).tenantId;
     return await this.orderService.getGuestBill(tenantId, id, locale || 'en');
   }
+
+  @Get(':id/receipt')
+  async getReceiptData(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.orderService.getReceiptData(tenantId, id);
+  }
 }

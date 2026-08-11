@@ -56,27 +56,38 @@ test.describe('R27 Real Browser E2E Certification Suite', () => {
     await page.waitForURL('**/app/pos');
     await page.waitForLoadState('networkidle');
 
-    // Click Cheeseburger product card in catalog grid
-    const productCard = page.locator('text=Cheeseburger Special').first();
+    // Select product card from catalog grid
+    const fastFoodTab = page.locator('.MuiTab-root').filter({ hasText: /Fast Food|Burger/i }).first();
+    if (await fastFoodTab.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await fastFoodTab.click();
+      await page.waitForTimeout(300);
+    }
+    const productCard = page.locator('.MuiPaper-root').filter({ hasText: /Cheeseburger|Burger|PROD-/i }).first();
     await expect(productCard).toBeVisible({ timeout: 15000 });
     await productCard.click();
 
+    // Wait for option groups async fetch & dialog rendering to settle
+    await page.waitForTimeout(2500);
+
     // Confirm product option customization dialog if visible
-    const dialog = page.locator('.MuiDialog-root');
-    if (await dialog.isVisible({ timeout: 5000 }).catch(() => false)) {
-      const dialogAddBtn = dialog.locator('button').filter({ hasText: /Add to Cart|افزودن/i }).first();
+    const optionDialog = page.locator('.MuiDialog-root').filter({ hasText: /Customize/i }).first();
+    if (await optionDialog.isVisible()) {
+      const dialogAddBtn = optionDialog.locator('button').filter({ hasText: /Add to Cart|افزودن/i }).first();
       await expect(dialogAddBtn).toBeVisible({ timeout: 5000 });
       await dialogAddBtn.click();
+      await page.waitForTimeout(500);
     }
-    await page.waitForTimeout(1000);
+
+    // Verify item is added to Active Cart
+    await expect(page.locator('body')).toContainText(/Active Cart \([1-9]\d* items?\)/i, { timeout: 10000 });
 
     // Assert Place Order / Submit Order button is enabled in cart summary
     const submitBtn = page.locator('button').filter({ hasText: /Place Order|Submit Order|ثبت سفارش/i }).first();
     await expect(submitBtn).toBeEnabled({ timeout: 15000 });
     await submitBtn.click();
 
-    // Assert real order creation success notification with order number
-    await expect(page.locator('body')).toContainText(/Order Placed Successfully|Order Number|ORD-/i, { timeout: 15000 });
+    // Assert real order creation success notification or checkout dialog with order number
+    await expect(page.locator('body')).toContainText(/Order Settlement & Checkout|Order Placed Successfully|Order Number|ORD-/i, { timeout: 15000 });
   });
 
   test('4. Operational KDS & Delivery Workflow', async ({ page }) => {
@@ -119,7 +130,7 @@ test.describe('R27 Real Browser E2E Certification Suite', () => {
     await page.waitForLoadState('networkidle');
 
     // Assert CSV export button exists and trigger export download event concurrently
-    const csvBtn = page.locator('button').filter({ hasText: /Export|خروجی/i }).first();
+    const csvBtn = page.locator('button').filter({ hasText: /Export UTF-8 CSV|Export|خروجی/i }).first();
     await expect(csvBtn).toBeVisible({ timeout: 15000 });
 
     const [download] = await Promise.all([

@@ -1085,5 +1085,83 @@ export class OrderService {
 
     return { html, order };
   }
+
+  async getReceiptData(tenantId: string, id: string) {
+    const order = await this.getOrderById(tenantId, id);
+
+    let branchName = 'Tehran Central';
+    let branchAddress = 'Tehran, Iran';
+    let branchPhone = '+98 21 88000000';
+
+    if (order.branch_id) {
+      try {
+        const branchRes = await this.dataSource.query(
+          `SELECT name, address, phone FROM "branch" WHERE id = $1 LIMIT 1`,
+          [order.branch_id],
+        );
+        if (branchRes && branchRes[0]) {
+          branchName = branchRes[0].name || branchName;
+          branchAddress = branchRes[0].address || branchAddress;
+          branchPhone = branchRes[0].phone || branchPhone;
+        }
+      } catch {
+        // Fallback to default branch info
+      }
+    }
+
+    let tenders: any[] = [];
+    try {
+      const pays = await this.dataSource.query(
+        `SELECT p.amount, p.reference_number, pm.name as method_name
+         FROM "payment" p
+         LEFT JOIN "payment_method" pm ON p.payment_method_id = pm.id
+         WHERE p.order_id = $1 AND p.status = 'SUCCEEDED'`,
+        [order.id],
+      );
+      tenders = pays.map((p: any) => ({
+        payment_method_name: p.method_name || 'Card / Cash',
+        amount: Number(p.amount),
+        reference_number: p.reference_number || undefined,
+      }));
+    } catch {
+      // Fallback
+    }
+
+    const items = (order.items || []).map((it) => ({
+      product_name: it.product_name,
+      quantity: Number(it.quantity),
+      subtotal: Number(it.line_total),
+      options: (it.options || []).map((opt) => ({
+        name: opt.option_item_name,
+        price_delta: Number(opt.price_delta || 0),
+      })),
+    }));
+
+    return {
+      receipt_header: {
+        tenant_name: 'Gnext Retail System',
+        branch_name: branchName,
+        branch_address: branchAddress,
+        branch_phone: branchPhone,
+        order_number: order.order_number,
+        order_type: order.order_type,
+        table_number: order.table_number || undefined,
+        placed_at: order.placed_at || (order as any).created_at || new Date().toISOString(),
+      },
+      items,
+      totals: {
+        subtotal_amount: Number(order.subtotal || 0),
+        tax_amount: Number(order.tax_total || 0),
+        discount_amount: Number(order.discount_total || 0),
+        total_amount: Number(order.total_amount || 0),
+        paid_amount: Number(order.paid_amount || 0),
+      },
+      tenders,
+      receipt_footer: {
+        bilingual_note_fa: 'از خرید شما متشکریم! لطفا فاکتور خود را نگهداری کنید.',
+        bilingual_note_en: 'Thank you for your business! Please keep your receipt.',
+      },
+    };
+  }
 }
 

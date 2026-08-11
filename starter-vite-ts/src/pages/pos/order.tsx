@@ -111,8 +111,12 @@ export function PosOrderPage() {
     setCheckedOptionIds([]);
     try {
       const groups = await catalogApi.getOptionGroups();
-      setOptionGroups(groups);
-      setOptionDialogOpen(true);
+      if (groups && groups.length > 0) {
+        setOptionGroups(groups);
+        setOptionDialogOpen(true);
+      } else {
+        addToCart(p, []);
+      }
     } catch {
       // Add directly without options
       addToCart(p, []);
@@ -259,6 +263,7 @@ export function PosOrderPage() {
       const draft = await orderApi.createOrder(orderPayload);
       const submitted = await orderApi.submitOrder(draft.id);
       setPlacedOrder(submitted);
+      setCheckoutModalOpen(true);
       setCart([]);
       setCouponCode('');
       setAppliedDiscountAmount(0);

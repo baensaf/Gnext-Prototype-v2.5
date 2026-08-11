@@ -8,6 +8,7 @@ import { OrderItem } from '../../entities/OrderItem.entity';
 import { Product } from '../../entities/Product.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { MoneyUtil } from '../../common/utils/money.util';
 
 @Injectable()
 export class SimulationService {
@@ -128,12 +129,15 @@ export class SimulationService {
       { product_name: 'Snappfood Combo Meal', quantity: 1, price: 15.0 },
     ];
 
-    let subtotal = 0;
+    let subtotalStr = '0.0000';
     for (const item of itemsInput) {
-      subtotal += parseFloat(item.price || '15.0') * (item.quantity || 1);
+      const priceStr = MoneyUtil.format(item.price || '15.0', 4);
+      const qtyStr = MoneyUtil.format(item.quantity || 1, 4);
+      const lineTotalStr = MoneyUtil.multiply(priceStr, qtyStr, 4);
+      subtotalStr = MoneyUtil.add(subtotalStr, lineTotalStr, 4);
     }
-    const taxAmount = subtotal * 0.09;
-    const totalAmount = subtotal + taxAmount;
+    const taxAmountStr = MoneyUtil.multiply(subtotalStr, '0.09', 4);
+    const totalAmountStr = MoneyUtil.add(subtotalStr, taxAmountStr, 4);
 
     const orderHeader = this.orderRepo.create({
       tenant_id: tenantId,
@@ -143,30 +147,41 @@ export class SimulationService {
       status: 'SUBMITTED',
       fulfillment_status: 'PENDING',
       notes: `Snappfood Order [Code: ${payload.order_code || 'SNP-001'}]. Vendor Notes: ${payload.vendor_notes || 'None'}`,
-      subtotal_amount: subtotal.toFixed(4),
-      tax_amount: taxAmount.toFixed(4),
+      subtotal_amount: subtotalStr,
+      tax_amount: taxAmountStr,
       discount_amount: '0.0000',
-      total_amount: totalAmount.toFixed(4),
-      paid_amount: totalAmount.toFixed(4),
+      total_amount: totalAmountStr,
+      paid_amount: totalAmountStr,
       due_amount: '0.0000',
     });
 
     const savedHeader = await this.orderRepo.save(orderHeader);
 
     for (const item of itemsInput) {
-      const lineTotal = parseFloat(item.price || '15.0') * (item.quantity || 1);
+      const priceStr = MoneyUtil.format(item.price || '15.0', 4);
+      const qtyStr = MoneyUtil.format(item.quantity || 1, 4);
+      const lineTotalStr = MoneyUtil.multiply(priceStr, qtyStr, 4);
+
       const orderItem = this.orderItemRepo.create({
         tenant_id: tenantId,
         order_id: savedHeader.id,
+        line_number: 1,
         product_id: item.product_id || 'snapp-prod-1',
         product_name: item.product_name || 'Snappfood Item',
-        unit_price: parseFloat(item.price || '15.0').toFixed(4),
-        quantity: (item.quantity || 1).toFixed(4),
-        subtotal: lineTotal.toFixed(4),
-        tax_amount: (lineTotal * 0.09).toFixed(4),
+        unit_price: priceStr,
+        quantity: qtyStr,
+        base_total: lineTotalStr,
+        subtotal: lineTotalStr,
+        modifier_total: '0.0000',
+        discount_total: '0.0000',
         discount_amount: '0.0000',
-        total_amount: (lineTotal * 1.09).toFixed(4),
+        tax_total: MoneyUtil.multiply(lineTotalStr, '0.09', 4),
+        tax_amount: MoneyUtil.multiply(lineTotalStr, '0.09', 4),
+        packaging_total: '0.0000',
+        line_total: lineTotalStr,
+        total_amount: MoneyUtil.multiply(lineTotalStr, '1.09', 4),
         special_instructions: item.notes || null,
+        state: 'ACTIVE',
       });
       await this.orderItemRepo.save(orderItem);
     }

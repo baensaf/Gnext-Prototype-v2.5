@@ -24,6 +24,7 @@ export async function runSeed() {
   const prodRepo = AppDataSource.getRepository('Product');
   const invItemRepo = AppDataSource.getRepository('InventoryItem');
   const invTxRepo = AppDataSource.getRepository('InventoryTransaction');
+  const zoneRepo = AppDataSource.getRepository('DeliveryZone');
 
   // 1. Idempotent Tenant Seed
   let tenant = await tenantRepo.findOne({ where: { id: DEFAULT_TENANT_ID } });
@@ -101,6 +102,19 @@ export async function runSeed() {
     });
     await branchRepo.save(branchExpress);
     console.log('Seeded Branch: Downtown Express');
+  }
+
+  // 4b. Idempotent Delivery Zones
+  const defaultZones = [
+    { tenant_id: tenant.id, branch_id: branchTeh.id, code: 'ZONE-CENTRAL-01', name: 'Central District Zone 1', fee: '25000.0000', currency_code: 'IRR', estimated_minutes: 30, is_active: true },
+    { tenant_id: tenant.id, branch_id: branchExpress.id, code: 'ZONE-DOWNTOWN-01', name: 'Downtown Express Zone 1', fee: '20000.0000', currency_code: 'IRR', estimated_minutes: 20, is_active: true },
+  ];
+  for (const z of defaultZones) {
+    const existing = await zoneRepo.findOne({ where: { tenant_id: tenant.id, code: z.code } });
+    if (!existing) {
+      await zoneRepo.save(zoneRepo.create(z));
+      console.log(`Seeded Delivery Zone: ${z.name}`);
+    }
   }
 
   // 5. Idempotent Terminals

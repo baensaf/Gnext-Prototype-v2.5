@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
+import Decimal from 'decimal.js';
 import { PriceEntry } from '../../entities/PriceEntry.entity';
 import { PriceGroupBranch } from '../../entities/PriceGroupBranch.entity';
 import { PriceBulkJob } from '../../entities/PriceBulkJob.entity';
@@ -220,8 +221,12 @@ export class PricingService {
     tenantId: string,
     params: { price_group_id?: string; branch_id?: string; category_id?: string; product_ids?: string[]; adjustment_type: 'PERCENTAGE' | 'FIXED' | 'SET'; amount: string; effective_from?: Date },
   ) {
-    const numAmount = parseFloat(params.amount);
-    if (isNaN(numAmount)) throw new BadRequestException('Invalid bulk adjustment amount');
+    try {
+      const adjCheck = new Decimal(params.amount || 0);
+      if (adjCheck.isNaN()) throw new BadRequestException('Invalid bulk adjustment amount');
+    } catch {
+      throw new BadRequestException('Invalid bulk adjustment amount');
+    }
 
     let products: Product[] = [];
     if (params.product_ids && params.product_ids.length > 0) {
@@ -235,23 +240,27 @@ export class PricingService {
     const previewItems = [];
     for (const prod of products) {
       const resolved = await this.resolvePrice(tenantId, { productId: prod.id, branchId: params.branch_id, priceGroupId: params.price_group_id });
-      const current = parseFloat(resolved.amount);
-      let newPrice = current;
+      const currentDec = new Decimal(resolved.amount || 0);
+      let newPriceDec: Decimal;
 
       if (params.adjustment_type === 'PERCENTAGE') {
-        newPrice = current * (1 + numAmount / 100);
+        const factor = new Decimal(1).plus(new Decimal(params.amount).div(100));
+        newPriceDec = currentDec.times(factor);
       } else if (params.adjustment_type === 'FIXED') {
-        newPrice = current + numAmount;
+        newPriceDec = currentDec.plus(new Decimal(params.amount));
       } else {
-        newPrice = numAmount;
+        newPriceDec = new Decimal(params.amount);
       }
 
-      newPrice = Math.max(0, newPrice);
+      if (newPriceDec.lessThan(0)) {
+        newPriceDec = new Decimal(0);
+      }
+
       previewItems.push({
         product_id: prod.id,
         product_name: prod.name,
-        current_price: MoneyUtil.format(current.toString()),
-        new_price: MoneyUtil.format(newPrice.toString()),
+        current_price: MoneyUtil.format(currentDec.toFixed(4)),
+        new_price: MoneyUtil.format(newPriceDec.toFixed(4)),
         effective_from: params.effective_from || new Date(),
       });
     }

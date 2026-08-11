@@ -275,10 +275,17 @@ export class ImportExportService {
       } else if (job.entity_type === 'PRODUCTS') {
         if (!parsedData.code) errors.push('Product Code is required');
         if (!parsedData.name_fa && !parsedData.name) errors.push('Product Name is required');
-        if (parsedData.base_price === undefined || parsedData.base_price === '' || isNaN(Number(parsedData.base_price))) {
+        if (parsedData.base_price === undefined || parsedData.base_price === '') {
           errors.push('Base price must be a valid number');
-        } else if (Number(parsedData.base_price) < 0) {
-          errors.push('Base price cannot be negative');
+        } else {
+          try {
+            const priceStr = MoneyUtil.format(parsedData.base_price, 4);
+            if (MoneyUtil.lessThan(priceStr, '0')) {
+              errors.push('Base price cannot be negative');
+            }
+          } catch {
+            errors.push('Base price must be a valid number');
+          }
         }
       } else if (job.entity_type === 'CATEGORIES') {
         if (!parsedData.code) errors.push('Category Code is required');

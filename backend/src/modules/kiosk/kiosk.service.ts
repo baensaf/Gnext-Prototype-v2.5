@@ -15,6 +15,7 @@ import { OrderItemOption } from '../../entities/OrderItemOption.entity';
 import { Payment } from '../../entities/Payment.entity';
 import { Customer } from '../../entities/Customer.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { MoneyUtil } from '../../common/utils/money.util';
 
 @Injectable()
 export class KioskService {
@@ -209,47 +210,48 @@ export class KioskService {
 
     const savedHeader = await this.orderRepo.save(orderHeader);
     const orderItems: OrderItem[] = [];
+    let subtotalStr = '0.0000';
 
     for (const itemInput of data.items) {
       const product = await this.productRepo.findOne({ where: { id: itemInput.product_id, tenant_id: tenantId } });
       if (!product) throw new NotFoundException(`Product ${itemInput.product_id} not found`);
 
       // Authoritative pricing: Ignore any client-supplied unit_price or additional_price
-      const basePrice = parseFloat(product.base_price || '0');
-      let itemOptionsPrice = 0;
+      const basePriceStr = product.base_price || '0.0000';
+      let itemOptionsPriceStr = '0.0000';
       const optionsToSave = [];
 
       if (itemInput.options && itemInput.options.length > 0) {
         for (const opt of itemInput.options) {
           const optionItem = await this.optionItemRepo.findOne({ where: { id: opt.option_item_id } });
-          const optPrice = optionItem ? parseFloat(optionItem.price_delta || '0') : 0;
-          itemOptionsPrice += optPrice;
+          const optPriceStr = optionItem ? MoneyUtil.format(optionItem.price_delta || '0', 4) : '0.0000';
+          itemOptionsPriceStr = MoneyUtil.add(itemOptionsPriceStr, optPriceStr, 4);
 
           optionsToSave.push({
             option_group_id: opt.option_group_id,
             option_item_id: opt.option_item_id,
             option_group_name: 'Option Group',
             option_item_name: optionItem ? optionItem.name : 'Option Item',
-            price_delta: optPrice.toFixed(4),
+            price_delta: optPriceStr,
           });
         }
       }
 
-      const unitPrice = basePrice + itemOptionsPrice;
-      const lineTotal = unitPrice * itemInput.quantity;
-      subtotal += lineTotal;
+      const unitPriceStr = MoneyUtil.add(basePriceStr, itemOptionsPriceStr, 4);
+      const lineTotalStr = MoneyUtil.multiply(unitPriceStr, itemInput.quantity, 4);
+      subtotalStr = MoneyUtil.add(subtotalStr, lineTotalStr, 4);
 
       const orderItem = this.orderItemRepo.create({
         tenant_id: tenantId,
         order_id: savedHeader.id,
         product_id: product.id,
         product_name: product.name,
-        unit_price: unitPrice.toFixed(4),
-        quantity: itemInput.quantity.toFixed(4),
-        subtotal: lineTotal.toFixed(4),
-        tax_amount: (lineTotal * 0.09).toFixed(4),
+        unit_price: unitPriceStr,
+        quantity: MoneyUtil.format(itemInput.quantity, 4),
+        subtotal: lineTotalStr,
+        tax_amount: MoneyUtil.multiply(lineTotalStr, '0.09', 4),
         discount_amount: '0.0000',
-        total_amount: (lineTotal * 1.09).toFixed(4),
+        total_amount: MoneyUtil.multiply(lineTotalStr, '1.09', 4),
         special_instructions: itemInput.notes || null,
       });
 
@@ -267,13 +269,13 @@ export class KioskService {
       orderItems.push(savedItem);
     }
 
-    const taxAmount = subtotal * 0.09;
-    const totalAmount = subtotal + taxAmount;
+    const taxAmountStr = MoneyUtil.multiply(subtotalStr, '0.09', 4);
+    const totalAmountStr = MoneyUtil.add(subtotalStr, taxAmountStr, 4);
 
-    savedHeader.subtotal_amount = subtotal.toFixed(4);
-    savedHeader.tax_amount = taxAmount.toFixed(4);
-    savedHeader.total_amount = totalAmount.toFixed(4);
-    savedHeader.due_amount = totalAmount.toFixed(4);
+    savedHeader.subtotal_amount = subtotalStr;
+    savedHeader.tax_amount = taxAmountStr;
+    savedHeader.total_amount = totalAmountStr;
+    savedHeader.due_amount = totalAmountStr;
 
     const finalOrder = await this.orderRepo.save(savedHeader);
 
@@ -303,7 +305,7 @@ export class KioskService {
     if (!order) throw new NotFoundException('Order not found');
 
     // Idempotency check: if order is already paid, return existing payment & receipt
-    if (order.status === 'READY' || parseFloat(order.due_amount || '0') <= 0.01) {
+    if (order.status === 'READY' || MoneyUtil.lessThanOrEqual(order.due_amount || '0', '0.01')) {
       const existingPayment = await this.paymentRepo.findOne({
         where: { tenant_id: tenantId, order_id: order.id },
         order: { initiated_at: 'DESC' },
@@ -319,7 +321,7 @@ export class KioskService {
           order_type: order.order_type,
           date: new Date(),
           reference_number: existingPayment ? existingPayment.reference : `POS-KOS-${order.id.slice(-6)}`,
-          total_paid: parseFloat(order.total_amount || '0').toFixed(2),
+          total_paid: MoneyUtil.format(order.total_amount || '0', 2),
           payment_method: 'Simulated Card Terminal',
           status: 'PAID & SENT TO KITCHEN',
           hardware_status: 'SIMULATED NETWORK POS OK',
@@ -327,7 +329,7 @@ export class KioskService {
       };
     }
 
-    const totalToPay = parseFloat(order.due_amount || order.total_amount || '0');
+    const totalToPayStr = MoneyUtil.format(order.due_amount || order.total_amount || '0', 4);
 
     let paymentMethod = null;
     if (data.payment_method_id) {
@@ -346,7 +348,7 @@ export class KioskService {
       payment_number: `PAY-KOS-${Date.now()}`,
       method_id: paymentMethod ? paymentMethod.id : 'default-pm',
       method_kind: paymentMethod ? paymentMethod.kind : 'CARD',
-      amount: totalToPay.toFixed(4),
+      amount: totalToPayStr,
       status: 'SUCCEEDED',
       reference: refNum,
       business_date: new Date().toISOString().slice(0, 10),
@@ -355,11 +357,12 @@ export class KioskService {
 
     const savedPayment = await this.paymentRepo.save(payment);
 
-    const currentPaid = parseFloat(order.paid_amount || '0') + totalToPay;
-    const currentDue = Math.max(0, parseFloat(order.total_amount || '0') - currentPaid);
+    const currentPaidStr = MoneyUtil.add(order.paid_amount || '0', totalToPayStr, 4);
+    const rawDueStr = MoneyUtil.subtract(order.total_amount || '0', currentPaidStr, 4);
+    const currentDueStr = MoneyUtil.lessThan(rawDueStr, '0') ? '0.0000' : rawDueStr;
 
-    order.paid_amount = currentPaid.toFixed(4);
-    order.due_amount = currentDue.toFixed(4);
+    order.paid_amount = currentPaidStr;
+    order.due_amount = currentDueStr;
     order.status = 'READY';
     order.state = 'READY' as any;
     order.fulfillment_status = 'PREPARING';
@@ -384,7 +387,7 @@ export class KioskService {
         order_type: updatedOrder.order_type,
         date: new Date(),
         reference_number: refNum,
-        total_paid: totalToPay.toFixed(2),
+        total_paid: MoneyUtil.format(totalToPayStr, 2),
         payment_method: paymentMethod ? paymentMethod.name : 'Simulated Card Terminal',
         status: 'PAID & SENT TO KITCHEN',
         hardware_status: 'SIMULATED NETWORK POS OK',

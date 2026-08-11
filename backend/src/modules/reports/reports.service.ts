@@ -208,11 +208,9 @@ export class ReportsService {
           .where('i.tenant_id = :tenantId', { tenantId });
         this.applyDateFilter(qb, 'i.created_at', startDate, endDate);
 
-        const items = await qb.getMany();
-
-        let totalQty = 0;
-        let totalGross = 0;
-        let totalNet = 0;
+        const items = await qb.getMany();        let totalQty = '0.0000';
+        let totalGross = '0.0000';
+        let totalNet = '0.0000';
 
         const productMap = new Map<string, any>();
         items.forEach((i) => {
@@ -220,33 +218,33 @@ export class ReportsService {
           const existing = productMap.get(key) || {
             product_id: i.product_id,
             product_name: i.product_name,
-            quantity: 0,
-            unit_price: parseFloat(i.unit_price || '0'),
-            gross_sales: 0,
-            net_sales: 0,
+            quantity: '0.0000',
+            unit_price: MoneyUtil.format(i.unit_price || '0', 2),
+            gross_sales: '0.0000',
+            net_sales: '0.0000',
             order_count: 0,
           };
 
-          const qty = parseFloat(i.quantity || '1');
-          const tot = parseFloat(i.total_amount || i.line_total || '0');
-          existing.quantity += qty;
-          existing.gross_sales += tot;
-          existing.net_sales += tot;
+          const qtyStr = MoneyUtil.format(i.quantity || '1', 4);
+          const totStr = MoneyUtil.format(i.total_amount || i.line_total || '0', 2);
+          existing.quantity = MoneyUtil.add(existing.quantity, qtyStr, 4);
+          existing.gross_sales = MoneyUtil.add(existing.gross_sales, totStr, 2);
+          existing.net_sales = MoneyUtil.add(existing.net_sales, totStr, 2);
           existing.order_count += 1;
           productMap.set(key, existing);
 
-          totalQty += qty;
-          totalGross += tot;
-          totalNet += tot;
+          totalQty = MoneyUtil.add(totalQty, qtyStr, 4);
+          totalGross = MoneyUtil.add(totalGross, totStr, 2);
+          totalNet = MoneyUtil.add(totalNet, totStr, 2);
         });
 
         const rows = Array.from(productMap.values()).map((p) => ({
           product_id: p.product_id,
           product_name: p.product_name,
-          quantity: p.quantity,
-          unit_price: p.unit_price.toFixed(2),
-          gross_sales: p.gross_sales.toFixed(2),
-          net_sales: p.net_sales.toFixed(2),
+          quantity: parseFloat(p.quantity),
+          unit_price: p.unit_price,
+          gross_sales: p.gross_sales,
+          net_sales: p.net_sales,
           order_count: p.order_count,
         }));
 
@@ -255,9 +253,9 @@ export class ReportsService {
           rows,
           summary_totals: {
             total_products: rows.length,
-            quantity: totalQty,
-            gross_sales: totalGross.toFixed(2),
-            net_sales: totalNet.toFixed(2),
+            quantity: parseFloat(totalQty),
+            gross_sales: totalGross,
+            net_sales: totalNet,
           },
         };
       }
@@ -269,38 +267,39 @@ export class ReportsService {
 
         const payments = await qb.getMany();
 
-        let totalSucceeded = 0;
-        let totalReversed = 0;
-        let totalRefunded = 0;
-        let totalNet = 0;
+        let totalSucceeded = '0.00';
+        let totalReversed = '0.00';
+        let totalRefunded = '0.00';
+        let totalNet = '0.00';
 
         const methodMap = new Map<string, any>();
         payments.forEach((p) => {
-          const key = p.method_kind || p.method_id || 'CASH';
+          const key = p.method_kind || 'CASH';
           const existing = methodMap.get(key) || {
             method_kind: key,
             method_name: key,
             count: 0,
-            succeeded: 0,
-            reversed: 0,
-            refunded: 0,
-            net: 0,
+            succeeded: '0.00',
+            reversed: '0.00',
+            refunded: '0.00',
+            net: '0.00',
           };
 
-          const amt = parseFloat(p.amount || '0');
-          const ref = 0;
+          const amtStr = MoneyUtil.format(p.amount || '0', 2);
+          const refStr = '0.00';
           existing.count += 1;
 
           if (p.status === 'REVERSED' || p.status === 'FAILED') {
-            existing.reversed += amt;
-            totalReversed += amt;
+            existing.reversed = MoneyUtil.add(existing.reversed, amtStr, 2);
+            totalReversed = MoneyUtil.add(totalReversed, amtStr, 2);
           } else {
-            existing.succeeded += amt;
-            existing.refunded += ref;
-            existing.net += (amt - ref);
-            totalSucceeded += amt;
-            totalRefunded += ref;
-            totalNet += (amt - ref);
+            existing.succeeded = MoneyUtil.add(existing.succeeded, amtStr, 2);
+            existing.refunded = MoneyUtil.add(existing.refunded, refStr, 2);
+            const netAmt = MoneyUtil.subtract(amtStr, refStr, 2);
+            existing.net = MoneyUtil.add(existing.net, netAmt, 2);
+            totalSucceeded = MoneyUtil.add(totalSucceeded, amtStr, 2);
+            totalRefunded = MoneyUtil.add(totalRefunded, refStr, 2);
+            totalNet = MoneyUtil.add(totalNet, netAmt, 2);
           }
 
           methodMap.set(key, existing);
@@ -309,22 +308,22 @@ export class ReportsService {
         const rows = Array.from(methodMap.values()).map((m) => ({
           method_kind: m.method_kind,
           method_name: m.method_name,
-          count: m.count,
-          succeeded: m.succeeded.toFixed(2),
-          reversed: m.reversed.toFixed(2),
-          refunded: m.refunded.toFixed(2),
-          net: m.net.toFixed(2),
+          transaction_count: m.count,
+          succeeded_amount: m.succeeded,
+          reversed_amount: m.reversed,
+          refunded_amount: m.refunded,
+          net_amount: m.net,
         }));
 
         return {
           report_code: reportCode,
           rows,
           summary_totals: {
-            total_payments: payments.length,
-            succeeded: totalSucceeded.toFixed(2),
-            reversed: totalReversed.toFixed(2),
-            refunded: totalRefunded.toFixed(2),
-            net: totalNet.toFixed(2),
+            method_count: rows.length,
+            succeeded: totalSucceeded,
+            reversed: totalReversed,
+            refunded: totalRefunded,
+            net: totalNet,
           },
         };
       }
@@ -348,7 +347,7 @@ export class ReportsService {
           .map(([ordId]) => ordId);
 
         let rows: any[] = [];
-        let totalPaid = 0;
+        let totalPaid = '0.00';
 
         if (mixedOrderIds.length > 0) {
           const orders = await this.orderRepo.find({ where: { tenant_id: tenantId } });
@@ -356,19 +355,19 @@ export class ReportsService {
 
           rows = matchedOrders.map((o) => {
             const pmts = orderPaymentMap.get(o.id) || [];
-            const paid = parseFloat(o.paid_amount || '0');
-            const tot = parseFloat(o.total_amount || '0');
-            totalPaid += paid;
+            const paidStr = MoneyUtil.format(o.paid_amount || '0', 2);
+            const totStr = MoneyUtil.format(o.total_amount || '0', 2);
+            totalPaid = MoneyUtil.add(totalPaid, o.paid_amount || '0', 2);
 
             return {
               order_id: o.id,
               order_number: o.order_number,
               date: o.placed_at ? new Date(o.placed_at).toISOString().split('T')[0] : '—',
               branch_id: o.branch_id,
-              total_amount: tot.toFixed(2),
-              paid_amount: paid.toFixed(2),
+              total_amount: totStr,
+              paid_amount: paidStr,
               method_count: pmts.length,
-              methods: pmts.map((p) => `${p.method_kind}: ${parseFloat(p.amount || '0').toFixed(2)}`).join(', '),
+              methods: pmts.map((p) => `${p.method_kind}: ${MoneyUtil.format(p.amount || '0', 2)}`).join(', '),
             };
           });
         }
@@ -378,7 +377,7 @@ export class ReportsService {
           rows,
           summary_totals: {
             mixed_orders_count: rows.length,
-            paid_amount: totalPaid.toFixed(2),
+            total_paid: totalPaid,
           },
         };
       }
@@ -386,18 +385,18 @@ export class ReportsService {
       case 'mobile-pos': {
         const qb = this.paymentRepo.createQueryBuilder('p')
           .where('p.tenant_id = :tenantId', { tenantId })
-          .andWhere('p.method_kind = :kind', { kind: 'MOBILE_POS' });
+          .andWhere('(p.method_kind = :mk OR p.device_id IS NOT NULL)', { mk: 'MOBILE_POS' });
         this.applyDateFilter(qb, 'p.initiated_at', startDate, endDate);
 
         const payments = await qb.getMany();
-        let totalAmt = 0;
-        let totalRef = 0;
+        let totalAmt = '0.00';
+        let totalRef = '0.00';
 
         const rows = payments.map((p) => {
-          const amt = parseFloat(p.amount || '0');
-          const ref = 0;
-          totalAmt += amt;
-          totalRef += ref;
+          const amtStr = MoneyUtil.format(p.amount || '0', 2);
+          const refStr = '0.00';
+          totalAmt = MoneyUtil.add(totalAmt, p.amount || '0', 2);
+          totalRef = MoneyUtil.add(totalRef, refStr, 2);
 
           return {
             payment_id: p.id,
@@ -405,8 +404,8 @@ export class ReportsService {
             date: p.initiated_at ? new Date(p.initiated_at).toISOString().split('T')[0] : '—',
             device_id: p.device_id || 'MOBILE_POS_DEV_1',
             reference_number: p.reference || 'REF-POS-100',
-            amount: amt.toFixed(2),
-            refunded_amount: ref.toFixed(2),
+            amount: amtStr,
+            refunded_amount: refStr,
             status: p.status,
           };
         });
@@ -415,10 +414,9 @@ export class ReportsService {
           report_code: reportCode,
           rows,
           summary_totals: {
-            payment_count: payments.length,
-            amount: totalAmt.toFixed(2),
-            refunded_amount: totalRef.toFixed(2),
-            net_pos_amount: (totalAmt - totalRef).toFixed(2),
+            mobile_pos_count: rows.length,
+            total_amount: totalAmt,
+            total_refunded: totalRef,
           },
         };
       }
@@ -429,13 +427,13 @@ export class ReportsService {
         this.applyDateFilter(qb, 'r.initiated_at', startDate, endDate);
 
         const refunds = await qb.getMany();
-        let totalAmt = 0;
+        let totalAmt = '0.00';
 
         const rows = refunds
           .filter((r) => r.is_alternative_method)
           .map((r) => {
-            const amt = parseFloat(r.amount || '0');
-            totalAmt += amt;
+            const amtStr = MoneyUtil.format(r.amount || '0', 2);
+            totalAmt = MoneyUtil.add(totalAmt, r.amount || '0', 2);
 
             return {
               refund_id: r.id,
@@ -443,7 +441,7 @@ export class ReportsService {
               date: r.initiated_at ? new Date(r.initiated_at).toISOString().split('T')[0] : '—',
               original_method: 'CASH',
               target_method: r.method_kind || 'BANK_TRANSFER',
-              amount: amt.toFixed(2),
+              amount: amtStr,
               reason: r.reason_text || r.reason_code_id || 'Customer Request',
               approval_id: r.approval_request_id || 'APPR-AUTO',
               status: r.status,
@@ -455,25 +453,25 @@ export class ReportsService {
           rows,
           summary_totals: {
             alternative_refund_count: rows.length,
-            amount: totalAmt.toFixed(2),
+            amount: totalAmt,
           },
         };
       }
 
       case 'discounts': {
         const adjustments = await this.adjustmentRepo.find({ where: { tenant_id: tenantId } });
-        let totalDisc = 0;
+        let totalDisc = '0.00';
 
         const rows = adjustments.map((a) => {
-          const amt = parseFloat(a.amount || '0');
-          totalDisc += amt;
+          const amtStr = MoneyUtil.format(a.amount || '0', 2);
+          totalDisc = MoneyUtil.add(totalDisc, a.amount || '0', 2);
 
           return {
             adjustment_id: a.id,
             order_id: a.order_id,
             type: a.type || 'DISCOUNT',
             code: a.code || 'PROMO10',
-            discount_amount: amt.toFixed(2),
+            discount_amount: amtStr,
             reason: a.name || 'Standard Promotion',
           };
         });
@@ -483,26 +481,26 @@ export class ReportsService {
           rows,
           summary_totals: {
             adjustment_count: rows.length,
-            discount_amount: totalDisc.toFixed(2),
+            discount_amount: totalDisc,
           },
         };
       }
 
       case 'manual-discounts': {
         const adjustments = await this.adjustmentRepo.find({ where: { tenant_id: tenantId } });
-        let totalManual = 0;
+        let totalManual = '0.00';
 
         const rows = adjustments
           .filter((a) => a.type === 'MANUAL' || a.source_type === 'MANUAL')
           .map((a) => {
-            const amt = parseFloat(a.amount || '0');
-            totalManual += amt;
+            const amtStr = MoneyUtil.format(a.amount || '0', 2);
+            totalManual = MoneyUtil.add(totalManual, a.amount || '0', 2);
 
             return {
               adjustment_id: a.id,
               order_id: a.order_id,
               cashier_id: 'CASHIER-1',
-              amount: amt.toFixed(2),
+              amount: amtStr,
               reason: a.name || 'Manager Courtesy',
               approval_status: 'NONE',
             };
@@ -513,7 +511,7 @@ export class ReportsService {
           rows,
           summary_totals: {
             manual_discount_count: rows.length,
-            amount: totalManual.toFixed(2),
+            amount: totalManual,
           },
         };
       }
@@ -525,34 +523,34 @@ export class ReportsService {
           order_id: a.order_id,
           campaign_code: a.code || 'DEFAULT_STACK',
           decision_reason: 'ALLOWED_SEQUENTIAL',
-          amount: parseFloat(a.amount || '0').toFixed(2),
+          amount: MoneyUtil.format(a.amount || '0', 2),
         }));
 
-        const totalAmt = adjustments.reduce((acc, a) => acc + parseFloat(a.amount || '0'), 0);
+        const totalAmt = adjustments.reduce((acc, a) => MoneyUtil.add(acc, a.amount || '0', 2), '0.00');
 
         return {
           report_code: reportCode,
           rows,
           summary_totals: {
             stacking_records: rows.length,
-            amount: totalAmt.toFixed(2),
+            amount: totalAmt,
           },
         };
       }
 
       case 'cashier-shifts': {
         const shifts = await this.cashierShiftRepo.find({ where: { tenant_id: tenantId } });
-        let totalExpected = 0;
-        let totalActual = 0;
-        let totalVariance = 0;
+        let totalExpected = '0.00';
+        let totalActual = '0.00';
+        let totalVariance = '0.00';
 
         const rows = shifts.map((s) => {
-          const exp = parseFloat(s.expected_cash || '0');
-          const act = parseFloat(s.actual_cash || '0');
-          const varAmt = parseFloat(s.short_over || '0');
-          totalExpected += exp;
-          totalActual += act;
-          totalVariance += varAmt;
+          const expStr = MoneyUtil.format(s.expected_cash || '0', 2);
+          const actStr = MoneyUtil.format(s.actual_cash || '0', 2);
+          const varStr = MoneyUtil.format(s.short_over || '0', 2);
+          totalExpected = MoneyUtil.add(totalExpected, expStr, 2);
+          totalActual = MoneyUtil.add(totalActual, actStr, 2);
+          totalVariance = MoneyUtil.add(totalVariance, varStr, 2);
 
           return {
             shift_id: s.id,
@@ -561,10 +559,10 @@ export class ReportsService {
             cashier_id: s.opened_by || 'CASHIER-1',
             opened_at: s.opened_at ? new Date(s.opened_at).toISOString() : '—',
             closed_at: s.closed_at ? new Date(s.closed_at).toISOString() : '—',
-            opening_cash: parseFloat(s.opening_cash || '0').toFixed(2),
-            expected_cash: exp.toFixed(2),
-            actual_cash: act.toFixed(2),
-            variance: varAmt.toFixed(2),
+            opening_cash: MoneyUtil.format(s.opening_cash || '0', 2),
+            expected_cash: expStr,
+            actual_cash: actStr,
+            variance: varStr,
             state: s.state || 'CLOSED',
           };
         });
@@ -574,31 +572,31 @@ export class ReportsService {
           rows,
           summary_totals: {
             shift_count: shifts.length,
-            expected_cash: totalExpected.toFixed(2),
-            actual_cash: totalActual.toFixed(2),
-            variance: totalVariance.toFixed(2),
+            expected_cash: totalExpected,
+            actual_cash: totalActual,
+            variance: totalVariance,
           },
         };
       }
 
       case 'cash-discrepancies': {
         const shifts = await this.cashierShiftRepo.find({ where: { tenant_id: tenantId } });
-        let totalAbsVariance = 0;
+        let totalAbsVariance = '0.00';
 
         const rows = shifts
-          .filter((s) => Math.abs(parseFloat(s.short_over || '0')) > 0.001)
+          .filter((s) => MoneyUtil.greaterThan(MoneyUtil.abs(s.short_over || '0', 4), '0.001'))
           .map((s) => {
-            const varAmt = parseFloat(s.short_over || '0');
-            totalAbsVariance += Math.abs(varAmt);
+            const varStr = MoneyUtil.format(s.short_over || '0', 2);
+            totalAbsVariance = MoneyUtil.add(totalAbsVariance, MoneyUtil.abs(s.short_over || '0', 2), 2);
 
             return {
               shift_id: s.id,
               date: s.closed_at ? new Date(s.closed_at).toISOString().split('T')[0] : '—',
               branch_id: s.branch_id,
               cashier_id: s.opened_by || 'CASHIER-1',
-              expected_cash: parseFloat(s.expected_cash || '0').toFixed(2),
-              actual_cash: parseFloat(s.actual_cash || '0').toFixed(2),
-              variance: varAmt.toFixed(2),
+              expected_cash: MoneyUtil.format(s.expected_cash || '0', 2),
+              actual_cash: MoneyUtil.format(s.actual_cash || '0', 2),
+              variance: varStr,
               reason: s.closing_note || 'Till Over/Short',
               approval_status: s.approval_request_id ? 'APPROVED' : 'PENDING_REVIEW',
             };
@@ -609,22 +607,24 @@ export class ReportsService {
           rows,
           summary_totals: {
             discrepancy_count: rows.length,
-            total_discrepancy_amount: totalAbsVariance.toFixed(2),
+            total_discrepancy_amount: totalAbsVariance,
           },
         };
       }
 
       case 'customer-credit': {
         const entries = await this.creditEntryRepo.find({ where: { tenant_id: tenantId } });
-        let totalDebit = 0;
-        let totalCredit = 0;
+        let totalDebit = '0.00';
+        let totalCredit = '0.00';
 
         const rows = entries.map((e) => {
-          const amt = parseFloat(e.amount || '0');
-          const debit = amt < 0 ? Math.abs(amt) : 0;
-          const credit = amt > 0 ? amt : 0;
-          totalDebit += debit;
-          totalCredit += credit;
+          const amtStr = MoneyUtil.format(e.amount || '0', 2);
+          const isDebit = MoneyUtil.lessThan(amtStr, '0');
+          const debitStr = isDebit ? MoneyUtil.abs(amtStr, 2) : '0.00';
+          const creditStr = !isDebit && MoneyUtil.greaterThan(amtStr, '0') ? amtStr : '0.00';
+
+          totalDebit = MoneyUtil.add(totalDebit, debitStr, 2);
+          totalCredit = MoneyUtil.add(totalCredit, creditStr, 2);
 
           return {
             entry_id: e.id,
@@ -632,9 +632,9 @@ export class ReportsService {
             account_id: e.account_id,
             type: e.entry_type || 'PURCHASE',
             order_id: e.order_id || '—',
-            debit: debit.toFixed(2),
-            credit: credit.toFixed(2),
-            running_balance: parseFloat(e.balance_after || '0').toFixed(2),
+            debit: debitStr,
+            credit: creditStr,
+            running_balance: MoneyUtil.format(e.balance_after || '0', 2),
             reason: e.reason_text || 'Credit Transaction',
           };
         });
@@ -644,27 +644,27 @@ export class ReportsService {
           rows,
           summary_totals: {
             total_entries: entries.length,
-            debit: totalDebit.toFixed(2),
-            credit: totalCredit.toFixed(2),
-            net_change: (totalCredit - totalDebit).toFixed(2),
+            debit: totalDebit,
+            credit: totalCredit,
+            net_change: MoneyUtil.subtract(totalCredit, totalDebit, 2),
           },
         };
       }
 
       case 'credit-eod-usage': {
         const entries = await this.creditEntryRepo.find({ where: { tenant_id: tenantId, entry_type: 'PURCHASE' } });
-        let totalUsage = 0;
+        let totalUsage = '0.00';
 
         const rows = entries.map((e) => {
-          const amt = Math.abs(parseFloat(e.amount || '0'));
-          totalUsage += amt;
+          const amtStr = MoneyUtil.abs(e.amount || '0', 2);
+          totalUsage = MoneyUtil.add(totalUsage, amtStr, 2);
 
           return {
             date: e.posted_at ? new Date(e.posted_at).toISOString().split('T')[0] : '—',
             account_id: e.account_id,
             order_id: e.order_id || '—',
-            purchase_amount: amt.toFixed(2),
-            balance_after: parseFloat(e.balance_after || '0').toFixed(2),
+            purchase_amount: amtStr,
+            balance_after: MoneyUtil.format(e.balance_after || '0', 2),
           };
         });
 
@@ -673,28 +673,29 @@ export class ReportsService {
           rows,
           summary_totals: {
             usage_count: entries.length,
-            purchase_amount: totalUsage.toFixed(2),
+            purchase_amount: totalUsage,
           },
         };
       }
 
       case 'credit-aging': {
         const accounts = await this.creditAccountRepo.find({ where: { tenant_id: tenantId } });
-        let totalBalance = 0;
+        let totalBalance = '0.00';
 
         const rows = accounts.map((a) => {
-          const bal = parseFloat(a.current_balance || '0');
-          const lim = parseFloat(a.credit_limit || '0');
-          totalBalance += bal;
+          const balStr = MoneyUtil.format(a.current_balance || '0', 2);
+          const limStr = MoneyUtil.format(a.credit_limit || '0', 2);
+          const availStr = MoneyUtil.subtract(limStr, balStr, 2);
+          totalBalance = MoneyUtil.add(totalBalance, balStr, 2);
 
           return {
             account_id: a.id,
             customer_id: a.customer_id,
             status: a.status || 'ACTIVE',
-            credit_limit: lim.toFixed(2),
-            current_balance: bal.toFixed(2),
-            available_credit: (lim - bal).toFixed(2),
-            current_0_30: bal.toFixed(2),
+            credit_limit: limStr,
+            current_balance: balStr,
+            available_credit: availStr,
+            current_0_30: balStr,
             aging_31_60: '0.00',
             aging_61_90: '0.00',
             aging_90_plus: '0.00',
@@ -706,7 +707,7 @@ export class ReportsService {
           rows,
           summary_totals: {
             account_count: accounts.length,
-            current_balance: totalBalance.toFixed(2),
+            current_balance: totalBalance,
           },
         };
       }
@@ -724,19 +725,19 @@ export class ReportsService {
           }
         });
 
-        let totalGross = 0;
+        let totalGross = '0.00';
 
         const rows = customers.map((c) => {
           const cOrders = custOrderMap.get(c.id) || [];
-          const gross = cOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || '0'), 0);
-          totalGross += gross;
+          const grossStr = cOrders.reduce((sum, o) => MoneyUtil.add(sum, o.total_amount || '0', 2), '0.00');
+          totalGross = MoneyUtil.add(totalGross, grossStr, 2);
 
           return {
             customer_id: c.id,
             customer_name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Valued Customer',
             phone: c.mobile || '—',
             order_count: cOrders.length,
-            gross_sales: gross.toFixed(2),
+            gross_sales: grossStr,
             first_order_date: cOrders.length > 0 ? new Date(cOrders[cOrders.length - 1].placed_at).toISOString().split('T')[0] : '—',
             last_order_date: cOrders.length > 0 ? new Date(cOrders[0].placed_at).toISOString().split('T')[0] : '—',
           };
@@ -747,7 +748,7 @@ export class ReportsService {
           rows,
           summary_totals: {
             total_customers: customers.length,
-            gross_sales: totalGross.toFixed(2),
+            gross_sales: totalGross,
           },
         };
       }
@@ -756,10 +757,10 @@ export class ReportsService {
         const orders = await this.orderRepo.find({ where: { tenant_id: tenantId } });
         const aggOrders = orders.filter((o) => o.order_type === 'SNAPPFOOD' || (o as any).external_id);
 
-        let totalAmt = 0;
+        let totalAmt = '0.00';
         const rows = aggOrders.map((o) => {
-          const amt = parseFloat(o.total_amount || '0');
-          totalAmt += amt;
+          const amtStr = MoneyUtil.format(o.total_amount || '0', 2);
+          totalAmt = MoneyUtil.add(totalAmt, amtStr, 2);
 
           return {
             order_id: o.id,
@@ -767,7 +768,7 @@ export class ReportsService {
             order_number: o.order_number,
             date: o.placed_at ? new Date(o.placed_at).toISOString().split('T')[0] : '—',
             status: o.status,
-            total_amount: amt.toFixed(2),
+            total_amount: amtStr,
             reconciliation_status: 'MATCHED',
           };
         });
@@ -777,27 +778,27 @@ export class ReportsService {
           rows,
           summary_totals: {
             aggregator_order_count: aggOrders.length,
-            total_amount: totalAmt.toFixed(2),
+            total_amount: totalAmt,
           },
         };
       }
 
       case 'snappfood-reconciliation': {
         const logs = await this.integrationLogRepo.find({ where: { tenant_id: tenantId } });
-        let totalDiscrepancy = 0;
+        let totalDiscrepancy = '0.00';
 
         const rows = logs.map((l) => {
-          const exp = parseFloat((l.request_payload as any)?.expected_amount || '0');
-          const act = parseFloat((l.response_payload as any)?.actual_amount || '0');
-          const disc = Math.abs(exp - act);
-          totalDiscrepancy += disc;
+          const expStr = MoneyUtil.format((l.request_payload as any)?.expected_amount || '0', 2);
+          const actStr = MoneyUtil.format((l.response_payload as any)?.actual_amount || '0', 2);
+          const discStr = MoneyUtil.abs(MoneyUtil.subtract(expStr, actStr, 4), 2);
+          totalDiscrepancy = MoneyUtil.add(totalDiscrepancy, discStr, 2);
 
           return {
             log_id: l.id,
             external_id: (l.request_payload as any)?.external_id || 'SNAPP-1002',
-            expected_total: exp.toFixed(2),
-            actual_total: act.toFixed(2),
-            discrepancy: disc.toFixed(2),
+            expected_total: expStr,
+            actual_total: actStr,
+            discrepancy: discStr,
             status: l.status || 'SUCCESS',
             last_action: l.created_at ? new Date(l.created_at).toISOString() : '—',
           };
@@ -808,7 +809,7 @@ export class ReportsService {
           rows,
           summary_totals: {
             log_count: logs.length,
-            total_discrepancy: totalDiscrepancy.toFixed(2),
+            total_discrepancy: totalDiscrepancy,
           },
         };
       }
@@ -846,24 +847,24 @@ export class ReportsService {
 
       case 'courier-settlements': {
         const settlements = await this.settlementRepo.find({ where: { tenant_id: tenantId } });
-        let totalNetDue = 0;
-        let totalDiscrepancy = 0;
+        let totalNetDue = '0.00';
+        let totalDiscrepancy = '0.00';
 
         const rows = settlements.map((s) => {
-          const net = parseFloat(s.net_settlement_amount || '0');
-          const disc = parseFloat(s.cash_discrepancy_amount || '0');
-          totalNetDue += net;
-          totalDiscrepancy += disc;
+          const netStr = MoneyUtil.format(s.net_settlement_amount || '0', 2);
+          const discStr = MoneyUtil.format(s.cash_discrepancy_amount || '0', 2);
+          totalNetDue = MoneyUtil.add(totalNetDue, netStr, 2);
+          totalDiscrepancy = MoneyUtil.add(totalDiscrepancy, discStr, 2);
 
           return {
             settlement_id: s.id,
             courier_id: s.courier_id,
-            expected_cash: parseFloat(s.expected_cash_amount || '0').toFixed(2),
-            actual_cash: parseFloat(s.actual_cash_amount || '0').toFixed(2),
-            expected_pos: parseFloat(s.expected_pos_amount || '0').toFixed(2),
-            verified_pos: parseFloat(s.actual_pos_amount || '0').toFixed(2),
-            net_due: net.toFixed(2),
-            discrepancy: disc.toFixed(2),
+            expected_cash: MoneyUtil.format(s.expected_cash_amount || '0', 2),
+            actual_cash: MoneyUtil.format(s.actual_cash_amount || '0', 2),
+            expected_pos: MoneyUtil.format(s.expected_pos_amount || '0', 2),
+            verified_pos: MoneyUtil.format(s.actual_pos_amount || '0', 2),
+            net_due: netStr,
+            discrepancy: discStr,
             state: s.status || 'CLOSED',
           };
         });
@@ -873,29 +874,29 @@ export class ReportsService {
           rows,
           summary_totals: {
             settlement_count: settlements.length,
-            net_due: totalNetDue.toFixed(2),
-            discrepancy: totalDiscrepancy.toFixed(2),
+            net_due: totalNetDue,
+            discrepancy: totalDiscrepancy,
           },
         };
       }
 
       case 'courier-reconciliation': {
         const lines = await this.settlementLineRepo.find();
-        let totalCash = 0;
-        let totalPos = 0;
+        let totalCash = '0.00';
+        let totalPos = '0.00';
 
         const rows = lines.map((l) => {
-          const cash = parseFloat(l.actual_cash || '0');
-          const pos = parseFloat(l.actual_pos || '0');
-          totalCash += cash;
-          totalPos += pos;
+          const cashStr = MoneyUtil.format(l.actual_cash || '0', 2);
+          const posStr = MoneyUtil.format(l.actual_pos || '0', 2);
+          totalCash = MoneyUtil.add(totalCash, cashStr, 2);
+          totalPos = MoneyUtil.add(totalPos, posStr, 2);
 
           return {
             line_id: l.id,
             order_id: l.order_id,
             delivery_assignment_id: l.delivery_assignment_id,
-            cash_collected: cash.toFixed(2),
-            pos_collected: pos.toFixed(2),
+            cash_collected: cashStr,
+            pos_collected: posStr,
             receipt_reference: 'REF-1234',
             discrepancy_reason: l.notes || 'NONE',
           };
@@ -906,34 +907,34 @@ export class ReportsService {
           rows,
           summary_totals: {
             line_count: lines.length,
-            cash_collected: totalCash.toFixed(2),
-            pos_collected: totalPos.toFixed(2),
+            cash_collected: totalCash,
+            pos_collected: totalPos,
           },
         };
       }
 
       case 'tax-packaging': {
         const orders = await this.orderRepo.find({ where: { tenant_id: tenantId } });
-        let totalTaxable = 0;
-        let totalTax = 0;
-        let totalPackaging = 0;
+        let totalTaxable = '0.00';
+        let totalTax = '0.00';
+        let totalPackaging = '0.00';
 
         const rows = orders.map((o) => {
-          const sub = parseFloat(o.subtotal_amount || '0');
-          const tax = parseFloat(o.tax_amount || '0');
-          const pack = parseFloat(o.packaging_total || '0');
+          const subStr = MoneyUtil.format(o.subtotal_amount || '0', 2);
+          const taxStr = MoneyUtil.format(o.tax_amount || '0', 2);
+          const packStr = MoneyUtil.format(o.packaging_total || '0', 2);
 
-          totalTaxable += sub;
-          totalTax += tax;
-          totalPackaging += pack;
+          totalTaxable = MoneyUtil.add(totalTaxable, subStr, 2);
+          totalTax = MoneyUtil.add(totalTax, taxStr, 2);
+          totalPackaging = MoneyUtil.add(totalPackaging, packStr, 2);
 
           return {
             order_number: o.order_number,
             date: o.placed_at ? new Date(o.placed_at).toISOString().split('T')[0] : '—',
-            taxable_amount: sub.toFixed(2),
+            taxable_amount: subStr,
             tax_rate: '9.0%',
-            tax_amount: tax.toFixed(2),
-            packaging_fee: pack.toFixed(2),
+            tax_amount: taxStr,
+            packaging_fee: packStr,
           };
         });
 
@@ -942,9 +943,9 @@ export class ReportsService {
           rows,
           summary_totals: {
             order_count: orders.length,
-            taxable_amount: totalTaxable.toFixed(2),
-            tax_amount: totalTax.toFixed(2),
-            packaging_fee: totalPackaging.toFixed(2),
+            taxable_amount: totalTaxable,
+            tax_amount: totalTax,
+            packaging_fee: totalPackaging,
           },
         };
       }
@@ -1283,12 +1284,12 @@ export class ReportsService {
 
     const todayStr = new Date().toISOString().split('T')[0];
     const todayOrders = orders.filter((o) => o.placed_at && new Date(o.placed_at).toISOString().startsWith(todayStr));
-    const salesToday = todayOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || '0'), 0);
+    const salesToday = todayOrders.reduce((sum, o) => MoneyUtil.add(sum, o.total_amount || '0', 2), '0.00');
     const openOrders = orders.filter((o) => o.status === 'SUBMITTED' || o.status === 'ACCEPTED' || o.status === 'IN_PREPARATION');
     const openAlerts = alerts.filter((a) => !a.acknowledged);
 
     return {
-      sales_today: salesToday.toFixed(2),
+      sales_today: salesToday,
       open_orders_count: openOrders.length,
       active_shifts_count: shifts.length,
       open_alerts_count: openAlerts.length,

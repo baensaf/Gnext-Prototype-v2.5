@@ -198,7 +198,14 @@ export const paymentApi = {
       reference: data.reference_number,
     });
     const processed = await paymentApi.processPayment(intent.id, {});
-    return { payment: processed, order: null };
+    const resOrder = await httpClient.get(`/api/v1/orders/${data.order_id}`);
+    const orderData = resOrder.data ? {
+      ...resOrder.data,
+      due_amount: resOrder.data.due_amount || resOrder.data.outstanding_total || '0',
+      paid_amount: resOrder.data.paid_amount || resOrder.data.paid_total || '0',
+      total_amount: resOrder.data.total_amount || resOrder.data.grand_total || '0',
+    } : null;
+    return { payment: processed, order: orderData };
   },
 
   reversePayment: async (paymentId: string, reason?: string): Promise<PaymentRecord> => {

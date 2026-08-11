@@ -1,6 +1,7 @@
+import type { Branch } from 'src/api/tenantApi';
 import type { Courier, Delivery, DeliveryZone, DeliveryEvent } from 'src/api/deliveryApi';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import MapIcon from '@mui/icons-material/Map';
@@ -51,6 +52,8 @@ export function DeliveryPage() {
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [zones, setZones] = useState<DeliveryZone[]>([]);
   const [terminals, setTerminals] = useState<any[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [selectedEvents, setSelectedEvents] = useState<DeliveryEvent[]>([]);
   const [_eventDeliveryId, setEventDeliveryId] = useState<string | null>(null);
 
@@ -81,32 +84,35 @@ export function DeliveryPage() {
   const [selectedCourierForTerminal, setSelectedCourierForTerminal] = useState<Courier | null>(null);
   const [selectedTerminalId, setSelectedTerminalId] = useState('');
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [delList, courList, znList, termList] = await Promise.all([
+      const [delList, courList, znList, termList, branchList] = await Promise.all([
         deliveryApi.getDeliveries(),
         deliveryApi.getCouriers(),
         deliveryApi.getZones(),
         tenantApi.getTerminals().catch(() => []),
+        tenantApi.getBranches().catch(() => []),
       ]);
       setDeliveries(delList);
       setCouriers(courList);
       setZones(znList);
       setTerminals(termList);
+      setBranches(branchList);
+      setSelectedBranchId((prev) => (branchList.length > 0 && !prev ? branchList[0].id : prev));
       setError(null);
     } catch (err: any) {
       setError(err.detail || err.message || 'Failed to load delivery data');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
     const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [loadData]);
 
   const handleOpenAssignModal = (del: Delivery) => {
     setSelectedDeliveryForAssign(del);
@@ -180,7 +186,7 @@ export function DeliveryPage() {
 
   const handleRecordAttendance = async (courierId: string, status: 'CHECKED_IN' | 'CHECKED_OUT' | 'PAUSED') => {
     try {
-      const targetBranchId = zones[0]?.branch_id;
+      const targetBranchId = selectedBranchId || zones[0]?.branch_id || branches[0]?.id;
       if (!targetBranchId) {
         setError('No active branch selected');
         return;
@@ -196,7 +202,7 @@ export function DeliveryPage() {
     }
   };
 
-  const _handleSetAvailability = async (courierId: string, availability: 'AVAILABLE' | 'BUSY' | 'OFF_LINE') => {
+  const handleSetAvailability = async (courierId: string, availability: 'AVAILABLE' | 'BUSY' | 'OFF_LINE') => {
     try {
       await deliveryApi.setAvailability(courierId, availability);
       loadData();
@@ -207,7 +213,7 @@ export function DeliveryPage() {
 
   const handleCreateCourier = async () => {
     try {
-      const targetBranchId = zones[0]?.branch_id;
+      const targetBranchId = selectedBranchId || zones[0]?.branch_id || branches[0]?.id;
       if (!targetBranchId) {
         setError('No active branch selected');
         return;
@@ -227,7 +233,7 @@ export function DeliveryPage() {
 
   const handleCreateZone = async () => {
     try {
-      const targetBranchId = zones[0]?.branch_id;
+      const targetBranchId = selectedBranchId || zones[0]?.branch_id || branches[0]?.id;
       if (!targetBranchId) {
         setError('No active branch selected');
         return;
@@ -302,9 +308,28 @@ export function DeliveryPage() {
           </Typography>
         </Box>
 
-        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
-          Refresh
-        </Button>
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+          {branches.length > 0 && (
+            <FormControl size="small" sx={{ minWidth: 200 }}>
+              <InputLabel>Active Branch</InputLabel>
+              <Select
+                value={selectedBranchId}
+                label="Active Branch"
+                onChange={(e) => setSelectedBranchId(e.target.value)}
+              >
+                {branches.map((b) => (
+                  <MenuItem key={b.id} value={b.id}>
+                    {b.name} ({b.code})
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
+          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
+            Refresh
+          </Button>
+        </Stack>
       </Stack>
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
@@ -531,11 +556,17 @@ export function DeliveryPage() {
                       />
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={c.attendance?.availability_status || 'OFF_LINE'}
-                        color={c.attendance?.availability_status === 'AVAILABLE' ? 'info' : 'default'}
+                      <Select
                         size="small"
-                      />
+                        value={c.attendance?.availability_status || 'OFF_LINE'}
+                        disabled={!isCheckedIn}
+                        onChange={(e) => handleSetAvailability(c.id, e.target.value as any)}
+                        sx={{ fontSize: '0.8125rem', py: 0 }}
+                      >
+                        <MenuItem value="AVAILABLE">AVAILABLE</MenuItem>
+                        <MenuItem value="BUSY">BUSY</MenuItem>
+                        <MenuItem value="OFF_LINE">OFF_LINE</MenuItem>
+                      </Select>
                     </TableCell>
                     <TableCell>
                       {c.active_terminal ? (

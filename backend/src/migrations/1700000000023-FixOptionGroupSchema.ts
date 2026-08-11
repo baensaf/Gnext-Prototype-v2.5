@@ -16,8 +16,15 @@ export class FixOptionGroupSchema1700000000023 implements MigrationInterface {
         ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE NULL,
         ADD COLUMN IF NOT EXISTS "version" integer NOT NULL DEFAULT 1;
 
-      UPDATE "option_group" SET "min_selection" = "min_select" WHERE "min_select" IS NOT NULL;
-      UPDATE "option_group" SET "max_selection" = "max_select" WHERE "max_select" IS NOT NULL;
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='option_group' AND column_name='min_select') THEN
+          UPDATE "option_group" SET "min_selection" = "min_select" WHERE "min_select" IS NOT NULL;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='option_group' AND column_name='max_select') THEN
+          UPDATE "option_group" SET "max_selection" = "max_select" WHERE "max_select" IS NOT NULL;
+        END IF;
+      END $$;
     `);
   }
 

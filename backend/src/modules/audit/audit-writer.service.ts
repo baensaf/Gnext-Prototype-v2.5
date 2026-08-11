@@ -18,10 +18,17 @@ export interface AuditWriteOptions {
   details?: Record<string, any>;
 }
 
+import { randomUUID } from 'crypto';
+
 function sanitizeUuid(val?: string): string | null {
   if (!val) return null;
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
   return isUuid ? val : null;
+}
+
+function sanitizeUuidOrDefault(val?: string): string {
+  const sanitized = sanitizeUuid(val);
+  return sanitized || randomUUID();
 }
 
 @Injectable()
@@ -41,7 +48,7 @@ export class AuditWriter {
       entity_type: options.entityType || null,
       entity_id: sanitizeUuid(options.entityId),
       branch_id: sanitizeUuid(options.branchId),
-      correlation_id: sanitizeUuid(options.correlationId),
+      correlation_id: sanitizeUuidOrDefault(options.correlationId),
       ip: options.ip || null,
       before_data: options.beforeData || null,
       after_data: options.afterData || null,
@@ -60,7 +67,7 @@ export class AuditWriter {
       entity_type: options.entityType || null,
       entity_id: sanitizeUuid(options.entityId),
       branch_id: sanitizeUuid(options.branchId),
-      correlation_id: sanitizeUuid(options.correlationId),
+      correlation_id: sanitizeUuidOrDefault(options.correlationId),
       ip: options.ip || null,
       before_data: options.beforeData || null,
       after_data: options.afterData || null,

@@ -14,7 +14,7 @@ export class OrderItem {
   order_id: string;
 
   @Column({ type: 'integer', default: 1 })
-  line_number: number;
+  line_number: number = 1;
 
   @Column({ type: 'uuid' })
   product_id: string;
@@ -32,40 +32,40 @@ export class OrderItem {
   variant_name: string;
 
   @Column({ type: 'numeric', precision: 12, scale: 3, default: '1.0000' })
-  quantity: string;
+  quantity: string = '1.0000';
 
   @Column({ type: 'numeric', precision: 19, scale: 4 })
   unit_price: string;
 
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
-  base_total: string;
+  base_total: string = '0.0000';
 
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
-  subtotal: string; // legacy alias
+  subtotal: string = '0.0000'; // legacy alias
 
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
-  modifier_total: string;
+  modifier_total: string = '0.0000';
 
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
-  discount_total: string;
+  discount_total: string = '0.0000';
 
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
-  discount_amount: string; // legacy alias
+  discount_amount: string = '0.0000'; // legacy alias
 
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
-  tax_total: string;
+  tax_total: string = '0.0000';
 
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
-  tax_amount: string; // legacy alias
+  tax_amount: string = '0.0000'; // legacy alias
 
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
-  packaging_total: string;
+  packaging_total: string = '0.0000';
 
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
-  line_total: string;
+  line_total: string = '0.0000';
 
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
-  total_amount: string; // legacy alias
+  total_amount: string = '0.0000'; // legacy alias
 
   @Column({ type: 'text', nullable: true })
   notes: string;
@@ -74,7 +74,7 @@ export class OrderItem {
   special_instructions: string; // legacy alias
 
   @Column({ type: 'varchar', length: 16, default: 'ACTIVE' })
-  state: string; // ACTIVE, VOID, REPLACED
+  state: string = 'ACTIVE'; // ACTIVE, VOID, REPLACED
 
   @Column({ type: 'uuid', nullable: true })
   replaces_item_id: string;

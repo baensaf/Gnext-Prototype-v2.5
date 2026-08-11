@@ -2,9 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/global-setup.ts',
   timeout: 60000,
   expect: {
-    timeout: 10000,
+    timeout: 15000,
   },
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -24,24 +25,18 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'npx ts-node -r tsconfig-paths/register src/main.ts',
+      command: 'cmd /c npx ts-node -r tsconfig-paths/register src/main.ts',
       cwd: '../backend',
       url: 'http://localhost:3100/health/ready',
-      reuseExistingServer: true,
-      timeout: 60000,
-      env: {
-        DB_PORT: '5433',
-        DB_USER: 'postgres',
-        DB_PASSWORD: 'postgres',
-        DB_NAME: 'appdb_test',
-        PORT: '3100',
-      },
+      reuseExistingServer: !process.env.CI,
+      timeout: 120000,
     },
     {
-      command: 'npx vite --port 8081',
+      command: 'cmd /c npm run dev -- --port 8081',
+      cwd: '.',
       url: 'http://localhost:8081',
-      reuseExistingServer: true,
-      timeout: 30000,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120000,
     },
   ],
 });

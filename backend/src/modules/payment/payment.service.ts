@@ -292,6 +292,8 @@ export class PaymentService {
         let newOutstanding = MoneyUtil.subtract(order.grand_total, order.paid_total);
         if (MoneyUtil.lessThan(newOutstanding, '0.0000')) newOutstanding = '0.0000';
         order.outstanding_total = newOutstanding;
+        order.paid_amount = order.paid_total;
+        order.due_amount = order.outstanding_total;
 
         await em.save(OrderHeader, order);
 

@@ -16,7 +16,12 @@ export class FixOptionItemSchema1700000000024 implements MigrationInterface {
         ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP WITH TIME ZONE NULL,
         ADD COLUMN IF NOT EXISTS "version" integer NOT NULL DEFAULT 1;
 
-      UPDATE "option_item" SET "price_delta" = "price_override" WHERE "price_override" IS NOT NULL;
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='option_item' AND column_name='price_override') THEN
+          UPDATE "option_item" SET "price_delta" = "price_override" WHERE "price_override" IS NOT NULL;
+        END IF;
+      END $$;
     `);
   }
 

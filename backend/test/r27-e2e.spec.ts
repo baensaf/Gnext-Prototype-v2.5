@@ -101,12 +101,23 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
       itemRepo.create({
         tenant_id: testTenantId,
         order_id: order.id,
+        line_number: 1,
         product_id: '00000000-0000-0000-0000-000000000001',
+        product_code: 'PROD-CHEESEBURGER',
         product_name: 'Cheeseburger',
         quantity: '1.0000',
         unit_price: '200000.0000',
+        base_total: '200000.0000',
+        subtotal: '200000.0000',
+        modifier_total: '0.0000',
+        discount_total: '0.0000',
+        discount_amount: '0.0000',
+        tax_total: '0.0000',
+        tax_amount: '0.0000',
+        packaging_total: '0.0000',
         line_total: '200000.0000',
         total_amount: '200000.0000',
+        state: 'ACTIVE',
       }),
     );
 

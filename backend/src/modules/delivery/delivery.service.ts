@@ -16,6 +16,7 @@ import { Delivery, DeliveryState } from '../../entities/Delivery.entity';
 import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { MoneyUtil } from '../../common/utils/money.util';
 
 @Injectable()
 export class DeliveryService {
@@ -53,7 +54,7 @@ export class DeliveryService {
       branch_id: data.branch_id,
       code: data.code.toUpperCase(),
       name: data.name,
-      fee: (data.fee || 0).toFixed(4),
+      fee: Number(data.fee || 0).toFixed(4),
       estimated_minutes: data.estimated_minutes || 30,
       polygon: data.polygon || null,
       postal_prefixes: data.postal_prefixes || null,
@@ -128,7 +129,7 @@ export class DeliveryService {
       name: data.name,
       phone: data.phone || null,
       vehicle_type: data.vehicle_type || 'MOTORCYCLE',
-      compensation_per_delivery: (data.compensation_per_delivery || 0).toFixed(4),
+      compensation_per_delivery: Number(data.compensation_per_delivery || 0).toFixed(4),
       status: 'AVAILABLE',
       is_active: true,
     });
@@ -193,6 +194,8 @@ export class DeliveryService {
       attendance.status = data.status;
       if (data.availability_status) {
         attendance.availability_status = data.availability_status;
+      } else if (data.status === 'CHECKED_IN') {
+        attendance.availability_status = 'AVAILABLE';
       } else if (data.status === 'CHECKED_OUT') {
         attendance.availability_status = 'OFF_LINE';
         attendance.checked_out_at = new Date();
@@ -393,22 +396,23 @@ export class DeliveryService {
     delivery.delivered_at = new Date();
 
     const payments = await this.paymentRepo.find({ where: { order_id: delivery.order_id, tenant_id: tenantId } });
-    let cashExp = 0;
-    let posExp = 0;
+    let cashExpStr = '0.0000';
+    let posExpStr = '0.0000';
 
     for (const p of payments) {
+      const pAmtStr = MoneyUtil.format(p.amount || '0', 4);
       if ((p as any).payment_method_code === 'CASH') {
-        cashExp += parseFloat(p.amount || '0');
+        cashExpStr = MoneyUtil.add(cashExpStr, pAmtStr, 4);
       } else {
-        posExp += parseFloat(p.amount || '0');
+        posExpStr = MoneyUtil.add(posExpStr, pAmtStr, 4);
       }
     }
 
-    if (data?.cashCollected !== undefined) cashExp = data.cashCollected;
-    if (data?.posAmount !== undefined) posExp = data.posAmount;
+    if (data?.cashCollected !== undefined) cashExpStr = MoneyUtil.format(data.cashCollected, 4);
+    if (data?.posAmount !== undefined) posExpStr = MoneyUtil.format(data.posAmount, 4);
 
-    delivery.cash_expected = cashExp.toFixed(4);
-    delivery.mobile_pos_expected = posExp.toFixed(4);
+    delivery.cash_expected = cashExpStr;
+    delivery.mobile_pos_expected = posExpStr;
 
     if (delivery.courier_id) {
       const courier = await this.courierRepo.findOne({ where: { id: delivery.courier_id } });
@@ -543,10 +547,10 @@ export class DeliveryService {
     throw new NotFoundException('Delivery not found');
   }
 
-  private async calculatePaymentBreakdown(orderId: string, defaultTotal: number) {
+  private async calculatePaymentBreakdown(orderId: string, defaultTotal: string | number = '0.0000') {
     const payments = await this.paymentRepo.find({ where: { order_id: orderId, status: In(['SUCCEEDED', 'COMPLETED']) as any } });
-    let expCash = 0;
-    let expPos = 0;
+    let expCashStr = '0.0000';
+    let expPosStr = '0.0000';
     let primaryMethod = 'CASH';
 
     if (payments && payments.length > 0) {
@@ -560,19 +564,20 @@ export class DeliveryService {
             isCash = true;
           }
         }
+        const pAmtStr = MoneyUtil.format(p.amount || '0', 4);
         if (isCash) {
-          expCash += parseFloat(p.amount || '0');
+          expCashStr = MoneyUtil.add(expCashStr, pAmtStr, 4);
         } else {
-          expPos += parseFloat(p.amount || '0');
+          expPosStr = MoneyUtil.add(expPosStr, pAmtStr, 4);
         }
       }
-      primaryMethod = expCash >= expPos ? 'CASH' : 'CARD';
+      primaryMethod = MoneyUtil.greaterThanOrEqual(expCashStr, expPosStr) ? 'CASH' : 'CARD';
     } else {
-      expCash = defaultTotal;
+      expCashStr = MoneyUtil.format(defaultTotal || 0, 4);
       primaryMethod = 'CASH';
     }
 
-    return { expCash, expPos, primaryMethod };
+    return { expCashStr, expPosStr, primaryMethod, expCash: expCashStr, expPos: expPosStr };
   }
 
   async getUnsettledSummary(tenantId: string, branchId?: string) {
@@ -588,27 +593,30 @@ export class DeliveryService {
         },
       });
 
-      let totalExpectedCash = 0;
-      let totalExpectedPos = 0;
-      let totalDeliveryFees = 0;
-      let totalCompensation = 0;
+      let totalExpectedCash = '0.0000';
+      let totalExpectedPos = '0.0000';
+      let totalDeliveryFees = '0.0000';
+      let totalCompensation = '0.0000';
 
       for (const d of unsettledDeliveries) {
-        totalDeliveryFees += parseFloat(d.fee || '0');
-        totalExpectedCash += parseFloat(d.cash_expected || '0');
-        totalExpectedPos += parseFloat(d.mobile_pos_expected || '0');
-        totalCompensation += parseFloat(d.compensation_amount || '0');
+        totalDeliveryFees = MoneyUtil.add(totalDeliveryFees, d.fee || '0', 4);
+        totalExpectedCash = MoneyUtil.add(totalExpectedCash, d.cash_expected || '0', 4);
+        totalExpectedPos = MoneyUtil.add(totalExpectedPos, d.mobile_pos_expected || '0', 4);
+        totalCompensation = MoneyUtil.add(totalCompensation, d.compensation_amount || '0', 4);
       }
+
+      const totalExpected = MoneyUtil.add(totalExpectedCash, totalExpectedPos, 4);
+      const netDue = MoneyUtil.subtract(totalExpected, totalCompensation, 4);
 
       summary.push({
         courier_id: courier.id,
         courier_name: courier.name,
         unsettled_orders_count: unsettledDeliveries.length,
-        total_delivery_fees: totalDeliveryFees.toFixed(4),
-        total_expected_cash: totalExpectedCash.toFixed(4),
-        total_expected_pos: totalExpectedPos.toFixed(4),
-        total_compensation: totalCompensation.toFixed(4),
-        net_due_amount: (totalExpectedCash + totalExpectedPos - totalCompensation).toFixed(4),
+        total_delivery_fees: totalDeliveryFees,
+        total_expected_cash: totalExpectedCash,
+        total_expected_pos: totalExpectedPos,
+        total_compensation: totalCompensation,
+        net_due_amount: netDue,
       });
     }
 
@@ -658,16 +666,16 @@ export class DeliveryService {
     }
     const eligibleAssignments = assignments;
 
-    let expCash = 0;
-    let expPos = 0;
-    let totalFee = 0;
+    let expCashStr = '0.00';
+    let expPosStr = '0.00';
+    let totalFeeStr = '0.00';
 
     for (const a of eligibleAssignments) {
-      totalFee += parseFloat(a.delivery_fee || '0');
+      totalFeeStr = MoneyUtil.add(totalFeeStr, a.delivery_fee || '0', 2);
       const order = await this.orderRepo.findOne({ where: { id: a.order_id } });
-      const breakdown = await this.calculatePaymentBreakdown(a.order_id, parseFloat(order?.total_amount || '0'));
-      expCash += breakdown.expCash;
-      expPos += breakdown.expPos;
+      const breakdown = await this.calculatePaymentBreakdown(a.order_id, order?.total_amount || '0');
+      expCashStr = MoneyUtil.add(expCashStr, breakdown.expCashStr, 2);
+      expPosStr = MoneyUtil.add(expPosStr, breakdown.expPosStr, 2);
     }
 
     return {
@@ -675,10 +683,10 @@ export class DeliveryService {
       courier_name: courier.name,
       courier_code: courier.code,
       line_count: eligibleAssignments.length,
-      expected_cash_amount: expCash.toFixed(2),
-      expected_pos_amount: expPos.toFixed(2),
-      total_delivery_fees: totalFee.toFixed(2),
-      net_settlement_amount: (expCash + expPos).toFixed(2),
+      expected_cash_amount: expCashStr,
+      expected_pos_amount: expPosStr,
+      total_delivery_fees: totalFeeStr,
+      net_settlement_amount: MoneyUtil.add(expCashStr, expPosStr, 2),
       assignment_ids: eligibleAssignments.map((a) => a.id),
     };
   }
@@ -731,7 +739,7 @@ export class DeliveryService {
       if (!asgn) continue;
 
       const order = await this.orderRepo.findOne({ where: { id: asgn.order_id } });
-      const breakdown = await this.calculatePaymentBreakdown(asgn.order_id, parseFloat(order?.total_amount || '0'));
+      const breakdown = await this.calculatePaymentBreakdown(asgn.order_id, order?.total_amount || '0');
 
       const line = this.settlementLineRepo.create({
         settlement_id: savedSettlement.id,
@@ -740,11 +748,11 @@ export class DeliveryService {
         order_number: order?.order_number || 'ORD-00',
         delivery_status: asgn.status || 'DELIVERED',
         payment_method_code: breakdown.primaryMethod,
-        expected_cash: breakdown.expCash.toFixed(2),
-        actual_cash: breakdown.expCash.toFixed(2),
-        expected_pos: breakdown.expPos.toFixed(2),
-        actual_pos: breakdown.expPos.toFixed(2),
-        delivery_fee_amount: asgn.delivery_fee || '0.00',
+        expected_cash: MoneyUtil.format(breakdown.expCashStr, 2),
+        actual_cash: MoneyUtil.format(breakdown.expCashStr, 2),
+        expected_pos: MoneyUtil.format(breakdown.expPosStr, 2),
+        actual_pos: MoneyUtil.format(breakdown.expPosStr, 2),
+        delivery_fee_amount: MoneyUtil.format(asgn.delivery_fee || '0.00', 2),
         receipt_verified: true,
       });
       const savedLine = await this.settlementLineRepo.save(line);
@@ -775,8 +783,8 @@ export class DeliveryService {
         if (!lineData.id) continue;
         const line = await this.settlementLineRepo.findOne({ where: { id: lineData.id, settlement_id: id } });
         if (line) {
-          if (lineData.actual_cash !== undefined) line.actual_cash = parseFloat(lineData.actual_cash).toFixed(2);
-          if (lineData.actual_pos !== undefined) line.actual_pos = parseFloat(lineData.actual_pos).toFixed(2);
+          if (lineData.actual_cash !== undefined) line.actual_cash = MoneyUtil.format(lineData.actual_cash, 2);
+          if (lineData.actual_pos !== undefined) line.actual_pos = MoneyUtil.format(lineData.actual_pos, 2);
           if (lineData.receipt_verified !== undefined) line.receipt_verified = Boolean(lineData.receipt_verified);
           await this.settlementLineRepo.save(line);
         }
@@ -784,31 +792,34 @@ export class DeliveryService {
     }
 
     if (data.actual_cash_amount !== undefined) {
-      settlement.actual_cash_amount = parseFloat(data.actual_cash_amount).toFixed(2);
+      settlement.actual_cash_amount = MoneyUtil.format(data.actual_cash_amount, 2);
     }
     if (data.actual_pos_amount !== undefined) {
-      settlement.actual_pos_amount = parseFloat(data.actual_pos_amount).toFixed(2);
+      settlement.actual_pos_amount = MoneyUtil.format(data.actual_pos_amount, 2);
     }
     if (data.total_compensation_amount !== undefined) {
-      settlement.total_compensation_amount = parseFloat(data.total_compensation_amount).toFixed(2);
+      settlement.total_compensation_amount = MoneyUtil.format(data.total_compensation_amount, 2);
     }
     if (data.total_adjustment_amount !== undefined) {
-      settlement.total_adjustment_amount = parseFloat(data.total_adjustment_amount).toFixed(2);
+      settlement.total_adjustment_amount = MoneyUtil.format(data.total_adjustment_amount, 2);
     }
     if (data.notes !== undefined) {
       settlement.notes = data.notes;
     }
 
-    const expCash = parseFloat(settlement.expected_cash_amount || '0');
-    const actCash = parseFloat(settlement.actual_cash_amount || '0');
-    const expPos = parseFloat(settlement.expected_pos_amount || '0');
-    const actPos = parseFloat(settlement.actual_pos_amount || '0');
-    const comp = parseFloat(settlement.total_compensation_amount || '0');
-    const adj = parseFloat(settlement.total_adjustment_amount || '0');
+    const expCash = settlement.expected_cash_amount || '0.00';
+    const actCash = settlement.actual_cash_amount || '0.00';
+    const expPos = settlement.expected_pos_amount || '0.00';
+    const actPos = settlement.actual_pos_amount || '0.00';
+    const comp = settlement.total_compensation_amount || '0.00';
+    const adj = settlement.total_adjustment_amount || '0.00';
 
-    settlement.cash_discrepancy_amount = (actCash - expCash).toFixed(2);
-    settlement.pos_discrepancy_amount = (actPos - expPos).toFixed(2);
-    settlement.net_settlement_amount = (actCash + actPos - comp + adj).toFixed(2);
+    settlement.cash_discrepancy_amount = MoneyUtil.subtract(actCash, expCash, 2);
+    settlement.pos_discrepancy_amount = MoneyUtil.subtract(actPos, expPos, 2);
+
+    const grossCollected = MoneyUtil.add(actCash, actPos, 2);
+    const afterComp = MoneyUtil.subtract(grossCollected, comp, 2);
+    settlement.net_settlement_amount = MoneyUtil.add(afterComp, adj, 2);
 
     const saved = await this.settlementRepo.save(settlement);
     await this.auditWriter.write({
@@ -876,10 +887,10 @@ export class DeliveryService {
       throw new BadRequestException(`Settlement is already ${settlement.status}`);
     }
 
-    const cashDisc = parseFloat(settlement.cash_discrepancy_amount || '0');
-    const posDisc = parseFloat(settlement.pos_discrepancy_amount || '0');
+    const hasCashDisc = !MoneyUtil.isZero(settlement.cash_discrepancy_amount || '0');
+    const hasPosDisc = !MoneyUtil.isZero(settlement.pos_discrepancy_amount || '0');
 
-    if (cashDisc !== 0 || posDisc !== 0) {
+    if (hasCashDisc || hasPosDisc) {
       let approval = null;
       if (approvalRequestId) {
         approval = await this.approvalRepo.findOne({ where: { id: approvalRequestId, tenant_id: tenantId, status: 'APPROVED' } });
