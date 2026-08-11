@@ -66,13 +66,13 @@ test.describe('R27 Real Browser E2E Certification Suite', () => {
     await productCard.click();
     await page.waitForTimeout(500);
 
-    // Handle option customization dialog if it appears
+    // Option customization dialog
     const optionDialog = page.locator('.MuiDialog-root').filter({ hasText: /Customize/i }).first();
-    const isDialogVisible = await optionDialog.isVisible().catch(() => false);
-    if (isDialogVisible) {
-      const dialogAddBtn = optionDialog.locator('button').filter({ hasText: /Add to Cart|افزودن/i }).first();
-      await dialogAddBtn.click();
-    }
+    await expect(optionDialog).toBeVisible({ timeout: 10000 });
+    const dialogAddBtn = optionDialog.locator('button').filter({ hasText: /Add to Cart|افزودن/i }).first();
+    await expect(dialogAddBtn).toBeVisible({ timeout: 5000 });
+    await dialogAddBtn.click();
+    await page.waitForTimeout(500);
 
     // Verify item is added to Active Cart
     await expect(page.locator('body')).toContainText(/Active Cart \([1-9]\d* items?\)/i, { timeout: 10000 });
@@ -419,29 +419,18 @@ test.describe('R27 Real Browser E2E Certification Suite', () => {
     await takeawayCard.click();
     await page.waitForTimeout(500);
 
-    // Check if Identity dialog pops up and complete if policy requires
-    const identityDialog = page.locator('.MuiDialog-root').filter({ hasText: /Customer Identification/i }).first();
-    const isIdentityVisible = await identityDialog.isVisible({ timeout: 2000 }).catch(() => false);
-    if (isIdentityVisible) {
-      const phoneInput = identityDialog.locator('input').first();
-      await phoneInput.fill('09121234567');
-      const continueBtn = identityDialog.locator('button').filter({ hasText: /Continue to Menu|ادامه/i }).first();
-      await continueBtn.click();
-      await page.waitForTimeout(500);
-    }
-
     // Select product card from catalog (Step 1)
     const productCard = page.locator('.MuiCard-root, .MuiPaper-root').filter({ hasText: /IRR|Cheeseburger|Burger|Fries/i }).last();
     await expect(productCard).toBeVisible({ timeout: 15000 });
     await productCard.click();
 
-    // Handle Customizer modal
+    // Option Customizer modal
     const customizerDialog = page.locator('.MuiDialog-root').filter({ hasText: /Customize/i }).first();
-    const isCustomizerVisible = await customizerDialog.isVisible({ timeout: 3000 }).catch(() => false);
-    if (isCustomizerVisible) {
-      const addToCartBtn = customizerDialog.locator('button').filter({ hasText: /Add to Cart|افزودن/i }).first();
-      await addToCartBtn.click();
-    }
+    await expect(customizerDialog).toBeVisible({ timeout: 10000 });
+    const addToCartBtn = customizerDialog.locator('button').filter({ hasText: /Add to Cart|افزودن/i }).first();
+    await expect(addToCartBtn).toBeVisible({ timeout: 5000 });
+    await addToCartBtn.click();
+    await page.waitForTimeout(500);
 
     // Open Cart Drawer
     const cartBtn = page.locator('button').filter({ hasText: /Cart|سبد خرید/i }).first();

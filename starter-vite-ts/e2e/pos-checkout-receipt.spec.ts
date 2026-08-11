@@ -38,14 +38,13 @@ test.describe('POS Order, Checkout / Pay Now, and Receipt Print E2E Workflow', (
     // Wait for option groups async fetch & dialog rendering to settle
     await page.waitForTimeout(3000);
 
-    // Check if Option Customization Dialog opened, and click "Add to Cart"
+    // Option Customization Dialog opens, click "Add to Cart"
     const customizeDialog = page.locator('.MuiDialog-root').filter({ hasText: /Customize/i }).first();
-    if (await customizeDialog.isVisible()) {
-      const dialogAddBtn = customizeDialog.locator('button').filter({ hasText: /Add to Cart|افزودن/i }).first();
-      await expect(dialogAddBtn).toBeVisible({ timeout: 5000 });
-      await dialogAddBtn.click();
-      await page.waitForTimeout(500);
-    }
+    await expect(customizeDialog).toBeVisible({ timeout: 10000 });
+    const dialogAddBtn = customizeDialog.locator('button').filter({ hasText: /Add to Cart|افزودن/i }).first();
+    await expect(dialogAddBtn).toBeVisible({ timeout: 5000 });
+    await dialogAddBtn.click();
+    await page.waitForTimeout(500);
 
     // Verify item is added to Active Cart
     await expect(page.locator('body')).toContainText(/Active Cart \(1 items\)/i, { timeout: 10000 });
