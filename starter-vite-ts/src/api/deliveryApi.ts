@@ -142,7 +142,7 @@ export const deliveryApi = {
     const res = await httpClient.post(`/api/v1/delivery/${deliveryId}/depart`);
     return res.data;
   },
-  completeDelivery: async (deliveryId: string, cashCollected?: number, posAmount?: number): Promise<Delivery> => {
+  completeDelivery: async (deliveryId: string, cashCollected?: string | number, posAmount?: string | number): Promise<Delivery> => {
     const res = await httpClient.post(`/api/v1/delivery/${deliveryId}/complete`, { cashCollected, posAmount });
     return res.data;
   },

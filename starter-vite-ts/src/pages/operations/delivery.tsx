@@ -42,6 +42,8 @@ import {
   DialogActions,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { tenantApi } from 'src/api/tenantApi';
 import { deliveryApi } from 'src/api/deliveryApi';
 
@@ -67,18 +69,18 @@ export function DeliveryPage() {
 
   const [completeModalOpen, setCompleteModalOpen] = useState(false);
   const [selectedDeliveryForComplete, setSelectedDeliveryForComplete] = useState<Delivery | null>(null);
-  const [cashCollected, setCashCollected] = useState<number>(0);
-  const [posAmount, setPosAmount] = useState<number>(0);
+  const [cashCollected, setCashCollected] = useState<string>('0');
+  const [posAmount, setPosAmount] = useState<string>('0');
 
   const [failModalOpen, setFailModalOpen] = useState(false);
   const [selectedDeliveryForFail, setSelectedDeliveryForFail] = useState<Delivery | null>(null);
   const [failReason, setFailReason] = useState('');
 
   const [courierModalOpen, setCourierModalOpen] = useState(false);
-  const [courierForm, setCourierForm] = useState({ code: '', name: '', phone: '', vehicle_type: 'MOTORCYCLE', compensation_per_delivery: 15000 });
+  const [courierForm, setCourierForm] = useState({ code: '', name: '', phone: '', vehicle_type: 'MOTORCYCLE', compensation_per_delivery: '15000' });
 
   const [zoneModalOpen, setZoneModalOpen] = useState(false);
-  const [zoneForm, setZoneForm] = useState({ code: '', name: '', fee: 25000, estimated_minutes: 30 });
+  const [zoneForm, setZoneForm] = useState({ code: '', name: '', fee: '25000', estimated_minutes: 30 });
 
   const [terminalAssignModalOpen, setTerminalAssignModalOpen] = useState(false);
   const [selectedCourierForTerminal, setSelectedCourierForTerminal] = useState<Courier | null>(null);
@@ -142,8 +144,8 @@ export function DeliveryPage() {
 
   const handleOpenCompleteModal = (del: Delivery) => {
     setSelectedDeliveryForComplete(del);
-    setCashCollected(parseFloat(del.grand_total || '0'));
-    setPosAmount(0);
+    setCashCollected(del.grand_total || '0');
+    setPosAmount('0');
     setCompleteModalOpen(true);
   };
 
@@ -224,7 +226,7 @@ export function DeliveryPage() {
         compensation_per_delivery: courierForm.compensation_per_delivery.toString(),
       });
       setCourierModalOpen(false);
-      setCourierForm({ code: '', name: '', phone: '', vehicle_type: 'MOTORCYCLE', compensation_per_delivery: 15000 });
+      setCourierForm({ code: '', name: '', phone: '', vehicle_type: 'MOTORCYCLE', compensation_per_delivery: '15000' });
       loadData();
     } catch (err: any) {
       setError(err.detail || 'Failed to create courier profile');
@@ -244,7 +246,7 @@ export function DeliveryPage() {
         fee: zoneForm.fee.toString(),
       });
       setZoneModalOpen(false);
-      setZoneForm({ code: '', name: '', fee: 25000, estimated_minutes: 30 });
+      setZoneForm({ code: '', name: '', fee: '25000', estimated_minutes: 30 });
       loadData();
     } catch (err: any) {
       setError(err.detail || 'Failed to create delivery zone');
@@ -365,10 +367,10 @@ export function DeliveryPage() {
                         Order #{del.order_number}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Zone: {del.zone_name} | Fee: {parseFloat(del.fee).toLocaleString()} {del.currency_code}
+                        Zone: {del.zone_name} | Fee: {MoneyUtil.formatCurrency(del.fee)} {del.currency_code}
                       </Typography>
                       <Typography variant="body2" sx={{ fontWeight: 'bold', mt: 1 }}>
-                        Total: {parseFloat(del.grand_total).toLocaleString()} {del.currency_code}
+                        Total: {MoneyUtil.formatCurrency(del.grand_total)} {del.currency_code}
                       </Typography>
 
                       <Stack direction="row" sx={{ pt: 2, justifyContent: 'space-between', alignItems: 'center' }}>
@@ -399,22 +401,34 @@ export function DeliveryPage() {
 
               <Stack spacing={2}>
                 {assigned.map((del) => (
-                  <Card key={del.id} elevation={2} sx={{ borderRadius: 2, borderLeft: 6, borderColor: 'warning.main' }}>
+                  <Card key={del.id} elevation={2} sx={{ borderRadius: 2 }}>
                     <CardContent sx={{ p: 2 }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                         Order #{del.order_number}
                       </Typography>
-                      <Chip label={`Courier: ${del.courier_name}`} color="primary" size="small" sx={{ my: 0.5 }} />
                       <Typography variant="body2" color="text.secondary">
-                        Assigned At: {del.assigned_at ? new Date(del.assigned_at).toLocaleTimeString() : ''}
+                        Courier: <strong>{del.courier_name}</strong>
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                        Phone: {del.courier_phone || 'N/A'}
                       </Typography>
 
-                      <Stack direction="row" sx={{ pt: 2, justifyContent: 'space-between', alignItems: 'center' }}>
-                        <IconButton size="small" onClick={() => handleViewEvents(del.id)}>
-                          <HistoryIcon fontSize="small" />
-                        </IconButton>
-                        <Button variant="contained" color="warning" size="small" onClick={() => handleDepartDelivery(del.id)}>
-                          Depart / En Route
+                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Button
+                          variant="contained"
+                          color="warning"
+                          size="small"
+                          startIcon={<LocalShippingIcon />}
+                          onClick={() => handleDepartDelivery(del.id)}
+                        >
+                          Depart
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => handleOpenAssignModal(del)}
+                        >
+                          Reassign
                         </Button>
                       </Stack>
                     </CardContent>
@@ -424,35 +438,53 @@ export function DeliveryPage() {
             </Paper>
           </Grid>
 
-          {/* EN ROUTE */}
+          {/* EN_ROUTE */}
           <Grid size={{ xs: 12, md: 3 }}>
             <Paper sx={{ p: 2, bg: '#fafafa', borderRadius: 2, minHeight: 600 }}>
               <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6" color="primary.main" sx={{ fontWeight: 'bold' }}>
+                <Typography variant="h6" color="info.main" sx={{ fontWeight: 'bold' }}>
                   En Route ({enRoute.length})
                 </Typography>
-                <Chip label="Out for Delivery" color="primary" size="small" />
+                <Chip label="Out for Delivery" color="info" size="small" />
               </Stack>
               <Divider sx={{ mb: 2 }} />
 
               <Stack spacing={2}>
                 {enRoute.map((del) => (
-                  <Card key={del.id} elevation={2} sx={{ borderRadius: 2, borderLeft: 6, borderColor: 'primary.main' }}>
+                  <Card key={del.id} elevation={2} sx={{ borderRadius: 2 }}>
                     <CardContent sx={{ p: 2 }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                         Order #{del.order_number}
                       </Typography>
-                      <Chip label={`Courier: ${del.courier_name}`} color="primary" size="small" sx={{ my: 0.5 }} />
                       <Typography variant="body2" color="text.secondary">
-                        Departed: {del.picked_up_at ? new Date(del.picked_up_at).toLocaleTimeString() : ''}
+                        Courier: <strong>{del.courier_name}</strong>
                       </Typography>
 
-                      <Stack direction="row" spacing={1} sx={{ pt: 2, justifyContent: 'flex-end' }}>
-                        <Button variant="outlined" color="error" size="small" onClick={() => handleOpenFailModal(del)}>
-                          Fail
+                      <Stack spacing={0.5} sx={{ my: 1 }}>
+                        <Typography variant="caption">
+                          Exp Cash: {MoneyUtil.formatCurrency(del.cash_expected)} IRR
+                        </Typography>
+                        <Typography variant="caption">
+                          Exp POS: {MoneyUtil.formatCurrency(del.mobile_pos_expected)} IRR
+                        </Typography>
+                      </Stack>
+
+                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', pt: 1 }}>
+                        <Button
+                          variant="contained"
+                          color="success"
+                          size="small"
+                          onClick={() => handleOpenCompleteModal(del)}
+                        >
+                          Complete
                         </Button>
-                        <Button variant="contained" color="success" size="small" onClick={() => handleOpenCompleteModal(del)}>
-                          Deliver
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          size="small"
+                          onClick={() => handleOpenFailModal(del)}
+                        >
+                          Failed
                         </Button>
                       </Stack>
                     </CardContent>
@@ -462,14 +494,14 @@ export function DeliveryPage() {
             </Paper>
           </Grid>
 
-          {/* DELIVERED & FAILED */}
+          {/* DELIVERED / TERMINAL */}
           <Grid size={{ xs: 12, md: 3 }}>
             <Paper sx={{ p: 2, bg: '#fafafa', borderRadius: 2, minHeight: 600 }}>
               <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="h6" color="success.main" sx={{ fontWeight: 'bold' }}>
                   History ({finished.length})
                 </Typography>
-                <Chip label="Completed / Failed" size="small" />
+                <Chip label="Terminal" size="small" />
               </Stack>
               <Divider sx={{ mb: 2 }} />
 
@@ -488,7 +520,7 @@ export function DeliveryPage() {
                         />
                       </Stack>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                        Courier: {del.courier_name} | Compensation: {parseFloat(del.compensation_amount).toLocaleString()} IRR
+                        Courier: {del.courier_name} | Compensation: {MoneyUtil.formatCurrency(del.compensation_amount)} IRR
                       </Typography>
 
                       {del.state === 'FAILED' && (
@@ -547,7 +579,7 @@ export function DeliveryPage() {
                       <Typography variant="caption" color="text.secondary">{c.phone || 'No phone'}</Typography>
                     </TableCell>
                     <TableCell><Chip label={c.vehicle_type} size="small" /></TableCell>
-                    <TableCell>{parseFloat(c.compensation_per_delivery || '0').toLocaleString()} IRR</TableCell>
+                    <TableCell>{MoneyUtil.formatCurrency(c.compensation_per_delivery || '0')} IRR</TableCell>
                     <TableCell>
                       <Chip
                         label={c.attendance?.status || 'CHECKED_OUT'}
@@ -632,7 +664,7 @@ export function DeliveryPage() {
                 <TableRow key={z.id}>
                   <TableCell><strong>{z.code}</strong></TableCell>
                   <TableCell>{z.name}</TableCell>
-                  <TableCell>{parseFloat(z.fee).toLocaleString()} {z.currency_code}</TableCell>
+                  <TableCell>{MoneyUtil.formatCurrency(z.fee)} {z.currency_code}</TableCell>
                   <TableCell>{z.estimated_minutes} mins</TableCell>
                   <TableCell><Chip label={z.is_active ? 'Active' : 'Inactive'} color="success" size="small" /></TableCell>
                 </TableRow>
@@ -720,16 +752,14 @@ export function DeliveryPage() {
             </Typography>
             <TextField
               label="Courier Cash Collected (IRR)"
-              type="number"
               value={cashCollected}
-              onChange={(e) => setCashCollected(Number(e.target.value))}
+              onChange={(e) => setCashCollected(e.target.value)}
               fullWidth
             />
             <TextField
               label="Company Mobile POS Amount (IRR)"
-              type="number"
               value={posAmount}
-              onChange={(e) => setPosAmount(Number(e.target.value))}
+              onChange={(e) => setPosAmount(e.target.value)}
               fullWidth
             />
           </Stack>
@@ -782,7 +812,7 @@ export function DeliveryPage() {
                 <MenuItem value="ON_FOOT">On Foot</MenuItem>
               </Select>
             </FormControl>
-            <TextField label="Compensation per Delivery (IRR)" type="number" value={courierForm.compensation_per_delivery} onChange={(e) => setCourierForm({ ...courierForm, compensation_per_delivery: Number(e.target.value) })} fullWidth />
+            <TextField label="Compensation per Delivery (IRR)" value={courierForm.compensation_per_delivery} onChange={(e) => setCourierForm({ ...courierForm, compensation_per_delivery: e.target.value })} fullWidth />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -798,7 +828,7 @@ export function DeliveryPage() {
           <Stack spacing={2} sx={{ pt: 1 }}>
             <TextField label="Zone Code" value={zoneForm.code} onChange={(e) => setZoneForm({ ...zoneForm, code: e.target.value })} fullWidth />
             <TextField label="Zone Name" value={zoneForm.name} onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })} fullWidth />
-            <TextField label="Delivery Fee (IRR)" type="number" value={zoneForm.fee} onChange={(e) => setZoneForm({ ...zoneForm, fee: Number(e.target.value) })} fullWidth />
+            <TextField label="Delivery Fee (IRR)" value={zoneForm.fee} onChange={(e) => setZoneForm({ ...zoneForm, fee: e.target.value })} fullWidth />
             <TextField label="Estimated Minutes" type="number" value={zoneForm.estimated_minutes} onChange={(e) => setZoneForm({ ...zoneForm, estimated_minutes: Number(e.target.value) })} fullWidth />
           </Stack>
         </DialogContent>

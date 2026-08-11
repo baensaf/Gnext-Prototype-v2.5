@@ -26,6 +26,8 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { httpClient as axios } from 'src/api/httpClient';
 
 export function SimulationCenterPage() {
@@ -104,7 +106,7 @@ export function SimulationCenterPage() {
       const res = await axios.post('/api/v1/simulation/tara/command', {
         command,
         customer_national_id: taraNationalId,
-        amount: parseFloat(taraAmount || '150.00'),
+        amount: MoneyUtil.format(taraAmount || '150.00', 2),
       });
       setTaraResponse(res.data);
       fetchScenariosAndLogs();

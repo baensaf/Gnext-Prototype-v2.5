@@ -28,6 +28,8 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { httpClient as axios } from 'src/api/httpClient';
 
 import { Iconify } from 'src/components/iconify';
@@ -177,15 +179,15 @@ export function CourierSettlementsPage() {
     try {
       const linePayload = editableLines.map((l) => ({
         id: l.id,
-        actual_cash: parseFloat(l.actual_cash || '0'),
-        actual_pos: parseFloat(l.actual_pos || '0'),
+        actual_cash: MoneyUtil.format(l.actual_cash || '0', 2),
+        actual_pos: MoneyUtil.format(l.actual_pos || '0', 2),
         receipt_verified: l.receipt_verified,
       }));
 
       const res = await axios.patch(`/api/v1/delivery/settlements/${activeSettlementDetail.id}`, {
         lines: linePayload,
-        total_compensation_amount: parseFloat(compAmount || '0'),
-        total_adjustment_amount: parseFloat(adjAmount || '0'),
+        total_compensation_amount: MoneyUtil.format(compAmount || '0', 2),
+        total_adjustment_amount: MoneyUtil.format(adjAmount || '0', 2),
       });
       setActiveSettlementDetail(res.data);
       setEditableLines(res.data.lines || []);
@@ -378,7 +380,7 @@ export function CourierSettlementsPage() {
                     <TableCell>{getStatusChip(b.status)}</TableCell>
                     <TableCell align="right">${b.expected_cash_amount}</TableCell>
                     <TableCell align="right">${b.actual_cash_amount}</TableCell>
-                    <TableCell align="right" sx={{ color: parseFloat(b.cash_discrepancy_amount) < 0 ? 'error.main' : 'text.primary' }}>
+                    <TableCell align="right" sx={{ color: MoneyUtil.lessThan(b.cash_discrepancy_amount || '0', '0') ? 'error.main' : 'text.primary' }}>
                       ${b.cash_discrepancy_amount}
                     </TableCell>
                     <TableCell align="right">${b.expected_pos_amount}</TableCell>
@@ -504,7 +506,7 @@ export function CourierSettlementsPage() {
                       <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
                         ${activeSettlementDetail.expected_cash_amount} / ${activeSettlementDetail.actual_cash_amount}
                       </Typography>
-                      <Typography variant="caption" color={parseFloat(activeSettlementDetail.cash_discrepancy_amount) !== 0 ? 'error.main' : 'success.main'}>
+                      <Typography variant="caption" color={MoneyUtil.notEqual(activeSettlementDetail.cash_discrepancy_amount || '0', '0') ? 'error.main' : 'success.main'}>
                         Discrepancy: ${activeSettlementDetail.cash_discrepancy_amount}
                       </Typography>
                     </Paper>
@@ -518,7 +520,7 @@ export function CourierSettlementsPage() {
                       <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
                         ${activeSettlementDetail.expected_pos_amount} / ${activeSettlementDetail.actual_pos_amount}
                       </Typography>
-                      <Typography variant="caption" color={parseFloat(activeSettlementDetail.pos_discrepancy_amount) !== 0 ? 'error.main' : 'success.main'}>
+                      <Typography variant="caption" color={MoneyUtil.notEqual(activeSettlementDetail.pos_discrepancy_amount || '0', '0') ? 'error.main' : 'success.main'}>
                         Discrepancy: ${activeSettlementDetail.pos_discrepancy_amount}
                       </Typography>
                     </Paper>

@@ -33,6 +33,8 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { catalogApi } from 'src/api/catalogApi';
 
 export function PricingPage() {
@@ -196,12 +198,12 @@ export function PricingPage() {
                         <code>{p.code}</code>
                       </TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>{p.name}</TableCell>
-                      <TableCell align="right">{Number(p.base_price).toLocaleString()} IRR</TableCell>
+                      <TableCell align="right">{MoneyUtil.formatCurrency(p.base_price)} IRR</TableCell>
                       <TableCell align="right">
                         <TextField
                           type="number"
                           size="small"
-                          placeholder={Number(p.base_price).toString()}
+                          placeholder={p.base_price}
                           value={overrideVal}
                           onChange={(e) => setOverridePrices((prev) => ({ ...prev, [p.id]: e.target.value }))}
                           sx={{ width: 180 }}

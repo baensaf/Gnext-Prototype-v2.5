@@ -37,6 +37,8 @@ import {
   FormControlLabel,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { orderApi } from 'src/api/orderApi';
 import { tenantApi } from 'src/api/tenantApi';
 import { catalogApi } from 'src/api/catalogApi';
@@ -49,7 +51,7 @@ interface CartItem {
   product: Product;
   quantity: number;
   selectedOptions: OptionItem[];
-  lineSubtotal: number;
+  lineSubtotal: string;
 }
 
 export function PosOrderPage() {
@@ -74,7 +76,7 @@ export function PosOrderPage() {
   // Cart state
   const [cart, setCart] = useState<CartItem[]>([]);
   const [couponCode, setCouponCode] = useState('');
-  const [appliedDiscountAmount, setAppliedDiscountAmount] = useState<number>(0);
+  const [appliedDiscountAmount, setAppliedDiscountAmount] = useState<string>('0');
   const [couponMessage, setCouponMessage] = useState<string | null>(null);
 
   // Success state
@@ -124,12 +126,8 @@ export function PosOrderPage() {
   };
 
   const addToCart = (product: Product, options: OptionItem[]) => {
-    let optionsSum = 0;
-    options.forEach((o) => {
-      optionsSum += Number(o.price_delta);
-    });
-
-    const itemUnitPrice = Number(product.base_price) + optionsSum;
+    const optionsSum = options.reduce((sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2), '0');
+    const itemUnitPrice = MoneyUtil.add(product.base_price || '0', optionsSum, 2);
 
     setCart((prev) => {
       const existingIndex = prev.findIndex(
@@ -142,7 +140,7 @@ export function PosOrderPage() {
         copy[existingIndex] = {
           ...copy[existingIndex],
           quantity: newQty,
-          lineSubtotal: newQty * itemUnitPrice,
+          lineSubtotal: MoneyUtil.multiply(itemUnitPrice, newQty.toString(), 2),
         };
         return copy;
       }
@@ -184,23 +182,28 @@ export function PosOrderPage() {
         return copy.filter((_, i) => i !== index);
       }
 
-      let optionsSum = 0;
-      copy[index].selectedOptions.forEach((o) => (optionsSum += Number(o.price_delta)));
-      const unitPrice = Number(copy[index].product.base_price) + optionsSum;
+      const optionsSum = copy[index].selectedOptions.reduce(
+        (sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2),
+        '0',
+      );
+      const unitPrice = MoneyUtil.add(copy[index].product.base_price || '0', optionsSum, 2);
 
       copy[index] = {
         ...copy[index],
         quantity: newQty,
-        lineSubtotal: newQty * unitPrice,
+        lineSubtotal: MoneyUtil.multiply(unitPrice, newQty.toString(), 2),
       };
       return copy;
     });
   };
 
-  // Cart financial math
-  const cartSubtotal = cart.reduce((sum, item) => sum + item.lineSubtotal, 0);
-  const cartTax = cartSubtotal * 0.1; // 10% VAT
-  const cartTotalDue = Math.max(0, cartSubtotal + cartTax - appliedDiscountAmount);
+  // Cart financial math via decimal-safe MoneyUtil
+  const cartSubtotal = cart.reduce((sum, item) => MoneyUtil.add(sum, item.lineSubtotal, 2), '0');
+  const cartTax = MoneyUtil.multiply(cartSubtotal, '0.10', 2); // 10% VAT
+  const subtotalPlusTax = MoneyUtil.add(cartSubtotal, cartTax, 2);
+  const cartTotalDue = MoneyUtil.greaterThan(subtotalPlusTax, appliedDiscountAmount)
+    ? MoneyUtil.subtract(subtotalPlusTax, appliedDiscountAmount, 2)
+    : '0';
 
   const handleApplyCoupon = async () => {
     if (!couponCode) return;
@@ -219,11 +222,11 @@ export function PosOrderPage() {
         couponCode,
       });
 
-      const discAmount = Number(quoteRes.discountTotal || 0);
+      const discAmount = MoneyUtil.format(quoteRes.discountTotal || '0', 2);
       setAppliedDiscountAmount(discAmount);
       const applied = quoteRes.consideredDiscounts.find((d) => d.status === 'APPLIED');
       if (applied) {
-        setCouponMessage(`Applied ${applied.campaignName} (-${discAmount.toLocaleString()} IRR)`);
+        setCouponMessage(`Applied ${applied.campaignName} (-${MoneyUtil.formatCurrency(discAmount)} IRR)`);
         setError(null);
       } else {
         const rejected = quoteRes.consideredDiscounts.find((d) => d.status === 'REJECTED');
@@ -266,7 +269,7 @@ export function PosOrderPage() {
       setCheckoutModalOpen(true);
       setCart([]);
       setCouponCode('');
-      setAppliedDiscountAmount(0);
+      setAppliedDiscountAmount('0');
       setCouponMessage(null);
       setError(null);
     } catch (err: any) {
@@ -331,7 +334,7 @@ export function PosOrderPage() {
             </Button>
           }
         >
-          <strong>Order Placed Successfully!</strong> Order Number: <code>{placedOrder.order_number}</code> | Total: {Number(placedOrder.total_amount).toLocaleString()} IRR
+          <strong>Order Placed Successfully!</strong> Order Number: <code>{placedOrder.order_number}</code> | Total: {MoneyUtil.formatCurrency(placedOrder.total_amount)} IRR
         </Alert>
       )}
 
@@ -374,7 +377,7 @@ export function PosOrderPage() {
                         {p.name}
                       </Typography>
                       <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                        {Number(p.base_price).toLocaleString()} IRR
+                        {MoneyUtil.formatCurrency(p.base_price)} IRR
                       </Typography>
                     </Paper>
                   </Grid>
@@ -455,11 +458,11 @@ export function PosOrderPage() {
                         </Typography>
                         {item.selectedOptions.map((o) => (
                           <Typography key={o.id} variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                            + {o.name} ({Number(o.price_delta).toLocaleString()} IRR)
+                            + {o.name} ({MoneyUtil.formatCurrency(o.price_delta)} IRR)
                           </Typography>
                         ))}
                         <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main', mt: 0.5 }}>
-                          {item.lineSubtotal.toLocaleString()} IRR
+                          {MoneyUtil.formatCurrency(item.lineSubtotal)} IRR
                         </Typography>
                       </Box>
 
@@ -505,23 +508,23 @@ export function PosOrderPage() {
               <Stack spacing={1} sx={{ mb: 3 }}>
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                   <Typography variant="body2" color="text.secondary">Subtotal:</Typography>
-                  <Typography variant="body2">{cartSubtotal.toLocaleString()} IRR</Typography>
+                  <Typography variant="body2">{MoneyUtil.formatCurrency(cartSubtotal)} IRR</Typography>
                 </Stack>
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                   <Typography variant="body2" color="text.secondary">VAT Tax (10%):</Typography>
-                  <Typography variant="body2">{cartTax.toLocaleString()} IRR</Typography>
+                  <Typography variant="body2">{MoneyUtil.formatCurrency(cartTax)} IRR</Typography>
                 </Stack>
-                {appliedDiscountAmount > 0 && (
+                {MoneyUtil.greaterThan(appliedDiscountAmount, '0') && (
                   <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="error.main">Discount Deduction:</Typography>
-                    <Typography variant="body2" color="error.main">-{appliedDiscountAmount.toLocaleString()} IRR</Typography>
+                    <Typography variant="body2" color="error.main">-{MoneyUtil.formatCurrency(appliedDiscountAmount)} IRR</Typography>
                   </Stack>
                 )}
                 <Divider />
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                   <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Total Due:</Typography>
                   <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                    {cartTotalDue.toLocaleString()} IRR
+                    {MoneyUtil.formatCurrency(cartTotalDue)} IRR
                   </Typography>
                 </Stack>
               </Stack>
@@ -567,7 +570,7 @@ export function PosOrderPage() {
                       }}
                     />
                   }
-                  label={`${item.name} (+${Number(item.price_delta).toLocaleString()} IRR)`}
+                  label={`${item.name} (+${MoneyUtil.formatCurrency(item.price_delta)} IRR)`}
                 />
               ))}
             </Box>

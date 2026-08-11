@@ -31,6 +31,8 @@ import {
   FormControlLabel,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { catalogApi } from 'src/api/catalogApi';
 
 export function OptionsPage() {
@@ -197,8 +199,8 @@ export function OptionsPage() {
                           <TableCell><code>{item.code}</code></TableCell>
                           <TableCell sx={{ fontWeight: 'bold' }}>{item.name}</TableCell>
                           <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                            {Number(item.price_delta) > 0
-                              ? `+${Number(item.price_delta).toLocaleString()} IRR`
+                            {MoneyUtil.greaterThan(item.price_delta || '0', '0')
+                              ? `+${MoneyUtil.formatCurrency(item.price_delta)} IRR`
                               : '0 IRR'}
                           </TableCell>
                         </TableRow>

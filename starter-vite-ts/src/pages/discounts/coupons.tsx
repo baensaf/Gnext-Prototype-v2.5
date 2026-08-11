@@ -30,6 +30,8 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { discountsApi } from 'src/api/discountsApi';
 
 export function CouponsPage() {
@@ -172,7 +174,7 @@ export function CouponsPage() {
           {validationResult && (
             <Alert icon={<CheckCircleIcon fontSize="inherit" />} severity="success" sx={{ mt: 2, borderRadius: 2 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                Coupon VALID! Applied Deduction: -{Number(validationResult.calculatedAmount).toLocaleString()} IRR
+                Coupon VALID! Applied Deduction: -{MoneyUtil.formatCurrency(validationResult.calculatedAmount)} IRR
               </Typography>
               <Typography variant="caption">
                 Rule: <strong>{validationResult.discount.name}</strong> ({validationResult.discount.calculation_type})

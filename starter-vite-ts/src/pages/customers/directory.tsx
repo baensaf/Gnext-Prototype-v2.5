@@ -41,6 +41,8 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import {
   customerApi
 } from 'src/api/customerApi';
@@ -388,7 +390,7 @@ export function CustomersPage() {
                       Current Credit Balance
                     </Typography>
                     <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                      {Number(creditAccount.current_balance).toLocaleString()} IRR
+                      {MoneyUtil.formatCurrency(creditAccount.current_balance)} IRR
                     </Typography>
                   </CardContent>
                 </Card>
@@ -400,7 +402,7 @@ export function CustomersPage() {
                       Assigned Credit Limit
                     </Typography>
                     <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                      {Number(creditAccount.credit_limit).toLocaleString()} IRR
+                      {MoneyUtil.formatCurrency(creditAccount.credit_limit)} IRR
                     </Typography>
                   </CardContent>
                 </Card>
@@ -473,7 +475,7 @@ export function CustomersPage() {
                       />
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                      {Number(t.amount).toLocaleString()} IRR
+                      {MoneyUtil.formatCurrency(t.amount)} IRR
                     </TableCell>
                     <TableCell>{t.note || '—'}</TableCell>
                   </TableRow>

@@ -6,6 +6,7 @@ import PrintIcon from '@mui/icons-material/Print';
 import CancelIcon from '@mui/icons-material/Cancel';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import {
+  Box,
   Card,
   Grid,
   Chip,
@@ -25,6 +26,8 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 export function OrdersDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -38,11 +41,11 @@ export function OrdersDetailPage() {
       try {
         setLoading(true);
         const res = await fetch(`/api/v1/orders/${id}`);
-        if (!res.ok) throw new Error(`Order ${id} not found`);
+        if (!res.ok) throw new Error('Order not found');
         const data = await res.json();
         setOrder(data);
       } catch (err: any) {
-        setError(err.message || 'Failed to load order details');
+        setError(err.message);
       } finally {
         setLoading(false);
       }
@@ -52,7 +55,7 @@ export function OrdersDetailPage() {
 
   if (loading) {
     return (
-      <Container sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
+      <Container sx={{ py: 5, textAlign: 'center' }}>
         <CircularProgress />
       </Container>
     );
@@ -60,42 +63,78 @@ export function OrdersDetailPage() {
 
   if (error || !order) {
     return (
-      <Container sx={{ py: 4 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/app/orders')} sx={{ mb: 2 }}>
-          {t('common.back', 'Back to Orders')}
+      <Container sx={{ py: 3 }}>
+        <Alert severity="error">{error || 'Order could not be loaded'}</Alert>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} sx={{ mt: 2 }}>
+          {t('common.back', 'Back')}
         </Button>
-        <Alert severity="error">{error || 'Order detail not found'}</Alert>
       </Container>
     );
   }
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container maxWidth="lg" sx={{ py: 3 }}>
       <Stack sx={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/app/orders')}>
-            {t('common.back', 'Back')}
-          </Button>
-          <Typography variant="h4">
-            {t('orders.detailTitle', 'Order')} <span dir="ltr">#{order.order_number || id}</span>
-          </Typography>
-          <Chip label={order.status || 'SUBMITTED'} color="primary" />
-        </Stack>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
+          {t('common.back', 'Back')}
+        </Button>
         <Stack sx={{ flexDirection: 'row', gap: 1 }}>
-          <Button variant="outlined" startIcon={<PrintIcon />}>
-            {t('common.reprint', 'Reprint Receipt')}
+          <Button
+            variant="outlined"
+            startIcon={<PrintIcon />}
+            onClick={() => navigate(`/app/pos/receipt/${order.id}`)}
+          >
+            {t('orders.printReceipt', 'Thermal Receipt')}
           </Button>
-          {order.status !== 'CANCELLED' && (
-            <Button variant="contained" color="error" startIcon={<CancelIcon />}>
-              {t('common.cancelOrder', 'Cancel Order')}
+          {['SUBMITTED', 'PENDING', 'ACCEPTED'].includes(order.state) && (
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<CancelIcon />}
+              onClick={() => navigate(`/app/orders/refunds`)}
+            >
+              {t('orders.refundCancel', 'Refund / Cancel')}
             </Button>
           )}
         </Stack>
       </Stack>
 
+      <Card sx={{ p: 3, mb: 3 }}>
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Typography variant="caption" color="text.secondary">
+              {t('orders.orderNumber', 'Order Number')}
+            </Typography>
+            <Typography variant="h6">{order.order_number}</Typography>
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Typography variant="caption" color="text.secondary">
+              {t('orders.type', 'Order Type')}
+            </Typography>
+            <Typography variant="h6">{order.order_type}</Typography>
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Typography variant="caption" color="text.secondary">
+              {t('orders.status', 'Status')}
+            </Typography>
+            <Box sx={{ mt: 0.5 }}>
+              <Chip label={order.state} color="primary" />
+            </Box>
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Typography variant="caption" color="text.secondary">
+              {t('orders.placedAt', 'Placed At')}
+            </Typography>
+            <Typography variant="body1">
+              {order.placed_at ? new Date(order.placed_at).toLocaleString() : '-'}
+            </Typography>
+          </Grid>
+        </Grid>
+      </Card>
+
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 8 }}>
-          <Card sx={{ p: 3, mb: 3 }}>
+          <Card sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
               {t('orders.itemsTitle', 'Order Items')}
             </Typography>
@@ -114,8 +153,8 @@ export function OrdersDetailPage() {
                     <TableRow key={idx}>
                       <TableCell>{item.product_name || item.name || 'Item'}</TableCell>
                       <TableCell align="right">{item.quantity || 1}</TableCell>
-                      <TableCell align="right"><span dir="ltr">{parseFloat(item.unit_price || 0).toLocaleString()} IRR</span></TableCell>
-                      <TableCell align="right"><span dir="ltr">{parseFloat(item.line_total || item.total_amount || 0).toLocaleString()} IRR</span></TableCell>
+                      <TableCell align="right"><span dir="ltr">{MoneyUtil.formatCurrency(item.unit_price || '0')} IRR</span></TableCell>
+                      <TableCell align="right"><span dir="ltr">{MoneyUtil.formatCurrency(item.line_total || item.total_amount || '0')} IRR</span></TableCell>
                     </TableRow>
                   ))}
                   {(!order.items || order.items.length === 0) && (
@@ -139,24 +178,24 @@ export function OrdersDetailPage() {
             <Stack spacing={1.5}>
               <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Typography color="text.secondary">{t('orders.subtotal', 'Subtotal')}</Typography>
-                <Typography dir="ltr">{parseFloat(order.subtotal_amount || 0).toLocaleString()} IRR</Typography>
+                <Typography dir="ltr">{MoneyUtil.formatCurrency(order.subtotal_amount || '0')} IRR</Typography>
               </Stack>
               <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Typography color="text.secondary">{t('orders.tax', 'Tax (9%)')}</Typography>
-                <Typography dir="ltr">{parseFloat(order.tax_amount || 0).toLocaleString()} IRR</Typography>
+                <Typography dir="ltr">{MoneyUtil.formatCurrency(order.tax_amount || '0')} IRR</Typography>
               </Stack>
               <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Typography color="text.secondary">{t('orders.discount', 'Discount')}</Typography>
-                <Typography dir="ltr">{parseFloat(order.discount_amount || 0).toLocaleString()} IRR</Typography>
+                <Typography dir="ltr">{MoneyUtil.formatCurrency(order.discount_amount || '0')} IRR</Typography>
               </Stack>
               <Divider />
               <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Typography variant="subtitle1">{t('orders.totalAmount', 'Total Amount')}</Typography>
-                <Typography variant="subtitle1" dir="ltr">{parseFloat(order.total_amount || 0).toLocaleString()} IRR</Typography>
+                <Typography variant="subtitle1" dir="ltr">{MoneyUtil.formatCurrency(order.total_amount || '0')} IRR</Typography>
               </Stack>
               <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Typography color="success.main">{t('orders.paidAmount', 'Paid Amount')}</Typography>
-                <Typography color="success.main" dir="ltr">{parseFloat(order.paid_amount || 0).toLocaleString()} IRR</Typography>
+                <Typography color="success.main" dir="ltr">{MoneyUtil.formatCurrency(order.paid_amount || '0')} IRR</Typography>
               </Stack>
             </Stack>
           </Card>

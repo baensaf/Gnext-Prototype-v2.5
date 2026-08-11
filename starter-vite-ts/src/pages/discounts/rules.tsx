@@ -32,6 +32,8 @@ import {
   FormControlLabel,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { discountsApi } from 'src/api/discountsApi';
 
 export function DiscountRulesPage() {
@@ -122,7 +124,7 @@ export function DiscountRulesPage() {
     const dType = d.discount_type || (d as any).calculation_type;
     const val = d.percentage || d.amount || (d as any).value || '0';
     if (dType === 'PERCENTAGE') {
-      return `${Number(val).toFixed(0)}%`;
+      return `${MoneyUtil.format(val, 0)}%`;
     }
     if (dType === 'FREE_DELIVERY') {
       return 'Free Delivery';
@@ -130,7 +132,7 @@ export function DiscountRulesPage() {
     if (dType === 'FREE_ITEM') {
       return 'Free Item Reward';
     }
-    return `${Number(val).toLocaleString()} IRR`;
+    return `${MoneyUtil.formatCurrency(val)} IRR`;
   };
 
   return (

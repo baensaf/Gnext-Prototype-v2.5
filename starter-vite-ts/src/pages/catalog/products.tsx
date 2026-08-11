@@ -35,6 +35,8 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { catalogApi } from 'src/api/catalogApi';
 
 import { ImageUploader } from 'src/components/ImageUploader';
@@ -224,10 +226,10 @@ export function ProductsPage() {
                       <TableCell sx={{ fontWeight: 'bold' }}>{p.name}</TableCell>
                       <TableCell>{catObj ? catObj.name : '—'}</TableCell>
                       <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                        {Number(p.base_price).toLocaleString()} IRR
+                        {MoneyUtil.formatCurrency(p.base_price)} IRR
                       </TableCell>
                       <TableCell align="center">
-                        <Chip label={`${(Number(p.tax_rate) * 100).toFixed(0)}%`} size="small" />
+                        <Chip label={`${MoneyUtil.multiply(p.tax_rate || '0', '100', 0)}%`} size="small" />
                       </TableCell>
                       <TableCell>
                         <Chip

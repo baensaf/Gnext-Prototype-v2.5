@@ -48,6 +48,8 @@ import {
   ToggleButtonGroup,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { orderApi } from 'src/api/orderApi';
 import { paymentApi } from 'src/api/paymentApi';
 import { customerApi } from 'src/api/customerApi';
@@ -355,7 +357,7 @@ export function OrdersWorkflowPage() {
                           <Stack spacing={0.5}>
                             {order.items.map((it) => (
                               <Typography key={it.id} variant="caption" sx={{ display: 'block' }}>
-                                <strong>{Number(it.quantity).toFixed(0)}x</strong> {it.product_name}
+                                <strong>{MoneyUtil.format(it.quantity, 0)}x</strong> {it.product_name}
                                 {it.options && it.options.length > 0 && (
                                   <span style={{ opacity: 0.75 }}> ({it.options.map(o => o.option_item_name).join(', ')})</span>
                                 )}
@@ -364,15 +366,15 @@ export function OrdersWorkflowPage() {
                           </Stack>
                         </TableCell>
                         <TableCell align="right" sx={{ color: 'primary.main', fontWeight: 700 }}>
-                          {Number(order.total_amount).toLocaleString()} IRR
+                          {MoneyUtil.formatCurrency(order.total_amount)} IRR
                         </TableCell>
                         <TableCell align="right">
                           <Typography color="success.main" sx={{ display: 'block', fontWeight: 600 }} variant="caption">
-                            Paid: {Number(order.paid_amount).toLocaleString()}
+                            Paid: {MoneyUtil.formatCurrency(order.paid_amount)}
                           </Typography>
-                          {Number(order.due_amount) > 0 ? (
+                          {MoneyUtil.greaterThan(order.due_amount, '0') ? (
                             <Typography color="error.main" sx={{ fontWeight: 700 }} variant="caption">
-                              Due: {Number(order.due_amount).toLocaleString()}
+                              Due: {MoneyUtil.formatCurrency(order.due_amount)}
                             </Typography>
                           ) : (
                             <Chip color="success" label="FULLY PAID" size="small" sx={{ fontSize: 9, height: 18 }} />
@@ -508,7 +510,7 @@ export function OrdersWorkflowPage() {
                             {order.items?.map((item) => (
                               <Box key={item.id} sx={{ mb: 0.5 }}>
                                 <Typography sx={{ fontWeight: 'bold' }} variant="body2">
-                                  {Number(item.quantity).toFixed(0)}x {item.product_name}
+                                  {MoneyUtil.format(item.quantity, 0)}x {item.product_name}
                                 </Typography>
                                 {item.options?.map((opt) => (
                                   <Typography key={opt.id} color="text.secondary" sx={{ display: 'block', pl: 1 }} variant="caption">
@@ -520,7 +522,7 @@ export function OrdersWorkflowPage() {
                           </Box>
 
                           <Typography color="primary.main" sx={{ fontWeight: 'bold', mb: 1.5 }} variant="subtitle2">
-                            Total: {Number(order.total_amount).toLocaleString()} IRR
+                            Total: {MoneyUtil.formatCurrency(order.total_amount)} IRR
                           </Typography>
 
                           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
@@ -657,19 +659,19 @@ export function OrdersWorkflowPage() {
               {receiptData.items.map((it, idx) => (
                 <Stack key={idx} direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
                   <Typography variant="caption">
-                    {it.quantity}x {it.product_name}
+                    {MoneyUtil.format(it.quantity, 0)}x {it.product_name}
                   </Typography>
                   <Typography sx={{ fontWeight: 700 }} variant="caption">
-                    {Number(it.total_amount).toLocaleString()}
+                    {MoneyUtil.formatCurrency(it.total_amount)}
                   </Typography>
                 </Stack>
               ))}
 
               <Typography sx={{ borderTop: 1, borderColor: 'divider', display: 'block', fontWeight: 700, mt: 1.5, pt: 1 }} variant="caption">
-                TOTAL: {Number(receiptData.totals.total_amount).toLocaleString()} IRR
+                TOTAL: {MoneyUtil.formatCurrency(receiptData.totals.total_amount)} IRR
               </Typography>
               <Typography color="success.main" sx={{ display: 'block', fontWeight: 700 }} variant="caption">
-                PAID: {Number(receiptData.totals.paid_amount).toLocaleString()} IRR
+                PAID: {MoneyUtil.formatCurrency(receiptData.totals.paid_amount)} IRR
               </Typography>
 
               <Typography align="center" color="text.secondary" sx={{ display: 'block', mt: 2 }} variant="caption">

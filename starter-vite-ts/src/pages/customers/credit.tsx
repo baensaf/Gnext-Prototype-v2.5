@@ -26,6 +26,8 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { customerApi } from 'src/api/customerApi';
 
 export function CustomerCreditPage() {
@@ -93,9 +95,9 @@ export function CustomerCreditPage() {
     }
   };
 
-  const totalLimit = agingData.reduce((acc, c) => acc + Number(c.credit_limit || 0), 0);
-  const totalBalance = agingData.reduce((acc, c) => acc + Number(c.current_balance || 0), 0);
-  const totalAvailable = agingData.reduce((acc, c) => acc + Number(c.available_credit || 0), 0);
+  const totalLimit = agingData.reduce((acc, c) => MoneyUtil.add(acc, c.credit_limit || '0', 0), '0');
+  const totalBalance = agingData.reduce((acc, c) => MoneyUtil.add(acc, c.current_balance || '0', 0), '0');
+  const totalAvailable = agingData.reduce((acc, c) => MoneyUtil.add(acc, c.available_credit || '0', 0), '0');
 
   return (
     <Box>
@@ -125,7 +127,7 @@ export function CustomerCreditPage() {
           <Card sx={{ borderRadius: 3, boxShadow: 2, p: 2 }}>
             <Typography variant="caption" color="text.secondary">Total Approved Credit Limit</Typography>
             <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 1, color: 'primary.main' }}>
-              {totalLimit.toLocaleString()} IRR
+              {MoneyUtil.formatCurrency(totalLimit)} IRR
             </Typography>
           </Card>
         </Grid>
@@ -134,7 +136,7 @@ export function CustomerCreditPage() {
           <Card sx={{ borderRadius: 3, boxShadow: 2, p: 2 }}>
             <Typography variant="caption" color="text.secondary">Total Current Balance (Deposits)</Typography>
             <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 1, color: 'success.main' }}>
-              +{totalBalance.toLocaleString()} IRR
+              +{MoneyUtil.formatCurrency(totalBalance)} IRR
             </Typography>
           </Card>
         </Grid>
@@ -143,7 +145,7 @@ export function CustomerCreditPage() {
           <Card sx={{ borderRadius: 3, boxShadow: 2, p: 2 }}>
             <Typography variant="caption" color="text.secondary">Total Available Purchasing Credit</Typography>
             <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 1, color: 'info.main' }}>
-              {totalAvailable.toLocaleString()} IRR
+              {MoneyUtil.formatCurrency(totalAvailable)} IRR
             </Typography>
           </Card>
         </Grid>
@@ -173,14 +175,14 @@ export function CustomerCreditPage() {
                   <TableRow key={row.customer_id}>
                     <TableCell><code>{row.customer_code}</code></TableCell>
                     <TableCell sx={{ fontWeight: 'bold' }}>{row.customer_name}</TableCell>
-                    <TableCell align="right">{Number(row.credit_limit).toLocaleString()}</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 'bold', color: Number(row.current_balance) >= 0 ? 'success.main' : 'error.main' }}>
-                      {Number(row.current_balance).toLocaleString()}
+                    <TableCell align="right">{MoneyUtil.formatCurrency(row.credit_limit)}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 'bold', color: MoneyUtil.greaterThanOrEqual(row.current_balance || '0', '0') ? 'success.main' : 'error.main' }}>
+                      {MoneyUtil.formatCurrency(row.current_balance)}
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                      {Number(row.available_credit).toLocaleString()}
+                      {MoneyUtil.formatCurrency(row.available_credit)}
                     </TableCell>
-                    <TableCell align="right">{Number(row.aging.current_0_30).toLocaleString()}</TableCell>
+                    <TableCell align="right">{MoneyUtil.formatCurrency(row.aging.current_0_30)}</TableCell>
                     <TableCell align="right">
                       <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
                         <Button
@@ -264,15 +266,15 @@ export function CustomerCreditPage() {
                   </Grid>
                   <Grid size={{ xs: 6, md: 3 }}>
                     <Typography variant="caption" color="text.secondary">Credit Limit:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{Number(statementData.credit_account.credit_limit).toLocaleString()} IRR</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{MoneyUtil.formatCurrency(statementData.credit_account.credit_limit)} IRR</Typography>
                   </Grid>
                   <Grid size={{ xs: 6, md: 3 }}>
                     <Typography variant="caption" color="text.secondary">Current Balance:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'success.main' }}>{Number(statementData.credit_account.current_balance).toLocaleString()} IRR</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'success.main' }}>{MoneyUtil.formatCurrency(statementData.credit_account.current_balance)} IRR</Typography>
                   </Grid>
                   <Grid size={{ xs: 6, md: 3 }}>
                     <Typography variant="caption" color="text.secondary">Available Credit:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>{Number(statementData.credit_account.available_credit).toLocaleString()} IRR</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>{MoneyUtil.formatCurrency(statementData.credit_account.available_credit)} IRR</Typography>
                   </Grid>
                 </Grid>
               </Paper>
@@ -303,7 +305,7 @@ export function CustomerCreditPage() {
                           />
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold', color: tx.transaction_type === 'DEBIT' ? 'error.main' : 'success.main' }}>
-                          {tx.transaction_type === 'DEBIT' ? `-${Number(tx.amount).toLocaleString()}` : `+${Number(tx.amount).toLocaleString()}`} IRR
+                          {tx.transaction_type === 'DEBIT' ? `-${MoneyUtil.formatCurrency(tx.amount)}` : `+${MoneyUtil.formatCurrency(tx.amount)}`} IRR
                         </TableCell>
                         <TableCell>{tx.note || '—'}</TableCell>
                       </TableRow>

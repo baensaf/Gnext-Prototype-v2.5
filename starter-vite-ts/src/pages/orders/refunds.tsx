@@ -25,6 +25,8 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { refundApi } from 'src/api/refundApi';
 
 export function RefundsPage() {
@@ -126,7 +128,7 @@ export function RefundsPage() {
                     />
                   </TableCell>
                   <TableCell sx={{ fontWeight: 'bold', color: 'error.main' }}>
-                    -{Number(r.total_refund_amount).toLocaleString()} IRR
+                    -{MoneyUtil.formatCurrency(r.total_refund_amount)} IRR
                   </TableCell>
                   <TableCell>
                     <Chip label={r.status} color={r.status === 'APPROVED' ? 'success' : 'default'} size="small" />
@@ -155,7 +157,7 @@ export function RefundsPage() {
                 <strong>Refund Type:</strong> {selectedRefund.refund_type}
               </Typography>
               <Typography variant="body2">
-                <strong>Total Amount Refunded:</strong> {Number(selectedRefund.total_refund_amount).toLocaleString()} IRR
+                <strong>Total Amount Refunded:</strong> {MoneyUtil.formatCurrency(selectedRefund.total_refund_amount)} IRR
               </Typography>
               <Typography variant="body2">
                 <strong>Note / Reason:</strong> {selectedRefund.note || 'None'}
@@ -170,7 +172,7 @@ export function RefundsPage() {
                     Method ID: <code>{a.payment_method_id}</code>
                   </Typography>
                   <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold' }}>
-                    Amount Reversed: -{Number(a.amount_refunded).toLocaleString()} IRR
+                    Amount Reversed: -{MoneyUtil.formatCurrency(a.amount_refunded)} IRR
                   </Typography>
                 </Paper>
               ))}

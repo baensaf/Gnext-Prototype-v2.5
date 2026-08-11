@@ -15,6 +15,8 @@ import {
   Typography,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { paymentApi } from 'src/api/paymentApi';
 
 export function ReceiptPage() {
@@ -122,10 +124,10 @@ export function ReceiptPage() {
             <Box key={idx}>
               <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                 <Typography variant="body2" sx={{ fontFamily: 'inherit', fontWeight: 'bold' }}>
-                  {Number(item.quantity).toFixed(0)}x {item.product_name}
+                  {MoneyUtil.format(item.quantity, 0)}x {item.product_name}
                 </Typography>
                 <Typography variant="body2" sx={{ fontFamily: 'inherit' }}>
-                  {Number(item.subtotal).toLocaleString()}
+                  {MoneyUtil.formatCurrency(item.subtotal)}
                 </Typography>
               </Stack>
 
@@ -135,7 +137,7 @@ export function ReceiptPage() {
                     + {opt.name}
                   </Typography>
                   <Typography variant="caption" sx={{ fontFamily: 'inherit', color: '#444' }}>
-                    {Number(opt.price_delta) > 0 ? `+${Number(opt.price_delta).toLocaleString()}` : ''}
+                    {MoneyUtil.greaterThan(opt.price_delta, '0') ? `+${MoneyUtil.formatCurrency(opt.price_delta)}` : ''}
                   </Typography>
                 </Stack>
               ))}
@@ -149,18 +151,18 @@ export function ReceiptPage() {
         <Stack spacing={0.5} sx={{ mb: 2 }}>
           <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
             <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>Subtotal:</Typography>
-            <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>{Number(totals.subtotal_amount).toLocaleString()} IRR</Typography>
+            <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>{MoneyUtil.formatCurrency(totals.subtotal_amount)} IRR</Typography>
           </Stack>
 
           <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
             <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>VAT Tax (10%):</Typography>
-            <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>{Number(totals.tax_amount).toLocaleString()} IRR</Typography>
+            <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>{MoneyUtil.formatCurrency(totals.tax_amount)} IRR</Typography>
           </Stack>
 
-          {Number(totals.discount_amount) > 0 && (
+          {MoneyUtil.greaterThan(totals.discount_amount, '0') && (
             <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
               <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>Discount:</Typography>
-              <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>-{Number(totals.discount_amount).toLocaleString()} IRR</Typography>
+              <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>-{MoneyUtil.formatCurrency(totals.discount_amount)} IRR</Typography>
             </Stack>
           )}
 
@@ -169,7 +171,7 @@ export function ReceiptPage() {
           <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
             <Typography variant="body2" sx={{ fontFamily: 'inherit', fontWeight: 'bold' }}>TOTAL:</Typography>
             <Typography variant="body2" sx={{ fontFamily: 'inherit', fontWeight: 'bold' }}>
-              {Number(totals.total_amount).toLocaleString()} IRR
+              {MoneyUtil.formatCurrency(totals.total_amount)} IRR
             </Typography>
           </Stack>
         </Stack>
@@ -186,7 +188,7 @@ export function ReceiptPage() {
                   {t.payment_method_name} {t.reference_number ? `(${t.reference_number})` : ''}
                 </Typography>
                 <Typography variant="caption" sx={{ fontFamily: 'inherit', fontWeight: 'bold' }}>
-                  {Number(t.amount).toLocaleString()} IRR
+                  {MoneyUtil.formatCurrency(t.amount)} IRR
                 </Typography>
               </Stack>
             ))}

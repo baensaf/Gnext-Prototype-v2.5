@@ -38,6 +38,8 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { tenantApi } from 'src/api/tenantApi';
 import { settingsApi } from 'src/api/settingsApi';
 import { cashDrawerApi } from 'src/api/cashDrawerApi';
@@ -255,7 +257,7 @@ export function CashDrawerPage() {
               <Card sx={{ borderRadius: 3, boxShadow: 1, textAlign: 'center', p: 2 }}>
                 <Typography variant="caption" color="text.secondary">Opening Float</Typography>
                 <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 1 }}>
-                  {Number(summary?.opening_float).toLocaleString()}
+                  {MoneyUtil.formatCurrency(summary?.opening_float)}
                 </Typography>
               </Card>
             </Grid>
@@ -264,7 +266,7 @@ export function CashDrawerPage() {
               <Card sx={{ borderRadius: 3, boxShadow: 1, textAlign: 'center', p: 2 }}>
                 <Typography variant="caption" color="text.secondary">Cash Sales</Typography>
                 <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 1, color: 'success.main' }}>
-                  +{Number(summary?.cash_sales).toLocaleString()}
+                  +{MoneyUtil.formatCurrency(summary?.cash_sales)}
                 </Typography>
               </Card>
             </Grid>
@@ -273,7 +275,7 @@ export function CashDrawerPage() {
               <Card sx={{ borderRadius: 3, boxShadow: 1, textAlign: 'center', p: 2 }}>
                 <Typography variant="caption" color="text.secondary">Pay In</Typography>
                 <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 1, color: 'info.main' }}>
-                  +{Number(summary?.pay_in).toLocaleString()}
+                  +{MoneyUtil.formatCurrency(summary?.pay_in)}
                 </Typography>
               </Card>
             </Grid>
@@ -282,7 +284,7 @@ export function CashDrawerPage() {
               <Card sx={{ borderRadius: 3, boxShadow: 1, textAlign: 'center', p: 2 }}>
                 <Typography variant="caption" color="text.secondary">Pay Out</Typography>
                 <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 1, color: 'error.main' }}>
-                  -{Number(summary?.pay_out).toLocaleString()}
+                  -{MoneyUtil.formatCurrency(summary?.pay_out)}
                 </Typography>
               </Card>
             </Grid>
@@ -291,7 +293,7 @@ export function CashDrawerPage() {
               <Card sx={{ borderRadius: 3, boxShadow: 1, textAlign: 'center', p: 2 }}>
                 <Typography variant="caption" color="text.secondary">Safe Drop</Typography>
                 <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 1, color: 'warning.main' }}>
-                  -{Number(summary?.safe_drop).toLocaleString()}
+                  -{MoneyUtil.formatCurrency(summary?.safe_drop)}
                 </Typography>
               </Card>
             </Grid>
@@ -300,7 +302,7 @@ export function CashDrawerPage() {
               <Card sx={{ borderRadius: 3, boxShadow: 2, textAlign: 'center', p: 2, bgcolor: 'primary.lighter' }}>
                 <Typography variant="caption" color="primary.dark font-bold">EXPECTED CASH</Typography>
                 <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 1, color: 'primary.main' }}>
-                  {Number(summary?.expected_cash).toLocaleString()} IRR
+                  {MoneyUtil.formatCurrency(summary?.expected_cash)} IRR
                 </Typography>
               </Card>
             </Grid>
@@ -334,7 +336,7 @@ export function CashDrawerPage() {
                           />
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                          {Number(tx.amount).toLocaleString()} IRR
+                          {MoneyUtil.formatCurrency(tx.amount)} IRR
                         </TableCell>
                         <TableCell>{tx.note || '—'}</TableCell>
                       </TableRow>
@@ -488,24 +490,30 @@ export function CashDrawerPage() {
                 <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="body2" color="text.secondary">Expected Cash in Drawer:</Typography>
                   <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                    {Number(summary.expected_cash).toLocaleString()} IRR
+                    {MoneyUtil.formatCurrency(summary.expected_cash)} IRR
                   </Typography>
                 </Stack>
 
                 <Divider sx={{ my: 1 }} />
 
-                <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Variance (Over/Short):</Typography>
-                  <Typography
-                    variant="subtitle2"
-                    sx={{
-                      fontWeight: 'bold',
-                      color: Number(actualCashInput || '0') - Number(summary.expected_cash) >= 0 ? 'success.main' : 'error.main',
-                    }}
-                  >
-                    {(Number(actualCashInput || '0') - Number(summary.expected_cash)).toLocaleString()} IRR
-                  </Typography>
-                </Stack>
+                {(() => {
+                  const variance = MoneyUtil.subtract(actualCashInput || '0', summary.expected_cash || '0', 2);
+                  const isPositive = MoneyUtil.greaterThanOrEqual(variance, '0');
+                  return (
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Variance (Over/Short):</Typography>
+                      <Typography
+                        variant="subtitle2"
+                        sx={{
+                          fontWeight: 'bold',
+                          color: isPositive ? 'success.main' : 'error.main',
+                        }}
+                      >
+                        {MoneyUtil.formatCurrency(variance)} IRR
+                      </Typography>
+                    </Stack>
+                  );
+                })()}
               </Paper>
             )}
 

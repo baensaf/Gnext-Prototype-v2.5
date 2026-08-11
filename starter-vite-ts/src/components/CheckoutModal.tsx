@@ -33,6 +33,8 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { orderApi } from 'src/api/orderApi';
 import { paymentApi } from 'src/api/paymentApi';
 import { settingsApi } from 'src/api/settingsApi';
@@ -105,7 +107,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       const updatedPays = await paymentApi.getOrderPayments(orderId);
       setPayments(updatedPays);
 
-      if (Number(res.order.due_amount) === 0 && onPaymentComplete) {
+      if (MoneyUtil.isZero(res.order.due_amount) && onPaymentComplete) {
         onPaymentComplete();
       }
     } catch (err: any) {
@@ -113,7 +115,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     }
   };
 
-  const isFullyPaid = order ? Number(order.due_amount) === 0 : false;
+  const isFullyPaid = order ? MoneyUtil.isZero(order.due_amount) : false;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -134,20 +136,20 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
               <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body2" color="text.secondary">Total Amount:</Typography>
                 <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                  {Number(order.total_amount).toLocaleString()} IRR
+                  {MoneyUtil.formatCurrency(order.total_amount)} IRR
                 </Typography>
               </Stack>
               <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body2" color="text.secondary">Paid Amount:</Typography>
                 <Typography variant="body2" color="success.main" sx={{ fontWeight: 'bold' }}>
-                  {Number(order.paid_amount).toLocaleString()} IRR
+                  {MoneyUtil.formatCurrency(order.paid_amount)} IRR
                 </Typography>
               </Stack>
               <Divider sx={{ my: 1 }} />
               <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Remaining Due:</Typography>
                 <Typography variant="h6" sx={{ fontWeight: 'bold', color: isFullyPaid ? 'success.main' : 'error.main' }}>
-                  {Number(order.due_amount).toLocaleString()} IRR
+                  {MoneyUtil.formatCurrency(order.due_amount)} IRR
                 </Typography>
               </Stack>
             </Paper>
@@ -222,7 +224,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                     <TableRow key={p.id}>
                       <TableCell>{new Date(p.recorded_at).toLocaleTimeString()}</TableCell>
                       <TableCell align="right" sx={{ fontWeight: 'bold', color: 'success.main' }}>
-                        {Number(p.amount).toLocaleString()} IRR
+                        {MoneyUtil.formatCurrency(p.amount)} IRR
                       </TableCell>
                       <TableCell>{p.reference_number || '—'}</TableCell>
                       <TableCell>

@@ -24,6 +24,8 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { httpClient as axios } from 'src/api/httpClient';
 
 interface KioskProduct {
@@ -50,13 +52,13 @@ interface CartItem {
   product_id: string;
   product_name: string;
   quantity: number;
-  unit_price: number;
-  line_total: number;
+  unit_price: string;
+  line_total: string;
   options: Array<{
     option_group_id: string;
     option_item_id: string;
     option_item_name: string;
-    additional_price: number;
+    additional_price: string;
   }>;
   notes?: string;
 }
@@ -64,7 +66,7 @@ interface CartItem {
 export function KioskPage() {
   const { i18n } = useTranslation();
 
-  // Kiosk Flow Steps: 0: WELCOME, 1: CATALOG, 2: PAYMENT_SIMULATION, 3: SUCCESS_RECEIPT
+  // Kiosk Flow Steps: 0: WELCOME, 1: CATALOG, 2: PAYMENT_SIMULATION, 3: SUCCESS_RECEIPT, 4: PAYMENT_FAILED
   const [kioskStep, setKioskStep] = useState<number>(0);
   const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY'>('TAKEAWAY');
 
@@ -89,8 +91,9 @@ export function KioskPage() {
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
 
   // Active Order & Payment state
-  const [_activeOrder, setActiveOrder] = useState<any>(null);
+  const [activeOrder, setActiveOrder] = useState<any>(null);
   const [receiptData, setReceiptData] = useState<any>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const fetchBootstrap = async () => {
     setLoading(true);
@@ -145,7 +148,7 @@ export function KioskPage() {
         option_group_id: group.id,
         option_item_id: item.id,
         option_item_name: item.name,
-        additional_price: parseFloat(item.price || '0'),
+        additional_price: MoneyUtil.format(item.price || '0', 2),
       },
     }));
   };
@@ -153,12 +156,15 @@ export function KioskPage() {
   const handleAddToCart = () => {
     if (!customizingProduct) return;
 
-    const basePrice = parseFloat(customizingProduct.base_price || '0');
-    const optionList = Object.values(selectedOptionsMap);
-    const optionsTotal = optionList.reduce((acc, opt) => acc + opt.additional_price, 0);
+    const basePrice = MoneyUtil.format(customizingProduct.base_price || '0', 2);
+    const optionList = Object.values(selectedOptionsMap) as any[];
+    const optionsTotal = optionList.reduce(
+      (acc, opt) => MoneyUtil.add(acc, opt.additional_price || '0', 2),
+      '0',
+    );
 
-    const unitPrice = basePrice + optionsTotal;
-    const lineTotal = unitPrice * customQuantity;
+    const unitPrice = MoneyUtil.add(basePrice, optionsTotal, 2);
+    const lineTotal = MoneyUtil.multiply(unitPrice, customQuantity.toString(), 2);
 
     const newCartItem: CartItem = {
       cart_id: `cart-${Date.now()}-${Math.random().toString().slice(-4)}`,
@@ -179,9 +185,10 @@ export function KioskPage() {
     setCart((prev) => prev.filter((i) => i.cart_id !== cartId));
   };
 
-  const calculateSubtotal = () => cart.reduce((acc, item) => acc + item.line_total, 0);
-  const calculateTax = () => calculateSubtotal() * 0.09;
-  const calculateTotal = () => calculateSubtotal() + calculateTax();
+  const calculateSubtotal = () =>
+    cart.reduce((acc, item) => MoneyUtil.add(acc, item.line_total, 2), '0');
+  const calculateTax = () => MoneyUtil.multiply(calculateSubtotal(), '0.09', 2); // 9% tax
+  const calculateTotal = () => MoneyUtil.add(calculateSubtotal(), calculateTax(), 2);
 
   const handleProceedToPayment = async () => {
     if (cart.length === 0) return;
@@ -217,15 +224,24 @@ export function KioskPage() {
   };
 
   const triggerSimulatedPosPayment = async (orderId: string) => {
+    setPaymentError(null);
     setTimeout(async () => {
       try {
         const res = await axios.post('/api/v1/kiosk/pay', { order_id: orderId });
         setReceiptData(res.data.receipt);
         setKioskStep(3);
-      } catch {
-        alert('Terminal Payment Failed');
+      } catch (err: any) {
+        setPaymentError(err.response?.data?.message || 'Terminal Payment Failed');
+        setKioskStep(4);
       }
-    }, 3000);
+    }, 2000);
+  };
+
+  const handleRetryPayment = () => {
+    if (activeOrder?.id) {
+      setKioskStep(2);
+      triggerSimulatedPosPayment(activeOrder.id);
+    }
   };
 
   const handleResetKiosk = () => {
@@ -233,6 +249,7 @@ export function KioskPage() {
     setCart([]);
     setActiveOrder(null);
     setReceiptData(null);
+    setPaymentError(null);
     setCustomerPhone('');
     setCustomerName('');
   };
@@ -378,7 +395,7 @@ export function KioskPage() {
               color="primary"
               onClick={() => setCartDrawerOpen(true)}
             >
-              🛒 Cart (${calculateTotal().toFixed(2)})
+              🛒 Cart ({MoneyUtil.formatCurrency(calculateTotal())} IRR)
             </Button>
           </Badge>
         </Stack>
@@ -430,7 +447,7 @@ export function KioskPage() {
                 </Typography>
                 <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="h6" color="primary.main" sx={{ fontWeight: 'bold' }}>
-                    ${parseFloat(product.base_price || '0').toFixed(2)}
+                    {MoneyUtil.formatCurrency(product.base_price)} IRR
                   </Typography>
                   <Button size="small" variant="contained">
                     Add +
@@ -450,7 +467,7 @@ export function KioskPage() {
             <DialogContent dividers>
               <Stack spacing={3}>
                 <Typography variant="h6" color="primary.main" sx={{ fontWeight: 'bold' }}>
-                  Base Price: ${parseFloat(customizingProduct.base_price || '0').toFixed(2)}
+                  Base Price: {MoneyUtil.formatCurrency(customizingProduct.base_price)} IRR
                 </Typography>
 
                 {/* Option Groups */}
@@ -479,7 +496,7 @@ export function KioskPage() {
                                 {item.name}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
-                                +${parseFloat(item.price || '0').toFixed(2)}
+                                +{MoneyUtil.formatCurrency(item.price)} IRR
                               </Typography>
                             </Paper>
                           </Grid>
@@ -531,13 +548,13 @@ export function KioskPage() {
                     </Typography>
                     {item.options.map((opt, idx) => (
                       <Typography key={idx} variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        + {opt.option_item_name} (${opt.additional_price.toFixed(2)})
+                        + {opt.option_item_name} ({MoneyUtil.formatCurrency(opt.additional_price)} IRR)
                       </Typography>
                     ))}
                   </Box>
                   <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                      ${item.line_total.toFixed(2)}
+                      {MoneyUtil.formatCurrency(item.line_total)} IRR
                     </Typography>
                     <IconButton color="error" onClick={() => handleRemoveCartItem(item.cart_id)}>
                       ✕
@@ -551,18 +568,18 @@ export function KioskPage() {
               <Stack spacing={1}>
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">Subtotal:</Typography>
-                  <Typography>${calculateSubtotal().toFixed(2)}</Typography>
+                  <Typography>{MoneyUtil.formatCurrency(calculateSubtotal())} IRR</Typography>
                 </Stack>
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">Tax (9%):</Typography>
-                  <Typography>${calculateTax().toFixed(2)}</Typography>
+                  <Typography>{MoneyUtil.formatCurrency(calculateTax())} IRR</Typography>
                 </Stack>
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                   <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                     Total:
                   </Typography>
                   <Typography variant="h6" color="primary.main" sx={{ fontWeight: 'bold' }}>
-                    ${calculateTotal().toFixed(2)}
+                    {MoneyUtil.formatCurrency(calculateTotal())} IRR
                   </Typography>
                 </Stack>
               </Stack>
@@ -578,7 +595,7 @@ export function KioskPage() {
             disabled={cart.length === 0 || loading}
             onClick={handleProceedToPayment}
           >
-            Pay Now (${calculateTotal().toFixed(2)})
+            Pay Now ({MoneyUtil.formatCurrency(calculateTotal())} IRR)
           </Button>
         </DialogActions>
       </Dialog>
@@ -615,7 +632,7 @@ export function KioskPage() {
               <Typography>Order Type: {receiptData.order_type}</Typography>
               <Typography>Terminal Ref: {receiptData.reference_number}</Typography>
               <Typography sx={{ mt: 1, fontWeight: 'bold', display: 'block' }}>
-                Total Paid: ${receiptData.total_paid} ({receiptData.payment_method})
+                Total Paid: {MoneyUtil.formatCurrency(receiptData.total_paid)} IRR ({receiptData.payment_method})
               </Typography>
               <Typography color="success.main" sx={{ fontWeight: 'bold', mt: 2, display: 'block' }}>
                 Status: {receiptData.status}
@@ -625,6 +642,31 @@ export function KioskPage() {
           <DialogActions>
             <Button variant="contained" size="large" fullWidth onClick={handleResetKiosk}>
               Done / Start New Kiosk Order
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
+
+      {/* STEP 4: PAYMENT FAILED & RETRY */}
+      {kioskStep === 4 && (
+        <Dialog open maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ color: 'error.main', fontWeight: 'bold' }}>
+            Payment Failed
+          </DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              {paymentError || 'The card terminal encountered an error or timeout.'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Please click Retry to re-initiate POS terminal communication.
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleResetKiosk} color="inherit">
+              Cancel
+            </Button>
+            <Button onClick={handleRetryPayment} variant="contained" color="primary">
+              Retry Payment
             </Button>
           </DialogActions>
         </Dialog>
