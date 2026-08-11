@@ -492,7 +492,15 @@ export class ImportExportService {
 
     await this.dataSource.transaction(async (manager) => {
       for (const table of resetTables) {
-        await manager.query(`DELETE FROM "${table}" WHERE tenant_id = $1`, [tenantId]);
+        const cols = await manager.query(
+          `SELECT column_name FROM information_schema.columns WHERE table_name = $1 AND column_name = 'tenant_id'`,
+          [table],
+        );
+        if (cols && cols.length > 0) {
+          await manager.query(`DELETE FROM "${table}" WHERE tenant_id = $1`, [tenantId]);
+        } else {
+          await manager.query(`DELETE FROM "${table}"`);
+        }
       }
     });
 

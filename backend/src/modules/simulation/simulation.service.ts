@@ -166,7 +166,7 @@ export class SimulationService {
         tenant_id: tenantId,
         order_id: savedHeader.id,
         line_number: 1,
-        product_id: item.product_id || 'snapp-prod-1',
+        product_id: item.product_id || '00000000-0000-0000-0000-000000000001',
         product_name: item.product_name || 'Snappfood Item',
         unit_price: priceStr,
         quantity: qtyStr,

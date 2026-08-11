@@ -346,7 +346,7 @@ export class KioskService {
       tenant_id: tenantId,
       order_id: order.id,
       payment_number: `PAY-KOS-${Date.now()}`,
-      method_id: paymentMethod ? paymentMethod.id : 'default-pm',
+      method_id: paymentMethod ? paymentMethod.id : '00000000-0000-0000-0000-000000000001',
       method_kind: paymentMethod ? paymentMethod.kind : 'CARD',
       amount: totalToPayStr,
       status: 'SUCCEEDED',
