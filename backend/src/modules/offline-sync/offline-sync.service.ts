@@ -93,7 +93,7 @@ export class OfflineSyncService {
     if (branchId && uuidRegex.test(branchId)) {
       return branchId;
     }
-    return '00000000-0000-0000-0000-000000000001';
+    throw new BadRequestException('Valid branch context (UUID) is required for offline sync operations');
   }
 
   private async getLatestBranchSnapshot(tenantId: string, branchId?: string): Promise<BranchStatusSnapshot> {
@@ -160,12 +160,13 @@ export class OfflineSyncService {
 
   async toggleConnectivity(
     tenantId: string,
-    branchId: string = 'default-branch',
+    branchId?: string,
     isOnline: boolean = true,
     agentVersion?: string,
     agentHealth?: string,
   ) {
-    const latest = await this.getLatestBranchSnapshot(tenantId, branchId);
+    const targetBranchId = this.resolveBranchId(branchId);
+    const latest = await this.getLatestBranchSnapshot(tenantId, targetBranchId);
 
     let offlineSince: Date | null = latest.offline_since;
     if (latest.is_online && !isOnline) {
@@ -176,7 +177,7 @@ export class OfflineSyncService {
 
     const newSnapshot = this.branchStatusRepo.create({
       tenant_id: tenantId,
-      branch_id: branchId,
+      branch_id: targetBranchId,
       is_online: isOnline,
       agent_version: agentVersion || latest.agent_version || 'v1.5.0-sim',
       agent_health: agentHealth || latest.agent_health || 'HEALTHY',
@@ -197,14 +198,14 @@ export class OfflineSyncService {
       action: isOnline ? 'BRANCH_CONNECTIVITY_ONLINE' : 'BRANCH_CONNECTIVITY_OFFLINE',
       correlationId: 'corr-offline-toggle',
       afterData: {
-        branch_id: branchId,
+        branch_id: targetBranchId,
         is_online: isOnline,
         offline_since: offlineSince,
         agent_version: newSnapshot.agent_version,
       },
     });
 
-    return this.getStatus(tenantId, branchId);
+    return this.getStatus(tenantId, targetBranchId);
   }
 
   async enqueueOfflineItem(
@@ -219,6 +220,7 @@ export class OfflineSyncService {
     },
     correlationId?: string,
   ) {
+    const targetBranchId = this.resolveBranchId(data?.branch_id);
     const entityType = (data.entity_type || 'ORDER').toUpperCase().trim();
     this.validateDomainPayload(entityType, data.payload);
 
@@ -226,7 +228,7 @@ export class OfflineSyncService {
       const existing = await this.queueRepo.findOne({
         where: {
           tenant_id: tenantId,
-          branch_id: data.branch_id,
+          branch_id: targetBranchId,
           dedupe_key: data.dedupe_key,
           status: In(['PENDING', 'SYNCING', 'CONFLICT']),
         },
@@ -240,12 +242,12 @@ export class OfflineSyncService {
       }
     }
 
-    const snapshot = await this.getLatestBranchSnapshot(tenantId, data.branch_id);
+    const snapshot = await this.getLatestBranchSnapshot(tenantId, targetBranchId);
     const initialStatus = snapshot.is_online ? 'SYNCED' : 'PENDING';
 
     const item = this.queueRepo.create({
       tenant_id: tenantId,
-      branch_id: data.branch_id,
+      branch_id: targetBranchId,
       terminal_id: data.terminal_id || null,
       entity_type: entityType,
       payload: data.payload,
@@ -280,7 +282,7 @@ export class OfflineSyncService {
         const existing = await this.queueRepo.findOne({
           where: {
             tenant_id: tenantId,
-            branch_id: data.branch_id,
+            branch_id: targetBranchId,
             dedupe_key: data.dedupe_key,
             status: In(['PENDING', 'SYNCING', 'CONFLICT']),
           },
@@ -296,7 +298,8 @@ export class OfflineSyncService {
     }
   }
 
-  async triggerSyncWorker(tenantId: string, branchId: string = 'default-branch', correlationId?: string) {
+  async triggerSyncWorker(tenantId: string, branchId?: string, correlationId?: string) {
+    const targetBranchId = this.resolveBranchId(branchId);
     const workerId = `worker-${Math.random().toString(36).substring(2, 9)}`;
     const now = new Date();
 
@@ -320,7 +323,7 @@ export class OfflineSyncService {
            ORDER BY "created_at" ASC
            LIMIT 50
            FOR UPDATE SKIP LOCKED`,
-          [tenantId, branchId, now],
+          [tenantId, targetBranchId, now],
         );
 
         const ids = rows.map((r: any) => r.id);
@@ -346,7 +349,7 @@ export class OfflineSyncService {
         claimedItems = await this.queueRepo.find({
           where: {
             tenant_id: tenantId,
-            branch_id: branchId,
+            branch_id: targetBranchId,
             status: In(['PENDING', 'SYNCING']),
           },
           order: { created_at: 'ASC' },
@@ -470,7 +473,7 @@ export class OfflineSyncService {
     for (const [catName, counts] of Object.entries(categoryCounts)) {
       const catLog = this.categoryLogRepo.create({
         tenant_id: tenantId,
-        branch_id: branchId,
+        branch_id: targetBranchId,
         batch_id: batchId,
         category: catName,
         processed_count: counts.processed,
@@ -481,7 +484,7 @@ export class OfflineSyncService {
       await this.categoryLogRepo.save(catLog);
     }
 
-    const latestSnapshot = await this.getLatestBranchSnapshot(tenantId, branchId);
+    const latestSnapshot = await this.getLatestBranchSnapshot(tenantId, targetBranchId);
     let updatedLastSyncAt = latestSnapshot.last_sync_at;
 
     // Advance last_sync_at ONLY if every selected item in the batch succeeded without conflict or DLQ
@@ -491,7 +494,7 @@ export class OfflineSyncService {
       updatedLastSyncAt = new Date();
       const syncSnapshot = this.branchStatusRepo.create({
         tenant_id: tenantId,
-        branch_id: branchId,
+        branch_id: targetBranchId,
         is_online: true,
         agent_version: latestSnapshot.agent_version,
         agent_health: latestSnapshot.agent_health,
@@ -585,8 +588,8 @@ export class OfflineSyncService {
   }
 
   async getQueue(tenantId: string, branchId?: string, status?: string) {
-    const where: any = { tenant_id: tenantId };
-    if (branchId) where.branch_id = branchId;
+    const targetBranchId = this.resolveBranchId(branchId);
+    const where: any = { tenant_id: tenantId, branch_id: targetBranchId };
     if (status) where.status = status;
 
     return await this.queueRepo.find({ where, order: { created_at: 'DESC' }, take: 100 });

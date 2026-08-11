@@ -1,12 +1,14 @@
 import type { IconButtonProps } from '@mui/material/IconButton';
 
 import { m } from 'framer-motion';
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { usePopover } from 'minimal-shared/hooks';
 
 import MenuList from '@mui/material/MenuList';
 import MenuItem from '@mui/material/MenuItem';
 import IconButton from '@mui/material/IconButton';
+
+import { useAuthStore } from 'src/store/useAuthStore';
 
 import { FlagIcon } from 'src/components/flag-icon';
 import { CustomPopover } from 'src/components/custom-popover';
@@ -24,17 +26,16 @@ export type LanguagePopoverProps = IconButtonProps & {
 
 export function LanguagePopover({ data = [], sx, ...other }: LanguagePopoverProps) {
   const { open, anchorEl, onClose, onOpen } = usePopover();
+  const { locale, setLocale } = useAuthStore();
 
-  const [locale, setLocale] = useState<string>(data[0].value);
-
-  const currentLang = data.find((lang) => lang.value === locale);
+  const currentLang = data.find((lang) => lang.value === locale) || data[0];
 
   const handleChangeLang = useCallback(
     (lang: string) => {
       setLocale(lang);
       onClose();
     },
-    [onClose]
+    [setLocale, onClose]
   );
 
   const renderMenuList = () => (

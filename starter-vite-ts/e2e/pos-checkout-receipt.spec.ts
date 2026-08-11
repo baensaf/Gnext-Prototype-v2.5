@@ -27,10 +27,9 @@ test.describe('POS Order, Checkout / Pay Now, and Receipt Print E2E Workflow', (
 
     // 3. Select product card from POS catalog grid
     const fastFoodTab = page.locator('.MuiTab-root').filter({ hasText: /Fast Food|Burger/i }).first();
-    if (await fastFoodTab.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await fastFoodTab.click();
-      await page.waitForTimeout(500);
-    }
+    await expect(fastFoodTab).toBeVisible({ timeout: 10000 });
+    await fastFoodTab.click();
+    await page.waitForTimeout(500);
 
     const productCard = page.locator('.MuiPaper-root').filter({ hasText: /Cheeseburger|Burger|PROD-/i }).first();
     await expect(productCard).toBeVisible({ timeout: 15000 });

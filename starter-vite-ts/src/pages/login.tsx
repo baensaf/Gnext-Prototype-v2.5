@@ -19,7 +19,7 @@ import { useAuthStore } from 'src/store/useAuthStore';
 import { AuthSplitLayout } from 'src/layouts/auth-split';
 
 export function LoginPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { login, isLoading, error, locale, setLocale, clearError, isAuthenticated, fetchMe } = useAuthStore();
 
@@ -46,7 +46,8 @@ export function LoginPage() {
   };
 
   const handleToggleLanguage = () => {
-    const nextLang = locale === 'fa' ? 'en' : 'fa';
+    const activeLang = document.documentElement.lang || i18n.language || locale || 'fa';
+    const nextLang = activeLang === 'fa' ? 'en' : 'fa';
     setLocale(nextLang);
   };
 

@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import type { Branch } from 'src/api/tenantApi';
+
+import React, { useState, useEffect, useCallback } from 'react';
 
 import {
   Box,
@@ -12,25 +14,32 @@ import {
   Button,
   Dialog,
   Switch,
+  Select,
   TableRow,
+  MenuItem,
   TableBody,
   TableCell,
   TableHead,
   TextField,
   Typography,
+  InputLabel,
   DialogTitle,
+  FormControl,
   DialogContent,
   DialogActions,
   TableContainer,
   FormControlLabel,
 } from '@mui/material';
 
+import { tenantApi } from 'src/api/tenantApi';
 import { httpClient as axios } from 'src/api/httpClient';
 
 export function OfflineSyncPage() {
   const [syncStatus, setSyncStatus] = useState<any>(null);
   const [queueItems, setQueueItems] = useState<any[]>([]);
   const [conflicts, setConflicts] = useState<any[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [workerResult, setWorkerResult] = useState<any>(null);
 
@@ -39,12 +48,28 @@ export function OfflineSyncPage() {
   const [selectedStrategy, setSelectedStrategy] = useState<'ACCEPT_CLIENT' | 'ACCEPT_SERVER' | 'MANUAL_OVERRIDE'>('ACCEPT_CLIENT');
   const [customOverrideJson, setCustomOverrideJson] = useState<string>('{}');
 
-  const fetchSyncData = async () => {
+  useEffect(() => {
+    tenantApi
+      .getBranches()
+      .then((bList) => {
+        setBranches(bList || []);
+        if (bList && bList.length > 0) {
+          setSelectedBranchId(bList[0].id);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch branches:', err);
+      });
+  }, []);
+
+  const fetchSyncData = useCallback(async (branchId?: string) => {
+    const bId = branchId || selectedBranchId;
+    if (!bId) return;
     setLoading(true);
     try {
       const [statusRes, queueRes, conflictRes] = await Promise.all([
-        axios.get('/api/v1/sync/status'),
-        axios.get('/api/v1/sync/queue'),
+        axios.get('/api/v1/sync/status', { params: { branchId: bId } }),
+        axios.get('/api/v1/sync/queue', { params: { branchId: bId } }),
         axios.get('/api/v1/sync/conflicts'),
       ]);
       setSyncStatus(statusRes.data || null);
@@ -64,25 +89,32 @@ export function OfflineSyncPage() {
       setConflicts(cData);
     } catch (err) {
       console.error('Failed to load sync data:', err);
+      setSyncStatus(null);
       setQueueItems([]);
       setConflicts([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedBranchId]);
 
   useEffect(() => {
-    fetchSyncData();
-  }, []);
+    if (selectedBranchId) {
+      fetchSyncData(selectedBranchId);
+    }
+  }, [selectedBranchId, fetchSyncData]);
 
   const handleToggleConnectivity = async (isOnline: boolean) => {
+    if (!selectedBranchId) {
+      alert('Please select a valid branch first');
+      return;
+    }
     setLoading(true);
     try {
       await axios.post('/api/v1/sync/toggle-connectivity', {
-        branchId: 'default-branch',
+        branchId: selectedBranchId,
         isOnline,
       });
-      fetchSyncData();
+      fetchSyncData(selectedBranchId);
     } catch {
       alert('Failed to toggle connectivity');
     } finally {
@@ -91,12 +123,15 @@ export function OfflineSyncPage() {
   };
 
   const handleEnqueueSampleOrder = async (scenario: 'NORMAL' | 'CONFLICT' | 'DLQ' | 'DEDUPE') => {
+    if (!selectedBranchId) {
+      alert('Please select a valid branch first');
+      return;
+    }
     setLoading(true);
     try {
       const payload: any = {
         order_num: `OFF-${Date.now().toString().slice(-4)}`,
-        items: [{ name: 'Cheeseburger', qty: 1, price: '12.00' }],
-        total: '12.00',
+        items: [{ product_id: 'prod-burger-101', quantity: 1 }],
       };
       let dedupeKey: string | undefined = undefined;
 
@@ -109,7 +144,7 @@ export function OfflineSyncPage() {
       }
 
       const res = await axios.post('/api/v1/sync/queue', {
-        branch_id: 'default-branch',
+        branch_id: selectedBranchId,
         entity_type: 'ORDER',
         payload,
         dedupe_key: dedupeKey,
@@ -119,7 +154,7 @@ export function OfflineSyncPage() {
         alert('Duplicate operation detected! Active queue item returned.');
       }
 
-      fetchSyncData();
+      fetchSyncData(selectedBranchId);
     } catch (err: any) {
       alert(err.response?.data?.message || 'Enqueue failed');
     } finally {
@@ -128,11 +163,15 @@ export function OfflineSyncPage() {
   };
 
   const handleTriggerSyncWorker = async () => {
+    if (!selectedBranchId) {
+      alert('Please select a valid branch first');
+      return;
+    }
     setLoading(true);
     try {
-      const res = await axios.post('/api/v1/sync/trigger', { branchId: 'default-branch' });
+      const res = await axios.post('/api/v1/sync/trigger', { branchId: selectedBranchId });
       setWorkerResult(res.data);
-      fetchSyncData();
+      fetchSyncData(selectedBranchId);
     } catch (err: any) {
       alert(err.response?.data?.message || 'Sync worker failed');
     } finally {
@@ -185,6 +224,37 @@ export function OfflineSyncPage() {
 
   return (
     <Box sx={{ p: 3 }}>
+      {/* Branch Context Selector */}
+      <Paper sx={{ p: 2, mb: 3, borderRadius: 3 }}>
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+          <FormControl size="small" sx={{ minWidth: 300 }}>
+            <InputLabel id="branch-select-label">Active Branch Context</InputLabel>
+            <Select
+              labelId="branch-select-label"
+              id="branch-select"
+              value={selectedBranchId}
+              label="Active Branch Context"
+              onChange={(e) => setSelectedBranchId(e.target.value)}
+            >
+              {branches.map((b) => (
+                <MenuItem key={b.id} value={b.id}>
+                  {b.name} ({b.code})
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Typography variant="caption" color="text.secondary">
+            Selected Branch UUID: <strong>{selectedBranchId || 'None Selected'}</strong>
+          </Typography>
+        </Stack>
+      </Paper>
+
+      {!selectedBranchId && (
+        <Alert severity="warning" sx={{ mb: 3, borderRadius: 3 }}>
+          No branch context selected. Please select a valid branch to perform offline sync operations.
+        </Alert>
+      )}
+
       {/* Connectivity Banner */}
       <Alert
         severity={isOnline ? 'success' : 'error'}

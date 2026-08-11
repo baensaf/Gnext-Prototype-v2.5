@@ -36,7 +36,7 @@ export class OfflineSyncController {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     const data = {
-      branch_id: body.branchId || body.branch_id || 'default-branch',
+      branch_id: body.branchId || body.branch_id,
       terminal_id: body.terminalId || body.terminal_id,
       entity_type: body.operationType || body.entity_type || 'ORDER',
       payload: body.payload,

@@ -69,10 +69,45 @@ describe('OfflineSyncService (Unit & Integration)', () => {
     service = module.get<OfflineSyncService>(OfflineSyncService);
   });
 
+  const validBranchId = '11111111-1111-1111-1111-111111111111';
+
+  it('should throw BadRequestException when branch_id is missing or not a valid UUID', async () => {
+    const expectedErrorMsg = 'Valid branch context (UUID) is required for offline sync operations';
+
+    await expect(service.getStatus('t-1', 'invalid-branch')).rejects.toThrow(new BadRequestException(expectedErrorMsg));
+    await expect(service.getStatus('t-1', 'default-branch')).rejects.toThrow(new BadRequestException(expectedErrorMsg));
+    await expect(service.getStatus('t-1', undefined)).rejects.toThrow(new BadRequestException(expectedErrorMsg));
+
+    await expect(service.toggleConnectivity('t-1', undefined, false)).rejects.toThrow(new BadRequestException(expectedErrorMsg));
+    await expect(service.toggleConnectivity('t-1', 'non-uuid-12345', true)).rejects.toThrow(new BadRequestException(expectedErrorMsg));
+
+    await expect(
+      service.enqueueOfflineItem('t-1', {
+        branch_id: 'default-branch',
+        entity_type: 'ORDER',
+        payload: { order_id: 'ord-1' },
+      }),
+    ).rejects.toThrow(new BadRequestException(expectedErrorMsg));
+
+    await expect(
+      service.enqueueOfflineItem('t-1', {
+        branch_id: 'invalid-branch-uuid',
+        entity_type: 'ORDER',
+        payload: { order_id: 'ord-1' },
+      }),
+    ).rejects.toThrow(new BadRequestException(expectedErrorMsg));
+
+    await expect(service.triggerSyncWorker('t-1', 'non-uuid-branch')).rejects.toThrow(new BadRequestException(expectedErrorMsg));
+    await expect(service.triggerSyncWorker('t-1', undefined)).rejects.toThrow(new BadRequestException(expectedErrorMsg));
+
+    await expect(service.getQueue('t-1', 'not-a-valid-uuid')).rejects.toThrow(new BadRequestException(expectedErrorMsg));
+    await expect(service.getQueue('t-1', undefined)).rejects.toThrow(new BadRequestException(expectedErrorMsg));
+  });
+
   it('should persist branch status in DB and return status on toggle', async () => {
     queueRepo.count.mockResolvedValue(0);
 
-    const status = await service.toggleConnectivity('t-1', 'br-1', false);
+    const status = await service.toggleConnectivity('t-1', validBranchId, false);
 
     expect(status.is_online).toBe(false);
     expect(branchStatusRepo.save).toHaveBeenCalledWith(expect.objectContaining({ is_online: false }));
@@ -84,13 +119,13 @@ describe('OfflineSyncService (Unit & Integration)', () => {
     queueRepo.findOne.mockResolvedValue({
       id: 'existing-item-1',
       tenant_id: 't-1',
-      branch_id: 'br-1',
+      branch_id: validBranchId,
       dedupe_key: 'KEY-123',
       status: 'PENDING',
     });
 
     const res = await service.enqueueOfflineItem('t-1', {
-      branch_id: 'br-1',
+      branch_id: validBranchId,
       entity_type: 'ORDER',
       payload: { order_id: 'ord-100', product_id: 'prod-1', quantity: 2 },
       dedupe_key: 'KEY-123',
@@ -105,7 +140,7 @@ describe('OfflineSyncService (Unit & Integration)', () => {
 
     await expect(
       service.enqueueOfflineItem('t-1', {
-        branch_id: 'br-1',
+        branch_id: validBranchId,
         entity_type: 'ORDER',
         payload: { order_id: 'ord-101', total: '50.00' },
       }),
@@ -117,7 +152,7 @@ describe('OfflineSyncService (Unit & Integration)', () => {
 
     await expect(
       service.enqueueOfflineItem('t-1', {
-        branch_id: 'br-1',
+        branch_id: validBranchId,
         entity_type: 'ORDER',
         payload: { arbitrary_financial_json: true, order_id: 'ord-102' },
       }),
@@ -126,14 +161,14 @@ describe('OfflineSyncService (Unit & Integration)', () => {
 
   it('should trigger sync worker, process queue items, and update DLQ state on retry limit', async () => {
     const pendingItems = [
-      { id: 'q-1', tenant_id: 't-1', branch_id: 'br-1', entity_type: 'ORDER', payload: { order_id: 'ord-1' }, retry_count: 0, status: 'PENDING' },
-      { id: 'q-2', tenant_id: 't-1', branch_id: 'br-1', entity_type: 'ORDER', payload: { order_id: 'ord-2', simulate_dlq: true }, retry_count: 0, status: 'PENDING' },
+      { id: 'q-1', tenant_id: 't-1', branch_id: validBranchId, entity_type: 'ORDER', payload: { order_id: 'ord-1' }, retry_count: 0, status: 'PENDING' },
+      { id: 'q-2', tenant_id: 't-1', branch_id: validBranchId, entity_type: 'ORDER', payload: { order_id: 'ord-2', simulate_dlq: true }, retry_count: 0, status: 'PENDING' },
     ];
 
     queueRepo.find.mockResolvedValue(pendingItems);
-    branchStatusRepo.findOne.mockResolvedValue({ tenant_id: 't-1', branch_id: 'br-1', is_online: true, last_sync_at: new Date('2026-08-01') });
+    branchStatusRepo.findOne.mockResolvedValue({ tenant_id: 't-1', branch_id: validBranchId, is_online: true, last_sync_at: new Date('2026-08-01') });
 
-    const res = await service.triggerSyncWorker('t-1', 'br-1');
+    const res = await service.triggerSyncWorker('t-1', validBranchId);
 
     expect(res.processed_count).toBe(2);
     expect(res.synced_count).toBe(1);
@@ -143,13 +178,13 @@ describe('OfflineSyncService (Unit & Integration)', () => {
 
   it('should advance last_sync_at only when all batch items succeed', async () => {
     const pendingItems = [
-      { id: 'q-1', tenant_id: 't-1', branch_id: 'br-1', entity_type: 'ORDER', payload: { order_id: 'ord-1' }, retry_count: 0, status: 'PENDING' },
+      { id: 'q-1', tenant_id: 't-1', branch_id: validBranchId, entity_type: 'ORDER', payload: { order_id: 'ord-1' }, retry_count: 0, status: 'PENDING' },
     ];
 
     queueRepo.find.mockResolvedValue(pendingItems);
-    branchStatusRepo.findOne.mockResolvedValue({ tenant_id: 't-1', branch_id: 'br-1', is_online: true, last_sync_at: new Date('2026-08-01') });
+    branchStatusRepo.findOne.mockResolvedValue({ tenant_id: 't-1', branch_id: validBranchId, is_online: true, last_sync_at: new Date('2026-08-01') });
 
-    const res = await service.triggerSyncWorker('t-1', 'br-1');
+    const res = await service.triggerSyncWorker('t-1', validBranchId);
 
     expect(res.processed_count).toBe(1);
     expect(res.synced_count).toBe(1);
@@ -160,7 +195,7 @@ describe('OfflineSyncService (Unit & Integration)', () => {
     queueRepo.findOne.mockResolvedValue({
       id: 'dlq-item-1',
       tenant_id: 't-1',
-      branch_id: 'br-1',
+      branch_id: validBranchId,
       entity_type: 'ORDER',
       payload: { order_id: 'ord-3' },
       status: 'DLQ_FAILED',
