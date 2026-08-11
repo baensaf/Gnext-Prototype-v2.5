@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
@@ -28,6 +27,8 @@ import {
   DialogActions,
   TableContainer,
 } from '@mui/material';
+
+import { httpClient as axios } from 'src/api/httpClient';
 
 import { Iconify } from 'src/components/iconify';
 

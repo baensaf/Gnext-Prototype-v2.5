@@ -1,12 +1,16 @@
-import { Controller, Post, Get, Body, Req, Query, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, Req, Query, UseInterceptors, UploadedFile, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { ImportExportService, AutoMapResult } from './import-export.service';
+import { ApprovalService } from '../approval/approval.service';
 import { ImportEntityType } from '../../entities/ImportJob.entity';
 
 @Controller('api/v1')
 export class ImportExportController {
-  constructor(private readonly importExportService: ImportExportService) {}
+  constructor(
+    private readonly importExportService: ImportExportService,
+    private readonly approvalService: ApprovalService,
+  ) {}
 
   @Post('import/upload')
   @UseInterceptors(FileInterceptor('file'))
@@ -35,6 +39,12 @@ export class ImportExportController {
 
     const job = await this.importExportService.createStagedJob(tenantId, entityType, originalName, content);
     return { success: true, data: job };
+  }
+
+  @Get('import/job/:id')
+  async getJobDetail(@Param('id') id: string) {
+    const data = await this.importExportService.getJobWithRows(id);
+    return { success: true, data };
   }
 
   @Post('import/auto-map')
@@ -69,15 +79,26 @@ export class ImportExportController {
     if (!body.jobId) {
       throw new BadRequestException('jobId is required');
     }
-    const userId = (req as any)?.user?.id || '00000000-0000-0000-0000-000000000001';
+    const userId = (req as any)?.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('User session required');
+    }
     const result = await this.importExportService.executeJob(body.jobId, userId);
     return { success: true, data: result };
   }
 
   @Post('system/reset')
-  async resetSystemData(@Req() req: Request) {
+  async resetSystemData(@Body() body: { pin?: string }, @Req() req: Request) {
     const tenantId = (req as any)?.tenantId;
-    const userId = (req as any)?.user?.id || '00000000-0000-0000-0000-000000000001';
+    const userId = (req as any)?.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('User session required');
+    }
+    if (!body.pin) {
+      throw new BadRequestException('Manager PIN is required for system reset');
+    }
+
+    await this.approvalService.verifyManagerPin(tenantId, userId, body.pin, 'SYSTEM_RESET');
     const result = await this.importExportService.systemReset(tenantId, userId);
     return { success: true, data: result };
   }
@@ -86,5 +107,21 @@ export class ImportExportController {
   getSeedProfiles() {
     const profiles = this.importExportService.getSeedProfiles();
     return { success: true, data: profiles };
+  }
+
+  @Post('system/apply-seed')
+  async applySeedProfile(@Body() body: { pin?: string; profileId?: string }, @Req() req: Request) {
+    const tenantId = (req as any)?.tenantId;
+    const userId = (req as any)?.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('User session required');
+    }
+    if (!body.pin || !body.profileId) {
+      throw new BadRequestException('Manager PIN and profileId are required');
+    }
+
+    await this.approvalService.verifyManagerPin(tenantId, userId, body.pin, 'SYSTEM_SEED');
+    const result = await this.importExportService.applySeedProfile(tenantId, userId, body.profileId);
+    return { success: true, data: result };
   }
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Req, UnauthorizedException } from '@nestjs/common';
 import { Request } from 'express';
 import { DeliveryService } from './delivery.service';
 
@@ -192,7 +192,8 @@ export class DeliveryController {
   @Post('settlements')
   async createSettlement(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || '00000000-0000-0000-0000-000000000000';
+    const userId = (req as any).user?.id;
+    if (!userId) throw new UnauthorizedException('User session required');
     const correlationId = (req as any).correlationId;
     const courierId = body.courier_id || body.courierId;
     const branchId = body.branch_id || body.branchId;
@@ -229,7 +230,8 @@ export class DeliveryController {
   @Post('settlements/:id/review')
   async reviewSettlement(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || '00000000-0000-0000-0000-000000000000';
+    const userId = (req as any).user?.id;
+    if (!userId) throw new UnauthorizedException('User session required');
     const correlationId = (req as any).correlationId;
     return await this.deliveryService.reviewSettlement(tenantId, id, userId, correlationId);
   }
@@ -237,7 +239,8 @@ export class DeliveryController {
   @Post('settlements/:id/return')
   async returnSettlement(@Param('id') id: string, @Body() body: { reason?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || '00000000-0000-0000-0000-000000000000';
+    const userId = (req as any).user?.id;
+    if (!userId) throw new UnauthorizedException('User session required');
     const correlationId = (req as any).correlationId;
     return await this.deliveryService.returnSettlement(tenantId, id, userId, body?.reason, correlationId);
   }
@@ -245,7 +248,8 @@ export class DeliveryController {
   @Post('settlements/:id/close')
   async closeSettlement(@Param('id') id: string, @Body() body: { reasonCodeId?: string; reason?: string; approvalRequestId?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || '00000000-0000-0000-0000-000000000000';
+    const userId = (req as any).user?.id;
+    if (!userId) throw new UnauthorizedException('User session required');
     const correlationId = (req as any).correlationId;
     return await this.deliveryService.closeSettlement(tenantId, id, userId, body?.approvalRequestId, correlationId);
   }
@@ -253,7 +257,8 @@ export class DeliveryController {
   @Post('settlements/:id/reverse')
   async reverseSettlement(@Param('id') id: string, @Body() body: { reasonCodeId?: string; reason?: string; approvalRequestId?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || '00000000-0000-0000-0000-000000000000';
+    const userId = (req as any).user?.id;
+    if (!userId) throw new UnauthorizedException('User session required');
     const correlationId = (req as any).correlationId;
     return await this.deliveryService.reverseSettlement(tenantId, id, userId, body?.reason, correlationId);
   }

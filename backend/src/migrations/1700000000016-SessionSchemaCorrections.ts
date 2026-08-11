@@ -15,6 +15,16 @@ export class SessionSchemaCorrections1700000000016 implements MigrationInterface
     await queryRunner.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS "idx_session_token_hash" ON "session" ("token_hash");
     `);
+
+    await queryRunner.query(`
+      ALTER TABLE "kitchen_ticket"
+      ADD COLUMN IF NOT EXISTS "ticket_number" varchar(32);
+    `);
+
+    await queryRunner.query(`
+      ALTER TABLE "courier"
+      ADD COLUMN IF NOT EXISTS "branch_id" uuid;
+    `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

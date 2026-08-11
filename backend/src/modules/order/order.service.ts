@@ -107,7 +107,7 @@ export class OrderService {
   async getOrderById(tenantId: string, id: string) {
     const order = await this.orderRepo.findOne({
       where: { id, tenant_id: tenantId },
-      relations: ['items', 'items.options', 'adjustments', 'notes', 'stateEvents'],
+      relations: ['items', 'items.options', 'adjustments', 'stateEvents'],
     });
     if (!order) throw new NotFoundException(`Order ${id} not found`);
     return order;
@@ -173,7 +173,7 @@ export class OrderService {
 
       return await em.findOne(OrderHeader, {
         where: { id: savedOrder.id },
-        relations: ['items', 'items.options', 'adjustments', 'notes', 'stateEvents'],
+        relations: ['items', 'items.options', 'adjustments', 'stateEvents'],
       });
     });
   }
@@ -218,7 +218,7 @@ export class OrderService {
 
       return await em.findOne(OrderHeader, {
         where: { id },
-        relations: ['items', 'items.options', 'adjustments', 'notes', 'stateEvents'],
+        relations: ['items', 'items.options', 'adjustments', 'stateEvents'],
       });
     });
   }
@@ -392,7 +392,7 @@ export class OrderService {
 
       return await em.findOne(OrderHeader, {
         where: { id: order.id },
-        relations: ['items', 'items.options', 'adjustments', 'notes', 'stateEvents'],
+        relations: ['items', 'items.options', 'adjustments', 'stateEvents'],
       });
     });
 
@@ -537,7 +537,7 @@ export class OrderService {
 
       return await em.findOne(OrderHeader, {
         where: { id },
-        relations: ['items', 'items.options', 'adjustments', 'notes', 'stateEvents'],
+        relations: ['items', 'items.options', 'adjustments', 'stateEvents'],
       });
     });
   }
@@ -659,8 +659,9 @@ export class OrderService {
               tenant_id: tenantId,
               order_item_id: savedItem.id,
               option_item_id: optItem.id,
-              name: optItem.name,
-              price: optItem.price_delta || '0.0000',
+              option_group_name: '',
+              option_item_name: optItem.name,
+              price_delta: optItem.price_delta || '0.0000',
             });
             await em.save(OrderItemOption, itemOpt);
           }

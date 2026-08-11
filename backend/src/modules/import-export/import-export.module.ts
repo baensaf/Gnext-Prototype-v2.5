@@ -8,11 +8,13 @@ import { Category } from '../../entities/Category.entity';
 import { ImportExportService } from './import-export.service';
 import { ImportExportController } from './import-export.controller';
 import { AuditModule } from '../audit/audit.module';
+import { ApprovalModule } from '../approval/approval.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([ImportJob, ImportRow, Customer, Product, Category]),
     AuditModule,
+    ApprovalModule,
   ],
   controllers: [ImportExportController],
   providers: [ImportExportService],

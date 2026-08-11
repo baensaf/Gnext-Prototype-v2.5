@@ -8,6 +8,7 @@ import { ApprovalDecision } from '../../entities/ApprovalDecision.entity';
 import { PinAttemptLog } from '../../entities/PinAttemptLog.entity';
 import { AdminUser } from '../../entities/AdminUser.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { MoneyUtil } from '../../common/utils/money.util';
 import { TransactionUtil } from '../../common/utils/transaction.util';
 import { AppDataSource } from '../../data-source';
 
@@ -140,8 +141,7 @@ export class ApprovalService {
     const rule = await this.ruleRepo.findOne({ where: { tenant_id: tenantId, action, is_active: true } });
     if (!rule) return { requires_approval: false };
 
-    const threshold = parseFloat(rule.threshold_value);
-    if (requestedValue > threshold) {
+    if (MoneyUtil.greaterThan(requestedValue, rule.threshold_value)) {
       return {
         requires_approval: true,
         rule_id: rule.id,

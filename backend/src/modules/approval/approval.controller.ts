@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Query, Body, Req } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Body, Req, UnauthorizedException } from '@nestjs/common';
 import { Request } from 'express';
 import { ApprovalService } from './approval.service';
 
@@ -22,7 +22,8 @@ export class ApprovalController {
   @Post('user-pin')
   async setUserPin(@Body() body: { userId?: string; pin: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const userId = body.userId || (req as any).user?.id || 'd3b07384-d113-4603-9a3d-3c220f86fb04';
+    const userId = body.userId || (req as any).user?.id;
+    if (!userId) throw new UnauthorizedException('User session required');
     const correlationId = (req as any).correlationId;
     return await this.approvalService.setUserPin(tenantId, userId, body.pin, correlationId);
   }
@@ -30,7 +31,8 @@ export class ApprovalController {
   @Post('verify-pin')
   async verifyPin(@Body() body: { userId?: string; pin: string; actionName?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const userId = body.userId || (req as any).user?.id || 'd3b07384-d113-4603-9a3d-3c220f86fb04';
+    const userId = body.userId || (req as any).user?.id;
+    if (!userId) throw new UnauthorizedException('User session required');
     return await this.approvalService.verifyManagerPin(tenantId, userId, body.pin, body.actionName);
   }
 
@@ -55,7 +57,8 @@ export class ApprovalController {
   @Post('requests')
   async createRequest(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const requesterUserId = (req as any).user?.id || 'd3b07384-d113-4603-9a3d-3c220f86fb04';
+    const requesterUserId = (req as any).user?.id;
+    if (!requesterUserId) throw new UnauthorizedException('User session required');
     const correlationId = (req as any).correlationId;
     return await this.approvalService.createRequest(tenantId, requesterUserId, body, correlationId);
   }
@@ -63,7 +66,8 @@ export class ApprovalController {
   @Post('requests/:id/approve')
   async approveRequest(@Param('id') id: string, @Body() body: { approverUserId?: string; pin: string; note?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const approverUserId = body.approverUserId || (req as any).user?.id || 'd3b07384-d113-4603-9a3d-3c220f86fb04';
+    const approverUserId = body.approverUserId || (req as any).user?.id;
+    if (!approverUserId) throw new UnauthorizedException('User session required');
     const correlationId = (req as any).correlationId;
     return await this.approvalService.approveRequest(tenantId, id, approverUserId, body.pin, body.note, correlationId);
   }
@@ -71,7 +75,8 @@ export class ApprovalController {
   @Post('requests/:id/reject')
   async rejectRequest(@Param('id') id: string, @Body() body: { approverUserId?: string; pin: string; note?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const approverUserId = body.approverUserId || (req as any).user?.id || 'd3b07384-d113-4603-9a3d-3c220f86fb04';
+    const approverUserId = body.approverUserId || (req as any).user?.id;
+    if (!approverUserId) throw new UnauthorizedException('User session required');
     const correlationId = (req as any).correlationId;
     return await this.approvalService.rejectRequest(tenantId, id, approverUserId, body.pin, body.note, correlationId);
   }

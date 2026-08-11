@@ -180,9 +180,14 @@ export function DeliveryPage() {
 
   const handleRecordAttendance = async (courierId: string, status: 'CHECKED_IN' | 'CHECKED_OUT' | 'PAUSED') => {
     try {
+      const targetBranchId = zones[0]?.branch_id;
+      if (!targetBranchId) {
+        setError('No active branch selected');
+        return;
+      }
       await deliveryApi.recordAttendance({
         courier_id: courierId,
-        branch_id: zones[0]?.branch_id || '00000000-0000-0000-0000-000000000000',
+        branch_id: targetBranchId,
         status,
       });
       loadData();
@@ -202,8 +207,13 @@ export function DeliveryPage() {
 
   const handleCreateCourier = async () => {
     try {
+      const targetBranchId = zones[0]?.branch_id;
+      if (!targetBranchId) {
+        setError('No active branch selected');
+        return;
+      }
       await deliveryApi.createCourier({
-        branch_id: zones[0]?.branch_id || '00000000-0000-0000-0000-000000000000',
+        branch_id: targetBranchId,
         ...courierForm,
         compensation_per_delivery: courierForm.compensation_per_delivery.toString(),
       });
@@ -217,8 +227,13 @@ export function DeliveryPage() {
 
   const handleCreateZone = async () => {
     try {
+      const targetBranchId = zones[0]?.branch_id;
+      if (!targetBranchId) {
+        setError('No active branch selected');
+        return;
+      }
       await deliveryApi.createZone({
-        branch_id: zones[0]?.branch_id || '00000000-0000-0000-0000-000000000000',
+        branch_id: targetBranchId,
         ...zoneForm,
         fee: zoneForm.fee.toString(),
       });

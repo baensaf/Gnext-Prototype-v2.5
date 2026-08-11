@@ -36,16 +36,14 @@ export function isValidToken(accessToken: string) {
   try {
     const decoded = jwtDecode(accessToken);
 
-    if (!decoded || !('exp' in decoded)) {
-      return false;
+    if (decoded && 'exp' in decoded) {
+      const currentTime = Date.now() / 1000;
+      return decoded.exp > currentTime;
     }
 
-    const currentTime = Date.now() / 1000;
-
-    return decoded.exp > currentTime;
-  } catch (error) {
-    console.error('Error during token validation:', error);
-    return false;
+    return accessToken.length > 5;
+  } catch {
+    return accessToken.length > 5;
   }
 }
 
@@ -76,12 +74,13 @@ export async function setSession(accessToken: string | null) {
 
       axios.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
 
-      const decodedToken = jwtDecode(accessToken); // ~3 days by minimals server
-
-      if (decodedToken && 'exp' in decodedToken) {
-        tokenExpired(decodedToken.exp);
-      } else {
-        throw new Error('Invalid access token!');
+      try {
+        const decodedToken = jwtDecode(accessToken);
+        if (decodedToken && 'exp' in decodedToken) {
+          tokenExpired(decodedToken.exp);
+        }
+      } catch {
+        // Gracefully accept backend session tokens
       }
     } else {
       sessionStorage.removeItem(JWT_STORAGE_KEY);

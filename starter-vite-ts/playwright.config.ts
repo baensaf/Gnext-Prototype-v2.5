@@ -26,7 +26,7 @@ export default defineConfig({
     {
       command: 'npx ts-node -r tsconfig-paths/register src/main.ts',
       cwd: '../backend',
-      url: 'http://localhost:3100/api/v1/auth/me',
+      url: 'http://localhost:3100/health/ready',
       reuseExistingServer: true,
       timeout: 60000,
       env: {
@@ -38,7 +38,7 @@ export default defineConfig({
       },
     },
     {
-      command: 'npx vite preview --port 8081',
+      command: 'npx vite --port 8081',
       url: 'http://localhost:8081',
       reuseExistingServer: true,
       timeout: 30000,

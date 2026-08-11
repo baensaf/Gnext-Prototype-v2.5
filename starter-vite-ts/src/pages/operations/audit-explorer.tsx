@@ -1,4 +1,3 @@
-import axios from 'axios';
 import React, { useState, useEffect } from 'react';
 
 import {
@@ -21,6 +20,8 @@ import {
   DialogActions,
   TableContainer,
 } from '@mui/material';
+
+import { httpClient as axios } from 'src/api/httpClient';
 
 export function AuditExplorerPage() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);

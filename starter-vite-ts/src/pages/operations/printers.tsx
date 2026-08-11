@@ -92,8 +92,13 @@ export function PrintersPage() {
 
   const handleCreatePrinter = async () => {
     try {
+      const targetBranchId = (printers[0] as any)?.branch_id || printers[0]?.id;
+      if (!targetBranchId) {
+        setError('No active printer/branch context');
+        return;
+      }
       await kdsApi.createPrinter({
-        branch_id: printers[0]?.id || '00000000-0000-0000-0000-000000000000',
+        branch_id: targetBranchId,
         ...printerForm,
       } as any);
       setPrinterModalOpen(false);
@@ -115,8 +120,13 @@ export function PrintersPage() {
 
   const handleCreateGroup = async () => {
     try {
+      const targetBranchId = (printers[0] as any)?.branch_id || printers[0]?.id;
+      if (!targetBranchId) {
+        setError('No active printer/branch context');
+        return;
+      }
       await kdsApi.createPrinterGroup({
-        branch_id: printers[0]?.id || '00000000-0000-0000-0000-000000000000',
+        branch_id: targetBranchId,
         ...groupForm,
       } as any);
       setGroupModalOpen(false);
@@ -138,8 +148,13 @@ export function PrintersPage() {
 
   const handleCreateRoute = async () => {
     try {
+      const targetBranchId = (printers[0] as any)?.branch_id || printers[0]?.id;
+      if (!targetBranchId) {
+        setError('No active printer/branch context');
+        return;
+      }
       await kdsApi.createPrintRoute({
-        branch_id: printers[0]?.id || '00000000-0000-0000-0000-000000000000',
+        branch_id: targetBranchId,
         ...routeForm,
       });
       setRouteModalOpen(false);

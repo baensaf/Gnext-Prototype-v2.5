@@ -24,8 +24,9 @@ export class AuthService {
     });
 
     if (!user || !user.is_active) {
+      const defaultTenant = !user ? await this.tenantRepo.findOne({}) : null;
       await this.auditWriter.write({
-        tenantId: user ? user.tenant_id : '00000000-0000-0000-0000-000000000000',
+        tenantId: user ? user.tenant_id : (defaultTenant?.id || ''),
         actorType: 'ADMIN',
         action: 'AUTH_LOGIN_FAILED',
         correlationId: correlationId || '00000000-0000-0000-0000-000000000000',

@@ -1,4 +1,3 @@
-import axios from 'axios';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import {
@@ -22,6 +21,8 @@ import {
   FormControl,
   TableContainer,
 } from '@mui/material';
+
+import { httpClient as axios } from 'src/api/httpClient';
 
 export function ReportViewerPage() {
   const [catalog, setCatalog] = useState<any[]>([]);

@@ -122,7 +122,7 @@ describe('DeliveryService (Courier Settlement)', () => {
   });
 
   it('should create a DRAFT courier settlement batch', async () => {
-    courierRepo.findOne.mockResolvedValue({ id: 'c-1', name: 'Courier 1', code: 'C01' });
+    courierRepo.findOne.mockResolvedValue({ id: 'c-1', name: 'Courier 1', code: 'C01', branch_id: 'b-1' });
     assignmentRepo.find.mockResolvedValue([
       { id: 'asgn-1', order_id: 'ord-1', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '10.00', is_settled: false },
     ]);

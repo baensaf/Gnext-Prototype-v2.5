@@ -26,13 +26,8 @@ export const signInWithPassword = async ({ email, password }: SignInParams): Pro
 
     const res = await axios.post(endpoints.auth.signIn, params);
 
-    const { accessToken } = res.data;
-
-    if (!accessToken) {
-      throw new Error('Access token not found in response');
-    }
-
-    setSession(accessToken);
+    const token = res.data.sessionToken || res.data.accessToken || res.data.csrfToken;
+    setSession(token);
   } catch (error) {
     console.error('Error during sign in:', error);
     throw error;

@@ -7,6 +7,7 @@ import { Customer } from '../../entities/Customer.entity';
 import { Product } from '../../entities/Product.entity';
 import { Category } from '../../entities/Category.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { MoneyUtil } from '../../common/utils/money.util';
 
 export interface AutoMapResult {
   header: string;
@@ -314,9 +315,19 @@ export class ImportExportService {
   }
 
   /**
+   * Fetch import job with full row details
+   */
+  async getJobWithRows(jobId: string): Promise<{ job: ImportJob; rows: ImportRow[] }> {
+    const job = await this.jobRepo.findOne({ where: { id: jobId } });
+    if (!job) throw new NotFoundException('Import job not found');
+    const rows = await this.rowRepo.find({ where: { job_id: jobId }, order: { row_number: 'ASC' } });
+    return { job, rows };
+  }
+
+  /**
    * Execute atomic batch database insertion for validated rows
    */
-  async executeJob(jobId: string, userId: string = '00000000-0000-0000-0000-000000000001'): Promise<{ importedCount: number; failedCount: number }> {
+  async executeJob(jobId: string, userId: string): Promise<{ importedCount: number; failedCount: number }> {
     const job = await this.jobRepo.findOne({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Import job not found');
 
@@ -362,7 +373,7 @@ export class ImportExportService {
           } else if (job.entity_type === 'PRODUCTS') {
             let product = await manager.findOne(Product, { where: { tenant_id: tenantId, code: data.code } });
             const isActive = data.is_active === 'false' || data.is_active === '0' ? false : true;
-            const priceStr = Number(data.base_price || 0).toFixed(4);
+            const priceStr = MoneyUtil.format(data.base_price || '0', 4);
             const productName = data.name_fa || data.name_en || data.name || 'Imported Product';
 
             let catId: string | null = null;
@@ -371,12 +382,17 @@ export class ImportExportService {
               if (cat) catId = cat.id;
             }
 
+            if (!catId) {
+              const defaultCat = await manager.findOne(Category, { where: { tenant_id: tenantId } });
+              catId = defaultCat?.id || null;
+            }
+
             if (!product) {
               product = manager.create(Product, {
                 tenant_id: tenantId,
                 code: data.code,
                 name: productName,
-                category_id: catId || '00000000-0000-0000-0000-000000000001',
+                category_id: catId || undefined,
                 base_price: priceStr,
                 is_active: isActive,
               });
@@ -440,7 +456,7 @@ export class ImportExportService {
   /**
    * System Reset: Clear operational data
    */
-  async systemReset(tenantId: string, userId: string = '00000000-0000-0000-0000-000000000001'): Promise<{ resetTables: string[] }> {
+  async systemReset(tenantId: string, userId: string): Promise<{ resetTables: string[] }> {
     const resetTables = [
       'order_item_option',
       'order_item',
@@ -485,6 +501,49 @@ export class ImportExportService {
     });
 
     return { resetTables };
+  }
+
+  /**
+   * Apply database seed profile
+   */
+  async applySeedProfile(tenantId: string, userId: string, profileId: string): Promise<{ success: boolean; profile: string }> {
+    if (profileId === 'DEMO_RESTAURANT') {
+      let burgerCat = await this.categoryRepo.findOne({ where: { tenant_id: tenantId, code: 'CAT-BURGER' } });
+      if (!burgerCat) {
+        burgerCat = await this.categoryRepo.save(this.categoryRepo.create({
+          tenant_id: tenantId,
+          code: 'CAT-BURGER',
+          name: 'Burgers & Sandwiches',
+          sort_order: 1,
+          is_active: true,
+        }));
+      }
+
+      let p1 = await this.productRepo.findOne({ where: { tenant_id: tenantId, code: 'PROD-BURGER-01' } });
+      if (!p1) {
+        await this.productRepo.save(this.productRepo.create({
+          tenant_id: tenantId,
+          code: 'PROD-BURGER-01',
+          name: 'Special House Burger',
+          category_id: burgerCat.id,
+          base_price: '250000.0000',
+          is_active: true,
+        }));
+      }
+    }
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      actorId: userId,
+      action: 'SYSTEM_SEED_APPLIED',
+      entityType: 'SYSTEM',
+      entityId: tenantId,
+      correlationId: `SEED-${Date.now()}`,
+      afterData: { profileId },
+    });
+
+    return { success: true, profile: profileId };
   }
 
   /**

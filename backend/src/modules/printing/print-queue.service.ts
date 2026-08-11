@@ -133,10 +133,15 @@ export class PrintQueueService {
       }
     }
 
+    const finalPrinterId = targetPrinterId || job.printer_id;
+    if (!finalPrinterId) {
+      throw new BadRequestException('Printer ID is required for print attempt');
+    }
+
     const attempt = this.attemptRepo.create({
       tenant_id: tenantId,
       job_id: job.id,
-      printer_id: targetPrinterId || job.printer_id || '00000000-0000-0000-0000-000000000000',
+      printer_id: finalPrinterId,
       attempt_no: attemptNo,
       status: data.outcome,
       scenario_id: data.scenarioId || null,

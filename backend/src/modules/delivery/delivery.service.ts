@@ -172,10 +172,18 @@ export class DeliveryService {
     });
 
     if (!attendance) {
+      let targetBranchId = data.branch_id || courier.branch_id;
+      if (!targetBranchId) {
+        const defaultTerm = await this.terminalRepo.findOne({ where: { tenant_id: tenantId } });
+        targetBranchId = defaultTerm?.branch_id || null;
+      }
+      if (!targetBranchId) {
+        throw new BadRequestException('Branch ID is required for courier attendance');
+      }
       attendance = this.attendanceRepo.create({
         tenant_id: tenantId,
         courier_id: data.courier_id,
-        branch_id: data.branch_id || courier.branch_id || '00000000-0000-0000-0000-000000000000',
+        branch_id: targetBranchId,
         date: todayStr,
         status: data.status,
         availability_status: data.availability_status || (data.status === 'CHECKED_IN' ? 'AVAILABLE' : 'OFF_LINE'),
@@ -686,9 +694,18 @@ export class DeliveryService {
 
     const settlementNumber = `SET-${Date.now().toString().slice(-6)}`;
 
+    let targetBranchId = data.branch_id || courier?.branch_id;
+    if (!targetBranchId) {
+      const defaultTerm = await this.terminalRepo.findOne({ where: { tenant_id: tenantId } });
+      targetBranchId = defaultTerm?.branch_id || null;
+    }
+    if (!targetBranchId) {
+      throw new BadRequestException('Branch ID is required for settlement creation');
+    }
+
     const settlement = this.settlementRepo.create({
       tenant_id: tenantId,
-      branch_id: data.branch_id || courier?.branch_id || '00000000-0000-0000-0000-000000000000',
+      branch_id: targetBranchId,
       courier_id: data.courier_id,
       settlement_number: settlementNumber,
       settlement_date: new Date(),

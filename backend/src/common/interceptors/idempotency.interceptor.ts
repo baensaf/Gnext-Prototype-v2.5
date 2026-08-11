@@ -3,6 +3,7 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
+  BadRequestException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Observable, of } from 'rxjs';
@@ -30,7 +31,10 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const req = context.switchToHttp().getRequest();
     const res = context.switchToHttp().getResponse();
     const idempotencyKey = req.headers['idempotency-key'] as string;
-    const tenantId = (req as any).tenantId || '00000000-0000-0000-0000-000000000000';
+    const tenantId = (req as any).tenantId;
+    if (!tenantId) {
+      throw new BadRequestException('Tenant ID is required for idempotency key scope');
+    }
     const requestHash = this.idempotencyService.computeHash(scope, req.url, req.body);
 
     const reservation = await this.idempotencyService.reserveOrReplay(

@@ -15,7 +15,10 @@ export class SimulatedWebhooksController {
     @Headers('x-snappfood-event-id') eventIdHeader: string,
     @Req() req: Request,
   ) {
-    const tenantId = (req as any).tenantId || '00000000-0000-0000-0000-000000000000';
+    const tenantId = (req as any).tenantId;
+    if (!tenantId) {
+      throw new BadRequestException('Tenant ID is required for webhook integration');
+    }
     const correlationId = (req as any).correlationId || `corr-snapp-${Date.now()}`;
     const rawBody = (req as any).rawBody || JSON.stringify(body);
     const timestamp = timestampHeader || body.timestamp || new Date().toISOString();

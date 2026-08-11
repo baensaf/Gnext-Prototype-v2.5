@@ -1,3 +1,6 @@
+import type { ChangeEvent } from 'react';
+import type { ImportJobDto, ImportRowDto } from 'src/api/importExportApi';
+
 import { useState } from 'react';
 
 import {
@@ -25,6 +28,8 @@ import {
   TableContainer,
   LinearProgress,
 } from '@mui/material';
+
+import { importExportApi } from 'src/api/importExportApi';
 
 import { Iconify } from 'src/components/iconify';
 
@@ -65,106 +70,115 @@ const TARGET_FIELDS: Record<ImportEntityType, { field: string; label: string; re
   ],
 };
 
-const DEMO_CSV_SAMPLES: Record<ImportEntityType, { headers: string[]; rows: Record<string, string>[] }> = {
-  CUSTOMERS: {
-    headers: ['کد مشتری', 'نام', 'نام خانوادگی', 'شماره تماس', 'ایمیل', 'وضعیت'],
-    rows: [
-      { 'کد مشتری': 'CUST-101', نام: 'علی', 'نام خانوادگی': 'رضایی', 'شماره تماس': '09121112233', ایمیل: 'ali@example.com', وضعیت: 'فعال' },
-      { 'کد مشتری': 'CUST-102', نام: 'سارا', 'نام خانوادگی': 'احمدی', 'شماره تماس': '09129998877', ایمیل: 'sara@example.com', وضعیت: 'فعال' },
-      { 'کد مشتری': 'CUST-103', نام: 'مریم', 'نام خانوادگی': 'حسینی', 'شماره تماس': '09123334455', ایمیل: 'maryam@example.com', وضعیت: 'غیرفعال' },
-      { 'کد مشتری': 'CUST-104', نام: 'رضا', 'نام خانوادگی': 'کریمی', 'شماره تماس': 'invalid-phone', ایمیل: 'reza@example.com', وضعیت: 'فعال' },
-    ],
-  },
-  PRODUCTS: {
-    headers: ['کد کالا', 'نام فارسی', 'English Name', 'قیمت پایه', 'کد دسته بندی', 'وضعیت'],
-    rows: [
-      { 'کد کالا': 'PROD-201', 'نام فارسی': 'همبرگر مخصوص', 'English Name': 'Special Burger', 'قیمت پایه': '250000', 'کد دسته بندی': 'CAT-BURGER', وضعیت: 'فعال' },
-      { 'کد کالا': 'PROD-202', 'نام فارسی': 'سیب زمینی سرخ کرده', 'English Name': 'French Fries', 'قیمت پایه': '90000', 'کد دسته بندی': 'CAT-SIDES', وضعیت: 'فعال' },
-      { 'کد کالا': 'PROD-203', 'نام فارسی': 'نوشابه قوطی', 'English Name': 'Canned Soda', 'قیمت پایه': '35000', 'کد دسته بندی': 'CAT-DRINKS', وضعیت: 'فعال' },
-      { 'کد کالا': 'PROD-204', 'نام فارسی': 'پیتزا مخلوط', 'English Name': 'Mix Pizza', 'قیمت پایه': '-10000', 'کد دسته بندی': 'CAT-PIZZA', وضعیت: 'فعال' },
-    ],
-  },
-  CATEGORIES: {
-    headers: ['کد', 'عنوان دسته', 'Title EN', 'ترتیب', 'وضعیت'],
-    rows: [
-      { کد: 'CAT-BURGER', 'عنوان دسته': 'برگرها', 'Title EN': 'Burgers', ترتیب: '1', وضعیت: 'فعال' },
-      { کد: 'CAT-SIDES', 'عنوان دسته': 'پیش غذا و پیش خوراک', 'Title EN': 'Appetizers & Sides', ترتیب: '2', وضعیت: 'فعال' },
-      { کد: 'CAT-DRINKS', 'عنوان دسته': 'نوشیدنی های سرد', 'Title EN': 'Beverages', ترتیب: '3', وضعیت: 'فعال' },
-    ],
-  },
+const DEFAULT_CSV_TEMPLATES: Record<ImportEntityType, string> = {
+  CUSTOMERS: 'کد مشتری,نام,نام خانوادگی,شماره تماس,ایمیل,وضعیت\nCUST-101,علی,رضایی,09121112233,ali@example.com,فعال\nCUST-102,سارا,احمدی,09129998877,sara@example.com,فعال\nCUST-103,مریم,حسینی,invalid-phone,maryam@example.com,غیرفعال',
+  PRODUCTS: 'کد کالا,نام فارسی,English Name,قیمت پایه,کد دسته بندی,وضعیت\nPROD-201,همبرگر مخصوص,Special Burger,250000,CAT-BURGER,فعال\nPROD-202,سیب زمینی سرخ کرده,French Fries,90000,CAT-SIDES,فعال\nPROD-203,پیتزا مخلوط,Mix Pizza,-10000,CAT-PIZZA,فعال',
+  CATEGORIES: 'کد,عنوان دسته,Title EN,ترتیب,وضعیت\nCAT-BURGER,برگرها,Burgers,1,فعال\nCAT-SIDES,پیش غذا و پیش خوراک,Appetizers & Sides,2,فعال',
 };
 
 export function ImportWizardPage() {
   const [activeStep, setActiveStep] = useState(0);
   const [entityType, setEntityType] = useState<ImportEntityType>('PRODUCTS');
-  const [fileName, setFileName] = useState<string>('products_catalog_2026.xlsx');
-  const [uploadedHeaders, setUploadedHeaders] = useState<string[]>(DEMO_CSV_SAMPLES.PRODUCTS.headers);
-  const [uploadedRows, setUploadedRows] = useState<Record<string, string>[]>(DEMO_CSV_SAMPLES.PRODUCTS.rows);
-
-  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({
-    'کد کالا': 'code',
-    'نام فارسی': 'name_fa',
-    'English Name': 'name_en',
-    'قیمت پایه': 'base_price',
-    'کد دسته بندی': 'category_code',
-    وضعیت: 'is_active',
-  });
-
+  const [fileName, setFileName] = useState<string>('products_catalog.csv');
+  const [fileContent, setFileContent] = useState<string>(DEFAULT_CSV_TEMPLATES.PRODUCTS);
+  
+  const [activeJob, setActiveJob] = useState<ImportJobDto | null>(null);
+  const [jobRows, setJobRows] = useState<ImportRowDto[]>([]);
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
+  const [distinctValues, setDistinctValues] = useState<Record<string, string[]>>({});
   const [valueMapping, setValueMapping] = useState<Record<string, Record<string, string>>>({
     is_active: { فعال: 'true', غیرفعال: 'false' },
   });
 
   const [isProcessing, setIsProcessing] = useState(false);
-  const [importSummary, setImportSummary] = useState<{ imported: number; failed: number } | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [importSummary, setImportSummary] = useState<{ importedCount: number; failedCount: number } | null>(null);
 
   const handleEntityChange = (newType: ImportEntityType) => {
     setEntityType(newType);
-    setUploadedHeaders(DEMO_CSV_SAMPLES[newType].headers);
-    setUploadedRows(DEMO_CSV_SAMPLES[newType].rows);
+    setFileContent(DEFAULT_CSV_TEMPLATES[newType]);
+    setFileName(`${newType.toLowerCase()}_import.csv`);
+    setActiveJob(null);
+    setJobRows([]);
+    setErrorMsg(null);
+  };
 
-    if (newType === 'CUSTOMERS') {
-      setColumnMapping({
-        'کد مشتری': 'code',
-        نام: 'first_name',
-        'نام خانوادگی': 'last_name',
-        'شماره تماس': 'mobile',
-        ایمیل: 'email',
-        وضعیت: 'is_active',
-      });
-    } else if (newType === 'PRODUCTS') {
-      setColumnMapping({
-        'کد کالا': 'code',
-        'نام فارسی': 'name_fa',
-        'English Name': 'name_en',
-        'قیمت پایه': 'base_price',
-        'کد دسته بندی': 'category_code',
-        وضعیت: 'is_active',
-      });
-    } else {
-      setColumnMapping({
-        کد: 'code',
-        'عنوان دسته': 'name_fa',
-        'Title EN': 'name_en',
-        ترتیب: 'sort_order',
-        وضعیت: 'is_active',
-      });
+  const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFileName(file.name);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        setFileContent(text);
+      };
+      reader.readAsText(file);
     }
   };
 
-  const handleNext = () => {
-    if (activeStep === 3) {
-      setIsProcessing(true);
-      setTimeout(() => {
-        setIsProcessing(false);
-        setImportSummary({ imported: uploadedRows.length - 1, failed: 1 });
+  const handleNext = async () => {
+    setErrorMsg(null);
+    setIsProcessing(true);
+
+    try {
+      if (activeStep === 0) {
+        if (!fileContent.trim()) {
+          throw new Error('Please upload or enter spreadsheet CSV/Excel content');
+        }
+        // Step 1: Upload & stage job via backend API
+        const job = await importExportApi.uploadFile(entityType, fileContent, fileName);
+        setActiveJob(job);
+
+        // Fetch auto mapping suggestions
+        const headers = Object.keys(job.column_mapping || {});
+        if (headers.length === 0) {
+          const firstLine = fileContent.split(/\r?\n/)[0];
+          const parsedHeaders = firstLine.split(/,|\t|;/).map((h) => h.replace(/^["']|["']$/g, '').trim());
+          const autoMap = await importExportApi.autoMap(parsedHeaders, entityType);
+          const mapObj: Record<string, string> = {};
+          autoMap.forEach((m) => {
+            if (m.mappedField) mapObj[m.header] = m.mappedField;
+          });
+          setColumnMapping(mapObj);
+        } else {
+          setColumnMapping(job.column_mapping);
+        }
+
+        setActiveStep(1);
+      } else if (activeStep === 1) {
+        if (!activeJob) throw new Error('Active staged import job missing');
+        // Extract distinct raw values for mapped enum fields
+        const distinct = await importExportApi.getDistinctValues(activeJob.id, columnMapping);
+        setDistinctValues(distinct);
+        setActiveStep(2);
+      } else if (activeStep === 2) {
+        if (!activeJob) throw new Error('Active staged import job missing');
+        // Dry-run validate job via backend API
+        const validatedJob = await importExportApi.validateJob(activeJob.id, columnMapping, valueMapping);
+        setActiveJob(validatedJob);
+
+        // Fetch row results from database
+        const detail = await importExportApi.getJobDetail(activeJob.id);
+        setJobRows(detail.rows);
+        setActiveStep(3);
+      } else if (activeStep === 3) {
+        if (!activeJob) throw new Error('Active staged import job missing');
+        // Execute atomic database insertion transaction
+        const result = await importExportApi.executeJob(activeJob.id);
+        setImportSummary(result);
         setActiveStep(4);
-      }, 1200);
-    } else {
-      setActiveStep((prev) => prev + 1);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.detail || err.message || 'Import step operation failed');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const handleBack = () => setActiveStep((prev) => prev - 1);
+  const handleBack = () => {
+    setErrorMsg(null);
+    setActiveStep((prev) => prev - 1);
+  };
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -174,11 +188,17 @@ export function ImportWizardPage() {
             Advanced Excel & CSV Import Engine
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Slice 22 — Multi-Entity Import Wizard with Intelligent Auto-Mapping, Value Transformation & Dry-Run Validation
+            Real Backend-Driven Multi-Entity Import Engine (Staged Jobs, Auto-Mapping, Row Validation & DB Execution)
           </Typography>
         </Box>
-        <Chip label="Slice 22" color="primary" variant="filled" sx={{ fontWeight: 'bold' }} />
+        <Chip label="Real Import API" color="primary" variant="filled" sx={{ fontWeight: 'bold' }} />
       </Stack>
+
+      {errorMsg && (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setErrorMsg(null)}>
+          {errorMsg}
+        </Alert>
+      )}
 
       <Card sx={{ p: 3, mb: 4 }}>
         <Stepper activeStep={activeStep} alternativeLabel>
@@ -211,26 +231,20 @@ export function ImportWizardPage() {
               </TextField>
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField fullWidth label="Simulated Upload File" value={fileName} onChange={(e) => setFileName(e.target.value)} />
+              <Button variant="outlined" component="label" fullWidth sx={{ height: 56 }}>
+                Choose File ({fileName})
+                <input type="file" hidden accept=".csv,.xlsx,.xls" onChange={handleFileUpload} />
+              </Button>
             </Grid>
             <Grid size={{ xs: 12 }}>
-              <Paper
-                variant="outlined"
-                sx={{
-                  p: 4,
-                  textAlign: 'center',
-                  borderStyle: 'dashed',
-                  borderWidth: 2,
-                  bgcolor: 'action.hover',
-                  cursor: 'pointer',
-                }}
-              >
-                <Iconify icon={"solar:upload-square-bold" as any} width={48} height={48} sx={{ color: 'primary.main', mb: 1 }} />
-                <Typography variant="h6">Drag & Drop Excel (.xlsx / .xls) or CSV file here</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Supports UTF-8, Persian/Arabic characters, auto-delimiter recognition (comma, tab, semicolon)
-                </Typography>
-              </Paper>
+              <TextField
+                fullWidth
+                multiline
+                rows={6}
+                label="File Raw CSV Content Preview"
+                value={fileContent}
+                onChange={(e) => setFileContent(e.target.value)}
+              />
             </Grid>
           </Grid>
         </Card>
@@ -243,23 +257,27 @@ export function ImportWizardPage() {
             Step 2: Column Mapping & Auto-Match Engine
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Auto-detected spreadsheet headers mapped against {entityType} target schema. You can override any field mapping below.
+            Auto-detected spreadsheet headers mapped against {entityType} schema in Job #{activeJob?.id}.
           </Typography>
           <TableContainer component={Paper} variant="outlined">
             <Table>
               <TableHead sx={{ bgcolor: 'action.hover' }}>
                 <TableRow>
                   <TableCell sx={{ fontWeight: 'bold' }}>Spreadsheet Header</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Auto Match Score</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Mapping Status</TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>Target Schema Field</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {uploadedHeaders.map((header) => (
+                {Object.keys(columnMapping).map((header) => (
                   <TableRow key={header}>
                     <TableCell sx={{ fontWeight: 'medium' }}>{header}</TableCell>
                     <TableCell>
-                      <Chip label="100% Match (Auto)" color="success" size="small" variant="soft" />
+                      {columnMapping[header] ? (
+                        <Chip label="Auto Mapped" color="success" size="small" variant="soft" />
+                      ) : (
+                        <Chip label="Unmapped" color="warning" size="small" variant="soft" />
+                      )}
                     </TableCell>
                     <TableCell>
                       <TextField
@@ -294,50 +312,61 @@ export function ImportWizardPage() {
             Step 3: Distinct Spreadsheet Value Mapping
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Map distinct raw spreadsheet cell values (such as text statuses or Persian values) to internal system enum codes.
+            Map distinct raw spreadsheet cell values to internal enum codes.
           </Typography>
 
-          <Alert severity="info" sx={{ mb: 3 }}>
-            Found distinct value <strong>&quot;فعال&quot;</strong> and <strong>&quot;غیرفعال&quot;</strong> in Active Status column. Automatically mapped to <strong>true</strong> / <strong>false</strong>.
-          </Alert>
-
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label='Raw Value: "فعال"'
-                value={valueMapping.is_active?.['فعال'] || 'true'}
-                onChange={(e) => setValueMapping({ ...valueMapping, is_active: { ...valueMapping.is_active, فعال: e.target.value } })}
-              />
+          {Object.keys(distinctValues).length === 0 ? (
+            <Alert severity="info" sx={{ mb: 3 }}>
+              No distinct lookup fields require custom value transformation for this entity. Click Next to proceed to dry-run validation.
+            </Alert>
+          ) : (
+            <Grid container spacing={2}>
+              {Object.entries(distinctValues).map(([field, vals]) => (
+                <Grid size={{ xs: 12 }} key={field}>
+                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                    Field: {field} (Distinct Raw Values: {vals.join(', ') || 'None'})
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {vals.map((v) => (
+                      <Grid size={{ xs: 12, md: 6 }} key={v}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label={`Raw Value: "${v}"`}
+                          value={valueMapping[field]?.[v] ?? v}
+                          onChange={(e) =>
+                            setValueMapping({
+                              ...valueMapping,
+                              [field]: { ...(valueMapping[field] || {}), [v]: e.target.value },
+                            })
+                          }
+                        />
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Grid>
+              ))}
             </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label='Raw Value: "غیرفعال"'
-                value={valueMapping.is_active?.['غیرفعال'] || 'false'}
-                onChange={(e) => setValueMapping({ ...valueMapping, is_active: { ...valueMapping.is_active, غیرفعال: e.target.value } })}
-              />
-            </Grid>
-          </Grid>
+          )}
         </Card>
       )}
 
       {/* STEP 3: Dry-Run Validation */}
-      {activeStep === 3 && (
+      {activeStep === 3 && activeJob && (
         <Card sx={{ p: 4 }}>
           <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
-            Step 4: Dry-Run Validation & Row Error Inspection
+            Step 4: Backend Dry-Run Validation & Row Error Inspection
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Pre-flight schema validation results. Review valid vs invalid rows before executing the database commit.
+            Validation results stored in backend database for Job #{activeJob.id}.
           </Typography>
 
           <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
             <Alert severity="success" sx={{ flex: 1 }}>
-              Valid Rows Ready for Import: <strong>{uploadedRows.length - 1}</strong>
+              Valid Rows Ready for Import: <strong>{activeJob.valid_rows}</strong>
             </Alert>
             <Alert severity="error" sx={{ flex: 1 }}>
-              Invalid Rows (Will Be Skipped): <strong>1</strong>
+              Invalid Rows (Will Be Skipped): <strong>{activeJob.error_rows}</strong>
             </Alert>
           </Stack>
 
@@ -352,11 +381,11 @@ export function ImportWizardPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {uploadedRows.map((r, idx) => {
-                  const isError = idx === uploadedRows.length - 1;
+                {jobRows.map((r) => {
+                  const isError = r.status === 'INVALID';
                   return (
-                    <TableRow key={idx} sx={{ bgcolor: isError ? 'error.lighter' : 'inherit' }}>
-                      <TableCell>{idx + 1}</TableCell>
+                    <TableRow key={r.id} sx={{ bgcolor: isError ? 'error.lighter' : 'inherit' }}>
+                      <TableCell>{r.row_number}</TableCell>
                       <TableCell>
                         {isError ? (
                           <Chip label="INVALID" color="error" size="small" />
@@ -364,15 +393,15 @@ export function ImportWizardPage() {
                           <Chip label="VALID" color="success" size="small" />
                         )}
                       </TableCell>
-                      <TableCell>{JSON.stringify(r)}</TableCell>
+                      <TableCell>{JSON.stringify(r.parsed_data || r.raw_data)}</TableCell>
                       <TableCell>
                         {isError ? (
                           <Typography variant="caption" color="error.main" sx={{ fontWeight: 600 }}>
-                            Row {idx + 1}: Invalid format or negative price restriction violated.
+                            {r.errors?.join(', ') || 'Row failed domain schema validation'}
                           </Typography>
                         ) : (
                           <Typography variant="caption" color="success.main">
-                            Ready for import
+                            Ready for database commit
                           </Typography>
                         )}
                       </TableCell>
@@ -390,27 +419,27 @@ export function ImportWizardPage() {
         <Card sx={{ p: 4, textAlign: 'center' }}>
           <Iconify icon={"solar:check-circle-bold" as any} width={64} height={64} sx={{ color: 'success.main', mb: 2 }} />
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
-            Import Job Completed Successfully!
+            Import Job Executed Successfully!
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-            Target entity records updated atomically with audit logging.
+            Batch database transaction completed with audit event log write.
           </Typography>
 
           <Grid container spacing={3} sx={{ justifyContent: 'center', mb: 4 }}>
             <Grid size={{ xs: 12, sm: 4 }}>
               <Paper variant="outlined" sx={{ p: 2, bgcolor: 'success.lighter' }}>
                 <Typography variant="h4" color="success.dark" sx={{ fontWeight: 700 }}>
-                  {importSummary.imported}
+                  {importSummary.importedCount}
                 </Typography>
                 <Typography variant="subtitle2" color="success.dark">
-                  Successfully Imported
+                  Successfully Inserted / Updated
                 </Typography>
               </Paper>
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
               <Paper variant="outlined" sx={{ p: 2, bgcolor: 'error.lighter' }}>
                 <Typography variant="h4" color="error.dark" sx={{ fontWeight: 700 }}>
-                  {importSummary.failed}
+                  {importSummary.failedCount}
                 </Typography>
                 <Typography variant="subtitle2" color="error.dark">
                   Skipped / Invalid Rows
@@ -419,7 +448,7 @@ export function ImportWizardPage() {
             </Grid>
           </Grid>
 
-          <Button variant="contained" size="large" onClick={() => setActiveStep(0)}>
+          <Button variant="contained" size="large" onClick={() => { setActiveStep(0); setActiveJob(null); }}>
             Start Another Import
           </Button>
         </Card>
@@ -429,7 +458,7 @@ export function ImportWizardPage() {
         <Box sx={{ mt: 3 }}>
           <LinearProgress />
           <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
-            Executing atomic batch import transaction into database...
+            Processing real backend API request...
           </Typography>
         </Box>
       )}
@@ -438,7 +467,7 @@ export function ImportWizardPage() {
 
       {activeStep < 4 && (
         <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-          <Button disabled={activeStep === 0} onClick={handleBack} variant="outlined">
+          <Button disabled={activeStep === 0 || isProcessing} onClick={handleBack} variant="outlined">
             Back
           </Button>
           <Button variant="contained" onClick={handleNext} disabled={isProcessing}>

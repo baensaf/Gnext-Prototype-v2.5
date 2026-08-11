@@ -23,12 +23,6 @@ export class ReportsController {
     return await this.reportsService.queryReport(tenantId, reportCode, filters);
   }
 
-  @Get(':reportCode')
-  async queryReportGet(@Param('reportCode') reportCode: string, @Query() query: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.reportsService.queryReport(tenantId, reportCode, query);
-  }
-
   @Post('export')
   async exportReportPost(
     @Body('reportCode') reportCode: string,
@@ -38,24 +32,6 @@ export class ReportsController {
   ) {
     const tenantId = (req as any).tenantId;
     return await this.reportsService.exportReport(tenantId, reportCode, filters, format || 'CSV');
-  }
-
-  @Post(':reportCode/exports')
-  async exportReportPath(
-    @Param('reportCode') reportCode: string,
-    @Body() body: any,
-    @Req() req: Request,
-  ) {
-    const tenantId = (req as any).tenantId;
-    const format = body.format || 'CSV';
-    const filters = body.filters || {};
-    return await this.reportsService.exportReport(tenantId, reportCode, filters, format);
-  }
-
-  @Get('report-exports/:id')
-  async getExportJob(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.reportsService.getExportJob(tenantId, id);
   }
 
   @Get('saved-views')
@@ -94,5 +70,30 @@ export class ReportsController {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).userId;
     return await this.reportsService.acknowledgeAlert(tenantId, id, userId);
+  }
+
+  @Get('report-exports/:id')
+  async getExportJob(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.reportsService.getExportJob(tenantId, id);
+  }
+
+  @Post(':reportCode/exports')
+  async exportReportPath(
+    @Param('reportCode') reportCode: string,
+    @Body() body: any,
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    const format = body.format || 'CSV';
+    const filters = body.filters || {};
+    return await this.reportsService.exportReport(tenantId, reportCode, filters, format);
+  }
+
+  // Dynamic parameterized routes MUST be at the bottom
+  @Get(':reportCode')
+  async queryReportGet(@Param('reportCode') reportCode: string, @Query() query: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.reportsService.queryReport(tenantId, reportCode, query);
   }
 }

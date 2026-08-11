@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
@@ -24,6 +23,8 @@ import {
   DialogActions,
   CircularProgress,
 } from '@mui/material';
+
+import { httpClient as axios } from 'src/api/httpClient';
 
 interface KioskProduct {
   id: string;

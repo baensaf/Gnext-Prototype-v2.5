@@ -12,6 +12,8 @@ import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { BusinessDayCloseDto, BusinessDayReopenDto } from './dtos/shift.dto';
 
+import { MoneyUtil } from '../../common/utils/money.util';
+
 @Injectable()
 export class BusinessDayService {
   constructor(
@@ -87,7 +89,7 @@ export class BusinessDayService {
       let orderCount = orders.length;
       for (const o of orders) {
         if (o.state !== 'CANCELLED') {
-          totalSales = (parseFloat(totalSales) + parseFloat(o.grand_total || '0')).toFixed(4);
+          totalSales = MoneyUtil.add(totalSales, o.grand_total || '0', 4);
         }
       }
 

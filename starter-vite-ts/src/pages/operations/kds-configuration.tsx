@@ -107,8 +107,13 @@ export function KdsConfigurationPage() {
 
   const handleCreateScreen = async () => {
     try {
+      const targetBranchId = (stations[0] as any)?.branch_id || stations[0]?.id;
+      if (!targetBranchId) {
+        setError('No active station/branch context');
+        return;
+      }
       await kdsApi.createScreen({
-        branch_id: stations[0]?.id || '00000000-0000-0000-0000-000000000000',
+        branch_id: targetBranchId,
         ...screenForm,
       });
       setScreenModalOpen(false);
@@ -130,8 +135,13 @@ export function KdsConfigurationPage() {
 
   const handleCreateRule = async () => {
     try {
+      const targetBranchId = (stations[0] as any)?.branch_id || stations[0]?.id;
+      if (!targetBranchId) {
+        setError('No active station/branch context');
+        return;
+      }
       await kdsApi.createRoutingRule({
-        branch_id: stations[0]?.id || '00000000-0000-0000-0000-000000000000',
+        branch_id: targetBranchId,
         station_id: ruleForm.station_id,
         product_id: ruleForm.selector_type === 'PRODUCT' ? ruleForm.product_id : undefined,
         category_id: ruleForm.selector_type === 'CATEGORY' ? ruleForm.category_id : undefined,

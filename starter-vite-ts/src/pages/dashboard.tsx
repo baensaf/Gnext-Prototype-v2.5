@@ -1,6 +1,5 @@
 import type { Branch } from 'src/api/tenantApi';
 
-import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
@@ -27,6 +26,7 @@ import {
 
 import { tenantApi } from 'src/api/tenantApi';
 import { useAuthStore } from 'src/store/useAuthStore';
+import { httpClient as axios } from 'src/api/httpClient';
 
 export function DashboardPage() {
   const { t } = useTranslation();

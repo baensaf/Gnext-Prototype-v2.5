@@ -88,16 +88,25 @@ export class OfflineSyncService {
     }
   }
 
-  private async getLatestBranchSnapshot(tenantId: string, branchId: string): Promise<BranchStatusSnapshot> {
+  private resolveBranchId(branchId?: string): string {
+    const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    if (branchId && uuidRegex.test(branchId)) {
+      return branchId;
+    }
+    return '00000000-0000-0000-0000-000000000001';
+  }
+
+  private async getLatestBranchSnapshot(tenantId: string, branchId?: string): Promise<BranchStatusSnapshot> {
+    const targetBranchId = this.resolveBranchId(branchId);
     let snapshot = await this.branchStatusRepo.findOne({
-      where: { tenant_id: tenantId, branch_id: branchId },
+      where: { tenant_id: tenantId, branch_id: targetBranchId },
       order: { recorded_at: 'DESC' },
     });
 
     if (!snapshot) {
       snapshot = this.branchStatusRepo.create({
         tenant_id: tenantId,
-        branch_id: branchId,
+        branch_id: targetBranchId,
         is_online: true,
         agent_version: 'v1.5.0-sim',
         agent_health: 'HEALTHY',
@@ -112,28 +121,29 @@ export class OfflineSyncService {
     return snapshot;
   }
 
-  async getStatus(tenantId: string, branchId: string = 'default-branch') {
-    const snapshot = await this.getLatestBranchSnapshot(tenantId, branchId);
+  async getStatus(tenantId: string, branchId?: string) {
+    const targetBranchId = this.resolveBranchId(branchId);
+    const snapshot = await this.getLatestBranchSnapshot(tenantId, targetBranchId);
 
     const pendingCount = await this.queueRepo.count({
-      where: { tenant_id: tenantId, branch_id: branchId, status: 'PENDING' },
+      where: { tenant_id: tenantId, branch_id: targetBranchId, status: 'PENDING' },
     });
 
     const conflictCount = await this.queueRepo.count({
-      where: { tenant_id: tenantId, branch_id: branchId, status: 'CONFLICT' },
+      where: { tenant_id: tenantId, branch_id: targetBranchId, status: 'CONFLICT' },
     });
 
     const dlqCount = await this.queueRepo.count({
-      where: { tenant_id: tenantId, branch_id: branchId, status: 'DLQ_FAILED' },
+      where: { tenant_id: tenantId, branch_id: targetBranchId, status: 'DLQ_FAILED' },
     });
 
     const syncingCount = await this.queueRepo.count({
-      where: { tenant_id: tenantId, branch_id: branchId, status: 'SYNCING' },
+      where: { tenant_id: tenantId, branch_id: targetBranchId, status: 'SYNCING' },
     });
 
     return {
       tenant_id: tenantId,
-      branch_id: branchId,
+      branch_id: targetBranchId,
       is_online: snapshot.is_online,
       agent_version: snapshot.agent_version || 'v1.5.0-sim',
       agent_health: snapshot.agent_health || 'HEALTHY',

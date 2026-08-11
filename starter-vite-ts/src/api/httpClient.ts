@@ -44,6 +44,12 @@ httpClient.interceptors.request.use((config) => {
   const currentLang = localStorage.getItem('gnext_locale') || 'fa';
   config.headers['Accept-Language'] = currentLang;
 
+  // Attach Session Token Authorization header
+  const accessToken = sessionStorage.getItem('jwt_access_token');
+  if (accessToken) {
+    config.headers['Authorization'] = `Bearer ${accessToken}`;
+  }
+
   return config;
 });
 

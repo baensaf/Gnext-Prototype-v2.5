@@ -30,15 +30,15 @@ export function MediaLocalizationDemoPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const dummyEntityId = '00000000-0000-0000-0000-000000000001';
+  const [entityId, _setEntityId] = useState('prod-demo-01');
 
   const handleSaveTranslations = async () => {
     try {
       await localizationApi.upsertStrings([
-        { entity_type: 'PRODUCT', entity_id: dummyEntityId, field_name: 'name', locale: 'fa', text_value: productTitleFa },
-        { entity_type: 'PRODUCT', entity_id: dummyEntityId, field_name: 'name', locale: 'en', text_value: productTitleEn },
-        { entity_type: 'PRODUCT', entity_id: dummyEntityId, field_name: 'description', locale: 'fa', text_value: descriptionFa },
-        { entity_type: 'PRODUCT', entity_id: dummyEntityId, field_name: 'description', locale: 'en', text_value: descriptionEn },
+        { entity_type: 'PRODUCT', entity_id: entityId, field_name: 'name', locale: 'fa', text_value: productTitleFa },
+        { entity_type: 'PRODUCT', entity_id: entityId, field_name: 'name', locale: 'en', text_value: productTitleEn },
+        { entity_type: 'PRODUCT', entity_id: entityId, field_name: 'description', locale: 'fa', text_value: descriptionFa },
+        { entity_type: 'PRODUCT', entity_id: entityId, field_name: 'description', locale: 'en', text_value: descriptionEn },
       ]);
       setStatus('Bilingual localized strings saved successfully!');
       setError(null);

@@ -7,7 +7,8 @@ import { CONFIG } from 'src/global-config';
 // ----------------------------------------------------------------------
 
 const axiosInstance = axios.create({
-  baseURL: CONFIG.serverUrl,
+  baseURL: CONFIG.serverUrl || 'http://localhost:3100',
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -61,9 +62,9 @@ export const endpoints = {
   kanban: '/api/kanban',
   calendar: '/api/calendar',
   auth: {
-    me: '/api/auth/me',
-    signIn: '/api/auth/sign-in',
-    signUp: '/api/auth/sign-up',
+    me: '/api/v1/auth/me',
+    signIn: '/api/v1/auth/login',
+    signUp: '/api/v1/auth/register',
   },
   mail: {
     list: '/api/mail/list',

@@ -30,6 +30,7 @@ import { Category } from '../../entities/Category.entity';
 import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { SavedReportView } from '../../entities/SavedReportView.entity';
 import { ReportExportJob } from '../../entities/ReportExportJob.entity';
+import { MoneyUtil } from '../../common/utils/money.util';
 
 @Injectable()
 export class ReportsService {
@@ -124,40 +125,41 @@ export class ReportsService {
 
         const orders = await qb.orderBy('o.placed_at', 'DESC').getMany();
 
-        let grossSubtotal = 0;
-        let modifiersTotal = 0;
-        let packagingTotal = 0;
-        let deliveryTotal = 0;
-        let discountTotal = 0;
-        let taxTotal = 0;
-        let netSalesTotal = 0;
-        let paidTotal = 0;
-        let refundedTotal = 0;
-        let outstandingTotal = 0;
+        let grossSubtotal = '0.00';
+        let modifiersTotal = '0.00';
+        let packagingTotal = '0.00';
+        let deliveryTotal = '0.00';
+        let discountTotal = '0.00';
+        let taxTotal = '0.00';
+        let netSalesTotal = '0.00';
+        let paidTotal = '0.00';
+        let refundedTotal = '0.00';
+        let outstandingTotal = '0.00';
 
         const rows = orders.map((o) => {
-          const sub = parseFloat(o.subtotal_amount || '0');
-          const tax = parseFloat(o.tax_amount || '0');
-          const disc = parseFloat(o.discount_amount || '0');
-          const tot = parseFloat(o.total_amount || '0');
-          const paid = parseFloat(o.paid_amount || '0');
-          const ref = parseFloat(o.refunded_total || '0');
-          const pack = parseFloat(o.packaging_total || '0');
-          const del = parseFloat(o.delivery_fee || '0');
-          const mod = parseFloat(o.modifier_total || '0');
-          const net = tot - tax;
-          const out = Math.max(0, tot - paid);
+          const sub = MoneyUtil.format(o.subtotal_amount || '0', 2);
+          const tax = MoneyUtil.format(o.tax_amount || '0', 2);
+          const disc = MoneyUtil.format(o.discount_amount || '0', 2);
+          const tot = MoneyUtil.format(o.total_amount || '0', 2);
+          const paid = MoneyUtil.format(o.paid_amount || '0', 2);
+          const ref = MoneyUtil.format(o.refunded_total || '0', 2);
+          const pack = MoneyUtil.format(o.packaging_total || '0', 2);
+          const del = MoneyUtil.format(o.delivery_fee || '0', 2);
+          const mod = MoneyUtil.format(o.modifier_total || '0', 2);
+          const net = MoneyUtil.subtract(tot, tax, 2);
+          const rawOut = MoneyUtil.subtract(tot, paid, 2);
+          const out = MoneyUtil.lessThan(rawOut, '0') ? '0.00' : rawOut;
 
-          grossSubtotal += sub;
-          modifiersTotal += mod;
-          packagingTotal += pack;
-          deliveryTotal += del;
-          discountTotal += disc;
-          taxTotal += tax;
-          netSalesTotal += net;
-          paidTotal += paid;
-          refundedTotal += ref;
-          outstandingTotal += out;
+          grossSubtotal = MoneyUtil.add(grossSubtotal, sub, 2);
+          modifiersTotal = MoneyUtil.add(modifiersTotal, mod, 2);
+          packagingTotal = MoneyUtil.add(packagingTotal, pack, 2);
+          deliveryTotal = MoneyUtil.add(deliveryTotal, del, 2);
+          discountTotal = MoneyUtil.add(discountTotal, disc, 2);
+          taxTotal = MoneyUtil.add(taxTotal, tax, 2);
+          netSalesTotal = MoneyUtil.add(netSalesTotal, net, 2);
+          paidTotal = MoneyUtil.add(paidTotal, paid, 2);
+          refundedTotal = MoneyUtil.add(refundedTotal, ref, 2);
+          outstandingTotal = MoneyUtil.add(outstandingTotal, out, 2);
 
           return {
             business_date: o.placed_at ? new Date(o.placed_at).toISOString().split('T')[0] : '—',
@@ -166,16 +168,16 @@ export class ReportsService {
             type: o.order_type || 'PICKUP',
             order_number: o.order_number,
             status: o.status,
-            gross_subtotal: sub.toFixed(2),
-            modifiers: mod.toFixed(2),
-            packaging: pack.toFixed(2),
-            delivery: del.toFixed(2),
-            discounts: disc.toFixed(2),
-            tax: tax.toFixed(2),
-            net_sales: net.toFixed(2),
-            paid: paid.toFixed(2),
-            refunded: ref.toFixed(2),
-            outstanding: out.toFixed(2),
+            gross_subtotal: sub,
+            modifiers: mod,
+            packaging: pack,
+            delivery: del,
+            discounts: disc,
+            tax: tax,
+            net_sales: net,
+            paid: paid,
+            refunded: ref,
+            outstanding: out,
           };
         });
 
@@ -185,18 +187,18 @@ export class ReportsService {
           rows,
           summary_totals: {
             order_count: orders.length,
-            gross_subtotal: grossSubtotal.toFixed(2),
-            modifiers: modifiersTotal.toFixed(2),
-            packaging: packagingTotal.toFixed(2),
-            delivery: deliveryTotal.toFixed(2),
-            discounts: discountTotal.toFixed(2),
-            tax: taxTotal.toFixed(2),
-            tax_total: taxTotal.toFixed(2),
-            net_sales: netSalesTotal.toFixed(2),
-            paid: paidTotal.toFixed(2),
-            paid_total: paidTotal.toFixed(2),
-            refunded: refundedTotal.toFixed(2),
-            outstanding: outstandingTotal.toFixed(2),
+            gross_subtotal: grossSubtotal,
+            modifiers: modifiersTotal,
+            packaging: packagingTotal,
+            delivery: deliveryTotal,
+            discounts: discountTotal,
+            tax: taxTotal,
+            tax_total: taxTotal,
+            net_sales: netSalesTotal,
+            paid: paidTotal,
+            paid_total: paidTotal,
+            refunded: refundedTotal,
+            outstanding: outstandingTotal,
           },
         };
       }

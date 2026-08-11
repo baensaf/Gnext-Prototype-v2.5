@@ -1,4 +1,3 @@
-import axios from 'axios';
 import React, { useState, useEffect } from 'react';
 
 import {
@@ -25,6 +24,8 @@ import {
   TableContainer,
   FormControlLabel,
 } from '@mui/material';
+
+import { httpClient as axios } from 'src/api/httpClient';
 
 export function OfflineSyncPage() {
   const [syncStatus, setSyncStatus] = useState<any>(null);

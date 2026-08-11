@@ -43,6 +43,8 @@ export class AuthController {
 
     return res.status(HttpStatus.OK).json({
       csrfToken: result.csrfToken,
+      sessionToken: result.sessionToken,
+      accessToken: result.sessionToken,
       user: result.user,
       tenant: result.tenant,
     });
@@ -62,7 +64,9 @@ export class AuthController {
 
   @Get('me')
   async me(@Req() req: Request, @Res() res: Response) {
-    const token = req.cookies?.gnext_session;
+    const authHeader = req.headers.authorization;
+    const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+    const token = req.cookies?.gnext_session || (req.headers['x-session-token'] as string) || bearerToken;
     if (!token) {
       return res.status(HttpStatus.UNAUTHORIZED).json({
         type: 'https://gnext.local/problems/auth',
