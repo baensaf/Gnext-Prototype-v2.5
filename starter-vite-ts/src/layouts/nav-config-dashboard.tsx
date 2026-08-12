@@ -38,17 +38,6 @@ export function useNavData(): NavSectionProps['data'] {
 
   return [
     {
-      subheader: t('nav.home', 'Home'),
-      items: [
-        {
-          title: t('nav.dashboard', 'Dashboard'),
-          path: '/app/dashboard',
-          icon: ICONS.dashboard,
-          info: <Label color="warning">v1.5</Label>,
-        },
-      ],
-    },
-    {
       subheader: t('nav.sell', 'Sell'),
       items: [
         {
