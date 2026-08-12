@@ -176,15 +176,18 @@ export function PrintersPage() {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Alert severity="info" variant="filled" sx={{ mb: 3, fontWeight: 'bold' }}>
-        SIMULATED PRINTER HARDWARE & ROUTING CONFIGURATION
+      <Alert severity="info" variant="outlined" sx={{ mb: 3, borderRadius: 2, fontWeight: 500 }}>
+        V5 Preview Module: Advanced ESC/POS printer device hardware models, station group matrix routing & fallback chains. Retained for V5 hardware integration testing.
       </Alert>
 
       <Stack direction="row" sx={{ mb: 3, justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-            <PrintIcon color="primary" /> Printers & Print Routing
-          </Typography>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+            <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PrintIcon color="primary" /> Printers & Print Routing
+            </Typography>
+            <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
+          </Stack>
           <Typography variant="body2" color="text.secondary">
             Manage simulated receipt/kitchen printers, fallback chain routing, and document group targets.
           </Typography>

@@ -92,11 +92,14 @@ export function ApprovalsSettingsPage() {
     <Box>
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Approval Workflows & Policies
-          </Typography>
+          <Stack direction="row" spacing={1.5} sx={{ mb: 0.5, alignItems: 'center' }}>
+            <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+              Approval Workflows & Policies
+            </Typography>
+            <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
+          </Stack>
           <Typography variant="body2" color="text.secondary">
-            Slice 7 — Configurable manager escalation limits, PIN security, and multi-step approvals
+            Multi-step manager escalation rules, Argon2 PIN verification, and approval decision logs
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
@@ -108,6 +111,10 @@ export function ApprovalsSettingsPage() {
           </Button>
         </Stack>
       </Stack>
+
+      <Alert severity="info" variant="outlined" sx={{ mb: 3, borderRadius: 2, fontWeight: 500 }}>
+        V5 Preview Module: Advanced multi-step approval workflow rules & Argon2 PIN hashing engine. Retained for V5 architectural evaluation.
+      </Alert>
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>

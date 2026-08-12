@@ -73,7 +73,12 @@
     "localization": "Localization & Formats",
     "dataReset": "Data Reset",
     "v5GroupHeader": "Future — V5 Preview",
-    "v5Preview": "Inventory Stock & Movement"
+    "v5Preview": "Inventory Stock & Movement",
+    "printersV5": "Printers & Station Routing",
+    "approvalsV5": "Multi-Step Approvals & Policy",
+    "offlineSyncV5": "Offline Sync & Conflict Engine",
+    "outboxV5": "Outbox & Event Queue Monitor",
+    "printQueueV5": "Thermal Print Queue Engine"
   },
   "common": {
     "language": "Language",

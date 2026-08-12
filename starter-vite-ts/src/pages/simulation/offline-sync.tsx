@@ -224,6 +224,17 @@ export function OfflineSyncPage() {
 
   return (
     <Box sx={{ p: 3 }}>
+      <Stack direction="row" spacing={1.5} sx={{ mb: 1, alignItems: 'center' }}>
+        <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+          Offline Sync & Conflict Simulator
+        </Typography>
+        <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
+      </Stack>
+
+      <Alert severity="info" variant="outlined" sx={{ mb: 3, borderRadius: 2, fontWeight: 500 }}>
+        V5 Preview Module: Cloud-branch offline operation envelope queue, DLQ retry workers & conflict resolution engine. Retained for V5 architectural validation.
+      </Alert>
+
       {/* Branch Context Selector */}
       <Paper sx={{ p: 2, mb: 3, borderRadius: 3 }}>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>

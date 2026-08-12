@@ -118,15 +118,18 @@ export function PrintQueuePage() {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Alert severity="info" variant="filled" icon={<PrintIcon />} sx={{ mb: 3, fontWeight: 'bold' }}>
-        SIMULATED PRINT QUEUE & REPRINT DISPATCHER
+      <Alert severity="info" variant="outlined" sx={{ mb: 3, borderRadius: 2, fontWeight: 500 }}>
+        V5 Preview Module: Simulated print queue, thermal receipt document generator & reprint dispatcher. Retained for V5 preview.
       </Alert>
 
       <Stack direction="row" sx={{ mb: 3, justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-            Print Queue & History
-          </Typography>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+            <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+              Print Queue & History
+            </Typography>
+            <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
+          </Stack>
           <Typography variant="body2" color="text.secondary">
             View generated print jobs, preview rendered HTML receipts, simulate printer hardware outcomes, and trigger reprints.
           </Typography>
