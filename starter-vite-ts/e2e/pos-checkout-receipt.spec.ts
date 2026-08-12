@@ -85,17 +85,13 @@ test.describe('POS Order, Checkout / Pay Now, and Receipt Print E2E Workflow', (
     await expect(printActionBtn).toBeVisible({ timeout: 10000 });
 
     await page.evaluate(() => {
-      (window as any).__printed = 0;
       window.print = () => {
-        (window as any).__printed = ((window as any).__printed || 0) + 1;
+        document.body.setAttribute('data-printed', 'true');
       };
     });
 
     await printActionBtn.click();
-    await page.waitForTimeout(500);
-
-    const isPrinted = await page.evaluate(() => (window as any).__printed > 0);
-    expect(isPrinted).toBe(true);
+    await expect(page.locator('body')).toHaveAttribute('data-printed', 'true', { timeout: 10000 });
   });
 
 });

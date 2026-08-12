@@ -139,19 +139,15 @@ test.describe('Specification §16.3 End-to-End Acceptance Workflows', () => {
     await expect(page.locator('body')).toContainText(/Order #:|شماره سفارش:|TOTAL:|جمع کل:/i, { timeout: 15000 });
 
     await page.evaluate(() => {
-      (window as any).__printed = 0;
       window.print = () => {
-        (window as any).__printed = ((window as any).__printed || 0) + 1;
+        document.body.setAttribute('data-printed', 'true');
       };
     });
 
     const printActionBtn = page.locator('button').filter({ hasText: /Print Receipt|چاپ فاکتور/i }).first();
     await expect(printActionBtn).toBeVisible({ timeout: 10000 });
     await printActionBtn.click();
-    await page.waitForTimeout(500);
-
-    const isPrinted = await page.evaluate(() => (window as any).__printed > 0);
-    expect(isPrinted).toBe(true);
+    await expect(page.locator('body')).toHaveAttribute('data-printed', 'true', { timeout: 10000 });
 
     // 7. KDS Bump Progression
     await navigateViaSidebar(page, '/app/kds', '/app/kds');
