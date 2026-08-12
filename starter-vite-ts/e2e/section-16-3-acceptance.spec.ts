@@ -552,7 +552,12 @@ test.describe('Specification §16.3 End-to-End Acceptance Workflows', () => {
     expect(execRes.ok()).toBe(true);
     await expect(page.locator('body')).toContainText(/Import Job Executed Successfully!|باتشکر/i, { timeout: 15000 });
 
-    await navigateViaSidebar(page, '/app/settings/data-reset', '/app/settings/data-reset');
+    await navigateViaSidebar(page, '/app/settings', '/app/settings');
+    const resetCard = page.locator('button, a').filter({ hasText: /Data Reset & System Seeds|بازنشانی داده/i }).first();
+    await expect(resetCard).toBeVisible({ timeout: 10000 });
+    await resetCard.click();
+    await page.waitForURL('**/app/settings/data-reset');
+    await page.waitForLoadState('networkidle');
 
     const resetBtn = page.locator('button').filter({ hasText: /Execute System Data Reset|بازنشانی/i }).first();
     await expect(resetBtn).toBeVisible();

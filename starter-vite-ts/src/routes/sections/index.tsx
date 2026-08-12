@@ -173,6 +173,17 @@ export const routesSection: RouteObject[] = [
       { path: 'simulation/media-localization', element: <Navigate to="/app/settings/localization" replace /> },
       { path: 'tools/import-wizard', element: <Navigate to="/app/catalog/import-export" replace /> },
       { path: 'tools/data-reset', element: <Navigate to="/app/settings/data-reset" replace /> },
+      { path: 'settings/branches', element: <Navigate to="/app/operations/branches" replace /> },
+      { path: 'settings/terminals', element: <Navigate to="/app/operations/terminals" replace /> },
+      { path: 'settings/kds-configuration', element: <Navigate to="/app/operations/kds-configuration" replace /> },
+      { path: 'settings/printers', element: <Navigate to="/app/operations/printers" replace /> },
+      { path: 'settings/payments', element: <Navigate to="/app/settings/payments-refunds" replace /> },
+      { path: 'settings/offline-sync', element: <Navigate to="/app/simulation/offline-sync" replace /> },
+      { path: 'settings/import-wizard', element: <Navigate to="/app/catalog/import-export" replace /> },
+      { path: 'settings/audit', element: <Navigate to="/app/audit" replace /> },
+      { path: 'settings/logs', element: <Navigate to="/app/simulation/logs" replace /> },
+      { path: 'settings/snappfood', element: <Navigate to="/app/simulation/snappfood" replace /> },
+      { path: 'settings/simulation', element: <Navigate to="/app/simulation" replace /> },
 
       {
         path: '*',

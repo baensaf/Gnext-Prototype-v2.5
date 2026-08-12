@@ -131,6 +131,7 @@ export const paths = {
     },
     audit: `${ROOTS.APP}/audit`,
     settings: {
+      root: `${ROOTS.APP}/settings`,
       general: `${ROOTS.APP}/settings/general`,
       orderWorkflow: `${ROOTS.APP}/settings/order-workflow`,
       discountsCredit: `${ROOTS.APP}/settings/discounts-credit`,

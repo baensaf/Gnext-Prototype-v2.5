@@ -1,18 +1,28 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
 
 import SyncIcon from '@mui/icons-material/Sync';
 import TuneIcon from '@mui/icons-material/Tune';
+import SellIcon from '@mui/icons-material/Sell';
 import GavelIcon from '@mui/icons-material/Gavel';
-import SearchIcon from '@mui/icons-material/Search';
+import PrintIcon from '@mui/icons-material/Print';
 import ShieldIcon from '@mui/icons-material/Shield';
-import DevicesIcon from '@mui/icons-material/Devices';
-import LanguageIcon from '@mui/icons-material/Language';
+import SearchIcon from '@mui/icons-material/Search';
+import ListAltIcon from '@mui/icons-material/ListAlt';
+import ScienceIcon from '@mui/icons-material/Science';
+import PaymentsIcon from '@mui/icons-material/Payments';
+import TranslateIcon from '@mui/icons-material/Translate';
+import LocalOfferIcon from '@mui/icons-material/LocalOffer';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import StorefrontIcon from '@mui/icons-material/Storefront';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
+import CountertopsIcon from '@mui/icons-material/Countertops';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
 import {
   Box,
   Card,
@@ -52,119 +62,338 @@ interface SettingCategory {
 export function SettingsHubPage() {
   const navigate = useNavigate();
   const theme = useTheme();
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
+  const isRtl = theme.direction === 'rtl';
 
   const categories: SettingCategory[] = [
     {
-      categoryDescription: 'Global system parameters, tenant organization details, and currency profiles',
-      categoryTitle: 'System & Organization',
-      icon: <LanguageIcon color="primary" sx={{ fontSize: 28 }} />,
-      id: 'system-org',
+      id: 'organization',
+      categoryTitle: t('settings.hub.domains.organization.title', 'Organization & Stores'),
+      categoryDescription: t(
+        'settings.hub.domains.organization.description',
+        'Tenant profile, branch locations, terminal registers, and currency settings.'
+      ),
+      icon: <StorefrontIcon color="primary" sx={{ fontSize: 28 }} />,
       items: [
         {
-          badge: { color: 'info', label: '9 Currencies' },
-          description: 'Tenant organization name, timezone, locale defaults, base currency, and precision limits.',
-          icon: <TuneIcon sx={{ color: 'primary.main' }} />,
           id: 'general',
+          title: t('settings.hub.items.general.title', 'General Settings & Currencies'),
+          description: t(
+            'settings.hub.items.general.description',
+            'Tenant organization name, timezone, locale defaults, base currency, and multi-currency limits.'
+          ),
           path: '/app/settings/general',
-          tags: ['general', 'tenant', 'currency', 'timezone', 'locale', 'organization'],
-          title: 'General Settings & Currencies',
+          icon: <TuneIcon sx={{ color: 'primary.main' }} />,
+          badge: { color: 'info', label: t('settings.hub.items.general.badge', '9 Currencies') },
+          tags: ['general', 'tenant', 'currency', 'timezone', 'locale', 'organization', 'base currency'],
         },
-      ],
-    },
-    {
-      categoryDescription: 'Branch store management, POS terminal hardware registry, and payment devices',
-      categoryTitle: 'Stores & Hardware Devices',
-      icon: <StorefrontIcon color="warning" sx={{ fontSize: 28 }} />,
-      id: 'stores-hardware',
-      items: [
         {
-          badge: { color: 'success', label: '3 Locations' },
-          description: 'Store locations, operational schedules, table arrangements, tax profiles, and branch statuses.',
-          icon: <StorefrontIcon sx={{ color: 'warning.main' }} />,
           id: 'branches',
-          path: '/app/settings/branches',
-          tags: ['branches', 'stores', 'hours', 'locations', 'tables', 'tax'],
-          title: 'Branches & Operating Hours',
+          title: t('settings.hub.items.branches.title', 'Branches & Operating Hours'),
+          description: t(
+            'settings.hub.items.branches.description',
+            'Store locations, operational schedules, table arrangements, tax profiles, and branch statuses.'
+          ),
+          path: '/app/operations/branches',
+          icon: <StorefrontIcon sx={{ color: 'warning.main' }} />,
+          badge: { color: 'success', label: t('settings.hub.items.branches.badge', '3 Locations') },
+          tags: ['branches', 'stores', 'hours', 'locations', 'tables', 'tax', 'schedules'],
         },
         {
-          badge: { color: 'primary', label: 'Active Pairs' },
-          description: 'POS hardware register pairing, terminal serial numbers, peripheral setup, and device status.',
-          icon: <PointOfSaleIcon sx={{ color: 'info.main' }} />,
           id: 'terminals',
-          path: '/app/settings/terminals',
-          tags: ['terminals', 'pos', 'registers', 'devices', 'hardware', 'pairing'],
-          title: 'Terminals Registry',
+          title: t('settings.hub.items.terminals.title', 'Terminals Registry'),
+          description: t(
+            'settings.hub.items.terminals.description',
+            'POS hardware register pairing, terminal serial numbers, peripheral setup, and device status.'
+          ),
+          path: '/app/operations/terminals',
+          icon: <PointOfSaleIcon sx={{ color: 'info.main' }} />,
+          badge: { color: 'primary', label: t('settings.hub.items.terminals.badge', 'Active Pairs') },
+          tags: ['terminals', 'pos', 'registers', 'devices', 'hardware', 'pairing', 'serials'],
+        },
+      ],
+    },
+    {
+      id: 'orderPos',
+      categoryTitle: t('settings.hub.domains.orderPos.title', 'Order & POS Workflows'),
+      categoryDescription: t(
+        'settings.hub.domains.orderPos.description',
+        'Order workflows, payment methods, tax profiles, kitchen KDS, and printers.'
+      ),
+      icon: <ReceiptLongIcon color="warning" sx={{ fontSize: 28 }} />,
+      items: [
+        {
+          id: 'orderWorkflow',
+          title: t('settings.hub.items.orderWorkflow.title', 'Order Workflow Settings'),
+          description: t(
+            'settings.hub.items.orderWorkflow.description',
+            'Order lifecycle states, auto-acceptance rules, dining modes, and kitchen routing.'
+          ),
+          path: '/app/settings/order-workflow',
+          icon: <ReceiptLongIcon sx={{ color: 'warning.main' }} />,
+          badge: { color: 'warning', label: t('settings.hub.items.orderWorkflow.badge', 'Workflow V1.5') },
+          tags: ['order', 'workflow', 'lifecycle', 'auto accept', 'dining', 'kitchen routing'],
         },
         {
-          badge: { color: 'success', label: 'Gateways Ready' },
-          description: 'Payment gateway configurations, card EFT terminals, kitchen printers, barcode scanners, and cash drawers.',
-          icon: <DevicesIcon sx={{ color: 'secondary.main' }} />,
           id: 'payments',
-          path: '/app/settings/payments',
-          tags: ['payments', 'gateways', 'eft', 'printers', 'scanners', 'hardware', 'cash drawer'],
-          title: 'Payments & Hardware Devices',
+          title: t('settings.hub.items.payments.title', 'Payments & Refund Methods'),
+          description: t(
+            'settings.hub.items.payments.description',
+            'EFT POS terminals, card gateways, cash drawers, refund limits, and payment methods.'
+          ),
+          path: '/app/settings/payments-refunds',
+          icon: <PaymentsIcon sx={{ color: 'success.main' }} />,
+          badge: { color: 'success', label: t('settings.hub.items.payments.badge', 'Gateways Ready') },
+          tags: ['payments', 'refunds', 'gateways', 'eft', 'cash drawer', 'cards', 'transactions'],
+        },
+        {
+          id: 'kds',
+          title: t('settings.hub.items.kds.title', 'KDS Configuration'),
+          description: t(
+            'settings.hub.items.kds.description',
+            'Kitchen display screens, preparation timers, item routing, and order bumping rules.'
+          ),
+          path: '/app/operations/kds-configuration',
+          icon: <CountertopsIcon sx={{ color: 'info.main' }} />,
+          badge: { color: 'info', label: t('settings.hub.items.kds.badge', 'KDS Active') },
+          tags: ['kds', 'kitchen', 'screens', 'preparation', 'timers', 'bumping', 'stations'],
+        },
+        {
+          id: 'printers',
+          title: t('settings.hub.items.printers.title', 'Printers & Print Routing'),
+          description: t(
+            'settings.hub.items.printers.description',
+            'Network receipt printers, kitchen ticket routing, print templates, and queue failover.'
+          ),
+          path: '/app/operations/printers',
+          icon: <PrintIcon sx={{ color: 'secondary.main' }} />,
+          badge: { color: 'secondary', label: t('settings.hub.items.printers.badge', 'Station Routing') },
+          tags: ['printers', 'receipts', 'kitchen tickets', 'routing', 'templates', 'queue', 'hardware'],
         },
       ],
     },
     {
-      categoryDescription: 'Manager approval thresholds, reason codes compliance, and offline synchronization policy',
-      categoryTitle: 'Governance & Workflows',
-      icon: <ShieldIcon color="info" sx={{ fontSize: 28 }} />,
-      id: 'governance-workflows',
+      id: 'commercial',
+      categoryTitle: t('settings.hub.domains.commercial.title', 'Commercial & Catalog'),
+      categoryDescription: t(
+        'settings.hub.domains.commercial.description',
+        'Catalog defaults, price books, discount campaigns, approvals policy, and reasons.'
+      ),
+      icon: <SellIcon color="success" sx={{ fontSize: 28 }} />,
       items: [
         {
-          badge: { color: 'info', label: 'Slice 7 Policy' },
-          description: 'Manager override rules, discount cap policy, self-approval prevention, and escalation thresholds.',
-          icon: <ShieldIcon sx={{ color: 'info.main' }} />,
+          id: 'menus',
+          title: t('settings.hub.items.menus.title', 'Menus & Catalog Composer'),
+          description: t(
+            'settings.hub.items.menus.description',
+            'Menu categories, default product availability, modifier groups, and combo options.'
+          ),
+          path: '/app/catalog/menus',
+          icon: <RestaurantMenuIcon sx={{ color: 'primary.main' }} />,
+          badge: { color: 'primary', label: t('settings.hub.items.menus.badge', 'Catalog Core') },
+          tags: ['menus', 'catalog', 'categories', 'modifiers', 'combos', 'products', 'availability'],
+        },
+        {
+          id: 'pricing',
+          title: t('settings.hub.items.pricing.title', 'Price Book & Groups'),
+          description: t(
+            'settings.hub.items.pricing.description',
+            'Base price books, customer group pricing, price tiers, and bulk price updates.'
+          ),
+          path: '/app/pricing/price-book',
+          icon: <SellIcon sx={{ color: 'success.main' }} />,
+          badge: { color: 'success', label: t('settings.hub.items.pricing.badge', 'Price Books') },
+          tags: ['pricing', 'price book', 'groups', 'tiers', 'discounts', 'bulk update'],
+        },
+        {
+          id: 'discounts',
+          title: t('settings.hub.items.discounts.title', 'Discounts & Credit Policies'),
+          description: t(
+            'settings.hub.items.discounts.description',
+            'Promotion campaigns, discount percentage caps, coupon codes, and customer credit limits.'
+          ),
+          path: '/app/settings/discounts-credit',
+          icon: <LocalOfferIcon sx={{ color: 'warning.main' }} />,
+          badge: { color: 'warning', label: t('settings.hub.items.discounts.badge', 'Promotions') },
+          tags: ['discounts', 'campaigns', 'promotions', 'coupons', 'credit', 'limits', 'caps'],
+        },
+        {
           id: 'approvals',
+          title: t('settings.hub.items.approvals.title', 'Approval Policies & Security'),
+          description: t(
+            'settings.hub.items.approvals.description',
+            'Manager override thresholds, discount cap policy, self-approval prevention, and escalations.'
+          ),
           path: '/app/settings/approvals',
-          tags: ['approvals', 'manager', 'security', 'limits', 'overrides', 'policy'],
-          title: 'Approval Policies & Security',
+          icon: <ShieldIcon sx={{ color: 'info.main' }} />,
+          badge: { color: 'info', label: t('settings.hub.items.approvals.badge', 'Policy Engine') },
+          tags: ['approvals', 'manager', 'security', 'limits', 'overrides', 'policy', 'escalations'],
         },
         {
-          badge: { color: 'default', label: 'Audit Ready' },
-          description: 'Predefined audit reason codes for order voids, customer refunds, cash variances, and item discounts.',
-          icon: <GavelIcon sx={{ color: 'error.main' }} />,
           id: 'reasons',
+          title: t('settings.hub.items.reasons.title', 'Reason Codes & Compliance'),
+          description: t(
+            'settings.hub.items.reasons.description',
+            'Predefined audit reason codes for order voids, customer refunds, cash variances, and discounts.'
+          ),
           path: '/app/settings/reasons',
-          tags: ['reasons', 'audit', 'voids', 'refunds', 'variances', 'compliance'],
-          title: 'Reason Codes & Compliance',
-        },
-        {
-          badge: { color: 'warning', label: 'Sync Engine' },
-          description: 'Local IndexedDB storage parameters, background sync interval, manual sync triggers, and queue limits.',
-          icon: <SyncIcon sx={{ color: 'warning.main' }} />,
-          id: 'offline-sync',
-          path: '/app/settings/offline-sync',
-          tags: ['offline', 'sync', 'queue', 'storage', 'database', 'engine'],
-          title: 'Offline & Sync Engine Settings',
+          icon: <GavelIcon sx={{ color: 'error.main' }} />,
+          badge: { color: 'default', label: t('settings.hub.items.reasons.badge', 'Audit Ready') },
+          tags: ['reasons', 'audit', 'voids', 'refunds', 'variances', 'compliance', 'codes'],
         },
       ],
     },
     {
-      categoryDescription: 'Data migration, bulk Excel import wizard, system resets, and baseline database seeding',
-      categoryTitle: 'Data Tools & Maintenance',
-      icon: <FileUploadIcon color="success" sx={{ fontSize: 28 }} />,
-      id: 'data-maintenance',
+      id: 'deliveryIntegrations',
+      categoryTitle: t('settings.hub.domains.deliveryIntegrations.title', 'Delivery & Integrations'),
+      categoryDescription: t(
+        'settings.hub.domains.deliveryIntegrations.description',
+        'Delivery management, couriers, offline sync engine, and external service simulations.'
+      ),
+      icon: <LocalShippingIcon color="info" sx={{ fontSize: 28 }} />,
       items: [
         {
-          badge: { color: 'success', label: 'Bulk Tools' },
-          description: 'Bulk upload products, prices, modifier groups, and customers using standardized Excel templates.',
-          icon: <FileUploadIcon sx={{ color: 'success.main' }} />,
-          id: 'import-wizard',
-          path: '/app/settings/import-wizard',
-          tags: ['import', 'excel', 'wizard', 'bulk', 'upload', 'migration'],
-          title: 'Excel Data Import Wizard',
+          id: 'delivery',
+          title: t('settings.hub.items.delivery.title', 'Delivery & Courier Roster'),
+          description: t(
+            'settings.hub.items.delivery.description',
+            'Delivery zones, courier rosters, delivery fee rules, and courier settlements.'
+          ),
+          path: '/app/delivery/orders',
+          icon: <LocalShippingIcon sx={{ color: 'info.main' }} />,
+          badge: { color: 'info', label: t('settings.hub.items.delivery.badge', 'Logistics') },
+          tags: ['delivery', 'couriers', 'zones', 'settlements', 'roster', 'logistics', 'dispatch'],
         },
         {
-          badge: { color: 'error', label: 'Admin Tools' },
-          description: 'Wipe transaction logs, seed mock products, reset sequence numbers, and reset environment state.',
-          icon: <RestartAltIcon sx={{ color: 'error.main' }} />,
-          id: 'data-reset',
+          id: 'offlineSync',
+          title: t('settings.hub.items.offlineSync.title', 'Offline & Sync Engine'),
+          description: t(
+            'settings.hub.items.offlineSync.description',
+            'Local IndexedDB storage parameters, background sync interval, manual sync triggers, and queue limits.'
+          ),
+          path: '/app/simulation/offline-sync',
+          icon: <SyncIcon sx={{ color: 'warning.main' }} />,
+          badge: { color: 'warning', label: t('settings.hub.items.offlineSync.badge', 'Sync Engine') },
+          tags: ['offline', 'sync', 'indexeddb', 'queue', 'storage', 'background', 'conflict'],
+        },
+        {
+          id: 'snappfood',
+          title: t('settings.hub.items.snappfood.title', 'Snappfood Integration Simulator'),
+          description: t(
+            'settings.hub.items.snappfood.description',
+            'Simulate online order webhooks, menu sync status, and delivery platform integration.'
+          ),
+          path: '/app/simulation/snappfood',
+          icon: <ScienceIcon sx={{ color: 'secondary.main' }} />,
+          badge: { color: 'secondary', label: t('settings.hub.items.snappfood.badge', 'Integrations') },
+          tags: ['snappfood', 'integration', 'webhooks', 'orders', 'online', 'simulation', 'third party'],
+        },
+        {
+          id: 'simulation',
+          title: t('settings.hub.items.simulation.title', 'Simulation Center & Mocks'),
+          description: t(
+            'settings.hub.items.simulation.description',
+            'Hardware mocks, printer failover tests, payment terminal simulation, and test harnesses.'
+          ),
+          path: '/app/simulation',
+          icon: <ScienceIcon sx={{ color: 'primary.main' }} />,
+          badge: { color: 'default', label: t('settings.hub.items.simulation.badge', 'Test Center') },
+          tags: ['simulation', 'mocks', 'hardware', 'printers', 'payments', 'testing', 'harness'],
+        },
+      ],
+    },
+    {
+      id: 'localizationData',
+      categoryTitle: t('settings.hub.domains.localizationData.title', 'Localization & Data Tools'),
+      categoryDescription: t(
+        'settings.hub.domains.localizationData.description',
+        'Language and media localization, bulk Excel import/export, and data resets.'
+      ),
+      icon: <TranslateIcon color="secondary" sx={{ fontSize: 28 }} />,
+      items: [
+        {
+          id: 'localization',
+          title: t('settings.hub.items.localization.title', 'Language & Media Localization'),
+          description: t(
+            'settings.hub.items.localization.description',
+            'English/Persian language switcher, RTL/LTR layout controls, and media asset localization.'
+          ),
+          path: '/app/settings/localization',
+          icon: <TranslateIcon sx={{ color: 'secondary.main' }} />,
+          badge: { color: 'secondary', label: t('settings.hub.items.localization.badge', 'EN / FA RTL') },
+          tags: ['localization', 'language', 'persian', 'english', 'rtl', 'ltr', 'media', 'i18n'],
+        },
+        {
+          id: 'importExport',
+          title: t('settings.hub.items.importExport.title', 'Data Import & Export Wizard'),
+          description: t(
+            'settings.hub.items.importExport.description',
+            'Bulk upload products, prices, modifier groups, and customers using standardized Excel templates.'
+          ),
+          path: '/app/catalog/import-export',
+          icon: <FileUploadIcon sx={{ color: 'success.main' }} />,
+          badge: { color: 'success', label: t('settings.hub.items.importExport.badge', 'Excel Wizard') },
+          tags: ['import', 'export', 'excel', 'wizard', 'bulk', 'upload', 'migration', 'data'],
+        },
+        {
+          id: 'dataReset',
+          title: t('settings.hub.items.dataReset.title', 'Data Reset & System Seeds'),
+          description: t(
+            'settings.hub.items.dataReset.description',
+            'Wipe transaction logs, seed mock products, reset sequence numbers, and reset environment state.'
+          ),
           path: '/app/settings/data-reset',
-          tags: ['reset', 'seeds', 'wipe', 'maintenance', 'database', 'environment'],
-          title: 'Data Reset & System Seeds',
+          icon: <RestartAltIcon sx={{ color: 'error.main' }} />,
+          badge: { color: 'error', label: t('settings.hub.items.dataReset.badge', 'Admin Tools') },
+          tags: ['data reset', 'reset', 'seed', 'wipe', 'maintenance', 'database', 'environment'],
+        },
+      ],
+    },
+    {
+      id: 'securityAudit',
+      categoryTitle: t('settings.hub.domains.securityAudit.title', 'Security & Audit Logs'),
+      categoryDescription: t(
+        'settings.hub.domains.securityAudit.description',
+        'Security governance, policy escalation rules, and system audit logs.'
+      ),
+      icon: <ShieldIcon color="error" sx={{ fontSize: 28 }} />,
+      items: [
+        {
+          id: 'securityApprovals',
+          title: t('settings.hub.items.approvals.title', 'Approval Policies & Security'),
+          description: t(
+            'settings.hub.items.approvals.description',
+            'Manager override thresholds, discount cap policy, self-approval prevention, and escalations.'
+          ),
+          path: '/app/settings/approvals',
+          icon: <ShieldIcon sx={{ color: 'info.main' }} />,
+          badge: { color: 'info', label: t('settings.hub.items.approvals.badge', 'Policy Engine') },
+          tags: ['security', 'approvals', 'manager', 'rbac', 'overrides', 'policy', 'audit'],
+        },
+        {
+          id: 'audit',
+          title: t('settings.hub.items.audit.title', 'Audit Explorer & Event Logs'),
+          description: t(
+            'settings.hub.items.audit.description',
+            'Complete system audit logs, manager override trails, void histories, and operational events.'
+          ),
+          path: '/app/audit',
+          icon: <GavelIcon sx={{ color: 'error.main' }} />,
+          badge: { color: 'error', label: t('settings.hub.items.audit.badge', 'System Audit') },
+          tags: ['audit', 'logs', 'events', 'overrides', 'voids', 'history', 'security', 'trails'],
+        },
+        {
+          id: 'logs',
+          title: t('settings.hub.items.logs.title', 'Integration & System Logs'),
+          description: t(
+            'settings.hub.items.logs.description',
+            'Background worker queue logs, transactional outbox monitor, and API event logs.'
+          ),
+          path: '/app/simulation/logs',
+          icon: <ListAltIcon sx={{ color: 'warning.main' }} />,
+          badge: { color: 'warning', label: t('settings.hub.items.logs.badge', 'Outbox Logs') },
+          tags: ['logs', 'outbox', 'integration', 'queues', 'background', 'webhooks', 'api'],
         },
       ],
     },
@@ -212,17 +441,20 @@ export function SettingsHubPage() {
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 1 }}>
               <TuneIcon sx={{ fontSize: 32 }} />
               <Typography variant="h3" sx={{ fontWeight: 800, letterSpacing: '-0.5px' }}>
-                Settings Hub
+                {t('settings.hub.title', 'Settings Hub')}
               </Typography>
             </Stack>
             <Typography variant="body1" sx={{ maxWidth: 640, opacity: 0.9 }}>
-              Centralized configuration portal. Manage business profiles, store branches, hardware registers, security governance, and system tools in one place.
+              {t(
+                'settings.hub.subtitle',
+                'Centralized configuration portal. Manage business profiles, store branches, hardware registers, security governance, and system tools in one place.'
+              )}
             </Typography>
           </Box>
 
           <TextField
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search settings..."
+            placeholder={t('settings.hub.searchPlaceholder', 'Search settings...')}
             size="medium"
             slotProps={{
               input: {
@@ -247,14 +479,17 @@ export function SettingsHubPage() {
         </Stack>
       </Box>
 
-      {/* Settings Grid by Business Functionality */}
+      {/* Settings Grid by Business Domains */}
       {filteredCategories.length === 0 ? (
         <Card sx={{ borderRadius: 3, p: 4, textAlign: 'center' }}>
           <Typography color="text.secondary" variant="h6">
-            No setting found matching &quot;{searchQuery}&quot;
+            {t('settings.hub.noResultsTitle', 'No setting found matching "{{query}}"', { query: searchQuery })}
           </Typography>
           <Typography color="text.secondary" sx={{ mt: 1 }} variant="body2">
-            Try searching for keywords like &quot;currency&quot;, &quot;branches&quot;, &quot;hardware&quot;, &quot;approvals&quot;, or &quot;reset&quot;.
+            {t(
+              'settings.hub.noResultsHelp',
+              'Try searching for keywords like "currency", "branches", "hardware", "approvals", or "reset".'
+            )}
           </Typography>
         </Card>
       ) : (
@@ -279,7 +514,7 @@ export function SettingsHubPage() {
                   sx={{
                     borderBottom: 1,
                     borderColor: 'divider',
-                    bgcolor: (t) => (t.palette.mode === 'dark' ? 'grey.800' : 'grey.100'),
+                    bgcolor: (tr) => (tr.palette.mode === 'dark' ? 'grey.800' : 'grey.100'),
                     p: 2.5,
                   }}
                 >
@@ -320,22 +555,31 @@ export function SettingsHubPage() {
                           display: 'flex',
                           justifyContent: 'space-between',
                           p: 2.5,
-                          textAlign: 'left',
+                          textAlign: isRtl ? 'right' : 'left',
                           transition: 'background-color 0.15s ease',
                           width: '100%',
                           '&:hover': {
-                            bgcolor: (t) => (t.palette.mode === 'dark' ? 'action.hover' : 'primary.50'),
+                            bgcolor: (tr) => (tr.palette.mode === 'dark' ? 'action.hover' : 'primary.50'),
                             '& .chevron-icon': {
                               color: 'primary.main',
-                              transform: 'translateX(4px)',
+                              transform: isRtl ? 'translateX(-4px) rotate(180deg)' : 'translateX(4px)',
                             },
                           },
                         }}
                       >
-                        <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-start', flexGrow: 1, mr: 2 }}>
+                        <Stack
+                          direction="row"
+                          spacing={2}
+                          sx={{
+                            alignItems: 'flex-start',
+                            flexGrow: 1,
+                            mr: isRtl ? 0 : 2,
+                            ml: isRtl ? 2 : 0,
+                          }}
+                        >
                           <Box
                             sx={{
-                              bgcolor: (t) => (t.palette.mode === 'dark' ? 'grey.900' : 'grey.100'),
+                              bgcolor: (tr) => (tr.palette.mode === 'dark' ? 'grey.900' : 'grey.100'),
                               borderRadius: 2,
                               display: 'flex',
                               mt: 0.5,
@@ -368,7 +612,10 @@ export function SettingsHubPage() {
                         <ChevronRightIcon
                           className="chevron-icon"
                           color="action"
-                          sx={{ transition: 'transform 0.2s ease, color 0.2s ease' }}
+                          sx={{
+                            transition: 'transform 0.2s ease, color 0.2s ease',
+                            transform: isRtl ? 'rotate(180deg)' : 'none',
+                          }}
                         />
                       </ButtonBase>
                     ))}

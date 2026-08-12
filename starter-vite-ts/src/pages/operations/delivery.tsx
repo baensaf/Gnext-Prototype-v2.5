@@ -1,7 +1,8 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router';
+
 import type { Branch } from 'src/api/tenantApi';
 import type { Courier, Delivery, DeliveryZone, DeliveryEvent } from 'src/api/deliveryApi';
-
-import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import MapIcon from '@mui/icons-material/Map';
@@ -48,7 +49,23 @@ import { tenantApi } from 'src/api/tenantApi';
 import { deliveryApi } from 'src/api/deliveryApi';
 
 export function DeliveryPage() {
-  const [tab, setTab] = useState<'BOARD' | 'COURIERS' | 'ZONES' | 'AUDIT'>('BOARD');
+  const location = useLocation();
+
+  const getInitialTab = (): 'BOARD' | 'COURIERS' | 'ZONES' | 'AUDIT' => {
+    if (location.pathname.includes('/couriers')) return 'COURIERS';
+    if (location.pathname.includes('/zones')) return 'ZONES';
+    if (location.pathname.includes('/audit')) return 'AUDIT';
+    return 'BOARD';
+  };
+
+  const [tab, setTab] = useState<'BOARD' | 'COURIERS' | 'ZONES' | 'AUDIT'>(getInitialTab);
+
+  useEffect(() => {
+    if (location.pathname.includes('/couriers')) setTab('COURIERS');
+    else if (location.pathname.includes('/zones')) setTab('ZONES');
+    else if (location.pathname.includes('/audit')) setTab('AUDIT');
+    else if (location.pathname.includes('/orders')) setTab('BOARD');
+  }, [location.pathname]);
 
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [couriers, setCouriers] = useState<Courier[]>([]);

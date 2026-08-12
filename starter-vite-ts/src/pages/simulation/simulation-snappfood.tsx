@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import React, { useState, useEffect } from 'react';
 
 import {
   Box,
@@ -58,7 +59,7 @@ export function SimulationSnappfoodPage() {
   const [expeditionType, setExpeditionType] = useState<string>('DELIVERY');
   const [price, setPrice] = useState<number>(1910);
   const [paidPrice, setPaidPrice] = useState<number>(1910);
-  const [otherDiscounts, setOtherDiscounts] = useState<number>(0);
+  const [otherDiscounts] = useState<number>(0);
   const [notes, setNotes] = useState<string>('غذا داخل باکس قرار داده شود - اردر تست');
   const [bikerName, setBikerName] = useState<string>('علی تهرانی');
   const [bikerStatusV2, setBikerStatusV2] = useState<string>('REQUESTED');
@@ -385,7 +386,7 @@ export function SimulationSnappfoodPage() {
                         {JSON.stringify(tokenResponse, null, 2)}
                       </Box>
                     ) : (
-                      <Typography color="text.secondary">No token requested yet. Click "Request Access Token".</Typography>
+                      <Typography color="text.secondary">No token requested yet. Click &quot;Request Access Token&quot;.</Typography>
                     )}
                   </Card>
                 </Grid>

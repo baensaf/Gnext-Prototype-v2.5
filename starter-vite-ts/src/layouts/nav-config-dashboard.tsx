@@ -80,14 +80,9 @@ export const navData: NavSectionProps['data'] = [
         icon: ICONS.kds,
       },
       {
-        title: 'Delivery Orders',
+        title: 'Delivery Management',
         path: '/app/delivery/orders',
         icon: ICONS.kds,
-      },
-      {
-        title: 'Couriers Roster',
-        path: '/app/delivery/couriers',
-        icon: ICONS.customers,
       },
       {
         title: 'Courier Settlements',
@@ -95,13 +90,8 @@ export const navData: NavSectionProps['data'] = [
         icon: ICONS.reasons,
       },
       {
-        title: 'Cashier Shifts',
+        title: 'Cashier & Shifts',
         path: '/app/cashier/shifts',
-        icon: ICONS.drawer,
-      },
-      {
-        title: 'Business Days',
-        path: '/app/cashier/business-days',
         icon: ICONS.drawer,
       },
       {
@@ -129,12 +119,6 @@ export const navData: NavSectionProps['data'] = [
         title: 'Print Queue',
         path: '/app/operations/print-queue',
         icon: ICONS.drawer,
-        info: <Label color="info">V5 Preview</Label>,
-      },
-      {
-        title: 'System Monitoring',
-        path: '/app/operations/monitoring',
-        icon: ICONS.dashboard,
         info: <Label color="info">V5 Preview</Label>,
       },
     ],
@@ -188,18 +172,8 @@ export const navData: NavSectionProps['data'] = [
         icon: ICONS.media,
       },
       {
-        title: 'Price Book',
+        title: 'Price Book & Groups',
         path: '/app/pricing/price-book',
-        icon: ICONS.pricing,
-      },
-      {
-        title: 'Price Groups',
-        path: '/app/pricing/price-groups',
-        icon: ICONS.pricing,
-      },
-      {
-        title: 'Bulk Price Update',
-        path: '/app/pricing/bulk-update',
         icon: ICONS.pricing,
       },
     ],
@@ -273,43 +247,8 @@ export const navData: NavSectionProps['data'] = [
     subheader: 'Settings',
     items: [
       {
-        title: 'General Settings',
-        path: '/app/settings/general',
-        icon: ICONS.settings,
-      },
-      {
-        title: 'Order Workflow',
-        path: '/app/settings/order-workflow',
-        icon: ICONS.settings,
-      },
-      {
-        title: 'Discounts & Credit',
-        path: '/app/settings/discounts-credit',
-        icon: ICONS.settings,
-      },
-      {
-        title: 'Payments & Refunds',
-        path: '/app/settings/payments-refunds',
-        icon: ICONS.settings,
-      },
-      {
-        title: 'Approvals & Profiles',
-        path: '/app/settings/approvals',
-        icon: ICONS.settings,
-      },
-      {
-        title: 'Reason Codes',
-        path: '/app/settings/reasons',
-        icon: ICONS.settings,
-      },
-      {
-        title: 'Localization & Formats',
-        path: '/app/settings/localization',
-        icon: ICONS.settings,
-      },
-      {
-        title: 'Data Reset',
-        path: '/app/settings/data-reset',
+        title: 'Settings Hub',
+        path: '/app/settings',
         icon: ICONS.settings,
       },
     ],
@@ -321,30 +260,6 @@ export const navData: NavSectionProps['data'] = [
         title: 'Inventory Stock & Movement',
         path: '/app/inventory/stock',
         icon: ICONS.inventory,
-        info: <Label color="info">V5 Preview</Label>,
-      },
-      {
-        title: 'Printers & Print Routing',
-        path: '/app/operations/printers',
-        icon: ICONS.terminal,
-        info: <Label color="info">V5 Preview</Label>,
-      },
-      {
-        title: 'Approvals & Policy Escalation',
-        path: '/app/settings/approvals',
-        icon: ICONS.settings,
-        info: <Label color="info">V5 Preview</Label>,
-      },
-      {
-        title: 'Offline Sync & Conflict Engine',
-        path: '/app/simulation/offline-sync',
-        icon: ICONS.terminal,
-        info: <Label color="info">V5 Preview</Label>,
-      },
-      {
-        title: 'Transactional Outbox Monitor',
-        path: '/app/operations/monitoring',
-        icon: ICONS.dashboard,
         info: <Label color="info">V5 Preview</Label>,
       },
     ],
@@ -401,14 +316,9 @@ export function useNavData(): NavSectionProps['data'] {
           icon: ICONS.kds,
         },
         {
-          title: t('nav.delivery', 'Delivery Orders'),
+          title: t('nav.delivery', 'Delivery Management'),
           path: '/app/delivery/orders',
           icon: ICONS.kds,
-        },
-        {
-          title: t('nav.couriers', 'Couriers Roster'),
-          path: '/app/delivery/couriers',
-          icon: ICONS.customers,
         },
         {
           title: t('nav.courierSettlements', 'Courier Settlements'),
@@ -416,13 +326,8 @@ export function useNavData(): NavSectionProps['data'] {
           icon: ICONS.reasons,
         },
         {
-          title: t('nav.cashier', 'Cashier Shifts'),
+          title: t('nav.cashier', 'Cashier & Shifts'),
           path: '/app/cashier/shifts',
-          icon: ICONS.drawer,
-        },
-        {
-          title: t('nav.businessDays', 'Business Days'),
-          path: '/app/cashier/business-days',
           icon: ICONS.drawer,
         },
         {
@@ -450,12 +355,6 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.printQueue', 'Print Queue'),
           path: '/app/operations/print-queue',
           icon: ICONS.drawer,
-          info: <Label color="info">V5 Preview</Label>,
-        },
-        {
-          title: t('nav.monitoring', 'System Monitoring'),
-          path: '/app/operations/monitoring',
-          icon: ICONS.dashboard,
           info: <Label color="info">V5 Preview</Label>,
         },
       ],
@@ -509,18 +408,8 @@ export function useNavData(): NavSectionProps['data'] {
           icon: ICONS.media,
         },
         {
-          title: t('nav.pricing', 'Price Book'),
+          title: t('nav.pricing', 'Price Book & Groups'),
           path: '/app/pricing/price-book',
-          icon: ICONS.pricing,
-        },
-        {
-          title: t('nav.priceGroups', 'Price Groups'),
-          path: '/app/pricing/price-groups',
-          icon: ICONS.pricing,
-        },
-        {
-          title: t('nav.bulkUpdate', 'Bulk Price Update'),
-          path: '/app/pricing/bulk-update',
           icon: ICONS.pricing,
         },
       ],
@@ -572,7 +461,6 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.syncSim', 'Offline Sync Simulation'),
           path: '/app/simulation/offline-sync',
           icon: ICONS.terminal,
-          info: <Label color="info">V5 Preview</Label>,
         },
         {
           title: t('nav.logsSim', 'Integration Logs'),
@@ -595,44 +483,8 @@ export function useNavData(): NavSectionProps['data'] {
       subheader: t('nav.settingsGroup', 'Settings'),
       items: [
         {
-          title: t('nav.settings', 'General Settings'),
-          path: '/app/settings/general',
-          icon: ICONS.settings,
-        },
-        {
-          title: t('nav.orderWorkflow', 'Order Workflow'),
-          path: '/app/settings/order-workflow',
-          icon: ICONS.settings,
-        },
-        {
-          title: t('nav.discountsCreditSettings', 'Discounts & Credit'),
-          path: '/app/settings/discounts-credit',
-          icon: ICONS.settings,
-        },
-        {
-          title: t('nav.paymentsRefundsSettings', 'Payments & Refunds'),
-          path: '/app/settings/payments-refunds',
-          icon: ICONS.settings,
-        },
-        {
-          title: t('nav.approvals', 'Approvals & Profiles'),
-          path: '/app/settings/approvals',
-          icon: ICONS.settings,
-          info: <Label color="info">V5 Preview</Label>,
-        },
-        {
-          title: t('nav.reasons', 'Reason Codes'),
-          path: '/app/settings/reasons',
-          icon: ICONS.settings,
-        },
-        {
-          title: t('nav.localization', 'Localization & Formats'),
-          path: '/app/settings/localization',
-          icon: ICONS.settings,
-        },
-        {
-          title: t('nav.dataReset', 'Data Reset'),
-          path: '/app/settings/data-reset',
+          title: t('nav.settingsHub', 'Settings Hub'),
+          path: '/app/settings',
           icon: ICONS.settings,
         },
       ],
@@ -644,30 +496,6 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.v5Preview', 'Inventory Stock & Movement'),
           path: '/app/inventory/stock',
           icon: ICONS.inventory,
-          info: <Label color="info">V5 Preview</Label>,
-        },
-        {
-          title: t('nav.printersV5', 'Printers & Station Routing'),
-          path: '/app/operations/printers',
-          icon: ICONS.terminal,
-          info: <Label color="info">V5 Preview</Label>,
-        },
-        {
-          title: t('nav.approvalsV5', 'Multi-Step Approvals & Policy'),
-          path: '/app/settings/approvals',
-          icon: ICONS.settings,
-          info: <Label color="info">V5 Preview</Label>,
-        },
-        {
-          title: t('nav.offlineSyncV5', 'Offline Sync & Conflict Engine'),
-          path: '/app/simulation/offline-sync',
-          icon: ICONS.terminal,
-          info: <Label color="info">V5 Preview</Label>,
-        },
-        {
-          title: t('nav.outboxV5', 'Outbox & Event Queue Monitor'),
-          path: '/app/operations/monitoring',
-          icon: ICONS.dashboard,
           info: <Label color="info">V5 Preview</Label>,
         },
       ],

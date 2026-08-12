@@ -499,8 +499,14 @@ test.describe('R27 Real Browser E2E Certification Suite', () => {
     expect(execRes.ok()).toBe(true);
     await expect(page.locator('body')).toContainText(/Import Job Executed Successfully!|باتشکر/i, { timeout: 15000 });
 
-    // 2. Navigate to System Data Reset via sidebar link
-    const resetNav = page.locator('a[href="/app/settings/data-reset"]').first();
+    // 2. Navigate to System Data Reset via Settings Hub
+    const settingsHubNav = page.locator('a[href="/app/settings"]').first();
+    await expect(settingsHubNav).toBeVisible({ timeout: 10000 });
+    await settingsHubNav.click();
+    await page.waitForURL('**/app/settings');
+    await page.waitForLoadState('networkidle');
+
+    const resetNav = page.locator('button, a').filter({ hasText: /Data Reset & System Seeds|بازنشانی داده/i }).first();
     await expect(resetNav).toBeVisible({ timeout: 10000 });
     await resetNav.click();
     await page.waitForURL('**/app/settings/data-reset');
