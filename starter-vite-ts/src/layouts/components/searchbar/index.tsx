@@ -1,11 +1,10 @@
 import type { BoxProps } from '@mui/material/Box';
 import type { Breakpoint } from '@mui/material/styles';
-
 import type { NavSectionProps } from 'src/components/nav-section';
 
+import { useTranslation } from 'react-i18next';
 import parse from 'autosuggest-highlight/parse';
 import match from 'autosuggest-highlight/match';
-import { useTranslation } from 'react-i18next';
 import { varAlpha } from 'minimal-shared/utils';
 import { useBoolean } from 'minimal-shared/hooks';
 import { useMemo, useState, useEffect, useCallback } from 'react';

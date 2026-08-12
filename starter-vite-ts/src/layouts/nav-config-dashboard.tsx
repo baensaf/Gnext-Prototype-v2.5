@@ -1,6 +1,6 @@
-import { useTranslation } from 'react-i18next';
-
 import type { NavSectionProps } from 'src/components/nav-section';
+
+import { useTranslation } from 'react-i18next';
 
 import { CONFIG } from 'src/global-config';
 
