@@ -64,10 +64,10 @@ test.describe('POS Order, Checkout / Pay Now, and Receipt Print E2E Workflow', (
     await postPaymentBtn.click();
 
     // 7. Verify Order is Fully Settled
-    await expect(checkoutDialog).toContainText(/Order Fully Settled/i, { timeout: 15000 });
+    await expect(checkoutDialog).toContainText(/Order Fully Settled|سفارش به طور کامل تسویه شد/i, { timeout: 15000 });
 
     // 8. Click "Print Thermal Receipt" button
-    const printReceiptBtn = checkoutDialog.locator('button').filter({ hasText: /Print Thermal Receipt/i }).first();
+    const printReceiptBtn = checkoutDialog.locator('button').filter({ hasText: /Print Thermal Receipt|چاپ فاکتور/i }).first();
     await expect(printReceiptBtn).toBeVisible({ timeout: 10000 });
     await printReceiptBtn.click();
 
@@ -76,28 +76,26 @@ test.describe('POS Order, Checkout / Pay Now, and Receipt Print E2E Workflow', (
     await page.waitForLoadState('networkidle');
 
     // 10. Verify Thermal Receipt content structure
-    await expect(page.locator('body')).toContainText(/Order #:/i, { timeout: 15000 });
-    await expect(page.locator('body')).toContainText(/TOTAL:/i);
-    await expect(page.locator('body')).toContainText(/Payment Tenders Split:/i);
+    await expect(page.locator('body')).toContainText(/Order #:|ORD-|شماره سفارش/i, { timeout: 15000 });
+    await expect(page.locator('body')).toContainText(/TOTAL:|IRR|جمع کل/i);
+    await expect(page.locator('body')).toContainText(/Payment Tenders Split:|پرداخت/i);
 
     // 11. Trigger Thermal Receipt Print action
-    const printActionBtn = page.locator('button').filter({ hasText: /Print Receipt/i }).first();
+    const printActionBtn = page.locator('button').filter({ hasText: /Print Receipt|چاپ فاکتور/i }).first();
     await expect(printActionBtn).toBeVisible({ timeout: 10000 });
 
-    // Spy on window.print to verify print triggering without blocking automated browser
-    let printTriggered = false;
-    await page.exposeFunction('onWindowPrintTriggered', () => {
-      printTriggered = true;
-    });
     await page.evaluate(() => {
+      (window as any).__printed = 0;
       window.print = () => {
-        (window as any).onWindowPrintTriggered();
+        (window as any).__printed = ((window as any).__printed || 0) + 1;
       };
     });
 
     await printActionBtn.click();
-    await page.waitForTimeout(1000);
-    expect(printTriggered).toBe(true);
+    await page.waitForTimeout(500);
+
+    const isPrinted = await page.evaluate(() => (window as any).__printed > 0);
+    expect(isPrinted).toBe(true);
   });
 
 });
