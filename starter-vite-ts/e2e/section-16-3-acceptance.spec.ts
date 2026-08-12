@@ -127,7 +127,7 @@ test.describe('Specification §16.3 End-to-End Acceptance Workflows', () => {
     await postPaymentBtn.click();
     await page.waitForTimeout(800);
 
-    await expect(checkoutDialog).toContainText(/Order Fully Settled!|تسویه کامل|Print Thermal Receipt/i, { timeout: 15000 });
+    await expect(checkoutDialog).toContainText(/Order Fully Settled!|سفارش به طور کامل تسویه شد!|تسویه کامل|Print Thermal Receipt/i, { timeout: 15000 });
 
     // 6. Simulated Print Failure & Fallback Retry Flow
     const printReceiptBtn = checkoutDialog.locator('button').filter({ hasText: /Print Thermal Receipt|چاپ فاکتور/i }).first();

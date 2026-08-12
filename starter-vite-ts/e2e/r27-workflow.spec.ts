@@ -93,10 +93,10 @@ test.describe('R27 Real Browser E2E Certification Suite', () => {
     await submitBtn.click();
 
     // Assert checkout modal
-    await expect(page.locator('body')).toContainText(/Order Settlement & Checkout|Order Placed Successfully/i, { timeout: 15000 });
+    await expect(page.locator('body')).toContainText(/Order Settlement & Checkout|تسویه و پرداخت سفارش|Order Placed Successfully|تسویه/i, { timeout: 15000 });
 
     // Post payment tender in checkout modal
-    const checkoutDialog = page.locator('.MuiDialog-root').filter({ hasText: /Order Settlement & Checkout/i }).first();
+    const checkoutDialog = page.locator('.MuiDialog-root').filter({ hasText: /Order Settlement & Checkout|تسویه و پرداخت سفارش|تسویه/i }).first();
     await expect(checkoutDialog).toBeVisible({ timeout: 10000 });
 
     const postPaymentBtn = checkoutDialog.locator('button').filter({ hasText: /Post Payment Tender|پرداخت/i }).first();
@@ -104,7 +104,7 @@ test.describe('R27 Real Browser E2E Certification Suite', () => {
     await postPaymentBtn.click();
 
     // Assert order fully settled and receipt button available
-    await expect(checkoutDialog).toContainText(/Order Fully Settled!|Print Thermal Receipt/i, { timeout: 15000 });
+    await expect(checkoutDialog).toContainText(/Order Fully Settled!|سفارش به طور کامل تسویه شد!|تسویه کامل|Print Thermal Receipt/i, { timeout: 15000 });
   });
 
   test('4. Operational KDS & Delivery Workflow (API-Backed State Outcomes)', async ({ page }) => {

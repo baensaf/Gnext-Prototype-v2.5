@@ -54,12 +54,12 @@ test.describe('POS Order, Checkout / Pay Now, and Receipt Print E2E Workflow', (
     await expect(placeOrderBtn).toBeEnabled({ timeout: 15000 });
     await placeOrderBtn.click();
 
-    // 5. Assert Checkout Modal Opens ("Order Settlement & Checkout")
-    const checkoutDialog = page.locator('.MuiDialog-root').filter({ hasText: /Order Settlement & Checkout/i }).first();
+    // 5. Assert Checkout Modal Opens ("Order Settlement & Checkout" / "تسویه و پرداخت سفارش")
+    const checkoutDialog = page.locator('.MuiDialog-root').filter({ hasText: /Order Settlement & Checkout|تسویه و پرداخت سفارش|تسویه/i }).first();
     await expect(checkoutDialog).toBeVisible({ timeout: 15000 });
 
     // 6. Post Payment Tender ("Pay Now" / "Post Payment Tender")
-    const postPaymentBtn = checkoutDialog.locator('button').filter({ hasText: /Post Payment Tender/i }).first();
+    const postPaymentBtn = checkoutDialog.locator('button').filter({ hasText: /Post Payment Tender|Pay Now|پرداخت/i }).first();
     await expect(postPaymentBtn).toBeVisible({ timeout: 10000 });
     await postPaymentBtn.click();
 
