@@ -36,10 +36,12 @@ export function AuditExplorerPage() {
         axios.get('/api/v1/reports/audit'),
         axios.get('/api/v1/reports/alerts'),
       ]);
-      setAuditLogs(auditRes.data);
-      setAlerts(alertRes.data);
+      setAuditLogs(Array.isArray(auditRes.data) ? auditRes.data : (auditRes.data?.data || []));
+      setAlerts(Array.isArray(alertRes.data) ? alertRes.data : (alertRes.data?.data || []));
     } catch (err) {
       console.error('Failed to load audit data:', err);
+      setAuditLogs([]);
+      setAlerts([]);
     } finally {
       setLoading(false);
     }
@@ -76,9 +78,9 @@ export function AuditExplorerPage() {
       </Stack>
 
       {/* Operational Alerts Bar */}
-      {alerts.length > 0 && (
+      {(Array.isArray(alerts) ? alerts : []).length > 0 && (
         <Stack spacing={2} sx={{ mb: 3 }}>
-          {alerts.map((alt) => (
+          {(Array.isArray(alerts) ? alerts : []).map((alt) => (
             <Alert
               key={alt.id}
               severity={alt.severity === 'CRITICAL' ? 'error' : 'warning'}
@@ -102,7 +104,7 @@ export function AuditExplorerPage() {
       {/* Audit Logs Table */}
       <Card sx={{ p: 3, borderRadius: 3 }}>
         <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-          System Audit Events ({auditLogs.length} entries)
+          System Audit Events ({(Array.isArray(auditLogs) ? auditLogs : []).length} entries)
         </Typography>
 
         <TableContainer component={Paper} variant="outlined">
@@ -117,7 +119,7 @@ export function AuditExplorerPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {auditLogs.map((log) => (
+              {(Array.isArray(auditLogs) ? auditLogs : []).map((log) => (
                 <TableRow key={log.id} hover>
                   <TableCell sx={{ fontWeight: 'bold' }}>
                     <Chip label={log.action} size="small" color="primary" variant="outlined" />

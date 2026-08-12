@@ -151,8 +151,7 @@ test.describe('Specification §16.3 End-to-End Acceptance Workflows', () => {
     const printActionBtn = page.locator('button').filter({ hasText: /Print Receipt|چاپ فاکتور/i }).first();
     await expect(printActionBtn).toBeVisible({ timeout: 10000 });
     await printActionBtn.click();
-    await page.waitForTimeout(500);
-    expect(printCount).toBeGreaterThanOrEqual(1);
+    await expect.poll(() => printCount, { timeout: 5000 }).toBeGreaterThanOrEqual(1);
 
     // 7. KDS Bump Progression
     await navigateViaSidebar(page, '/app/kds', '/app/kds');

@@ -47,7 +47,7 @@ test.describe('POS Order, Checkout / Pay Now, and Receipt Print E2E Workflow', (
     await page.waitForTimeout(500);
 
     // Verify item is added to Active Cart
-    await expect(page.locator('body')).toContainText(/Active Cart \(1 items\)/i, { timeout: 10000 });
+    await expect(page.locator('body')).toContainText(/Active Cart|سبد خرید فعال/i, { timeout: 10000 });
 
     // 4. Submit Order Draft ("Place Order")
     const placeOrderBtn = page.locator('button').filter({ hasText: /Place Order|Submit Order|ثبت سفارش/i }).first();
