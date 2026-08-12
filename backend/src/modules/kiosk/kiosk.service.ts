@@ -145,8 +145,8 @@ export class KioskService {
       throw new BadRequestException('Kiosk order must contain at least one item');
     }
 
-    // Idempotency check: if an order with same idempotency key or correlation ID exists, return it
-    if (data.idempotency_key || correlationId) {
+    // Idempotency check: if an order with same idempotency key exists, return it
+    if (data.idempotency_key && data.idempotency_key.trim() !== '') {
       const existing = await this.orderRepo.findOne({
         where: [
           { tenant_id: tenantId, channel: 'KIOSK', order_number: data.idempotency_key },

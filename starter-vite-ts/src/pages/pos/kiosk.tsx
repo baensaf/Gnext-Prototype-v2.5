@@ -26,6 +26,7 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 
+import { useAuthStore } from 'src/store/useAuthStore';
 import { httpClient as axios } from 'src/api/httpClient';
 
 interface KioskProduct {
@@ -111,9 +112,11 @@ export function KioskPage() {
     fetchBootstrap();
   }, []);
 
+  const { setLocale } = useAuthStore();
+
   const toggleLanguage = () => {
     const nextLang = i18n.language === 'fa' ? 'en' : 'fa';
-    i18n.changeLanguage(nextLang);
+    setLocale(nextLang);
   };
 
   const handleStartOrder = (type: 'DINE_IN' | 'TAKEAWAY') => {

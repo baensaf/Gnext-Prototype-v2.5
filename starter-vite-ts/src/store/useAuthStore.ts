@@ -65,8 +65,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         error: null,
       });
 
-      if (user.preferredLocale) {
-        await get().setLocale(user.preferredLocale);
+      const activeLocale = get().locale || user.preferredLocale || 'fa';
+      if (activeLocale) {
+        await get().setLocale(activeLocale);
       }
 
       return true;

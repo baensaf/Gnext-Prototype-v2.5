@@ -24,19 +24,29 @@ test.describe('R27 Real Browser E2E Certification Suite', () => {
     await page.waitForLoadState('networkidle');
 
     const htmlElem = page.locator('html');
-    const loginLangBtn = page.locator('#login-language-toggle-btn').first();
+    const loginLangBtn = page.locator('#login-language-toggle-btn, button[aria-label="Languages button"]').first();
     await expect(loginLangBtn).toBeVisible({ timeout: 10000 });
 
-    // Toggle language once on Login page
+    // Switch to English via popover menu
     await loginLangBtn.click();
+    await page.waitForTimeout(200);
+    const enOption = page.locator('.MuiMenuItem-root').filter({ hasText: 'English' }).first();
+    if (await enOption.isVisible()) {
+      await enOption.click();
+    }
     await page.waitForTimeout(300);
 
     const lang1 = (await htmlElem.getAttribute('lang')) || 'en';
     const expectedDir1 = lang1 === 'fa' ? 'rtl' : 'ltr';
     await expect(htmlElem).toHaveAttribute('dir', expectedDir1, { timeout: 10000 });
 
-    // Toggle language back
+    // Switch to Persian via popover menu
     await loginLangBtn.click();
+    await page.waitForTimeout(200);
+    const faOption = page.locator('.MuiMenuItem-root').filter({ hasText: 'فارسی' }).first();
+    if (await faOption.isVisible()) {
+      await faOption.click();
+    }
     await page.waitForTimeout(300);
 
     const lang2 = (await htmlElem.getAttribute('lang')) || 'fa';

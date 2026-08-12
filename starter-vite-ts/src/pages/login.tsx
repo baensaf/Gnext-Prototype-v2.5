@@ -9,19 +9,22 @@ import {
   Alert,
   Stack,
   Button,
-  Tooltip,
   TextField,
   Typography,
   IconButton,
 } from '@mui/material';
 
 import { useAuthStore } from 'src/store/useAuthStore';
+
 import { AuthSplitLayout } from 'src/layouts/auth-split';
+
+import { useSettingsContext } from 'src/components/settings';
 
 export function LoginPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { login, isLoading, error, locale, setLocale, clearError, isAuthenticated, fetchMe } = useAuthStore();
+  const settings = useSettingsContext();
 
   const [username, setUsername] = useState('admin@gnext.local');
   const [password, setPassword] = useState('GnextDemo!2026');
@@ -49,6 +52,7 @@ export function LoginPage() {
     const activeLang = document.documentElement.lang || i18n.language || locale || 'fa';
     const nextLang = activeLang === 'fa' ? 'en' : 'fa';
     setLocale(nextLang);
+    settings.setField('direction', nextLang === 'fa' ? 'rtl' : 'ltr');
   };
 
   return (
@@ -68,14 +72,9 @@ export function LoginPage() {
             size="small"
             sx={{ fontWeight: 'bold' }}
           />
-          <Tooltip title={t('common.language')}>
-            <IconButton id="login-language-toggle-btn" onClick={handleToggleLanguage} color="primary">
-              <LanguageIcon />
-              <Typography variant="caption" sx={{ ml: 0.5, fontWeight: 'bold' }}>
-                {locale.toUpperCase()}
-              </Typography>
-            </IconButton>
-          </Tooltip>
+          <IconButton id="login-language-toggle-btn" onClick={handleToggleLanguage} color="primary">
+            <LanguageIcon />
+          </IconButton>
         </Stack>
 
         <Box sx={{ mb: 3 }}>

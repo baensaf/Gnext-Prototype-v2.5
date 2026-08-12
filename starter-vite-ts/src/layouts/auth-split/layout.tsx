@@ -19,6 +19,7 @@ import { Logo } from 'src/components/logo';
 import { AuthSplitSection } from './section';
 import { AuthSplitContent } from './content';
 import { SettingsButton } from '../components/settings-button';
+import { LanguagePopover } from '../components/language-popover';
 import { MainSection, LayoutSection, HeaderSection } from '../core';
 
 // ----------------------------------------------------------------------
@@ -70,6 +71,15 @@ export function AuthSplitLayout({
           >
             Need help?
           </Link>
+
+          {/** @slot Language popover */}
+          <LanguagePopover
+            id="login-language-toggle-btn"
+            data={[
+              { value: 'fa', label: 'فارسی', countryCode: 'IR' },
+              { value: 'en', label: 'English', countryCode: 'GB' },
+            ]}
+          />
 
           {/** @slot Settings button */}
           <SettingsButton />

@@ -85,7 +85,9 @@ export class AuthController {
 
   @Post('change-language')
   async changeLanguage(@Body() body: { locale: string }, @Req() req: Request) {
-    const token = req.cookies?.gnext_session;
+    const authHeader = req.headers.authorization;
+    const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+    const token = req.cookies?.gnext_session || (req.headers['x-session-token'] as string) || bearerToken;
     const correlationId = (req as any).correlationId;
     return await this.authService.changeLanguage(token, body.locale, correlationId);
   }

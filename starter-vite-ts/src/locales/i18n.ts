@@ -23,6 +23,17 @@ export const updateDocumentDirection = (lang: string) => {
   document.documentElement.dir = dir;
   document.documentElement.lang = lang;
   localStorage.setItem('gnext_locale', lang);
+
+  try {
+    const rawSettings = localStorage.getItem('gnext_settings');
+    const settings = rawSettings ? JSON.parse(rawSettings) : {};
+    if (settings.direction !== dir) {
+      settings.direction = dir;
+      localStorage.setItem('gnext_settings', JSON.stringify(settings));
+    }
+  } catch {
+    // Ignore storage parse errors
+  }
 };
 
 // Initialize direction immediately

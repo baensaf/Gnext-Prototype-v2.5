@@ -15,6 +15,7 @@ import { Logo } from 'src/components/logo';
 
 import { SimpleCompactContent } from './content';
 import { SettingsButton } from '../components/settings-button';
+import { LanguagePopover } from '../components/language-popover';
 import { MainSection, LayoutSection, HeaderSection } from '../core';
 
 // ----------------------------------------------------------------------
@@ -58,6 +59,14 @@ export function SimpleLayout({
           >
             Need help?
           </Link>
+
+          {/** @slot Language popover */}
+          <LanguagePopover
+            data={[
+              { value: 'fa', label: 'فارسی', countryCode: 'IR' },
+              { value: 'en', label: 'English', countryCode: 'GB' },
+            ]}
+          />
 
           {/** @slot Settings button */}
           <SettingsButton />

@@ -21,6 +21,7 @@ const cacheRtl = createCache({
 export function Rtl({ children, direction }: RtlProps) {
   useEffect(() => {
     document.dir = direction;
+    document.documentElement.dir = direction;
   }, [direction]);
 
   if (direction === 'rtl') {

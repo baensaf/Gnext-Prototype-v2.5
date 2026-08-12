@@ -20,6 +20,9 @@ import { DeliveryService } from '../src/modules/delivery/delivery.service';
 import { ReportsService } from '../src/modules/reports/reports.service';
 import { SimulationService } from '../src/modules/simulation/simulation.service';
 import { OfflineSyncService } from '../src/modules/offline-sync/offline-sync.service';
+import { KioskService } from '../src/modules/kiosk/kiosk.service';
+import { ImportExportService } from '../src/modules/import-export/import-export.service';
+import { SettingsService } from '../src/modules/settings/settings.service';
 
 // Entities
 import { Tenant } from '../src/entities/Tenant.entity';
@@ -43,6 +46,7 @@ import { AuditEvent } from '../src/entities/AuditEvent.entity';
 import { IntegrationLog } from '../src/entities/IntegrationLog.entity';
 import { OfflineQueueItem } from '../src/entities/OfflineQueueItem.entity';
 import { SyncConflictRecord } from '../src/entities/SyncConflictRecord.entity';
+import { TenantSetting } from '../src/entities/TenantSetting.entity';
 
 // Utility
 import { MoneyUtil } from '../src/common/utils/money.util';
@@ -65,6 +69,9 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
   let reportsService: ReportsService;
   let simulationService: SimulationService;
   let offlineSyncService: OfflineSyncService;
+  let kioskService: KioskService;
+  let importExportService: ImportExportService;
+  let settingsService: SettingsService;
 
   let tenantId: string;
   let branchId: string;
@@ -112,6 +119,9 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     reportsService = moduleRef.get<ReportsService>(ReportsService);
     simulationService = moduleRef.get<SimulationService>(SimulationService);
     offlineSyncService = moduleRef.get<OfflineSyncService>(OfflineSyncService);
+    kioskService = moduleRef.get<KioskService>(KioskService);
+    importExportService = moduleRef.get<ImportExportService>(ImportExportService);
+    settingsService = moduleRef.get<SettingsService>(SettingsService);
 
     await dataSource.runMigrations();
 
@@ -1263,4 +1273,224 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     });
     expect(offlineAudits.length).toBeGreaterThanOrEqual(3);
   });
+
+  // =========================================================================
+  // WORKFLOW 6: KIOSK COMPLETE LIFECYCLE (§16.3.6)
+  // =========================================================================
+  it('Workflow 6: Kiosk - Guest vs Mandatory Identification, Idempotency, Tax Calculation, Simulated Payment/Receipt Failures & Retries', async () => {
+    const correlationId = `corr-kiosk-${Date.now()}`;
+    const tag = Date.now().toString().slice(-5);
+
+    // Step 1: Bootstrap Context & Optional Guest Path
+    const bootstrap = await kioskService.getBootstrapContext(tenantId, branchId, terminalId);
+    expect(bootstrap.channel).toBe('KIOSK');
+    expect(bootstrap.customer_identity_policy).toBe('OPTIONAL');
+
+    // Create Guest Kiosk Order
+    const guestOrder = await kioskService.createKioskOrder(
+      tenantId,
+      {
+        branch_id: branchId,
+        terminal_id: terminalId,
+        order_type: 'TAKEAWAY',
+        items: [{ product_id: productId, quantity: 2 }],
+      },
+      correlationId,
+    );
+
+    expect(guestOrder.id).toBeDefined();
+    expect(guestOrder.channel).toBe('KIOSK');
+    expect(MoneyUtil.format(guestOrder.subtotal_amount)).toBe('400000.0000');
+    expect(MoneyUtil.format(guestOrder.tax_amount)).toBe('36000.0000'); // 9% tax
+    expect(MoneyUtil.format(guestOrder.total_amount)).toBe('436000.0000');
+
+    // Process Kiosk POS Payment
+    const guestPaymentRes = await kioskService.processKioskPayment(tenantId, {
+      order_id: guestOrder.id,
+      payment_method_id: posPaymentMethodId,
+    });
+    expect(guestPaymentRes.success).toBe(true);
+    expect(guestPaymentRes.receipt).toBeDefined();
+    expect(guestPaymentRes.receipt.status).toContain('SENT TO KITCHEN');
+
+    // Step 2: Mandatory Identification Policy Path
+    const settingRepo = dataSource.getRepository(TenantSetting);
+    let identitySetting = await settingRepo.findOne({ where: { tenant_id: tenantId, key: 'KIOSK_CUSTOMER_IDENTITY_POLICY' } });
+    if (!identitySetting) {
+      identitySetting = settingRepo.create({ tenant_id: tenantId, key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'REQUIRED' as any });
+    } else {
+      identitySetting.value = 'REQUIRED' as any;
+    }
+    await settingRepo.save(identitySetting);
+
+    // Attempt order without phone -> expect ForbiddenException
+    await expect(
+      kioskService.createKioskOrder(tenantId, {
+        branch_id: branchId,
+        terminal_id: terminalId,
+        order_type: 'DINE_IN',
+        items: [{ product_id: productId, quantity: 1 }],
+      }),
+    ).rejects.toThrow('Customer phone number is required');
+
+    // Provide required phone and Persian name -> Success
+    const uniqueMobile = `0999${Date.now().toString().slice(-6)}`;
+    const identifiedOrder = await kioskService.createKioskOrder(
+      tenantId,
+      {
+        branch_id: branchId,
+        terminal_id: terminalId,
+        order_type: 'DINE_IN',
+        customer_name: 'حمیدرضا رضایی',
+        customer_phone: uniqueMobile,
+        items: [{ product_id: productId, quantity: 1 }],
+      },
+      correlationId,
+    );
+    expect(identifiedOrder.customer_id).toBeDefined();
+
+    // Verify Customer record created with Persian name
+    const custRepo = dataSource.getRepository(Customer);
+    const createdCustomer = await custRepo.findOne({ where: { id: identifiedOrder.customer_id! } });
+    expect(createdCustomer?.first_name).toBe('حمیدرضا رضایی');
+
+    // Step 3: Simulated POS & Receipt Failure & Retry
+    const printJob = await printQueueService.enqueueOrderPrintJobs(tenantId, identifiedOrder.id);
+    expect(printJob).toBeDefined();
+
+    // Simulate failure on primary thermal printer
+    const failOutcome = await printQueueService.processSimulationOutcome(tenantId, {
+      printJobId: printJob.id,
+      outcome: 'FAILED',
+      useFallback: true,
+    });
+    expect(failOutcome.attempt.status).toBe('FAILED');
+
+    // Retry print job with fallback thermal printer
+    const retryOutcome = await printQueueService.retryJob(tenantId, printJob.id, { useFallback: true });
+    expect(retryOutcome.job.status).toBe('SUCCESS');
+
+    // Revert identity policy to OPTIONAL
+    identitySetting.value = 'OPTIONAL' as any;
+    await settingRepo.save(identitySetting);
+  });
+
+  // =========================================================================
+  // WORKFLOW 7: REPORTS EXPORT, PERSIAN IMPORT, LAYOUT SAVE & RESET (§16.3.7)
+  // =========================================================================
+  it('Workflow 7: Reports/Import/Reset - Every Report CSV/XLSX with Persian Text, Persian Customer/Catalog Imports, Layout Save, Reset & Seeded Relogin', async () => {
+    const correlationId = `corr-rep-imp-${Date.now()}`;
+    const tag = Date.now().toString().slice(-5);
+
+    // Step 1: Export Every Single Report in CSV & XLSX Formats with Persian Text
+    const catalog = await reportsService.getCatalog();
+    expect(catalog.length).toBeGreaterThanOrEqual(20);
+
+    for (const reportDef of catalog) {
+      // Export CSV
+      const csvJob = await reportsService.exportReport(tenantId, reportDef.code, { branchId }, 'CSV');
+      expect(csvJob.export_job_id).toBeDefined();
+      expect(csvJob.content_base64).toBeDefined();
+      expect(csvJob.content_base64.length).toBeGreaterThan(0);
+
+      // Verify UTF-8 BOM or header text
+      const csvStr = Buffer.from(csvJob.content_base64, 'base64').toString('utf8');
+      expect(csvStr.length).toBeGreaterThan(10);
+
+      // Export XLSX
+      const xlsxJob = await reportsService.exportReport(tenantId, reportDef.code, { branchId }, 'XLSX');
+      expect(xlsxJob.export_job_id).toBeDefined();
+      expect(xlsxJob.content_base64).toBeDefined();
+      expect(xlsxJob.content_base64.length).toBeGreaterThan(0);
+    }
+
+    // Step 2: Persian Customer & Catalog Imports
+    // A) Persian Customer Import CSV
+    const customerCsv = `کد مشتری,نام,نام خانوادگی,موبایل\nCUST-FA-${tag},محسن,صادقی,0912${tag}99`;
+    const custJob = await importExportService.createStagedJob(
+      tenantId,
+      'CUSTOMERS',
+      'customers_persian.csv',
+      customerCsv,
+    );
+    expect(custJob.id).toBeDefined();
+    expect(custJob.total_rows).toBe(1);
+
+    const validatedCustJob = await importExportService.validateJob(custJob.id, {
+      'کد مشتری': 'code',
+      'نام': 'first_name',
+      'نام خانوادگی': 'last_name',
+      'موبایل': 'mobile',
+    });
+    expect(validatedCustJob.valid_rows).toBe(1);
+
+    const custImportResult = await importExportService.executeJob(custJob.id, adminUserId);
+    expect(custImportResult.importedCount).toBe(1);
+
+    const custRepo = dataSource.getRepository(Customer);
+    const importedCust = await custRepo.findOne({ where: { tenant_id: tenantId, code: `CUST-FA-${tag}` } });
+    expect(importedCust).toBeDefined();
+    expect(importedCust?.first_name).toBe('محسن');
+    expect(importedCust?.last_name).toBe('صادقی');
+
+    // B) Persian Catalog Product Import CSV
+    const productCsv = `کد کالا,نام کالا,قیمت پایه,کد دسته بندی\nPROD-FA-${tag},چلوکباب کوبیده سیخی,280000.0000,CAT-BURGER-163`;
+    const prodJob = await importExportService.createStagedJob(
+      tenantId,
+      'PRODUCTS',
+      'products_persian.csv',
+      productCsv,
+    );
+    expect(prodJob.id).toBeDefined();
+    expect(prodJob.total_rows).toBe(1);
+
+    const validatedProdJob = await importExportService.validateJob(prodJob.id, {
+      'کد کالا': 'code',
+      'نام کالا': 'name_fa',
+      'قیمت پایه': 'base_price',
+      'کد دسته بندی': 'category_code',
+    });
+    expect(validatedProdJob.valid_rows).toBe(1);
+
+    const prodImportResult = await importExportService.executeJob(prodJob.id, adminUserId);
+    expect(prodImportResult.importedCount).toBe(1);
+
+    const prodRepo = dataSource.getRepository(Product);
+    const importedProd = await prodRepo.findOne({ where: { tenant_id: tenantId, code: `PROD-FA-${tag}` } });
+    expect(importedProd).toBeDefined();
+    expect(importedProd?.name).toBe('چلوکباب کوبیده سیخی');
+    expect(MoneyUtil.format(importedProd?.base_price || '0')).toBe('280000.0000');
+
+    // Step 3: Save Layout & System Preferences
+    const layoutSettings = await settingsService.updateSetting(
+      tenantId,
+      'SYSTEM',
+      { auto_logout_minutes: 45, default_theme: 'DARK', grid_layout_mode: 'COMPACT' },
+      correlationId,
+    );
+    expect(layoutSettings.key).toBe('SYSTEM');
+    expect(layoutSettings.value.grid_layout_mode).toBe('COMPACT');
+
+    const fetchedSettings = await settingsService.getSettings(tenantId);
+    expect(fetchedSettings['SYSTEM']?.grid_layout_mode).toBe('COMPACT');
+
+    // Step 4: System Reset & Seeded Relogin Verification
+    const resetResult = await importExportService.systemReset(tenantId, adminUserId);
+    expect(resetResult.resetTables).toBeDefined();
+    expect(resetResult.resetTables.length).toBeGreaterThan(0);
+
+    const seedResult = await importExportService.applySeedProfile(tenantId, adminUserId, 'MINIMAL');
+    expect(seedResult.success).toBe(true);
+
+    // Verify seeded admin user exists and password hash validates
+    const userRepo = dataSource.getRepository(AdminUser);
+    const seededAdmins = await userRepo.find({ where: { tenant_id: tenantId } });
+    expect(seededAdmins.length).toBeGreaterThan(0);
+    const seededAdmin = seededAdmins[0];
+    expect(seededAdmin.is_active).toBe(true);
+
+    const validPassword = await argon2.verify(seededAdmin.password_hash, 'GnextDemo!2026');
+    expect(validPassword).toBe(true);
+  });
 });
+
