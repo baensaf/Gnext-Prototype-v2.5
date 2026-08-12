@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SyncIcon from '@mui/icons-material/Sync';
@@ -38,6 +37,8 @@ import {
   InputAdornment,
 } from '@mui/material';
 
+import { RouterLink } from 'src/routes/components';
+
 interface SettingItem {
   badge?: {
     color: 'default' | 'error' | 'info' | 'primary' | 'secondary' | 'success' | 'warning';
@@ -60,7 +61,6 @@ interface SettingCategory {
 }
 
 export function SettingsHubPage() {
-  const navigate = useNavigate();
   const theme = useTheme();
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
@@ -548,8 +548,9 @@ export function SettingsHubPage() {
                   <Stack divider={<Divider />}>
                     {category.items.map((item) => (
                       <ButtonBase
+                        component={RouterLink}
+                        href={item.path}
                         key={item.id}
-                        onClick={() => navigate(item.path)}
                         sx={{
                           alignItems: 'center',
                           display: 'flex',

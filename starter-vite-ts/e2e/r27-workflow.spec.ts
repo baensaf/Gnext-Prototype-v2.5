@@ -506,9 +506,10 @@ test.describe('R27 Real Browser E2E Certification Suite', () => {
     await page.waitForURL('**/app/settings');
     await page.waitForLoadState('networkidle');
 
-    const resetNav = page.locator('button, a').filter({ hasText: /Data Reset & System Seeds|بازنشانی داده/i }).first();
-    await expect(resetNav).toBeVisible({ timeout: 10000 });
-    await resetNav.click();
+    const resetCard = page.locator('a[href="/app/settings/data-reset"]').first();
+    await expect(resetCard).toBeVisible({ timeout: 10000 });
+    await resetCard.scrollIntoViewIfNeeded();
+    await resetCard.click();
     await page.waitForURL('**/app/settings/data-reset');
     await page.waitForLoadState('networkidle');
 

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation } from 'react-router';
-
 import type { Branch } from 'src/api/tenantApi';
 import type { Courier, Delivery, DeliveryZone, DeliveryEvent } from 'src/api/deliveryApi';
+
+import { useLocation } from 'react-router';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import MapIcon from '@mui/icons-material/Map';
@@ -64,7 +64,6 @@ export function DeliveryPage() {
     if (location.pathname.includes('/couriers')) setTab('COURIERS');
     else if (location.pathname.includes('/zones')) setTab('ZONES');
     else if (location.pathname.includes('/audit')) setTab('AUDIT');
-    else if (location.pathname.includes('/orders')) setTab('BOARD');
   }, [location.pathname]);
 
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
