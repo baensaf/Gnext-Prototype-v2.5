@@ -3,6 +3,7 @@ import type { OrderHeader } from 'src/api/orderApi';
 import type { PaymentMethod } from 'src/api/settingsApi';
 
 import { useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import PrintIcon from '@mui/icons-material/Print';
@@ -47,6 +48,7 @@ interface CheckoutModalProps {
 }
 
 export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: CheckoutModalProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const [order, setOrder] = useState<OrderHeader | null>(null);
@@ -121,7 +123,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
         <PaymentIcon color="primary" />
-        Order Settlement & Checkout — {order?.order_number}
+        {t('pos.checkout')} — {order?.order_number}
       </DialogTitle>
       <DialogContent sx={{ pt: 2 }}>
         {error && (
@@ -134,20 +136,20 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
           <Stack spacing={2} sx={{ mb: 3, mt: 1 }}>
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'background.neutral' }}>
               <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2" color="text.secondary">Total Amount:</Typography>
+                <Typography variant="body2" color="text.secondary">{t('orders.totalAmount')}:</Typography>
                 <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                   {MoneyUtil.formatCurrency(order.total_amount)} IRR
                 </Typography>
               </Stack>
               <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2" color="text.secondary">Paid Amount:</Typography>
+                <Typography variant="body2" color="text.secondary">{t('orders.paidAmount')}:</Typography>
                 <Typography variant="body2" color="success.main" sx={{ fontWeight: 'bold' }}>
                   {MoneyUtil.formatCurrency(order.paid_amount)} IRR
                 </Typography>
               </Stack>
               <Divider sx={{ my: 1 }} />
               <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Remaining Due:</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t('settlements.variance')}:</Typography>
                 <Typography variant="h6" sx={{ fontWeight: 'bold', color: isFullyPaid ? 'success.main' : 'error.main' }}>
                   {MoneyUtil.formatCurrency(order.due_amount)} IRR
                 </Typography>
@@ -156,19 +158,19 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
 
             {isFullyPaid ? (
               <Alert severity="success" sx={{ py: 1 }}>
-                <strong>Order Fully Settled!</strong> No remaining due balance.
+                <strong>{t('pos.orderSettled')}</strong>
               </Alert>
             ) : (
               <Box component="form" onSubmit={handleAddPayment} sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 2 }}>
-                  Add Payment Tender (Split Allowed)
+                  {t('pos.postPayment')}
                 </Typography>
                 <Stack spacing={2}>
                   <FormControl fullWidth size="small">
-                    <InputLabel>Payment Method</InputLabel>
+                    <InputLabel>{t('payments.instrument')}</InputLabel>
                     <Select
                       value={selectedMethodId}
-                      label="Payment Method"
+                      label={t('payments.instrument')}
                       onChange={(e) => setSelectedMethodId(e.target.value)}
                     >
                       {paymentMethods.map((m) => (
@@ -181,7 +183,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
 
                   <TextField
                     size="small"
-                    label="Tender Amount (IRR)"
+                    label={t('payments.amount')}
                     type="number"
                     required
                     fullWidth
@@ -191,7 +193,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
 
                   <TextField
                     size="small"
-                    label="Reference # / POS Terminal Tx"
+                    label={t('payments.reference')}
                     placeholder="e.g. POS-998822"
                     fullWidth
                     value={refNumber}
@@ -199,7 +201,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                   />
 
                   <Button type="submit" variant="contained" fullWidth sx={{ fontWeight: 'bold' }}>
-                    Post Payment Tender
+                    {t('pos.postPayment')}
                   </Button>
                 </Stack>
               </Box>
@@ -207,16 +209,16 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
 
             {/* Payments Table */}
             <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mt: 2 }}>
-              Posted Payment Tenders
+              {t('payments.title')}
             </Typography>
             <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, maxHeight: 180 }}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Time</TableCell>
-                    <TableCell align="right">Amount (IRR)</TableCell>
-                    <TableCell>Ref #</TableCell>
-                    <TableCell>Status</TableCell>
+                    <TableCell>{t('common.time')}</TableCell>
+                    <TableCell align="right">{t('payments.amount')}</TableCell>
+                    <TableCell>{t('payments.reference')}</TableCell>
+                    <TableCell>{t('common.status')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -247,10 +249,10 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
             onClick={() => navigate(`/app/pos/receipt/${orderId}`)}
             sx={{ fontWeight: 'bold' }}
           >
-            Print Thermal Receipt
+            {t('pos.printReceipt')}
           </Button>
         )}
-        <Button onClick={onClose}>Close</Button>
+        <Button onClick={onClose}>{t('common.close')}</Button>
       </DialogActions>
     </Dialog>
   );

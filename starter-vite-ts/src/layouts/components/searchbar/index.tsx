@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 import type { BoxProps } from '@mui/material/Box';
 import type { Breakpoint } from '@mui/material/styles';
 import type { NavSectionProps } from 'src/components/nav-section';
@@ -35,6 +37,7 @@ export type SearchbarProps = BoxProps & {
 const breakpoint: Breakpoint = 'sm';
 
 export function Searchbar({ data: navItems = [], sx, ...other }: SearchbarProps) {
+  const { t } = useTranslation();
   const theme = useTheme();
   const smUp = useMediaQuery(theme.breakpoints.up(breakpoint));
 
@@ -188,7 +191,7 @@ export function Searchbar({ data: navItems = [], sx, ...other }: SearchbarProps)
         <InputBase
           fullWidth
           autoFocus={open}
-          placeholder="Search..."
+          placeholder={t('common.search', 'Search...')}
           value={searchQuery}
           onChange={handleSearch}
           startAdornment={

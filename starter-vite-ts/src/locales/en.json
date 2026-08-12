@@ -16,10 +16,14 @@
     "sessionExpired": "Your session has expired. Please sign in again."
   },
   "nav": {
+    "home": "Home",
     "dashboard": "Dashboard",
+    "sell": "Sell",
     "pos": "POS Register",
-    "orders": "Orders Directory",
     "dineIn": "Dine-In Floor",
+    "orders": "Orders Directory",
+    "kiosk": "Self-Service Kiosk",
+    "operations": "Operations",
     "kds": "Kitchen KDS",
     "delivery": "Delivery Orders",
     "couriers": "Couriers Roster",
@@ -28,8 +32,14 @@
     "businessDays": "Business Days",
     "payments": "Payment Transactions",
     "refunds": "Refunds & Returns",
+    "kdsConfig": "KDS Configuration",
+    "printers": "Printers & Routes",
+    "printQueue": "Print Queue",
+    "monitoring": "System Monitoring",
+    "customersGroup": "Customers",
     "customers": "Customer Directory",
     "credit": "Credit Accounts & Aging",
+    "catalogGroup": "Catalog & Pricing",
     "catalog": "Master Catalog",
     "categories": "Categories",
     "products": "Products Catalog",
@@ -40,29 +50,30 @@
     "pricing": "Price Book",
     "priceGroups": "Price Groups",
     "bulkUpdate": "Bulk Price Update",
+    "discountsGroup": "Discounts & Credit",
     "discounts": "Discount Campaigns",
     "coupons": "Coupons Studio",
+    "reportsGroup": "Reports",
     "reports": "Reports & Analytics",
-    "simulation": "Simulation Center",
+    "simulationGroup": "Simulation Center",
+    "simulation": "Simulation Hub",
     "snappfoodSim": "Snappfood Simulator",
     "hardwareSim": "Payments & Printers",
     "syncSim": "Offline Sync Simulation",
     "logsSim": "Integration Logs",
+    "auditGroup": "Audit",
     "audit": "Audit Explorer",
-    "settings": "Settings",
+    "settingsGroup": "Settings",
+    "settings": "General Settings",
+    "orderWorkflow": "Order Workflow",
+    "discountsCreditSettings": "Discounts & Credit",
+    "paymentsRefundsSettings": "Payments & Refunds",
+    "approvals": "Approvals & Profiles",
+    "reasons": "Reason Codes",
+    "localization": "Localization & Formats",
+    "dataReset": "Data Reset",
     "v5GroupHeader": "Future — V5 Preview",
-    "v5Preview": "V5 Preview — Inventory Stock"
-  },
-  "inventory": {
-    "v5Banner": "V5 Preview Module: Inventory stock management is retained for V5 preview. It does not affect v1.5 catalog availability, order submission, KDS, reports, or financial calculations."
-  },
-  "error": {
-    "pageNotFound": "404 — Page Not Found",
-    "notFoundMessage": "Sorry, we couldn’t find the page you’re looking for. Be sure to check your URL.",
-    "backToHome": "Go to Dashboard",
-    "retry": "Retry Action",
-    "versionConflict": "409 Version Conflict — Record modified by another user",
-    "staleQuote": "Quote Stale — Prices updated on server"
+    "v5Preview": "Inventory Stock & Movement"
   },
   "common": {
     "language": "Language",
@@ -82,7 +93,28 @@
     "noData": "No data available.",
     "back": "Back",
     "reprint": "Reprint",
-    "cancelOrder": "Cancel Order"
+    "cancelOrder": "Cancel Order",
+    "search": "Search...",
+    "filter": "Filter",
+    "export": "Export",
+    "import": "Import",
+    "reset": "Reset",
+    "submit": "Submit",
+    "apply": "Apply",
+    "view": "View",
+    "edit": "Edit",
+    "delete": "Delete",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "active": "Active",
+    "inactive": "Inactive",
+    "total": "Total",
+    "date": "Date",
+    "time": "Time",
+    "success": "Success",
+    "error": "Error",
+    "warning": "Warning",
+    "info": "Info"
   },
   "dashboard": {
     "title": "Operations Dashboard",
@@ -90,9 +122,49 @@
     "salesToday": "Today's Sales",
     "openOrders": "Open Orders",
     "activeShifts": "Active Shifts",
-    "branchHealth": "Branch System Health"
+    "branchHealth": "Branch System Health",
+    "branchTableTitle": "Branch Status Overview",
+    "code": "Branch Code",
+    "name": "Branch Name",
+    "timeZone": "Timezone",
+    "phone": "Phone",
+    "agentHealth": "Agent Health"
+  },
+  "pos": {
+    "title": "POS Register",
+    "activeCart": "Active Cart",
+    "itemsCount": "items",
+    "addToCart": "Add to Cart",
+    "placeOrder": "Place Order",
+    "checkout": "Order Settlement & Checkout",
+    "postPayment": "Post Payment Tender",
+    "payNow": "Pay Now",
+    "cash": "Cash",
+    "card": "POS Card",
+    "customerCredit": "Customer Credit",
+    "orderSettled": "Order Fully Settled!",
+    "printReceipt": "Print Thermal Receipt",
+    "orderType": "Order Type",
+    "dineIn": "Dine-In",
+    "takeaway": "Takeaway",
+    "delivery": "Delivery"
+  },
+  "kiosk": {
+    "title": "SELF-SERVICE KIOSK",
+    "subtitle": "Touch screen ordering terminal",
+    "selectOrderType": "Select Order Type",
+    "eatIn": "EAT IN",
+    "takeaway": "TAKEAWAY",
+    "customerIdentification": "Customer Identification",
+    "phoneNumber": "Phone Number",
+    "fullName": "Full Name",
+    "proceedToPayment": "Proceed to Payment",
+    "paymentSuccessful": "Order Placed Successfully!",
+    "newOrder": "New Order",
+    "sentToKitchen": "Order sent to kitchen display system."
   },
   "orders": {
+    "title": "Orders Directory",
     "detailTitle": "Order Detail",
     "itemsTitle": "Order Items",
     "summary": "Order Summary",
@@ -104,52 +176,164 @@
     "product": "Product",
     "qty": "Qty",
     "unitPrice": "Unit Price",
-    "total": "Total"
+    "total": "Total",
+    "statusPending": "Pending",
+    "statusPreparing": "Preparing",
+    "statusReady": "Ready",
+    "statusDelivered": "Delivered",
+    "statusCancelled": "Cancelled"
+  },
+  "dineIn": {
+    "title": "Dine-In Floor Plan",
+    "table": "Table",
+    "seats": "Seats",
+    "available": "Available",
+    "occupied": "Occupied",
+    "reserved": "Reserved"
+  },
+  "kds": {
+    "title": "Kitchen Display System",
+    "bump": "Bump / Mark Ready",
+    "prepTime": "Prep Time",
+    "orderNumber": "Order #"
   },
   "delivery": {
+    "title": "Delivery Operations",
+    "couriersTab": "Couriers Roster",
+    "ordersTab": "Delivery Orders",
     "courierDetail": "Courier Profile",
     "courierInfo": "Courier Details",
     "courierId": "Courier ID",
     "courierName": "Name",
     "phone": "Phone",
-    "vehicle": "Vehicle"
+    "vehicle": "Vehicle",
+    "addCourier": "Add Courier",
+    "initiateSettlement": "Initiate Settlement"
   },
   "settlements": {
-    "detailTitle": "Courier Settlement",
+    "title": "Courier Settlements",
+    "detailTitle": "Courier Settlement Detail",
     "summary": "Settlement Summary",
     "expectedCash": "Expected Cash",
     "actualCash": "Actual Cash",
-    "variance": "Variance"
+    "variance": "Variance",
+    "confirmSettlement": "Confirm Settlement"
   },
   "cashier": {
+    "title": "Cashier Shift Management",
+    "openShift": "Open Shift",
+    "closeShift": "Close Shift",
     "shiftDetail": "Shift Detail",
     "shiftSummary": "Shift Balances",
     "openingFloat": "Opening Float",
     "expectedCash": "Expected Cash",
     "actualCash": "Actual Cash"
   },
+  "payments": {
+    "title": "Payment Transactions",
+    "instrument": "Tender Type",
+    "amount": "Amount",
+    "reference": "Reference Code",
+    "gatewayStatus": "Gateway Status"
+  },
+  "refunds": {
+    "title": "Refunds & Returns",
+    "originalTender": "Original Payment Method Refund",
+    "cashAlternative": "Alternative Cash Refund",
+    "reason": "Refund Reason",
+    "approveRefund": "Approve Refund"
+  },
+  "customers": {
+    "title": "Customer Directory",
+    "registerCustomer": "Register Customer",
+    "name": "Customer Name",
+    "phone": "Phone Number",
+    "creditLimit": "Credit Limit",
+    "balance": "Current Balance"
+  },
+  "credit": {
+    "title": "Customer Credit Accounts",
+    "aging": "Aging Summary",
+    "repayment": "Repayment / Top-Up",
+    "postRepayment": "Post Repayment",
+    "statement": "Credit Statement",
+    "current": "Current",
+    "days30": "30 Days",
+    "days60": "60 Days",
+    "days90Plus": "90+ Days"
+  },
   "catalog": {
+    "title": "Master Catalog",
     "productDetail": "Product Details",
     "info": "Product Configuration",
     "productId": "Product ID",
     "name": "Product Name",
-    "unitPrice": "Base Price"
+    "unitPrice": "Base Price",
+    "categories": "Categories",
+    "products": "Products",
+    "modifiers": "Modifiers & Options",
+    "menus": "Menus Composer",
+    "availability": "Availability Suspensions",
+    "importExport": "Import & Export Wizard"
+  },
+  "pricing": {
+    "title": "Price Book & Groups",
+    "priceBook": "Price Book",
+    "priceGroups": "Price Groups",
+    "bulkUpdate": "Bulk Price Update"
   },
   "discounts": {
+    "title": "Discount Campaigns & Coupons",
     "campaignDetail": "Discount Campaign",
     "campaignRules": "Campaign Rules & Limits",
     "campaignId": "Campaign ID",
-    "name": "Campaign Name"
+    "name": "Campaign Name",
+    "coupons": "Coupons Studio"
+  },
+  "reports": {
+    "title": "Reports & Analytics",
+    "salesSummary": "Sales Summary Report",
+    "exportCsv": "Export UTF-8 CSV",
+    "exportXlsx": "Export Typed XLSX"
   },
   "simulation": {
+    "title": "Simulation Center",
     "snappfoodNotice": "Snappfood Webhook Simulator & Integration Testing Console",
     "snappfoodTitle": "Snappfood Integration Webhook Test Bench",
     "snappfoodDesc": "Simulate incoming Snappfood webhooks, order creation events, HMAC signature validation, and duplicate rejection scenarios.",
     "hardwareNotice": "Payment POS Devices & Kitchen Printer Hardware Simulation Console",
     "hardwareTitle": "Hardware Failure & Response Simulator",
     "hardwareDesc": "Simulate mobile POS timeouts, paper-out printer errors, network drops, and device failover rerouting.",
+    "syncTitle": "Offline Sync Simulation",
     "logsNotice": "Integration Execution & Webhook Audit Logs",
     "logsTitle": "Integration Event Logs",
     "logsDesc": "Real-time inspection of external provider payloads, HMAC verification logs, and webhook status codes."
+  },
+  "audit": {
+    "title": "Audit Explorer",
+    "eventType": "Event Type",
+    "actor": "Actor / User",
+    "timestamp": "Timestamp",
+    "details": "Audit Details"
+  },
+  "settings": {
+    "title": "System Settings",
+    "general": "General Settings",
+    "orderWorkflow": "Order Workflow Settings",
+    "discountsCredit": "Discounts & Credit Policy",
+    "paymentsRefunds": "Payments & Refunds Configuration",
+    "dataReset": "System Data Reset",
+    "managerPin": "Manager PIN"
+  },
+  "inventory": {
+    "v5Banner": "V5 Preview Module: Inventory stock management is retained for V5 preview. It does not affect v1.5 catalog availability, order submission, KDS, reports, or financial calculations."
+  },
+  "error": {
+    "pageNotFound": "404 — Page Not Found",
+    "notFoundMessage": "Sorry, we couldn’t find the page you’re looking for. Be sure to check your URL.",
+    "backToHome": "Go to Dashboard",
+    "retry": "Retry Action",
+    "versionConflict": "409 Version Conflict — Record modified by another user",
+    "staleQuote": "Quote Stale — Prices updated on server"
   }
 }

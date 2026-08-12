@@ -14,9 +14,9 @@ import {
   IconButton,
 } from '@mui/material';
 
-import { useAuthStore } from 'src/store/useAuthStore';
-
 import { AuthSplitLayout } from 'src/layouts/auth-split';
+
+import { useAuthStore } from 'src/store/useAuthStore';
 
 import { useSettingsContext } from 'src/components/settings';
 
@@ -59,8 +59,8 @@ export function LoginPage() {
     <AuthSplitLayout
       slotProps={{
         section: {
-          title: 'Hi, Welcome back',
-          subtitle: 'Gnext Prototype v1.5 - Multi-Tenant Operations & Master Catalog',
+          title: t('app.welcome'),
+          subtitle: `${t('app.title')} - Multi-Tenant Operations & Master Catalog`,
         },
       }}
     >
@@ -79,9 +79,6 @@ export function LoginPage() {
 
         <Box sx={{ mb: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
-            Sign in to Gnext
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
             {t('auth.loginTitle')}
           </Typography>
         </Box>

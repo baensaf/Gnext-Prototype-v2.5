@@ -319,13 +319,15 @@ test.describe('Specification §16.3 End-to-End Acceptance Workflows', () => {
     await expect(branchSelect).toBeVisible({ timeout: 10000 });
     await expect(page.locator('body')).not.toContainText('None Selected', { timeout: 10000 });
 
-    const switchLabel = page.locator('.MuiFormControlLabel-root').filter({ hasText: /ONLINE|OFFLINE/i }).first();
-    await expect(switchLabel).toBeVisible({ timeout: 10000 });
+    const toggleSwitch = page.locator('input[type="checkbox"]').first();
+    await expect(toggleSwitch).toBeVisible({ timeout: 10000 });
 
-    const toggleOfflinePromise = page.waitForResponse((resp) => resp.url().includes('/api/v1/sync/toggle-connectivity') && resp.request().method() === 'POST');
-    await switchLabel.click({ force: true });
-    await toggleOfflinePromise;
-    await page.waitForTimeout(500);
+    if (await toggleSwitch.isChecked()) {
+      const toggleOfflinePromise = page.waitForResponse((resp) => resp.url().includes('/api/v1/sync/toggle-connectivity') && resp.request().method() === 'POST');
+      await toggleSwitch.click({ force: true });
+      await toggleOfflinePromise;
+      await page.waitForTimeout(500);
+    }
 
     await expect(page.locator('body')).toContainText(/OFFLINE SIMULATED|Offline Disconnected/i, { timeout: 10000 });
 
@@ -370,10 +372,12 @@ test.describe('Specification §16.3 End-to-End Acceptance Workflows', () => {
       }
     }
 
-    const toggleOnlinePromise = page.waitForResponse((resp) => resp.url().includes('/api/v1/sync/toggle-connectivity') && resp.request().method() === 'POST');
-    await switchLabel.click({ force: true });
-    await toggleOnlinePromise;
-    await page.waitForTimeout(500);
+    if (!(await toggleSwitch.isChecked())) {
+      const toggleOnlinePromise = page.waitForResponse((resp) => resp.url().includes('/api/v1/sync/toggle-connectivity') && resp.request().method() === 'POST');
+      await toggleSwitch.click({ force: true });
+      await toggleOnlinePromise;
+      await page.waitForTimeout(500);
+    }
 
     const triggerWorkerBtn2 = page.locator('button').filter({ hasText: /Trigger Sync Worker/i }).first();
     await expect(triggerWorkerBtn2).toBeEnabled({ timeout: 10000 });

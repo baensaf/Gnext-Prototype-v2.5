@@ -22,6 +22,7 @@
     "tsc:watch": "tsc --noEmit --watch",
     "tsc:print": "tsc --showConfig",
     "tsc:check": "tsc --noEmit --pretty",
+    "i18n:check": "node scripts/check-i18n.js",
     "test:e2e": "playwright test"
   },
   "engines": {

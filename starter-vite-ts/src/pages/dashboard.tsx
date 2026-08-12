@@ -156,12 +156,12 @@ export function DashboardPage() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Code</TableCell>
-                  <TableCell>Branch Name</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Time Zone</TableCell>
-                  <TableCell>Phone</TableCell>
-                  <TableCell>Agent Health</TableCell>
+                  <TableCell>{t('dashboard.code')}</TableCell>
+                  <TableCell>{t('dashboard.name')}</TableCell>
+                  <TableCell>{t('common.status')}</TableCell>
+                  <TableCell>{t('dashboard.timeZone')}</TableCell>
+                  <TableCell>{t('dashboard.phone')}</TableCell>
+                  <TableCell>{t('dashboard.agentHealth')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>

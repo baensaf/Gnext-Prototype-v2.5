@@ -1,6 +1,7 @@
 import type { ButtonProps } from '@mui/material/Button';
 
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import Button from '@mui/material/Button';
 
@@ -16,6 +17,7 @@ type Props = ButtonProps & {
 };
 
 export function SignOutButton({ onClose, sx, ...other }: Props) {
+  const { t } = useTranslation();
   const router = useRouter();
 
   const { checkUserSession } = useAuthContext();
@@ -42,7 +44,7 @@ export function SignOutButton({ onClose, sx, ...other }: Props) {
       sx={sx}
       {...other}
     >
-      Logout
+      {t('auth.logout', 'Sign Out')}
     </Button>
   );
 }

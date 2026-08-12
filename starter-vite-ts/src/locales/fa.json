@@ -16,10 +16,14 @@
     "sessionExpired": "نشست شما منقضی شده است. لطفا دوباره وارد شوید."
   },
   "nav": {
-    "dashboard": "داشبورد عملیات",
+    "home": "خانه",
+    "dashboard": "داشبورد",
+    "sell": "فروش",
     "pos": "صندوق فروش POS",
-    "orders": "دفترچه سفارش‌ها",
     "dineIn": "سالن و میزها",
+    "orders": "دفترچه سفارش‌ها",
+    "kiosk": "کیوسک خودسفارش‌دهی",
+    "operations": "عملیات",
     "kds": "نمایشگر آشپزخانه KDS",
     "delivery": "سفارش‌های تحویلی",
     "couriers": "فهرست سفیران",
@@ -28,8 +32,14 @@
     "businessDays": "روزهای کاری",
     "payments": "تراکنش‌های پرداخت",
     "refunds": "استرداد و مرجوعی",
+    "kdsConfig": "تنظیمات KDS",
+    "printers": "چاپگرها و مسیریابی",
+    "printQueue": "صف چاپ",
+    "monitoring": "پایش سیستم",
+    "customersGroup": "مشتریان",
     "customers": "دفترچه مشتریان",
     "credit": "حساب‌های اعتباری و سن بدهی",
+    "catalogGroup": "کاتالوگ و قیمت‌گذاری",
     "catalog": "کاتالوگ اصلی",
     "categories": "دسته‌بندی‌ها",
     "products": "کاتالوگ کالاها",
@@ -40,29 +50,30 @@
     "pricing": "دفترچه قیمت",
     "priceGroups": "گروه‌های قیمت",
     "bulkUpdate": "به‌روزرسانی دسته‌جمعی قیمت",
+    "discountsGroup": "تخفیف‌ها و اعتبار",
     "discounts": "کمپین‌های تخفیف",
     "coupons": "استودیو کوپن‌ها",
+    "reportsGroup": "گزارش‌ها",
     "reports": "گزارش‌ها و تحلیل‌ها",
-    "simulation": "مرکز شبیه‌سازی",
+    "simulationGroup": "مرکز شبیه‌سازی",
+    "simulation": "داشبورد شبیه‌سازی",
     "snappfoodSim": "شبیه‌ساز اسنپ‌فود",
     "hardwareSim": "پرداخت و چاپگرها",
     "syncSim": "شبیه‌ساز همگام‌سازی آفلاین",
     "logsSim": "سوابق یکپارچه‌سازی",
+    "auditGroup": "ممیزی",
     "audit": "ممیزی و سوابق",
-    "settings": "تنظیمات",
+    "settingsGroup": "تنظیمات",
+    "settings": "تنظیمات عمومی",
+    "orderWorkflow": "گردش کار سفارش",
+    "discountsCreditSettings": "تخفیف‌ها و سیاست اعتباری",
+    "paymentsRefundsSettings": "پرداخت و مرجوعی",
+    "approvals": "تاییده‌ها و پروفایل‌ها",
+    "reasons": "کدهای علت",
+    "localization": "بومی‌سازی و قالب‌ها",
+    "dataReset": "بازنشانی داده‌ها",
     "v5GroupHeader": "قابلیت‌های آتی — پیش‌نمایش نسخه ۵",
-    "v5Preview": "پیش‌نمایش نسخه ۵ — موجودی انبار"
-  },
-  "inventory": {
-    "v5Banner": "ماژول پیش‌نمایش نسخه ۵: مدیریت موجودی کالا برای بررسی قابلیت‌های آتی فعال است. این بخش تاثیری بر موجودی کاتالوگ نسخه ۱.۵، ثبت سفارش، KDS، گزارش‌ها یا محاسبات مالی ندارد."
-  },
-  "error": {
-    "pageNotFound": "۴۰۴ — صفحه مورد نظر یافت نشد",
-    "notFoundMessage": "متاسفانه صفحه‌ای که به دنبال آن بودید پیدا نشد. لطفاً آدرس را بررسی نمایید.",
-    "backToHome": "بازگشت به داشبورد",
-    "retry": "تلاش مجدد",
-    "versionConflict": "۴۰۹ تعارض نسخه — رکورد توسط کاربر دیگری تغییر یافته است",
-    "staleQuote": "پیش‌فاکتور منقضی شده — قیمت‌ها در سرور به‌روز شده‌اند"
+    "v5Preview": "پیش‌نمایش نسخه ۵ — موجودی و گردش انبار"
   },
   "common": {
     "language": "زبان",
@@ -82,7 +93,28 @@
     "noData": "داده‌ای یافت نشد.",
     "back": "بازگشت",
     "reprint": "چاپ مجدد",
-    "cancelOrder": "لغو سفارش"
+    "cancelOrder": "لغو سفارش",
+    "search": "جستجو...",
+    "filter": "فیلتر",
+    "export": "خروجی",
+    "import": "ورود داده",
+    "reset": "بازنشانی",
+    "submit": "ثبت",
+    "apply": "اعمال",
+    "view": "مشاهده",
+    "edit": "ویرایش",
+    "delete": "حذف",
+    "enabled": "فعال",
+    "disabled": "غیرفعال",
+    "active": "فعال",
+    "inactive": "غیرفعال",
+    "total": "جمع کل",
+    "date": "تاریخ",
+    "time": "زمان",
+    "success": "موفق",
+    "error": "خطا",
+    "warning": "هشدار",
+    "info": "اطلاعات"
   },
   "dashboard": {
     "title": "داشبورد عملیات",
@@ -90,9 +122,49 @@
     "salesToday": "فروش امروز",
     "openOrders": "سفارش‌های باز",
     "activeShifts": "شیفت‌های فعال",
-    "branchHealth": "وضعیت سلامت شعب"
+    "branchHealth": "وضعیت سلامت شعب",
+    "branchTableTitle": "مرور وضعیت سلامت شعب",
+    "code": "کد شعبه",
+    "name": "نام شعبه",
+    "timeZone": "منطقه زمانی",
+    "phone": "تلفن",
+    "agentHealth": "سلامت عامل"
+  },
+  "pos": {
+    "title": "صندوق فروش POS",
+    "activeCart": "سبد خرید فعال",
+    "itemsCount": "قلم",
+    "addToCart": "افزودن به سبد",
+    "placeOrder": "ثبت سفارش",
+    "checkout": "تسویه و پرداخت سفارش",
+    "postPayment": "ثبت پرداخت",
+    "payNow": "پرداخت سریع",
+    "cash": "نقدی",
+    "card": "کارتخوان",
+    "customerCredit": "اعتبار مشتری",
+    "orderSettled": "سفارش به طور کامل تسویه شد!",
+    "printReceipt": "چاپ فاکتور حرارتی",
+    "orderType": "نوع سفارش",
+    "dineIn": "سالن",
+    "takeaway": "بیرون‌بر",
+    "delivery": "ارسال با پیک"
+  },
+  "kiosk": {
+    "title": "کیوسک خودسفارش‌دهی",
+    "subtitle": "ترمینال سفارش‌گیری لمسی",
+    "selectOrderType": "انتخاب نوع سفارش",
+    "eatIn": "میل در سالن",
+    "takeaway": "بیرون‌بر",
+    "customerIdentification": "شناسایی مشتری",
+    "phoneNumber": "شماره تلفن",
+    "fullName": "نام و نام خانوادگی",
+    "proceedToPayment": "ورود به مرحله پرداخت",
+    "paymentSuccessful": "سفارش با موفقیت ثبت شد!",
+    "newOrder": "سفارش جدید",
+    "sentToKitchen": "سفارش به نمایشگر آشپزخانه ارسال شد."
   },
   "orders": {
+    "title": "دفترچه سفارش‌ها",
     "detailTitle": "جزئیات سفارش",
     "itemsTitle": "اقلام سفارش",
     "summary": "خلاصه سفارش",
@@ -104,52 +176,164 @@
     "product": "کالا",
     "qty": "تعداد",
     "unitPrice": "قیمت واحد",
-    "total": "جمع"
+    "total": "جمع",
+    "statusPending": "در انتظار",
+    "statusPreparing": "در حال آماده‌سازی",
+    "statusReady": "آماده تحویل",
+    "statusDelivered": "تحویل داده شده",
+    "statusCancelled": "لغو شده"
+  },
+  "dineIn": {
+    "title": "نقشه سالن و میزها",
+    "table": "میز",
+    "seats": "ظرفیت",
+    "available": "خالی",
+    "occupied": "مشغول",
+    "reserved": "رزرو شده"
+  },
+  "kds": {
+    "title": "نمایشگر آشپزخانه KDS",
+    "bump": "تغییر وضعیت / آماده شد",
+    "prepTime": "زمان آماده‌سازی",
+    "orderNumber": "شماره سفارش"
   },
   "delivery": {
+    "title": "مدیریت سفارش‌های تحویلی",
+    "couriersTab": "فهرست سفیران",
+    "ordersTab": "سفارش‌های تحویلی",
     "courierDetail": "پروفایل سفیر",
     "courierInfo": "اطلاعات سفیر",
     "courierId": "شناسه سفیر",
     "courierName": "نام",
     "phone": "تلفن",
-    "vehicle": "وسیله نقلیه"
+    "vehicle": "وسیله نقلیه",
+    "addCourier": "سفیر جدید",
+    "initiateSettlement": "ایجاد تسویه‌حساب"
   },
   "settlements": {
-    "detailTitle": "تسویه‌حساب سفیر",
+    "title": "تسویه‌حساب سفیران",
+    "detailTitle": "جزئیات تسویه‌حساب سفیر",
     "summary": "خلاصه تسویه‌حساب",
     "expectedCash": "نقد مورد انتظار",
     "actualCash": "نقد واقعی",
-    "variance": "مغایرت"
+    "variance": "مغایرت",
+    "confirmSettlement": "تایید تسویه‌حساب"
   },
   "cashier": {
+    "title": "مدیریت شیفت‌های صندوق‌دار",
+    "openShift": "شروع شیفت",
+    "closeShift": "بستن شیفت",
     "shiftDetail": "جزئیات شیفت",
     "shiftSummary": "تراز مالی شیفت",
     "openingFloat": "موجودی اولیه صندوق",
     "expectedCash": "نقد مورد انتظار",
     "actualCash": "نقد واقعی"
   },
+  "payments": {
+    "title": "تراکنش‌های پرداخت",
+    "instrument": "روش پرداخت",
+    "amount": "مبلغ",
+    "reference": "کد پیگیری",
+    "gatewayStatus": "وضعیت درگاه"
+  },
+  "refunds": {
+    "title": "استرداد و مرجوعی",
+    "originalTender": "استرداد به روش پرداخت اصلی",
+    "cashAlternative": "استرداد نقدی جایگزین",
+    "reason": "علت مرجوعی",
+    "approveRefund": "تایید استرداد"
+  },
+  "customers": {
+    "title": "دفترچه مشتریان",
+    "registerCustomer": "ثبت مشتری جدید",
+    "name": "نام مشتری",
+    "phone": "شماره تلفن",
+    "creditLimit": "سقف اعتبار",
+    "balance": "مانده حساب"
+  },
+  "credit": {
+    "title": "حساب‌های اعتباری مشتریان",
+    "aging": "خلاصه سن بدهی",
+    "repayment": "بازپرداخت / شارژ اعتبار",
+    "postRepayment": "ثبت بازپرداخت",
+    "statement": "صورتحساب اعتباری",
+    "current": "جاری",
+    "days30": "۳۰ روزه",
+    "days60": "۶۰ روزه",
+    "days90Plus": "بالای ۹۰ روز"
+  },
   "catalog": {
+    "title": "کاتالوگ اصلی کالاها",
     "productDetail": "جزئیات کالا",
     "info": "تنظیمات کالا",
     "productId": "شناسه کالا",
     "name": "نام کالا",
-    "unitPrice": "قیمت پایه"
+    "unitPrice": "قیمت پایه",
+    "categories": "دسته‌بندی‌ها",
+    "products": "کالاها",
+    "modifiers": "افزودنی‌ها و گزینه‌ها",
+    "menus": "مدیریت منوها",
+    "availability": "توقف فروش و موجودی",
+    "importExport": "مدیریت ورود و خروج داده‌ها"
+  },
+  "pricing": {
+    "title": "دفترچه قیمت و گروه‌ها",
+    "priceBook": "دفترچه قیمت",
+    "priceGroups": "گروه‌های قیمت",
+    "bulkUpdate": "به‌روزرسانی دسته‌جمعی قیمت"
   },
   "discounts": {
+    "title": "کمپین‌های تخفیف و کوپن‌ها",
     "campaignDetail": "کمپین تخفیف",
     "campaignRules": "قوانین و محدودیت‌های کمپین",
     "campaignId": "شناسه کمپین",
-    "name": "نام کمپین"
+    "name": "نام کمپین",
+    "coupons": "استودیو کوپن‌ها"
+  },
+  "reports": {
+    "title": "گزارش‌ها و تحلیل‌ها",
+    "salesSummary": "گزارش خلاصه فروش",
+    "exportCsv": "خروجی UTF-8 CSV",
+    "exportXlsx": "خروجی Typed XLSX"
   },
   "simulation": {
+    "title": "مرکز شبیه‌سازی",
     "snappfoodNotice": "کنسول تست یکپارچه‌سازی و شبیه‌ساز وب‌هوک اسنپ‌فود",
     "snappfoodTitle": "محیط آزمایشی وب‌هوک‌های اسنپ‌فود",
     "snappfoodDesc": "شبیه‌سازی وب‌هوک‌های ورودی اسنپ‌فود، رویدادهای ایجاد سفارش، اعتبارسنجی امضای HMAC و سناریوهای رد سفارش تکراری.",
     "hardwareNotice": "کنسول شبیه‌سازی تجهیزات سخت‌افزاری دستگاه‌های کارتخوان و چاپگرهای آشپزخانه",
     "hardwareTitle": "شبیه‌ساز خطا و پاسخ‌دهی سخت‌افزار",
     "hardwareDesc": "شبیه‌سازی خطای مهلت زمانی کارتخوان سیار، پایان کاغذ چاپگر، قطعی شبکه و مسیریابی مجدد هنگام خطا.",
+    "syncTitle": "شبیه‌ساز همگام‌سازی آفلاین",
     "logsNotice": "سوابق اجرای یکپارچه‌سازی و ممیزی وب‌هوک‌ها",
     "logsTitle": "سوابق رویدادهای یکپارچه‌سازی",
     "logsDesc": "بررسی زنده داده‌های ارسالی سرویس‌دهندگان خارجی، سوابق اعتبارسنجی HMAC و کدهای وضعیت وب‌هوک."
+  },
+  "audit": {
+    "title": "ممیزی و سوابق",
+    "eventType": "نوع رویداد",
+    "actor": "کاربر / عامل",
+    "timestamp": "زمان رویداد",
+    "details": "جزئیات ممیزی"
+  },
+  "settings": {
+    "title": "تنظیمات سیستم",
+    "general": "تنظیمات عمومی",
+    "orderWorkflow": "تنظیمات گردش کار سفارش",
+    "discountsCredit": "سیاست تخفیف‌ها و اعتبار",
+    "paymentsRefunds": "تنظیمات پرداخت و مرجوعی",
+    "dataReset": "بازنشانی داده‌های سیستم",
+    "managerPin": "رمز مدیر"
+  },
+  "inventory": {
+    "v5Banner": "ماژول پیش‌نمایش نسخه ۵: مدیریت موجودی کالا برای بررسی قابلیت‌های آتی فعال است. این بخش تاثیری بر موجودی کاتالوگ نسخه ۱.۵، ثبت سفارش، KDS، گزارش‌ها یا محاسبات مالی ندارد."
+  },
+  "error": {
+    "pageNotFound": "۴۰۴ — صفحه مورد نظر یافت نشد",
+    "notFoundMessage": "متاسفانه صفحه‌ای که به دنبال آن بودید پیدا نشد. لطفاً آدرس را بررسی نمایید.",
+    "backToHome": "بازگشت به داشبورد",
+    "retry": "تلاش مجدد",
+    "versionConflict": "۴۰۹ تعارض نسخه — رکورد توسط کاربر دیگری تغییر یافته است",
+    "staleQuote": "پیش‌فاکتور منقضی شده — قیمت‌ها در سرور به‌روز شده‌اند"
   }
 }

@@ -11,8 +11,8 @@ import IconButton from '@mui/material/IconButton';
 import { useAuthStore } from 'src/store/useAuthStore';
 
 import { FlagIcon } from 'src/components/flag-icon';
-import { CustomPopover } from 'src/components/custom-popover';
 import { useSettingsContext } from 'src/components/settings';
+import { CustomPopover } from 'src/components/custom-popover';
 import { varTap, varHover, transitionTap } from 'src/components/animate';
 
 // ----------------------------------------------------------------------
