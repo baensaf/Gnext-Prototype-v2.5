@@ -17,7 +17,6 @@ import {
 import { AuthSplitLayout } from 'src/layouts/auth-split';
 
 import { useAuthStore } from 'src/store/useAuthStore';
-
 import { useSettingsContext } from 'src/components/settings';
 
 export function LoginPage() {
