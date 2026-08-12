@@ -1,11 +1,6 @@
-import type { Coupon, DiscountCampaign, CouponValidationResult } from 'src/api/discountsApi';
-
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
-import AddIcon from '@mui/icons-material/Add';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
 import {
   Box,
   Card,
@@ -16,54 +11,65 @@ import {
   Alert,
   Button,
   Drawer,
-  Select,
   TableRow,
-  MenuItem,
   TableBody,
   TableCell,
   TableHead,
   TextField,
   Typography,
-  InputLabel,
   CardContent,
-  FormControl,
+  DialogTitle,
   TableContainer,
+  CircularProgress,
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
 
-import { discountsApi } from 'src/api/discountsApi';
+import { Iconify } from 'src/components/iconify';
+
+interface Coupon {
+  id: string;
+  code: string;
+  max_uses?: number | null;
+  uses_count?: number;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  is_active: boolean;
+  campaign_id?: string;
+}
 
 export function CouponsPage() {
-  const { t: _t } = useTranslation();
+  const { t } = useTranslation();
 
   const [coupons, setCoupons] = useState<Coupon[]>([]);
-  const [discounts, setDiscounts] = useState<DiscountCampaign[]>([]);
-  const [_loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Form state
+  // Form state for 1-time coupon
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [code, setCode] = useState('');
-  const [discountId, setDiscountId] = useState('');
-  const [maxRedemptions, setMaxRedemptions] = useState<number | undefined>(100);
+  const [percentage, setPercentage] = useState('15');
+  const [minSubtotal, setMinSubtotal] = useState('');
+  const [maxCap, setMaxCap] = useState('');
+  const [effectiveFrom, setEffectiveFrom] = useState('');
+  const [effectiveTo, setEffectiveTo] = useState('');
+  const [saving, setSaving] = useState(false);
 
   // Test bench state
-  const [testCouponCode, setTestCouponCode] = useState('WELCOME500K');
-  const [testOrderTotal, setTestOrderTotal] = useState('1500000');
-  const [validationResult, setValidationResult] = useState<CouponValidationResult | null>(null);
+  const [testCouponCode, setTestCouponCode] = useState('');
+  const [testOrderTotal, setTestOrderTotal] = useState('100000');
+  const [validationResult, setValidationResult] = useState<any>(null);
   const [testError, setTestError] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const cList = await discountsApi.getCoupons();
-      setCoupons(cList);
-      const dList = await discountsApi.getDiscounts();
-      setDiscounts(dList);
+      const res = await fetch('/api/v1/coupons');
+      const cList = await res.json();
+      setCoupons(Array.isArray(cList) ? cList : cList.data || []);
       setError(null);
     } catch (err: any) {
-      setError(err.detail || 'Failed to load coupons');
+      setError(err.message || 'Failed to load coupons');
     } finally {
       setLoading(false);
     }
@@ -73,27 +79,37 @@ export function CouponsPage() {
     loadData();
   }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreateOneTimeCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!discountId) {
-      setError('Please select a discount rule');
-      return;
-    }
+    if (!code || !percentage) return;
+    setSaving(true);
+    setError(null);
     try {
-      await discountsApi.createCoupon({
-        code,
-        campaign_id: discountId,
-        discount_id: discountId,
-        max_uses: maxRedemptions,
-        max_redemptions: maxRedemptions,
+      const res = await fetch('/api/v1/coupons/one-time', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: code.trim().toUpperCase(),
+          percentage,
+          minimum_subtotal: minSubtotal || undefined,
+          maximum_discount_amount: maxCap || undefined,
+          effective_from: effectiveFrom || undefined,
+          effective_to: effectiveTo || undefined,
+        }),
       });
+
+      if (!res.ok) {
+        const errJson = await res.json();
+        throw new Error(errJson.message || 'Failed to create one-time coupon');
+      }
+
       setDrawerOpen(false);
-      setCode('');
-      setDiscountId('');
-      setMaxRedemptions(100);
-      loadData();
+      resetForm();
+      await loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to create coupon');
+      setError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -102,31 +118,49 @@ export function CouponsPage() {
     setTestError(null);
     setValidationResult(null);
     try {
-      const res = await discountsApi.validateCoupon(testCouponCode, testOrderTotal);
-      setValidationResult(res);
+      const res = await fetch('/api/v1/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ couponCode: testCouponCode, orderTotal: testOrderTotal }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Coupon validation failed');
+      setValidationResult(data);
     } catch (err: any) {
-      setTestError(err.detail || err.message || 'Coupon validation failed');
+      setTestError(err.message || 'Coupon validation failed');
     }
   };
 
+  const resetForm = () => {
+    setCode('');
+    setPercentage('15');
+    setMinSubtotal('');
+    setMaxCap('');
+    setEffectiveFrom('');
+    setEffectiveTo('');
+  };
+
   return (
-    <Box>
+    <Box sx={{ p: 3 }}>
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Coupons & Voucher Management
+            {t('coupons.title', 'One-Time Promotional Coupons')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage single-use and multi-use coupon codes bound to campaign rules
+            {t('coupons.subtitle', 'Create unique one-time percentage coupon codes with minimum purchase subtotal and redemption tracking.')}
           </Typography>
         </Box>
         <Button
           variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setDrawerOpen(true)}
+          startIcon={<Iconify icon={'solar:ticket-bold' as any} />}
+          onClick={() => {
+            resetForm();
+            setDrawerOpen(true);
+          }}
           sx={{ fontWeight: 'bold' }}
         >
-          Create Coupon
+          {t('coupons.createOneTime', 'Create One-Time Coupon')}
         </Button>
       </Stack>
 
@@ -137,16 +171,17 @@ export function CouponsPage() {
       )}
 
       {/* Interactive Coupon Validation Test Bench */}
-      <Card sx={{ mb: 4, borderRadius: 3, bgcolor: 'background.neutral', boxShadow: 1 }}>
+      <Card sx={{ mb: 4, borderRadius: 3, bgcolor: 'background.neutral' }}>
         <CardContent>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <ConfirmationNumberIcon color="primary" /> Interactive Coupon Validation Test Bench
+            <Iconify icon={'solar:ticket-bold' as any} color="primary" />
+            {t('coupons.testBenchTitle', 'POS Coupon Validation Test Bench')}
           </Typography>
           <form onSubmit={handleTestValidate}>
             <Stack spacing={2} sx={{ flexDirection: { xs: 'column', sm: 'row' }, alignItems: 'center' }}>
               <Box sx={{ flex: 1, width: '100%' }}>
                 <TextField
-                  label="Test Coupon Code"
+                  label={t('coupons.testCodeLabel', 'Coupon Code')}
                   fullWidth
                   size="small"
                   value={testCouponCode}
@@ -155,7 +190,7 @@ export function CouponsPage() {
               </Box>
               <Box sx={{ flex: 1, width: '100%' }}>
                 <TextField
-                  label="Simulated Subtotal (IRR)"
+                  label={t('coupons.simulatedSubtotal', 'Simulated Subtotal (IRR)')}
                   type="number"
                   fullWidth
                   size="small"
@@ -165,19 +200,19 @@ export function CouponsPage() {
               </Box>
               <Box sx={{ width: { xs: '100%', sm: 'auto' } }}>
                 <Button type="submit" variant="contained" color="secondary" fullWidth sx={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                  Validate Coupon Code
+                  {t('coupons.validateButton', 'Validate Code')}
                 </Button>
               </Box>
             </Stack>
           </form>
 
           {validationResult && (
-            <Alert icon={<CheckCircleIcon fontSize="inherit" />} severity="success" sx={{ mt: 2, borderRadius: 2 }}>
+            <Alert severity="success" sx={{ mt: 2, borderRadius: 2 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                Coupon VALID! Applied Deduction: -{MoneyUtil.formatCurrency(validationResult.calculatedAmount)} IRR
+                Coupon VALID! Applied Discount: -{MoneyUtil.formatCurrency(validationResult.calculatedAmount)} IRR
               </Typography>
               <Typography variant="caption">
-                Rule: <strong>{validationResult.discount.name}</strong> ({validationResult.discount.calculation_type})
+                Rule: <strong>{validationResult.discount?.name || 'Discount'}</strong>
               </Typography>
             </Alert>
           )}
@@ -192,96 +227,152 @@ export function CouponsPage() {
 
       <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
         <CardContent sx={{ p: 0 }}>
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Coupon Code</TableCell>
-                  <TableCell>Linked Campaign Rule</TableCell>
-                  <TableCell align="center">Uses / Max Limit</TableCell>
-                  <TableCell>Status</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {coupons.map((c) => {
-                  const cId = c.campaign_id || c.discount_id;
-                  const discObj = discounts.find((d) => d.id === cId);
-                  const currentUses = c.uses_count ?? c.current_redemptions ?? 0;
-                  const maxUses = c.max_uses ?? c.max_redemptions;
-                  return (
-                    <TableRow key={c.id}>
-                      <TableCell sx={{ fontWeight: 'bold', fontSize: '1.05rem' }}>
-                        <code>{c.code}</code>
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        {discObj ? `${discObj.name} (${discObj.code})` : cId}
-                      </TableCell>
-                      <TableCell align="center">
-                        <Chip
-                          label={`${currentUses} / ${maxUses ? maxUses : 'Unlimited'}`}
-                          size="small"
-                          color={maxUses && currentUses >= maxUses ? 'error' : 'default'}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={c.is_active ? 'Active' : 'Disabled'}
-                          color={c.is_active ? 'success' : 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
+              <CircularProgress />
+            </Box>
+          ) : coupons.length === 0 ? (
+            <Box sx={{ p: 5, textAlign: 'center' }}>
+              <Typography variant="body1" color="text.secondary">
+                {t('coupons.noCoupons', 'No one-time coupons created yet.')}
+              </Typography>
+            </Box>
+          ) : (
+            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t('coupons.code', 'Coupon Code')}</TableCell>
+                    <TableCell>{t('coupons.redemptionStatus', 'Redemption Status')}</TableCell>
+                    <TableCell>{t('coupons.validity', 'Effective Window')}</TableCell>
+                    <TableCell>{t('coupons.status', 'Status')}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {coupons.map((coupon) => {
+                    const uses = coupon.uses_count || 0;
+                    const max = coupon.max_uses || 1;
+                    const isRedeemed = uses >= max;
+
+                    return (
+                      <TableRow key={coupon.id} hover>
+                        <TableCell>
+                          <Typography variant="subtitle2" sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
+                            {coupon.code}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={isRedeemed ? 'Redeemed (1/1)' : `Available (${uses}/${max})`}
+                            color={isRedeemed ? 'error' : 'success'}
+                            variant={isRedeemed ? 'outlined' : 'filled'}
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {coupon.effective_from || coupon.effective_to ? (
+                            <Typography variant="caption">
+                              {coupon.effective_from ? new Date(coupon.effective_from).toLocaleDateString() : 'Start'}
+                              {' — '}
+                              {coupon.effective_to ? new Date(coupon.effective_to).toLocaleDateString() : 'Expires'}
+                            </Typography>
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">
+                              No Date Limit
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={coupon.is_active ? 'Active' : 'Inactive'}
+                            color={coupon.is_active ? 'success' : 'default'}
+                            size="small"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </CardContent>
       </Card>
 
-      {/* Create Coupon Drawer */}
+      {/* Drawer Form for 1-Time Coupon */}
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <Box sx={{ width: 400, p: 3 }}>
-          <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Create Coupon Code
-          </Typography>
-          <form onSubmit={handleCreate}>
-            <Stack spacing={2.5}>
+        <Box sx={{ width: { xs: 320, sm: 440 }, p: 3 }}>
+          <DialogTitle sx={{ px: 0, pt: 0 }}>{t('coupons.createModalTitle', 'Create One-Time Coupon Code')}</DialogTitle>
+          <form onSubmit={handleCreateOneTimeCoupon}>
+            <Stack spacing={3}>
               <TextField
-                label="Coupon Code (Auto Uppercase)"
-                placeholder="e.g. WELCOME500K"
                 required
                 fullWidth
+                label={t('coupons.codeLabel', 'Unique Coupon Code')}
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
+                placeholder="e.g. WELCOME15"
               />
-
-              <FormControl fullWidth required>
-                <InputLabel>Target Discount Campaign Rule</InputLabel>
-                <Select
-                  value={discountId}
-                  label="Target Discount Campaign Rule"
-                  onChange={(e) => setDiscountId(e.target.value)}
-                >
-                  {discounts.map((d) => (
-                    <MenuItem key={d.id} value={d.id}>
-                      {d.code} - {d.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
 
               <TextField
-                label="Max Allowed Redemptions"
-                type="number"
+                required
                 fullWidth
-                value={maxRedemptions || ''}
-                onChange={(e) => setMaxRedemptions(e.target.value ? Number(e.target.value) : undefined)}
+                type="number"
+                label={t('coupons.percentageLabel', 'Discount Percentage (%)')}
+                value={percentage}
+                onChange={(e) => setPercentage(e.target.value)}
+                placeholder="15"
               />
 
-              <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>
-                Save Coupon Code
-              </Button>
+              <TextField
+                fullWidth
+                type="number"
+                label={t('coupons.minSubtotalLabel', 'Minimum Purchase Subtotal (IRR)')}
+                value={minSubtotal}
+                onChange={(e) => setMinSubtotal(e.target.value)}
+                placeholder="100000"
+              />
+
+              <TextField
+                fullWidth
+                type="number"
+                label={t('coupons.maxCapLabel', 'Maximum Discount Cap (IRR)')}
+                value={maxCap}
+                onChange={(e) => setMaxCap(e.target.value)}
+                placeholder="50000"
+              />
+
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label={t('coupons.startDate', 'Start Date')}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                  value={effectiveFrom}
+                  onChange={(e) => setEffectiveFrom(e.target.value)}
+                />
+                <TextField
+                  fullWidth
+                  type="date"
+                  label={t('coupons.endDate', 'End Date')}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                  value={effectiveTo}
+                  onChange={(e) => setEffectiveTo(e.target.value)}
+                />
+              </Stack>
+
+              <Alert severity="info">
+                {t('coupons.oneTimeNotice', 'One-Time Coupons are locked to exactly 1 total redemption and 1 redemption per customer.')}
+              </Alert>
+
+              <Stack direction="row" spacing={2} sx={{ justifyContent: 'flex-end' }}>
+                <Button onClick={() => setDrawerOpen(false)} color="inherit">
+                  {t('common.cancel', 'Cancel')}
+                </Button>
+                <Button type="submit" variant="contained" disabled={saving}>
+                  {saving ? <CircularProgress size={24} /> : t('common.create', 'Create Coupon')}
+                </Button>
+              </Stack>
             </Stack>
           </form>
         </Box>

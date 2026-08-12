@@ -13,10 +13,21 @@ export class SettingsController {
   }
 
   @Patch('settings')
-  async updateSetting(@Body() body: { key: string; value: any }, @Req() req: Request) {
+  async updateSetting(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
-    return await this.settingsService.updateSetting(tenantId, body.key, body.value, correlationId);
+    const key = body.key || 'GENERAL';
+    const value = body.value !== undefined ? body.value : body;
+    return await this.settingsService.updateSetting(tenantId, key, value, correlationId);
+  }
+
+  @Patch('settings/:group')
+  async updateSettingGroup(@Param('group') group: string, @Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    const keyToSave = body.key || group;
+    const valueToSave = body.value !== undefined ? body.value : body;
+    return await this.settingsService.updateSetting(tenantId, keyToSave, valueToSave, correlationId);
   }
 
   @Get('currencies')

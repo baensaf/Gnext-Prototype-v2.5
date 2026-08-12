@@ -306,3 +306,78 @@ export class DiscountQuoteRequestDto {
   @IsString()
   couponCode?: string;
 }
+
+export class CreateCustomerDiscountDto {
+  @IsUUID()
+  @IsNotEmpty()
+  customer_id: string;
+
+  @IsNumberString()
+  @IsNotEmpty()
+  discount_percentage: string;
+
+  @IsOptional()
+  @IsString()
+  effective_from?: string;
+
+  @IsOptional()
+  @IsString()
+  effective_to?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  is_active?: boolean;
+}
+
+export class UpdateCustomerDiscountDto {
+  @IsOptional()
+  @IsNumberString()
+  discount_percentage?: string;
+
+  @IsOptional()
+  @IsString()
+  effective_from?: string;
+
+  @IsOptional()
+  @IsString()
+  effective_to?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  is_active?: boolean;
+}
+
+export class CreateOneTimeCouponDto {
+  @IsString()
+  @IsNotEmpty()
+  code: string;
+
+  @IsNumberString()
+  @IsNotEmpty()
+  percentage: string;
+
+  @IsOptional()
+  @IsNumberString()
+  minimum_subtotal?: string;
+
+  @IsOptional()
+  @IsNumberString()
+  maximum_discount_amount?: string;
+
+  @IsOptional()
+  @IsString()
+  effective_from?: string;
+
+  @IsOptional()
+  @IsString()
+  effective_to?: string;
+}
+

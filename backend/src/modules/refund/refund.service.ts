@@ -319,6 +319,17 @@ export class RefundService {
       }
 
       if (refund.status === 'SUCCEEDED') {
+        await this.creditService.reverseLoyaltyCashback(
+          tenantId,
+          order.id,
+          refund.amount,
+          order.subtotal,
+          refund.currency_code,
+          em,
+        );
+      }
+
+      if (refund.status === 'SUCCEEDED') {
         refund.posted_at = new Date();
 
         // Update Order refunded_total

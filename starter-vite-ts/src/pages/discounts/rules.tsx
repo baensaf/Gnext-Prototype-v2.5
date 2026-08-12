@@ -136,14 +136,26 @@ export function DiscountRulesPage() {
   };
 
   return (
-    <Box>
+    <Box sx={{ p: 3 }}>
+      <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+          V5 Preview Experience — Advanced Campaign Engine
+        </Typography>
+        <Typography variant="body2">
+          Advanced campaign types (free item rewards, free delivery waivers, complex multi-scopes, stacking groups, and funding sources) are part of the V5 Preview platform. For standard Phase 1 setups, use Customer Club Discounts, One-Time Coupons, or Cashier Manual Discount Authorizations.
+        </Typography>
+      </Alert>
+
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Discount Rules & Campaigns
-          </Typography>
+          <Stack direction="row" sx={{ alignItems: 'center' }} spacing={1}>
+            <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+              Advanced Discount Campaigns
+            </Typography>
+            <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
+          </Stack>
           <Typography variant="body2" color="text.secondary">
-            Configure percentage, fixed amount, priority stacking groups, coupons, and promotion constraints
+            Multi-scope, multi-level campaign rules and stacking groups (V5 Preview)
           </Typography>
         </Box>
         <Button
@@ -152,7 +164,7 @@ export function DiscountRulesPage() {
           onClick={() => setDrawerOpen(true)}
           sx={{ fontWeight: 'bold' }}
         >
-          Create Campaign Rule
+          Create V5 Campaign
         </Button>
       </Stack>
 

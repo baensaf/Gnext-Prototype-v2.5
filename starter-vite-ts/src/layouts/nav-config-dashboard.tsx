@@ -110,8 +110,18 @@ export function useNavData(): NavSectionProps['data'] {
       ],
     },
     {
-      subheader: t('nav.customersGroup', 'Customers'),
+      subheader: t('nav.customerClubGroup', 'Customer Club & Loyalty'),
       items: [
+        {
+          title: t('nav.customerDiscounts', 'Customer Discounts'),
+          path: '/app/customer-club/discounts',
+          icon: ICONS.discounts,
+        },
+        {
+          title: t('nav.customerWallet', 'Wallet & Cashback'),
+          path: '/app/customer-club/wallet',
+          icon: ICONS.credit,
+        },
         {
           title: t('nav.customers', 'Customer Directory'),
           path: '/app/customers',
@@ -165,17 +175,18 @@ export function useNavData(): NavSectionProps['data'] {
       ],
     },
     {
-      subheader: t('nav.discountsGroup', 'Discounts & Credit'),
+      subheader: t('nav.discountsGroup', 'Discounts & Promotions'),
       items: [
         {
-          title: t('nav.discounts', 'Discount Campaigns'),
-          path: '/app/discounts/campaigns',
-          icon: ICONS.discounts,
-        },
-        {
-          title: t('nav.coupons', 'Coupons Studio'),
+          title: t('nav.coupons', 'One-Time Coupons Studio'),
           path: '/app/discounts/coupons',
           icon: ICONS.coupons,
+        },
+        {
+          title: t('nav.discounts', 'Advanced Campaigns (V5)'),
+          path: '/app/discounts/campaigns',
+          icon: ICONS.discounts,
+          info: <Label color="info">V5 Preview</Label>,
         },
       ],
     },
@@ -236,6 +247,11 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.settingsHub', 'Settings Hub'),
           path: '/app/settings',
           icon: ICONS.settings,
+        },
+        {
+          title: t('nav.discountAuthorizations', 'Manual Discount Authorizations'),
+          path: '/app/settings/discount-authorizations',
+          icon: ICONS.reasons,
         },
         {
           title: t('nav.kdsConfig', 'KDS Configuration'),

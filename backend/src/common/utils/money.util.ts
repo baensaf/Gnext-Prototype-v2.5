@@ -18,6 +18,10 @@ export class MoneyUtil {
     return new Decimal(a || 0).times(new Decimal(b || 0)).toFixed(decimals);
   }
 
+  static negate(val: MoneyInput, decimals: number = 4): string {
+    return new Decimal(val || 0).negated().toFixed(decimals);
+  }
+
   static divide(a: MoneyInput, b: MoneyInput, decimals: number = 4): string {
     const divisor = new Decimal(b || 0);
     if (divisor.isZero()) {

@@ -130,11 +130,16 @@ export const paths = {
       code: (code: string) => `${ROOTS.APP}/reports/${code}`,
     },
     audit: `${ROOTS.APP}/audit`,
+    customerClub: {
+      discounts: `${ROOTS.APP}/customer-club/discounts`,
+      wallet: `${ROOTS.APP}/customer-club/wallet`,
+    },
     settings: {
       root: `${ROOTS.APP}/settings`,
       general: `${ROOTS.APP}/settings/general`,
       orderWorkflow: `${ROOTS.APP}/settings/order-workflow`,
       discountsCredit: `${ROOTS.APP}/settings/discounts-credit`,
+      discountAuthorizations: `${ROOTS.APP}/settings/discount-authorizations`,
       paymentsRefunds: `${ROOTS.APP}/settings/payments-refunds`,
       approvals: `${ROOTS.APP}/settings/approvals`,
       reasons: `${ROOTS.APP}/settings/reasons`,

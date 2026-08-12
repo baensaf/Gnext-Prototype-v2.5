@@ -75,6 +75,7 @@ export class OrderService {
     @Optional() private readonly kdsService?: KdsService,
     @Optional() private readonly printQueueService?: PrintQueueService,
     @Optional() private readonly deliveryService?: DeliveryService,
+    @Optional() private readonly creditService?: CreditService,
   ) {}
 
   async getOrders(tenantId: string, query: any) {
@@ -449,6 +450,23 @@ export class OrderService {
 
       if (targetState === 'COMPLETED') {
         order.completed_at = new Date();
+        if (order.customer_id && this.creditService) {
+          const eligiblePaidSubtotal = MoneyUtil.subtract(order.subtotal, order.discount_total);
+          if (MoneyUtil.greaterThan(eligiblePaidSubtotal, '0.0000')) {
+            const settingRepo = em.getRepository(TenantSetting);
+            const setting = await settingRepo.findOne({ where: { tenant_id: tenantId, key: 'CUSTOMER_CLUB' } });
+            const cashbackPct = (setting?.value as any)?.cashback_percentage ?? '5.00';
+            await this.creditService.awardLoyaltyCashback(
+              tenantId,
+              order.customer_id,
+              order.id,
+              eligiblePaidSubtotal,
+              cashbackPct,
+              order.currency_code || 'IRR',
+              em,
+            );
+          }
+        }
       } else if (targetState === 'CANCELLED') {
         order.cancelled_at = new Date();
         order.cancellation_reason_code_id = dto.reasonCodeId || null;

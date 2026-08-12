@@ -14,7 +14,9 @@ export type CreditEntryType =
   | 'REPAYMENT'
   | 'ADJUSTMENT'
   | 'REFUND'
-  | 'REVERSAL';
+  | 'REVERSAL'
+  | 'LOYALTY_CASHBACK'
+  | 'LOYALTY_CASHBACK_REVERSAL';
 
 @Entity('credit_entry')
 @Index(['account_id', 'posted_at'])

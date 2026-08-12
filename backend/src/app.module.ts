@@ -103,6 +103,7 @@ import { DiscountScope } from './entities/DiscountScope.entity';
 import { DiscountUsage } from './entities/DiscountUsage.entity';
 import { CustomerGroup } from './entities/CustomerGroup.entity';
 import { Customer } from './entities/Customer.entity';
+import { CustomerDiscount } from './entities/CustomerDiscount.entity';
 import { CustomerPhone } from './entities/CustomerPhone.entity';
 import { CustomerAddress } from './entities/CustomerAddress.entity';
 import { CustomerCreditAccount } from './entities/CustomerCreditAccount.entity';
@@ -178,7 +179,7 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
           PriceEntry, PriceGroupBranch, PriceBulkJob,
           Menu, MenuCategory, MenuProduct, ProductAvailability,
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,
-          Discount, Coupon, DiscountCampaign, DiscountScope, DiscountUsage,
+          Discount, Coupon, DiscountCampaign, DiscountScope, DiscountUsage, CustomerDiscount,
           CustomerGroup, Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CustomerCreditTransaction, CreditEntry,
           CustomFieldDefinition, CustomerCustomValue, CustomerTag, CustomerTagLink, CustomerSegment,
           CustomerConsent, CustomerMerge,

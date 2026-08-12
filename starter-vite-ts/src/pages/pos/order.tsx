@@ -205,6 +205,43 @@ export function PosOrderPage() {
     ? MoneyUtil.subtract(subtotalPlusTax, appliedDiscountAmount, 2)
     : '0';
 
+  useEffect(() => {
+    if (cart.length === 0) {
+      setAppliedDiscountAmount('0');
+      setCouponMessage(null);
+      return;
+    }
+    const autoQuote = async () => {
+      try {
+        const quoteRes = await discountsApi.quoteDiscounts({
+          orderDraft: {
+            branchId: selectedBranchId,
+            customerId: selectedCustomerId || undefined,
+            orderType,
+            items: cart.map((ci) => ({
+              productId: ci.product.id,
+              unitPrice: (ci.product.base_price || (ci.product as any).price || '0').toString(),
+              quantity: ci.quantity.toString(),
+            })),
+          },
+          couponCode: couponCode || undefined,
+        });
+
+        const discAmount = MoneyUtil.format(quoteRes.discountTotal || '0', 2);
+        setAppliedDiscountAmount(discAmount);
+        const applied = quoteRes.consideredDiscounts?.find((d) => d.status === 'APPLIED');
+        if (applied) {
+          setCouponMessage(`Applied ${applied.campaignName} (-${MoneyUtil.formatCurrency(discAmount)} IRR)`);
+        } else {
+          setCouponMessage(null);
+        }
+      } catch {
+        // Ignore auto-quote error during live typing
+      }
+    };
+    autoQuote();
+  }, [cart, selectedCustomerId, couponCode, selectedBranchId, orderType]);
+
   const handleApplyCoupon = async () => {
     if (!couponCode) return;
     try {

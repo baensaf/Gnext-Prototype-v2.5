@@ -48,12 +48,15 @@ import { ProductDetailPage } from 'src/pages/catalog/product-detail';
 import { BranchDetailPage } from 'src/pages/operations/branch-detail';
 import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
 import { CourierDetailPage } from 'src/pages/operations/courier-detail';
+import WalletCashbackPage from 'src/pages/customer-club/wallet-cashback';
 import { CampaignDetailPage } from 'src/pages/discounts/campaign-detail';
 import { CourierSettlementsPage } from 'src/pages/operations/settlements';
 import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
 import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
 import { KdsConfigurationPage } from 'src/pages/operations/kds-configuration';
 import { SettlementDetailPage } from 'src/pages/operations/settlement-detail';
+import CustomerDiscountsPage from 'src/pages/customer-club/customer-discounts';
+import DiscountAuthorizationsPage from 'src/pages/settings/discount-authorizations';
 import { MediaLocalizationDemoPage } from 'src/pages/simulation/media-localization';
 import { SimulationSnappfoodPage } from 'src/pages/simulation/simulation-snappfood';
 import { SimulationPaymentsPrintersPage } from 'src/pages/simulation/simulation-payments-printers';
@@ -111,6 +114,8 @@ export const routesSection: RouteObject[] = [
       { path: 'cashier/business-days', element: <CashDrawerPage /> },
       { path: 'payments', element: <PaymentsPage /> },
       { path: 'refunds', element: <RefundsPage /> },
+      { path: 'customer-club/discounts', element: <CustomerDiscountsPage /> },
+      { path: 'customer-club/wallet', element: <WalletCashbackPage /> },
       { path: 'customers', element: <CustomersPage /> },
       { path: 'customers/:id', element: <CustomersPage /> },
       { path: 'credit/accounts', element: <CustomerCreditPage /> },
@@ -147,6 +152,7 @@ export const routesSection: RouteObject[] = [
       { path: 'settings/general', element: <GeneralSettingsPage /> },
       { path: 'settings/order-workflow', element: <OrdersWorkflowPage /> },
       { path: 'settings/discounts-credit', element: <DiscountRulesPage /> },
+      { path: 'settings/discount-authorizations', element: <DiscountAuthorizationsPage /> },
       { path: 'settings/payments-refunds', element: <PaymentsPage /> },
       { path: 'settings/approvals', element: <ApprovalsSettingsPage /> },
       { path: 'settings/reasons', element: <ReasonCodesPage /> },

@@ -17,6 +17,7 @@ import { OrdersController } from './order.controller';
 import { CatalogModule } from '../catalog/catalog.module';
 import { PricingModule } from '../pricing/pricing.module';
 import { DiscountsModule } from '../discounts/discounts.module';
+import { CustomerModule } from '../customer/customer.module';
 import { AuditModule } from '../audit/audit.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { KdsModule } from '../kds/kds.module';
@@ -41,6 +42,7 @@ import { DeliveryModule } from '../delivery/delivery.module';
     CatalogModule,
     PricingModule,
     DiscountsModule,
+    CustomerModule,
     AuditModule,
     OutboxModule,
     KdsModule,

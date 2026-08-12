@@ -523,4 +523,175 @@ export class CreditService {
       customers: customerAgingList,
     };
   }
+
+  // Workflow 2: Purchase-based cashback & loyalty wallet
+  async awardLoyaltyCashback(
+    tenantId: string,
+    customerId: string,
+    orderId: string,
+    paidEligibleSubtotal: string,
+    cashbackPct: string,
+    currencyCode: string = 'IRR',
+    entityManager?: EntityManager,
+  ) {
+    const runner = async (em: EntityManager) => {
+      // Check idempotency: ensure LOYALTY_CASHBACK entry for this order does not already exist
+      const existingEntry = await em.findOne(CreditEntry, {
+        where: { tenant_id: tenantId, order_id: orderId, entry_type: 'LOYALTY_CASHBACK' as any },
+      });
+      if (existingEntry) return existingEntry;
+
+      const pctDec = MoneyUtil.divide(cashbackPct, '100', 6);
+      const cashbackAmt = MoneyUtil.multiply(paidEligibleSubtotal, pctDec);
+      if (MoneyUtil.lessThanOrEqual(cashbackAmt, '0.0000')) return null;
+
+      let acc = await em.findOne(CustomerCreditAccount, {
+        where: { tenant_id: tenantId, customer_id: customerId, currency_code: currencyCode },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!acc) {
+        acc = em.create(CustomerCreditAccount, {
+          tenant_id: tenantId,
+          customer_id: customerId,
+          currency_code: currencyCode,
+          mode: 'FINITE',
+          credit_limit: '10000000.0000',
+          current_balance: '0.0000',
+          status: 'ACTIVE',
+        });
+        acc = await em.save(CustomerCreditAccount, acc);
+      }
+
+      const newBalance = MoneyUtil.add(acc.current_balance, cashbackAmt);
+      acc.current_balance = newBalance;
+      await em.save(CustomerCreditAccount, acc);
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const entry = em.create(CreditEntry, {
+        tenant_id: tenantId,
+        account_id: acc.id,
+        entry_type: 'LOYALTY_CASHBACK' as any,
+        amount: cashbackAmt,
+        currency_code: currencyCode,
+        order_id: orderId,
+        reason_text: `Customer Club Cashback (${cashbackPct}%) on paid subtotal ${paidEligibleSubtotal}`,
+        reference: `CASHBACK_${orderId}`,
+        business_date: todayStr,
+        balance_after: newBalance,
+      });
+
+      const savedEntry = await em.save(CreditEntry, entry);
+
+      await this.auditWriter.write({
+        tenantId,
+        actorType: 'SYSTEM',
+        action: 'LOYALTY_CASHBACK_AWARDED',
+        entityType: 'CreditEntry',
+        entityId: savedEntry.id,
+        correlationId: `order_${orderId}`,
+        afterData: savedEntry,
+        details: { customerId, orderId, cashbackAmt, cashbackPct },
+      });
+
+      return savedEntry;
+    };
+
+    if (entityManager) {
+      return await runner(entityManager);
+    } else {
+      return await this.dataSource.transaction(async (em) => runner(em));
+    }
+  }
+
+  async reverseLoyaltyCashback(
+    tenantId: string,
+    orderId: string,
+    refundedSubtotalAmount: string,
+    totalOrderSubtotalAmount: string,
+    currencyCode: string = 'IRR',
+    entityManager?: EntityManager,
+  ) {
+    const runner = async (em: EntityManager) => {
+      const originalEntry = await em.findOne(CreditEntry, {
+        where: { tenant_id: tenantId, order_id: orderId, entry_type: 'LOYALTY_CASHBACK' as any },
+      });
+      if (!originalEntry) return null;
+
+      const originalCashbackAmt = originalEntry.amount;
+
+      // Cumulative reversals check
+      const previousReversals = await em.find(CreditEntry, {
+        where: { tenant_id: tenantId, order_id: orderId, entry_type: 'LOYALTY_CASHBACK_REVERSAL' as any },
+      });
+      let alreadyReversedAmt = '0.0000';
+      for (const rev of previousReversals) {
+        const absVal = MoneyUtil.format(Math.abs(Number(rev.amount)));
+        alreadyReversedAmt = MoneyUtil.add(alreadyReversedAmt, absVal);
+      }
+
+      const maxReversible = MoneyUtil.subtract(originalCashbackAmt, alreadyReversedAmt);
+      if (MoneyUtil.lessThanOrEqual(maxReversible, '0.0000')) return null;
+
+      let targetCumulativeReversal = '0.0000';
+      if (MoneyUtil.greaterThanOrEqual(refundedSubtotalAmount, totalOrderSubtotalAmount)) {
+        targetCumulativeReversal = originalCashbackAmt;
+      } else {
+        const ratio = MoneyUtil.divide(refundedSubtotalAmount, totalOrderSubtotalAmount, 6);
+        targetCumulativeReversal = MoneyUtil.multiply(originalCashbackAmt, ratio);
+      }
+
+      let reversalAmt = MoneyUtil.subtract(targetCumulativeReversal, alreadyReversedAmt);
+      if (MoneyUtil.greaterThan(reversalAmt, maxReversible)) {
+        reversalAmt = maxReversible;
+      }
+      if (MoneyUtil.lessThanOrEqual(reversalAmt, '0.0000')) return null;
+
+      const acc = await em.findOne(CustomerCreditAccount, {
+        where: { id: originalEntry.account_id, tenant_id: tenantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!acc) return null;
+
+      const newBalance = MoneyUtil.subtract(acc.current_balance, reversalAmt);
+      acc.current_balance = newBalance;
+      await em.save(CustomerCreditAccount, acc);
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const entry = em.create(CreditEntry, {
+        tenant_id: tenantId,
+        account_id: acc.id,
+        entry_type: 'LOYALTY_CASHBACK_REVERSAL' as any,
+        amount: MoneyUtil.negate(reversalAmt),
+        currency_code: currencyCode,
+        order_id: orderId,
+        related_entry_id: originalEntry.id,
+        reason_text: `Customer Club Cashback Reversal due to order refund`,
+        reference: `REVERSAL_${orderId}`,
+        business_date: todayStr,
+        balance_after: newBalance,
+      });
+
+      const savedEntry = await em.save(CreditEntry, entry);
+
+      await this.auditWriter.write({
+        tenantId,
+        actorType: 'SYSTEM',
+        action: 'LOYALTY_CASHBACK_REVERSED',
+        entityType: 'CreditEntry',
+        entityId: savedEntry.id,
+        correlationId: `refund_${orderId}`,
+        afterData: savedEntry,
+        details: { orderId, reversalAmt, originalEntryId: originalEntry.id },
+      });
+
+      return savedEntry;
+    };
+
+    if (entityManager) {
+      return await runner(entityManager);
+    } else {
+      return await this.dataSource.transaction(async (em) => runner(em));
+    }
+  }
 }

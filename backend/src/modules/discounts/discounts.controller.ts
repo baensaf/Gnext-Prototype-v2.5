@@ -118,4 +118,44 @@ export class DiscountsController {
     const tenantId = (req as any).tenantId;
     return await this.discountsService.evaluateQuote(tenantId, body);
   }
+
+  // Customer Discounts (Workflow 1)
+  @Get('customer-discounts')
+  async getCustomerDiscounts(@Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const customerId = req.query.customer_id as string | undefined;
+    return await this.discountsService.getCustomerDiscounts(tenantId, customerId);
+  }
+
+  @Post('customer-discounts')
+  async createCustomerDiscount(@Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    const correlationId = (req as any).correlationId;
+    return await this.discountsService.createCustomerDiscount(tenantId, body, userId, correlationId);
+  }
+
+  @Patch('customer-discounts/:id')
+  async updateCustomerDiscount(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    const correlationId = (req as any).correlationId;
+    return await this.discountsService.updateCustomerDiscount(tenantId, id, body, userId, correlationId);
+  }
+
+  @Delete('customer-discounts/:id')
+  async revokeCustomerDiscount(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.discountsService.revokeCustomerDiscount(tenantId, id, correlationId);
+  }
+
+  // One-Time Coupon (Workflow 4)
+  @Post('coupons/one-time')
+  async createOneTimeCoupon(@Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.discountsService.createOneTimeCoupon(tenantId, body, correlationId);
+  }
 }
+
