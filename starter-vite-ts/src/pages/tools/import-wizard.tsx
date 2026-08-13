@@ -81,6 +81,7 @@ export function ImportWizardPage() {
   const [entityType, setEntityType] = useState<ImportEntityType>('PRODUCTS');
   const [fileName, setFileName] = useState<string>('products_catalog.csv');
   const [fileContent, setFileContent] = useState<string>(DEFAULT_CSV_TEMPLATES.PRODUCTS);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
   const [activeJob, setActiveJob] = useState<ImportJobDto | null>(null);
   const [jobRows, setJobRows] = useState<ImportRowDto[]>([]);
@@ -96,6 +97,7 @@ export function ImportWizardPage() {
 
   const handleEntityChange = (newType: ImportEntityType) => {
     setEntityType(newType);
+    setSelectedFile(null);
     setFileContent(DEFAULT_CSV_TEMPLATES[newType]);
     setFileName(`${newType.toLowerCase()}_import.csv`);
     setActiveJob(null);
@@ -107,12 +109,19 @@ export function ImportWizardPage() {
     const file = e.target.files?.[0];
     if (file) {
       setFileName(file.name);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const text = event.target?.result as string;
-        setFileContent(text);
-      };
-      reader.readAsText(file);
+      const isXlsx = file.name.toLowerCase().endsWith('.xlsx');
+      if (isXlsx) {
+        setSelectedFile(file);
+        setFileContent('');
+      } else {
+        setSelectedFile(null);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const text = event.target?.result as string;
+          setFileContent(text);
+        };
+        reader.readAsText(file);
+      }
     }
   };
 
@@ -122,16 +131,22 @@ export function ImportWizardPage() {
 
     try {
       if (activeStep === 0) {
-        if (!fileContent.trim()) {
-          throw new Error('Please upload or enter spreadsheet CSV/Excel content');
+        let job: ImportJobDto;
+        if (selectedFile) {
+          job = await importExportApi.uploadFileAsFormData(entityType, selectedFile);
+        } else {
+          if (!fileContent.trim()) {
+            throw new Error('Please upload an Excel (.xlsx) file or provide CSV content');
+          }
+          job = await importExportApi.uploadFile(entityType, fileContent, fileName);
         }
-        // Step 1: Upload & stage job via backend API
-        const job = await importExportApi.uploadFile(entityType, fileContent, fileName);
         setActiveJob(job);
 
-        // Fetch auto mapping suggestions
-        const headers = Object.keys(job.column_mapping || {});
-        if (headers.length === 0) {
+        // Auto-mapping setup
+        const mappedCols = job.column_mapping || {};
+        if (Object.keys(mappedCols).length > 0) {
+          setColumnMapping(mappedCols);
+        } else if (!selectedFile && fileContent.trim()) {
           const firstLine = fileContent.split(/\r?\n/)[0];
           const parsedHeaders = firstLine.split(/,|\t|;/).map((h) => h.replace(/^["']|["']$/g, '').trim());
           const autoMap = await importExportApi.autoMap(parsedHeaders, entityType);
@@ -140,8 +155,6 @@ export function ImportWizardPage() {
             if (m.mappedField) mapObj[m.header] = m.mappedField;
           });
           setColumnMapping(mapObj);
-        } else {
-          setColumnMapping(job.column_mapping);
         }
 
         setActiveStep(1);
@@ -233,18 +246,29 @@ export function ImportWizardPage() {
             <Grid size={{ xs: 12, md: 6 }}>
               <Button variant="outlined" component="label" fullWidth sx={{ height: 56 }}>
                 Choose File ({fileName})
-                <input type="file" hidden accept=".csv,.xlsx,.xls" onChange={handleFileUpload} />
+                <input type="file" hidden accept=".csv,.xlsx" onChange={handleFileUpload} />
               </Button>
             </Grid>
             <Grid size={{ xs: 12 }}>
-              <TextField
-                fullWidth
-                multiline
-                rows={6}
-                label="File Raw CSV Content Preview"
-                value={fileContent}
-                onChange={(e) => setFileContent(e.target.value)}
-              />
+              {selectedFile ? (
+                <Alert severity="info" sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    Excel Workbook Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    Binary Excel spreadsheet file ready for backend parsing and auto-mapping. Click <strong>Next Step</strong> to proceed.
+                  </Typography>
+                </Alert>
+              ) : (
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={6}
+                  label="File Raw CSV Content Preview / Editor"
+                  value={fileContent}
+                  onChange={(e) => setFileContent(e.target.value)}
+                />
+              )}
             </Grid>
           </Grid>
         </Card>

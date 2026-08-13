@@ -19,6 +19,9 @@ export interface Customer {
   customer_group_id?: string;
   national_id?: string;
   is_active: boolean;
+  credit_account?: CustomerCreditAccount | null;
+  wallet_balance?: string;
+  credit_limit?: string;
 }
 
 export interface CustomerAddress {

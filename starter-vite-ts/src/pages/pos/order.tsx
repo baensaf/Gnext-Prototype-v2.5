@@ -15,16 +15,16 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import VerifiedIcon from '@mui/icons-material/Verified';
+import EditNoteIcon from '@mui/icons-material/EditNote';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
+import RestaurantIcon from '@mui/icons-material/Restaurant';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
-import RestaurantIcon from '@mui/icons-material/Restaurant';
 import TakeoutDiningIcon from '@mui/icons-material/TakeoutDining';
 import DeliveryDiningIcon from '@mui/icons-material/DeliveryDining';
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
-import EditNoteIcon from '@mui/icons-material/EditNote';
 import {
   Box,
   Tab,

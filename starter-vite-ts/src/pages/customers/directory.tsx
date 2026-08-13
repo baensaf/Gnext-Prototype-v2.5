@@ -242,6 +242,7 @@ export function CustomersPage() {
                   <TableCell>Customer Name</TableCell>
                   <TableCell>Mobile Number</TableCell>
                   <TableCell>Customer Group</TableCell>
+                  <TableCell>Wallet / Credit Balance</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell align="center">Actions</TableCell>
                 </TableRow>
@@ -249,8 +250,12 @@ export function CustomersPage() {
               <TableBody>
                 {customers.map((c) => {
                   const grpObj = customerGroups.find((g) => g.id === c.customer_group_id);
+                  const walletBal = c.wallet_balance || c.credit_account?.current_balance || '0.0000';
+                  const credLim = c.credit_limit || c.credit_account?.credit_limit || '0.0000';
+                  const isPositive = MoneyUtil.greaterThan(walletBal, '0');
+
                   return (
-                    <TableRow key={c.id}>
+                    <TableRow key={c.id} hover>
                       <TableCell><code>{c.code}</code></TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>
                         {c.first_name} {c.last_name}
@@ -264,6 +269,22 @@ export function CustomersPage() {
                         )}
                       </TableCell>
                       <TableCell>
+                        <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
+                          <Chip
+                            icon={<AccountBalanceWalletIcon sx={{ '&&': { fontSize: 16 } }} />}
+                            label={`${MoneyUtil.formatCurrency(walletBal)} IRR`}
+                            color={isPositive ? 'success' : 'default'}
+                            size="small"
+                            onClick={() => handleOpenCredit(c)}
+                            title="Click to view full wallet ledger & post transactions"
+                            sx={{ fontWeight: 'bold', cursor: 'pointer' }}
+                          />
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', px: 0.5 }}>
+                            Credit Limit: {MoneyUtil.formatCurrency(credLim)} IRR
+                          </Typography>
+                        </Stack>
+                      </TableCell>
+                      <TableCell>
                         <Chip
                           label={c.is_active ? 'Active' : 'Disabled'}
                           color={c.is_active ? 'success' : 'default'}
@@ -272,7 +293,7 @@ export function CustomersPage() {
                       </TableCell>
                       <TableCell align="center">
                         <IconButton
-                          title="Credit Ledger & Account"
+                          title="Customer Wallet & Credit Ledger"
                           color="primary"
                           onClick={() => handleOpenCredit(c)}
                         >
@@ -360,10 +381,11 @@ export function CustomersPage() {
               </FormControl>
 
               <TextField
-                label="Credit Limit (IRR)"
+                label="Assigned Credit Line / Overdraft Limit (IRR)"
                 type="number"
                 fullWidth
                 value={creditLimit}
+                helperText="A wallet account will be automatically provisioned with this initial credit limit."
                 onChange={(e) => setCreditLimit(e.target.value)}
               />
 
@@ -378,31 +400,45 @@ export function CustomersPage() {
       {/* Credit Ledger Dialog */}
       <Dialog open={creditDialogOpen} onClose={() => setCreditDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ fontWeight: 'bold' }}>
-          Credit Ledger — {selectedCustomer?.first_name} {selectedCustomer?.last_name} ({selectedCustomer?.code})
+          Customer Wallet & Credit Ledger — {selectedCustomer?.first_name} {selectedCustomer?.last_name} ({selectedCustomer?.code})
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           {creditAccount && (
             <Grid container spacing={2} sx={{ mb: 3, mt: 1 }}>
-              <Grid size={{ xs: 6 }}>
-                <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'primary.50' }}>
-                  <CardContent>
-                    <Typography variant="caption" color="text.secondary">
-                      Current Credit Balance
+              <Grid size={{ xs: 12, md: 4 }}>
+                <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'success.50', borderColor: 'success.200' }}>
+                  <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                    <Typography variant="caption" color="success.dark" sx={{ fontWeight: 600 }}>
+                      Available Wallet Balance
                     </Typography>
-                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'success.main', mt: 0.5 }}>
                       {MoneyUtil.formatCurrency(creditAccount.current_balance)} IRR
                     </Typography>
                   </CardContent>
                 </Card>
               </Grid>
-              <Grid size={{ xs: 6 }}>
-                <Card variant="outlined" sx={{ borderRadius: 2 }}>
-                  <CardContent>
-                    <Typography variant="caption" color="text.secondary">
+              <Grid size={{ xs: 12, md: 4 }}>
+                <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'background.neutral' }}>
+                  <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
                       Assigned Credit Limit
                     </Typography>
-                    <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+                    <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 0.5 }}>
                       {MoneyUtil.formatCurrency(creditAccount.credit_limit)} IRR
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'primary.50', borderColor: 'primary.200' }}>
+                  <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                    <Typography variant="caption" color="primary.dark" sx={{ fontWeight: 600 }}>
+                      Total Purchasing Power
+                    </Typography>
+                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main', mt: 0.5 }}>
+                      {MoneyUtil.formatCurrency(
+                        MoneyUtil.add(creditAccount.current_balance || '0', creditAccount.credit_limit || '0'),
+                      )} IRR
                     </Typography>
                   </CardContent>
                 </Card>
@@ -413,16 +449,16 @@ export function CustomersPage() {
           {/* Post Transaction Form */}
           <Box component="form" onSubmit={handlePostTransaction} sx={{ mb: 3, p: 2, bgcolor: 'background.neutral', borderRadius: 2 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1.5 }}>
-              Post Credit Transaction
+              Top-Up, Deduct or Adjust Wallet Balance
             </Typography>
             <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-              <FormControl size="small" sx={{ width: 180 }}>
-                <InputLabel>Type</InputLabel>
-                <Select value={txType} label="Type" onChange={(e) => setTxType(e.target.value)}>
-                  <MenuItem value="CHARGE">CHARGE (Deposit +)</MenuItem>
-                  <MenuItem value="DEBIT">DEBIT (Deduct -)</MenuItem>
-                  <MenuItem value="SETTLEMENT">SETTLEMENT (+)</MenuItem>
-                  <MenuItem value="ADJUSTMENT">ADJUSTMENT (=)</MenuItem>
+              <FormControl size="small" sx={{ width: 200 }}>
+                <InputLabel>Transaction Type</InputLabel>
+                <Select value={txType} label="Transaction Type" onChange={(e) => setTxType(e.target.value)}>
+                  <MenuItem value="CHARGE">CHARGE (Top-Up / Deposit +)</MenuItem>
+                  <MenuItem value="DEBIT">DEBIT (Deduct / Spend -)</MenuItem>
+                  <MenuItem value="SETTLEMENT">SETTLEMENT (Debt Repay +)</MenuItem>
+                  <MenuItem value="ADJUSTMENT">ADJUSTMENT (Balance Adjust =)</MenuItem>
                 </Select>
               </FormControl>
 
@@ -444,7 +480,7 @@ export function CustomersPage() {
               />
 
               <Button type="submit" variant="contained" size="small" sx={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                Post
+                Post Transaction
               </Button>
             </Stack>
           </Box>

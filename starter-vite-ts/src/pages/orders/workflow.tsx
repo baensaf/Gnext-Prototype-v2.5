@@ -5,27 +5,22 @@ import type { ReasonCode } from 'src/api/settingsApi';
 
 import React, { useState, useEffect } from 'react';
 
+import CodeIcon from '@mui/icons-material/Code';
+import CloseIcon from '@mui/icons-material/Close';
 import CancelIcon from '@mui/icons-material/Cancel';
 import PersonIcon from '@mui/icons-material/Person';
 import SearchIcon from '@mui/icons-material/Search';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import HistoryIcon from '@mui/icons-material/History';
+import SecurityIcon from '@mui/icons-material/Security';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import CloseIcon from '@mui/icons-material/Close';
-import HistoryIcon from '@mui/icons-material/History';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import SecurityIcon from '@mui/icons-material/Security';
-import CodeIcon from '@mui/icons-material/Code';
-import RestaurantIcon from '@mui/icons-material/Restaurant';
-import TakeoutDiningIcon from '@mui/icons-material/TakeoutDining';
-import DeliveryDiningIcon from '@mui/icons-material/DeliveryDining';
-import EditNoteIcon from '@mui/icons-material/EditNote';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import {
   Box,
   Tab,
@@ -64,13 +59,13 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
-import { Label } from 'src/components/label';
-import { httpClient as axios } from 'src/api/httpClient';
 
 import { orderApi } from 'src/api/orderApi';
 import { paymentApi } from 'src/api/paymentApi';
 import { customerApi } from 'src/api/customerApi';
 import { settingsApi } from 'src/api/settingsApi';
+import { httpClient as axios } from 'src/api/httpClient';
+
 
 export function OrdersWorkflowPage() {
   const [orders, setOrders] = useState<OrderHeader[]>([]);

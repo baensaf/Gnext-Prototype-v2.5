@@ -34,6 +34,18 @@ export const importExportApi = {
     return res.data.data;
   },
 
+  uploadFileAsFormData: async (entityType: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('entityType', entityType);
+    const res = await httpClient.post<{ success: boolean; data: ImportJobDto }>('/api/v1/import/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return res.data.data;
+  },
+
   getJobDetail: async (jobId: string) => {
     const res = await httpClient.get<{ success: boolean; data: { job: ImportJobDto; rows: ImportRowDto[] } }>(`/api/v1/import/job/${jobId}`);
     return res.data.data;

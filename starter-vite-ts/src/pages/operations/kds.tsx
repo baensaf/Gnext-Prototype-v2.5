@@ -34,6 +34,7 @@ import {
 } from '@mui/material';
 
 import { kdsApi } from 'src/api/kdsApi';
+
 import { Label } from 'src/components/label';
 
 export function KdsPage() {

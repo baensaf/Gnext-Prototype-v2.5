@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { CustomerGroup } from '../../entities/CustomerGroup.entity';
 import { Customer } from '../../entities/Customer.entity';
 import { CustomerPhone } from '../../entities/CustomerPhone.entity';
@@ -87,16 +87,35 @@ export class CustomerService {
     return saved;
   }
 
+  private async enrichCustomersWithCredit(tenantId: string, customers: Customer[]): Promise<any[]> {
+    if (!customers || customers.length === 0) return [];
+    const customerIds = customers.map((c) => c.id);
+    const accounts = await this.accountRepo.find({
+      where: { tenant_id: tenantId, customer_id: In(customerIds) },
+    });
+    const accMap = new Map(accounts.map((a) => [a.customer_id, a]));
+    return customers.map((c) => {
+      const acc = accMap.get(c.id);
+      return {
+        ...c,
+        credit_account: acc || null,
+        wallet_balance: acc?.current_balance || '0.0000',
+        credit_limit: acc?.credit_limit || '0.0000',
+      };
+    });
+  }
+
   // Customers
   async getCustomers(
     tenantId: string,
     query?: PaginationQueryDto & { search?: string; status?: string; tagId?: string },
-  ): Promise<PagedResponse<Customer> | Customer[]> {
+  ): Promise<PagedResponse<any> | any[]> {
     if (!query || (!query.page && !query.limit && !query.search && !query.status && !query.tagId)) {
       const qb = this.customerRepo.createQueryBuilder('c')
         .where('c.tenant_id = :tenantId', { tenantId })
         .orderBy('c.code', 'ASC');
-      return await qb.getMany();
+      const items = await qb.getMany();
+      return await this.enrichCustomersWithCredit(tenantId, items);
     }
 
     const page = query.page || 1;
@@ -123,7 +142,8 @@ export class CustomerService {
       .take(limit);
 
     const [items, total] = await qb.getManyAndCount();
-    return createPagedResponse(items, total, page, limit);
+    const enriched = await this.enrichCustomersWithCredit(tenantId, items);
+    return createPagedResponse(enriched, total, page, limit);
   }
 
   async getCustomerById(tenantId: string, id: string) {
@@ -133,7 +153,17 @@ export class CustomerService {
     const addresses = await this.addressRepo.find({ where: { tenant_id: tenantId, customer_id: id } });
     const tagLinks = await this.tagLinkRepo.find({ where: { tenant_id: tenantId, customer_id: id } });
     const consents = await this.consentRepo.find({ where: { tenant_id: tenantId, customer_id: id } });
-    return { ...customer, phones, addresses, tags: tagLinks, consents };
+    const creditAccount = await this.accountRepo.findOne({ where: { tenant_id: tenantId, customer_id: id } });
+    return {
+      ...customer,
+      phones,
+      addresses,
+      tags: tagLinks,
+      consents,
+      credit_account: creditAccount || null,
+      wallet_balance: creditAccount?.current_balance || '0.0000',
+      credit_limit: creditAccount?.credit_limit || '0.0000',
+    };
   }
 
   async createCustomer(

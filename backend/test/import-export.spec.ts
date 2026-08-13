@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import * as ExcelJS from 'exceljs';
 import { ImportExportService } from '../src/modules/import-export/import-export.service';
 import { ImportJob } from '../src/entities/ImportJob.entity';
 import { ImportRow } from '../src/entities/ImportRow.entity';
@@ -64,6 +65,77 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
       expect(parsed.rows[0]['Customer Code']).toBe('CUST-001');
       expect(parsed.rows[0]['First Name']).toBe('Ali');
       expect(parsed.rows[1]['Mobile']).toBe('09129998877');
+    });
+
+    it('should parse XLSX buffer into headers and row objects', async () => {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Sheet1');
+      sheet.addRow(['Customer Code', 'First Name', 'Last Name', 'Mobile']);
+      sheet.addRow(['CUST-001', 'Ali', 'Rezaei', '09121112233']);
+      sheet.addRow(['CUST-002', 'Sara', 'Ahmadi', '09129998877']);
+      const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+
+      const parsed = await service.parseXlsxBuffer(buffer);
+      expect(parsed.headers).toEqual(['Customer Code', 'First Name', 'Last Name', 'Mobile']);
+      expect(parsed.rows).toHaveLength(2);
+      expect(parsed.rows[0]['Customer Code']).toBe('CUST-001');
+      expect(parsed.rows[0]['First Name']).toBe('Ali');
+      expect(parsed.rows[1]['Mobile']).toBe('09129998877');
+    });
+
+    it('should parse XLSX with mixed cell types (numbers, formulas, Persian text)', async () => {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Products');
+      sheet.addRow(['کد کالا', 'نام کالا', 'قیمت', 'Formula Total']);
+
+      const row2 = sheet.addRow(['PROD-100', 'همبرگر مخصوص', 250000]);
+      row2.getCell(4).value = { formula: 'C2*1.09', result: 272500 };
+
+      const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+      const parsed = await service.parseXlsxBuffer(buffer);
+
+      expect(parsed.headers).toEqual(['کد کالا', 'نام کالا', 'قیمت', 'Formula Total']);
+      expect(parsed.rows).toHaveLength(1);
+      expect(parsed.rows[0]['کد کالا']).toBe('PROD-100');
+      expect(parsed.rows[0]['نام کالا']).toBe('همبرگر مخصوص');
+      expect(parsed.rows[0]['قیمت']).toBe('250000');
+      expect(parsed.rows[0]['Formula Total']).toBe('272500');
+    });
+
+    it('should throw BadRequestException when parsing empty XLSX buffer', async () => {
+      await expect(service.parseXlsxBuffer(Buffer.from([]))).rejects.toThrow('Excel file is empty');
+    });
+
+    it('should stage an import job from XLSX buffer', async () => {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Customers');
+      sheet.addRow(['کد مشتری', 'نام', 'نام خانوادگی', 'شماره تماس']);
+      sheet.addRow(['CUST-X1', 'امیر', 'کاظمی', '09123334455']);
+      const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+
+      const job = await service.createStagedJobFromXlsx('test-tenant', 'CUSTOMERS', 'customers.xlsx', buffer);
+
+      expect(jobRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenant_id: 'test-tenant',
+          entity_type: 'CUSTOMERS',
+          file_name: 'customers.xlsx',
+          status: 'STAGED',
+          total_rows: 1,
+        }),
+      );
+      expect(rowRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          row_number: 1,
+          status: 'STAGED',
+          raw_data: {
+            'کد مشتری': 'CUST-X1',
+            'نام': 'امیر',
+            'نام خانوادگی': 'کاظمی',
+            'شماره تماس': '09123334455',
+          },
+        }),
+      );
     });
   });
 

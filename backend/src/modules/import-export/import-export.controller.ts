@@ -22,19 +22,29 @@ export class ImportExportController {
   ) {
     const tenantId = (req as any)?.tenantId;
 
-    let content = fileContentString;
+    if (!entityType || !['CUSTOMERS', 'PRODUCTS', 'CATEGORIES'].includes(entityType)) {
+      throw new BadRequestException('Valid entityType (CUSTOMERS, PRODUCTS, CATEGORIES) is required');
+    }
+
+    if (!file && !fileContentString) {
+      throw new BadRequestException('File or fileContent is required');
+    }
+
     let originalName = 'import_file.csv';
+    const isXlsx = file?.originalname?.toLowerCase().endsWith('.xlsx');
 
     if (file) {
-      content = file.buffer.toString('utf-8');
       originalName = file.originalname;
     }
 
-    if (!content) {
-      throw new BadRequestException('File or fileContent is required');
+    if (isXlsx && file?.buffer) {
+      const job = await this.importExportService.createStagedJobFromXlsx(tenantId, entityType, originalName, file.buffer);
+      return { success: true, data: job };
     }
-    if (!entityType || !['CUSTOMERS', 'PRODUCTS', 'CATEGORIES'].includes(entityType)) {
-      throw new BadRequestException('Valid entityType (CUSTOMERS, PRODUCTS, CATEGORIES) is required');
+
+    const content = file ? file.buffer.toString('utf-8') : fileContentString;
+    if (!content) {
+      throw new BadRequestException('File or fileContent is empty');
     }
 
     const job = await this.importExportService.createStagedJob(tenantId, entityType, originalName, content);

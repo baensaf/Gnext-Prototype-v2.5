@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
+import * as ExcelJS from 'exceljs';
 import { ImportJob, ImportEntityType } from '../../entities/ImportJob.entity';
 import { ImportRow } from '../../entities/ImportRow.entity';
 import { Customer } from '../../entities/Customer.entity';
@@ -60,7 +61,7 @@ export class ImportExportService {
   ) {}
 
   /**
-   * Parse CSV/Excel data buffer or text content into header array and data object rows.
+   * Parse CSV data text content into header array and data object rows.
    */
   parseRawContent(fileContent: string): { headers: string[]; rows: Record<string, any>[] } {
     const lines = fileContent
@@ -96,16 +97,99 @@ export class ImportExportService {
   }
 
   /**
-   * Upload & stage spreadsheet file
+   * Helper to extract cell value from ExcelJS cell across mixed types (richText, formulas, dates, etc.)
    */
-  async createStagedJob(
+  private extractCellValue(cell: ExcelJS.Cell): string {
+    if (cell.value === null || cell.value === undefined) {
+      return '';
+    }
+    if (typeof cell.value === 'object') {
+      if ('result' in cell.value && cell.value.result !== undefined && cell.value.result !== null) {
+        return String((cell.value as any).result);
+      }
+      if ('richText' in cell.value && Array.isArray((cell.value as any).richText)) {
+        return (cell.value as any).richText.map((rt: any) => rt.text || '').join('');
+      }
+      if ('text' in cell.value && (cell.value as any).text !== undefined) {
+        return String((cell.value as any).text);
+      }
+      if (cell.value instanceof Date) {
+        return cell.value.toISOString();
+      }
+    }
+    return String(cell.value);
+  }
+
+  /**
+   * Parse XLSX binary buffer into headers and row objects.
+   */
+  async parseXlsxBuffer(buffer: Buffer | ArrayBuffer): Promise<{ headers: string[]; rows: Record<string, any>[] }> {
+    const len = (buffer as any)?.length ?? (buffer as any)?.byteLength ?? 0;
+    if (!buffer || len === 0) {
+      throw new BadRequestException('Excel file is empty');
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    try {
+      await workbook.xlsx.load(buffer as any);
+    } catch (err: any) {
+      throw new BadRequestException(`Failed to parse Excel file: ${err.message || 'Invalid format'}`);
+    }
+
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet || worksheet.rowCount === 0) {
+      throw new BadRequestException('Excel file has no worksheets or is empty');
+    }
+
+    const headerRow = worksheet.getRow(1);
+    const headerCols: { header: string; colNumber: number }[] = [];
+    const headers: string[] = [];
+
+    headerRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+      const val = this.extractCellValue(cell).trim();
+      if (val) {
+        headerCols.push({ header: val, colNumber });
+        headers.push(val);
+      }
+    });
+
+    if (headers.length === 0) {
+      throw new BadRequestException('No headers found in the first row of the Excel sheet');
+    }
+
+    const rows: Record<string, any>[] = [];
+    for (let rowIdx = 2; rowIdx <= worksheet.rowCount; rowIdx++) {
+      const row = worksheet.getRow(rowIdx);
+      const rowObj: Record<string, any> = {};
+      let hasData = false;
+
+      headerCols.forEach(({ header, colNumber }) => {
+        const cell = row.getCell(colNumber);
+        const val = this.extractCellValue(cell).trim();
+        rowObj[header] = val;
+        if (val !== '') {
+          hasData = true;
+        }
+      });
+
+      if (hasData) {
+        rows.push(rowObj);
+      }
+    }
+
+    return { headers, rows };
+  }
+
+  /**
+   * Shared helper to stage job and import rows from parsed headers and data.
+   */
+  private async stageJobFromParsedData(
     tenantId: string,
     entityType: ImportEntityType,
     fileName: string,
-    fileContent: string,
+    headers: string[],
+    rows: Record<string, any>[],
   ): Promise<ImportJob> {
-    const { headers, rows } = this.parseRawContent(fileContent);
-
     const autoMapping = this.generateAutoMapping(headers, entityType);
     const mappingObj: Record<string, string> = {};
     autoMapping.forEach((m) => {
@@ -140,6 +224,32 @@ export class ImportExportService {
     await this.rowRepo.save(importRows);
 
     return savedJob;
+  }
+
+  /**
+   * Upload & stage spreadsheet file (CSV format)
+   */
+  async createStagedJob(
+    tenantId: string,
+    entityType: ImportEntityType,
+    fileName: string,
+    fileContent: string,
+  ): Promise<ImportJob> {
+    const { headers, rows } = this.parseRawContent(fileContent);
+    return await this.stageJobFromParsedData(tenantId, entityType, fileName, headers, rows);
+  }
+
+  /**
+   * Upload & stage spreadsheet file (XLSX binary format)
+   */
+  async createStagedJobFromXlsx(
+    tenantId: string,
+    entityType: ImportEntityType,
+    fileName: string,
+    buffer: Buffer | ArrayBuffer,
+  ): Promise<ImportJob> {
+    const { headers, rows } = await this.parseXlsxBuffer(buffer);
+    return await this.stageJobFromParsedData(tenantId, entityType, fileName, headers, rows);
   }
 
   /**
