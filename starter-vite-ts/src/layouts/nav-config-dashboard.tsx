@@ -120,6 +120,11 @@ export function useNavData(): NavSectionProps['data'] {
           icon: ICONS.discounts,
         },
         {
+          title: t('nav.coupons', 'One-Time Coupons Studio'),
+          path: '/app/discounts/coupons',
+          icon: ICONS.coupons,
+        },
+        {
           title: t('nav.customerWallet', 'Wallet & Cashback'),
           path: '/app/customer-club/wallet',
           icon: ICONS.credit,
@@ -173,22 +178,6 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.pricing', 'Price Book & Groups'),
           path: '/app/pricing/price-book',
           icon: ICONS.pricing,
-        },
-      ],
-    },
-    {
-      subheader: t('nav.discountsGroup', 'Discounts & Promotions'),
-      items: [
-        {
-          title: t('nav.coupons', 'One-Time Coupons Studio'),
-          path: '/app/discounts/coupons',
-          icon: ICONS.coupons,
-        },
-        {
-          title: t('nav.discounts', 'Advanced Campaigns (V5)'),
-          path: '/app/discounts/campaigns',
-          icon: ICONS.discounts,
-          info: <Label color="info">V5 Preview</Label>,
         },
       ],
     },
@@ -271,6 +260,12 @@ export function useNavData(): NavSectionProps['data'] {
     {
       subheader: t('nav.v5GroupHeader', 'Future — V5 Preview'),
       items: [
+        {
+          title: t('nav.discounts', 'Advanced Campaigns (V5)'),
+          path: '/app/discounts/campaigns',
+          icon: ICONS.discounts,
+          info: <Label color="info">V5 Preview</Label>,
+        },
         {
           title: t('nav.v5Preview', 'Inventory Stock & Movement'),
           path: '/app/inventory/stock',
