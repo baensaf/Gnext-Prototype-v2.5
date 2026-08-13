@@ -13,6 +13,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { httpClient as axios } from 'src/api/httpClient';
 import { DashboardContent } from 'src/layouts/dashboard';
 
 import { Iconify } from 'src/components/iconify';
@@ -51,8 +52,8 @@ export default function DiscountAuthorizationsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/v1/settings');
-      const data = await res.json();
+      const res = await axios.get('/api/v1/settings');
+      const data = res.data;
       const authSetting = data?.DISCOUNT_AUTHORIZATIONS || data?.DISCOUNTS || {};
 
       setPolicy({
@@ -66,7 +67,7 @@ export default function DiscountAuthorizationsPage() {
         adminMaxFixed: authSetting.adminMaxFixed ?? 10000000,
       });
     } catch (err: any) {
-      setError(err.message || t('authPolicy.failedToLoad', 'Failed to load discount authorization policy'));
+      setError(err.detail || err.message || t('authPolicy.failedToLoad', 'Failed to load discount authorization policy'));
     } finally {
       setLoading(false);
     }
@@ -81,17 +82,10 @@ export default function DiscountAuthorizationsPage() {
     setError(null);
     setSuccess(null);
     try {
-      const res = await fetch('/api/v1/settings/DISCOUNT_AUTHORIZATIONS', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(policy),
-      });
-
-      if (!res.ok) throw new Error('Failed to save discount authorization settings');
-
+      await axios.patch('/api/v1/settings/DISCOUNT_AUTHORIZATIONS', policy);
       setSuccess(t('authPolicy.savedSuccess', 'Role-based manual discount authorization policy saved successfully.'));
     } catch (err: any) {
-      setError(err.message);
+      setError(err.detail || err.message || 'Failed to save discount authorization settings');
     } finally {
       setSaving(false);
     }

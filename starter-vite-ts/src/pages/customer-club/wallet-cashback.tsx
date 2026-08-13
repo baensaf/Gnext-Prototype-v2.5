@@ -21,6 +21,7 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 
+import { httpClient as axios } from 'src/api/httpClient';
 import { DashboardContent } from 'src/layouts/dashboard';
 
 import { Iconify } from 'src/components/iconify';
@@ -55,8 +56,8 @@ export default function WalletCashbackPage() {
     setError(null);
     try {
       const [accRes, settingsRes] = await Promise.all([
-        fetch('/api/v1/credit-accounts').then((res) => res.json()),
-        fetch('/api/v1/settings').then((res) => res.json()),
+        axios.get('/api/v1/credit-accounts').then((res) => res.data),
+        axios.get('/api/v1/settings').then((res) => res.data),
       ]);
 
       const accList = Array.isArray(accRes) ? accRes : accRes.data || [];
@@ -66,7 +67,7 @@ export default function WalletCashbackPage() {
         setCashbackPct(String(settingsRes.CUSTOMER_CLUB.cashback_percentage));
       }
     } catch (err: any) {
-      setError(err.message || t('wallet.failedToLoad', 'Failed to load wallet accounts'));
+      setError(err.detail || err.message || t('wallet.failedToLoad', 'Failed to load wallet accounts'));
     } finally {
       setLoading(false);
     }
@@ -81,17 +82,13 @@ export default function WalletCashbackPage() {
     setError(null);
     setSuccess(null);
     try {
-      const res = await fetch('/api/v1/settings/CUSTOMER_CLUB', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cashback_percentage: cashbackPct }),
+      await axios.patch('/api/v1/settings/CUSTOMER_CLUB', {
+        cashback_percentage: cashbackPct,
       });
-
-      if (!res.ok) throw new Error('Failed to update cashback policy setting');
 
       setSuccess(t('wallet.policySaved', 'Cashback policy saved successfully. Eligible orders will earn cashback on completion.'));
     } catch (err: any) {
-      setError(err.message);
+      setError(err.detail || err.message || 'Failed to update cashback policy setting');
     } finally {
       setSavingPolicy(false);
     }

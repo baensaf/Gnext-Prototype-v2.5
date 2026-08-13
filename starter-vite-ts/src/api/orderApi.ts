@@ -114,7 +114,7 @@ export const orderApi = {
     return res.data;
   },
 
-  submitOrder: async (id: string, data?: { quoteVersion?: string }): Promise<OrderHeader> => {
+  submitOrder: async (id: string, data?: { quoteVersion?: string; approvalRequestIds?: string[] }): Promise<OrderHeader> => {
     const res = await httpClient.post(`/api/v1/orders/${id}/submit`, data || {});
     return res.data;
   },

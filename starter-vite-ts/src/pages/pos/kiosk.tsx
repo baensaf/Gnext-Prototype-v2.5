@@ -404,62 +404,134 @@ export function KioskPage() {
         </Stack>
       </Stack>
 
-      {/* Category Tabs */}
-      <Tabs
-        value={selectedCategory}
-        onChange={(_, val) => setSelectedCategory(val)}
-        variant="scrollable"
-        scrollButtons="auto"
-        sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
-      >
-        <Tab label="ALL ITEMS" value="ALL" sx={{ fontWeight: 'bold', fontSize: '1.1rem' }} />
-        {(bootstrapData?.categories || []).map((cat: any) => (
-          <Tab key={cat.id} label={cat.name} value={cat.id} sx={{ fontWeight: 'bold', fontSize: '1.1rem' }} />
-        ))}
-      </Tabs>
-
-      {/* Products Grid */}
+      {/* Main Kiosk Content with Vertical Categories and Products Grid */}
       <Grid container spacing={3}>
-        {filteredProducts.map((product: KioskProduct) => (
-          <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={product.id}>
-            <Card
+        {/* Left Column: Vertical Category Rail */}
+        <Grid size={{ xs: 12, sm: 4, md: 3, lg: 2.5 }}>
+          <Card
+            sx={{
+              borderRadius: 3,
+              p: 2,
+              boxShadow: 2,
+              bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'grey.900' : 'background.paper'),
+              position: { sm: 'sticky' },
+              top: { sm: 24 },
+            }}
+          >
+            <Typography
+              variant="caption"
               sx={{
-                borderRadius: 3,
-                boxShadow: 3,
-                cursor: 'pointer',
-                transition: '0.2s',
-                '&:hover': { transform: 'scale(1.02)' },
+                px: 1.5,
+                py: 1,
+                display: 'block',
+                fontWeight: 700,
+                color: 'text.secondary',
+                textTransform: 'uppercase',
+                letterSpacing: 0.8,
+                fontSize: '0.75rem',
               }}
-              onClick={() => handleOpenProductCustomizer(product)}
             >
-              <Box
-                sx={{
-                  height: 120,
-                  bgcolor: 'primary.lighter',
-                  display: 'flex',
+              Categories
+            </Typography>
+            <Tabs
+              orientation="vertical"
+              variant="scrollable"
+              value={selectedCategory}
+              onChange={(_, val) => setSelectedCategory(val)}
+              sx={{
+                '& .MuiTabs-scroller': {
+                  overflowY: 'auto !important',
+                },
+                '& .MuiTab-root': {
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '3rem',
-                }}
-              >
-                🍔
-              </Box>
-              <CardContent>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-                  {product.name}
-                </Typography>
-                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="h6" color="primary.main" sx={{ fontWeight: 'bold' }}>
-                    {MoneyUtil.formatCurrency(product.base_price)} IRR
-                  </Typography>
-                  <Button size="small" variant="contained">
-                    Add +
-                  </Button>
-                </Stack>
-              </CardContent>
+                  justifyContent: 'flex-start',
+                  textAlign: 'left',
+                  borderRadius: 2,
+                  py: 1.75,
+                  px: 2,
+                  my: 0.5,
+                  fontWeight: 'bold',
+                  fontSize: '1rem',
+                  minHeight: 52,
+                  transition: 'all 0.2s ease',
+                  '&.Mui-selected': {
+                    bgcolor: 'primary.main',
+                    color: 'primary.contrastText',
+                    boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}40`,
+                  },
+                  '&:hover:not(.Mui-selected)': {
+                    bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'grey.800' : 'grey.200'),
+                  },
+                },
+                '& .MuiTabs-indicator': {
+                  display: 'none',
+                },
+              }}
+            >
+              <Tab label="ALL ITEMS" value="ALL" />
+              {(bootstrapData?.categories || []).map((cat: any) => (
+                <Tab key={cat.id} label={cat.name} value={cat.id} />
+              ))}
+            </Tabs>
+          </Card>
+        </Grid>
+
+        {/* Right Column: Products Grid */}
+        <Grid size={{ xs: 12, sm: 8, md: 9, lg: 9.5 }}>
+          {filteredProducts.length === 0 ? (
+            <Card sx={{ p: 5, textAlign: 'center', borderRadius: 3 }}>
+              <Typography variant="h6" color="text.secondary">
+                No items found in this category
+              </Typography>
             </Card>
-          </Grid>
-        ))}
+          ) : (
+            <Grid container spacing={3}>
+              {filteredProducts.map((product: KioskProduct) => (
+                <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={product.id}>
+                  <Card
+                    sx={{
+                      borderRadius: 3,
+                      boxShadow: 3,
+                      cursor: 'pointer',
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      transition: 'all 0.2s ease',
+                      '&:hover': { transform: 'scale(1.02)' },
+                    }}
+                    onClick={() => handleOpenProductCustomizer(product)}
+                  >
+                    <Box
+                      sx={{
+                        height: 120,
+                        bgcolor: 'primary.lighter',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '3rem',
+                      }}
+                    >
+                      🍔
+                    </Box>
+                    <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+                        {product.name}
+                      </Typography>
+                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
+                        <Typography variant="h6" color="primary.main" sx={{ fontWeight: 'bold' }}>
+                          {MoneyUtil.formatCurrency(product.base_price)} IRR
+                        </Typography>
+                        <Button size="small" variant="contained">
+                          Add +
+                        </Button>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          )}
+        </Grid>
       </Grid>
 
       {/* Item Customizer Modal */}

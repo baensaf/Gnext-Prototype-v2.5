@@ -25,6 +25,8 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 
+import { httpClient as axios } from 'src/api/httpClient';
+
 import { Iconify } from 'src/components/iconify';
 
 interface Coupon {
@@ -64,12 +66,12 @@ export function CouponsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/coupons');
-      const cList = await res.json();
+      const res = await axios.get('/api/v1/coupons');
+      const cList = res.data;
       setCoupons(Array.isArray(cList) ? cList : cList.data || []);
       setError(null);
     } catch (err: any) {
-      setError(err.message || 'Failed to load coupons');
+      setError(err.detail || err.message || 'Failed to load coupons');
     } finally {
       setLoading(false);
     }
@@ -85,29 +87,20 @@ export function CouponsPage() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch('/api/v1/coupons/one-time', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: code.trim().toUpperCase(),
-          percentage,
-          minimum_subtotal: minSubtotal || undefined,
-          maximum_discount_amount: maxCap || undefined,
-          effective_from: effectiveFrom || undefined,
-          effective_to: effectiveTo || undefined,
-        }),
+      await axios.post('/api/v1/coupons/one-time', {
+        code: code.trim().toUpperCase(),
+        percentage,
+        minimum_subtotal: minSubtotal || undefined,
+        maximum_discount_amount: maxCap || undefined,
+        effective_from: effectiveFrom || undefined,
+        effective_to: effectiveTo || undefined,
       });
-
-      if (!res.ok) {
-        const errJson = await res.json();
-        throw new Error(errJson.message || 'Failed to create one-time coupon');
-      }
 
       setDrawerOpen(false);
       resetForm();
       await loadData();
     } catch (err: any) {
-      setError(err.message);
+      setError(err.detail || err.message || 'Failed to create one-time coupon');
     } finally {
       setSaving(false);
     }
@@ -118,16 +111,13 @@ export function CouponsPage() {
     setTestError(null);
     setValidationResult(null);
     try {
-      const res = await fetch('/api/v1/coupons/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ couponCode: testCouponCode, orderTotal: testOrderTotal }),
+      const res = await axios.post('/api/v1/coupons/validate', {
+        couponCode: testCouponCode,
+        orderTotal: testOrderTotal,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Coupon validation failed');
-      setValidationResult(data);
+      setValidationResult(res.data);
     } catch (err: any) {
-      setTestError(err.message || 'Coupon validation failed');
+      setTestError(err.detail || err.message || 'Coupon validation failed');
     }
   };
 

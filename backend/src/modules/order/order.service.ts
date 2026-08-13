@@ -25,6 +25,8 @@ import { OutboxWriter } from '../outbox/outbox-writer.service';
 import { KdsService } from '../kds/kds.service';
 import { PrintQueueService } from '../printing/print-queue.service';
 import { DeliveryService } from '../delivery/delivery.service';
+import { CreditService } from '../customer/credit.service';
+import { TenantSetting } from '../../entities/TenantSetting.entity';
 import Decimal from 'decimal.js';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { DiningTable } from '../../entities/DiningTable.entity';
@@ -85,8 +87,10 @@ export class OrderService {
       .leftJoinAndSelect('item.options', 'opt')
       .where('o.tenant_id = :tenantId', { tenantId });
 
-    if (query.branch) qb.andWhere('o.branch_id = :branch', { branch: query.branch });
-    if (query.state) qb.andWhere('o.state = :state', { state: query.state });
+    const branchVal = query.branch || query.branch_id || query.branchId;
+    if (branchVal) qb.andWhere('o.branch_id = :branch', { branch: branchVal });
+    const stateVal = query.state || query.status;
+    if (stateVal) qb.andWhere('(o.state = :state OR o.status = :state)', { state: stateVal });
     if (query.type) qb.andWhere('o.order_type = :type', { type: query.type });
     if (query.channel) qb.andWhere('o.channel = :channel', { channel: query.channel });
     if (query.customer) qb.andWhere('o.customer_id = :customer', { customer: query.customer });
@@ -305,6 +309,7 @@ export class OrderService {
             quantity: i.quantity,
           })),
         },
+        manualDiscount: dto.manualDiscount || (dto.approvalRequestIds?.[0] ? { approvalRequestId: dto.approvalRequestIds[0], calculation_type: 'PERCENTAGE', value: '10' } : undefined),
         couponCode: order.coupon_code || undefined,
       });
 
@@ -323,6 +328,25 @@ export class OrderService {
           quoteRes.discountTotal,
           em,
         );
+      }
+
+      // Persist OrderAdjustment records for applied discounts
+      const appliedDiscounts = quoteRes.consideredDiscounts.filter((d) => d.status === 'APPLIED');
+      for (const disc of appliedDiscounts) {
+        const isManual = disc.campaignName.toLowerCase().includes('manual');
+        const adj = em.create(OrderAdjustment, {
+          tenant_id: tenantId,
+          order_id: order.id,
+          type: 'DISCOUNT',
+          source_type: isManual ? 'MANUAL' : 'CAMPAIGN',
+          source_id: disc.campaignId || null,
+          code: disc.campaignCode || (isManual ? 'MANUAL_DISCOUNT' : null),
+          name: disc.campaignName,
+          amount: disc.amount,
+          funding_source: 'MERCHANT',
+          calculation_snapshot: { discountType: disc.discountType, amount: disc.amount },
+        });
+        await em.save(OrderAdjustment, adj);
       }
 
       // Snapshot totals

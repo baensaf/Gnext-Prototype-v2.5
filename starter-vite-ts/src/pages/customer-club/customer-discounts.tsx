@@ -25,6 +25,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { httpClient as axios } from 'src/api/httpClient';
 import { DashboardContent } from 'src/layouts/dashboard';
 
 import { Iconify } from 'src/components/iconify';
@@ -81,14 +82,14 @@ export default function CustomerDiscountsPage() {
     setError(null);
     try {
       const [discRes, custRes] = await Promise.all([
-        fetch('/api/v1/customer-discounts').then((res) => res.json()),
-        fetch('/api/v1/customers').then((res) => res.json()),
+        axios.get('/api/v1/customer-discounts').then((res) => res.data),
+        axios.get('/api/v1/customers').then((res) => res.data),
       ]);
 
       setDiscounts(Array.isArray(discRes) ? discRes : discRes.data || []);
       setCustomers(Array.isArray(custRes) ? custRes : custRes.data || []);
     } catch (err: any) {
-      setError(err.message || t('customerClub.failedToLoad', 'Failed to load customer discounts'));
+      setError(err.detail || err.message || t('customerClub.failedToLoad', 'Failed to load customer discounts'));
     } finally {
       setLoading(false);
     }
@@ -104,47 +105,29 @@ export default function CustomerDiscountsPage() {
     try {
       if (editingId) {
         // Edit existing assignment
-        const res = await fetch(`/api/v1/customer-discounts/${editingId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            discount_percentage: discountPct,
-            effective_from: effectiveFrom || undefined,
-            effective_to: effectiveTo || undefined,
-            note: note || undefined,
-          }),
+        await axios.patch(`/api/v1/customer-discounts/${editingId}`, {
+          discount_percentage: discountPct,
+          effective_from: effectiveFrom || undefined,
+          effective_to: effectiveTo || undefined,
+          note: note || undefined,
         });
-
-        if (!res.ok) {
-          const errJson = await res.json();
-          throw new Error(errJson.message || 'Failed to update customer discount');
-        }
       } else {
         // Create single assignment
         if (!selectedCustomerId) return;
-        const res = await fetch('/api/v1/customer-discounts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customer_id: selectedCustomerId,
-            discount_percentage: discountPct,
-            effective_from: effectiveFrom || undefined,
-            effective_to: effectiveTo || undefined,
-            note: note || undefined,
-          }),
+        await axios.post('/api/v1/customer-discounts', {
+          customer_id: selectedCustomerId,
+          discount_percentage: discountPct,
+          effective_from: effectiveFrom || undefined,
+          effective_to: effectiveTo || undefined,
+          note: note || undefined,
         });
-
-        if (!res.ok) {
-          const errJson = await res.json();
-          throw new Error(errJson.message || 'Failed to save customer discount');
-        }
       }
 
       setOpenModal(false);
       resetForm();
       await fetchData();
     } catch (err: any) {
-      setError(err.message);
+      setError(err.detail || err.message || 'Failed to save customer discount');
     } finally {
       setSaving(false);
     }
@@ -156,16 +139,12 @@ export default function CustomerDiscountsPage() {
     try {
       await Promise.all(
         bulkSelectedIds.map((cId) =>
-          fetch('/api/v1/customer-discounts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              customer_id: cId,
-              discount_percentage: bulkPct,
-              effective_from: bulkFrom || undefined,
-              effective_to: bulkTo || undefined,
-              note: bulkNote || 'Bulk Assignment',
-            }),
+          axios.post('/api/v1/customer-discounts', {
+            customer_id: cId,
+            discount_percentage: bulkPct,
+            effective_from: bulkFrom || undefined,
+            effective_to: bulkTo || undefined,
+            note: bulkNote || 'Bulk Assignment',
           }),
         ),
       );
@@ -175,7 +154,7 @@ export default function CustomerDiscountsPage() {
       setBulkSearch('');
       await fetchData();
     } catch (err: any) {
-      setError(err.message);
+      setError(err.detail || err.message || 'Failed to save bulk discounts');
     } finally {
       setSaving(false);
     }
@@ -186,11 +165,10 @@ export default function CustomerDiscountsPage() {
       return;
     }
     try {
-      const res = await fetch(`/api/v1/customer-discounts/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to revoke discount');
+      await axios.delete(`/api/v1/customer-discounts/${id}`);
       await fetchData();
     } catch (err: any) {
-      setError(err.message);
+      setError(err.detail || err.message || 'Failed to revoke discount');
     }
   };
 

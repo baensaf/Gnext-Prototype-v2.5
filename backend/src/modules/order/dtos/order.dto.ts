@@ -170,6 +170,9 @@ export class OrderSubmitDto {
   approvalRequestIds?: string[];
 
   @IsOptional()
+  manualDiscount?: any;
+
+  @IsOptional()
   @IsInt()
   version?: number;
 }

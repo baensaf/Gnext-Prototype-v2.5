@@ -19,12 +19,24 @@ import { approvalApi } from 'src/api/approvalApi';
 interface ApprovalModalProps {
   open: boolean;
   onClose: () => void;
-  onSuccess: (pin: string) => void;
+  onSuccess: (pin: string, requestId?: string) => void;
   actionName: string;
   detailsText?: string;
+  entityType?: string;
+  entityId?: string;
+  createRequest?: boolean;
 }
 
-export function ApprovalModal({ open, onClose, onSuccess, actionName, detailsText }: ApprovalModalProps) {
+export function ApprovalModal({
+  open,
+  onClose,
+  onSuccess,
+  actionName,
+  detailsText,
+  entityType = 'ORDER',
+  entityId,
+  createRequest = false,
+}: ApprovalModalProps) {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,12 +47,25 @@ export function ApprovalModal({ open, onClose, onSuccess, actionName, detailsTex
     setLoading(true);
     setError(null);
     try {
-      await approvalApi.verifyPin(pin, undefined, actionName);
-      onSuccess(pin);
+      if (createRequest) {
+        // Create pending request and approve it with PIN
+        const req = await approvalApi.createRequest({
+          action: actionName,
+          entity_type: entityType,
+          entity_id: entityId,
+          reason: detailsText || `Manager authorization for ${actionName}`,
+          details: { actionName, detailsText },
+        });
+        const approved = await approvalApi.approveRequest(req.id, pin, 'Manager PIN Authorization');
+        onSuccess(pin, approved.id);
+      } else {
+        await approvalApi.verifyPin(pin, undefined, actionName);
+        onSuccess(pin);
+      }
       setPin('');
       onClose();
     } catch (err: any) {
-      setError(err.response?.data?.message || err.detail || 'Invalid Manager PIN');
+      setError(err.response?.data?.message || err.detail || err.message || 'Invalid Manager PIN');
     } finally {
       setLoading(false);
     }

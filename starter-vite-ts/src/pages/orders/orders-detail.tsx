@@ -28,6 +28,8 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 
+import { httpClient as axios } from 'src/api/httpClient';
+
 export function OrdersDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -40,12 +42,10 @@ export function OrdersDetailPage() {
     async function loadOrder() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/v1/orders/${id}`);
-        if (!res.ok) throw new Error('Order not found');
-        const data = await res.json();
-        setOrder(data);
+        const res = await axios.get(`/api/v1/orders/${id}`);
+        setOrder(res.data);
       } catch (err: any) {
-        setError(err.message);
+        setError(err.detail || err.message || 'Order not found');
       } finally {
         setLoading(false);
       }

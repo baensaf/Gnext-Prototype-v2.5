@@ -72,6 +72,13 @@ export interface Coupon {
   is_active: boolean;
 }
 
+export interface ManualDiscount {
+  calculation_type: 'PERCENTAGE' | 'FIXED_AMOUNT';
+  value: string;
+  reasonCode?: string;
+  approvalRequestId?: string;
+}
+
 export interface ConsideredDiscount {
   campaignId?: string;
   campaignCode?: string;
@@ -160,7 +167,7 @@ export const discountsApi = {
 
   quoteDiscounts: async (data: {
     orderDraft: any;
-    manualDiscount?: any;
+    manualDiscount?: ManualDiscount;
     couponCode?: string;
   }): Promise<DiscountQuoteResult> => {
     const res = await httpClient.post('/api/v1/discount-quotes', data);

@@ -34,7 +34,7 @@ describe('Refunds & Paid-Order Cancellation Suite (R16)', () => {
     paymentRepo = { find: jest.fn().mockResolvedValue([]) };
     methodRepo = { findOne: jest.fn() };
     shiftService = { getCurrentShift: jest.fn(), recordCashRefundMovement: jest.fn() };
-    creditService = { getAccountByCustomer: jest.fn(), postRepayment: jest.fn() };
+    creditService = { getAccountByCustomer: jest.fn(), postRepayment: jest.fn(), reverseLoyaltyCashback: jest.fn().mockResolvedValue(true) };
     auditWriter = { write: jest.fn() };
 
     const mockQueryBuilder: any = {

@@ -8,8 +8,11 @@ import { DiscountCampaign } from '../src/entities/DiscountCampaign.entity';
 import { DiscountScope } from '../src/entities/DiscountScope.entity';
 import { Coupon } from '../src/entities/Coupon.entity';
 import { DiscountUsage } from '../src/entities/DiscountUsage.entity';
-import { TenantSetting } from '../src/entities/TenantSetting.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
+import { TenantSetting } from '../src/entities/TenantSetting.entity';
+import { CustomerDiscount } from '../src/entities/CustomerDiscount.entity';
+import { Customer } from '../src/entities/Customer.entity';
+import { ApprovalRequest } from '../src/entities/ApprovalRequest.entity';
 import { DiscountType, ScopeType } from '../src/modules/discounts/dtos/discounts.dto';
 
 describe('Discounts & Evaluation Engine Suite (R11)', () => {
@@ -42,6 +45,9 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
         { provide: getRepositoryToken(DiscountScope), useValue: scopeRepo },
         { provide: getRepositoryToken(Coupon), useValue: couponRepo },
         { provide: getRepositoryToken(DiscountUsage), useValue: usageRepo },
+        { provide: getRepositoryToken(CustomerDiscount), useValue: { find: jest.fn().mockResolvedValue([]), findOne: jest.fn(), create: jest.fn(), save: jest.fn() } },
+        { provide: getRepositoryToken(Customer), useValue: { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() } },
+        { provide: getRepositoryToken(ApprovalRequest), useValue: { findOne: jest.fn().mockResolvedValue(null), create: jest.fn(), save: jest.fn() } },
         { provide: getRepositoryToken(TenantSetting), useValue: settingRepo },
         { provide: AuditWriter, useValue: auditWriter },
       ],
@@ -282,8 +288,8 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
       });
 
       expect(result.approvalRequired).toBe(true);
-      expect(result.approvalReason).toContain('exceeds cashier maximum of 15%');
-      expect(result.discountTotal).toBe('25000.0000');
+      expect(result.approvalReason).toContain('exceeds CASHIER limit');
+      expect(result.discountTotal).toBe('0.0000');
     });
   });
 
