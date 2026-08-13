@@ -15,6 +15,17 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CloseIcon from '@mui/icons-material/Close';
+import HistoryIcon from '@mui/icons-material/History';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import SecurityIcon from '@mui/icons-material/Security';
+import CodeIcon from '@mui/icons-material/Code';
+import RestaurantIcon from '@mui/icons-material/Restaurant';
+import TakeoutDiningIcon from '@mui/icons-material/TakeoutDining';
+import DeliveryDiningIcon from '@mui/icons-material/DeliveryDining';
+import EditNoteIcon from '@mui/icons-material/EditNote';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import {
   Box,
   Tab,
@@ -29,6 +40,8 @@ import {
   Button,
   Dialog,
   Select,
+  Drawer,
+  Divider,
   TableRow,
   MenuItem,
   TableBody,
@@ -37,6 +50,7 @@ import {
   TextField,
   Typography,
   InputLabel,
+  IconButton,
   CardContent,
   DialogTitle,
   FormControl,
@@ -45,10 +59,13 @@ import {
   DialogActions,
   TableContainer,
   InputAdornment,
+  CircularProgress,
   ToggleButtonGroup,
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { Label } from 'src/components/label';
+import { httpClient as axios } from 'src/api/httpClient';
 
 import { orderApi } from 'src/api/orderApi';
 import { paymentApi } from 'src/api/paymentApi';
@@ -74,6 +91,34 @@ export function OrdersWorkflowPage() {
   // Receipt Modal State
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
+
+  // Order Details & Audit Drawer State
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedDrawerOrder, setSelectedDrawerOrder] = useState<any | null>(null);
+  const [orderAuditLogs, setOrderAuditLogs] = useState<any[]>([]);
+  const [loadingDrawerDetails, setLoadingDrawerDetails] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<'details' | 'audit'>('details');
+  const [inspectingJson, setInspectingJson] = useState<any>(null);
+
+  const handleOpenOrderDrawer = async (order: OrderHeader) => {
+    setSelectedOrder(order);
+    setSelectedDrawerOrder(order);
+    setDrawerOpen(true);
+    setLoadingDrawerDetails(true);
+    try {
+      const [detailRes, auditRes] = await Promise.all([
+        axios.get(`/api/v1/orders/${order.id}`).catch(() => ({ data: order })),
+        axios.get('/api/v1/reports/audit', { params: { entityId: order.id } }).catch(() => ({ data: [] })),
+      ]);
+      setSelectedDrawerOrder(detailRes.data);
+      const auditList = Array.isArray(auditRes.data) ? auditRes.data : (auditRes.data?.data || []);
+      setOrderAuditLogs(auditList);
+    } catch (err) {
+      console.error('Failed to load order drawer details:', err);
+    } finally {
+      setLoadingDrawerDetails(false);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -311,7 +356,16 @@ export function OrdersWorkflowPage() {
                     const custMobile = getCustomerMobile(order);
 
                     return (
-                      <TableRow key={order.id} hover>
+                      <TableRow
+                        key={order.id}
+                        hover
+                        onClick={() => handleOpenOrderDrawer(order)}
+                        sx={{
+                          cursor: 'pointer',
+                          transition: 'background-color 0.15s',
+                          '&:hover': { bgcolor: 'action.hover' },
+                        }}
+                      >
                         <TableCell>
                           <Chip
                             label={order.order_number}
@@ -396,7 +450,23 @@ export function OrdersWorkflowPage() {
                         <TableCell align="center">
                           <Stack direction="row" spacing={1} sx={{ justifyContent: 'center' }}>
                             <Button
-                              onClick={() => handleViewReceipt(order.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenOrderDrawer(order);
+                              }}
+                              size="small"
+                              startIcon={<VisibilityIcon />}
+                              variant="outlined"
+                              color="primary"
+                            >
+                              Details
+                            </Button>
+
+                            <Button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewReceipt(order.id);
+                              }}
                               size="small"
                               startIcon={<ReceiptIcon />}
                               variant="outlined"
@@ -407,7 +477,10 @@ export function OrdersWorkflowPage() {
                             {order.status === 'SUBMITTED' && (
                               <Button
                                 color="warning"
-                                onClick={() => handleUpdateStatus(order.id, 'KITCHEN_PREPARING')}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateStatus(order.id, 'KITCHEN_PREPARING');
+                                }}
                                 size="small"
                                 startIcon={<PlayArrowIcon />}
                                 variant="contained"
@@ -419,7 +492,10 @@ export function OrdersWorkflowPage() {
                             {order.status === 'KITCHEN_PREPARING' && (
                               <Button
                                 color="success"
-                                onClick={() => handleUpdateStatus(order.id, 'READY')}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateStatus(order.id, 'READY');
+                                }}
                                 size="small"
                                 startIcon={<CheckCircleIcon />}
                                 variant="contained"
@@ -431,7 +507,10 @@ export function OrdersWorkflowPage() {
                             {order.status === 'READY' && (
                               <Button
                                 color="primary"
-                                onClick={() => handleUpdateStatus(order.id, 'COMPLETED')}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateStatus(order.id, 'COMPLETED');
+                                }}
                                 size="small"
                                 startIcon={<DoneAllIcon />}
                                 variant="contained"
@@ -443,7 +522,10 @@ export function OrdersWorkflowPage() {
                             {order.status !== 'COMPLETED' && order.status !== 'CANCELLED' && (
                               <Button
                                 color="error"
-                                onClick={() => handleOpenCancelDialog(order)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenCancelDialog(order);
+                                }}
                                 size="small"
                                 startIcon={<CancelIcon />}
                                 variant="outlined"
@@ -484,7 +566,22 @@ export function OrdersWorkflowPage() {
                       const custName = getCustomerDisplayName(order);
 
                       return (
-                        <Card key={order.id} sx={{ borderRadius: 2, boxShadow: 1, p: 2 }}>
+                        <Card
+                          key={order.id}
+                          onClick={() => handleOpenOrderDrawer(order)}
+                          sx={{
+                            borderRadius: 2,
+                            boxShadow: 1,
+                            p: 2,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            '&:hover': {
+                              borderColor: 'primary.main',
+                              boxShadow: 3,
+                              transform: 'translateY(-2px)',
+                            },
+                          }}
+                        >
                           <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1 }}>
                             <Typography sx={{ fontWeight: 'bold' }} variant="subtitle2">
                               <code>{order.order_number}</code>
@@ -526,11 +623,29 @@ export function OrdersWorkflowPage() {
                           </Typography>
 
                           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                            <Button
+                              color="inherit"
+                              fullWidth
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenOrderDrawer(order);
+                              }}
+                              size="small"
+                              startIcon={<HistoryIcon />}
+                              variant="outlined"
+                              sx={{ mb: 0.5 }}
+                            >
+                              Details & Audit Log
+                            </Button>
+
                             {order.status === 'SUBMITTED' && (
                               <Button
                                 color="warning"
                                 fullWidth
-                                onClick={() => handleUpdateStatus(order.id, 'KITCHEN_PREPARING')}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateStatus(order.id, 'KITCHEN_PREPARING');
+                                }}
                                 size="small"
                                 startIcon={<PlayArrowIcon />}
                                 sx={{ fontWeight: 'bold' }}
@@ -544,7 +659,10 @@ export function OrdersWorkflowPage() {
                               <Button
                                 color="success"
                                 fullWidth
-                                onClick={() => handleUpdateStatus(order.id, 'READY')}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateStatus(order.id, 'READY');
+                                }}
                                 size="small"
                                 startIcon={<CheckCircleIcon />}
                                 sx={{ fontWeight: 'bold' }}
@@ -558,7 +676,10 @@ export function OrdersWorkflowPage() {
                               <Button
                                 color="primary"
                                 fullWidth
-                                onClick={() => handleUpdateStatus(order.id, 'COMPLETED')}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateStatus(order.id, 'COMPLETED');
+                                }}
                                 size="small"
                                 startIcon={<DoneAllIcon />}
                                 sx={{ fontWeight: 'bold' }}
@@ -572,7 +693,10 @@ export function OrdersWorkflowPage() {
                               <Button
                                 color="error"
                                 fullWidth
-                                onClick={() => handleOpenCancelDialog(order)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenCancelDialog(order);
+                                }}
                                 size="small"
                                 startIcon={<CancelIcon />}
                                 sx={{ mt: 0.5 }}
@@ -682,6 +806,447 @@ export function OrdersWorkflowPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setReceiptModalOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Order Details & Audit Trail Drawer */}
+      <Drawer
+        anchor="right"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        slotProps={{
+          paper: {
+            sx: {
+              width: { xs: '100%', sm: 540, md: 620 },
+              p: 0,
+              display: 'flex',
+              flexDirection: 'column',
+            },
+          },
+        }}
+      >
+        {selectedDrawerOrder && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {/* Header */}
+            <Box sx={{ p: 2.5, pb: 2, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.neutral' }}>
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <Typography variant="h6" sx={{ fontFamily: 'monospace', fontWeight: 800 }}>
+                    {selectedDrawerOrder.order_number}
+                  </Typography>
+                  <Chip
+                    label={selectedDrawerOrder.status}
+                    color={getStatusChipColor(selectedDrawerOrder.status) as any}
+                    size="small"
+                    sx={{ fontWeight: 700 }}
+                  />
+                  <Chip
+                    label={selectedDrawerOrder.order_type}
+                    size="small"
+                    variant="outlined"
+                    color={selectedDrawerOrder.order_type === 'DINE_IN' ? 'primary' : 'default'}
+                  />
+                </Stack>
+                <IconButton onClick={() => setDrawerOpen(false)} size="small">
+                  <CloseIcon />
+                </IconButton>
+              </Stack>
+
+              <Typography variant="caption" color="text.secondary">
+                Placed on {selectedDrawerOrder.placed_at ? new Date(selectedDrawerOrder.placed_at).toLocaleString() : 'Just now'}
+                {selectedDrawerOrder.table_number && ` • Table ${selectedDrawerOrder.table_number}`}
+                {selectedDrawerOrder.notes && ` • Note: ${selectedDrawerOrder.notes}`}
+              </Typography>
+
+              {/* Tabs */}
+              <Tabs
+                value={drawerTab}
+                onChange={(_, val) => setDrawerTab(val)}
+                sx={{ mt: 2, minHeight: 38 }}
+              >
+                <Tab
+                  value="details"
+                  label="Order Summary & Items"
+                  icon={<ReceiptLongIcon sx={{ fontSize: 18 }} />}
+                  iconPosition="start"
+                  sx={{ minHeight: 38, py: 0.5, fontWeight: 700 }}
+                />
+                <Tab
+                  value="audit"
+                  label={`Audit Trail & Timeline (${(orderAuditLogs.length + (selectedDrawerOrder.stateEvents?.length || 0)) || 1})`}
+                  icon={<HistoryIcon sx={{ fontSize: 18 }} />}
+                  iconPosition="start"
+                  sx={{ minHeight: 38, py: 0.5, fontWeight: 700 }}
+                />
+              </Tabs>
+            </Box>
+
+            {/* Body */}
+            <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 3 }}>
+              {loadingDrawerDetails ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                  <CircularProgress />
+                </Box>
+              ) : drawerTab === 'details' ? (
+                <Stack spacing={3}>
+                  {/* Customer Info Card */}
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <PersonIcon fontSize="small" color="primary" /> Customer & Dining Context
+                    </Typography>
+                    <Grid container spacing={1.5}>
+                      <Grid size={{ xs: 6 }}>
+                        <Typography variant="caption" color="text.secondary">Customer Name</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{getCustomerDisplayName(selectedDrawerOrder)}</Typography>
+                      </Grid>
+                      <Grid size={{ xs: 6 }}>
+                        <Typography variant="caption" color="text.secondary">Contact Phone</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{getCustomerMobile(selectedDrawerOrder) || 'Walk-In'}</Typography>
+                      </Grid>
+                      {selectedDrawerOrder.table_number && (
+                        <Grid size={{ xs: 6 }}>
+                          <Typography variant="caption" color="text.secondary">Dine-In Table</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>Table {selectedDrawerOrder.table_number}</Typography>
+                        </Grid>
+                      )}
+                      {selectedDrawerOrder.notes && (
+                        <Grid size={{ xs: 12 }}>
+                          <Typography variant="caption" color="text.secondary">Special Instructions / Notes</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, bgcolor: 'background.neutral', p: 1, borderRadius: 1 }}>
+                            {selectedDrawerOrder.notes}
+                          </Typography>
+                        </Grid>
+                      )}
+                    </Grid>
+                  </Paper>
+
+                  {/* Items List */}
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
+                      Ordered Items ({(selectedDrawerOrder.items || []).length})
+                    </Typography>
+                    <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+                      <Table size="small">
+                        <TableHead sx={{ bgcolor: 'background.neutral' }}>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 700 }}>Item</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 700 }}>Qty</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700 }}>Unit Price</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700 }}>Total</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {(selectedDrawerOrder.items || []).map((item: any) => (
+                            <TableRow key={item.id}>
+                              <TableCell>
+                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                  {item.product_name}
+                                </Typography>
+                                {item.options && item.options.length > 0 && (
+                                  <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', mt: 0.5 }}>
+                                    {item.options.map((opt: any) => (
+                                      <Chip
+                                        key={opt.id}
+                                        label={`+ ${opt.option_item_name}`}
+                                        size="small"
+                                        sx={{ fontSize: '0.7rem', height: 20 }}
+                                      />
+                                    ))}
+                                  </Stack>
+                                )}
+                              </TableCell>
+                              <TableCell align="center" sx={{ fontWeight: 600 }}>
+                                {MoneyUtil.format(item.quantity, 0)}
+                              </TableCell>
+                              <TableCell align="right">
+                                {MoneyUtil.formatCurrency(item.unit_price)}
+                              </TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 700 }}>
+                                {MoneyUtil.formatCurrency(item.total_amount || MoneyUtil.multiply(item.quantity, item.unit_price, 2))} IRR
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Box>
+
+                  {/* Financial Breakdown */}
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'background.neutral' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
+                      Financial Breakdown
+                    </Typography>
+                    <Stack spacing={1}>
+                      <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                        <Typography variant="body2" color="text.secondary">Gross Subtotal</Typography>
+                        <Typography variant="body2">{MoneyUtil.formatCurrency(selectedDrawerOrder.subtotal_amount || selectedDrawerOrder.total_amount)} IRR</Typography>
+                      </Stack>
+                      {MoneyUtil.greaterThan(selectedDrawerOrder.discount_amount || '0', '0') && (
+                        <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                          <Typography variant="body2" color="success.main">Discount Applied</Typography>
+                          <Typography variant="body2" color="success.main">-{MoneyUtil.formatCurrency(selectedDrawerOrder.discount_amount)} IRR</Typography>
+                        </Stack>
+                      )}
+                      {MoneyUtil.greaterThan(selectedDrawerOrder.tax_amount || '0', '0') && (
+                        <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                          <Typography variant="body2" color="text.secondary">Value Added Tax (VAT)</Typography>
+                          <Typography variant="body2">+{MoneyUtil.formatCurrency(selectedDrawerOrder.tax_amount)} IRR</Typography>
+                        </Stack>
+                      )}
+                      <Divider sx={{ my: 0.5 }} />
+                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Grand Total</Typography>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800, color: 'primary.main' }}>
+                          {MoneyUtil.formatCurrency(selectedDrawerOrder.total_amount)} IRR
+                        </Typography>
+                      </Stack>
+                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="body2" color="text.secondary">Paid Amount</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main' }}>
+                          {MoneyUtil.formatCurrency(selectedDrawerOrder.paid_amount || '0')} IRR
+                        </Typography>
+                      </Stack>
+                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="body2" color="text.secondary">Outstanding Balance</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: MoneyUtil.greaterThan(selectedDrawerOrder.due_amount || '0', '0') ? 'error.main' : 'success.main' }}>
+                          {MoneyUtil.formatCurrency(selectedDrawerOrder.due_amount || '0')} IRR
+                        </Typography>
+                      </Stack>
+                    </Stack>
+                  </Paper>
+                </Stack>
+              ) : (
+                /* TAB 2: AUDIT TRAIL & TIMELINE */
+                <Stack spacing={2.5}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <SecurityIcon color="primary" fontSize="small" /> Immutable Order Audit Log
+                    </Typography>
+                    <Chip label="Append-Only Trail" color="success" size="small" variant="outlined" />
+                  </Box>
+
+                  {/* Unified Chronological Event Timeline */}
+                  {orderAuditLogs.length === 0 && (!selectedDrawerOrder.stateEvents || selectedDrawerOrder.stateEvents.length === 0) ? (
+                    <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderRadius: 2 }}>
+                      <HistoryIcon color="disabled" sx={{ fontSize: 40, mb: 1 }} />
+                      <Typography variant="body2" color="text.secondary">
+                        Order was created as {selectedDrawerOrder.status}. No previous lifecycle events registered.
+                      </Typography>
+                    </Paper>
+                  ) : (
+                    <Stack spacing={2} sx={{ position: 'relative', pl: 2, '&::before': { content: '""', position: 'absolute', top: 12, bottom: 12, left: 19, width: 2, bgcolor: 'divider' } }}>
+                      {/* State Events from Order Aggregate */}
+                      {selectedDrawerOrder.stateEvents?.map((evt: any, idx: number) => (
+                        <Paper
+                          key={evt.id || idx}
+                          variant="outlined"
+                          sx={{
+                            p: 2,
+                            borderRadius: 2,
+                            position: 'relative',
+                            bgcolor: 'background.paper',
+                            borderColor: evt.to_state === 'CANCELLED' ? 'error.light' : 'divider',
+                          }}
+                        >
+                          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                              <Chip
+                                label={evt.action || evt.to_state}
+                                color={getStatusChipColor(evt.to_state) as any}
+                                size="small"
+                                sx={{ fontWeight: 700 }}
+                              />
+                              <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                                {evt.from_state ? `${evt.from_state} → ${evt.to_state}` : evt.to_state}
+                              </Typography>
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary">
+                              {evt.occurred_at ? new Date(evt.occurred_at).toLocaleTimeString() : 'Just now'}
+                            </Typography>
+                          </Stack>
+
+                          <Typography variant="body2" sx={{ mb: 0.5 }}>
+                            <strong>Actor:</strong> {evt.actor_user_id ? 'Authenticated User' : 'System / POS'}
+                          </Typography>
+                          {evt.reason && (
+                            <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
+                              <strong>Reason Code:</strong> {evt.reason}
+                            </Typography>
+                          )}
+                          {evt.notes && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                              Note: {evt.notes}
+                            </Typography>
+                          )}
+                        </Paper>
+                      ))}
+
+                      {/* System Audit Events from audit_event table */}
+                      {orderAuditLogs.map((log: any) => (
+                        <Paper
+                          key={log.id}
+                          variant="outlined"
+                          sx={{
+                            p: 2,
+                            borderRadius: 2,
+                            position: 'relative',
+                            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50',
+                          }}
+                        >
+                          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                              <Chip
+                                label={log.action}
+                                color="primary"
+                                size="small"
+                                sx={{ fontWeight: 700 }}
+                              />
+                              <Chip
+                                label={log.actor_type || 'SYSTEM'}
+                                size="small"
+                                variant="outlined"
+                                sx={{ fontSize: '0.7rem', height: 20 }}
+                              />
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary">
+                              {new Date(log.occurred_at).toLocaleString()}
+                            </Typography>
+                          </Stack>
+
+                          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                            <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                              Corr: {log.correlation_id ? log.correlation_id.substring(0, 8) + '...' : '-'}
+                            </Typography>
+                            <Button
+                              size="small"
+                              startIcon={<CodeIcon />}
+                              onClick={() => setInspectingJson(log)}
+                              sx={{ textTransform: 'none', py: 0.25, fontSize: '0.75rem' }}
+                            >
+                              Inspect Snapshot
+                            </Button>
+                          </Stack>
+                        </Paper>
+                      ))}
+                    </Stack>
+                  )}
+                </Stack>
+              )}
+            </Box>
+
+            {/* Footer Quick Actions */}
+            <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider', bgcolor: 'background.neutral' }}>
+              <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+                <Button
+                  startIcon={<ReceiptIcon />}
+                  variant="outlined"
+                  onClick={() => {
+                    handleViewReceipt(selectedDrawerOrder.id);
+                  }}
+                >
+                  Receipt
+                </Button>
+                {selectedDrawerOrder.status === 'SUBMITTED' && (
+                  <Button
+                    color="warning"
+                    variant="contained"
+                    startIcon={<PlayArrowIcon />}
+                    onClick={async () => {
+                      await handleUpdateStatus(selectedDrawerOrder.id, 'KITCHEN_PREPARING');
+                      handleOpenOrderDrawer({ ...selectedDrawerOrder, status: 'KITCHEN_PREPARING' });
+                    }}
+                  >
+                    Start Prep
+                  </Button>
+                )}
+                {selectedDrawerOrder.status === 'KITCHEN_PREPARING' && (
+                  <Button
+                    color="success"
+                    variant="contained"
+                    startIcon={<CheckCircleIcon />}
+                    onClick={async () => {
+                      await handleUpdateStatus(selectedDrawerOrder.id, 'READY');
+                      handleOpenOrderDrawer({ ...selectedDrawerOrder, status: 'READY' });
+                    }}
+                  >
+                    Mark Ready
+                  </Button>
+                )}
+                {selectedDrawerOrder.status === 'READY' && (
+                  <Button
+                    color="primary"
+                    variant="contained"
+                    startIcon={<DoneAllIcon />}
+                    onClick={async () => {
+                      await handleUpdateStatus(selectedDrawerOrder.id, 'COMPLETED');
+                      handleOpenOrderDrawer({ ...selectedDrawerOrder, status: 'COMPLETED' });
+                    }}
+                  >
+                    Complete Order
+                  </Button>
+                )}
+                {selectedDrawerOrder.status !== 'COMPLETED' && selectedDrawerOrder.status !== 'CANCELLED' && (
+                  <Button
+                    color="error"
+                    variant="outlined"
+                    startIcon={<CancelIcon />}
+                    onClick={() => {
+                      setDrawerOpen(false);
+                      handleOpenCancelDialog(selectedDrawerOrder);
+                    }}
+                  >
+                    Cancel Order
+                  </Button>
+                )}
+              </Stack>
+            </Box>
+          </Box>
+        )}
+      </Drawer>
+
+      {/* JSON Snapshot Inspection Modal */}
+      <Dialog
+        open={Boolean(inspectingJson)}
+        onClose={() => setInspectingJson(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <CodeIcon color="primary" />
+          Audit Snapshot: {inspectingJson?.action}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            Timestamp: {inspectingJson && new Date(inspectingJson.occurred_at).toLocaleString()} • Actor: {inspectingJson?.actor_type}
+          </Typography>
+          <Box
+            component="pre"
+            sx={{
+              p: 2,
+              borderRadius: 1.5,
+              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100',
+              fontFamily: 'monospace',
+              fontSize: 12,
+              overflowX: 'auto',
+              maxHeight: 400,
+            }}
+          >
+            {JSON.stringify(
+              {
+                action: inspectingJson?.action,
+                actor_type: inspectingJson?.actor_type,
+                correlation_id: inspectingJson?.correlation_id,
+                before_data: inspectingJson?.before_data,
+                after_data: inspectingJson?.after_data,
+                details: inspectingJson?.details,
+              },
+              null,
+              2
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setInspectingJson(null)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

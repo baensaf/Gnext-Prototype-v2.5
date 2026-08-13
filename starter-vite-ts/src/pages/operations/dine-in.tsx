@@ -39,6 +39,7 @@ import {
 
 import { orderApi } from 'src/api/orderApi';
 import { dineInApi } from 'src/api/dineInApi';
+import { Label } from 'src/components/label';
 
 export function DineInPage() {
   const [areas, setAreas] = useState<DiningArea[]>([]);
@@ -256,8 +257,8 @@ export function DineInPage() {
     <Box>
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Dine-In Floor Plan & Operations
+          <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            Dine-In Floor Plan & Operations <Label color="info">V4</Label>
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Slice R17 — Table management, occupancy, move, merge, split orders, item transfers, and guest bill

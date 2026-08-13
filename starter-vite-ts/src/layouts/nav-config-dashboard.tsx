@@ -50,6 +50,7 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.dineIn', 'Dine-In Floor'),
           path: '/app/dine-in/floor',
           icon: ICONS.pos,
+          info: <Label color="info">V4</Label>,
         },
         {
           title: t('nav.orders', 'Orders Directory'),
@@ -70,6 +71,7 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.kds', 'Kitchen KDS'),
           path: '/app/kds',
           icon: ICONS.kds,
+          info: <Label color="info">V4</Label>,
         },
         {
           title: t('nav.delivery', 'Delivery Management'),

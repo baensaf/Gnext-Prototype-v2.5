@@ -34,6 +34,7 @@ import {
 } from '@mui/material';
 
 import { kdsApi } from 'src/api/kdsApi';
+import { Label } from 'src/components/label';
 
 export function KdsPage() {
   const [stations, setStations] = useState<KitchenStation[]>([]);
@@ -151,8 +152,8 @@ export function KdsPage() {
       {/* Header */}
       <Stack direction="row" sx={{ mb: 3, justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-            Kitchen Display Board <LocalFireDepartmentIcon color="error" />
+          <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            Kitchen Display Board <LocalFireDepartmentIcon color="error" /> <Label color="info">V4</Label>
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Live order ticket routing by product & category rules with automated readiness roll-up.

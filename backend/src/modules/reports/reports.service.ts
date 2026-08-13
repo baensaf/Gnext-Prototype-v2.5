@@ -1177,11 +1177,13 @@ export class ReportsService {
 
   // Audit Logs with Masking & Paging
   async getAuditLogs(tenantId: string, query: any = {}) {
-    const { page = 1, limit = 50, action, actorType } = query;
+    const { page = 1, limit = 50, action, actorType, entityId, entityType } = query;
     const qb = this.auditRepo.createQueryBuilder('a').where('a.tenant_id = :tenantId', { tenantId });
 
     if (action) qb.andWhere('a.action = :action', { action });
     if (actorType) qb.andWhere('a.actor_type = :actorType', { actorType });
+    if (entityId) qb.andWhere('a.entity_id = :entityId', { entityId });
+    if (entityType) qb.andWhere('a.entity_type = :entityType', { entityType });
 
     const [events, total] = await qb
       .orderBy('a.occurred_at', 'DESC')
