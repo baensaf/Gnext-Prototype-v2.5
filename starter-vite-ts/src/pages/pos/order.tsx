@@ -20,6 +20,11 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
+import RestaurantIcon from '@mui/icons-material/Restaurant';
+import TakeoutDiningIcon from '@mui/icons-material/TakeoutDining';
+import DeliveryDiningIcon from '@mui/icons-material/DeliveryDining';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import EditNoteIcon from '@mui/icons-material/EditNote';
 import {
   Box,
   Tab,
@@ -93,6 +98,51 @@ export function PosOrderPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>('DINE_IN');
   const [tableNumber, setTableNumber] = useState('T-01');
+
+  // Order Notes Dialog state
+  const [orderNotes, setOrderNotes] = useState<string>('');
+  const [notesModalOpen, setNotesModalOpen] = useState(false);
+  const [tempNotesInput, setTempNotesInput] = useState<string>('');
+
+  // Quick Add Customer Dialog state
+  const [quickAddCustomerOpen, setQuickAddCustomerOpen] = useState(false);
+  const [newCustFirstName, setNewCustFirstName] = useState('');
+  const [newCustLastName, setNewCustLastName] = useState('');
+  const [newCustMobile, setNewCustMobile] = useState('');
+  const [newCustEmail, setNewCustEmail] = useState('');
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const [customerError, setCustomerError] = useState<string | null>(null);
+
+  const handleQuickAddCustomer = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newCustFirstName.trim() || !newCustMobile.trim()) {
+      setCustomerError('First name and Mobile number are required');
+      return;
+    }
+    try {
+      setCreatingCustomer(true);
+      setCustomerError(null);
+      const created = await customerApi.createCustomer({
+        first_name: newCustFirstName.trim(),
+        last_name: newCustLastName.trim(),
+        mobile: newCustMobile.trim(),
+        email: newCustEmail.trim() || undefined,
+        credit_limit: '10000000',
+      });
+      const updatedList = await customerApi.getCustomers();
+      setCustomers(updatedList);
+      setSelectedCustomerId(created.id);
+      setNewCustFirstName('');
+      setNewCustLastName('');
+      setNewCustMobile('');
+      setNewCustEmail('');
+      setQuickAddCustomerOpen(false);
+    } catch (err: any) {
+      setCustomerError(err.detail || err.message || 'Failed to create customer');
+    } finally {
+      setCreatingCustomer(false);
+    }
+  };
 
   // Search & Filtering
   const [searchQuery, setSearchQuery] = useState('');
@@ -292,6 +342,7 @@ export function PosOrderPage() {
     setDiscountMessage(null);
     setApprovalRequired(false);
     setApprovalReason(null);
+    setOrderNotes('');
     setError(null);
   };
 
@@ -313,6 +364,7 @@ export function PosOrderPage() {
         customer_id: selectedCustomerId || undefined,
         coupon_code: couponCode || undefined,
         table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
+        notes: orderNotes.trim() || undefined,
         items: cart.map((ci) => ({
           product_id: ci.product.id,
           quantity: ci.quantity,
@@ -346,6 +398,7 @@ export function PosOrderPage() {
       if (fullOrder.table_number) setTableNumber(fullOrder.table_number);
       setSelectedCustomerId(fullOrder.customer_id || '');
       setCouponCode(fullOrder.coupon_code || '');
+      setOrderNotes(fullOrder.notes || '');
 
       // Reconstruct cart items
       const loadedCart: CartItem[] = [];
@@ -500,8 +553,28 @@ export function PosOrderPage() {
       return;
     }
 
-    if (manualCalcType === 'PERCENTAGE' && Number(manualValue) > 100) {
-      setError('Percentage discount cannot exceed 100%');
+    if (manualCalcType === 'PERCENTAGE' && Number(manualValue) > 30) {
+      setError('Percentage discount exceeds maximum policy ceiling of 30%');
+      return;
+    }
+
+    if (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > 300000) {
+      setError('Fixed discount exceeds maximum policy ceiling of 300,000 IRR');
+      return;
+    }
+
+    const exceedsCashierLimit =
+      (manualCalcType === 'PERCENTAGE' && Number(manualValue) > 10) ||
+      (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > 50000);
+
+    if (exceedsCashierLimit) {
+      // Prompt Manager PIN authorization immediately
+      setApprovalReason(
+        `Manual discount ${manualValue}${manualCalcType === 'PERCENTAGE' ? '%' : ' IRR'} exceeds standard Cashier limit (10% / 50,000 IRR). Manager PIN authorization required.`
+      );
+      setManualDiscountModalOpen(false);
+      setApprovalModalOpen(true);
+      setError(null);
       return;
     }
 
@@ -510,7 +583,7 @@ export function PosOrderPage() {
       calculation_type: manualCalcType,
       value: manualValue,
       reasonCode: manualReasonCode,
-      approvalRequestId: manualApprovalRequestId,
+      approvalRequestId: undefined,
     });
     setManualDiscountModalOpen(false);
     setError(null);
@@ -536,15 +609,17 @@ export function PosOrderPage() {
   const handleApprovalSuccess = (_pin: string, requestId?: string) => {
     if (requestId) {
       setManualApprovalRequestId(requestId);
-      if (appliedManualDiscount) {
-        setAppliedManualDiscount({
-          ...appliedManualDiscount,
-          approvalRequestId: requestId,
-        });
-      }
+      setCouponCode('');
+      setAppliedManualDiscount({
+        calculation_type: manualCalcType,
+        value: manualValue,
+        reasonCode: manualReasonCode,
+        approvalRequestId: requestId,
+      });
     }
     setApprovalRequired(false);
     setApprovalReason(null);
+    setError(null);
   };
 
   // Order Placement
@@ -570,6 +645,7 @@ export function PosOrderPage() {
         customer_id: selectedCustomerId || undefined,
         coupon_code: couponCode || undefined,
         table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
+        notes: orderNotes.trim() || undefined,
         items: cart.map((ci) => ({
           product_id: ci.product.id,
           quantity: ci.quantity,
@@ -957,21 +1033,133 @@ export function PosOrderPage() {
                 )}
               </Stack>
 
-              {/* Order Parameters (Compact inline layout) */}
+              {/* Order Parameters (Segmented Order Type Switch + Customer/Table) */}
               <Stack spacing={1.25} sx={{ mb: 1.5 }}>
-                <Stack direction="row" spacing={1.25}>
+                <ToggleButtonGroup
+                  value={orderType}
+                  exclusive
+                  fullWidth
+                  size="small"
+                  onChange={(_, newType) => {
+                    if (newType) {
+                      setOrderType(newType);
+                    }
+                  }}
+                  sx={{
+                    bgcolor: 'background.neutral',
+                    p: 0.5,
+                    borderRadius: 1.5,
+                    '& .MuiToggleButton-root': {
+                      py: 0.75,
+                      fontSize: '0.8125rem',
+                      fontWeight: 600,
+                      border: 'none',
+                      borderRadius: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 0.75,
+                      color: 'text.secondary',
+                      transition: 'all 0.15s ease-in-out',
+                      '&.Mui-selected': {
+                        bgcolor: 'background.paper',
+                        color: 'primary.main',
+                        boxShadow: (theme) => theme.customShadows?.z1 || '0 1px 3px rgba(0,0,0,0.1)',
+                        fontWeight: 700,
+                        '&:hover': {
+                          bgcolor: 'background.paper',
+                        },
+                      },
+                      '&:hover': {
+                        bgcolor: 'action.hover',
+                      },
+                    },
+                  }}
+                >
+                  <ToggleButton value="DINE_IN">
+                    <RestaurantIcon sx={{ fontSize: 18 }} />
+                    Dine-In
+                  </ToggleButton>
+                  <ToggleButton value="TAKEAWAY">
+                    <TakeoutDiningIcon sx={{ fontSize: 18 }} />
+                    Takeaway
+                  </ToggleButton>
+                  <ToggleButton value="DELIVERY">
+                    <DeliveryDiningIcon sx={{ fontSize: 18 }} />
+                    Delivery
+                  </ToggleButton>
+                </ToggleButtonGroup>
+
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <FormControl fullWidth size="small">
-                    <InputLabel>Order Type</InputLabel>
+                    <InputLabel>Customer</InputLabel>
                     <Select
-                      value={orderType}
-                      label="Order Type"
-                      onChange={(e) => setOrderType(e.target.value as any)}
+                      value={selectedCustomerId}
+                      label="Customer"
+                      onChange={(e) => setSelectedCustomerId(e.target.value)}
                     >
-                      <MenuItem value="DINE_IN">Dine-In</MenuItem>
-                      <MenuItem value="TAKEAWAY">Takeaway</MenuItem>
-                      <MenuItem value="DELIVERY">Delivery</MenuItem>
+                      <MenuItem value="">Walk-In Guest</MenuItem>
+                      {customers.map((c) => (
+                        <MenuItem key={c.id} value={c.id}>
+                          {c.first_name} {c.last_name} ({c.mobile})
+                        </MenuItem>
+                      ))}
                     </Select>
                   </FormControl>
+
+                  <Tooltip title="Quick Register Customer">
+                    <IconButton
+                      color="primary"
+                      onClick={() => {
+                        setCustomerError(null);
+                        setQuickAddCustomerOpen(true);
+                      }}
+                      sx={{
+                        bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 167, 111, 0.16)' : 'primary.lighter',
+                        color: 'primary.main',
+                        borderRadius: 1.25,
+                        p: 0.85,
+                        border: '1px solid',
+                        borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 167, 111, 0.24)' : 'primary.light',
+                        '&:hover': {
+                          bgcolor: 'primary.main',
+                          color: 'primary.contrastText',
+                        },
+                        flexShrink: 0,
+                      }}
+                    >
+                      <PersonAddIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+
+                  <Tooltip title={orderNotes ? "Edit Order / Kitchen Note" : "Add Order / Kitchen Note"}>
+                    <IconButton
+                      color={orderNotes ? "info" : "default"}
+                      onClick={() => {
+                        setTempNotesInput(orderNotes);
+                        setNotesModalOpen(true);
+                      }}
+                      sx={{
+                        bgcolor: orderNotes
+                          ? (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 184, 217, 0.16)' : 'info.lighter'
+                          : 'action.hover',
+                        color: orderNotes ? 'info.main' : 'text.secondary',
+                        borderRadius: 1.25,
+                        p: 0.85,
+                        border: '1px solid',
+                        borderColor: orderNotes ? 'info.light' : 'divider',
+                        '&:hover': {
+                          bgcolor: orderNotes ? 'info.main' : 'action.selected',
+                          color: orderNotes ? 'info.contrastText' : 'text.primary',
+                        },
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Badge color="info" variant="dot" invisible={!orderNotes}>
+                        <EditNoteIcon fontSize="small" />
+                      </Badge>
+                    </IconButton>
+                  </Tooltip>
 
                   {orderType === 'DINE_IN' && (
                     <TextField
@@ -979,26 +1167,55 @@ export function PosOrderPage() {
                       label="Table #"
                       value={tableNumber}
                       onChange={(e) => setTableNumber(e.target.value)}
-                      sx={{ width: 110, flexShrink: 0 }}
+                      sx={{ width: 85, flexShrink: 0 }}
                     />
                   )}
                 </Stack>
 
-                <FormControl fullWidth size="small">
-                  <InputLabel>Customer</InputLabel>
-                  <Select
-                    value={selectedCustomerId}
-                    label="Customer"
-                    onChange={(e) => setSelectedCustomerId(e.target.value)}
+                {/* Active Note Preview Card */}
+                {orderNotes && (
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 0.85,
+                      px: 1.25,
+                      borderRadius: 1.25,
+                      bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 184, 217, 0.08)' : 'info.lighter',
+                      borderColor: 'info.light',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 1,
+                    }}
                   >
-                    <MenuItem value="">Walk-In Guest</MenuItem>
-                    {customers.map((c) => (
-                      <MenuItem key={c.id} value={c.id}>
-                        {c.first_name} {c.last_name} ({c.mobile})
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                    <Box sx={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                      <EditNoteIcon color="info" fontSize="small" sx={{ flexShrink: 0 }} />
+                      <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.primary' }} noWrap>
+                        Note: {orderNotes}
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={0.25} sx={{ flexShrink: 0 }}>
+                      <Button
+                        size="small"
+                        color="info"
+                        onClick={() => {
+                          setTempNotesInput(orderNotes);
+                          setNotesModalOpen(true);
+                        }}
+                        sx={{ py: 0, px: 0.75, minWidth: 0, fontSize: '0.75rem', textTransform: 'none', fontWeight: 600 }}
+                      >
+                        Edit
+                      </Button>
+                      <IconButton
+                        size="small"
+                        onClick={() => setOrderNotes('')}
+                        sx={{ p: 0.25 }}
+                      >
+                        <ClearIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    </Stack>
+                  </Paper>
+                )}
               </Stack>
 
               <Divider sx={{ mb: 1.5 }} />
@@ -1203,6 +1420,11 @@ export function PosOrderPage() {
           Apply Manual Cashier Discount
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
           <Stack spacing={2}>
             {/* Calculation Type Toggle */}
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', pt: 1 }}>
@@ -1214,6 +1436,7 @@ export function PosOrderPage() {
                   if (val) {
                     setManualCalcType(val);
                     setManualValue('');
+                    setError(null);
                   }
                 }}
                 sx={{ flexShrink: 0 }}
@@ -1231,7 +1454,10 @@ export function PosOrderPage() {
                 type="number"
                 placeholder={manualCalcType === 'PERCENTAGE' ? 'e.g. 10 (%)' : 'e.g. 50000 (IRR)'}
                 value={manualValue}
-                onChange={(e) => setManualValue(e.target.value)}
+                onChange={(e) => {
+                  setManualValue(e.target.value);
+                  setError(null);
+                }}
                 fullWidth
               />
             </Stack>
@@ -1243,29 +1469,56 @@ export function PosOrderPage() {
               </Typography>
               <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', gap: 0.75 }}>
                 {manualCalcType === 'PERCENTAGE'
-                  ? ['5', '10', '15', '20', '25'].map((pct) => (
+                  ? ['5', '10', '15', '20', '25', '30'].map((pct) => (
                       <Chip
                         key={pct}
                         label={`${pct}%`}
                         size="small"
                         variant={manualValue === pct ? 'filled' : 'outlined'}
                         color={Number(pct) > 10 ? 'warning' : 'primary'}
-                        onClick={() => handleSelectPreset(pct)}
+                        onClick={() => {
+                          handleSelectPreset(pct);
+                          setError(null);
+                        }}
                         sx={{ fontWeight: 600, cursor: 'pointer' }}
                       />
                     ))
-                  : ['20000', '50000', '100000', '200000'].map((amt) => (
+                  : ['20000', '50000', '100000', '200000', '300000'].map((amt) => (
                       <Chip
                         key={amt}
                         label={`${MoneyUtil.formatCurrency(amt)}`}
                         size="small"
                         variant={manualValue === amt ? 'filled' : 'outlined'}
                         color={Number(amt) > 50000 ? 'warning' : 'primary'}
-                        onClick={() => handleSelectPreset(amt)}
+                        onClick={() => {
+                          handleSelectPreset(amt);
+                          setError(null);
+                        }}
                         sx={{ fontWeight: 600, cursor: 'pointer' }}
                       />
                     ))}
               </Stack>
+
+              {manualValue && Number(manualValue) > 0 && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: 'block',
+                    mt: 1,
+                    fontWeight: 600,
+                    color:
+                      (manualCalcType === 'PERCENTAGE' && Number(manualValue) > 10) ||
+                      (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > 50000)
+                        ? 'warning.main'
+                        : 'success.main',
+                  }}
+                >
+                  {(manualCalcType === 'PERCENTAGE' && Number(manualValue) > 10) ||
+                  (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > 50000)
+                    ? '🔒 Requires Manager PIN authorization on Apply'
+                    : '✓ Within standard Cashier authorization limit'}
+                </Typography>
+              )}
             </Box>
 
             {/* Reason Selector */}
@@ -1294,11 +1547,26 @@ export function PosOrderPage() {
           <Button onClick={() => setManualDiscountModalOpen(false)}>Cancel</Button>
           <Button
             variant="contained"
+            color={
+              (manualCalcType === 'PERCENTAGE' && Number(manualValue) > 10) ||
+              (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > 50000)
+                ? 'warning'
+                : 'primary'
+            }
+            startIcon={
+              (manualCalcType === 'PERCENTAGE' && Number(manualValue) > 10) ||
+              (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > 50000) ? (
+                <LockOpenIcon />
+              ) : undefined
+            }
             onClick={handleApplyManualDiscount}
             disabled={!manualValue || Number(manualValue) <= 0}
             sx={{ fontWeight: 'bold' }}
           >
-            Apply to Cart
+            {(manualCalcType === 'PERCENTAGE' && Number(manualValue) > 10) ||
+            (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > 50000)
+              ? 'Authorize & Apply (PIN)'
+              : 'Apply to Cart'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1453,6 +1721,165 @@ export function PosOrderPage() {
         detailsText={approvalReason || 'Manual cashier discount authorization'}
         createRequest
       />
+
+      {/* Quick Add Customer Dialog */}
+      <Dialog
+        open={quickAddCustomerOpen}
+        onClose={() => !creatingCustomer && setQuickAddCustomerOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <form onSubmit={handleQuickAddCustomer}>
+          <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PersonAddIcon color="primary" />
+            Quick Register Customer
+          </DialogTitle>
+          <DialogContent sx={{ pt: 1 }}>
+            {customerError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {customerError}
+              </Alert>
+            )}
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <TextField
+                size="small"
+                label="First Name"
+                required
+                fullWidth
+                autoFocus
+                value={newCustFirstName}
+                onChange={(e) => setNewCustFirstName(e.target.value)}
+              />
+              <TextField
+                size="small"
+                label="Last Name"
+                fullWidth
+                value={newCustLastName}
+                onChange={(e) => setNewCustLastName(e.target.value)}
+              />
+              <TextField
+                size="small"
+                label="Mobile / Phone Number"
+                required
+                fullWidth
+                value={newCustMobile}
+                placeholder="0912..."
+                onChange={(e) => setNewCustMobile(e.target.value)}
+              />
+              <TextField
+                size="small"
+                label="Email (Optional)"
+                type="email"
+                fullWidth
+                value={newCustEmail}
+                onChange={(e) => setNewCustEmail(e.target.value)}
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2.5 }}>
+            <Button
+              onClick={() => setQuickAddCustomerOpen(false)}
+              disabled={creatingCustomer}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={creatingCustomer}
+              startIcon={creatingCustomer ? <CircularProgress size={16} color="inherit" /> : <PersonAddIcon />}
+              sx={{ fontWeight: 'bold' }}
+            >
+              {creatingCustomer ? 'Saving...' : 'Save & Select'}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
+      {/* Order Notes Dialog */}
+      <Dialog
+        open={notesModalOpen}
+        onClose={() => setNotesModalOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <EditNoteIcon color="primary" />
+          Order & Kitchen Instructions
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Add special instructions for kitchen preparation, courier delivery, or customer preferences.
+          </Typography>
+          <TextField
+            multiline
+            rows={3}
+            fullWidth
+            size="small"
+            autoFocus
+            label="Special Instructions / Notes"
+            placeholder="e.g. Extra napkins, no onions, allergies, gate code 1234..."
+            value={tempNotesInput}
+            onChange={(e) => setTempNotesInput(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.75, display: 'block', fontWeight: 600 }}>
+            Quick Tags:
+          </Typography>
+          <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+            {[
+              'No Onions',
+              'Extra Spicy',
+              'Less Ice',
+              'Allergy Alert',
+              'Cutlery Needed',
+              'Call on Arrival',
+              'Urgent / Rush',
+            ].map((tag) => (
+              <Chip
+                key={tag}
+                label={tag}
+                size="small"
+                variant={tempNotesInput.includes(tag) ? 'filled' : 'outlined'}
+                color="primary"
+                onClick={() => {
+                  setTempNotesInput((prev) =>
+                    prev ? (prev.includes(tag) ? prev : `${prev}, ${tag}`) : tag
+                  );
+                }}
+                sx={{ fontWeight: 600, cursor: 'pointer' }}
+              />
+            ))}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          {tempNotesInput && (
+            <Button
+              color="error"
+              onClick={() => {
+                setTempNotesInput('');
+                setOrderNotes('');
+                setNotesModalOpen(false);
+              }}
+              sx={{ mr: 'auto' }}
+            >
+              Clear Note
+            </Button>
+          )}
+          <Button onClick={() => setNotesModalOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setOrderNotes(tempNotesInput.trim());
+              setNotesModalOpen(false);
+            }}
+            sx={{ fontWeight: 'bold' }}
+          >
+            Save Note
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Checkout / Payment Modal */}
       <CheckoutModal
