@@ -80,6 +80,43 @@ export class CatalogController {
     return await this.catalogService.attachOptionGroupToProduct(tenantId, id, body.optionGroupId, body.sortOrder, correlationId);
   }
 
+  // Product Variants Endpoints
+  @Get('products/:id/variants')
+  async getProductVariants(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.catalogService.getProductVariants(tenantId, id);
+  }
+
+  @Post('products/:id/variants')
+  async createProductVariant(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.catalogService.createProductVariant(tenantId, id, body, correlationId);
+  }
+
+  @Patch('products/:id/variants/:variantId')
+  async updateProductVariant(
+    @Param('id') id: string,
+    @Param('variantId') variantId: string,
+    @Body() body: any,
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.catalogService.updateProductVariant(tenantId, id, variantId, body, correlationId);
+  }
+
+  @Delete('products/:id/variants/:variantId')
+  async archiveProductVariant(
+    @Param('id') id: string,
+    @Param('variantId') variantId: string,
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.catalogService.archiveProductVariant(tenantId, id, variantId, correlationId);
+  }
+
   @Get('products/:id/effective-price')
   async getEffectivePrice(
     @Param('id') id: string,

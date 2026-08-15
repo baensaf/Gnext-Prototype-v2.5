@@ -158,6 +158,7 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.modifiers', 'Modifiers'),
           path: '/app/catalog/modifiers',
           icon: ICONS.options,
+          info: <Label color="info">V5</Label>,
         },
         {
           title: t('nav.menus', 'Menus Composer'),

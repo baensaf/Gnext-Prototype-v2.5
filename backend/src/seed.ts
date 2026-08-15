@@ -22,6 +22,7 @@ export async function runSeed() {
   const reasonRepo = AppDataSource.getRepository('ReasonCode');
   const catRepo = AppDataSource.getRepository('Category');
   const prodRepo = AppDataSource.getRepository('Product');
+  const variantRepo = AppDataSource.getRepository('ProductVariant');
   const invItemRepo = AppDataSource.getRepository('InventoryItem');
   const invTxRepo = AppDataSource.getRepository('InventoryTransaction');
   const zoneRepo = AppDataSource.getRepository('DeliveryZone');
@@ -181,8 +182,23 @@ export async function runSeed() {
     }
   }
 
-  // 9. Idempotent V5 Inventory Seed Items
+  // 8.1 Seed Product Variants for Cheeseburger Special
   const prodBurger = await prodRepo.findOne({ where: { tenant_id: tenant.id, code: 'PROD-CHEESEBURGER' } });
+  if (prodBurger) {
+    const burgerVariants = [
+      { tenant_id: tenant.id, product_id: prodBurger.id, code: 'VAR-CHB-SGL', name: 'Single Patty', sku: 'CHB-SGL', base_price: '150000.0000', is_default: true, sort_order: 0, is_active: true },
+      { tenant_id: tenant.id, product_id: prodBurger.id, code: 'VAR-CHB-DBL', name: 'Double Patty', sku: 'CHB-DBL', base_price: '220000.0000', is_default: false, sort_order: 1, is_active: true },
+      { tenant_id: tenant.id, product_id: prodBurger.id, code: 'VAR-CHB-TPL', name: 'Triple Patty', sku: 'CHB-TPL', base_price: '290000.0000', is_default: false, sort_order: 2, is_active: true },
+    ];
+    for (const v of burgerVariants) {
+      const existingVar = await variantRepo.findOne({ where: { tenant_id: tenant.id, product_id: prodBurger.id, code: v.code } });
+      if (!existingVar) {
+        await variantRepo.save(variantRepo.create(v));
+      }
+    }
+  }
+
+  // 9. Idempotent V5 Inventory Seed Items
   const prodFries = await prodRepo.findOne({ where: { tenant_id: tenant.id, code: 'PROD-FRIES' } });
   const prodCola = await prodRepo.findOne({ where: { tenant_id: tenant.id, code: 'PROD-COLA' } });
 

@@ -1,9 +1,11 @@
 import type { Product, Category, OptionGroup } from 'src/api/catalogApi';
 
+import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
 import TuneIcon from '@mui/icons-material/Tune';
 import DeleteIcon from '@mui/icons-material/Delete';
 import {
@@ -42,6 +44,7 @@ import { catalogApi } from 'src/api/catalogApi';
 import { ImageUploader } from 'src/components/ImageUploader';
 
 export function ProductsPage() {
+  const navigate = useNavigate();
   const { t: _t } = useTranslation();
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -240,8 +243,15 @@ export function ProductsPage() {
                       </TableCell>
                       <TableCell align="center">
                         <IconButton
-                          title="Attach Modifier Option Group"
+                          title="Edit Product & Manage Variants"
                           color="primary"
+                          onClick={() => navigate(`/app/catalog/products/${p.id}`)}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton
+                          title="Attach Modifier Option Group"
+                          color="info"
                           onClick={() => handleOpenAttachDialog(p)}
                         >
                           <TuneIcon />

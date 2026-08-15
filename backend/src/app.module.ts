@@ -80,6 +80,7 @@ import { FileAsset } from './entities/FileAsset.entity';
 import { LocalizedString } from './entities/LocalizedString.entity';
 import { Category } from './entities/Category.entity';
 import { Product } from './entities/Product.entity';
+import { ProductVariant } from './entities/ProductVariant.entity';
 import { OptionGroup } from './entities/OptionGroup.entity';
 import { OptionItem } from './entities/OptionItem.entity';
 import { ProductOptionGroup } from './entities/ProductOptionGroup.entity';
@@ -175,7 +176,7 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
           Branch, BranchOperatingHour, Terminal, BranchStatusSnapshot, TenantSetting,
           Currency, PaymentMethod, ReasonCode,
           FileAsset, LocalizedString,
-          Category, Product, OptionGroup, OptionItem, ProductOptionGroup, PriceGroup, PriceGroupItem,
+          Category, Product, ProductVariant, OptionGroup, OptionItem, ProductOptionGroup, PriceGroup, PriceGroupItem,
           PriceEntry, PriceGroupBranch, PriceBulkJob,
           Menu, MenuCategory, MenuProduct, ProductAvailability,
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,

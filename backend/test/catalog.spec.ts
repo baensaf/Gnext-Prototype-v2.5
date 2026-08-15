@@ -3,6 +3,7 @@ import { CatalogService } from '../src/modules/catalog/catalog.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Category } from '../src/entities/Category.entity';
 import { Product } from '../src/entities/Product.entity';
+import { ProductVariant } from '../src/entities/ProductVariant.entity';
 import { OptionGroup } from '../src/entities/OptionGroup.entity';
 import { OptionItem } from '../src/entities/OptionItem.entity';
 import { ProductOptionGroup } from '../src/entities/ProductOptionGroup.entity';
@@ -18,6 +19,7 @@ import { PricingService } from '../src/modules/pricing/pricing.service';
 describe('CatalogService (Unit)', () => {
   let service: CatalogService;
   let prodRepo: any;
+  let variantRepo: any;
   let prodGroupRepo: any;
   let priceItemRepo: any;
   let menuRepo: any;
@@ -29,6 +31,15 @@ describe('CatalogService (Unit)', () => {
 
   beforeEach(async () => {
     prodRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), softRemove: jest.fn() };
+    variantRepo = {
+      findOne: jest.fn(),
+      find: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
+      create: jest.fn((dto) => ({ id: 'var-1', ...dto })),
+      save: jest.fn((v) => Promise.resolve(v)),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      softRemove: jest.fn().mockResolvedValue(true),
+    };
     prodGroupRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
     priceItemRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
     menuRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), softRemove: jest.fn() };
@@ -46,6 +57,7 @@ describe('CatalogService (Unit)', () => {
         CatalogService,
         { provide: getRepositoryToken(Category), useValue: { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() } },
         { provide: getRepositoryToken(Product), useValue: prodRepo },
+        { provide: getRepositoryToken(ProductVariant), useValue: variantRepo },
         { provide: getRepositoryToken(OptionGroup), useValue: { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() } },
         { provide: getRepositoryToken(OptionItem), useValue: { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() } },
         { provide: getRepositoryToken(ProductOptionGroup), useValue: prodGroupRepo },
@@ -112,5 +124,48 @@ describe('CatalogService (Unit)', () => {
 
     expect(result.success).toBe(true);
     expect(result.updated_count).toBe(2);
+  });
+
+  describe('Product Variants', () => {
+    it('should create a variant and write audit event', async () => {
+      prodRepo.findOne.mockResolvedValue({ id: 'prod-burger', base_price: '150000.0000' });
+      variantRepo.findOne.mockResolvedValue(null);
+      variantRepo.count.mockResolvedValue(0);
+
+      const created = await service.createProductVariant(
+        't-1',
+        'prod-burger',
+        {
+          code: 'VAR-CHB-DBL',
+          name: 'Double Patty',
+          base_price: '220000.0000',
+          sku: 'CHB-DBL',
+          is_default: false,
+        },
+        'corr-v1',
+      );
+
+      expect(created.code).toBe('VAR-CHB-DBL');
+      expect(created.name).toBe('Double Patty');
+      expect(variantRepo.save).toHaveBeenCalled();
+      expect(auditWriter.write).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'PRODUCT_VARIANT_CREATED',
+          entityType: 'ProductVariant',
+        }),
+      );
+    });
+
+    it('should list variants for a product', async () => {
+      prodRepo.findOne.mockResolvedValue({ id: 'prod-burger' });
+      variantRepo.find.mockResolvedValue([
+        { id: 'var-1', code: 'VAR-CHB-SGL', name: 'Single Patty', is_default: true },
+        { id: 'var-2', code: 'VAR-CHB-DBL', name: 'Double Patty', is_default: false },
+      ]);
+
+      const list = await service.getProductVariants('t-1', 'prod-burger');
+      expect(list).toHaveLength(2);
+      expect(list[0].code).toBe('VAR-CHB-SGL');
+    });
   });
 });

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Category } from '../../entities/Category.entity';
 import { Product } from '../../entities/Product.entity';
+import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { OptionGroup } from '../../entities/OptionGroup.entity';
 import { OptionItem } from '../../entities/OptionItem.entity';
 import { ProductOptionGroup } from '../../entities/ProductOptionGroup.entity';
@@ -22,6 +23,7 @@ export class CatalogService {
   constructor(
     @InjectRepository(Category) private readonly catRepo: Repository<Category>,
     @InjectRepository(Product) private readonly prodRepo: Repository<Product>,
+    @InjectRepository(ProductVariant) private readonly variantRepo: Repository<ProductVariant>,
     @InjectRepository(OptionGroup) private readonly groupRepo: Repository<OptionGroup>,
     @InjectRepository(OptionItem) private readonly itemRepo: Repository<OptionItem>,
     @InjectRepository(ProductOptionGroup) private readonly prodGroupRepo: Repository<ProductOptionGroup>,
@@ -172,7 +174,12 @@ export class CatalogService {
       }
     }
 
-    return { ...prod, optionGroups };
+    const variants = await this.variantRepo.find({
+      where: { tenant_id: tenantId, product_id: id, is_active: true },
+      order: { sort_order: 'ASC', code: 'ASC' },
+    });
+
+    return { ...prod, optionGroups, variants };
   }
 
   async createProduct(tenantId: string, data: { code: string; name: string; category_id: string; base_price: string; sku?: string; barcode?: string; description?: string; tax_rate?: string; image_asset_id?: string }, correlationId: string) {
@@ -247,6 +254,172 @@ export class CatalogService {
       action: 'PRODUCT_ARCHIVED',
       entityType: 'Product',
       entityId: id,
+      correlationId,
+    });
+
+    return { success: true };
+  }
+
+  // Product Variants
+  async getProductVariants(tenantId: string, productId: string) {
+    const prod = await this.prodRepo.findOne({ where: { id: productId, tenant_id: tenantId } });
+    if (!prod) throw new NotFoundException('Product not found');
+
+    return await this.variantRepo.find({
+      where: { tenant_id: tenantId, product_id: productId, is_active: true },
+      order: { sort_order: 'ASC', code: 'ASC' },
+    });
+  }
+
+  async createProductVariant(
+    tenantId: string,
+    productId: string,
+    data: {
+      code: string;
+      name: string;
+      base_price?: string;
+      sku?: string;
+      barcode?: string;
+      is_default?: boolean;
+      sort_order?: number;
+    },
+    correlationId: string,
+  ) {
+    const prod = await this.prodRepo.findOne({ where: { id: productId, tenant_id: tenantId } });
+    if (!prod) throw new NotFoundException('Product not found');
+
+    const code = data.code.toUpperCase().trim();
+    const existing = await this.variantRepo.findOne({
+      where: { tenant_id: tenantId, product_id: productId, code, is_active: true },
+    });
+    if (existing) throw new ConflictException(`Variant code ${code} already exists for this product`);
+
+    const count = await this.variantRepo.count({
+      where: { tenant_id: tenantId, product_id: productId, is_active: true },
+    });
+
+    const isDefault = data.is_default || count === 0;
+
+    if (isDefault) {
+      await this.variantRepo.update(
+        { tenant_id: tenantId, product_id: productId },
+        { is_default: false },
+      );
+    }
+
+    const variant = this.variantRepo.create({
+      tenant_id: tenantId,
+      product_id: productId,
+      code,
+      name: data.name,
+      base_price: MoneyUtil.format(data.base_price || prod.base_price || '0'),
+      sku: data.sku || null,
+      barcode: data.barcode || null,
+      is_default: isDefault,
+      sort_order: data.sort_order ?? count,
+      is_active: true,
+    });
+
+    const saved = await this.variantRepo.save(variant);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'PRODUCT_VARIANT_CREATED',
+      entityType: 'ProductVariant',
+      entityId: saved.id,
+      correlationId,
+      afterData: saved,
+    });
+
+    return saved;
+  }
+
+  async updateProductVariant(
+    tenantId: string,
+    productId: string,
+    variantId: string,
+    data: Partial<ProductVariant>,
+    correlationId: string,
+  ) {
+    const variant = await this.variantRepo.findOne({
+      where: { id: variantId, product_id: productId, tenant_id: tenantId },
+    });
+    if (!variant) throw new NotFoundException('Product variant not found');
+
+    const before = { ...variant };
+
+    if (data.code) {
+      data.code = data.code.toUpperCase().trim();
+      const duplicate = await this.variantRepo.findOne({
+        where: { tenant_id: tenantId, product_id: productId, code: data.code, is_active: true },
+      });
+      if (duplicate && duplicate.id !== variantId) {
+        throw new ConflictException(`Variant code ${data.code} already exists for this product`);
+      }
+    }
+
+    if (data.base_price) {
+      data.base_price = MoneyUtil.format(data.base_price);
+    }
+
+    if (data.is_default === true) {
+      await this.variantRepo.update(
+        { tenant_id: tenantId, product_id: productId },
+        { is_default: false },
+      );
+    }
+
+    Object.assign(variant, data);
+    const saved = await this.variantRepo.save(variant);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'PRODUCT_VARIANT_UPDATED',
+      entityType: 'ProductVariant',
+      entityId: variantId,
+      correlationId,
+      beforeData: before,
+      afterData: saved,
+    });
+
+    return saved;
+  }
+
+  async archiveProductVariant(
+    tenantId: string,
+    productId: string,
+    variantId: string,
+    correlationId: string,
+  ) {
+    const variant = await this.variantRepo.findOne({
+      where: { id: variantId, product_id: productId, tenant_id: tenantId },
+    });
+    if (!variant) throw new NotFoundException('Product variant not found');
+
+    const wasDefault = variant.is_default;
+    variant.is_active = false;
+    variant.is_default = false;
+    await this.variantRepo.softRemove(variant);
+
+    if (wasDefault) {
+      const remaining = await this.variantRepo.findOne({
+        where: { tenant_id: tenantId, product_id: productId, is_active: true },
+        order: { sort_order: 'ASC' },
+      });
+      if (remaining) {
+        remaining.is_default = true;
+        await this.variantRepo.save(remaining);
+      }
+    }
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'PRODUCT_VARIANT_ARCHIVED',
+      entityType: 'ProductVariant',
+      entityId: variantId,
       correlationId,
     });
 

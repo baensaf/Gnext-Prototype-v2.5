@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Category } from '../../entities/Category.entity';
 import { Product } from '../../entities/Product.entity';
+import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { OptionGroup } from '../../entities/OptionGroup.entity';
 import { OptionItem } from '../../entities/OptionItem.entity';
 import { ProductOptionGroup } from '../../entities/ProductOptionGroup.entity';
@@ -21,6 +22,7 @@ import { PricingModule } from '../pricing/pricing.module';
     TypeOrmModule.forFeature([
       Category,
       Product,
+      ProductVariant,
       OptionGroup,
       OptionItem,
       ProductOptionGroup,

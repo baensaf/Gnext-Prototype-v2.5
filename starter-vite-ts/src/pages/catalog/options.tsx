@@ -119,11 +119,14 @@ export function OptionsPage() {
     <Box>
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Modifier Option Groups & Items
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Configure product add-ons, sizes, toppings, and modifier selection rules
+          <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
+            <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+              Modifier Option Groups & Items
+            </Typography>
+            <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
+          </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Configure product add-ons, sizes, toppings, and modifier selection rules (V5 Feature)
           </Typography>
         </Box>
         <Button

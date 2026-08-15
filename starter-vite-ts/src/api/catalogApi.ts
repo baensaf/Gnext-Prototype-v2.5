@@ -10,6 +10,20 @@ export interface Category {
   image_asset_id?: string;
 }
 
+export interface ProductVariant {
+  id: string;
+  tenant_id?: string;
+  product_id: string;
+  code: string;
+  name: string;
+  sku?: string;
+  barcode?: string;
+  base_price: string;
+  is_default: boolean;
+  sort_order: number;
+  is_active: boolean;
+}
+
 export interface Product {
   id: string;
   code: string;
@@ -24,6 +38,7 @@ export interface Product {
   is_active: boolean;
   base_price: string;
   optionGroups?: OptionGroup[];
+  variants?: ProductVariant[];
 }
 
 export interface OptionItem {
@@ -145,6 +160,23 @@ export const catalogApi = {
   attachOptionGroup: async (id: string, optionGroupId: string, sortOrder: number = 0): Promise<any> => {
     const res = await httpClient.post(`/api/v1/products/${id}/option-groups`, { optionGroupId, sortOrder });
     return res.data;
+  },
+
+  // Product Variants
+  getProductVariants: async (productId: string): Promise<ProductVariant[]> => {
+    const res = await httpClient.get(`/api/v1/products/${productId}/variants`);
+    return res.data;
+  },
+  createProductVariant: async (productId: string, data: Partial<ProductVariant>): Promise<ProductVariant> => {
+    const res = await httpClient.post(`/api/v1/products/${productId}/variants`, data);
+    return res.data;
+  },
+  updateProductVariant: async (productId: string, variantId: string, data: Partial<ProductVariant>): Promise<ProductVariant> => {
+    const res = await httpClient.patch(`/api/v1/products/${productId}/variants/${variantId}`, data);
+    return res.data;
+  },
+  deleteProductVariant: async (productId: string, variantId: string): Promise<void> => {
+    await httpClient.delete(`/api/v1/products/${productId}/variants/${variantId}`);
   },
 
   getOptionGroups: async (): Promise<OptionGroup[]> => {

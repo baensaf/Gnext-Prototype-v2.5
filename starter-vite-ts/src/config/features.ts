@@ -47,6 +47,20 @@ export const FEATURE_REGISTRY: Record<string, FeatureRegistryItem> = {
     labelKey: 'nav.offlineSyncV5',
     isV5Preview: true,
   },
+  variants: {
+    id: 'variants',
+    version: 'V5 Preview',
+    status: 'V5_PREVIEW',
+    labelKey: 'nav.variantsV5',
+    isV5Preview: true,
+  },
+  modifiers: {
+    id: 'modifiers',
+    version: 'V5 Preview',
+    status: 'V5_PREVIEW',
+    labelKey: 'nav.modifiersV5',
+    isV5Preview: true,
+  },
 };
 
 export function getFeature(featureId: string): FeatureRegistryItem | undefined {

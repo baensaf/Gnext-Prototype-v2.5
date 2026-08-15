@@ -2,7 +2,7 @@ import type { Branch } from 'src/api/tenantApi';
 import type { OrderHeader } from 'src/api/orderApi';
 import type { Customer } from 'src/api/customerApi';
 import type { ManualDiscount } from 'src/api/discountsApi';
-import type { Product, Category, OptionItem, OptionGroup } from 'src/api/catalogApi';
+import type { Product, Category, OptionItem, OptionGroup, ProductVariant } from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -36,6 +36,7 @@ import {
   Stack,
   Alert,
   Paper,
+  Radio,
   Drawer,
   Button,
   Select,
@@ -48,6 +49,7 @@ import {
   Typography,
   IconButton,
   InputLabel,
+  RadioGroup,
   CardContent,
   FormControl,
   DialogTitle,
@@ -73,6 +75,7 @@ import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 
 interface CartItem {
   product: Product;
+  selectedVariant?: ProductVariant;
   quantity: number;
   selectedOptions: OptionItem[];
   lineSubtotal: string;
@@ -147,9 +150,11 @@ export function PosOrderPage() {
   // Search & Filtering
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Option Customization Dialog
+  // Option & Variant Customization Dialog
   const [optionDialogOpen, setOptionDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [productVariants, setProductVariants] = useState<ProductVariant[]>([]);
+  const [selectedVariantId, setSelectedVariantId] = useState<string>('');
   const [optionGroups, setOptionGroups] = useState<OptionGroup[]>([]);
   const [checkedOptionIds, setCheckedOptionIds] = useState<string[]>([]);
 
@@ -241,28 +246,41 @@ export function PosOrderPage() {
     setSelectedProduct(p);
     setCheckedOptionIds([]);
     try {
-      const groups = await catalogApi.getOptionGroups();
-      if (groups && groups.length > 0) {
-        setOptionGroups(groups);
+      const [vList, groups] = await Promise.all([
+        catalogApi.getProductVariants(p.id).catch(() => [] as ProductVariant[]),
+        catalogApi.getOptionGroups().catch(() => [] as OptionGroup[]),
+      ]);
+
+      setProductVariants(vList || []);
+      setOptionGroups(groups || []);
+
+      const defaultVariant = vList?.find((v) => v.is_default) || vList?.[0];
+      setSelectedVariantId(defaultVariant?.id || '');
+
+      if ((vList && vList.length > 1) || (groups && groups.length > 0)) {
         setOptionDialogOpen(true);
       } else {
-        addToCart(p, []);
+        addToCart(p, defaultVariant, []);
       }
     } catch {
-      addToCart(p, []);
+      addToCart(p, undefined, []);
     }
   };
 
-  const addToCart = (product: Product, options: OptionItem[]) => {
+  const addToCart = (product: Product, variant: ProductVariant | undefined, options: OptionItem[]) => {
     if (placedOrder) setPlacedOrder(null);
     if (holdSuccessMessage) setHoldSuccessMessage(null);
 
+    const basePrice = variant ? variant.base_price : (product.base_price || '0');
     const optionsSum = options.reduce((sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2), '0');
-    const itemUnitPrice = MoneyUtil.add(product.base_price || '0', optionsSum, 2);
+    const itemUnitPrice = MoneyUtil.add(basePrice, optionsSum, 2);
 
     setCart((prev) => {
       const existingIndex = prev.findIndex(
-        (ci) => ci.product.id === product.id && JSON.stringify(ci.selectedOptions) === JSON.stringify(options),
+        (ci) =>
+          ci.product.id === product.id &&
+          ci.selectedVariant?.id === variant?.id &&
+          JSON.stringify(ci.selectedOptions) === JSON.stringify(options),
       );
 
       if (existingIndex > -1) {
@@ -280,6 +298,7 @@ export function PosOrderPage() {
         ...prev,
         {
           product,
+          selectedVariant: variant,
           quantity: 1,
           selectedOptions: options,
           lineSubtotal: itemUnitPrice,
@@ -291,6 +310,8 @@ export function PosOrderPage() {
   const handleConfirmAddWithOptions = () => {
     if (!selectedProduct) return;
 
+    const chosenVariant = productVariants.find((v) => v.id === selectedVariantId);
+
     const chosenOptions: OptionItem[] = [];
     optionGroups.forEach((g) => {
       g.items?.forEach((i) => {
@@ -300,9 +321,11 @@ export function PosOrderPage() {
       });
     });
 
-    addToCart(selectedProduct, chosenOptions);
+    addToCart(selectedProduct, chosenVariant, chosenOptions);
     setOptionDialogOpen(false);
     setSelectedProduct(null);
+    setProductVariants([]);
+    setSelectedVariantId('');
   };
 
   const updateQuantity = (index: number, delta: number) => {
@@ -320,7 +343,10 @@ export function PosOrderPage() {
         (sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2),
         '0',
       );
-      const unitPrice = MoneyUtil.add(copy[index].product.base_price || '0', optionsSum, 2);
+      const basePrice = copy[index].selectedVariant
+        ? copy[index].selectedVariant!.base_price
+        : copy[index].product.base_price || '0';
+      const unitPrice = MoneyUtil.add(basePrice, optionsSum, 2);
 
       copy[index] = {
         ...copy[index],
@@ -367,6 +393,8 @@ export function PosOrderPage() {
         notes: orderNotes.trim() || undefined,
         items: cart.map((ci) => ({
           product_id: ci.product.id,
+          variant_id: ci.selectedVariant?.id || undefined,
+          variant_name: ci.selectedVariant?.name || undefined,
           quantity: ci.quantity,
           options: ci.selectedOptions.map((o) => ({ option_item_id: o.id })),
         })),
@@ -480,7 +508,8 @@ export function PosOrderPage() {
           orderType,
           items: cart.map((ci) => ({
             productId: ci.product.id,
-            unitPrice: (ci.product.base_price || (ci.product as any).price || '0').toString(),
+            variantId: ci.selectedVariant?.id || undefined,
+            unitPrice: (ci.selectedVariant?.base_price || ci.product.base_price || (ci.product as any).price || '0').toString(),
             quantity: ci.quantity.toString(),
           })),
         },
@@ -648,6 +677,8 @@ export function PosOrderPage() {
         notes: orderNotes.trim() || undefined,
         items: cart.map((ci) => ({
           product_id: ci.product.id,
+          variant_id: ci.selectedVariant?.id || undefined,
+          variant_name: ci.selectedVariant?.name || undefined,
           quantity: ci.quantity,
           options: ci.selectedOptions.map((o) => ({ option_item_id: o.id })),
         })),
@@ -1235,7 +1266,7 @@ export function PosOrderPage() {
                         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                           <Box sx={{ pr: 1, minWidth: 0 }}>
                             <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'text.primary', fontSize: '0.875rem' }} noWrap>
-                              {item.product.name}
+                              {item.product.name} {item.selectedVariant ? `(${item.selectedVariant.name})` : ''}
                             </Typography>
                             {item.selectedOptions.length > 0 && (
                               <Typography
@@ -1672,41 +1703,114 @@ export function PosOrderPage() {
         )}
       </Drawer>
 
-      {/* Option Customization Dialog */}
-      <Dialog open={optionDialogOpen} onClose={() => setOptionDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>
-          Customize {selectedProduct?.name}
+      {/* Option & Variant Customization Dialog */}
+      <Dialog open={optionDialogOpen} onClose={() => setOptionDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>Configure {selectedProduct?.name}</span>
+          <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
-          {optionGroups.map((g) => (
-            <Box key={g.id} sx={{ mb: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                {g.name}
-              </Typography>
-              {g.items?.map((item) => (
-                <FormControlLabel
-                  key={item.id}
-                  control={
-                    <Checkbox
-                      checked={checkedOptionIds.includes(item.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setCheckedOptionIds((prev) => [...prev, item.id]);
-                        } else {
-                          setCheckedOptionIds((prev) => prev.filter((id) => id !== item.id));
-                        }
-                      }}
+          {/* Variant Selection Section */}
+          {productVariants.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                  Select Variant / Size
+                </Typography>
+                <Chip label="V5" size="small" color="info" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 'bold' }} />
+              </Stack>
+              <RadioGroup
+                value={selectedVariantId}
+                onChange={(e) => setSelectedVariantId(e.target.value)}
+              >
+                <Grid container spacing={1}>
+                  {productVariants.map((v) => (
+                    <Grid key={v.id} size={{ xs: 12, sm: 6 }}>
+                      <Paper
+                        variant="outlined"
+                        onClick={() => setSelectedVariantId(v.id)}
+                        sx={{
+                          p: 1.5,
+                          borderRadius: 2,
+                          cursor: 'pointer',
+                          borderColor: selectedVariantId === v.id ? 'primary.main' : 'divider',
+                          bgcolor: selectedVariantId === v.id ? 'action.hover' : 'background.paper',
+                          borderWidth: selectedVariantId === v.id ? 2 : 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <FormControlLabel
+                          value={v.id}
+                          control={<Radio size="small" />}
+                          label={
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                {v.name}
+                              </Typography>
+                              {v.sku && (
+                                <Typography variant="caption" color="text.secondary">
+                                  SKU: {v.sku}
+                                </Typography>
+                              )}
+                            </Box>
+                          }
+                          sx={{ m: 0 }}
+                        />
+                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                          {MoneyUtil.formatCurrency(v.base_price)} IRR
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  ))}
+                </Grid>
+              </RadioGroup>
+            </Box>
+          )}
+
+          {/* Modifier Groups Section */}
+          {optionGroups.length > 0 && (
+            <Box>
+              {productVariants.length > 0 && <Divider sx={{ my: 2 }} />}
+              <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
+                  Optional Customizations & Modifiers
+                </Typography>
+                <Chip label="V5" size="small" color="info" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 'bold' }} />
+              </Stack>
+              {optionGroups.map((g) => (
+                <Box key={g.id} sx={{ mb: 2 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5, color: 'text.secondary' }}>
+                    {g.name} {g.is_required ? '(Required)' : ''}
+                  </Typography>
+                  {g.items?.map((item) => (
+                    <FormControlLabel
+                      key={item.id}
+                      control={
+                        <Checkbox
+                          checked={checkedOptionIds.includes(item.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setCheckedOptionIds((prev) => [...prev, item.id]);
+                            } else {
+                              setCheckedOptionIds((prev) => prev.filter((id) => id !== item.id));
+                            }
+                          }}
+                        />
+                      }
+                      label={`${item.name} (+${MoneyUtil.formatCurrency(item.price_delta)} IRR)`}
+                      sx={{ display: 'block', mb: 0.5 }}
                     />
-                  }
-                  label={`${item.name} (+${MoneyUtil.formatCurrency(item.price_delta)} IRR)`}
-                />
+                  ))}
+                </Box>
               ))}
             </Box>
-          ))}
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOptionDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleConfirmAddWithOptions} sx={{ fontWeight: 'bold' }}>
+          <Button variant="contained" onClick={handleConfirmAddWithOptions} sx={{ fontWeight: 'bold', px: 3 }}>
             Add to Cart
           </Button>
         </DialogActions>
