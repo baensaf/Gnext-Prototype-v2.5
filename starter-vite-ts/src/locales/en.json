@@ -417,6 +417,11 @@
           "description": "Promotion campaigns, discount percentage caps, coupon codes, and customer credit limits.",
           "badge": "Promotions"
         },
+        "discountAuthorizations": {
+          "title": "Manual Discount Authorizations",
+          "description": "Role-based manual discount percentage and fixed amount caps for cashiers, supervisors, and managers.",
+          "badge": "Role Limits"
+        },
         "approvals": {
           "title": "Approval Policies & Security",
           "description": "Manager override thresholds, discount cap policy, self-approval prevention, and escalations.",

@@ -243,21 +243,6 @@ export function useNavData(): NavSectionProps['data'] {
           path: '/app/settings',
           icon: ICONS.settings,
         },
-        {
-          title: t('nav.discountAuthorizations', 'Manual Discount Authorizations'),
-          path: '/app/settings/discount-authorizations',
-          icon: ICONS.reasons,
-        },
-        {
-          title: t('nav.kdsConfig', 'KDS Configuration'),
-          path: '/app/operations/kds-configuration',
-          icon: ICONS.kds,
-        },
-        {
-          title: t('nav.printers', 'Printers & Routes'),
-          path: '/app/operations/printers',
-          icon: ICONS.terminal,
-        },
       ],
     },
     {

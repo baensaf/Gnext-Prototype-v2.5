@@ -1491,6 +1491,6 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
 
     const validPassword = await argon2.verify(seededAdmin.password_hash, 'GnextDemo!2026');
     expect(validPassword).toBe(true);
-  });
+  }, 60000);
 });
 

@@ -91,7 +91,7 @@ export function OrdersDetailPage() {
               variant="outlined"
               color="error"
               startIcon={<CancelIcon />}
-              onClick={() => navigate(`/app/orders/refunds`)}
+              onClick={() => navigate(`/app/refunds`)}
             >
               {t('orders.refundCancel', 'Refund / Cancel')}
             </Button>

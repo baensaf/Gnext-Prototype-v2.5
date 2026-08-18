@@ -219,6 +219,18 @@ export function SettingsHubPage() {
           tags: ['discounts', 'campaigns', 'promotions', 'coupons', 'credit', 'limits', 'caps'],
         },
         {
+          id: 'discountAuthorizations',
+          title: t('settings.hub.items.discountAuthorizations.title', 'Manual Discount Authorizations'),
+          description: t(
+            'settings.hub.items.discountAuthorizations.description',
+            'Role-based manual discount percentage and fixed amount caps for cashiers, supervisors, and managers.'
+          ),
+          path: '/app/settings/discount-authorizations',
+          icon: <GavelIcon sx={{ color: 'warning.main' }} />,
+          badge: { color: 'warning', label: t('settings.hub.items.discountAuthorizations.badge', 'Role Limits') },
+          tags: ['discounts', 'authorizations', 'roles', 'limits', 'cashier', 'supervisor', 'manager', 'caps', 'policy'],
+        },
+        {
           id: 'approvals',
           title: t('settings.hub.items.approvals.title', 'Approval Policies & Security'),
           description: t(

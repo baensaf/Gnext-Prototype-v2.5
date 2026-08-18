@@ -637,7 +637,7 @@ export class CreditService {
       });
       let alreadyReversedAmt = '0.0000';
       for (const rev of previousReversals) {
-        const absVal = MoneyUtil.format(Math.abs(Number(rev.amount)));
+        const absVal = MoneyUtil.abs(rev.amount);
         alreadyReversedAmt = MoneyUtil.add(alreadyReversedAmt, absVal);
       }
 

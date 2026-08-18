@@ -22,6 +22,7 @@ import {
   Paper,
   Button,
   Dialog,
+  Drawer,
   Slider,
   Divider,
   Tooltip,
@@ -44,7 +45,7 @@ export function KdsPage() {
   const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [_recallDrawerOpen, setRecallDrawerOpen] = useState(false);
+  const [recallDrawerOpen, setRecallDrawerOpen] = useState(false);
   const [priorityDialogOpen, setPriorityDialogOpen] = useState(false);
   const [selectedTicketForPriority, setSelectedTicketForPriority] = useState<KitchenTicket | null>(null);
   const [priorityValue, setPriorityValue] = useState<number>(0);
@@ -319,6 +320,46 @@ export function KdsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Recall / Completed Tickets Drawer */}
+      <Drawer
+        anchor="right"
+        open={recallDrawerOpen}
+        onClose={() => setRecallDrawerOpen(false)}
+        slotProps={{ paper: { sx: { width: { xs: '100%', sm: 480 }, p: 3 } } }}
+      >
+        <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            Completed & Bumped Tickets ({readyTickets.length})
+          </Typography>
+          <Button size="small" onClick={() => setRecallDrawerOpen(false)}>
+            Close
+          </Button>
+        </Stack>
+        <Divider sx={{ mb: 2 }} />
+
+        <Stack spacing={2}>
+          {readyTickets.map((ticket) => (
+            <KdsTicketCard
+              key={ticket.id}
+              ticket={ticket}
+              formatTimer={formatTimer}
+              getTimerColor={getTimerColor}
+              onRecall={() => {
+                handleRecallTicket(ticket.id);
+                setRecallDrawerOpen(false);
+              }}
+              onToggleItemState={handleToggleItemState}
+            />
+          ))}
+
+          {readyTickets.length === 0 && (
+            <Typography variant="body2" color="text.secondary" sx={{ py: 6, textAlign: 'center' }}>
+              No completed tickets in history.
+            </Typography>
+          )}
+        </Stack>
+      </Drawer>
     </Box>
   );
 }

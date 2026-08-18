@@ -121,7 +121,7 @@ export const cashDrawerApi = {
       note?: string;
     },
   ): Promise<CashDrawerTransaction> => {
-    const moveType = data.transaction_type === 'PAY_OUT' ? 'PAID_OUT' : 'PAID_IN';
+    const moveType = data.transaction_type === 'PAY_OUT' || data.transaction_type === 'SAFE_DROP' ? 'PAID_OUT' : 'PAID_IN';
     const move = await shiftApi.recordMovement(shiftId, {
       type: moveType,
       amount: data.amount,
