@@ -1,35 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import type { GridColDef } from '@mui/x-data-grid';
 
+import { useTranslation } from 'react-i18next';
+import { useState, useEffect, useCallback } from 'react';
+
+import RefreshIcon from '@mui/icons-material/Refresh';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import HistoryEduIcon from '@mui/icons-material/HistoryEdu';
 import {
   Box,
-  Card,
   Chip,
-  Table,
   Paper,
   Stack,
   Alert,
   Dialog,
   Button,
-  TableRow,
-  TableBody,
-  TableCell,
-  TableHead,
   Typography,
+  IconButton,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TableContainer,
 } from '@mui/material';
 
 import { httpClient as axios } from 'src/api/httpClient';
 
+import { ServerDataGrid } from '../../components/server-data-grid';
+
 export function AuditExplorerPage() {
+  const { t } = useTranslation();
+
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [inspectingLog, setInspectingLog] = useState<any>(null);
-  const [_loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [auditRes, alertRes] = await Promise.all([
@@ -45,11 +49,11 @@ export function AuditExplorerPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const handleAcknowledgeAlert = async (id: string) => {
     try {
@@ -60,27 +64,92 @@ export function AuditExplorerPage() {
     }
   };
 
+  const columns: GridColDef[] = [
+    {
+      field: 'action',
+      headerName: t('audit.action', 'Action'),
+      width: 220,
+      renderCell: (params) => (
+        <Chip
+          label={params.value}
+          size="small"
+          color="primary"
+          variant="outlined"
+          sx={{ fontWeight: 600 }}
+        />
+      ),
+    },
+    {
+      field: 'actor_type',
+      headerName: t('audit.actorType', 'Actor Type'),
+      width: 140,
+      renderCell: (params) => (
+        <Chip
+          size="small"
+          label={params.value || 'SYSTEM'}
+          color={params.value === 'ADMIN' ? 'warning' : 'default'}
+        />
+      ),
+    },
+    {
+      field: 'correlation_id',
+      headerName: t('audit.correlationId', 'Correlation ID'),
+      width: 200,
+      renderCell: (params) => (
+        <Typography variant="body2" sx={{ fontFamily: 'monospace' }} dir="ltr">
+          {params.value || '-'}
+        </Typography>
+      ),
+    },
+    {
+      field: 'created_at',
+      headerName: t('audit.timestamp', 'Timestamp'),
+      width: 200,
+      renderCell: (params) => (
+        <Typography variant="body2" dir="ltr">
+          {new Date(params.value).toLocaleString()}
+        </Typography>
+      ),
+    },
+    {
+      field: 'actions',
+      headerName: t('audit.details', 'Details'),
+      width: 130,
+      sortable: false,
+      renderCell: (params) => (
+        <Button
+          size="small"
+          startIcon={<VisibilityIcon />}
+          onClick={() => setInspectingLog(params.row)}
+        >
+          {t('common.inspect', 'Inspect')}
+        </Button>
+      ),
+    },
+  ];
+
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
-      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Stack sx={{ flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { sm: 'center' }, gap: 2, mb: 3 }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Audit Explorer & System Alerts
+          <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <HistoryEduIcon color="primary" fontSize="large" />
+            {t('audit.title', 'Audit Explorer & System Ledger')}
           </Typography>
           <Typography color="text.secondary">
-            Immutable system audit logs with masked sensitive data and operational alerts.
+            {t('audit.subtitle', 'Immutable system audit logs with masked sensitive data and operational trace IDs.')}
           </Typography>
         </Box>
-        <Button variant="outlined" onClick={fetchData}>
-          Refresh Audit
-        </Button>
+        <IconButton onClick={fetchData} title={t('common.refresh', 'Refresh Audit')}>
+          <RefreshIcon />
+        </IconButton>
       </Stack>
 
       {/* Operational Alerts Bar */}
-      {(Array.isArray(alerts) ? alerts : []).length > 0 && (
+      {alerts.length > 0 && (
         <Stack spacing={2} sx={{ mb: 3 }}>
-          {(Array.isArray(alerts) ? alerts : []).map((alt) => (
+          {alerts.map((alt) => (
             <Alert
               key={alt.id}
               severity={alt.severity === 'CRITICAL' ? 'error' : 'warning'}
@@ -91,7 +160,7 @@ export function AuditExplorerPage() {
                   disabled={alt.acknowledged}
                   onClick={() => handleAcknowledgeAlert(alt.id)}
                 >
-                  {alt.acknowledged ? 'Acknowledged' : 'Acknowledge'}
+                  {alt.acknowledged ? t('audit.acknowledged', 'Acknowledged') : t('audit.acknowledge', 'Acknowledge')}
                 </Button>
               }
             >
@@ -101,56 +170,28 @@ export function AuditExplorerPage() {
         </Stack>
       )}
 
-      {/* Audit Logs Table */}
-      <Card sx={{ p: 3, borderRadius: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-          System Audit Events ({(Array.isArray(auditLogs) ? auditLogs : []).length} entries)
-        </Typography>
+      {/* Audit Logs Virtualized DataGrid */}
+      <ServerDataGrid
+        rows={auditLogs}
+        columns={columns}
+        loading={loading}
+        height={620}
+        emptyTitle={t('audit.noLogs', 'No audit logs recorded yet')}
+        emptyDescription={t('audit.noLogsDesc', 'System events will populate here as operations are performed.')}
+      />
 
-        <TableContainer component={Paper} variant="outlined">
-          <Table size="small">
-            <TableHead sx={{ bgcolor: 'background.neutral' }}>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 'bold' }}>Action</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Actor Type</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Correlation ID</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Timestamp</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Detail</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {(Array.isArray(auditLogs) ? auditLogs : []).map((log) => (
-                <TableRow key={log.id} hover>
-                  <TableCell sx={{ fontWeight: 'bold' }}>
-                    <Chip label={log.action} size="small" color="primary" variant="outlined" />
-                  </TableCell>
-                  <TableCell>{log.actor_type || 'SYSTEM'}</TableCell>
-                  <TableCell sx={{ fontFamily: 'monospace' }}>{log.correlation_id || '-'}</TableCell>
-                  <TableCell>{new Date(log.created_at).toLocaleString()}</TableCell>
-                  <TableCell>
-                    <Button size="small" onClick={() => setInspectingLog(log)}>
-                      Inspect JSON
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Card>
-
-      {/* Inspect Log Drawer / Modal */}
+      {/* Inspect Log Modal */}
       <Dialog open={Boolean(inspectingLog)} onClose={() => setInspectingLog(null)} maxWidth="md" fullWidth>
         {inspectingLog && (
           <>
-            <DialogTitle>Audit Event Details: {inspectingLog.action}</DialogTitle>
+            <DialogTitle>{t('audit.eventDetails', 'Audit Event Details')}: {inspectingLog.action}</DialogTitle>
             <DialogContent dividers>
               <Stack spacing={2}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                  Correlation ID: {inspectingLog.correlation_id}
+                  Correlation ID: <span style={{ fontFamily: 'monospace' }}>{inspectingLog.correlation_id}</span>
                 </Typography>
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                  Payload Data (Masked for Passwords/PINs):
+                  {t('audit.payloadData', 'Payload Data (Sensitive Data Masked)')}:
                 </Typography>
                 <Paper sx={{ p: 2, bgcolor: 'background.neutral', fontFamily: 'monospace' }} variant="outlined">
                   <pre style={{ margin: 0, overflowX: 'auto' }}>
@@ -160,7 +201,7 @@ export function AuditExplorerPage() {
               </Stack>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setInspectingLog(null)}>Close</Button>
+              <Button onClick={() => setInspectingLog(null)}>{t('common.close', 'Close')}</Button>
             </DialogActions>
           </>
         )}

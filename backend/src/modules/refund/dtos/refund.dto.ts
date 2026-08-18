@@ -3,6 +3,8 @@ import {
   IsNotEmpty,
   IsOptional,
   IsUUID,
+  IsInt,
+  Min,
   IsNumberString,
   IsBoolean,
   IsArray,
@@ -15,6 +17,8 @@ export class RefundItemDto {
   orderItemId: string;
 
   @IsNotEmpty()
+  @IsInt()
+  @Min(1)
   quantity: number;
 }
 

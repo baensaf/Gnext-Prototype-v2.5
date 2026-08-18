@@ -200,11 +200,17 @@ export class KioskService {
       fulfillment_status: 'PENDING',
       customer_id: customerId,
       notes: data.idempotency_key ? `IDEM:${data.idempotency_key}` : (data.notes || 'Kiosk Self-Service Order'),
+      subtotal: '0.0000',
       subtotal_amount: '0.0000',
+      tax_total: '0.0000',
       tax_amount: '0.0000',
+      discount_total: '0.0000',
       discount_amount: '0.0000',
+      grand_total: '0.0000',
       total_amount: '0.0000',
+      paid_total: '0.0000',
       paid_amount: '0.0000',
+      outstanding_total: '0.0000',
       due_amount: '0.0000',
     });
 
@@ -272,10 +278,18 @@ export class KioskService {
     const taxAmountStr = MoneyUtil.multiply(subtotalStr, '0.09', 4);
     const totalAmountStr = MoneyUtil.add(subtotalStr, taxAmountStr, 4);
 
+    savedHeader.subtotal = subtotalStr;
     savedHeader.subtotal_amount = subtotalStr;
+    savedHeader.tax_total = taxAmountStr;
     savedHeader.tax_amount = taxAmountStr;
+    savedHeader.discount_total = '0.0000';
+    savedHeader.discount_amount = '0.0000';
+    savedHeader.grand_total = totalAmountStr;
     savedHeader.total_amount = totalAmountStr;
+    savedHeader.outstanding_total = totalAmountStr;
     savedHeader.due_amount = totalAmountStr;
+    savedHeader.paid_total = '0.0000';
+    savedHeader.paid_amount = '0.0000';
 
     const finalOrder = await this.orderRepo.save(savedHeader);
 

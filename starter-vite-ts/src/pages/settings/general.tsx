@@ -43,10 +43,18 @@ export function GeneralSettingsPage() {
 
   const loadData = async () => {
     try {
-      const cList = await settingsApi.getCurrencies();
+      const [cList, profile] = await Promise.all([
+        settingsApi.getCurrencies(),
+        tenantApi.getTenantProfile(),
+      ]);
       setCurrencies(cList);
+      if (profile) {
+        if (profile.name) setTenantName(profile.name);
+        if (profile.default_locale || profile.defaultLocale) setDefaultLocale(profile.default_locale || profile.defaultLocale);
+        if (profile.time_zone || profile.timeZone) setTimeZone(profile.time_zone || profile.timeZone);
+      }
     } catch (err: any) {
-      setError(err.detail || 'Failed to load currencies');
+      setError(err?.response?.data?.message || err.detail || 'Failed to load settings');
     }
   };
 
@@ -57,11 +65,15 @@ export function GeneralSettingsPage() {
   const handleSaveTenant = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await tenantApi.updateBranchHours; // test import
+      await tenantApi.updateTenantProfile({
+        name: tenantName,
+        default_locale: defaultLocale,
+        time_zone: timeZone,
+      });
       setSuccess('Tenant settings updated successfully');
       setError(null);
     } catch (err: any) {
-      setError(err.detail || 'Failed to update settings');
+      setError(err?.response?.data?.message || err.detail || 'Failed to update settings');
     }
   };
 
@@ -70,7 +82,7 @@ export function GeneralSettingsPage() {
       await settingsApi.updateCurrency(currency.id, { is_enabled: enabled });
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to update currency status');
+      setError(err?.response?.data?.message || err.detail || 'Failed to update currency status');
     }
   };
 

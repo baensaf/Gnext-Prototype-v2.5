@@ -9,6 +9,7 @@ import { KitchenTicketItem } from '../src/entities/KitchenTicketItem.entity';
 import { KdsEvent } from '../src/entities/KdsEvent.entity';
 import { Printer } from '../src/entities/Printer.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
+import { Product } from '../src/entities/Product.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 
 describe('KdsService (Unit & Integration)', () => {
@@ -21,6 +22,7 @@ describe('KdsService (Unit & Integration)', () => {
   let kdsEventRepo: any;
   let printerRepo: any;
   let orderRepo: any;
+  let productRepo: any;
   let auditWriter: any;
 
   beforeEach(async () => {
@@ -32,6 +34,7 @@ describe('KdsService (Unit & Integration)', () => {
     kdsEventRepo = { create: jest.fn().mockImplementation((e) => e), save: jest.fn().mockImplementation((e) => Promise.resolve(e)) };
     printerRepo = { find: jest.fn(), create: jest.fn(), save: jest.fn() };
     orderRepo = { findOne: jest.fn(), save: jest.fn() };
+    productRepo = { findOne: jest.fn().mockResolvedValue({ id: 'prod-1', category_id: 'cat-hot-dishes' }) };
     auditWriter = { write: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -45,6 +48,7 @@ describe('KdsService (Unit & Integration)', () => {
         { provide: getRepositoryToken(KdsEvent), useValue: kdsEventRepo },
         { provide: getRepositoryToken(Printer), useValue: printerRepo },
         { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
+        { provide: getRepositoryToken(Product), useValue: productRepo },
         { provide: AuditWriter, useValue: auditWriter },
       ],
     }).compile();

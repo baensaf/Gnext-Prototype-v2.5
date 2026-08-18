@@ -117,6 +117,36 @@ export class DeliveryService {
     return enriched;
   }
 
+  async getCourierById(tenantId: string, id: string) {
+    const c = await this.courierRepo.findOne({ where: { tenant_id: tenantId, id } });
+    if (!c) throw new NotFoundException(`Courier ${id} not found`);
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const attendance = await this.attendanceRepo.findOne({
+      where: { tenant_id: tenantId, courier_id: c.id, date: todayStr },
+      order: { created_at: 'DESC' },
+    });
+    const terminalAssign = await this.terminalAssignRepo.findOne({
+      where: { tenant_id: tenantId, courier_id: c.id, is_active: true },
+    });
+    const activeDeliveryCount = await this.deliveryRepo.count({
+      where: { tenant_id: tenantId, courier_id: c.id, state: In(['ASSIGNED', 'PICKED_UP', 'EN_ROUTE']) },
+    });
+
+    let terminalName = null;
+    if (terminalAssign) {
+      const term = await this.terminalRepo.findOne({ where: { id: terminalAssign.terminal_id } });
+      if (term) terminalName = term.name || term.code;
+    }
+
+    return {
+      ...c,
+      attendance: attendance || { status: 'CHECKED_OUT', availability_status: 'OFF_LINE' },
+      active_terminal: terminalAssign ? { ...terminalAssign, terminal_name: terminalName } : null,
+      active_delivery_count: activeDeliveryCount,
+    };
+  }
+
   async createCourier(
     tenantId: string,
     data: { branch_id?: string; code: string; name: string; phone?: string; vehicle_type?: string; compensation_per_delivery?: string | number },
@@ -427,7 +457,7 @@ export class DeliveryService {
 
     for (const p of payments) {
       const pAmtStr = MoneyUtil.format(p.amount || '0', 4);
-      if ((p as any).payment_method_code === 'CASH') {
+      if (p.method_kind === 'CASH' || (p as any).payment_method_code === 'CASH') {
         cashExpStr = MoneyUtil.add(cashExpStr, pAmtStr, 4);
       } else {
         posExpStr = MoneyUtil.add(posExpStr, pAmtStr, 4);

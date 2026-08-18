@@ -57,13 +57,10 @@ export class RefundService {
     });
 
     let sumSucceededPayments = '0.0000';
-    let sumReversals = '0.0000';
 
     for (const p of payments) {
       if (p.status === 'SUCCEEDED' || (p.status as any) === 'COMPLETED') {
         sumSucceededPayments = MoneyUtil.add(sumSucceededPayments, p.amount);
-      } else if (p.status === 'REVERSED') {
-        sumReversals = MoneyUtil.add(sumReversals, p.amount);
       }
     }
 
@@ -76,10 +73,7 @@ export class RefundService {
       sumSucceededRefunds = MoneyUtil.add(sumSucceededRefunds, r.amount);
     }
 
-    const refundable = MoneyUtil.subtract(
-      MoneyUtil.subtract(sumSucceededPayments, sumSucceededRefunds),
-      sumReversals,
-    );
+    const refundable = MoneyUtil.subtract(sumSucceededPayments, sumSucceededRefunds);
 
     return MoneyUtil.greaterThan(refundable, '0.0000') ? refundable : '0.0000';
   }
@@ -114,8 +108,9 @@ export class RefundService {
     userId?: string,
     correlationId?: string,
     isCancellationOrchestration: boolean = false,
+    externalEm?: EntityManager,
   ) {
-    return await this.dataSource.transaction(async (em) => {
+    const runInEm = async (em: EntityManager) => {
       const order = await em.findOne(OrderHeader, {
         where: { id: orderId, tenant_id: tenantId },
         lock: { mode: 'pessimistic_write' },
@@ -205,12 +200,12 @@ export class RefundService {
 
       const savedRefund = await em.save(Refund, refund);
 
-      // Create allocations across payments
-      let remainingAlloc = requestedAmount;
+      // Create allocations across payments FIFO
+      let remainingToAllocate = requestedAmount;
       for (const p of payments) {
-        if (MoneyUtil.isZero(remainingAlloc)) break;
-        const allocAmt = MoneyUtil.lessThan(remainingAlloc, p.amount) ? remainingAlloc : p.amount;
+        if (MoneyUtil.lessThanOrEqual(remainingToAllocate, '0.0000')) break;
 
+        const allocAmount = MoneyUtil.greaterThan(remainingToAllocate, p.amount) ? p.amount : remainingToAllocate;
         const alloc = em.create(RefundAllocation, {
           tenant_id: tenantId,
           refund_id: savedRefund.id,
@@ -218,18 +213,18 @@ export class RefundService {
           payment_id: p.id,
           payment_method_id: p.method_id,
           original_payment_id: p.id,
-          amount: allocAmt,
-          amount_refunded: allocAmt,
+          amount: allocAmount,
+          amount_refunded: allocAmount,
         });
         await em.save(RefundAllocation, alloc);
-        remainingAlloc = MoneyUtil.subtract(remainingAlloc, allocAmt);
+        remainingToAllocate = MoneyUtil.subtract(remainingToAllocate, allocAmount);
       }
 
       await this.auditWriter.write({
         tenantId,
         actorType: userId ? 'ADMIN' : 'SYSTEM',
         actorId: userId,
-        action: 'REFUND_INTENT_CREATED',
+        action: 'REFUND_INITIATED',
         entityType: 'Refund',
         entityId: savedRefund.id,
         correlationId: correlationId || 'system',
@@ -237,11 +232,23 @@ export class RefundService {
       });
 
       return savedRefund;
-    });
+    };
+
+    if (externalEm) {
+      return await runInEm(externalEm);
+    }
+    return await this.dataSource.transaction(runInEm);
   }
 
-  async processRefund(tenantId: string, id: string, dto: RefundProcessDto, userId?: string, correlationId?: string) {
-    return await this.dataSource.transaction(async (em) => {
+  async processRefund(
+    tenantId: string,
+    id: string,
+    dto: RefundProcessDto = {},
+    userId?: string,
+    correlationId?: string,
+    externalEm?: EntityManager,
+  ) {
+    const runInEm = async (em: EntityManager) => {
       const refund = await em.findOne(Refund, {
         where: { id, tenant_id: tenantId },
         lock: { mode: 'pessimistic_write' },
@@ -279,16 +286,17 @@ export class RefundService {
         if (!order.customer_id) {
           throw new BadRequestException('Customer credit refund requires an assigned customer on the order');
         }
-        const acc = await this.creditService.getAccountByCustomer(tenantId, order.customer_id, refund.currency_code);
+        const acc = await this.creditService.getAccountByCustomer(tenantId, order.customer_id, refund.currency_code, em);
         if (!acc) throw new NotFoundException(`No credit account found for customer ${order.customer_id}`);
 
-        // Post positive refund entry to customer credit subledger
+        // Post positive refund entry to customer credit subledger within active transaction
         await this.creditService.postRepayment(
           tenantId,
           acc.id,
           { amount: refund.amount, reason: `Refund #${refund.refund_number}` },
           userId,
           correlationId,
+          em,
         );
         refund.status = 'SUCCEEDED';
       } else {
@@ -323,19 +331,16 @@ export class RefundService {
           tenantId,
           order.id,
           refund.amount,
-          order.subtotal,
-          refund.currency_code,
+          userId,
+          correlationId,
           em,
         );
-      }
-
-      if (refund.status === 'SUCCEEDED') {
-        refund.posted_at = new Date();
 
         // Update Order refunded_total
         order.refunded_total = MoneyUtil.add(order.refunded_total, refund.amount);
         await em.save(OrderHeader, order);
 
+        refund.posted_at = new Date();
         const savedRefund = await em.save(Refund, refund);
 
         await this.auditWriter.write({
@@ -353,7 +358,12 @@ export class RefundService {
       }
 
       return await em.save(Refund, refund);
-    });
+    };
+
+    if (externalEm) {
+      return await runInEm(externalEm);
+    }
+    return await this.dataSource.transaction(runInEm);
   }
 
   async cancelPaidOrder(tenantId: string, orderId: string, dto: PaidOrderCancelDto, userId?: string, correlationId?: string) {
@@ -371,7 +381,7 @@ export class RefundService {
       const refundable = await this.calculateRefundableBalance(tenantId, orderId, em);
 
       if (MoneyUtil.greaterThan(refundable, '0.0000')) {
-        // Create and process refund intent as part of cancellation orchestration
+        // Create and process refund intent as part of cancellation orchestration inside current transaction
         const refundIntent = await this.createRefundIntent(
           tenantId,
           orderId,
@@ -386,9 +396,10 @@ export class RefundService {
           userId,
           correlationId,
           true, // isCancellationOrchestration
+          em,
         );
 
-        const processedRefund = await this.processRefund(tenantId, refundIntent.id, {}, userId, correlationId);
+        const processedRefund = await this.processRefund(tenantId, refundIntent.id, {}, userId, correlationId, em);
         if (processedRefund.status !== 'SUCCEEDED') {
           throw new BadRequestException(
             `Paid order cancellation failed because refund ${processedRefund.refund_number} could not be processed (${processedRefund.status})`,

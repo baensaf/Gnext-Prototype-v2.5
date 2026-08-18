@@ -32,6 +32,12 @@ export class DeliveryController {
     return await this.deliveryService.getCouriers(tenantId, branchId);
   }
 
+  @Get('couriers/:id')
+  async getCourierById(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.deliveryService.getCourierById(tenantId, id);
+  }
+
   @Post('couriers')
   async createCourier(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

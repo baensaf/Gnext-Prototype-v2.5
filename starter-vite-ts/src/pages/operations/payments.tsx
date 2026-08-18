@@ -1,11 +1,13 @@
 import type { Branch } from 'src/api/tenantApi';
-import type { PaymentDevice, SettlementAccount } from 'src/api/paymentApi';
+import type { PaymentDevice, PaymentRecord, SettlementAccount } from 'src/api/paymentApi';
 
-import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import {
   Box,
@@ -28,11 +30,17 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { tenantApi } from 'src/api/tenantApi';
 import { paymentApi } from 'src/api/paymentApi';
+import { httpClient } from 'src/api/httpClient';
 
 export function PaymentsPage() {
+  const { t: _t } = useTranslation();
+
   const [tabIndex, setTabIndex] = useState(0);
+  const [transactions, setTransactions] = useState<PaymentRecord[]>([]);
   const [devices, setDevices] = useState<PaymentDevice[]>([]);
   const [accounts, setAccounts] = useState<SettlementAccount[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -56,7 +64,7 @@ export function PaymentsPage() {
   const [accountNumber, setAccountNumber] = useState('');
   const [iban, setIban] = useState('');
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [dList, aList, bList] = await Promise.all([
@@ -67,17 +75,43 @@ export function PaymentsPage() {
       setDevices(dList);
       setAccounts(aList);
       setBranches(bList);
+
+      // Attempt to load recent payment transactions
+      try {
+        const txRes = await httpClient.get('/api/v1/audit/logs', { params: { entityType: 'Payment', limit: 25 } });
+        if (Array.isArray(txRes.data)) {
+          setTransactions(
+            txRes.data.map((l: any) => ({
+              id: l.entity_id || l.id,
+              order_id: l.payload_json?.order_id || l.payload_json?.orderId || '-',
+              payment_number: l.payload_json?.payment_number || `PAY-${(l.id || '').substring(0, 8)}`,
+              method_id: l.payload_json?.method_id || '-',
+              method_kind: l.payload_json?.method_kind || l.payload_json?.method || 'CARD_PRESENT',
+              status: (l.payload_json?.status || 'SUCCEEDED') as any,
+              amount: l.payload_json?.amount || '0',
+              currency_code: l.payload_json?.currency_code || 'IRR',
+              business_date: l.created_at || new Date().toISOString(),
+              recorded_at: l.created_at || new Date().toISOString(),
+              initiated_at: l.created_at || new Date().toISOString(),
+              reference: l.payload_json?.reference || l.payload_json?.rrn,
+            }))
+          );
+        }
+      } catch {
+        // Fallback: graceful empty list
+      }
+
       setError(null);
     } catch (err: any) {
       setError(err.detail || 'Failed to load payment infrastructure');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const handleCreateDevice = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,11 +169,12 @@ export function PaymentsPage() {
           <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
             Refresh
           </Button>
-          {tabIndex === 0 ? (
+          {tabIndex === 1 && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDeviceDrawerOpen(true)}>
               Register Device
             </Button>
-          ) : (
+          )}
+          {tabIndex === 2 && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAccDrawerOpen(true)}>
               Create Account
             </Button>
@@ -155,12 +190,80 @@ export function PaymentsPage() {
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={tabIndex} onChange={(_, val) => setTabIndex(val)}>
+          <Tab icon={<ReceiptLongIcon />} label="Payment Transactions Ledger" iconPosition="start" />
           <Tab icon={<PointOfSaleIcon />} label="Payment Devices & Terminals" iconPosition="start" />
           <Tab icon={<AccountBalanceIcon />} label="Bank Settlement Accounts" iconPosition="start" />
         </Tabs>
       </Box>
 
       {tabIndex === 0 && (
+        <TableContainer component={Paper} variant="outlined">
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Payment Number</TableCell>
+                <TableCell>Order ID</TableCell>
+                <TableCell>Method</TableCell>
+                <TableCell>Amount</TableCell>
+                <TableCell>Reference / RRN</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Timestamp</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {transactions.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center">
+                    <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
+                      No payment transactions recorded yet. Transactions will appear here as orders are placed via POS, Kiosk, or Delivery.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                transactions.map((tx) => (
+                  <TableRow key={tx.id}>
+                    <TableCell>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                        {tx.payment_number}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                        {tx.order_id}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip label={tx.method_kind} size="small" variant="outlined" />
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>
+                      {MoneyUtil.formatCurrency(tx.amount)} {tx.currency_code || 'IRR'}
+                    </TableCell>
+                    <TableCell>{tx.reference || '-'}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={tx.status}
+                        color={
+                          tx.status === 'SUCCEEDED'
+                            ? 'success'
+                            : tx.status === 'REVERSED' || tx.status === 'REFUNDED'
+                            ? 'warning'
+                            : tx.status === 'FAILED'
+                            ? 'error'
+                            : 'info'
+                        }
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>{tx.recorded_at ? new Date(tx.recorded_at).toLocaleString() : '-'}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {tabIndex === 1 && (
         <TableContainer component={Paper} variant="outlined">
           <Table>
             <TableHead>
@@ -218,7 +321,7 @@ export function PaymentsPage() {
         </TableContainer>
       )}
 
-      {tabIndex === 1 && (
+      {tabIndex === 2 && (
         <TableContainer component={Paper} variant="outlined">
           <Table>
             <TableHead>

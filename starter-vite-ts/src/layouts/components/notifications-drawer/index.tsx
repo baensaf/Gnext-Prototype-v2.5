@@ -1,9 +1,9 @@
 import type { IconButtonProps } from '@mui/material/IconButton';
-import type { NotificationItemProps } from './notification-item';
+import type { OperationalAlertItem } from 'src/api/alertsApi';
 
 import { m } from 'framer-motion';
-import { useState, useCallback } from 'react';
 import { useBoolean } from 'minimal-shared/hooks';
+import { useState, useEffect, useCallback } from 'react';
 
 import Tab from '@mui/material/Tab';
 import Box from '@mui/material/Box';
@@ -14,6 +14,12 @@ import Button from '@mui/material/Button';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
+import CircularProgress from '@mui/material/CircularProgress';
+
+import { paths } from 'src/routes/paths';
+import { useRouter } from 'src/routes/hooks';
+
+import { alertsApi } from 'src/api/alertsApi';
 
 import { Label } from 'src/components/label';
 import { Iconify } from 'src/components/iconify';
@@ -24,34 +30,95 @@ import { NotificationItem } from './notification-item';
 
 // ----------------------------------------------------------------------
 
-const TABS = [
-  { value: 'all', label: 'All', count: 22 },
-  { value: 'unread', label: 'Unread', count: 12 },
-  { value: 'archived', label: 'Archived', count: 10 },
-];
-
-// ----------------------------------------------------------------------
-
 export type NotificationsDrawerProps = IconButtonProps & {
-  data?: NotificationItemProps['notification'][];
+  data?: OperationalAlertItem[];
 };
 
 export function NotificationsDrawer({ data = [], sx, ...other }: NotificationsDrawerProps) {
+  const router = useRouter();
   const { value: open, onFalse: onClose, onTrue: onOpen } = useBoolean();
 
+  const [alerts, setAlerts] = useState<OperationalAlertItem[]>(data);
+  const [loading, setLoading] = useState(false);
   const [currentTab, setCurrentTab] = useState('all');
+
+  const fetchAlerts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const items = await alertsApi.getAlerts();
+      setAlerts(items);
+    } catch {
+      // keep existing state
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAlerts();
+  }, [fetchAlerts]);
+
+  // Refresh on open
+  const handleOpenDrawer = () => {
+    onOpen();
+    fetchAlerts();
+  };
 
   const handleChangeTab = useCallback((event: React.SyntheticEvent, newValue: string) => {
     setCurrentTab(newValue);
   }, []);
 
-  const [notifications, setNotifications] = useState(data);
+  const totalUnRead = alerts.filter((item) => !item.acknowledged).length;
+  const totalCritical = alerts.filter(
+    (item) => item.severity === 'CRITICAL' || item.severity === 'WARNING'
+  ).length;
 
-  const totalUnRead = notifications.filter((item) => item.isUnRead === true).length;
-
-  const handleMarkAllAsRead = () => {
-    setNotifications(notifications.map((notification) => ({ ...notification, isUnRead: false })));
+  const handleAcknowledge = async (id: string) => {
+    try {
+      await alertsApi.acknowledgeAlert(id);
+      setAlerts((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? { ...item, acknowledged: true, acknowledged_at: new Date().toISOString() }
+            : item
+        )
+      );
+    } catch (err) {
+      console.error('Failed to acknowledge alert:', err);
+    }
   };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await alertsApi.acknowledgeAll(alerts);
+      setAlerts((prev) =>
+        prev.map((item) => ({
+          ...item,
+          acknowledged: true,
+          acknowledged_at: new Date().toISOString(),
+        }))
+      );
+    } catch (err) {
+      console.error('Failed to acknowledge all alerts:', err);
+    }
+  };
+
+  const handleViewAll = () => {
+    onClose();
+    router.push(paths.app.operations.monitoring || paths.app.audit || '/app/dashboard');
+  };
+
+  const filteredAlerts = alerts.filter((item) => {
+    if (currentTab === 'open') return !item.acknowledged;
+    if (currentTab === 'critical') return item.severity === 'CRITICAL' || item.severity === 'WARNING';
+    return true;
+  });
+
+  const TABS = [
+    { value: 'all', label: 'All', count: alerts.length, color: 'default' as const },
+    { value: 'open', label: 'Open', count: totalUnRead, color: 'error' as const },
+    { value: 'critical', label: 'Critical', count: totalCritical, color: 'warning' as const },
+  ];
 
   const renderHead = () => (
     <Box
@@ -64,13 +131,24 @@ export function NotificationsDrawer({ data = [], sx, ...other }: NotificationsDr
         alignItems: 'center',
       }}
     >
-      <Typography variant="h6" sx={{ flexGrow: 1 }}>
-        Notifications
-      </Typography>
+      <Box sx={{ flexGrow: 1 }}>
+        <Typography variant="h6">Operational Alerts</Typography>
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          {totalUnRead} unacknowledged issue{totalUnRead === 1 ? '' : 's'}
+        </Typography>
+      </Box>
+
+      {loading && <CircularProgress size={20} sx={{ mr: 1 }} />}
+
+      <Tooltip title="Refresh alerts">
+        <IconButton size="small" onClick={fetchAlerts} sx={{ mr: 0.5 }}>
+          <Iconify icon="solar:restart-bold" />
+        </IconButton>
+      </Tooltip>
 
       {!!totalUnRead && (
-        <Tooltip title="Mark all as read">
-          <IconButton color="primary" onClick={handleMarkAllAsRead}>
+        <Tooltip title="Acknowledge all alerts">
+          <IconButton size="small" color="primary" onClick={handleMarkAllAsRead} sx={{ mr: 0.5 }}>
             <Iconify icon="eva:done-all-fill" />
           </IconButton>
         </Tooltip>
@@ -79,15 +157,11 @@ export function NotificationsDrawer({ data = [], sx, ...other }: NotificationsDr
       <IconButton onClick={onClose} sx={{ display: { xs: 'inline-flex', sm: 'none' } }}>
         <Iconify icon="mingcute:close-line" />
       </IconButton>
-
-      <IconButton>
-        <Iconify icon="solar:settings-bold-duotone" />
-      </IconButton>
     </Box>
   );
 
   const renderTabs = () => (
-    <Tabs variant="fullWidth" value={currentTab} onChange={handleChangeTab} indicatorColor="custom">
+    <Tabs variant="fullWidth" value={currentTab} onChange={handleChangeTab}>
       {TABS.map((tab) => (
         <Tab
           key={tab.value}
@@ -96,12 +170,9 @@ export function NotificationsDrawer({ data = [], sx, ...other }: NotificationsDr
           label={tab.label}
           icon={
             <Label
-              variant={((tab.value === 'all' || tab.value === currentTab) && 'filled') || 'soft'}
-              color={
-                (tab.value === 'unread' && 'info') ||
-                (tab.value === 'archived' && 'success') ||
-                'default'
-              }
+              variant={tab.value === currentTab ? 'filled' : 'soft'}
+              color={tab.color}
+              sx={{ ml: 0.5 }}
             >
               {tab.count}
             </Label>
@@ -111,17 +182,59 @@ export function NotificationsDrawer({ data = [], sx, ...other }: NotificationsDr
     </Tabs>
   );
 
-  const renderList = () => (
-    <Scrollbar>
-      <Box component="ul">
-        {notifications?.map((notification) => (
-          <Box component="li" key={notification.id} sx={{ display: 'flex' }}>
-            <NotificationItem notification={notification} />
+  const renderList = () => {
+    if (filteredAlerts.length === 0) {
+      return (
+        <Box
+          sx={{
+            py: 8,
+            px: 3,
+            display: 'flex',
+            alignItems: 'center',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            textAlign: 'center',
+          }}
+        >
+          <Box
+            sx={{
+              width: 56,
+              height: 56,
+              borderRadius: '50%',
+              bgcolor: 'success.lighter',
+              color: 'success.main',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              mb: 2,
+            }}
+          >
+            <Iconify icon="solar:check-circle-bold" width={32} />
           </Box>
-        ))}
-      </Box>
-    </Scrollbar>
-  );
+          <Typography variant="subtitle1" sx={{ mb: 0.5 }}>
+            All systems normal
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', maxWidth: 260 }}>
+            {currentTab === 'open'
+              ? 'There are no open operational alerts requiring acknowledgment.'
+              : 'No alerts match this filter.'}
+          </Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <Scrollbar>
+        <Box component="ul" sx={{ p: 0, m: 0, listStyle: 'none' }}>
+          {filteredAlerts.map((alert) => (
+            <Box component="li" key={alert.id} sx={{ display: 'flex' }}>
+              <NotificationItem notification={alert} onAcknowledge={handleAcknowledge} />
+            </Box>
+          ))}
+        </Box>
+      </Scrollbar>
+    );
+  };
 
   return (
     <>
@@ -130,12 +243,12 @@ export function NotificationsDrawer({ data = [], sx, ...other }: NotificationsDr
         whileTap={varTap(0.96)}
         whileHover={varHover(1.04)}
         transition={transitionTap()}
-        aria-label="Notifications button"
-        onClick={onOpen}
+        aria-label="Operational Alerts button"
+        onClick={handleOpenDrawer}
         sx={sx}
         {...other}
       >
-        <Badge badgeContent={totalUnRead} color="error">
+        <Badge badgeContent={totalUnRead} color={totalUnRead > 0 ? 'error' : 'default'}>
           <Iconify width={24} icon="solar:bell-bing-bold-duotone" />
         </Badge>
       </IconButton>
@@ -153,9 +266,15 @@ export function NotificationsDrawer({ data = [], sx, ...other }: NotificationsDr
         {renderTabs()}
         {renderList()}
 
-        <Box sx={{ p: 1 }}>
-          <Button fullWidth size="large">
-            View all
+        <Box sx={{ p: 2, borderTop: (theme) => `solid 1px ${theme.vars.palette.divider}` }}>
+          <Button
+            fullWidth
+            size="medium"
+            variant="outlined"
+            onClick={handleViewAll}
+            startIcon={<Iconify icon="solar:shield-check-bold" />}
+          >
+            View Operational Monitoring
           </Button>
         </Box>
       </Drawer>

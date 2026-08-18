@@ -132,6 +132,10 @@ export const discountsApi = {
     const res = await httpClient.get('/api/v1/discounts');
     return res.data;
   },
+  getDiscountById: async (id: string): Promise<DiscountCampaign> => {
+    const res = await httpClient.get(`/api/v1/discounts/${id}`);
+    return res.data;
+  },
   createDiscount: async (data: Partial<DiscountCampaign>): Promise<DiscountCampaign> => {
     const res = await httpClient.post('/api/v1/discounts', data);
     return res.data;

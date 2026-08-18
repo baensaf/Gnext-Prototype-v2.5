@@ -22,14 +22,25 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { useParams, useRouter } from 'src/routes/hooks';
+
 import { httpClient as axios } from 'src/api/httpClient';
 
 export function ReportViewerPage() {
+  const { reportCode } = useParams();
+  const router = useRouter();
+
   const [catalog, setCatalog] = useState<any[]>([]);
-  const [selectedReportCode, setSelectedReportCode] = useState('sales-summary');
+  const [selectedReportCode, setSelectedReportCode] = useState(reportCode || 'sales-summary');
   const [reportResult, setReportResult] = useState<any>(null);
   const [savedViews, setSavedViews] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (reportCode && reportCode !== selectedReportCode) {
+      setSelectedReportCode(reportCode);
+    }
+  }, [reportCode, selectedReportCode]);
 
   // Filters
   const [startDate, setStartDate] = useState('');
@@ -162,7 +173,11 @@ export function ReportViewerPage() {
               <Select
                 value={selectedReportCode}
                 label="Select Report"
-                onChange={(e) => setSelectedReportCode(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedReportCode(val);
+                  router.push(`/app/reports/${val}`);
+                }}
               >
                 {catalog.map((rep) => (
                   <MenuItem key={rep.code} value={rep.code}>

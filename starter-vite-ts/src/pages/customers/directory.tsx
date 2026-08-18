@@ -41,11 +41,15 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { useParams } from 'src/routes/hooks';
+
 import { MoneyUtil } from 'src/utils/money.util';
 
 import {
   customerApi
 } from 'src/api/customerApi';
+
+import { ServerDataGrid } from 'src/components/server-data-grid';
 
 export function CustomersPage() {
 
@@ -130,7 +134,7 @@ export function CustomersPage() {
   };
 
   // Credit Account Handlers
-  const handleOpenCredit = async (c: Customer) => {
+  const handleOpenCredit = useCallback(async (c: Customer) => {
     setSelectedCustomer(c);
     setCreditDialogOpen(true);
     try {
@@ -140,7 +144,18 @@ export function CustomersPage() {
     } catch (err: any) {
       setError(err.detail || 'Failed to fetch credit account');
     }
-  };
+  }, []);
+
+  const { id } = useParams();
+
+  useEffect(() => {
+    if (id && customers.length > 0) {
+      const match = customers.find((c) => c.id === id || c.code === id);
+      if (match) {
+        handleOpenCredit(match);
+      }
+    }
+  }, [id, customers, handleOpenCredit]);
 
   const handlePostTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -232,89 +247,114 @@ export function CustomersPage() {
         />
       </Box>
 
-      <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
-        <CardContent sx={{ p: 0 }}>
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Code</TableCell>
-                  <TableCell>Customer Name</TableCell>
-                  <TableCell>Mobile Number</TableCell>
-                  <TableCell>Customer Group</TableCell>
-                  <TableCell>Wallet / Credit Balance</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="center">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {customers.map((c) => {
-                  const grpObj = customerGroups.find((g) => g.id === c.customer_group_id);
-                  const walletBal = c.wallet_balance || c.credit_account?.current_balance || '0.0000';
-                  const credLim = c.credit_limit || c.credit_account?.credit_limit || '0.0000';
-                  const isPositive = MoneyUtil.greaterThan(walletBal, '0');
-
-                  return (
-                    <TableRow key={c.id} hover>
-                      <TableCell><code>{c.code}</code></TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        {c.first_name} {c.last_name}
-                      </TableCell>
-                      <TableCell>{c.mobile}</TableCell>
-                      <TableCell>
-                        {grpObj ? (
-                          <Chip label={grpObj.name} color="info" size="small" />
-                        ) : (
-                          'Regular'
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
-                          <Chip
-                            icon={<AccountBalanceWalletIcon sx={{ '&&': { fontSize: 16 } }} />}
-                            label={`${MoneyUtil.formatCurrency(walletBal)} IRR`}
-                            color={isPositive ? 'success' : 'default'}
-                            size="small"
-                            onClick={() => handleOpenCredit(c)}
-                            title="Click to view full wallet ledger & post transactions"
-                            sx={{ fontWeight: 'bold', cursor: 'pointer' }}
-                          />
-                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', px: 0.5 }}>
-                            Credit Limit: {MoneyUtil.formatCurrency(credLim)} IRR
-                          </Typography>
-                        </Stack>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={c.is_active ? 'Active' : 'Disabled'}
-                          color={c.is_active ? 'success' : 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <IconButton
-                          title="Customer Wallet & Credit Ledger"
-                          color="primary"
-                          onClick={() => handleOpenCredit(c)}
-                        >
-                          <AccountBalanceWalletIcon />
-                        </IconButton>
-                        <IconButton
-                          title="Delivery Addresses"
-                          color="info"
-                          onClick={() => handleOpenAddresses(c)}
-                        >
-                          <HomeIcon />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
+      <ServerDataGrid
+        rows={customers}
+        columns={[
+          {
+            field: 'code',
+            headerName: 'Code',
+            width: 120,
+            renderCell: (params) => <code>{params.value}</code>,
+          },
+          {
+            field: 'name',
+            headerName: 'Customer Name',
+            flex: 1,
+            minWidth: 180,
+            valueGetter: (_value, row) => `${row.first_name || ''} ${row.last_name || ''}`.trim(),
+            renderCell: (params) => (
+              <Typography sx={{ fontWeight: 600 }}>{params.value}</Typography>
+            ),
+          },
+          {
+            field: 'mobile',
+            headerName: 'Mobile Number',
+            width: 150,
+            renderCell: (params) => <span dir="ltr">{params.value}</span>,
+          },
+          {
+            field: 'customer_group_id',
+            headerName: 'Customer Group',
+            width: 150,
+            renderCell: (params) => {
+              const grpObj = customerGroups.find((g) => g.id === params.value);
+              return grpObj ? <Chip label={grpObj.name} color="info" size="small" /> : 'Regular';
+            },
+          },
+          {
+            field: 'wallet_balance',
+            headerName: 'Wallet / Credit Balance',
+            width: 220,
+            renderCell: (params) => {
+              const c = params.row as Customer;
+              const walletBal = c.wallet_balance || c.credit_account?.current_balance || '0.0000';
+              const credLim = c.credit_limit || c.credit_account?.credit_limit || '0.0000';
+              const isPositive = MoneyUtil.greaterThan(walletBal, '0');
+              return (
+                <Stack spacing={0.5} sx={{ alignItems: 'flex-start', py: 1 }}>
+                  <Chip
+                    icon={<AccountBalanceWalletIcon sx={{ '&&': { fontSize: 16 } }} />}
+                    label={`${MoneyUtil.formatCurrency(walletBal)} IRR`}
+                    color={isPositive ? 'success' : 'default'}
+                    size="small"
+                    onClick={() => handleOpenCredit(c)}
+                    title="Click to view full wallet ledger & post transactions"
+                    sx={{ fontWeight: 600, cursor: 'pointer' }}
+                  />
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                    Limit: {MoneyUtil.formatCurrency(credLim)} IRR
+                  </Typography>
+                </Stack>
+              );
+            },
+          },
+          {
+            field: 'is_active',
+            headerName: 'Status',
+            width: 110,
+            renderCell: (params) => (
+              <Chip
+                label={params.value ? 'Active' : 'Disabled'}
+                color={params.value ? 'success' : 'default'}
+                size="small"
+              />
+            ),
+          },
+          {
+            field: 'actions',
+            headerName: 'Actions',
+            width: 120,
+            sortable: false,
+            renderCell: (params) => {
+              const c = params.row as Customer;
+              return (
+                <Stack direction="row" spacing={0.5}>
+                  <IconButton
+                    size="small"
+                    title="Customer Wallet & Credit Ledger"
+                    color="primary"
+                    onClick={() => handleOpenCredit(c)}
+                  >
+                    <AccountBalanceWalletIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    title="Delivery Addresses"
+                    color="info"
+                    onClick={() => handleOpenAddresses(c)}
+                  >
+                    <HomeIcon fontSize="small" />
+                  </IconButton>
+                </Stack>
+              );
+            },
+          },
+        ]}
+        loading={_loading}
+        height={600}
+        emptyTitle="No customers registered"
+        emptyDescription="Click 'New Customer' to register a customer account."
+      />
 
       {/* Create Customer Drawer */}
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>

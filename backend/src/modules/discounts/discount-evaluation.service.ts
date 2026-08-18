@@ -287,10 +287,10 @@ export class DiscountEvaluationService {
             campaignName: `Coupon (${normalizedCode})`,
             discountType: 'COUPON',
             status: 'REJECTED',
-            rejectionReason: 'COUPON_ALREADY_REDEEMED',
+            rejectionReason: 'COUPON_MAX_USES_REACHED',
             amount: '0.0000',
           });
-          warnings.push(`Coupon code ${normalizedCode} has already been redeemed`);
+          warnings.push(`Coupon code ${normalizedCode} has reached maximum usage limit`);
         } else {
           // Check per customer redemption
           if (orderDraft.customerId) {
@@ -385,6 +385,46 @@ export class DiscountEvaluationService {
         if (campaign.effective_to && new Date(campaign.effective_to) < now) continue;
         if (campaign.usage_limit_total && campaign.usage_count >= campaign.usage_limit_total) continue;
 
+        // Check scopes
+        if (campaign.scopes && campaign.scopes.length > 0) {
+          const exclusionScopes = campaign.scopes.filter((s) => s.is_exclusion);
+          const inclusionScopes = campaign.scopes.filter((s) => !s.is_exclusion);
+
+          // If any exclusion scope matches the draft, reject the campaign
+          const isExcluded = exclusionScopes.some((s) => this.matchesScope(s, orderDraft));
+          if (isExcluded) {
+            consideredDiscounts.push({
+              campaignId: campaign.id,
+              campaignCode: campaign.code,
+              campaignName: campaign.name,
+              discountType: campaign.discount_type,
+              status: 'REJECTED',
+              rejectionReason: 'EXCLUDED_BY_SCOPE',
+              amount: '0.0000',
+            });
+            continue;
+          }
+
+          // If there are inclusion scopes, at least one must match
+          if (inclusionScopes.length > 0) {
+            const matchesInclusion = inclusionScopes.some((s) => this.matchesScope(s, orderDraft));
+            if (!matchesInclusion) {
+              if (isCouponMatch) {
+                consideredDiscounts.push({
+                  campaignId: campaign.id,
+                  campaignCode: campaign.code,
+                  campaignName: campaign.name,
+                  discountType: campaign.discount_type,
+                  status: 'REJECTED',
+                  rejectionReason: 'SCOPE_MISMATCH',
+                  amount: '0.0000',
+                });
+              }
+              continue;
+            }
+          }
+        }
+
         if (campaign.minimum_subtotal && MoneyUtil.lessThan(subtotal, campaign.minimum_subtotal)) {
           if (isCouponMatch) {
             consideredDiscounts.push({
@@ -414,7 +454,12 @@ export class DiscountEvaluationService {
         const campaign = candidate.campaign;
         let campaignAmount = '0.0000';
 
-        if (campaign.discount_type === 'PERCENTAGE' && campaign.percentage) {
+        if (campaign.discount_type === 'FREE_DELIVERY') {
+          if (MoneyUtil.greaterThan(deliveryFee, '0.0000')) {
+            campaignAmount = deliveryFee;
+            deliveryFee = '0.0000';
+          }
+        } else if (campaign.discount_type === 'PERCENTAGE' && campaign.percentage) {
           const pctDecimal = MoneyUtil.divide(campaign.percentage, '100');
           for (let i = 0; i < lineItems.length; i++) {
             if (!isCampaignEligibleLine[i]) continue;
@@ -429,6 +474,30 @@ export class DiscountEvaluationService {
             remainingBases[i] = MoneyUtil.subtract(remainingBases[i], lineDisc);
             campaignAmount = MoneyUtil.add(campaignAmount, lineDisc);
           }
+        } else if (campaign.discount_type === 'FIXED_AMOUNT' && campaign.amount) {
+          let totalEligibleBasis = '0.0000';
+          for (let i = 0; i < lineItems.length; i++) {
+            if (isCampaignEligibleLine[i] && MoneyUtil.greaterThan(remainingBases[i], '0')) {
+              totalEligibleBasis = MoneyUtil.add(totalEligibleBasis, remainingBases[i]);
+            }
+          }
+
+          if (MoneyUtil.greaterThan(totalEligibleBasis, '0')) {
+            const targetDiscount = MoneyUtil.greaterThan(campaign.amount, totalEligibleBasis)
+              ? totalEligibleBasis
+              : campaign.amount;
+
+            for (let i = 0; i < lineItems.length; i++) {
+              if (!isCampaignEligibleLine[i]) continue;
+              const lineEligible = remainingBases[i];
+              if (MoneyUtil.lessThanOrEqual(lineEligible, '0')) continue;
+
+              const lineDisc = MoneyUtil.divide(MoneyUtil.multiply(targetDiscount, lineEligible), totalEligibleBasis);
+              lineItems[i].discountTotal = MoneyUtil.add(lineItems[i].discountTotal, lineDisc);
+              remainingBases[i] = MoneyUtil.subtract(remainingBases[i], lineDisc);
+              campaignAmount = MoneyUtil.add(campaignAmount, lineDisc);
+            }
+          }
         }
 
         if (MoneyUtil.greaterThan(campaignAmount, '0')) {
@@ -441,8 +510,10 @@ export class DiscountEvaluationService {
             status: 'APPLIED',
             amount: campaignAmount,
           });
-          singleDiscountApplied = true;
-          break; // Single discount per order rule!
+          if (!campaign.is_stackable) {
+            singleDiscountApplied = true;
+            break; // Non-stackable campaign stops further discounts
+          }
         }
       }
     }

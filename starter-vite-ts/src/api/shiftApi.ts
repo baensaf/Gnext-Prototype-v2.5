@@ -85,6 +85,11 @@ export const shiftApi = {
     return res.data;
   },
 
+  getShiftById: async (shiftId: string): Promise<CashierShift> => {
+    const res = await httpClient.get(`/api/v1/shifts/${shiftId}`);
+    return res.data;
+  },
+
   openShift: async (data: {
     terminalId: string;
     currencyCode?: string;

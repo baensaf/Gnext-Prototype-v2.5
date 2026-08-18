@@ -36,11 +36,13 @@ import { CustomerCreditPage } from 'src/pages/customers/credit';
 import { GeneralSettingsPage } from 'src/pages/settings/general';
 import { ImportWizardPage } from 'src/pages/tools/import-wizard';
 import { ShiftDetailPage } from 'src/pages/cashier/shift-detail';
+import { MonitoringPage } from 'src/pages/operations/monitoring';
 import { AvailabilityPage } from 'src/pages/catalog/availability';
 import { CashDrawerPage } from 'src/pages/operations/cash-drawer';
 import { PrintQueuePage } from 'src/pages/operations/print-queue';
 /* Detail & Simulation Sub-Pages */
 import { OrdersDetailPage } from 'src/pages/orders/orders-detail';
+import { BusinessDaysPage } from 'src/pages/cashier/business-days';
 import { ReportViewerPage } from 'src/pages/reports/report-viewer';
 import { OfflineSyncPage } from 'src/pages/simulation/offline-sync';
 import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
@@ -111,7 +113,7 @@ export const routesSection: RouteObject[] = [
       { path: 'delivery/settlements/:settlementId', element: <SettlementDetailPage /> },
       { path: 'cashier/shifts', element: <CashDrawerPage /> },
       { path: 'cashier/shifts/:shiftId', element: <ShiftDetailPage /> },
-      { path: 'cashier/business-days', element: <CashDrawerPage /> },
+      { path: 'cashier/business-days', element: <BusinessDaysPage /> },
       { path: 'payments', element: <PaymentsPage /> },
       { path: 'refunds', element: <RefundsPage /> },
       { path: 'customer-club/discounts', element: <CustomerDiscountsPage /> },
@@ -140,7 +142,7 @@ export const routesSection: RouteObject[] = [
       { path: 'operations/kds-configuration', element: <KdsConfigurationPage /> },
       { path: 'operations/printers', element: <PrintersPage /> },
       { path: 'operations/print-queue', element: <PrintQueuePage /> },
-      { path: 'operations/monitoring', element: <DashboardPage /> },
+      { path: 'operations/monitoring', element: <MonitoringPage /> },
       { path: 'simulation', element: <SimulationCenterPage /> },
       { path: 'simulation/snappfood', element: <SimulationSnappfoodPage /> },
       { path: 'simulation/payments-printers', element: <SimulationPaymentsPrintersPage /> },

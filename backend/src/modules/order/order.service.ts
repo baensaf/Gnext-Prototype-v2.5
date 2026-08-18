@@ -236,12 +236,18 @@ export class OrderService {
   private async evaluateOrderQuote(tenantId: string, order: OrderHeader, request?: OrderQuoteRequestDto) {
     const couponCode = request?.couponCode || order.coupon_code;
 
-    const draftItems = (order.items || []).map((i) => ({
-      productId: i.product_id,
-      variantId: i.variant_id || undefined,
-      unitPrice: i.unit_price,
-      quantity: i.quantity,
-    }));
+    const draftItems = (order.items || []).map((i) => {
+      const modPerUnit = (i.quantity && Number(i.quantity) > 0 && i.modifier_total)
+        ? MoneyUtil.divide(i.modifier_total, i.quantity)
+        : '0.0000';
+      const effectiveUnitPrice = MoneyUtil.add(i.unit_price || '0.0000', modPerUnit);
+      return {
+        productId: i.product_id,
+        variantId: i.variant_id || undefined,
+        unitPrice: effectiveUnitPrice,
+        quantity: i.quantity,
+      };
+    });
 
     const quoteRes = await this.discountEngine.evaluateQuote(tenantId, {
       orderDraft: {
@@ -302,14 +308,23 @@ export class OrderService {
           orderType: order.order_type,
           currencyCode: order.currency_code,
           deliveryFee: order.delivery_fee,
-          items: order.items.map((i) => ({
-            productId: i.product_id,
-            variantId: i.variant_id || undefined,
-            unitPrice: i.unit_price,
-            quantity: i.quantity,
-          })),
+          items: order.items.map((i) => {
+            const modPerUnit = (i.quantity && Number(i.quantity) > 0 && i.modifier_total)
+              ? MoneyUtil.divide(i.modifier_total, i.quantity)
+              : '0.0000';
+            const effectiveUnitPrice = MoneyUtil.add(i.unit_price || '0.0000', modPerUnit);
+            return {
+              productId: i.product_id,
+              variantId: i.variant_id || undefined,
+              unitPrice: effectiveUnitPrice,
+              quantity: i.quantity,
+            };
+          }),
         },
-        manualDiscount: dto.manualDiscount || (dto.approvalRequestIds?.[0] ? { approvalRequestId: dto.approvalRequestIds[0], calculation_type: 'PERCENTAGE', value: '10' } : undefined),
+        manualDiscount: dto.manualDiscount ||
+          (MoneyUtil.greaterThan(order.discount_total || order.discount_amount || '0.0000', '0.0000')
+            ? { calculation_type: 'FIXED_AMOUNT', value: order.discount_total || order.discount_amount }
+            : (dto.approvalRequestIds?.[0] ? { approvalRequestId: dto.approvalRequestIds[0], calculation_type: 'PERCENTAGE', value: '10' } : undefined)),
         couponCode: order.coupon_code || undefined,
       });
 
@@ -674,6 +689,31 @@ export class OrderService {
       const uPrice = itemDto.unit_price ? MoneyUtil.format(itemDto.unit_price) : MoneyUtil.format(product.base_price);
       const sub = MoneyUtil.multiply(uPrice, qty);
 
+      let modifierUnitDelta = '0.0000';
+      const optionsToSave: { itemOpt: OrderItemOption }[] = [];
+
+      if (itemDto.options && itemDto.options.length > 0) {
+        for (const optDto of itemDto.options) {
+          const optItem = await this.optionItemRepo.findOne({ where: { id: optDto.option_item_id } });
+          if (optItem) {
+            const delta = optItem.price_delta ? MoneyUtil.format(optItem.price_delta) : '0.0000';
+            modifierUnitDelta = MoneyUtil.add(modifierUnitDelta, delta);
+            const itemOpt = em.create(OrderItemOption, {
+              tenant_id: tenantId,
+              order_item_id: '',
+              option_item_id: optItem.id,
+              option_group_name: optDto.option_group_name || '',
+              option_item_name: optItem.name,
+              price_delta: delta,
+            });
+            optionsToSave.push({ itemOpt });
+          }
+        }
+      }
+
+      const modifierTotal = MoneyUtil.multiply(modifierUnitDelta, qty);
+      const totalLine = MoneyUtil.add(sub, modifierTotal);
+
       const orderItem = em.create(OrderItem, {
         tenant_id: tenantId,
         order_id: order.id,
@@ -685,29 +725,18 @@ export class OrderService {
         quantity: qty,
         unit_price: uPrice,
         base_total: sub,
-        subtotal: sub,
-        line_total: sub,
-        total_amount: sub,
+        modifier_total: modifierTotal,
+        subtotal: totalLine,
+        line_total: totalLine,
+        total_amount: totalLine,
         notes: itemDto.notes || null,
         state: 'ACTIVE',
       });
       const savedItem = await em.save(OrderItem, orderItem);
 
-      if (itemDto.options && itemDto.options.length > 0) {
-        for (const optDto of itemDto.options) {
-          const optItem = await this.optionItemRepo.findOne({ where: { id: optDto.option_item_id } });
-          if (optItem) {
-            const itemOpt = em.create(OrderItemOption, {
-              tenant_id: tenantId,
-              order_item_id: savedItem.id,
-              option_item_id: optItem.id,
-              option_group_name: '',
-              option_item_name: optItem.name,
-              price_delta: optItem.price_delta || '0.0000',
-            });
-            await em.save(OrderItemOption, itemOpt);
-          }
-        }
+      for (const { itemOpt } of optionsToSave) {
+        itemOpt.order_item_id = savedItem.id;
+        await em.save(OrderItemOption, itemOpt);
       }
     }
   }
@@ -847,9 +876,15 @@ export class OrderService {
           await em.save(OrderItem, sourceItem);
         } else {
           const remainingQty = currentQty.minus(splitQty);
+          const origModifierTotal = sourceItem.modifier_total || '0.0000';
+          const splitRatio = MoneyUtil.divide(MoneyUtil.format(splitQty, 4), MoneyUtil.format(currentQty, 4), 6);
+          const newModifierTotal = MoneyUtil.multiply(origModifierTotal, splitRatio);
+          const remainingModifierTotal = MoneyUtil.subtract(origModifierTotal, newModifierTotal);
+
           sourceItem.quantity = MoneyUtil.format(remainingQty, 4);
           sourceItem.base_total = MoneyUtil.multiply(sourceItem.unit_price, sourceItem.quantity);
-          sourceItem.line_total = MoneyUtil.add(sourceItem.base_total, sourceItem.modifier_total || '0.0000');
+          sourceItem.modifier_total = remainingModifierTotal;
+          sourceItem.line_total = MoneyUtil.add(sourceItem.base_total, remainingModifierTotal);
           await em.save(OrderItem, sourceItem);
 
           const newItem = em.create(OrderItem, {
@@ -864,11 +899,11 @@ export class OrderService {
             quantity: MoneyUtil.format(splitQty, 4),
             unit_price: sourceItem.unit_price,
             base_total: MoneyUtil.multiply(sourceItem.unit_price, MoneyUtil.format(splitQty, 4)),
-            modifier_total: sourceItem.modifier_total,
+            modifier_total: newModifierTotal,
             discount_total: '0.0000',
             tax_total: '0.0000',
             packaging_total: '0.0000',
-            line_total: MoneyUtil.add(MoneyUtil.multiply(sourceItem.unit_price, MoneyUtil.format(splitQty, 4)), sourceItem.modifier_total || '0.0000'),
+            line_total: MoneyUtil.add(MoneyUtil.multiply(sourceItem.unit_price, MoneyUtil.format(splitQty, 4)), newModifierTotal),
             notes: sourceItem.notes,
             state: sourceItem.state,
           });
@@ -979,9 +1014,15 @@ export class OrderService {
           await em.save(OrderItem, sourceItem);
         } else {
           const remainingQty = currentQty.minus(qtyToTransfer);
+          const origModifierTotal = sourceItem.modifier_total || '0.0000';
+          const transferRatio = MoneyUtil.divide(MoneyUtil.format(qtyToTransfer, 4), MoneyUtil.format(currentQty, 4), 6);
+          const transferModifierTotal = MoneyUtil.multiply(origModifierTotal, transferRatio);
+          const remainingModifierTotal = MoneyUtil.subtract(origModifierTotal, transferModifierTotal);
+
           sourceItem.quantity = MoneyUtil.format(remainingQty, 4);
           sourceItem.base_total = MoneyUtil.multiply(sourceItem.unit_price, sourceItem.quantity);
-          sourceItem.line_total = MoneyUtil.add(sourceItem.base_total, sourceItem.modifier_total || '0.0000');
+          sourceItem.modifier_total = remainingModifierTotal;
+          sourceItem.line_total = MoneyUtil.add(sourceItem.base_total, remainingModifierTotal);
           await em.save(OrderItem, sourceItem);
 
           const newItem = em.create(OrderItem, {
@@ -996,11 +1037,11 @@ export class OrderService {
             quantity: MoneyUtil.format(qtyToTransfer, 4),
             unit_price: sourceItem.unit_price,
             base_total: MoneyUtil.multiply(sourceItem.unit_price, MoneyUtil.format(qtyToTransfer, 4)),
-            modifier_total: sourceItem.modifier_total,
+            modifier_total: transferModifierTotal,
             discount_total: '0.0000',
             tax_total: '0.0000',
             packaging_total: '0.0000',
-            line_total: MoneyUtil.add(MoneyUtil.multiply(sourceItem.unit_price, MoneyUtil.format(qtyToTransfer, 4)), sourceItem.modifier_total || '0.0000'),
+            line_total: MoneyUtil.add(MoneyUtil.multiply(sourceItem.unit_price, MoneyUtil.format(qtyToTransfer, 4)), transferModifierTotal),
             notes: sourceItem.notes,
             state: sourceItem.state,
           });

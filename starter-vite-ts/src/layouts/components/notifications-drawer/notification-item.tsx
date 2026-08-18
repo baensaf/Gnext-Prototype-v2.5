@@ -1,7 +1,6 @@
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Avatar from '@mui/material/Avatar';
-import SvgIcon from '@mui/material/SvgIcon';
 import ListItemText from '@mui/material/ListItemText';
 import ListItemAvatar from '@mui/material/ListItemAvatar';
 import ListItemButton from '@mui/material/ListItemButton';
@@ -9,44 +8,64 @@ import ListItemButton from '@mui/material/ListItemButton';
 import { fToNow } from 'src/utils/format-time';
 
 import { Label } from 'src/components/label';
-import { FileThumbnail } from 'src/components/file-thumbnail';
-
-import { notificationIcons } from './icons';
+import { Iconify } from 'src/components/iconify';
 
 // ----------------------------------------------------------------------
 
 export type NotificationItemProps = {
   notification: {
     id: string;
-    type: string;
+    type?: string;
+    severity?: 'INFO' | 'WARNING' | 'CRITICAL';
     title: string;
-    category: string;
-    isUnRead: boolean;
-    avatarUrl: string | null;
-    createdAt: string | number | null;
+    message?: string;
+    category?: string;
+    isUnRead?: boolean;
+    acknowledged?: boolean;
+    avatarUrl?: string | null;
+    createdAt?: string | number | null;
+    created_at?: string;
   };
+  onAcknowledge?: (id: string) => void;
 };
 
-const readerContent = (data: string) => (
-  <Box
-    dangerouslySetInnerHTML={{ __html: data }}
-    sx={{
-      '& p': { m: 0, typography: 'body2' },
-      '& a': { color: 'inherit', textDecoration: 'none' },
-      '& strong': { typography: 'subtitle2' },
-    }}
-  />
-);
+export function NotificationItem({ notification, onAcknowledge }: NotificationItemProps) {
+  const isUnRead = notification.acknowledged === false || notification.isUnRead === true;
+  const severity = notification.severity || 'INFO';
+  const createdAt = notification.created_at || notification.createdAt;
 
-const renderIcon = (type: string) =>
-  ({
-    order: notificationIcons.order,
-    chat: notificationIcons.chat,
-    mail: notificationIcons.mail,
-    delivery: notificationIcons.delivery,
-  })[type];
+  const getSeverityColor = () => {
+    switch (severity) {
+      case 'CRITICAL':
+        return 'error';
+      case 'WARNING':
+        return 'warning';
+      case 'INFO':
+      default:
+        return 'info';
+    }
+  };
 
-export function NotificationItem({ notification }: NotificationItemProps) {
+  const getSeverityIcon = () => {
+    switch (severity) {
+      case 'CRITICAL':
+        return 'solar:danger-triangle-bold';
+      case 'WARNING':
+        return 'solar:danger-bold';
+      case 'INFO':
+      default:
+        return 'solar:info-circle-bold';
+    }
+  };
+
+  const formatCategory = () => {
+    if (notification.category) return notification.category;
+    if (notification.type) {
+      return notification.type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+    return 'System';
+  };
+
   const renderAvatar = () => (
     <ListItemAvatar>
       {notification.avatarUrl ? (
@@ -60,10 +79,19 @@ export function NotificationItem({ notification }: NotificationItemProps) {
             borderRadius: '50%',
             alignItems: 'center',
             justifyContent: 'center',
-            bgcolor: 'background.neutral',
+            bgcolor: (theme) => {
+              if (severity === 'CRITICAL') return theme.palette.error.lighter;
+              if (severity === 'WARNING') return theme.palette.warning.lighter;
+              return theme.palette.info.lighter;
+            },
+            color: (theme) => {
+              if (severity === 'CRITICAL') return theme.palette.error.main;
+              if (severity === 'WARNING') return theme.palette.warning.main;
+              return theme.palette.info.main;
+            },
           }}
         >
-          <SvgIcon sx={{ width: 24, height: 24 }}>{renderIcon(notification.type)}</SvgIcon>
+          <Iconify icon={getSeverityIcon()} width={22} />
         </Box>
       )}
     </ListItemAvatar>
@@ -71,173 +99,121 @@ export function NotificationItem({ notification }: NotificationItemProps) {
 
   const renderText = () => (
     <ListItemText
-      primary={readerContent(notification.title)}
-      secondary={
-        <>
-          {fToNow(notification.createdAt)}
-          <Box
-            component="span"
-            sx={{ width: 2, height: 2, borderRadius: '50%', bgcolor: 'currentColor' }}
-          />
-          {notification.category}
-        </>
+      primary={
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', mb: 0.5 }}>
+          <Box component="span" sx={{ typography: 'subtitle2', fontWeight: 600 }}>
+            {notification.title}
+          </Box>
+          <Label variant="soft" color={getSeverityColor()} sx={{ height: 20, fontSize: '0.7rem' }}>
+            {severity}
+          </Label>
+        </Box>
       }
-      slotProps={{
-        primary: {
-          sx: { mb: 0.5 },
-        },
-        secondary: {
-          sx: {
-            gap: 0.5,
-            display: 'flex',
-            alignItems: 'center',
-            typography: 'caption',
-            color: 'text.disabled',
-          },
-        },
-      }}
+      secondary={
+        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+          {notification.message && (
+            <Box
+              component="span"
+              sx={{
+                m: 0,
+                mb: 0.5,
+                typography: 'body2',
+                color: 'text.secondary',
+                fontSize: '0.8125rem',
+                lineHeight: 1.4,
+              }}
+            >
+              {notification.message}
+            </Box>
+          )}
+          <Box
+            sx={{
+              gap: 0.75,
+              display: 'flex',
+              alignItems: 'center',
+              typography: 'caption',
+              color: 'text.disabled',
+            }}
+          >
+            {createdAt ? fToNow(createdAt) : 'Just now'}
+            <Box
+              component="span"
+              sx={{ width: 3, height: 3, borderRadius: '50%', bgcolor: 'currentColor' }}
+            />
+            {formatCategory()}
+          </Box>
+        </Box>
+      }
     />
   );
 
   const renderUnReadBadge = () =>
-    notification.isUnRead && (
+    isUnRead && (
       <Box
         sx={{
-          top: 26,
+          top: 20,
           width: 8,
           height: 8,
-          right: 20,
+          right: 16,
           borderRadius: '50%',
-          bgcolor: 'info.main',
+          bgcolor: severity === 'CRITICAL' ? 'error.main' : 'warning.main',
           position: 'absolute',
         }}
       />
     );
 
-  const renderFriendAction = () => (
-    <Box sx={{ gap: 1, mt: 1.5, display: 'flex' }}>
-      <Button size="small" variant="contained">
-        Accept
-      </Button>
-      <Button size="small" variant="outlined">
-        Decline
-      </Button>
-    </Box>
-  );
-
-  const renderProjectAction = () => (
-    <>
-      <Box
-        sx={{
-          p: 1.5,
-          my: 1.5,
-          borderRadius: 1.5,
-          color: 'text.secondary',
-          bgcolor: 'background.neutral',
-        }}
-      >
-        {readerContent(
-          `<p><strong>@Jaydon Frankie</strong> feedback by asking questions or just leave a note of appreciation.</p>`
-        )}
+  const renderActions = () => {
+    if (isUnRead && onAcknowledge) {
+      return (
+        <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
+          <Button
+            size="small"
+            variant="soft"
+            color="inherit"
+            startIcon={<Iconify icon="solar:check-circle-bold" width={16} />}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAcknowledge(notification.id);
+            }}
+            sx={{ fontSize: '0.75rem', py: 0.25, px: 1 }}
+          >
+            Acknowledge
+          </Button>
+        </Box>
+      );
+    }
+    return (
+      <Box sx={{ mt: 0.5, display: 'flex', justifyContent: 'flex-end' }}>
+        <Label variant="outlined" color="default" sx={{ height: 18, fontSize: '0.65rem', color: 'text.disabled' }}>
+          Acknowledged
+        </Label>
       </Box>
-
-      <Button size="small" variant="contained" sx={{ alignSelf: 'flex-start' }}>
-        Reply
-      </Button>
-    </>
-  );
-
-  const renderFileAction = () => (
-    <Box
-      sx={(theme) => ({
-        p: theme.spacing(1.5, 1.5, 1.5, 1),
-        gap: 1,
-        mt: 1.5,
-        display: 'flex',
-        borderRadius: 1.5,
-        bgcolor: 'background.neutral',
-      })}
-    >
-      <FileThumbnail file="http://localhost:8080/httpsdesign-suriname-2015.mp3" />
-
-      <ListItemText
-        primary="design-suriname-2015.mp3 design-suriname-2015.mp3"
-        secondary="2.3 Mb"
-        slotProps={{
-          primary: {
-            noWrap: true,
-            sx: (theme) => ({
-              color: 'text.secondary',
-              fontSize: theme.typography.pxToRem(13),
-            }),
-          },
-          secondary: {
-            sx: {
-              mt: 0.25,
-              typography: 'caption',
-              color: 'text.disabled',
-            },
-          },
-        }}
-      />
-
-      <Button size="small" variant="outlined" sx={{ flexShrink: 0 }}>
-        Download
-      </Button>
-    </Box>
-  );
-
-  const renderTagsAction = () => (
-    <Box
-      sx={{
-        mt: 1.5,
-        gap: 0.75,
-        display: 'flex',
-        flexWrap: 'wrap',
-      }}
-    >
-      <Label variant="outlined" color="info">
-        Design
-      </Label>
-      <Label variant="outlined" color="warning">
-        Dashboard
-      </Label>
-      <Label variant="outlined">Design system</Label>
-    </Box>
-  );
-
-  const renderPaymentAction = () => (
-    <Box sx={{ gap: 1, mt: 1.5, display: 'flex' }}>
-      <Button size="small" variant="contained">
-        Pay
-      </Button>
-      <Button size="small" variant="outlined">
-        Decline
-      </Button>
-    </Box>
-  );
+    );
+  };
 
   return (
     <ListItemButton
       disableRipple
       sx={[
         (theme) => ({
-          p: 2.5,
+          p: 2,
+          pr: 2.5,
           alignItems: 'flex-start',
           borderBottom: `dashed 1px ${theme.vars.palette.divider}`,
+          bgcolor: isUnRead ? 'action.hover' : 'transparent',
+          transition: theme.transitions.create('background-color'),
+          '&:hover': {
+            bgcolor: 'action.selected',
+          },
         }),
       ]}
     >
       {renderUnReadBadge()}
       {renderAvatar()}
 
-      <Box sx={{ minWidth: 0, flex: '1 1 auto' }}>
+      <Box sx={{ minWidth: 0, flex: '1 1 auto', pl: 0.5 }}>
         {renderText()}
-        {notification.type === 'friend' && renderFriendAction()}
-        {notification.type === 'project' && renderProjectAction()}
-        {notification.type === 'file' && renderFileAction()}
-        {notification.type === 'tags' && renderTagsAction()}
-        {notification.type === 'payment' && renderPaymentAction()}
+        {renderActions()}
       </Box>
     </ListItemButton>
   );

@@ -341,7 +341,28 @@ export class PaymentService {
         order.paid_total = MoneyUtil.subtract(order.paid_total, payment.amount);
         if (MoneyUtil.lessThan(order.paid_total, '0.0000')) order.paid_total = '0.0000';
         order.outstanding_total = MoneyUtil.subtract(order.grand_total, order.paid_total);
+        order.paid_amount = order.paid_total;
+        order.due_amount = order.outstanding_total;
         await em.save(OrderHeader, order);
+
+        // If payment was cash and shift is active, record a CASH_REFUND / movement
+        if (payment.method_kind === 'CASH' && order.terminal_id) {
+          try {
+            const shift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id);
+            if (shift) {
+              await this.shiftService.recordCashRefundMovement(
+                tenantId,
+                shift.id,
+                payment.id,
+                payment.amount,
+                userId,
+                em,
+              );
+            }
+          } catch {
+            // If no active shift, continue without blocking reversal
+          }
+        }
       }
 
       await this.auditWriter.write({

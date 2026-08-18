@@ -70,6 +70,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       create: jest.fn((entityClass, data) => ({ ...data })),
       save: jest.fn((entityClass, data) => Promise.resolve(data || entityClass)),
       findOne: jest.fn((entityClass, options) => orderRepo.findOne(options)),
+      find: jest.fn((entityClass, options) => Promise.resolve([])),
       delete: jest.fn(),
       getRepository: jest.fn().mockReturnValue(sequenceRepo),
     };
@@ -189,6 +190,44 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
 
       const orderNum = await sequenceService.generateOrderNumber('t-1');
       expect(orderNum).toMatch(/^ORD-\d{8}-0006$/);
+    });
+  });
+
+  describe('FIN-03: Order Splits & Transfers Modifier Scaling (R12)', () => {
+    it('should scale modifier_total proportionally when partially splitting an order item', async () => {
+      const sourceItem: any = {
+        id: 'item-1',
+        product_id: 'prod-burger',
+        product_name: 'Burger Deluxe',
+        quantity: '2.0000',
+        unit_price: '50000.0000',
+        base_total: '100000.0000',
+        modifier_total: '20000.0000', // 10,000 extra cheese per burger
+        line_total: '120000.0000',
+        options: [{ option_item_id: 'opt-cheese', price_delta: '10000.0000' }],
+      };
+
+      const sourceOrder: any = {
+        id: 'ord-source',
+        tenant_id: 't-1',
+        order_number: 'ORD-001',
+        state: 'SUBMITTED',
+        items: [sourceItem],
+      };
+
+      orderRepo.findOne.mockResolvedValue(sourceOrder);
+      sequenceRepo.findOne.mockResolvedValue({ tenant_id: 't-1', prefix: 'ORD-20260818', last_value: 1 });
+
+      const childOrder = await service.splitOrder('t-1', 'ord-source', {
+        lines: [{ orderItemId: 'item-1', quantity: '1.0000' }],
+      });
+
+      expect(childOrder).toBeDefined();
+      // Source item remaining quantity = 1, modifier_total scaled to 10,000 (from 20,000)
+      expect(sourceItem.quantity).toBe('1.0000');
+      expect(sourceItem.base_total).toBe('50000.0000');
+      expect(sourceItem.modifier_total).toBe('10000.0000');
+      expect(sourceItem.line_total).toBe('60000.0000');
     });
   });
 });

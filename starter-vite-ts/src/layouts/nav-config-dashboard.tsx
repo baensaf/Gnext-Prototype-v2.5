@@ -107,7 +107,6 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.printQueue', 'Print Queue'),
           path: '/app/operations/print-queue',
           icon: ICONS.drawer,
-          info: <Label color="info">V5 Preview</Label>,
         },
       ],
     },
@@ -117,6 +116,11 @@ export function useNavData(): NavSectionProps['data'] {
         {
           title: t('nav.customerDiscounts', 'Customer Discounts'),
           path: '/app/customer-club/discounts',
+          icon: ICONS.discounts,
+        },
+        {
+          title: t('nav.discounts', 'Discount Campaigns'),
+          path: '/app/discounts/campaigns',
           icon: ICONS.discounts,
         },
         {
@@ -158,7 +162,6 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.modifiers', 'Modifiers'),
           path: '/app/catalog/modifiers',
           icon: ICONS.options,
-          info: <Label color="info">V5</Label>,
         },
         {
           title: t('nav.menus', 'Menus Composer'),
@@ -254,7 +257,6 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.printers', 'Printers & Routes'),
           path: '/app/operations/printers',
           icon: ICONS.terminal,
-          info: <Label color="info">V5 Preview</Label>,
         },
       ],
     },
@@ -262,16 +264,10 @@ export function useNavData(): NavSectionProps['data'] {
       subheader: t('nav.v5GroupHeader', 'Future — V5 Preview'),
       items: [
         {
-          title: t('nav.discounts', 'Advanced Campaigns (V5)'),
-          path: '/app/discounts/campaigns',
-          icon: ICONS.discounts,
-          info: <Label color="info">V5 Preview</Label>,
-        },
-        {
           title: t('nav.v5Preview', 'Inventory Stock & Movement'),
           path: '/app/inventory/stock',
           icon: ICONS.inventory,
-          info: <Label color="info">V5 Preview</Label>,
+          info: <Label color="warning">V5 Preview</Label>,
         },
       ],
     },

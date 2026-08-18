@@ -161,4 +161,74 @@ describe('Refunds & Paid-Order Cancellation Suite (R16)', () => {
       expect(shiftService.recordCashRefundMovement).toHaveBeenCalled();
     });
   });
+
+  describe('FIN-01 & FIN-02 Integrity Tests', () => {
+    it('FIN-02: should accurately calculate refundable balance when some payments are REVERSED without double-subtraction', async () => {
+      const order = { id: 'ord-multi-pay', state: 'COMPLETED', refunded_total: '0.0000' };
+      const payments = [
+        { id: 'pay-succeeded', amount: '50000.0000', status: 'SUCCEEDED', method_id: 'pm-cash' },
+        { id: 'pay-reversed', amount: '30000.0000', status: 'REVERSED', method_id: 'pm-card' },
+      ];
+      const method = { id: 'pm-cash', kind: 'CASH', is_active: true };
+
+      orderRepo.findOne.mockResolvedValue(order);
+      paymentRepo.find.mockResolvedValue(payments);
+      methodRepo.findOne.mockResolvedValue(method);
+
+      // Refundable balance must be 50,000 (succeeded payments minus refunds), NOT 20,000 (which would be double-subtracting 30,000 reversals)
+      const refundIntent = await service.createRefundIntent('t-1', 'ord-multi-pay', {
+        amount: '50000.0000',
+        reason: 'Customer return for succeeded portion',
+      });
+
+      expect(refundIntent).toBeDefined();
+      expect(refundIntent.amount).toBe('50000.0000');
+    });
+
+    it('FIN-01: should pass active entityManager to creditService when processing CUSTOMER_CREDIT refund', async () => {
+      const order = {
+        id: 'ord-credit-ref',
+        customer_id: 'cust-1',
+        terminal_id: 'term-1',
+        state: 'COMPLETED',
+        refunded_total: '0.0000',
+        subtotal: '50000.0000',
+        currency_code: 'IRR',
+      };
+      const creditAccount = {
+        id: 'acc-cust-1',
+        tenant_id: 't-1',
+        customer_id: 'cust-1',
+        currency_code: 'IRR',
+        current_balance: '-50000.0000',
+        status: 'ACTIVE',
+      };
+      const payment = { id: 'pay-cred', amount: '50000.0000', status: 'SUCCEEDED', method_id: 'pm-credit' };
+      const creditMethod = { id: 'pm-credit', kind: 'CUSTOMER_CREDIT', is_active: true };
+
+      orderRepo.findOne.mockResolvedValue(order);
+      paymentRepo.find.mockResolvedValue([payment]);
+      methodRepo.findOne.mockResolvedValue(creditMethod);
+      creditService.getAccountByCustomer.mockResolvedValue(creditAccount);
+      creditService.postRepayment.mockResolvedValue({ entry: { id: 'entry-1' }, newBalance: '0.0000' });
+
+      const refund = await service.createRefundIntent('t-1', 'ord-credit-ref', {
+        amount: '50000.0000',
+        reason: 'Customer credit refund test',
+      });
+
+      const processed = await service.processRefund('t-1', refund.id, {});
+
+      expect(processed.status).toBe('SUCCEEDED');
+      expect(creditService.getAccountByCustomer).toHaveBeenCalledWith('t-1', 'cust-1', 'IRR', expect.anything());
+      expect(creditService.postRepayment).toHaveBeenCalledWith(
+        't-1',
+        'acc-cust-1',
+        expect.objectContaining({ amount: '50000.0000' }),
+        undefined,
+        undefined,
+        expect.anything(), // Verify entityManager is passed
+      );
+    });
+  });
 });

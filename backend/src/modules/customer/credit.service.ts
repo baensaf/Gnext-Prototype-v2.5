@@ -79,8 +79,9 @@ export class CreditService {
     };
   }
 
-  async getAccountByCustomer(tenantId: string, customerId: string, currencyCode: string = 'IRR') {
-    const acc = await this.accountRepo.findOne({
+  async getAccountByCustomer(tenantId: string, customerId: string, currencyCode: string = 'IRR', entityManager?: EntityManager) {
+    const repo = entityManager ? entityManager.getRepository(CustomerCreditAccount) : this.accountRepo;
+    const acc = await repo.findOne({
       where: { tenant_id: tenantId, customer_id: customerId, currency_code: currencyCode },
       relations: ['entries'],
     });
@@ -285,8 +286,15 @@ export class CreditService {
     return await this.dataSource.transaction(execute);
   }
 
-  async postRepayment(tenantId: string, accountId: string, dto: CreditRepaymentDto, userId?: string, correlationId?: string) {
-    return await this.dataSource.transaction(async (em) => {
+  async postRepayment(
+    tenantId: string,
+    accountId: string,
+    dto: CreditRepaymentDto,
+    userId?: string,
+    correlationId?: string,
+    entityManager?: EntityManager,
+  ) {
+    const execute = async (em: EntityManager) => {
       const acc = await em.findOne(CustomerCreditAccount, {
         where: { id: accountId, tenant_id: tenantId },
         lock: { mode: 'pessimistic_write' },
@@ -347,7 +355,10 @@ export class CreditService {
         newBalance: acc.current_balance,
         availableCredit: this.calculateAvailableCredit(acc),
       };
-    });
+    };
+
+    if (entityManager) return await execute(entityManager);
+    return await this.dataSource.transaction(execute);
   }
 
   async postAdjustment(tenantId: string, accountId: string, dto: CreditAdjustmentDto, userId?: string, correlationId?: string) {

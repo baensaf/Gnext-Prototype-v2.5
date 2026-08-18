@@ -15,12 +15,25 @@
 @import '@fontsource-variable/dm-sans';
 @import '@fontsource-variable/inter';
 @import '@fontsource-variable/nunito-sans';
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@100..900&display=swap');
 
 /** **************************************
 * Plugins
 *************************************** */
 /* scrollbar */
 @import './components/scrollbar/styles.css';
+
+/** **************************************
+* RTL Typography
+*************************************** */
+[dir='rtl'],
+[dir='rtl'] body,
+[dir='rtl'] input,
+[dir='rtl'] button,
+[dir='rtl'] textarea,
+[dir='rtl'] select {
+  font-family: 'Vazirmatn', 'Public Sans Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
 
 /** **************************************
 * Baseline

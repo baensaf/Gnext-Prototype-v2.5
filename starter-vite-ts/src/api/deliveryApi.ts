@@ -99,6 +99,10 @@ export const deliveryApi = {
     const res = await httpClient.get('/api/v1/delivery/couriers', { params: { branchId } });
     return res.data;
   },
+  getCourierById: async (id: string): Promise<Courier> => {
+    const res = await httpClient.get(`/api/v1/delivery/couriers/${id}`);
+    return res.data;
+  },
   createCourier: async (data: Partial<Courier>): Promise<Courier> => {
     const res = await httpClient.post('/api/v1/delivery/couriers', data);
     return res.data;

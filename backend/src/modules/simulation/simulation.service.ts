@@ -147,11 +147,17 @@ export class SimulationService {
       status: 'SUBMITTED',
       fulfillment_status: 'PENDING',
       notes: `Snappfood Order [Code: ${payload.order_code || 'SNP-001'}]. Vendor Notes: ${payload.vendor_notes || payload.comment || 'None'}`,
+      subtotal: subtotalStr,
       subtotal_amount: subtotalStr,
+      tax_total: taxAmountStr,
       tax_amount: taxAmountStr,
+      discount_total: '0.0000',
       discount_amount: '0.0000',
+      grand_total: totalAmountStr,
       total_amount: totalAmountStr,
+      paid_total: totalAmountStr,
       paid_amount: totalAmountStr,
+      outstanding_total: '0.0000',
       due_amount: '0.0000',
     });
 

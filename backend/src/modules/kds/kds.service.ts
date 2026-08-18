@@ -12,6 +12,7 @@ import { KitchenTicketItem } from '../../entities/KitchenTicketItem.entity';
 import { KdsEvent } from '../../entities/KdsEvent.entity';
 import { Printer } from '../../entities/Printer.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
+import { Product } from '../../entities/Product.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 
 export interface MessageEvent {
@@ -34,6 +35,7 @@ export class KdsService {
     @InjectRepository(KdsEvent) private readonly kdsEventRepo: Repository<KdsEvent>,
     @InjectRepository(Printer) private readonly printerRepo: Repository<Printer>,
     @InjectRepository(OrderHeader) private readonly orderRepo: Repository<OrderHeader>,
+    @InjectRepository(Product) private readonly productRepo: Repository<Product>,
     private readonly auditWriter: AuditWriter,
   ) {}
 
@@ -179,10 +181,18 @@ export class KdsService {
       if (prodRule) {
         targetStationId = prodRule.station_id;
       } else {
-        // Check category rule match
-        const catRule = rules.find((r) => r.category_id); // category ID check if available on product
-        if (catRule) {
-          targetStationId = catRule.station_id;
+        // Check category rule match by looking up product category
+        const categoryRules = rules.filter((r) => !!r.category_id);
+        if (categoryRules.length > 0 && item.product_id) {
+          const product = await this.productRepo.findOne({
+            where: { id: item.product_id, tenant_id: tenantId },
+          });
+          if (product && product.category_id) {
+            const catRule = categoryRules.find((r) => r.category_id === product.category_id);
+            if (catRule) {
+              targetStationId = catRule.station_id;
+            }
+          }
         }
       }
 

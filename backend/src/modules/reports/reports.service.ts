@@ -120,7 +120,7 @@ export class ReportsService {
         const qb = this.orderRepo.createQueryBuilder('o')
           .where('o.tenant_id = :tenantId', { tenantId });
         if (branchId) qb.andWhere('o.branch_id = :branchId', { branchId });
-        if (channel) qb.andWhere('o.order_type = :channel', { channel });
+        if (channel) qb.andWhere('(o.channel = :channel OR o.order_type = :channel)', { channel });
         this.applyDateFilter(qb, 'o.placed_at', startDate, endDate);
 
         const orders = await qb.orderBy('o.placed_at', 'DESC').getMany();

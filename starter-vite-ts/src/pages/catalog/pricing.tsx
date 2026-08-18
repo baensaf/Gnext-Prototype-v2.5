@@ -33,12 +33,15 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { usePathname } from 'src/routes/hooks';
+
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { catalogApi } from 'src/api/catalogApi';
 
 export function PricingPage() {
   const { t: _t } = useTranslation();
+  const pathname = usePathname();
 
   const [priceGroups, setPriceGroups] = useState<PriceGroup[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -83,6 +86,14 @@ export function PricingPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (pathname.includes('bulk-update')) {
+      setBulkModalOpen(true);
+    } else if (pathname.includes('price-groups')) {
+      setDrawerOpen(true);
+    }
+  }, [pathname]);
 
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();

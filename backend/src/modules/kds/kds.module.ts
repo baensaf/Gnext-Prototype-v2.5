@@ -9,6 +9,7 @@ import { KitchenTicketItem } from '../../entities/KitchenTicketItem.entity';
 import { KdsEvent } from '../../entities/KdsEvent.entity';
 import { Printer } from '../../entities/Printer.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
+import { Product } from '../../entities/Product.entity';
 import { KdsService } from './kds.service';
 import { KdsController } from './kds.controller';
 import { AuditModule } from '../audit/audit.module';
@@ -24,6 +25,7 @@ import { AuditModule } from '../audit/audit.module';
       KdsEvent,
       Printer,
       OrderHeader,
+      Product,
     ]),
     AuditModule,
   ],

@@ -26,6 +26,8 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { useParams } from 'src/routes/hooks';
+
 import { tenantApi } from 'src/api/tenantApi';
 import { catalogApi } from 'src/api/catalogApi';
 
@@ -75,6 +77,18 @@ export function MenusPage() {
     loadData();
   }, []);
 
+  const { id } = useParams();
+
+  useEffect(() => {
+    if (id && menus.length > 0) {
+      const match = menus.find((m) => m.id === id || m.code === id);
+      if (match) {
+        setSelectedMenu(match);
+        setAttachDrawerOpen(true);
+      }
+    }
+  }, [id, menus]);
+
   const handleCreateMenu = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -95,10 +109,10 @@ export function MenusPage() {
     }
   };
 
-  const handleDeleteMenu = async (id: string) => {
+  const handleDeleteMenu = async (menuId: string) => {
     if (!window.confirm('Are you sure you want to delete this menu?')) return;
     try {
-      await catalogApi.deleteMenu(id);
+      await catalogApi.deleteMenu(menuId);
       loadData();
     } catch (err: any) {
       setError(err.detail || 'Failed to delete menu');

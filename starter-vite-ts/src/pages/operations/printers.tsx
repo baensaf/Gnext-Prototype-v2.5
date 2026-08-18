@@ -1,3 +1,4 @@
+import type { Branch } from 'src/api/tenantApi';
 import type { PrintRoute, PrinterGroup, PrinterDevice } from 'src/api/kdsApi';
 
 import React, { useState, useEffect } from 'react';
@@ -35,6 +36,7 @@ import {
 } from '@mui/material';
 
 import { kdsApi } from 'src/api/kdsApi';
+import { tenantApi } from 'src/api/tenantApi';
 
 export function PrintersPage() {
   const [tab, setTab] = useState<'PRINTERS' | 'GROUPS' | 'ROUTES'>('PRINTERS');
@@ -42,6 +44,7 @@ export function PrintersPage() {
   const [printers, setPrinters] = useState<PrinterDevice[]>([]);
   const [groups, setGroups] = useState<PrinterGroup[]>([]);
   const [routes, setRoutes] = useState<PrintRoute[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,14 +73,16 @@ export function PrintersPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [prList, grList, rtList] = await Promise.all([
+      const [prList, grList, rtList, bList] = await Promise.all([
         kdsApi.getPrinters(),
         kdsApi.getPrinterGroups(),
         kdsApi.getPrintRoutes(),
+        tenantApi.getBranches().catch(() => []),
       ]);
       setPrinters(prList);
       setGroups(grList);
       setRoutes(rtList);
+      setBranches(bList || []);
       setError(null);
     } catch (err: any) {
       setError(err.detail || err.message || 'Failed to load printers configuration');
@@ -92,11 +97,7 @@ export function PrintersPage() {
 
   const handleCreatePrinter = async () => {
     try {
-      const targetBranchId = (printers[0] as any)?.branch_id || printers[0]?.id;
-      if (!targetBranchId) {
-        setError('No active printer/branch context');
-        return;
-      }
+      const targetBranchId = (printers[0] as any)?.branch_id || branches[0]?.id || 'branch-1';
       await kdsApi.createPrinter({
         branch_id: targetBranchId,
         ...printerForm,
@@ -120,11 +121,7 @@ export function PrintersPage() {
 
   const handleCreateGroup = async () => {
     try {
-      const targetBranchId = (printers[0] as any)?.branch_id || printers[0]?.id;
-      if (!targetBranchId) {
-        setError('No active printer/branch context');
-        return;
-      }
+      const targetBranchId = (printers[0] as any)?.branch_id || branches[0]?.id || 'branch-1';
       await kdsApi.createPrinterGroup({
         branch_id: targetBranchId,
         ...groupForm,

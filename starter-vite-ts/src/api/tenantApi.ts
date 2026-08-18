@@ -43,6 +43,14 @@ export interface BranchStatusSnapshot {
 }
 
 export const tenantApi = {
+  getTenantProfile: async (): Promise<any> => {
+    const res = await httpClient.get('/api/v1/tenant');
+    return res.data;
+  },
+  updateTenantProfile: async (data: any): Promise<any> => {
+    const res = await httpClient.patch('/api/v1/tenant', data);
+    return res.data;
+  },
   getBranches: async (): Promise<Branch[]> => {
     const res = await httpClient.get('/api/v1/branches');
     return res.data;

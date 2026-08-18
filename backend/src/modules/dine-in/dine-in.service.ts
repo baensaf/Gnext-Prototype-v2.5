@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { DiningArea } from '../../entities/DiningArea.entity';
 import { DiningTable } from '../../entities/DiningTable.entity';
 import { TableSession } from '../../entities/TableSession.entity';
@@ -10,6 +10,8 @@ import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { OrderLink } from '../../entities/OrderLink.entity';
 import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
+import { Payment } from '../../entities/Payment.entity';
+import { PaymentAllocation } from '../../entities/PaymentAllocation.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { CreateSectionDto, UpdateSectionDto, CreateTableDto, UpdateTableDto, MergeOrdersDto } from './dtos/dine-in.dto';
@@ -473,6 +475,18 @@ export class DineInService {
         }
       }
 
+      // Re-parent source order payments and allocations to target order
+      const sourcePayments = await em.find(Payment, { where: { order_id: In(dto.sourceOrderIds), tenant_id: tenantId } });
+      for (const p of sourcePayments) {
+        p.order_id = targetOrder.id;
+        await em.save(Payment, p);
+      }
+      const sourceAllocations = await em.find(PaymentAllocation, { where: { order_id: In(dto.sourceOrderIds), tenant_id: tenantId } });
+      for (const a of sourceAllocations) {
+        a.order_id = targetOrder.id;
+        await em.save(PaymentAllocation, a);
+      }
+
       // Requote & recalculate target order totals
       const freshTargetItems = await em.find(OrderItem, { where: { order_id: targetOrder.id, tenant_id: tenantId } });
       let subtotal = '0.0000';
@@ -499,7 +513,21 @@ export class DineInService {
       targetOrder.grand_total = MoneyUtil.greaterThan(grandTotal, '0.0000') ? grandTotal : '0.0000';
       targetOrder.total_amount = targetOrder.grand_total;
 
-      const outstanding = MoneyUtil.subtract(targetOrder.grand_total, targetOrder.paid_total || '0.0000');
+      // Compute total paid from all succeeded payments linked to target order
+      const allTargetPayments = await em.find(Payment, {
+        where: [
+          { order_id: targetOrder.id, tenant_id: tenantId, status: 'SUCCEEDED' },
+          { order_id: targetOrder.id, tenant_id: tenantId, status: 'COMPLETED' as any },
+        ],
+      });
+      let targetPaid = '0.0000';
+      for (const p of allTargetPayments) {
+        targetPaid = MoneyUtil.add(targetPaid, p.amount || '0.0000');
+      }
+      targetOrder.paid_total = targetPaid;
+      targetOrder.paid_amount = targetPaid;
+
+      const outstanding = MoneyUtil.subtract(targetOrder.grand_total, targetOrder.paid_total);
       targetOrder.outstanding_total = MoneyUtil.greaterThan(outstanding, '0.0000') ? outstanding : '0.0000';
       targetOrder.due_amount = targetOrder.outstanding_total;
       targetOrder.quote_version = String(Date.now());

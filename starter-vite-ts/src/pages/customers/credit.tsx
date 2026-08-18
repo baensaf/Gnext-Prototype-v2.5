@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import PaymentsIcon from '@mui/icons-material/Payments';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
@@ -25,6 +25,8 @@ import {
   DialogActions,
   TableContainer,
 } from '@mui/material';
+
+import { useParams } from 'src/routes/hooks';
 
 import { MoneyUtil } from 'src/utils/money.util';
 
@@ -85,7 +87,7 @@ export function CustomerCreditPage() {
     }
   };
 
-  const handleViewStatement = async (customerId: string) => {
+  const handleViewStatement = useCallback(async (customerId: string) => {
     try {
       const res = await customerApi.getCreditStatement(customerId);
       setStatementData(res);
@@ -93,7 +95,15 @@ export function CustomerCreditPage() {
     } catch (err: any) {
       setError(err.detail || 'Failed to load statement');
     }
-  };
+  }, []);
+
+  const { id } = useParams();
+
+  useEffect(() => {
+    if (id) {
+      handleViewStatement(id);
+    }
+  }, [id, handleViewStatement]);
 
   const totalLimit = agingData.reduce((acc, c) => MoneyUtil.add(acc, c.credit_limit || '0', 0), '0');
   const totalBalance = agingData.reduce((acc, c) => MoneyUtil.add(acc, c.current_balance || '0', 0), '0');

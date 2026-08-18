@@ -456,7 +456,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     );
     expect(cashPayment.status).toBe('SUCCEEDED');
 
-    const remainingDue = '200000.0000';
+    const remainingDue = MoneyUtil.subtract(submittedOrder.grand_total, '200000.0000');
     const posIntent = await paymentService.createPaymentIntent(
       tenantId,
       {
@@ -478,7 +478,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     expect(posPayment.status).toBe('SUCCEEDED');
 
     const refreshedOrder = await orderRepo.findOne({ where: { id: submittedOrder.id } });
-    expect(MoneyUtil.format(refreshedOrder?.paid_amount || '0')).toBe('400000.0000');
+    expect(MoneyUtil.format(refreshedOrder?.paid_amount || '0')).toBe(MoneyUtil.format(submittedOrder.grand_total));
     expect(MoneyUtil.format(refreshedOrder?.outstanding_total || '0')).toBe('0.0000');
 
     // Step 5: KDS Kitchen Ticket Progression & Bump
