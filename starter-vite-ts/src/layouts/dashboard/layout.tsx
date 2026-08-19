@@ -18,14 +18,15 @@ import { useAuthContext } from 'src/auth/hooks';
 import { NavMobile } from './nav-mobile';
 import { VerticalDivider } from './content';
 import { NavVertical } from './nav-vertical';
-import { NavHorizontal } from './nav-horizontal';
 import { _account } from '../nav-config-account';
+import { NavHorizontal } from './nav-horizontal';
 import { Searchbar } from '../components/searchbar';
 import { useNavData } from '../nav-config-dashboard';
 import { MenuButton } from '../components/menu-button';
 import { AccountDrawer } from '../components/account-drawer';
 import { SettingsButton } from '../components/settings-button';
 import { LanguagePopover } from '../components/language-popover';
+import { WorkspacesPopover } from '../components/workspaces-popover';
 import { dashboardLayoutVars, dashboardNavColorVars } from './css-vars';
 import { NotificationsDrawer } from '../components/notifications-drawer';
 import { MainSection, layoutClasses, HeaderSection, LayoutSection } from '../core';
@@ -131,6 +132,8 @@ export function DashboardLayout({
             <VerticalDivider sx={{ [theme.breakpoints.up(layoutQuery)]: { display: 'flex' } }} />
           )}
 
+          {/** @slot Workspace / Branch popover */}
+          <WorkspacesPopover />
         </>
       ),
       rightArea: (

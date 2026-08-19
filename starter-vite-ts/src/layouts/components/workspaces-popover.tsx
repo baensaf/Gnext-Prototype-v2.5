@@ -1,7 +1,6 @@
 import type { Theme, SxProps } from '@mui/material/styles';
 import type { ButtonBaseProps } from '@mui/material/ButtonBase';
 
-import { useState, useCallback } from 'react';
 import { usePopover } from 'minimal-shared/hooks';
 
 import Box from '@mui/material/Box';
@@ -12,6 +11,11 @@ import MenuItem from '@mui/material/MenuItem';
 import Typography from '@mui/material/Typography';
 import ButtonBase from '@mui/material/ButtonBase';
 import Button, { buttonClasses } from '@mui/material/Button';
+
+import { paths } from 'src/routes/paths';
+import { useRouter } from 'src/routes/hooks';
+
+import { useBranchContext } from 'src/contexts/branch-context';
 
 import { Label } from 'src/components/label';
 import { Iconify } from 'src/components/iconify';
@@ -24,25 +28,19 @@ export type WorkspacesPopoverProps = ButtonBaseProps & {
   data?: {
     id: string;
     name: string;
-    logo: string;
-    plan: string;
+    logo?: string;
+    plan?: string;
   }[];
 };
 
-export function WorkspacesPopover({ data = [], sx, ...other }: WorkspacesPopoverProps) {
+export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps) {
   const mediaQuery = 'sm';
-
+  const router = useRouter();
   const { open, anchorEl, onClose, onOpen } = usePopover();
+  const { branches, selectedBranch, selectedBranchId, setSelectedBranchId } = useBranchContext();
 
-  const [workspace, setWorkspace] = useState(data[0]);
-
-  const handleChangeWorkspace = useCallback(
-    (newValue: (typeof data)[0]) => {
-      setWorkspace(newValue);
-      onClose();
-    },
-    [onClose]
-  );
+  const activeName = selectedBranch?.name || data?.[0]?.name || 'Active Branch';
+  const activeCode = selectedBranch?.code || data?.[0]?.plan || 'BRANCH';
 
   const buttonBg: SxProps<Theme> = {
     height: 1,
@@ -72,6 +70,8 @@ export function WorkspacesPopover({ data = [], sx, ...other }: WorkspacesPopover
       sx={[
         {
           py: 0.5,
+          px: 1,
+          borderRadius: 1.5,
           gap: { xs: 0.5, [mediaQuery]: 1 },
           '&::before': buttonBg,
         },
@@ -79,29 +79,40 @@ export function WorkspacesPopover({ data = [], sx, ...other }: WorkspacesPopover
       ]}
       {...other}
     >
-      <Box
-        component="img"
-        alt={workspace?.name}
-        src={workspace?.logo}
-        sx={{ width: 24, height: 24, borderRadius: '50%' }}
-      />
+      <Avatar
+        sx={{
+          width: 26,
+          height: 26,
+          bgcolor: 'primary.main',
+          color: 'primary.contrastText',
+          fontSize: '0.75rem',
+          fontWeight: 700,
+        }}
+      >
+        {activeName.charAt(0).toUpperCase()}
+      </Avatar>
 
       <Box
         component="span"
-        sx={{ typography: 'subtitle2', display: { xs: 'none', [mediaQuery]: 'inline-flex' } }}
-      >
-        {workspace?.name}
-      </Box>
-
-      <Label
-        color={workspace?.plan === 'Free' ? 'default' : 'info'}
         sx={{
-          height: 22,
-          cursor: 'inherit',
+          typography: 'subtitle2',
+          fontWeight: 700,
           display: { xs: 'none', [mediaQuery]: 'inline-flex' },
         }}
       >
-        {workspace?.plan}
+        {activeName}
+      </Box>
+
+      <Label
+        color="info"
+        sx={{
+          height: 22,
+          cursor: 'inherit',
+          fontWeight: 700,
+          display: { xs: 'none', [mediaQuery]: 'inline-flex' },
+        }}
+      >
+        {activeCode}
       </Label>
 
       <Iconify width={16} icon="carbon:chevron-sort" sx={{ color: 'text.disabled' }} />
@@ -115,30 +126,54 @@ export function WorkspacesPopover({ data = [], sx, ...other }: WorkspacesPopover
       onClose={onClose}
       slotProps={{
         arrow: { placement: 'top-left' },
-        paper: { sx: { mt: 0.5, ml: -1.55, width: 240 } },
+        paper: { sx: { mt: 0.5, ml: -1.55, width: 280 } },
       }}
     >
-      <Scrollbar sx={{ maxHeight: 240 }}>
-        <MenuList>
-          {data.map((option) => (
+      <Box sx={{ p: 1.5, pb: 1 }}>
+        <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>
+          Active Branch / Store
+        </Typography>
+      </Box>
+
+      <Divider sx={{ mb: 0.5, borderStyle: 'dashed' }} />
+
+      <Scrollbar sx={{ maxHeight: 260 }}>
+        <MenuList sx={{ p: 0.5 }}>
+          {branches.map((branch) => (
             <MenuItem
-              key={option.id}
-              selected={option.id === workspace?.id}
-              onClick={() => handleChangeWorkspace(option)}
-              sx={{ height: 48 }}
+              key={branch.id}
+              selected={branch.id === selectedBranchId}
+              onClick={() => {
+                setSelectedBranchId(branch.id);
+                onClose();
+              }}
+              sx={{ height: 48, borderRadius: 1, gap: 1.5 }}
             >
-              <Avatar alt={option.name} src={option.logo} sx={{ width: 24, height: 24 }} />
-
-              <Typography
-                noWrap
-                component="span"
-                variant="body2"
-                sx={{ flexGrow: 1, fontWeight: 'fontWeightMedium' }}
+              <Avatar
+                sx={{
+                  width: 28,
+                  height: 28,
+                  bgcolor: branch.id === selectedBranchId ? 'primary.main' : 'action.selected',
+                  color: branch.id === selectedBranchId ? 'primary.contrastText' : 'text.primary',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                }}
               >
-                {option.name}
-              </Typography>
+                {branch.name.charAt(0).toUpperCase()}
+              </Avatar>
 
-              <Label color={option.plan === 'Free' ? 'default' : 'info'}>{option.plan}</Label>
+              <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                <Typography noWrap variant="body2" sx={{ fontWeight: branch.id === selectedBranchId ? 700 : 500 }}>
+                  {branch.name}
+                </Typography>
+                <Typography noWrap variant="caption" color="text.secondary">
+                  Code: {branch.code}
+                </Typography>
+              </Box>
+
+              <Label color={branch.id === selectedBranchId ? 'primary' : 'default'} sx={{ height: 20, fontSize: '0.65rem' }}>
+                {branch.code}
+              </Label>
             </MenuItem>
           ))}
         </MenuList>
@@ -148,12 +183,13 @@ export function WorkspacesPopover({ data = [], sx, ...other }: WorkspacesPopover
 
       <Button
         fullWidth
-        startIcon={<Iconify width={18} icon="mingcute:add-line" />}
+        startIcon={<Iconify width={18} icon="mingcute:location-fill" />}
         onClick={() => {
           onClose();
+          router.push(paths.app.operations.branches);
         }}
         sx={{
-          gap: 2,
+          gap: 1.5,
           justifyContent: 'flex-start',
           fontWeight: 'fontWeightMedium',
           [`& .${buttonClasses.startIcon}`]: {
@@ -166,7 +202,7 @@ export function WorkspacesPopover({ data = [], sx, ...other }: WorkspacesPopover
           },
         }}
       >
-        Create workspace
+        Manage Branches
       </Button>
     </CustomPopover>
   );

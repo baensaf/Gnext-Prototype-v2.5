@@ -259,6 +259,7 @@ export function SettingsDrawer({ sx, defaultSettings }: SettingsDrawerProps) {
             }}
             options={[
               themeConfig.fontFamily.primary,
+              'Public Sans Variable',
               'Inter Variable',
               'DM Sans Variable',
               'Nunito Sans Variable',

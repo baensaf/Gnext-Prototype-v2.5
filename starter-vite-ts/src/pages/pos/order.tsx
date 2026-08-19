@@ -1,6 +1,6 @@
-import type { Branch } from 'src/api/tenantApi';
 import type { OrderHeader } from 'src/api/orderApi';
 import type { Customer } from 'src/api/customerApi';
+import type { DiningTable } from 'src/api/dineInApi';
 import type { ManualDiscount } from 'src/api/discountsApi';
 import type { Product, Category, OptionItem, OptionGroup, ProductVariant } from 'src/api/catalogApi';
 
@@ -10,12 +10,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import ClearIcon from '@mui/icons-material/Clear';
 import PauseIcon from '@mui/icons-material/Pause';
+import CheckIcon from '@mui/icons-material/Check';
 import SearchIcon from '@mui/icons-material/Search';
 import RemoveIcon from '@mui/icons-material/Remove';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import EditNoteIcon from '@mui/icons-material/EditNote';
+import TableBarIcon from '@mui/icons-material/TableBar';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -32,6 +34,7 @@ import {
   Chip,
   Tabs,
   Grid,
+  Menu,
   Badge,
   Stack,
   Alert,
@@ -65,10 +68,11 @@ import {
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { orderApi } from 'src/api/orderApi';
-import { tenantApi } from 'src/api/tenantApi';
+import { dineInApi } from 'src/api/dineInApi';
 import { catalogApi } from 'src/api/catalogApi';
 import { customerApi } from 'src/api/customerApi';
 import { discountsApi } from 'src/api/discountsApi';
+import { useBranchContext } from 'src/contexts/branch-context';
 
 import { CheckoutModal } from 'src/components/CheckoutModal';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
@@ -92,8 +96,7 @@ const DISCOUNT_REASONS = [
 export function PosOrderPage() {
   const { t: _t } = useTranslation();
 
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  const { selectedBranchId, setSelectedBranchId } = useBranchContext();
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeTab, setActiveTab] = useState<string>('');
   const [products, setProducts] = useState<Product[]>([]);
@@ -101,6 +104,9 @@ export function PosOrderPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>('DINE_IN');
   const [tableNumber, setTableNumber] = useState('T-01');
+  const [diningTables, setDiningTables] = useState<DiningTable[]>([]);
+  const [tableMenuAnchorEl, setTableMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [customTableInput, setCustomTableInput] = useState('');
 
   // Order Notes Dialog state
   const [orderNotes, setOrderNotes] = useState<string>('');
@@ -169,7 +175,8 @@ export function PosOrderPage() {
   const [holdSuccessMessage, setHoldSuccessMessage] = useState<string | null>(null);
 
   // Coupon state
-  const [couponCode, setCouponCode] = useState('');
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCouponCode, setAppliedCouponCode] = useState('');
 
   // Manual Discount Modal state
   const [manualDiscountModalOpen, setManualDiscountModalOpen] = useState(false);
@@ -208,11 +215,6 @@ export function PosOrderPage() {
 
   const loadInitialData = async () => {
     try {
-      const bList = await tenantApi.getBranches();
-      setBranches(bList);
-      const initialBranch = bList.length > 0 ? bList[0].id : '';
-      if (initialBranch) setSelectedBranchId(initialBranch);
-
       const cList = await catalogApi.getCategories();
       setCategories(cList);
       if (cList.length > 0) setActiveTab(cList[0].id);
@@ -223,8 +225,10 @@ export function PosOrderPage() {
       const custs = await customerApi.getCustomers();
       setCustomers(custs);
 
-      if (initialBranch) {
-        fetchHeldOrders(initialBranch);
+      const tList = await dineInApi.getTables().catch(() => [] as DiningTable[]);
+      setDiningTables(tList);
+      if (tList.length > 0 && (!tableNumber || tableNumber === 'T-01')) {
+        setTableNumber(tList[0].code || tList[0].table_number || 'T-01');
       }
     } catch {
       setError('Failed to load POS catalog data');
@@ -360,7 +364,8 @@ export function PosOrderPage() {
   const handleClearCart = () => {
     setCart([]);
     setActiveDraftOrderId(null);
-    setCouponCode('');
+    setCouponInput('');
+    setAppliedCouponCode('');
     setManualValue('');
     setAppliedManualDiscount(null);
     setManualApprovalRequestId(undefined);
@@ -388,7 +393,7 @@ export function PosOrderPage() {
         branch_id: selectedBranchId,
         order_type: orderType,
         customer_id: selectedCustomerId || undefined,
-        coupon_code: couponCode || undefined,
+        coupon_code: appliedCouponCode || undefined,
         table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
         notes: orderNotes.trim() || undefined,
         items: cart.map((ci) => ({
@@ -425,7 +430,8 @@ export function PosOrderPage() {
       setOrderType((fullOrder.order_type as any) || 'DINE_IN');
       if (fullOrder.table_number) setTableNumber(fullOrder.table_number);
       setSelectedCustomerId(fullOrder.customer_id || '');
-      setCouponCode(fullOrder.coupon_code || '');
+      setCouponInput(fullOrder.coupon_code || '');
+      setAppliedCouponCode(fullOrder.coupon_code || '');
       setOrderNotes(fullOrder.notes || '');
 
       // Reconstruct cart items
@@ -515,8 +521,8 @@ export function PosOrderPage() {
         },
       };
 
-      if (couponCode.trim()) {
-        payload.couponCode = couponCode.trim();
+      if (appliedCouponCode.trim()) {
+        payload.couponCode = appliedCouponCode.trim();
       }
 
       if (appliedManualDiscount && MoneyUtil.greaterThan(appliedManualDiscount.value, '0')) {
@@ -556,21 +562,23 @@ export function PosOrderPage() {
     } catch {
       // Ignore routine typing auto-quote errors
     }
-  }, [cart, selectedCustomerId, couponCode, appliedManualDiscount, selectedBranchId, orderType]);
+  }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType]);
 
   useEffect(() => {
     evaluateQuote();
   }, [evaluateQuote]);
 
   // Coupon Actions
-  const handleApplyCoupon = async () => {
-    if (!couponCode.trim()) return;
+  const handleApplyCoupon = () => {
+    const trimmed = couponInput.trim().toUpperCase();
+    if (!trimmed) return;
     setAppliedManualDiscount(null);
-    evaluateQuote();
+    setAppliedCouponCode(trimmed);
   };
 
   const handleClearCoupon = () => {
-    setCouponCode('');
+    setCouponInput('');
+    setAppliedCouponCode('');
     setDiscountMessage(null);
     setError(null);
   };
@@ -607,7 +615,8 @@ export function PosOrderPage() {
       return;
     }
 
-    setCouponCode('');
+    setCouponInput('');
+    setAppliedCouponCode('');
     setAppliedManualDiscount({
       calculation_type: manualCalcType,
       value: manualValue,
@@ -638,7 +647,8 @@ export function PosOrderPage() {
   const handleApprovalSuccess = (_pin: string, requestId?: string) => {
     if (requestId) {
       setManualApprovalRequestId(requestId);
-      setCouponCode('');
+      setCouponInput('');
+      setAppliedCouponCode('');
       setAppliedManualDiscount({
         calculation_type: manualCalcType,
         value: manualValue,
@@ -672,7 +682,7 @@ export function PosOrderPage() {
         branch_id: selectedBranchId,
         order_type: orderType,
         customer_id: selectedCustomerId || undefined,
-        coupon_code: couponCode || undefined,
+        coupon_code: appliedCouponCode || undefined,
         table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
         notes: orderNotes.trim() || undefined,
         items: cart.map((ci) => ({
@@ -719,57 +729,6 @@ export function PosOrderPage() {
 
   return (
     <Box>
-      {/* Header Banner */}
-      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2.5, flexWrap: 'wrap', gap: 2 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            POS Register & Order Placement
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            High-density cashier touch terminal: search, modifiers, manual discounts modal, supervisor approvals & parked carts
-          </Typography>
-        </Box>
-
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          {/* Held Orders Drawer Trigger Button */}
-          <Tooltip title="View and resume parked draft orders">
-            <Button
-              variant="outlined"
-              color="inherit"
-              startIcon={
-                <Badge badgeContent={heldOrders.length} color="warning">
-                  <PauseIcon />
-                </Badge>
-              }
-              onClick={() => {
-                fetchHeldOrders();
-                setHeldOrdersDrawerOpen(true);
-              }}
-              sx={{ fontWeight: 600, px: 2, height: 40 }}
-            >
-              Held Orders ({heldOrders.length})
-            </Button>
-          </Tooltip>
-
-          <Box sx={{ minWidth: 220 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Active Branch</InputLabel>
-              <Select
-                value={selectedBranchId}
-                label="Active Branch"
-                onChange={(e) => setSelectedBranchId(e.target.value)}
-              >
-                {branches.map((b) => (
-                  <MenuItem key={b.id} value={b.id}>
-                    {b.name} ({b.code})
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
-        </Stack>
-      </Stack>
-
       {error && (
         <Alert severity="error" sx={{ mb: 2.5 }} onClose={() => setError(null)}>
           {error}
@@ -1039,18 +998,31 @@ export function PosOrderPage() {
                   <ShoppingCartIcon color="primary" fontSize="small" />
                   Active Cart ({cart.reduce((s, i) => s + i.quantity, 0)} items)
                 </Typography>
-                {cart.length > 0 && (
-                  <Stack direction="row" spacing={0.75}>
+                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                  <Tooltip title="View and resume held draft orders">
                     <Button
                       size="small"
                       color="warning"
                       variant="outlined"
-                      startIcon={<PauseIcon fontSize="small" />}
-                      onClick={handleHoldOrder}
+                      startIcon={
+                        <Badge
+                          badgeContent={heldOrders.length}
+                          color="warning"
+                          sx={{ '& .MuiBadge-badge': { fontSize: '0.65rem', height: 16, minWidth: 16 } }}
+                        >
+                          <PauseIcon fontSize="small" />
+                        </Badge>
+                      }
+                      onClick={() => {
+                        fetchHeldOrders();
+                        setHeldOrdersDrawerOpen(true);
+                      }}
                       sx={{ textTransform: 'none', fontWeight: 600, py: 0.25, px: 1 }}
                     >
-                      Hold
+                      Held
                     </Button>
+                  </Tooltip>
+                  {cart.length > 0 && (
                     <Button
                       size="small"
                       color="error"
@@ -1060,8 +1032,8 @@ export function PosOrderPage() {
                     >
                       Clear
                     </Button>
-                  </Stack>
-                )}
+                  )}
+                </Stack>
               </Stack>
 
               {/* Order Parameters (Segmented Order Type Switch + Customer/Table) */}
@@ -1193,13 +1165,168 @@ export function PosOrderPage() {
                   </Tooltip>
 
                   {orderType === 'DINE_IN' && (
-                    <TextField
-                      size="small"
-                      label="Table #"
-                      value={tableNumber}
-                      onChange={(e) => setTableNumber(e.target.value)}
-                      sx={{ width: 85, flexShrink: 0 }}
-                    />
+                    <>
+                      <Tooltip title={tableNumber ? `Dining Table: ${tableNumber}` : 'Select Dining Table'}>
+                        <IconButton
+                          color="warning"
+                          onClick={(e) => {
+                            setCustomTableInput(tableNumber || '');
+                            setTableMenuAnchorEl(e.currentTarget);
+                          }}
+                          sx={{
+                            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 171, 0, 0.16)' : 'warning.lighter',
+                            color: (theme) => theme.palette.mode === 'dark' ? 'warning.main' : 'warning.darker',
+                            borderRadius: 1.25,
+                            p: 0.85,
+                            border: '1px solid',
+                            borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 171, 0, 0.24)' : 'warning.light',
+                            '&:hover': {
+                              bgcolor: 'warning.main',
+                              color: 'warning.contrastText',
+                            },
+                            flexShrink: 0,
+                          }}
+                        >
+                          <Badge
+                            color="warning"
+                            badgeContent={tableNumber || 0}
+                            invisible={!tableNumber}
+                            sx={{
+                              '& .MuiBadge-badge': {
+                                fontSize: '0.65rem',
+                                fontWeight: 700,
+                                height: 18,
+                                minWidth: 18,
+                                borderRadius: 1,
+                                px: 0.5,
+                                bgcolor: 'warning.main',
+                                color: 'warning.contrastText',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+                              },
+                            }}
+                          >
+                            <TableBarIcon fontSize="small" />
+                          </Badge>
+                        </IconButton>
+                      </Tooltip>
+
+                      <Menu
+                        anchorEl={tableMenuAnchorEl}
+                        open={Boolean(tableMenuAnchorEl)}
+                        onClose={() => setTableMenuAnchorEl(null)}
+                        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                        slotProps={{
+                          paper: {
+                            sx: {
+                              minWidth: 260,
+                              maxWidth: 340,
+                              p: 1,
+                              borderRadius: 1.5,
+                              boxShadow: (theme) => theme.customShadows?.dropdown || 4,
+                            },
+                          },
+                        }}
+                      >
+                        <Box sx={{ px: 1, py: 0.5, mb: 0.5 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                            Select Dining Table
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {tableNumber ? `Current Selection: ${tableNumber}` : 'Assign a table for this dine-in order'}
+                          </Typography>
+                        </Box>
+                        <Divider sx={{ my: 0.5 }} />
+
+                        {diningTables.length > 0 ? (
+                          <Box sx={{ maxHeight: 220, overflowY: 'auto' }}>
+                            {diningTables.map((t) => {
+                              const val = t.code || t.table_number;
+                              const isSelected = tableNumber === val;
+                              return (
+                                <MenuItem
+                                  key={t.id}
+                                  selected={isSelected}
+                                  onClick={() => {
+                                    setTableNumber(val);
+                                    setTableMenuAnchorEl(null);
+                                  }}
+                                  sx={{
+                                    borderRadius: 1,
+                                    my: 0.25,
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                                    {isSelected ? (
+                                      <CheckIcon fontSize="small" color="warning" />
+                                    ) : (
+                                      <TableBarIcon fontSize="small" sx={{ color: 'text.secondary', opacity: 0.6 }} />
+                                    )}
+                                    <Box>
+                                      <Typography variant="body2" sx={{ fontWeight: isSelected ? 700 : 500 }}>
+                                        {t.code || `Table ${t.table_number}`}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        {t.seating_capacity} seats
+                                      </Typography>
+                                    </Box>
+                                  </Stack>
+                                  <Chip
+                                    label={t.status}
+                                    size="small"
+                                    color={t.status === 'AVAILABLE' ? 'success' : t.status === 'OCCUPIED' ? 'warning' : 'default'}
+                                    sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600 }}
+                                  />
+                                </MenuItem>
+                              );
+                            })}
+                          </Box>
+                        ) : (
+                          <Box sx={{ p: 1 }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                              No registered dining tables found. Enter table identifier:
+                            </Typography>
+                          </Box>
+                        )}
+
+                        <Divider sx={{ my: 0.75 }} />
+                        <Box sx={{ p: 1, pt: 0.5 }}>
+                          <Stack direction="row" spacing={0.75}>
+                            <TextField
+                              size="small"
+                              placeholder="Custom Table #"
+                              value={customTableInput}
+                              onChange={(e) => setCustomTableInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && customTableInput.trim()) {
+                                  setTableNumber(customTableInput.trim());
+                                  setTableMenuAnchorEl(null);
+                                }
+                              }}
+                              sx={{ '& .MuiInputBase-input': { py: 0.75, fontSize: '0.8125rem' } }}
+                            />
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="warning"
+                              disabled={!customTableInput.trim()}
+                              onClick={() => {
+                                if (customTableInput.trim()) {
+                                  setTableNumber(customTableInput.trim());
+                                  setTableMenuAnchorEl(null);
+                                }
+                              }}
+                              sx={{ minWidth: 50, px: 1.5, fontSize: '0.75rem', fontWeight: 700 }}
+                            >
+                              Set
+                            </Button>
+                          </Stack>
+                        </Box>
+                      </Menu>
+                    </>
                   )}
                 </Stack>
 
@@ -1307,12 +1434,18 @@ export function PosOrderPage() {
                 <TextField
                   size="small"
                   placeholder="Coupon Code"
-                  value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleApplyCoupon();
+                    }
+                  }}
                   fullWidth
                   slotProps={{
                     input: {
-                      endAdornment: couponCode ? (
+                      endAdornment: (couponInput || appliedCouponCode) ? (
                         <InputAdornment position="end">
                           <IconButton size="small" onClick={handleClearCoupon} sx={{ p: 0.25 }}>
                             <ClearIcon fontSize="small" />
@@ -1323,13 +1456,14 @@ export function PosOrderPage() {
                   }}
                 />
                 <Button
-                  variant="contained"
+                  variant={appliedCouponCode && appliedCouponCode === couponInput.trim() ? 'contained' : 'outlined'}
+                  color={appliedCouponCode && appliedCouponCode === couponInput.trim() ? 'success' : 'primary'}
                   size="small"
                   onClick={handleApplyCoupon}
-                  disabled={!couponCode.trim()}
+                  disabled={!couponInput.trim() || (appliedCouponCode === couponInput.trim())}
                   sx={{ fontWeight: 'bold', flexShrink: 0, px: 1.75 }}
                 >
-                  Apply
+                  {appliedCouponCode && appliedCouponCode === couponInput.trim() ? 'Applied' : 'Apply'}
                 </Button>
                 <Tooltip title="Configure Cashier Manual Discount in modal">
                   <Button

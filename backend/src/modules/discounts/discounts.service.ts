@@ -244,13 +244,9 @@ export class DiscountsService {
       discount_id: cId,
       code,
       max_uses: dto.max_uses || null,
-      max_redemptions: dto.max_uses || null,
       uses_count: 0,
-      current_redemptions: 0,
       effective_from: dto.effective_from ? new Date(dto.effective_from) : null,
-      starts_at: dto.effective_from ? new Date(dto.effective_from) : null,
       effective_to: dto.effective_to ? new Date(dto.effective_to) : null,
-      expires_at: dto.effective_to ? new Date(dto.effective_to) : null,
       is_active: true,
     });
 
@@ -480,13 +476,9 @@ export class DiscountsService {
       discount_id: campaign.id,
       code,
       max_uses: 1,
-      max_redemptions: 1,
       uses_count: 0,
-      current_redemptions: 0,
       effective_from: dto.effective_from ? new Date(dto.effective_from) : null,
-      starts_at: dto.effective_from ? new Date(dto.effective_from) : null,
       effective_to: dto.effective_to ? new Date(dto.effective_to) : null,
-      expires_at: dto.effective_to ? new Date(dto.effective_to) : null,
       is_active: true,
     });
 
