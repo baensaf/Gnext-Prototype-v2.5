@@ -293,7 +293,7 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
       tenant_id: testTenantId,
       branch_id: testBranchId,
       is_online: false,
-      agent_version: 'v1.5.0-sim',
+      agent_version: 'v2.0.0-sim',
       agent_health: 'HEALTHY',
       last_heartbeat_at: new Date(),
       offline_since: new Date(),

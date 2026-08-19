@@ -95,7 +95,7 @@ export class PrintRenderService {
         </table>
         ${totalsHtml}
         <div class="footer">
-          <div>Gnext Prototype v1.5 Simulated Thermal Print</div>
+          <div>Gnext Prototype v2 Simulated Thermal Print</div>
         </div>
       </body>
       </html>

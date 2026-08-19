@@ -1,4 +1,4 @@
-# Gnext Prototype v1.5 — Traceability & Certification Matrix
+# Gnext Prototype v2 — Traceability & Certification Matrix
 
 This document provides a comprehensive traceability matrix mapping every original functional requirement and all remediation slices (**R0** through **R27**) to backend/frontend code implementations, TypeORM schema migrations, REST API endpoints, page components, and test evidence.
 

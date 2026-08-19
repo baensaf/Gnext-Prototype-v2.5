@@ -1,6 +1,6 @@
-# Gnext Prototype v1.5
+# Gnext Prototype v2
 
-Gnext Prototype v1.5 is a customer-validation operational prototype designed for restaurant management, point of sale (POS), kitchen display system (KDS), dine-in, delivery, cashier management, customer subledger, and operational simulation.
+Gnext Prototype v2 is a customer-validation operational prototype designed for restaurant management, point of sale (POS), kitchen display system (KDS), dine-in, delivery, cashier management, customer subledger, and operational simulation.
 
 ---
 

@@ -290,7 +290,7 @@ export class TenantService {
     if (!snapshot) {
       return {
         is_online: true,
-        agent_version: 'v1.5.0-simulated',
+        agent_version: 'v2.0.0-simulated',
         agent_health: 'HEALTHY',
         last_heartbeat_at: new Date(),
         last_sync_at: new Date(),

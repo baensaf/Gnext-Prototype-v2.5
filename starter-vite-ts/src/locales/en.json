@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Gnext Prototype v1.5",
+    "title": "Gnext Prototype v2",
     "simulatedBadge": "SIMULATED ENVIRONMENT",
     "sharedAdminNotice": "Shared Prototype Administrator Account",
     "environment": "Customer-Validation Prototype"
@@ -385,7 +385,7 @@
         "orderWorkflow": {
           "title": "Order Workflow Settings",
           "description": "Order lifecycle states, auto-acceptance rules, dining modes, and kitchen routing.",
-          "badge": "Workflow V1.5"
+          "badge": "Workflow V2"
         },
         "payments": {
           "title": "Payments & Refund Methods",

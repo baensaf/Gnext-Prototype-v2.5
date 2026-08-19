@@ -1059,7 +1059,7 @@ export class ReportsService {
     } else {
       // XLSX Export via ExcelJS
       const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'Gnext Prototype v1.5';
+      workbook.creator = 'Gnext Prototype v2';
       const sheet = workbook.addWorksheet(reportCode);
 
       sheet.addRow([`Report Code: ${reportCode}`]);

@@ -1,11 +1,11 @@
 /**
- * Gnext Prototype v1.5 — Lightweight Feature Registry
+ * Gnext Prototype v2 — Lightweight Feature Registry
  * Controls feature metadata, scope status, and V5 Preview classification.
  */
 
 export interface FeatureRegistryItem {
   id: string;
-  version: 'v1.5' | 'V5 Preview';
+  version: 'v2' | 'V5 Preview';
   status: 'ACTIVE' | 'V5_PREVIEW';
   labelKey: string;
   isV5Preview: boolean;

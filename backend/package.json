@@ -1,7 +1,7 @@
 {
   "name": "gnext-backend",
-  "version": "1.5.0",
-  "description": "Gnext Prototype v1.5 NestJS Backend Monolith",
+  "version": "2.0.0",
+  "description": "Gnext Prototype v2 NestJS Backend Monolith",
   "private": true,
   "scripts": {
     "build": "tsc",
