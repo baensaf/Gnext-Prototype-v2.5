@@ -132,7 +132,7 @@ export function SettingsHubPage() {
           ),
           path: '/app/settings/order-workflow',
           icon: <ReceiptLongIcon sx={{ color: 'warning.main' }} />,
-          badge: { color: 'warning', label: t('settings.hub.items.orderWorkflow.badge', 'Workflow V1.5') },
+          badge: { color: 'warning', label: t('settings.hub.items.orderWorkflow.badge', 'Workflow V2') },
           tags: ['order', 'workflow', 'lifecycle', 'auto accept', 'dining', 'kitchen routing'],
         },
         {

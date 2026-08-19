@@ -288,7 +288,7 @@ export function OfflineSyncPage() {
           Branch Connectivity Mode: {isOnline ? 'Online Connected' : 'Offline Disconnected'}
         </Typography>
         <Typography variant="body2">
-          Agent Version: <strong>{syncStatus?.agent_version || 'v1.5.0-sim'}</strong> | Health: <strong>{syncStatus?.agent_health || 'HEALTHY'}</strong>
+          Agent Version: <strong>{syncStatus?.agent_version || 'v2.0.0-sim'}</strong> | Health: <strong>{syncStatus?.agent_health || 'HEALTHY'}</strong>
         </Typography>
         <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
           Last Sync: {syncStatus?.last_synced_at ? new Date(syncStatus.last_synced_at).toLocaleString() : 'Never'} | Offline Since: {syncStatus?.offline_since ? new Date(syncStatus.offline_since).toLocaleString() : 'N/A'}

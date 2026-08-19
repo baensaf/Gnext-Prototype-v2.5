@@ -45,6 +45,6 @@ This document provides a comprehensive traceability matrix mapping every origina
 > The **V5 Preview Inventory** module (`/app/inventory/stock`) is strictly isolated:
 > - Displayed under the explicit navigation header **"Future — V5 Preview"**.
 > - Rendered with a prominent banner explaining its preview status.
-> - **Excluded** from all core v1.5 sales reports, shift EOD reconciliations, customer credit calculations, and financial total aggregations.
+> - **Excluded** from all core v2 sales reports, shift EOD reconciliations, customer credit calculations, and financial total aggregations.
 
 ---

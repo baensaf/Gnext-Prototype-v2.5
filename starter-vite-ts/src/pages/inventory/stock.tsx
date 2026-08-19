@@ -164,7 +164,7 @@ export function InventoryStockPage() {
 
       {/* V5 Preview Isolation Notice Banner */}
       <Alert severity="info" variant="outlined" sx={{ mb: 3, borderRadius: 2, fontWeight: 500 }}>
-        {t('inventory.v5Banner', 'V5 Preview Module: Inventory stock management is retained for V5 preview. It does not affect v1.5 catalog availability, order submission, KDS, reports, or financial calculations.')}
+        {t('inventory.v5Banner', 'V5 Preview Module: Inventory stock management is retained for V5 preview. It does not affect v2 catalog availability, order submission, KDS, reports, or financial calculations.')}
       </Alert>
 
       {error && (

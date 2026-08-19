@@ -481,7 +481,7 @@
     }
   },
   "inventory": {
-    "v5Banner": "V5 Preview Module: Inventory stock management is retained for V5 preview. It does not affect v1.5 catalog availability, order submission, KDS, reports, or financial calculations."
+    "v5Banner": "V5 Preview Module: Inventory stock management is retained for V5 preview. It does not affect v2 catalog availability, order submission, KDS, reports, or financial calculations."
   },
   "error": {
     "pageNotFound": "404 — Page Not Found",
