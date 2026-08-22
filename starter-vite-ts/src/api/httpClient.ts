@@ -4,6 +4,8 @@ import axios from 'axios';
 
 import { CONFIG } from 'src/global-config';
 
+import { showErrorToast } from 'src/components/snackbar';
+
 export interface ProblemDetails {
   type: string;
   title: string;
@@ -56,11 +58,19 @@ httpClient.interceptors.request.use((config) => {
 httpClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ProblemDetails>) => {
+    const isNetworkError = !error.response;
+    const isServerError = !!(error.response && error.response.status >= 500);
+    const skipToast = error.config?.headers?.['X-Skip-Toast'] === 'true' || (error.config as any)?.skipToast;
+
     if (error.response?.data) {
       const problem = error.response.data;
+      if (isServerError && !skipToast) {
+        showErrorToast(problem);
+      }
       return Promise.reject(problem);
     }
-    return Promise.reject({
+
+    const networkProblem: ProblemDetails = {
       type: 'https://gnext.local/problems/network',
       title: 'Network Error',
       status: 0,
@@ -68,6 +78,12 @@ httpClient.interceptors.response.use(
       detail: error.message || 'Failed to connect to the server.',
       instance: error.config?.url || '',
       correlationId: '00000000-0000-0000-0000-000000000000',
-    } as ProblemDetails);
+    };
+
+    if (isNetworkError && !skipToast) {
+      showErrorToast(networkProblem);
+    }
+
+    return Promise.reject(networkProblem);
   }
 );

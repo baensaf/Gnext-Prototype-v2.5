@@ -1,5 +1,6 @@
 import type { PrintJob } from 'src/api/kdsApi';
 
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import PrintIcon from '@mui/icons-material/Print';
@@ -36,6 +37,7 @@ import {
 import { kdsApi } from 'src/api/kdsApi';
 
 export function PrintQueuePage() {
+  const { t } = useTranslation();
   const [jobs, setJobs] = useState<PrintJob[]>([]);
   const [_total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -119,24 +121,24 @@ export function PrintQueuePage() {
   return (
     <Box sx={{ p: 3 }}>
       <Alert severity="info" variant="outlined" sx={{ mb: 3, borderRadius: 2, fontWeight: 500 }}>
-        V5 Preview Module: Simulated print queue, thermal receipt document generator & reprint dispatcher. Retained for V5 preview.
+        {t('inventory.v5Banner', 'ماژول پیش‌نمایش نسخه ۵: مدیریت صف چاپ شبیه‌سازی‌شده و صدور مجدد فیش.')}
       </Alert>
 
       <Stack direction="row" sx={{ mb: 3, justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
           <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
             <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-              Print Queue & History
+              {t('printQueue.title', 'Print Queue & History')}
             </Typography>
             <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
           </Stack>
           <Typography variant="body2" color="text.secondary">
-            View generated print jobs, preview rendered HTML receipts, simulate printer hardware outcomes, and trigger reprints.
+            {t('nav.hardwareSimDesc', 'View generated print jobs, preview rendered HTML receipts, simulate printer hardware outcomes, and trigger reprints.')}
           </Typography>
         </Box>
 
         <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
-          Refresh
+          {t('monitoring.refresh', 'Refresh')}
         </Button>
       </Stack>
 
@@ -146,9 +148,9 @@ export function PrintQueuePage() {
       <Paper sx={{ p: 2, mb: 3, borderRadius: 2 }}>
         <Stack direction="row" spacing={2}>
           <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel>Status</InputLabel>
-            <Select value={statusFilter} label="Status" onChange={(e) => setStatusFilter(e.target.value)}>
-              <MenuItem value="">All Statuses</MenuItem>
+            <InputLabel>{t('printQueue.filterStatus', 'Status')}</InputLabel>
+            <Select value={statusFilter} label={t('printQueue.filterStatus', 'Status')} onChange={(e) => setStatusFilter(e.target.value)}>
+              <MenuItem value="">{t('printQueue.allStatuses', 'All Statuses')}</MenuItem>
               <MenuItem value="QUEUED">QUEUED</MenuItem>
               <MenuItem value="PROCESSING">PROCESSING</MenuItem>
               <MenuItem value="SUCCESS">SUCCESS</MenuItem>
@@ -157,9 +159,9 @@ export function PrintQueuePage() {
           </FormControl>
 
           <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel>Document Type</InputLabel>
-            <Select value={docTypeFilter} label="Document Type" onChange={(e) => setDocTypeFilter(e.target.value)}>
-              <MenuItem value="">All Document Types</MenuItem>
+            <InputLabel>{t('printQueue.filterDocType', 'Document Type')}</InputLabel>
+            <Select value={docTypeFilter} label={t('printQueue.filterDocType', 'Document Type')} onChange={(e) => setDocTypeFilter(e.target.value)}>
+              <MenuItem value="">{t('printQueue.allDocTypes', 'All Document Types')}</MenuItem>
               <MenuItem value="CUSTOMER_RECEIPT">Customer Receipt</MenuItem>
               <MenuItem value="KITCHEN_TICKET">Kitchen Ticket</MenuItem>
               <MenuItem value="COURIER_SLIP">Courier Slip</MenuItem>
@@ -174,14 +176,14 @@ export function PrintQueuePage() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Job ID</TableCell>
-              <TableCell>Document Type</TableCell>
-              <TableCell>Entity</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Copies</TableCell>
-              <TableCell>Reprint</TableCell>
-              <TableCell>Created At</TableCell>
-              <TableCell align="right">Actions</TableCell>
+              <TableCell>{t('printQueue.columnJobId', 'Job ID')}</TableCell>
+              <TableCell>{t('printQueue.columnType', 'Document Type')}</TableCell>
+              <TableCell>{t('payments.columnOrder', 'Entity')}</TableCell>
+              <TableCell>{t('printQueue.columnStatus', 'Status')}</TableCell>
+              <TableCell>{t('printQueue.columnAttempts', 'Copies')}</TableCell>
+              <TableCell>{t('printQueue.reprint', 'Reprint')}</TableCell>
+              <TableCell>{t('printQueue.columnCreatedAt', 'Created At')}</TableCell>
+              <TableCell align="right">{t('printQueue.columnActions', 'Actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -233,7 +235,7 @@ export function PrintQueuePage() {
             {jobs.length === 0 && (
               <TableRow>
                 <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
-                  No print jobs found in queue.
+                  {t('printQueue.noJobsFound', 'No print jobs found in queue.')}
                 </TableCell>
               </TableRow>
             )}
@@ -243,7 +245,7 @@ export function PrintQueuePage() {
 
       {/* Rendered HTML Preview Modal */}
       <Dialog open={Boolean(previewJob)} onClose={() => setPreviewJob(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>Simulated Thermal Print Preview</DialogTitle>
+        <DialogTitle>{t('printQueue.simulateOutcome', 'Simulated Thermal Print Preview')}</DialogTitle>
         <DialogContent dividers>
           {previewJob && (
             <Box
@@ -253,21 +255,21 @@ export function PrintQueuePage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPreviewJob(null)}>Close</Button>
+          <Button onClick={() => setPreviewJob(null)}>{t('common.cancel', 'Close')}</Button>
         </DialogActions>
       </Dialog>
 
       {/* Simulate Outcome Modal */}
       <Dialog open={Boolean(outcomeJob)} onClose={() => setOutcomeJob(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Simulate Printer Hardware Outcome</DialogTitle>
+        <DialogTitle>{t('printQueue.simulateOutcome', 'Simulate Printer Hardware Outcome')}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>
             Simulate hardware success or failure for Print Job #{outcomeJob?.id.slice(0, 8)}
           </Typography>
           <Stack spacing={2}>
             <FormControl fullWidth>
-              <InputLabel>Simulated Outcome</InputLabel>
-              <Select value={outcomeVal} label="Simulated Outcome" onChange={(e) => setOutcomeVal(e.target.value as any)}>
+              <InputLabel>{t('printQueue.simulateOutcome', 'Simulated Outcome')}</InputLabel>
+              <Select value={outcomeVal} label={t('printQueue.simulateOutcome', 'Simulated Outcome')} onChange={(e) => setOutcomeVal(e.target.value as any)}>
                 <MenuItem value="SUCCESS">SUCCESS (Thermal Print Succeeded)</MenuItem>
                 <MenuItem value="FAILED">FAILED (Printer Error / Out of Paper)</MenuItem>
               </Select>
@@ -275,8 +277,8 @@ export function PrintQueuePage() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOutcomeJob(null)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSimulateOutcome}>Submit Outcome</Button>
+          <Button onClick={() => setOutcomeJob(null)}>{t('common.cancel', 'Cancel')}</Button>
+          <Button variant="contained" onClick={handleSimulateOutcome}>{t('common.confirm', 'Submit Outcome')}</Button>
         </DialogActions>
       </Dialog>
     </Box>

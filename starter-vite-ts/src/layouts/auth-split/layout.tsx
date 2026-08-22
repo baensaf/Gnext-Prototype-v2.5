@@ -4,10 +4,10 @@ import type { AuthSplitContentProps } from './content';
 import type { MainSectionProps, LayoutSectionProps, HeaderSectionProps } from '../core';
 
 import { merge } from 'es-toolkit';
+import { useTranslation } from 'react-i18next';
 
 import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
-import Alert from '@mui/material/Alert';
 
 import { paths } from 'src/routes/paths';
 import { RouterLink } from 'src/routes/components';
@@ -43,17 +43,15 @@ export function AuthSplitLayout({
   slotProps,
   layoutQuery = 'md',
 }: AuthSplitLayoutProps) {
+  const { t } = useTranslation();
+
   const renderHeader = () => {
     const headerSlotProps: HeaderSectionProps['slotProps'] = {
       container: { maxWidth: false },
     };
 
     const headerSlots: HeaderSectionProps['slots'] = {
-      topArea: (
-        <Alert severity="info" sx={{ display: 'none', borderRadius: 0 }}>
-          This is an info Alert.
-        </Alert>
-      ),
+      topArea: null,
       leftArea: (
         <>
           {/** @slot Logo */}
@@ -69,7 +67,7 @@ export function AuthSplitLayout({
             color="inherit"
             sx={{ typography: 'subtitle2' }}
           >
-            Need help?
+            {t('app.needHelp', 'Need help?')}
           </Link>
 
           {/** @slot Language popover */}

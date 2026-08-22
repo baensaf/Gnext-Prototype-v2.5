@@ -179,10 +179,10 @@ export function MonitoringPage() {
             />
             <CardContent sx={{ pt: 0 }}>
               <Typography variant="h5" sx={{ fontWeight: 700, color: 'success.main' }}>
-                ONLINE & HEALTHY
+                {t('monitoring.onlineHealthy', 'آنلاین و فعال')}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Latency: &lt;15ms | DB Pool: Active
+                {t('monitoring.latencyStatus', 'تاخیر کمتر از ۱۵ میلی‌ثانیه | پایگاه‌داده فعال')}
               </Typography>
             </CardContent>
           </Card>
@@ -199,7 +199,7 @@ export function MonitoringPage() {
                 {criticalAlerts.length}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Requires immediate manager action
+                {t('monitoring.requiresAction', 'نیازمند اقدام فوری مدیر')}
               </Typography>
             </CardContent>
           </Card>
@@ -216,7 +216,7 @@ export function MonitoringPage() {
                 {terminals.filter((term) => term.is_active).length} / {terminals.length}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                POS, Kiosk & KDS Stations
+                {t('monitoring.stationsType', 'پایانه‌های POS، کیوسک و KDS')}
               </Typography>
             </CardContent>
           </Card>

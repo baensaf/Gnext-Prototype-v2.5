@@ -1,0 +1,5692 @@
+{
+  "src/api/httpClient.ts": [
+    {
+      "type": "JSX Text",
+      "text": "response,\n  (error: AxiosError"
+    }
+  ],
+  "src/auth/components/sign-up-terms.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Terms of service"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Privacy policy"
+    }
+  ],
+  "src/auth/context/jwt/utils.ts": [
+    {
+      "type": "Toast/Alert",
+      "text": "Token expired!"
+    }
+  ],
+  "src/auth/guard/role-based-guard.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Permission denied"
+    },
+    {
+      "type": "JSX Text",
+      "text": "You do not have permission to access this page."
+    }
+  ],
+  "src/auth/types.ts": [
+    {
+      "type": "JSX Text",
+      "text": "Promise"
+    }
+  ],
+  "src/auth/view/jwt/jwt-sign-in-view.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Forgot password?"
+    },
+    {
+      "type": "Button Text",
+      "text": "Sign in"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Get started"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Use"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Email address"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Password"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Sign in to your account"
+    }
+  ],
+  "src/auth/view/jwt/jwt-sign-up-view.tsx": [
+    {
+      "type": "Button Text",
+      "text": "Create account"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Sign in"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "First name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Last name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Email address"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Password"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Get started absolutely free"
+    }
+  ],
+  "src/components/animate/back-to-top-button.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Back to top"
+    }
+  ],
+  "src/components/approval/ApprovalModal.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Manager PIN Authorization"
+    },
+    {
+      "type": "JSX Text",
+      "text": "This action ("
+    },
+    {
+      "type": "Button Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Manager PIN"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Enter 4-digit PIN (e.g. 1234)"
+    }
+  ],
+  "src/components/BilingualInput.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "English (EN)"
+    }
+  ],
+  "src/components/CheckoutModal.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. POS-998822"
+    }
+  ],
+  "src/components/ImageUploader.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Upload Image"
+    }
+  ],
+  "src/components/logo/logo.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Logo"
+    }
+  ],
+  "src/components/nav-section/types.ts": [
+    {
+      "type": "JSX Text",
+      "text": "Record"
+    }
+  ],
+  "src/components/search-not-found/search-not-found.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Please enter keywords"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Not found"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Try checking for typos or using complete words."
+    }
+  ],
+  "src/components/settings/drawer/font-options.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Change font size"
+    }
+  ],
+  "src/components/settings/drawer/settings-drawer.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Settings"
+    },
+    {
+      "type": "JSX Text",
+      "text": "System"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Reset all"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Close"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Mode"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Contrast"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Right to left"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Compact"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Presets"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Nav"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Layout"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Color"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Font"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Family"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Size"
+    }
+  ],
+  "src/contexts/branch-context.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Promise"
+    }
+  ],
+  "src/layouts/auth-split/layout.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "This is an info Alert."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Need help?"
+    }
+  ],
+  "src/layouts/auth-split/section.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Manage the job"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "More effectively with optimized workflows."
+    }
+  ],
+  "src/layouts/components/account-button.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Account button"
+    }
+  ],
+  "src/layouts/components/account-drawer.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Add account"
+    }
+  ],
+  "src/layouts/components/contacts-popover.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Contacts"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Contacts button"
+    }
+  ],
+  "src/layouts/components/language-popover.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Languages button"
+    }
+  ],
+  "src/layouts/components/nav-upgrade.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Free"
+    },
+    {
+      "type": "Button Text",
+      "text": "Upgrade to Pro"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Power up Productivity!"
+    }
+  ],
+  "src/layouts/components/notifications-drawer/index.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Operational Alerts"
+    },
+    {
+      "type": "JSX Text",
+      "text": "All systems normal"
+    },
+    {
+      "type": "JSX Text",
+      "text": "View Operational Monitoring"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Refresh alerts"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Acknowledge all alerts"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Operational Alerts button"
+    }
+  ],
+  "src/layouts/components/notifications-drawer/notification-item.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Acknowledge"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Acknowledged"
+    }
+  ],
+  "src/layouts/components/searchbar/index.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "esc"
+    }
+  ],
+  "src/layouts/components/settings-button.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Settings button"
+    }
+  ],
+  "src/layouts/components/sign-in-button.tsx": [
+    {
+      "type": "Button Text",
+      "text": "Sign in"
+    }
+  ],
+  "src/layouts/components/workspaces-popover.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Active Branch / Store"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Manage Branches"
+    }
+  ],
+  "src/layouts/dashboard/layout.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "This is an info Alert."
+    }
+  ],
+  "src/layouts/nav-config-dashboard.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "V5 Preview"
+    }
+  ],
+  "src/layouts/simple/layout.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "This is an info Alert."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Need help?"
+    }
+  ],
+  "src/pages/cashier/business-days.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Unreconciled evening shift correction"
+    }
+  ],
+  "src/pages/catalog/availability.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Refresh"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Product Name"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Base Price"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Suspension Reason"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Suspended Until"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Resume Item"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Suspend Item"
+    },
+    {
+      "type": "JSX Text",
+      "text": "All Branches"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "Button Text",
+      "text": "Confirm Suspension"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Branch Scope"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Suspension Duration"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Out of ingredients, Equipment failure"
+    }
+  ],
+  "src/pages/catalog/categories.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Catalog Categories"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Manage product categories and menu hierarchy"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create Category"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Category Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Sort Order"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create New Category"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Category"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Archive Category"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Category Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. CAT-DESSERTS"
+    }
+  ],
+  "src/pages/catalog/menus.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Menus Composer"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Refresh"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create Menu"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Name"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Target Branch"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Sales Channel"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Assigned Items"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Items"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create New Menu"
+    },
+    {
+      "type": "JSX Text",
+      "text": "All Branches"
+    },
+    {
+      "type": "JSX Text",
+      "text": "All Channels"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Dine-In"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Delivery"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Takeaway"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Kiosk"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Aggregator (Snappfood)"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Menu"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Item to Menu"
+    },
+    {
+      "type": "Button Text",
+      "text": "Attach Item to Menu"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Menu Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Menu Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Weekend Dine-In Menu"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Branch (Optional)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Select Product"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Menu Price Override (Optional)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Leave blank to use base price"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Specific price override for this menu channel"
+    }
+  ],
+  "src/pages/catalog/options.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Configure product add-ons, sizes, toppings, and modifier selection rules (V5 Feature)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create Option Group"
+    },
+    {
+      "type": "Button Text",
+      "text": "Add Option"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Option Item"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Price Delta"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No options added to this group yet."
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Option Group"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Modifier Option Item"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "V5 Preview"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Required"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Group Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. GRP-TOPPINGS"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Group Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Extra Pizza Toppings"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Min Selection"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Max Selection"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Required Selection (At least Min Selection mandatory)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Option Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. OPT-EXTRACHEESE"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Option Display Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Extra Mozzarella Cheese"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Price Delta (IRR)"
+    }
+  ],
+  "src/pages/catalog/pricing.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Bulk Price Update"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create Price Group"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Active Price Group"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Product Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Product Name"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Base Catalog Price (IRR)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Group Override Price (IRR)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Action"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Save Override"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Price Group"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Bulk Price Adjustment"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Apply atomic price adjustments across catalog base prices or price group overrides."
+    },
+    {
+      "type": "JSX Text",
+      "text": "All Categories"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Fixed Amount Adjustment (IRR)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "Button Text",
+      "text": "Apply Bulk Adjustment"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Price Group Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. PG-DELIVERY"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Price Group Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Online Delivery Price List"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Category Filter (Optional)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Adjustment Mode"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Adjustment Amount"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Use positive numbers for increase, negative numbers for discount"
+    }
+  ],
+  "src/pages/catalog/product-detail.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Basic Product Information"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Category"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Product Image"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Product Variants"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Configure distinct purchasable versions (e.g. Single Patty, Double Patty, Sizes) with independent SKUs and prices (V5 Feature)."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Variant"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No variants configured yet"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create First Variant"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Default"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Variant Name"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Barcode"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Base Price"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Optional or required add-ons and preparation customizations (e.g. Extra Cheese, Sauces, Notes) (V5 Feature)."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Attach Modifier Group"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No modifier groups attached"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Attach modifier groups to allow cashiers and customers to add toppings or customize preparation."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Select Option Group"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Product Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Product Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Default Base Price (IRR)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Description"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "V5 Preview"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "REQUIRED"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Variant Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. VAR-CHB-DBL"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Double Patty"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. CHB-DBL"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Variant Base Price (IRR)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Sort Order"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Set as Default Variant for this product"
+    }
+  ],
+  "src/pages/catalog/products.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Product Catalog"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Manage master items, base pricing, tax rates, and modifier option groups"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create Product"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Filter by Category"
+    },
+    {
+      "type": "JSX Text",
+      "text": "All Categories"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Product Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Category"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Base Price (IRR)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "VAT Tax Rate"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create New Master Product"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Product"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Select Option Group"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "Button Text",
+      "text": "Attach Group"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Attach Modifier Option Group"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Archive Product"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Product Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. PROD-DOUBLEBURGER"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Double Beef Burger"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Tax Rate (VAT)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Product Media Image Asset"
+    }
+  ],
+  "src/pages/customer-club/customer-discounts.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Search and select multiple customers to assign uniform percentage discount entitlements in a single workflow."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Review:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "customer(s) selected for"
+    },
+    {
+      "type": "JSX Text",
+      "text": "discount."
+    }
+  ],
+  "src/pages/customers/credit.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Credit limits, repayments, statement ledgers, and credit aging reports (AD-12 / Section 8.6)"
+    },
+    {
+      "type": "Button Text",
+      "text": "Refresh Subledger"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Total Approved Credit Limit"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Total Current Balance (Deposits)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Total Available Purchasing Credit"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Customer Credit Accounts Directory"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Customer Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Customer Name"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Credit Limit (IRR)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Current Balance"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Available Credit"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Aging (Current 0-30d)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Repayment / Top-Up"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Statement"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Post Credit Repayment / Top-Up"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "Button Text",
+      "text": "Confirm Repayment"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Mobile:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Credit Limit:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Current Balance:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Available Credit:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Subledger Transaction History"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Time"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Amount (IRR)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Note"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Close"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Repayment Amount (IRR)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Note / Reference"
+    }
+  ],
+  "src/pages/customers/directory.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Manage customer profiles, delivery addresses, customer groups, and credit account ledgers"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Register Customer"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Register New Customer"
+    },
+    {
+      "type": "Table Header",
+      "text": "Customer Group"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Regular Customer"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Customer Profile"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Available Wallet Balance"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Assigned Credit Limit"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Total Purchasing Power"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Top-Up, Deduct or Adjust Wallet Balance"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Transaction Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "DEBIT (Deduct / Spend -)"
+    },
+    {
+      "type": "Button Text",
+      "text": "Post Transaction"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Transaction History"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Date"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Type"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Amount (IRR)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Note"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Close"
+    },
+    {
+      "type": "Button Text",
+      "text": "Add Address"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Saved Addresses"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Search by code, name, or mobile number..."
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Delivery Addresses"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Customer Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. CUST-1002"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "First Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Last Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Mobile Phone Number"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Email Address"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Assigned Credit Line / Overdraft Limit (IRR)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "A wallet account will be automatically provisioned with this initial credit limit."
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Note / Reference"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Address Title"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Office / Home"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Address Text"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Full street address..."
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Default"
+    },
+    {
+      "type": "Table Header",
+      "text": "Code"
+    },
+    {
+      "type": "Table Header",
+      "text": "Customer Name"
+    },
+    {
+      "type": "Table Header",
+      "text": "Mobile Number"
+    },
+    {
+      "type": "Table Header",
+      "text": "Wallet / Credit Balance"
+    },
+    {
+      "type": "Table Header",
+      "text": "Status"
+    },
+    {
+      "type": "Table Header",
+      "text": "Actions"
+    }
+  ],
+  "src/pages/customers/groups.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Customer Tier Groups"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Configure customer categories for group-level pricing overrides and automatic tier discounts"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create Customer Group"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Group Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Group Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Linked Price Group Override"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Linked Tier Discount"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Default Standard Pricing"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Linked Discount Rule"
+    },
+    {
+      "type": "JSX Text",
+      "text": "None"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Customer Group"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. GRP-VIP"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Corporate VIP Tier"
+    }
+  ],
+  "src/pages/dashboard/five.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Page five"
+    }
+  ],
+  "src/pages/dashboard/four.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Page four"
+    }
+  ],
+  "src/pages/dashboard/one.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Page one"
+    }
+  ],
+  "src/pages/dashboard/six.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Page six"
+    }
+  ],
+  "src/pages/dashboard/three.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Page three"
+    }
+  ],
+  "src/pages/dashboard/two.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Page two"
+    }
+  ],
+  "src/pages/dashboard.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "HEALTHY"
+    }
+  ],
+  "src/pages/discounts/coupons.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Rule:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No Date Limit"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. WELCOME15"
+    }
+  ],
+  "src/pages/discounts/rules.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Advanced campaign types (free item rewards, free delivery waivers, complex multi-scopes, stacking groups, and funding sources) are part of the V5 Preview platform. For standard Phase 1 setups, use Customer Club Discounts, One-Time Coupons, or Cashier Manual Discount Authorizations."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Advanced Discount Campaigns"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Multi-scope, multi-level campaign rules and stacking groups (V5 Preview)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create V5 Campaign"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Campaign Name"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Value"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Priority"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Stackable"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Coupon Req."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create Campaign Rule"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Discount Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "PERCENTAGE"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Campaign Rule"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "V5 Preview"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Archive Discount"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Campaign Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. DISC-15PCT"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Campaign Display Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Fixed Amount (IRR)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Priority (Lower number evaluates first, e.g. 10, 20, 30)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Stacking Group"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Min Order Subtotal (IRR)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Allow Stacking with other campaigns"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Requires Coupon Code Input"
+    }
+  ],
+  "src/pages/inventory/stock.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Inventory stock levels, reorder threshold alerts, and waste/adjustment tracking"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Filter Branch"
+    },
+    {
+      "type": "JSX Text",
+      "text": "All Branches"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Product Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Product Name"
+    },
+    {
+      "type": "JSX Text",
+      "text": "On Hand Qty"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Reorder Level"
+    },
+    {
+      "type": "JSX Text",
+      "text": "UOM"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Adjust / Restock"
+    },
+    {
+      "type": "JSX Text",
+      "text": "History"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Transaction Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Inventory Waste (-)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Reason Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "Button Text",
+      "text": "Post Stock Transaction"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Recorded Time"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Qty Delta"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Note / Reason"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Close"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "LOW STOCK ALERT"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "NORMAL"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Note / Explanation"
+    }
+  ],
+  "src/pages/login.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Username:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "GnextDemo!2026"
+    }
+  ],
+  "src/pages/operations/audit-explorer.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Correlation ID:"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Failed to acknowledge alert"
+    }
+  ],
+  "src/pages/operations/branch-detail.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Loading branch details..."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Branch not found"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Save Schedule"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Day of Week"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Is Closed"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Open Time"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Close Time"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Spans Midnight"
+    }
+  ],
+  "src/pages/operations/branches.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Branch Management"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Configure tenant branches, locations, and operating schedules"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create Branch"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Name"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Phone"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Address"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Time Zone"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create New Branch"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Branch"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Hours Schedule"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Archive Branch"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Branch Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. TEH-WEST"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Branch Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Tehran West Branch"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Phone Number"
+    }
+  ],
+  "src/pages/operations/cash-drawer.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "End-of-Day cash reconciliation, float initialization, and petty cash drops"
+    },
+    {
+      "type": "JSX Text",
+      "text": "End-of-Day Shift Close"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Open New Shift"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Pay In"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Pay Out"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Safe Drop"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Opening Float"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cash Sales"
+    },
+    {
+      "type": "JSX Text",
+      "text": "EXPECTED CASH"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Shift Cash Transactions Log"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Time"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Type"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Amount (IRR)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Note / Reason"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No cash drops or pay-ins posted for this shift yet."
+    },
+    {
+      "type": "JSX Text",
+      "text": "No Active Cash Drawer Shift"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Open Shift Now"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Open Cash Drawer Shift"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Branch"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Terminal"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "Button Text",
+      "text": "Confirm Open Shift"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Reason Code"
+    },
+    {
+      "type": "Button Text",
+      "text": "Post Transaction"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Expected Cash in Drawer:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Variance (Over/Short):"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "ACTIVE OPEN"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Opening Float Amount (IRR)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Note / Description"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Actual Counted Cash in Drawer (IRR)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Closing Notes / Discrepancy Reason"
+    }
+  ],
+  "src/pages/operations/delivery.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Delivery Management"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Active Branch"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Refresh"
+    },
+    {
+      "type": "Button Text",
+      "text": "Assign Courier"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Courier:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Depart"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Reassign"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Complete"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Failed"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Re-queue Delivery"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Courier"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Vehicle"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Compensation / Delivery"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Attendance"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Availability"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Mobile POS Assignment"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Active Load"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "AVAILABLE"
+    },
+    {
+      "type": "JSX Text",
+      "text": "BUSY"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Assign POS"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Check-In"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Check-Out"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Delivery Zone"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Zone Name"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Standard Delivery Fee"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Estimated Minutes"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Timestamp"
+    },
+    {
+      "type": "JSX Text",
+      "text": "From State"
+    },
+    {
+      "type": "JSX Text",
+      "text": "To State"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Reason / Note"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Select a delivery from the board to view its audit timeline."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Assign Courier to Delivery"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Eligible Courier"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No couriers are currently checked in and AVAILABLE under capacity limits."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "Button Text",
+      "text": "Confirm Delivery"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Record Delivery Failure"
+    },
+    {
+      "type": "Button Text",
+      "text": "Submit Failure"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Courier Profile"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Vehicle Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Motorcycle"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Bicycle"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Car"
+    },
+    {
+      "type": "JSX Text",
+      "text": "On Foot"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Courier"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Zone"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Assign Mobile POS Terminal"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Mobile POS Terminal"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Assignment"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Delivery Audit Log"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Needs Courier"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Ready to Depart"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Out for Delivery"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Terminal"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Courier Cash Collected (IRR)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Company Mobile POS Amount (IRR)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Failure Reason"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Courier Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Courier Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Phone Number"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Compensation per Delivery (IRR)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Zone Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Delivery Fee (IRR)"
+    }
+  ],
+  "src/pages/operations/dine-in.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Refresh"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Section"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Table"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Ready for Guests"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Seat Guests"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Release / Vacate"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "Button Text",
+      "text": "Confirm Seating"
+    },
+    {
+      "type": "Button Text",
+      "text": "Confirm Move"
+    },
+    {
+      "type": "Button Text",
+      "text": "Merge Orders"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Select quantities of items to move to a new child order."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Same Table"
+    },
+    {
+      "type": "Button Text",
+      "text": "Execute Split"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Guest Bill Preview"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Close"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Print Preview"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Dining Section"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Section"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Dining Table"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Table"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "All Sections"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Move Order to Another Table"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Split Order Items"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Number of Guests"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Target Available Table"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Source Order to Merge"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Reason for Merge"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Combined party table"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Split Qty"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Target Table for Split Order (Optional)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Section Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Section Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Main Dining Hall"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Dining Section"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Table Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Table Number"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Seating Capacity"
+    }
+  ],
+  "src/pages/operations/kds-configuration.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "KDS Configuration"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Configure kitchen stations, KDS screens, and product/category preparation routing rules."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Refresh"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Station"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Name"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Target Minutes"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add KDS Screen"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Screen Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Assigned Stations"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Routing Rule"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Specificity Order: Product-level rules override Category-level rules. If no rule matches, item defaults to Main Kitchen."
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Priority"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Target Station"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Target Product / Category"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Kitchen Station"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Station"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Screen"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Rule Selector Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Specific Product"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Whole Category"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Product"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Category"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Rule"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Kitchen Stations"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "KDS Screens"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Station Routing Rules"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Station Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Station Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Target Prep Minutes"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Screen Code"
+    }
+  ],
+  "src/pages/operations/kds.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Kitchen Display Board"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Refresh"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Recall / History"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No new tickets."
+    },
+    {
+      "type": "JSX Text",
+      "text": "No tickets in preparation."
+    },
+    {
+      "type": "JSX Text",
+      "text": "No bumped tickets."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Set Ticket Priority"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Priority"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Close"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No completed tickets in history."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Start"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Bump"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Recall"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "All Stations"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Queued"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Cooking"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Pass Table"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "SNAPPFOOD"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Change Priority"
+    }
+  ],
+  "src/pages/operations/monitoring.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Requires immediate manager action"
+    },
+    {
+      "type": "JSX Text",
+      "text": "SYNCED (0 BACKLOG)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Snappfood Webhook"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Network Printers (ESC/POS)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Payment Gateway (SEP / Asan)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "CONNECTED"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "READY"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "STANDBY"
+    }
+  ],
+  "src/pages/operations/payments.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Refresh"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Register Device"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create Account"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Payment Number"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Order ID"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Method"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Amount"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Reference / RRN"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Timestamp"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No payment transactions recorded yet. Transactions will appear here as orders are placed via POS, Kiosk, or Delivery."
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Device Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Device Name"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Type"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Serial Number"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Assigned Branch"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Settlement Destination"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Account Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Account Name"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Bank"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Account Number"
+    },
+    {
+      "type": "JSX Text",
+      "text": "IBAN"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No settlement accounts created yet."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Register Payment Device"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Physical POS Terminal"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Courier Mobile POS"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Online Payment Gateway"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Bank Transfer Account"
+    },
+    {
+      "type": "JSX Text",
+      "text": "All Branches"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Unassigned"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Device"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create Settlement Account"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Account"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Payment Transactions Ledger"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Bank Settlement Accounts"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. POS-MAIN-01"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Counter Card POS Terminal"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Device Type"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. SN-8839210"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Branch Scope"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Settlement Destination Account"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. ACC-MELLAT-MAIN"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Mellat Corporate Account"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Bank Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Bank Mellat"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "IBAN (Sheba)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "IR..."
+    }
+  ],
+  "src/pages/operations/print-queue.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "View generated print jobs, preview rendered HTML receipts, simulate printer hardware outcomes, and trigger reprints."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Refresh"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "All Statuses"
+    },
+    {
+      "type": "JSX Text",
+      "text": "QUEUED"
+    },
+    {
+      "type": "JSX Text",
+      "text": "PROCESSING"
+    },
+    {
+      "type": "JSX Text",
+      "text": "SUCCESS"
+    },
+    {
+      "type": "JSX Text",
+      "text": "FAILED"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Document Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "All Document Types"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Customer Receipt"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Kitchen Ticket"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Courier Slip"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Guest Bill"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Job ID"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Entity"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Copies"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Reprint"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Created At"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No print jobs found in queue."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Simulated Thermal Print Preview"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Close"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Simulate Printer Hardware Outcome"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Simulated Outcome"
+    },
+    {
+      "type": "JSX Text",
+      "text": "SUCCESS (Thermal Print Succeeded)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "FAILED (Printer Error / Out of Paper)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "Button Text",
+      "text": "Submit Outcome"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "V5 Preview"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "REPRINT"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "ORIGINAL"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Preview Rendered HTML"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Simulate Printer Outcome"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Retry Job"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Reprint Document"
+    }
+  ],
+  "src/pages/operations/printers.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Manage simulated receipt/kitchen printers, fallback chain routing, and document group targets."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Refresh"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Printer"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Simulated Address"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Paper Width"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Fallback Printer"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Printer Group"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Group Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Group Name"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Print Route"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Priority"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Document Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Printer Group"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Copies"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Simulated Printer"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Thermal Receipt (80mm)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Kitchen Impact Chit"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Label Printer"
+    },
+    {
+      "type": "JSX Text",
+      "text": "None"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Printer"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Group"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Customer Receipt"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Kitchen Dispatch Chit"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Courier Slip"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Guest Bill"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Target Printer Group"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Route"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "V5 Preview"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Printer Groups"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Print Document Routes"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Printer Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Printer Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Simulated Network Address"
+    }
+  ],
+  "src/pages/operations/settlements.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Refresh"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Expected Cash:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Expected Mobile POS:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Total Delivery Fees:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Start Settlement Batch"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No couriers found or no active delivery assignments."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Courier"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Expected Cash"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actual Cash"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cash Disc."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Expected POS"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actual POS"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Net Total"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Detail"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Statement"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No settlement batches created yet."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Preview New Courier Settlement"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Expected Cash Collection"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Expected Mobile POS Collection"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Payment Method"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Exp Cash"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Exp POS"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "Button Text",
+      "text": "Create Draft Settlement"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Expected Cash / Actual Cash"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Expected POS / Actual POS"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Compensations / Adjustments"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Net Settlement Total"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Verified"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Method"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Act Cash"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Act POS"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Close Window"
+    },
+    {
+      "type": "Button Text",
+      "text": "Submit for Review"
+    },
+    {
+      "type": "Button Text",
+      "text": "Reverse Settlement"
+    },
+    {
+      "type": "JSX Text",
+      "text": "COURIER SETTLEMENT STATEMENT"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Summary:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Close"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Print Statement"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "CLOSED"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "UNDER REVIEW"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "REVERSED"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "DRAFT"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Unsettled Couriers Overview"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Total Compensation"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Total Adjustment"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Failed to preview settlement:"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Error creating settlement:"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Failed to load settlement details"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Settlement draft updated successfully."
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Failed to update settlement draft"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Error changing status to review"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Settlement closed successfully!"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Error closing settlement:"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Settlement reversed successfully."
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Error reversing settlement"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Failed to load statement payload"
+    }
+  ],
+  "src/pages/operations/terminals.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Terminal Registry"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Manage operational POS, Kiosk, and Kitchen KDS terminal hardware"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add Terminal"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Filter by Branch"
+    },
+    {
+      "type": "JSX Text",
+      "text": "All Branches"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Terminal Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Terminal Type"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Branch"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No terminals found for this selection."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add New Terminal"
+    },
+    {
+      "type": "JSX Text",
+      "text": "CASHIER (POS Touch)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "KIOSK (Self-Service)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "KDS (Kitchen Display)"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Terminal"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Archive Terminal"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Terminal Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. TEH-CENTRAL-POS-2"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Cashier Counter 2"
+    }
+  ],
+  "src/pages/orders/refunds.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Refresh"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Refund Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Order Reference"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Refund Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Refund Amount"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Reason / Note"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Timestamp"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No refund requests or paid cancellations recorded yet."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Refund Type:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Total Amount Refunded:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Note / Reason:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Payment Method Allocations Reversed:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Method ID:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Close"
+    }
+  ],
+  "src/pages/orders/workflow.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Real-time order registry, interactive state machine controls, and KDS workflow status board"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Table View"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Kanban Board"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Refresh"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Order Number"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Customer Name"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Table / Notes"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Items Summary"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Total Amount"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Paid / Due"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Placed At"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No orders found matching your filter criteria."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Details"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Receipt"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Prep"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Ready"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Complete"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Table:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Start Preparing"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Mark Ready"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Complete Order"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Per operational specification, a mandatory reason code is required when cancelling an active order."
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Cancellation Reason Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Keep Order"
+    },
+    {
+      "type": "Button Text",
+      "text": "Confirm Cancellation"
+    },
+    {
+      "type": "JSX Text",
+      "text": "ITEMS:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Close"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Contact Phone"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Dine-In Table"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Special Instructions / Notes"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Item"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Qty"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Unit Price"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Total"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Financial Breakdown"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Gross Subtotal"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Discount Applied"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Value Added Tax (VAT)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Grand Total"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Paid Amount"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Outstanding Balance"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Immutable Order Audit Log"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actor:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Reason Code:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Inspect Snapshot"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Start Prep"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel Order"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "FULLY PAID"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Append-Only Trail"
+    }
+  ],
+  "src/pages/pos/kiosk.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Touch screen to choose order type and explore menu"
+    },
+    {
+      "type": "JSX Text",
+      "text": "EAT IN"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Dine inside the restaurant"
+    },
+    {
+      "type": "JSX Text",
+      "text": "TAKEAWAY"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Pack to go"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Customer Identification"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Please enter your phone number to continue your kiosk order."
+    },
+    {
+      "type": "Button Text",
+      "text": "Continue to Menu"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Categories"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No items found in this category"
+    },
+    {
+      "type": "Button Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "Button Text",
+      "text": "Add to Cart"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Your Order Summary"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Your cart is empty."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Subtotal:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Total:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Continue Browsing"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Insert or Tap Card"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Simulating Network Card POS Terminal authorization..."
+    },
+    {
+      "type": "JSX Text",
+      "text": "ORDER SUCCESSFUL!"
+    },
+    {
+      "type": "Button Text",
+      "text": "Done / Start New Kiosk Order"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Payment Failed"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Please click Retry to re-initiate POS terminal communication."
+    },
+    {
+      "type": "Button Text",
+      "text": "Retry Payment"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "SELF-SERVICE KIOSK"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Phone Number"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Your Name (Optional)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "ALL ITEMS"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Phone number is required to proceed."
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Order creation failed:"
+    }
+  ],
+  "src/pages/pos/order.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Checkout / Pay Now"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Order Placed Successfully!"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Order Number:"
+    },
+    {
+      "type": "Button Text",
+      "text": "Cancel Resumed Draft"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Currently Editing Held Draft Order (Changes will update this draft upon hold or checkout)."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Categories"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No products found matching your search or category."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Held"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Clear"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Dine-In"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Takeaway"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Delivery"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Customer"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Walk-In Guest"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Select Dining Table"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No registered dining tables found. Enter table identifier:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Set"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Edit"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cart is empty. Tap products to add items."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Authorize PIN"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Supervisor Approval Required"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Subtotal:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Discount:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Total Due:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Hold"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Apply Manual Cashier Discount"
+    },
+    {
+      "type": "JSX Text",
+      "text": "IRR Fixed"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Quick Presets:"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Discount Justification Reason"
+    },
+    {
+      "type": "Button Text",
+      "text": "Remove Discount"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Held Draft Orders"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Resume, modify, or discard parked cashier carts"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No draft orders currently on hold."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Discard"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Resume Order"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Select Variant / Size"
+    },
+    {
+      "type": "Button Text",
+      "text": "Add to Cart"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Quick Register Customer"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Add special instructions for kitchen preparation, courier delivery, or customer preferences."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Quick Tags:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Clear Note"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Save Note"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "All Items"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "View and resume held draft orders"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Coupon Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Configure Cashier Manual Discount in modal"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "V5 Preview"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "First Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Last Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Mobile / Phone Number"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Email (Optional)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Special Instructions / Notes"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Extra napkins, no onions, allergies, gate code 1234..."
+    }
+  ],
+  "src/pages/pos/receipt.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Loading receipt..."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Back"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Print Receipt"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Subtotal:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Discount:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "TOTAL:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Payment Tenders Split:"
+    }
+  ],
+  "src/pages/reports/report-viewer.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Export UTF-8 CSV"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Export Typed XLSX"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Select Report"
+    },
+    {
+      "type": "Button Text",
+      "text": "Run Report"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save View"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No data for the selected filters."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Clear filters"
+    },
+    {
+      "type": "JSX Text",
+      "text": "SUMMARY TOTALS"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Start Date"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "End Date"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Save Filter View Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Filter Basis: Business Date"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Failed to query report"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Failed to save view"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Export failed"
+    }
+  ],
+  "src/pages/settings/approvals.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Multi-step manager escalation rules, Argon2 PIN verification, and approval decision logs"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Refresh"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Configure Policy Rule"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Operational Action"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Threshold Limit"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Required Approval Steps"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Required Approver Role"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Approval Request Audit Log"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Request Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Action"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Current Step"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Expires At"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Requested Date"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No approval requests generated yet."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Fixed Amount (IRR)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Supervisor"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Branch Manager"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Tenant Administrator"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Policy Rule"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "V5 Preview"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Default (No Limit)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Threshold Type"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Threshold Limit Value"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Operations exceeding this limit require manager PIN approval"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Approval Workflow Steps"
+    }
+  ],
+  "src/pages/settings/discount-authorizations.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Default: 50,000 IRR"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Default: 150,000 IRR"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Default: 300,000 IRR"
+    }
+  ],
+  "src/pages/settings/general.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Manage tenant profile, timezone, locale defaults, and system currencies"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Tenant Organization Profile"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Save Tenant Settings"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Supported Currencies"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Symbol"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Precision"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Increment"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Base"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Enabled"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Tenant Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Tenant Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Default Locale"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Time Zone"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "One Currency per Order (AD-10)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "BASE"
+    }
+  ],
+  "src/pages/settings/reasons.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Reason Codes Management"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Configure standardized operational reasons for cancellations, refunds, shifts, and overrides"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Create Reason Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Code"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Reason Name"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Applies To"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Requires Note"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Active"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Applies To Operational Domains"
+    },
+    {
+      "type": "Button Text",
+      "text": "Save Reason Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Reason Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Reason Display Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "e.g. Customer Requested Cancellation"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Requires Cashier Note When Selected"
+    }
+  ],
+  "src/pages/simulation/media-localization.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Upload media images with SHA256 checksums and manage bilingual Persian/English product translations"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Media File Asset Upload (AD-18)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Asset Metadata:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "ID:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "URL:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "MIME:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "SHA256:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Save Localized Strings"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Product Image Media Asset"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Product Title"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Product Description"
+    }
+  ],
+  "src/pages/simulation/offline-sync.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Active Branch Context"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Selected Branch UUID:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No branch context selected. Please select a valid branch to perform offline sync operations."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Agent Version:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Pending Queue Items"
+    },
+    {
+      "type": "JSX Text",
+      "text": "DLQ / Failed Items"
+    },
+    {
+      "type": "Button Text",
+      "text": "Trigger Sync Worker"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Item ID"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Entity Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Dedupe Key"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Retries"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Conflict / Error"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Clone for Retry"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Conflict ID"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Conflict Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Resolution Strategy"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Timestamp"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Action"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Resolve Diff"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Client State (Local Original):"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Server State (Cloud Original):"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Choose Resolution Strategy:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Accept Local Version"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Accept Cloud Version"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Merged / Manual Override"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Financial payloads must obey domain validation rules. Arbitrary or unvalidated financial JSON will be rejected."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "Button Text",
+      "text": "Confirm Resolution"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "V5 Preview"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Merged Domain Payload (JSON)"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Please select a valid branch first"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Failed to toggle connectivity"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Duplicate operation detected! Active queue item returned."
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Invalid JSON in override payload editor"
+    }
+  ],
+  "src/pages/simulation/simulation-center.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "External Integration Simulation Center"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Simulate Snappfood webhooks, HMAC verification, Tara BNPL lifecycle, and inspection logs."
+    },
+    {
+      "type": "Button Text",
+      "text": "Refresh Logs"
+    },
+    {
+      "type": "Button Text",
+      "text": "Generate Test Snappfood Order (HMAC Signed)"
+    },
+    {
+      "type": "Button Text",
+      "text": "Post Webhook"
+    },
+    {
+      "type": "Button Text",
+      "text": "Replay (Test Duplicate Suppression)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Simulation Result Output"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Exactly-Once Enforced!"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Duplicate webhook detected and suppressed safely."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Order Created!"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Snappfood order intake mapped into domain Order Engine."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Tara BNPL Payment Lifecycle"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Check Eligibility"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Reserve Credit"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Settle BNPL"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel Token"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Kitchen Printer Spooler Fault Injection"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Simulate physical kitchen ticket printer out-of-paper and spooler retry logic."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Inject Printer Paper Outage Fault"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Tara BNPL Outcome"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Run a Tara command to inspect response."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Provider"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Event Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Idempotency Key"
+    },
+    {
+      "type": "JSX Text",
+      "text": "HMAC Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Duplicate"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Timestamp"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Inspect JSON"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Request Payload:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Response Payload:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Close"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Snappfood Aggregator Simulator"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Integration Audit Logs"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Customer Name"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Vendor Notes"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Customer National ID"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "HMAC SHA-256"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "DUPLICATE"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "UNIQUE"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Failed to generate Snappfood order:"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Webhook error:"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Tara Command Failed:"
+    }
+  ],
+  "src/pages/simulation/simulation-logs.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Refresh Logs"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Provider"
+    },
+    {
+      "type": "JSX Text",
+      "text": "All Providers"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Snappfood Webhook"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Tara Credit / Digital Wallet"
+    },
+    {
+      "type": "JSX Text",
+      "text": "POS Hardware Terminal"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Transactional Outbox"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Execution Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "All Statuses"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Success (HTTP 200/201)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Failed / Rejected"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Retrying in Queue"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Timestamp"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Provider / Integration"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Event Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Reference / Order"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Latency"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Actions"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No integration logs match the specified criteria."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Correlation ID"
+    },
+    {
+      "type": "JSX Text",
+      "text": "HMAC Security Signature"
+    },
+    {
+      "type": "JSX Text",
+      "text": "SHA-256 Validated (Secret: snappfood-secret-key-123)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Inbound Request Payload (JSON)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Outbound HTTP Response / Acknowledgment"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Close Inspector"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Search by order code, correlation ID, event..."
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Replay webhook"
+    }
+  ],
+  "src/pages/simulation/simulation-payments-printers.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Inject POS Terminal Event"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Target POS Terminal"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Default POS Terminal"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Simulation Scenario"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Success (Approved Auth Code: 00)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Terminal Timeout (HTTP 504 / 15s delay)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Card Declined / Wrong PIN (Code: 51)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Network Connection Drop / Socket Reset"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Trigger a transaction to inspect live terminal response."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Paper Roll Sensor:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cover Sensor:"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Gateway Action"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Authorize Payment (OTP Required)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Direct Capture / Settle"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Customer Credit Limit Inquiry"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Reverse / Refund Wallet Payment"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Gateway Transaction Log"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Execute a gateway action to view response payload."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Recent Hardware Simulation Events"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No simulation events recorded yet. Run a POS or printer test above."
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "SIMULATION ACTIVE"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "POS Terminal Simulator"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Simulation Event Log"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Amount (IRR)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Latency (ms)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Customer Mobile"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Transaction Amount (IRR)"
+    }
+  ],
+  "src/pages/simulation/simulation-snappfood.tsx": [
+    {
+      "type": "Button Text",
+      "text": "Refresh Audit Logs"
+    },
+    {
+      "type": "JSX Text",
+      "text": "OAuth2 Password Grant Simulator"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Environment / Server Endpoint"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Staging (https://staging-auth.snappfood.dev/token)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Production (https://auth.snappfood.ir/token)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Request Access Token"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Simulate Token Error 3001"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Token Response Output"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Generate v4.3.0 Order Webhook (HMAC Signed)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Expedition Type"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Biker Status V2"
+    },
+    {
+      "type": "JSX Text",
+      "text": "REQUESTED"
+    },
+    {
+      "type": "JSX Text",
+      "text": "ASSIGNED"
+    },
+    {
+      "type": "JSX Text",
+      "text": "ACK"
+    },
+    {
+      "type": "JSX Text",
+      "text": "PICKED"
+    },
+    {
+      "type": "JSX Text",
+      "text": "DELIVERED"
+    },
+    {
+      "type": "JSX Text",
+      "text": "CANCELED"
+    },
+    {
+      "type": "Button Text",
+      "text": "Submit Webhook (Post Order)"
+    },
+    {
+      "type": "Button Text",
+      "text": "Replay (Test Duplicate Suppression)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No order generated yet. Fill the form and click Submit Webhook."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Order Status Lifecycle State Machine"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Target Order Code:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Current State Code:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Available Vendor Actions (API Endpoints):"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Action Response"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Vendor Automation API Test Console (v4.3.0)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Select Endpoint"
+    },
+    {
+      "type": "JSX Text",
+      "text": "GET /va/v1.1/product/ (Get Catalog)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "POST /va/v1/category/sync/categoryId (Sync Category)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "POST /va/v1/product/sync/productId (Sync Product)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "PUT /va/v1/product/ (Toggle Product Status)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "GET /va/v1/topping/groups (Get Toppings)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "GET /va/v1/vendor/status (Get Vendor Status)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "GET /va/v1/vendor/vendorDeliveries (Service Polygons)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "GET /va/v1/order/decline-reason (Decline Reasons)"
+    },
+    {
+      "type": "JSX Text",
+      "text": "POST /va/v1/order/latest (Recent Orders)"
+    },
+    {
+      "type": "Button Text",
+      "text": "Execute API Endpoint"
+    },
+    {
+      "type": "JSX Text",
+      "text": "API Response Payload"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Select an endpoint and click Execute API Endpoint."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Time"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Event Type"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Idempotency Key"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Duplicate?"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Action"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Inspect Payload"
+    },
+    {
+      "type": "JSX Text",
+      "text": "No Snappfood integration logs recorded yet."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Request Payload (v4.3.0):"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Response Payload:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Close"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "SIMULATED"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Environment"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Client ID"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Client Secret"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Username"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Password"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Order Coupon"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Accept: deliveryTime (Max 70m)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Accept: riderPickupTime (min)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Accept: delta (Max 500)"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Decline Reason"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Reject: Comment"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Category ID"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Category Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Product ID"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Product Code"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "DUPLICATE"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Error generating webhook:"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Generate a webhook order first to replay!"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Error replaying duplicate:"
+    },
+    {
+      "type": "Toast/Alert",
+      "text": "Action error:"
+    }
+  ],
+  "src/pages/tools/data-reset.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Transactional System Data Reset"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Purges operational transactional data including"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Order Headers, Payments, Refunds, Cash Drawer Shifts, KDS Tickets, and Audit Events"
+    },
+    {
+      "type": "JSX Text",
+      "text": "while retaining core tenant and branch setup."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Caution:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "This operation is permanent and immutable. Requires server-side Security Manager PIN verification."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Execute System Data Reset"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Database Seed Profiles"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Populate fresh database instance with pre-configured operational datasets."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Apply Selected Seed Profile"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Authorize System Data Reset"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Enter your Manager PIN to authorize permanent operational data wipe."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Cancel"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Authorize Seed Profile Application"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Enter your Manager PIN to apply seed profile"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Protected PIN Auth"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Security Manager PIN"
+    }
+  ],
+  "src/pages/tools/import-wizard.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Binary Excel spreadsheet file ready for backend parsing and auto-mapping. Click"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Next Step"
+    },
+    {
+      "type": "JSX Text",
+      "text": "to proceed."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Spreadsheet Header"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Mapping Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Target Schema Field"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Step 3: Distinct Spreadsheet Value Mapping"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Map distinct raw spreadsheet cell values to internal enum codes."
+    },
+    {
+      "type": "JSX Text",
+      "text": "No distinct lookup fields require custom value transformation for this entity. Click Next to proceed to dry-run validation."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Valid Rows Ready for Import:"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Invalid Rows (Will Be Skipped):"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Validation Status"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Parsed Data Preview"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Validation Messages / Errors"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Ready for database commit"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Import Job Executed Successfully!"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Batch database transaction completed with audit event log write."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Successfully Inserted / Updated"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Skipped / Invalid Rows"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Start Another Import"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Processing real backend API request..."
+    },
+    {
+      "type": "Button Text",
+      "text": "Back"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Real Import API"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Target Import Entity"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "File Raw CSV Content Preview / Editor"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Auto Mapped"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "Unmapped"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "INVALID"
+    },
+    {
+      "type": "JSX Attribute",
+      "text": "VALID"
+    }
+  ],
+  "src/routes/components/error-boundary.tsx": [
+    {
+      "type": "JSX Text",
+      "text": "Unexpected Application Error!"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Unknown Error"
+    }
+  ],
+  "src/sections/blank/view.tsx": [
+    {
+      "type": "JSX Attribute",
+      "text": "Blank"
+    }
+  ],
+  "src/store/useAuthStore.ts": [
+    {
+      "type": "JSX Text",
+      "text": "Promise"
+    }
+  ],
+  "src/_mock/_job.ts": [
+    {
+      "type": "JSX Text",
+      "text": "Job description"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Occaecati est et illo quibusdam accusamus qui. Incidunt aut et molestiae ut facere aut. Est quidem iusto praesentium excepturi harum nihil tenetur facilis. Ut omnis voluptates nihil accusantium doloribus eaque debitis."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Key responsibilities"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Collaborate with agencies to finalize design drawings, obtain quotations, and coordinate local production."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Oversee the production of window displays, signage, interior setups, floor plans, and special promotional displays."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Update and refresh displays to support new product launches, festive campaigns, and seasonal promotions."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Plan and manage store openings, renovations, and closing procedures to ensure smooth execution."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Monitor and follow up on store maintenance activities and maintain accurate SKU in/out records."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Control expenses and ensure all activities stay within the approved budget."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Work closely with suppliers to source materials, props, and display elements."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Why You'll love working here"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Be part of creative projects from concept to execution, working with leading design agencies and production teams."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Gain hands-on experience in retail space transformation, from window displays to full store setups."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Play a key role in promoting new collections, festive themes, and brand campaigns."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Contribute to meaningful store projects including openings, renovations, and exciting launch events."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Work in a dynamic environment where your ideas and attention to detail make a visible impact on customer experience."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Collaborate with suppliers and partners to bring creative concepts to life, all while managing costs effectively."
+    }
+  ],
+  "src/_mock/_others.ts": [
+    {
+      "type": "JSX Text",
+      "text": "Deja Brady"
+    },
+    {
+      "type": "JSX Text",
+      "text": "sent you a friend request"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Jayvon Hull"
+    },
+    {
+      "type": "JSX Text",
+      "text": "mentioned you in"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Minimal UI"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Lainey Davidson"
+    },
+    {
+      "type": "JSX Text",
+      "text": "added file to"
+    },
+    {
+      "type": "JSX Text",
+      "text": "File manager"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Angelique Morse"
+    },
+    {
+      "type": "JSX Text",
+      "text": "added new tags to"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Giana Brandt"
+    },
+    {
+      "type": "JSX Text",
+      "text": "request a payment of"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Your order is placed waiting for shipping"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Delivery processing your order is being shipped"
+    },
+    {
+      "type": "JSX Text",
+      "text": "You have new message 5 unread messages"
+    }
+  ],
+  "src/_mock/_tour.ts": [
+    {
+      "type": "JSX Text",
+      "text": "Description"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Occaecati est et illo quibusdam accusamus qui. Incidunt aut et molestiae ut facere aut. Est quidem iusto praesentium excepturi harum nihil tenetur facilis. Ut omnis voluptates nihil accusantium doloribus eaque debitis."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Highlights"
+    },
+    {
+      "type": "JSX Text",
+      "text": "A fermentum in morbi pretium aliquam adipiscing donec tempus."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Vulputate placerat amet pulvinar lorem nisl."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Consequat feugiat habitant gravida quisque elit bibendum id adipiscing sed."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Etiam duis lobortis in fames ultrices commodo nibh."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Program"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Day 1"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Amet minim mollit non deserunt ullamco est sit aliqua dolor do amet sint. Velit officia consequat duis enim velit mollit. Exercitation veniam consequat sunt nostrud amet."
+    },
+    {
+      "type": "JSX Text",
+      "text": "Day 2"
+    },
+    {
+      "type": "JSX Text",
+      "text": "Day 3"
+    }
+  ]
+}

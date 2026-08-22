@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   Box,
@@ -30,6 +31,7 @@ export function BilingualInput({
   rows = 1,
   required = false,
 }: BilingualInputProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'fa' | 'en'>('fa');
 
   return (
@@ -43,8 +45,8 @@ export function BilingualInput({
           onChange={(_, val) => setActiveTab(val)}
           sx={{ minHeight: 32, '& .MuiTab-root': { py: 0.5, px: 1.5, minHeight: 32, fontSize: '0.8rem', fontWeight: 'bold' } }}
         >
-          <Tab value="fa" label="فارسی (FA)" />
-          <Tab value="en" label="English (EN)" />
+          <Tab value="fa" label={t('bilingual.farsi', 'فارسی (FA)')} />
+          <Tab value="en" label={t('bilingual.english', 'English (EN)')} />
         </Tabs>
       </Stack>
 
@@ -55,7 +57,7 @@ export function BilingualInput({
           rows={rows}
           value={faValue}
           onChange={(e) => onFaChange(e.target.value)}
-          placeholder={`Enter Persian (${label})...`}
+          placeholder={`ورود متن فارسی (${label})...`}
           slotProps={{ htmlInput: { dir: 'rtl' } }}
         />
       )}

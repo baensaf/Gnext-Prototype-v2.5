@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -15,6 +16,8 @@ import {
 } from '@mui/material';
 
 import { approvalApi } from 'src/api/approvalApi';
+
+import { toast, showErrorToast } from 'src/components/snackbar';
 
 interface ApprovalModalProps {
   open: boolean;
@@ -37,6 +40,7 @@ export function ApprovalModal({
   entityId,
   createRequest = false,
 }: ApprovalModalProps) {
+  const { t } = useTranslation();
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,15 +61,19 @@ export function ApprovalModal({
           details: { actionName, detailsText },
         });
         const approved = await approvalApi.approveRequest(req.id, pin, 'Manager PIN Authorization');
+        toast.success(t('approval.authorized', 'Manager authorization granted'));
         onSuccess(pin, approved.id);
       } else {
         await approvalApi.verifyPin(pin, undefined, actionName);
+        toast.success(t('approval.authorized', 'Manager authorization granted'));
         onSuccess(pin);
       }
       setPin('');
       onClose();
     } catch (err: any) {
-      setError(err.response?.data?.message || err.detail || err.message || 'Invalid Manager PIN');
+      const errorMsg = err.response?.data?.message || err.detail || err.message || t('auth.invalidCredentials', 'Invalid Manager PIN');
+      setError(errorMsg);
+      showErrorToast(err, errorMsg);
     } finally {
       setLoading(false);
     }
@@ -76,38 +84,38 @@ export function ApprovalModal({
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <LockIcon color="primary" />
         <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-          Manager PIN Authorization
+          {t('approval.title', 'Manager PIN Authorization')}
         </Typography>
       </DialogTitle>
       <Box component="form" onSubmit={handleSubmit}>
         <DialogContent>
           <Stack spacing={2}>
             <Alert severity="warning">
-              This action (<strong>{actionName}</strong>) exceeds cashier operational limits and requires supervisor approval.
+              {t('approval.warningText', 'This action exceeds cashier operational limits and requires supervisor approval.')} ({actionName})
             </Alert>
             {detailsText && <Typography variant="body2">{detailsText}</Typography>}
 
             {error && <Alert severity="error">{error}</Alert>}
 
             <TextField
-              label="Manager PIN"
+              label={t('approval.pinLabel', 'Manager PIN')}
               type="password"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               autoFocus
               required
               fullWidth
-              placeholder="Enter 4-digit PIN (e.g. 1234)"
+              placeholder={t('approval.pinPlaceholder', 'Enter 4-digit PIN (e.g. 1234)')}
               slotProps={{ htmlInput: { maxLength: 8, style: { fontSize: 20, textAlign: 'center', letterSpacing: 6 } } }}
             />
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose} disabled={loading}>
-            Cancel
+            {t('common.cancel', 'Cancel')}
           </Button>
           <Button type="submit" variant="contained" color="primary" disabled={loading || !pin}>
-            {loading ? 'Verifying...' : 'Authorize'}
+            {loading ? t('approval.verifying', 'Verifying...') : t('approval.authorize', 'Authorize')}
           </Button>
         </DialogActions>
       </Box>

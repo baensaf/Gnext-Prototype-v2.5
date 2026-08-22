@@ -1,6 +1,7 @@
 import type { LinkProps } from '@mui/material/Link';
 
 import { useId } from 'react';
+import { useTranslation } from 'react-i18next';
 import { mergeClasses } from 'minimal-shared/utils';
 
 import Link from '@mui/material/Link';
@@ -25,6 +26,7 @@ export function Logo({
   isSingle = true,
   ...other
 }: LogoProps) {
+  const { t } = useTranslation();
   const theme = useTheme();
 
   const uniqueId = useId();
@@ -191,7 +193,7 @@ export function Logo({
     <LogoRoot
       component={RouterLink}
       href={href}
-      aria-label="Logo"
+      aria-label={t('app.title', 'Gnext')}
       underline="none"
       className={mergeClasses([logoClasses.root, className])}
       sx={[

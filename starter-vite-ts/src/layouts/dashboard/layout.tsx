@@ -6,7 +6,6 @@ import { merge } from 'es-toolkit';
 import { useBoolean } from 'minimal-shared/hooks';
 
 import Box from '@mui/material/Box';
-import Alert from '@mui/material/Alert';
 import { useTheme } from '@mui/material/styles';
 import { iconButtonClasses } from '@mui/material/IconButton';
 
@@ -89,11 +88,7 @@ export function DashboardLayout({
     };
 
     const headerSlots: HeaderSectionProps['slots'] = {
-      topArea: (
-        <Alert severity="info" sx={{ display: 'none', borderRadius: 0 }}>
-          This is an info Alert.
-        </Alert>
-      ),
+      topArea: null,
       bottomArea: isNavHorizontal ? (
         <NavHorizontal
           data={navData}
@@ -191,7 +186,30 @@ export function DashboardLayout({
 
   const renderFooter = () => null;
 
-  const renderMain = () => <MainSection {...slotProps?.main}>{children}</MainSection>;
+  const renderMain = () => (
+    <MainSection
+      {...slotProps?.main}
+      sx={[
+        {
+          display: 'flex',
+          flex: '1 1 auto',
+          flexDirection: 'column',
+          pt: 'var(--layout-dashboard-content-pt, 8px)',
+          pb: 'var(--layout-dashboard-content-pb, 64px)',
+          px: {
+            xs: 2,
+            sm: 3,
+            [layoutQuery]: 'var(--layout-dashboard-content-px, 40px)',
+          },
+        },
+        ...(Array.isArray(slotProps?.main?.sx)
+          ? slotProps.main.sx
+          : (slotProps?.main?.sx ? [slotProps.main.sx] : [])),
+      ]}
+    >
+      {children}
+    </MainSection>
+  );
 
   return (
     <LayoutSection

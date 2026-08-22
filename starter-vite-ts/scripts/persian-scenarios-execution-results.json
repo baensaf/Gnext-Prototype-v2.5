@@ -1,0 +1,1190 @@
+{
+  "executedAt": "2026-08-19T16:36:20.235Z",
+  "totalScenarios": 60,
+  "successfulScenarios": 60,
+  "totalUniqueUntranslatedElements": 0,
+  "uniqueUntranslatedList": [],
+  "scenarios": [
+    {
+      "id": 1,
+      "title": "افتتاح روز کاری و شروع شیفت صندوق‌دار با تنخواه اولیه",
+      "enTitle": "Morning Day Opening & Cashier Shift Initialization",
+      "route": "/app/cashier/shifts",
+      "persianData": {
+        "branch": "شعبه مرکزی کوروش (مرکزی)",
+        "cashier": "مرتضی کیانی",
+        "terminal": "صندوق شماره ۱ (POS-01)",
+        "openingFloat": "500,000 ریال"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/cashier/shifts",
+        "بررسی مسیر تکمیلی /app/cashier/business-days",
+        "✅ سناریوی 1 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 2,
+      "title": "تعلیق و توقف فروش اقلام ناموجود (86 کردن کالا)",
+      "enTitle": "Morning Prep & 86'd / Out-of-Stock Item Suspension",
+      "route": "/app/catalog/availability",
+      "persianData": {
+        "item": "شیر بادام طبیعی / پیتزا قارچ و ترافل",
+        "reason": "عدم موجودی مواد اولیه در انبار روزانه"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/catalog/availability",
+        "✅ سناریوی 2 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 3,
+      "title": "ثبت سفارش حضوری همبرگر با افزودنی‌ها و پرداخت نقدی",
+      "enTitle": "Walk-In Counter Order with Item Modifiers (Cash)",
+      "route": "/app/pos",
+      "persianData": {
+        "category": "برگر و ساندویچ",
+        "item": "همبرگر کلاسیک دست‌ساز سرآشپز",
+        "modifiers": [
+          "پخت مغزپخت",
+          "پنیر چدار دوبل",
+          "بیکن تنوری ویژه"
+        ],
+        "tender": "نقدی (Cash)",
+        "amount": "۳۵۰,۰۰۰ ریال"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pos",
+        "✅ سناریوی 3 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 4,
+      "title": "ثبت سفارش با پرداخت ترکیبی (نقد + کارت بانکی POS)",
+      "enTitle": "Walk-In Counter Order with Split Tender (Cash + Card)",
+      "route": "/app/pos",
+      "persianData": {
+        "items": [
+          "دوبل برگر مخصوص",
+          "سیب زمینی سرخ‌کرده کریسپی"
+        ],
+        "splitCash": "۱۰۰,۰۰۰ ریال نقد",
+        "splitCard": "۲۳۵,۰۰۰ ریال کارتخوان شاپرک"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pos",
+        "شبیه‌سازی سفارش چند قلمی و پرداخت ترکیبی نقد و پوز بانکی",
+        "✅ سناریوی 4 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 5,
+      "title": "پذیرش مهمانان سالن، انتخاب میز ۴ و ارسال سفارش به آشپزخانه",
+      "enTitle": "Dine-In Guest Seating & Multi-Course Table Order",
+      "route": "/app/dine-in/floor",
+      "persianData": {
+        "table": "میز شماره ۰۴ (سالن اصلی - ظرفیت ۴ نفر)",
+        "courseItems": [
+          "۲x موهیتو نعناع طبیعی",
+          "۱x بال مرغ سوخاری با سس بوفالو",
+          "۲x برگر مخصوص"
+        ]
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/dine-in/floor",
+        "✅ سناریوی 5 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 6,
+      "title": "انتقال و جابجایی میز در سالن (از میز ۴ به میز ۶ تراس)",
+      "enTitle": "Dine-In Order Additions, Table Transfer & Merging",
+      "route": "/app/dine-in/floor",
+      "persianData": {
+        "sourceTable": "میز ۰۴ سالن",
+        "targetTable": "میز ۰۶ فضای باز تراس",
+        "additionalItem": "دسر چیزکیک نیویورکی"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/dine-in/floor",
+        "اجرای عملیات انتقال حساب میز ۴ به میز ۶ تراس",
+        "✅ سناریوی 6 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 7,
+      "title": "آماده‌سازی سفارش در نمایشگر آشپزخانه (KDS) و اعلان خروج",
+      "enTitle": "Kitchen Display System (KDS) Preparation & Bump Flow",
+      "route": "/app/kds",
+      "persianData": {
+        "station": "ایستگاه گریل و برگر آشپزخانه مرکزی",
+        "action": "تیک زدن اقلام و بامپ (اتمام پخت)"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/kds",
+        "✅ سناریوی 7 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 8,
+      "title": "سفارش فوری با اولویت بحرانی (VIP / Rush P0) و بازیابی تیکت",
+      "enTitle": "High-Priority (VIP/Rush) Ticket Escalation & Recall",
+      "route": "/app/kds",
+      "persianData": {
+        "priority": "فوری / اولویت بحرانی P0",
+        "action": "فراخوانی تاریخچه تیکت‌های تحویل‌شده"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/kds",
+        "اعمال تگ فوری (P0) و بازیابی تیکت از تاریخچه",
+        "✅ سناریوی 8 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 9,
+      "title": "ثبت‌نام مشتری جدید و تخصیص کش‌بک وفاداری باشگاه مشتریان",
+      "enTitle": "Customer Registration & Loyalty Cashback Accrual",
+      "route": "/app/customers",
+      "persianData": {
+        "fullName": "علیرضا رضایی تهرانی",
+        "phone": "09121112233",
+        "email": "alireza.rezaei@example.com",
+        "nationalCode": "0012345678",
+        "address": "تهران، خیابان شریعتی، بالاتر از پل رومی، پلاک ۴۵"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/customers",
+        "✅ سناریوی 9 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 10,
+      "title": "استفاده از موجودی کیف پول و اعمال کوپن تخفیف WELCOME10",
+      "enTitle": "Wallet Cashback Balance Redemption & Coupon Codes",
+      "route": "/app/pos",
+      "persianData": {
+        "couponCode": "WELCOME10",
+        "discountRate": "۱۰ درصد تخفیف خوش‌آمدگویی",
+        "walletRedeem": "۵۰,۰۰۰ ریال کسر از کیف پول"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pos",
+        "بررسی اعتبار کوپن WELCOME10 در استودیو کوپن‌ها",
+        "اعمال کد کوپن و کسر موجودی کیف پول در سبد خرید POS",
+        "بررسی مسیر تکمیلی /app/discounts/coupons",
+        "✅ سناریوی 10 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 11,
+      "title": "ثبت سفارش تلفنی دلیوری، محاسبه هزینه ارسال و تخصیص سفیر",
+      "enTitle": "Delivery Phone Order Creation & Courier Dispatch",
+      "route": "/app/delivery/orders",
+      "persianData": {
+        "customer": "خانم سارا محمدی (۰۹۳۵۴۴۴۵۵۶۶)",
+        "address": "سعادت‌آباد، میدان کاج، خیابان سرو شرقی، مجتمع نگین",
+        "courier": "آرش احمدی (پیک موتوری ۰۱)",
+        "deliveryFee": "۴۵,۰۰۰ ریال"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/delivery/orders",
+        "بررسی تابلوی سفارش‌های ارسالی و تخصیص سفیر به سفارش شماره ۱۰۴۲",
+        "✅ سناریوی 11 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 12,
+      "title": "تحویل سفارش به مشتری در محل و تسویه نقدی COD",
+      "enTitle": "Courier Delivery Completion & COD Collection",
+      "route": "/app/delivery/orders",
+      "persianData": {
+        "orderId": "DEL-2026-0819",
+        "status": "تحویل داده شد (DELIVERED)",
+        "codAmount": "۴۹۰,۰۰۰ ریال نقدی"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/delivery/orders",
+        "بررسی وضعیت دریافت نقدی در محل (COD) توسط سفیر آرش احمدی",
+        "بررسی مسیر تکمیلی /app/delivery/couriers",
+        "✅ سناریوی 12 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 13,
+      "title": "تزریق سفارش بیرونی از اسنپ‌فود (Snappfood Aggregator Webhook)",
+      "enTitle": "External Food Aggregator (Snappfood) Order Injection",
+      "route": "/app/simulation/snappfood",
+      "persianData": {
+        "aggregator": "اسنپ‌فود (اکسپرس)",
+        "vendorCode": "SF-TEH-CENTRAL-01",
+        "payloadItems": [
+          "۲x پیتزا پپرونی ویژه",
+          "۱x سالاد سزار",
+          "۲x نوشابه قوطی"
+        ]
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/simulation/snappfood",
+        "✅ سناریوی 13 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 14,
+      "title": "انتقال وجوه مازاد صندوق به گاوصندوق (Safe Drop) و ثبت تنخواه خرید یخ",
+      "enTitle": "Mid-Day Cash Drawer Drop & Petty Cash Payout",
+      "route": "/app/cashier/shifts",
+      "persianData": {
+        "safeDropAmount": "۲,۰۰۰,۰۰۰ ریال به گاوصندوق اصلی",
+        "pettyCashAmount": "۱۵۰,۰۰۰ ریال خرید یخ اضطراری",
+        "reason": "خرید قالب یخ قالبی برای بار سرد"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/cashier/shifts",
+        "ثبت عملیات تخلیه ایمن نقدینگی (Safe Drop) و پرداخت تنخواه اضطراری",
+        "✅ سناریوی 14 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 15,
+      "title": "ابطال ردیف کالا از فاکتور با ورود رمز سرپرست (Supervisor PIN)",
+      "enTitle": "Line-Item Void & Supervisor PIN Override",
+      "route": "/app/pos",
+      "persianData": {
+        "voidedItem": "استیک فیله مینیون",
+        "reason": "انصراف مشتری پیش از پخت",
+        "supervisorPin": "9999 (رمز مدیر سالن)"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pos",
+        "ابطال ردیف کالا و گشودن مودال مجوز سرپرست با پین ۹۹۹۹",
+        "بررسی مسیر تکمیلی /app/settings/approvals",
+        "✅ سناریوی 15 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 16,
+      "title": "استرداد وجه فاکتور مرجوعی و بازگشت مبلغ به کیف پول مشتری",
+      "enTitle": "Full & Partial Order Refunds with Wallet Reversal",
+      "route": "/app/refunds",
+      "persianData": {
+        "refundReason": "عدم رضایت کیفی از طعم سس سالاد",
+        "refundType": "شارژ معادل در کیف پول اعتباری مشتری"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/refunds",
+        "ثبت رکورد استرداد وجه و ثبت تراکنش بازگشت اعتبار کیف پول",
+        "بررسی مسیر تکمیلی /app/orders",
+        "✅ سناریوی 16 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 17,
+      "title": "پذیرایی ناهار شرکتی سازمانی با حساب دفتری اعتباری (On-Tab)",
+      "enTitle": "Corporate B2B Dining on Credit Account (On-Tab)",
+      "route": "/app/pos",
+      "persianData": {
+        "corporateClient": "شرکت مهندسی داده‌پردازان آینده",
+        "creditLimit": "۵۰,۰۰۰,۰۰۰ ریال",
+        "authorizedPerson": "مهندس حسینی (معاونت فناوری)"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pos",
+        "بررسی سقف اعتبار و ثبت فاکتور ناهار سازمانی روی حساب دفتری شرکت",
+        "بررسی مسیر تکمیلی /app/credit/accounts",
+        "✅ سناریوی 17 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 18,
+      "title": "سفارش‌گیری مشتری از کیوسک خودکار لمسی و پرداخت متصل به پوز",
+      "enTitle": "Self-Service Kiosk Customer Order & Self-Checkout",
+      "route": "/app/kiosk",
+      "persianData": {
+        "kioskId": "کیوسک سالن ورودی شماره ۰۱",
+        "selectedItem": "کمبو دوبل چیزبرگر + نوشابه + سالاد کلم",
+        "paymentMethod": "پایانه کارتخوان بانکی متصل به کیوسک"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/kiosk",
+        "✅ سناریوی 18 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 19,
+      "title": "مغایرت‌گیری و تسویه‌حساب دسته‌ای پایان شیفت سفیران پیک",
+      "enTitle": "End-of-Shift Courier Batch Settlement Reconciliation",
+      "route": "/app/delivery/settlements",
+      "persianData": {
+        "courier": "پیمان صادقی",
+        "totalCollected": "۳,۴۵۰,۰۰۰ ریال",
+        "settlementStatus": "تراز کامل و بدون کسری"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/delivery/settlements",
+        "انجام محاسبات مغایرت‌گیری و صدور سند تسویه‌حساب نهایی سفیر",
+        "✅ سناریوی 19 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 20,
+      "title": "بستن روز مالی، گزارش پایان شیفت (گزارش Z) و صدور فایل اکسل",
+      "enTitle": "End-of-Shift Z-Report & End-of-Day (EOD) Business Close",
+      "route": "/app/cashier/shifts",
+      "persianData": {
+        "zReportNo": "Z-2026-0819-001",
+        "totalGrossSales": "۱۸,۴۵۰,۰۰۰ ریال",
+        "totalTax": "۱,۶۶۰,۵۰۰ ریال (ارزش افزوده)",
+        "drawerBalance": "کاملاً منطبق"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/cashier/shifts",
+        "مشاهده گزارش جامع فروش روزانه (گزارش Z) و اعتبارسنجی خروجی",
+        "بررسی مسیر تکمیلی /app/reports",
+        "✅ سناریوی 20 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 21,
+      "title": "نگهداری و پارک سفارش در سبد خرید POS و بازیابی مجدد",
+      "enTitle": "Park / Hold Cart Order & Recall for Later Checkout",
+      "route": "/app/pos",
+      "persianData": {
+        "parkedNote": "مشتری برای آوردن پول نقد به خودرو مراجعه کرده است",
+        "heldItems": [
+          "۲x همبرگر کلاسیک",
+          "۱x سیب زمینی سرخ‌کرده کریسپی"
+        ]
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pos",
+        "پارک کردن سفارش جاری در کشوی سفارش‌های معلق و بازیابی بعدی آن",
+        "✅ سناریوی 21 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 22,
+      "title": "تفکیک و دنگ‌بندی صورت‌حساب میز بین مهمانان (Split Bill)",
+      "enTitle": "Split Bill by Line Items Between Dine-In Guests",
+      "route": "/app/dine-in/floor",
+      "persianData": {
+        "guest1": "مهمان ۱: استیک فیله + موهیتو (سهم: ۴۵۰,۰۰۰ ریال)",
+        "guest2": "مهمان ۲: پیتزا بیکن + لیموناد (سهم: ۳۲۰,۰۰۰ ریال)"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/dine-in/floor",
+        "تفکیک اقلام صورت‌حساب میز بین دو مهمان و صدور دو قبض مجزا",
+        "✅ سناریوی 22 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 23,
+      "title": "شبیه‌سازی کارکرد آفلاین صندوق POS و همگام‌سازی پس از وصل شبکه",
+      "enTitle": "Offline POS Sync Simulation & Network Recovery",
+      "route": "/app/simulation/offline-sync",
+      "persianData": {
+        "networkStatus": "قطع شبکه (آفلاین محلی SQLite / IndexedDB)",
+        "queuedOrders": "۳ فاکتور در صف همگام‌سازی",
+        "syncResult": "ارسال خودکار تراکنش‌ها به سرور مرکزی پس از اتصال"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/simulation/offline-sync",
+        "تغییر وضعیت شبکه به آفلاین، ثبت سفارش محلی و اجرای صف همگام‌سازی",
+        "✅ سناریوی 23 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 24,
+      "title": "شبیه‌سازی پرداخت اقساطی اعتباری تارا (Tara BNPL Payment Flow)",
+      "enTitle": "Tara BNPL Installment Payment Flow Simulation",
+      "route": "/app/simulation/payments-printers",
+      "persianData": {
+        "bnplProvider": "سرویس الان بخر بعدا پرداخت کن تارا (Tara BNPL)",
+        "nationalId": "0078945612",
+        "installmentPlan": "۴ قسط مساوی ماهانه بدون کارمزد"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/simulation/payments-printers",
+        "استعلام اعتبار سنجی تارا BNPL، ارسال پیامک OTP و ثبت تراکنش اقساطی",
+        "بررسی مسیر تکمیلی /app/payments",
+        "✅ سناریوی 24 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 25,
+      "title": "شبیه‌سازی خطای پرینتر حرارتی و ارسال مجدد از صف چاپگر (Spooler)",
+      "enTitle": "Printer Hardware Fault Injection & Print Job Retry",
+      "route": "/app/operations/print-queue",
+      "persianData": {
+        "printer": "چاپگر حرارتی صدور فیش صندوق (Bixolon SRP-350)",
+        "faultType": "اتمام رول کاغذ حرارتی (Paper Out Error)",
+        "action": "تلاش مجدد خودکار پس از تعویض رول"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/operations/print-queue",
+        "شبیه‌سازی خطای سخت‌افزاری چاپگر و کلیک روی دکمه تلاش مجدد (Retry)",
+        "✅ سناریوی 25 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 26,
+      "title": "تخفیف دستی ۳۰٪ و الزام تایید رمز عبور سرپرست (Supervisor PIN)",
+      "enTitle": "Discount PIN Authorization Exceeding Cashier Threshold",
+      "route": "/app/pos",
+      "persianData": {
+        "discountRate": "۳۰٪ تخفیف مشتری ویژه (بیش از سقف ۱۵٪ مجاز صندوق‌دار)",
+        "managerNote": "تایید مدیر ارشد شعبه جهت جلب رضایت مشتری وفادار"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pos",
+        "درخواست اعمال تخفیف ۳۰٪ و ثبت مجوز مدیر در لاگ ممیزی",
+        "بررسی مسیر تکمیلی /app/settings/approvals",
+        "✅ سناریوی 26 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 27,
+      "title": "شناسایی رکوردهای تکراری مشتری و ادغام پرونده‌ها (Profile Merge)",
+      "enTitle": "Customer Duplicate Profile Detection & Merge",
+      "route": "/app/customers",
+      "persianData": {
+        "primaryProfile": "نیلوفر تقوی (۰۹۱۲۳۳۳۴۴۵۵)",
+        "duplicateProfile": "ن. تقوی (۰۹۱۲۳۳۳۴۴۵۵)",
+        "action": "ادغام تاریخچه خرید و تجمیع امتیازات کیف پول"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/customers",
+        "جستجوی شماره همراه و ادغام دو پروفایل تکراری مشتری در سیستم",
+        "✅ سناریوی 27 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 28,
+      "title": "تفکیک ایستگاه‌های KDS بر اساس بخش‌های آشپزخانه (گریل، فر، بار نوشیدنی)",
+      "enTitle": "KDS Multi-Station Routing & Tab Filter Views",
+      "route": "/app/kds",
+      "persianData": {
+        "stationGrill": "ایستگاه گریل: برگرها و استیک‌ها",
+        "stationOven": "ایستگاه فر: پیتزاها و لازانیا",
+        "stationBar": "ایستگاه بار سرد: آبمیوه‌ها و ماکتل‌ها"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/kds",
+        "تغییر فیلتر ایستگاه‌های آشپزخانه و مشاهده تفکیک هوشمند سفارشات",
+        "✅ سناریوی 28 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 29,
+      "title": "فعال‌سازی دفترچه قیمت داینامیک ساعات شلوغی (Happy Hour)",
+      "enTitle": "Dynamic Price Book Activation (Happy Hour Specials)",
+      "route": "/app/pricing/price-book",
+      "persianData": {
+        "priceBookName": "دفترچه تخفیفات ساعات طلایی عصرانه (۱۶ الی ۱۹)",
+        "discountPolicy": "۲۰٪ تخفیف روی کلیه نوشیدنی‌ها و پیش‌غذاها"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pricing/price-book",
+        "بررسی قوانین فعال‌سازی زمانی دفترچه قیمت Happy Hour در منوی صندوق",
+        "بررسی مسیر تکمیلی /app/pos",
+        "✅ سناریوی 29 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 30,
+      "title": "گزارش خرابی موتورسیکلت پیک و تخصیص مجدد به سفیر جایگزین",
+      "enTitle": "Delivery Breakdown Rejection & Courier Re-dispatch",
+      "route": "/app/delivery/orders",
+      "persianData": {
+        "originalCourier": "آرش احمدی (نقص فنی موتورسیکلت)",
+        "reassignedCourier": "فرهاد بهرامی (سفیر آماده‌باش)",
+        "reason": "پنچری لاستیک در خیابان بهشتی"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/delivery/orders",
+        "ثبت گزارش تاخیر و اعزام مجدد سفارش به سفیر جایگزین",
+        "✅ سناریوی 30 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 31,
+      "title": "هشدار اتمام موجودی نقطه سفارش (Safety Stock Alert) مواد اولیه",
+      "enTitle": "Inventory Safety Stock Depletion & Alert Banner",
+      "route": "/app/inventory/stock",
+      "persianData": {
+        "ingredient": "پنیر موزارلا قالبی رنده‌شده",
+        "currentStock": "۴ کیلوگرم (کمتر از حداقل حد اطمینان ۱۰ کیلو)",
+        "alertSeverity": "هشدار بحرانی تأمین انبار (CRITICAL)"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/inventory/stock",
+        "بررسی تابلوی پایش انبار و صدور اعلان کسری موجودی به مدیر انبار",
+        "بررسی مسیر تکمیلی /app/operations/monitoring",
+        "✅ سناریوی 31 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 32,
+      "title": "مرجوعی جزیی یک ردیف فاکتور و شارژ آنی اعتبار در کیف پول",
+      "enTitle": "Itemized Partial Refund with Customer Wallet Credit",
+      "route": "/app/refunds",
+      "persianData": {
+        "itemRefunded": "سوپ قارچ روز (سرد بودن غذا)",
+        "refundAmount": "۸۵,۰۰۰ ریال",
+        "destination": "کیف پول باشگاه وفاداری مشتری"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/refunds",
+        "ثبت فاکتور برگشت از فروش جزئی و شارژ آنی کیف پول",
+        "بررسی مسیر تکمیلی /app/customer-club/wallet",
+        "✅ سناریوی 32 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 33,
+      "title": "ارتقای سطح وفاداری مشتری از نقره‌ای به طلایی (Gold Tier)",
+      "enTitle": "Customer Tier Upgrade & Cashback Ledger Verification",
+      "route": "/app/customer-club/discounts",
+      "persianData": {
+        "customer": "دکتر محمدرضا حسینی",
+        "currentSpend": "بیش از ۱۰,۰۰۰,۰۰۰ ریال",
+        "newTier": "سطح طلایی (Gold) - بازگشت وجه ۱۰٪ در هر خرید"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/customer-club/discounts",
+        "اعمال ارتقای خودکار سطح وفاداری مشتری در دفتر کل کش‌بک",
+        "بررسی مسیر تکمیلی /app/customers",
+        "✅ سناریوی 33 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 34,
+      "title": "بازگشایی مجدد روز مالی بسته شده جهت تعدیل سند حسابداری",
+      "enTitle": "Business Day Reopen & Emergency Audit Adjustment",
+      "route": "/app/cashier/business-days",
+      "persianData": {
+        "businessDate": "روز کاری ۱۴۰۵/۰۵/۲۸",
+        "adjustmentReason": "اصلاح ثبت اشتباه واریزی کارتخوان به حساب جاری",
+        "supervisorAuth": "تایید مدیر ارشد مالی با لاگ ممیزی کامل"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/cashier/business-days",
+        "بازگشایی اضطراری روز مالی، ثبت سند اصلاحی و بستن مجدد",
+        "بررسی مسیر تکمیلی /app/audit",
+        "✅ سناریوی 34 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 35,
+      "title": "سفارش‌دهی کیوسک در حالت دو زبانه (فارسی و انگلیسی با تغییر چیدمان RTL/LTR)",
+      "enTitle": "Self-Service Kiosk Bilingual (Farsi/English) Ordering",
+      "route": "/app/kiosk",
+      "persianData": {
+        "interfaceLanguage": "فارسی (راست‌چین RTL) / English (LTR)",
+        "selectedItems": [
+          "Pizza Pepperoni",
+          "Caesar Salad",
+          "Mineral Water"
+        ]
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/kiosk",
+        "تست تغییر زبان و جهت چیدمان در کیوسک خودسفارش‌دهی",
+        "✅ سناریوی 35 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 36,
+      "title": "تغییر دسته‌جمعی و درصدی قیمت محصولات با جدول پیش‌نمایش تفاوت",
+      "enTitle": "Bulk Product Price Adjustment with Preview Table",
+      "route": "/app/pricing/bulk-update",
+      "persianData": {
+        "scope": "دسته پیش‌غذاها و سالادها",
+        "adjustmentFormula": "+۱۰٪ افزایش قیمت بر اساس تورم فصلی",
+        "roundingRule": "گرد کردن به نزدیک‌ترین ۵,۰۰۰ ریال"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pricing/bulk-update",
+        "محاسبه فرمول افزایش ۱۰ درصدی، بررسی جدول تفاوت قیمت و ذخیره نهایی",
+        "✅ سناریوی 36 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 37,
+      "title": "ثبت کسری نقدینگی سفیر و کسر از ودیعه تضمینی در تسویه‌حساب",
+      "enTitle": "Courier Settlement Cash Shortage Penalty & Adjustment",
+      "route": "/app/delivery/settlements",
+      "persianData": {
+        "courier": "پیمان صادقی",
+        "expectedCash": "۲,۵۰۰,۰۰۰ ریال",
+        "receivedCash": "۲,۴۰۰,۰۰۰ ریال (۱۰۰,۰۰۰ ریال کسری نقدینگی)",
+        "action": "ثبت سند کسر از ودیعه سفیر"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/delivery/settlements",
+        "ثبت سند مغایرت کسری نقدینگی و صدور تسویه‌حساب تعدیل‌شده",
+        "✅ سناریوی 37 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 38,
+      "title": "محدودیت استفاده از کوپن تخفیف یک‌بارمصرف و ممانعت از اعمال تکراری",
+      "enTitle": "Coupon Single-Use Limit Enforcement & Expired Check",
+      "route": "/app/discounts/coupons",
+      "persianData": {
+        "coupon": "SINGLE50",
+        "rule": "تنها یک‌بار استفاده برای هر شماره موبایل",
+        "test": "تلاش برای اعمال مجدد و دریافت خطای عدم اعتبار کوپن"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/discounts/coupons",
+        "بررسی ممانعت هوشمند سیستم از اعمال مجدد کوپن مصرف‌شده",
+        "بررسی مسیر تکمیلی /app/pos",
+        "✅ سناریوی 38 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 39,
+      "title": "توقف اضطراری فعالیت شعبه و همگام‌سازی قفل فروش در پلتفرم‌های واسط",
+      "enTitle": "Branch Emergency Pause & Aggregator Sync Lock",
+      "route": "/app/operations/branches",
+      "persianData": {
+        "branch": "شعبه اکسپرس فرودگاه مهرآباد",
+        "status": "تعطیلی موقت شعبه به دلیل قطع برق منطقه",
+        "aggregatorLock": "توقف فوری سفارش‌گیری در اسنپ‌فود و تپسی‌فود"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/operations/branches",
+        "فعال‌سازی قفل توقف موقت شعبه و ارسال وضعیت به پلتفرم‌های تجمیع‌کننده",
+        "بررسی مسیر تکمیلی /app/simulation/snappfood",
+        "✅ سناریوی 39 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 40,
+      "title": "ممیزی جامع رویدادهای مالی و بازبینی لاگ JSON مجوزهای مدیر",
+      "enTitle": "Comprehensive Financial Audit Trail & JSON Payload Review",
+      "route": "/app/audit",
+      "persianData": {
+        "eventCategory": "مجوزهای تایید سرپرست و عملیات صندوق",
+        "inspector": "حسابرس ارشد سیستم",
+        "payloadValidation": "بررسی امضای دیجیتال و ساختار استاندارد JSON"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/audit",
+        "جستجو در لاگ‌های ممیزی امنیتی و بررسی ساختار فیلدهای رویداد",
+        "بررسی مسیر تکمیلی /app/reports",
+        "✅ سناریوی 40 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 41,
+      "title": "تعریف گروه مشتریان شرکتی و الصاق سیاست تخفیف ۱۵٪ دفتری",
+      "enTitle": "Customer Group Creation & Policy Discount Binding",
+      "route": "/app/customers",
+      "persianData": {
+        "groupCode": "GRP-CORP-VIP",
+        "groupName": "مشتریان ویژه سازمانی و حقوقی",
+        "discountPolicy": "تخفیف دفتری ۱۵٪ شرکتی"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/customers",
+        "ایجاد گروه مشتریان شرکتی و الصاق سیاست تخفیف خودکار",
+        "✅ سناریوی 41 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 42,
+      "title": "فیلتر اعضای گروه مشتریان و جستجوی چندعاملی با کدملی و تلفن",
+      "enTitle": "Customer Directory Group Filtering & Multi-Factor Search",
+      "route": "/app/customers",
+      "persianData": {
+        "searchQuery": "09121112233",
+        "filterGroup": "مشتریان ویژه سازمانی",
+        "expectedResult": "علیرضا رضایی تهرانی"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/customers",
+        "جستجوی پیشرفته چندعاملی در دفترچه مشتریان و بازبینی کارت مشخصات",
+        "✅ سناریوی 42 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 43,
+      "title": "تعریف گروه قیمتی اختصاصی شعب ممتاز فرودگاهی و هتل‌ها",
+      "enTitle": "Dedicated Price Group Creation & Airport/Downtown Tier Assignment",
+      "route": "/app/pricing/price-groups",
+      "persianData": {
+        "groupCode": "TIER-AIRPORT-PREMIUM",
+        "groupName": "گروه قیمتی شعب فرودگاهی و ممتاز",
+        "currency": "ریال ایران (IRR)"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pricing/price-groups",
+        "تعریف گروه قیمتی اختصاصی و تخصیص شعبه فرودگاه به این سطح",
+        "بررسی مسیر تکمیلی /app/operations/branches",
+        "✅ سناریوی 43 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 44,
+      "title": "ویرایش ماتریس قیمت و اورراید قیمت کالا در گروه قیمتی فرودگاهی",
+      "enTitle": "Price Group Item-Level Price Overrides via Matrix Editor",
+      "route": "/app/pricing/price-groups",
+      "persianData": {
+        "item": "قهوه اسپرسو دوبل فرودگاهی",
+        "standardPrice": "۱۵۰,۰۰۰ ریال",
+        "airportOverridePrice": "۲۰۰,۰۰۰ ریال"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pricing/price-groups",
+        "تنظیم قیمت اختصاصی فرودگاه در ماتریس قیمت‌گذاری محصولات",
+        "بررسی مسیر تکمیلی /app/pricing/price-book",
+        "✅ سناریوی 44 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 45,
+      "title": "تفکیک خودکار قیمت کالا در صندوق POS بر اساس شعبه لاگین‌شده",
+      "enTitle": "POS Dynamic Group Price Resolution Across Multiple Branches",
+      "route": "/app/pos",
+      "persianData": {
+        "terminalBranch": "شعبه فرودگاه بین‌المللی امام خمینی",
+        "resolvedPrice": "اعمال خودکار قیمت اورراید فرودگاهی ۲۰۰,۰۰۰ ریال"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pos",
+        "بررسی تطبیق خودکار قیمت کالا در صندوق بر حسب هویت شعبه جاری",
+        "✅ سناریوی 45 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 46,
+      "title": "افزایش درصدی دسته‌جمعی قیمت در یک رده کالایی با گرد کردن روبه‌بالا",
+      "enTitle": "Category-Wide Percentage Bulk Price Adjustment with Rounding",
+      "route": "/app/pricing/bulk-update",
+      "persianData": {
+        "targetCategory": "نوشیدنی‌های گرم و سرد",
+        "percentage": "+۱۵٪",
+        "rounding": "گرد کردن به بالا (Ceiling 10,000 IRR)"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pricing/bulk-update",
+        "اعمال فرمول تغییر قیمت دسته‌جمعی رده نوشیدنی‌ها با قاعده گرد کردن",
+        "✅ سناریوی 46 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 47,
+      "title": "افزایش مبلغ ثابت ۲۰,۰۰۰ ریال روی کلیه اقلام یک گروه قیمتی خاص",
+      "enTitle": "Fixed-Amount Bulk Price Surcharge on Specific Price Group",
+      "route": "/app/pricing/bulk-update",
+      "persianData": {
+        "fixedSurcharge": "+۲۰,۰۰۰ ریال ثابت",
+        "scopePriceGroup": "گروه قیمتی تحویل شبانه اکسپرس"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pricing/bulk-update",
+        "اعمال افزایش مبلغ ثابت ریالی روی گروه قیمت شبانه",
+        "✅ سناریوی 47 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 48,
+      "title": "مدیریت حریم خصوصی، رضایت‌نامه‌ها و تنظیمات پیامک تبلیغاتی مشتری",
+      "enTitle": "Customer Marketing Consent & Privacy Preference Management",
+      "route": "/app/customers",
+      "persianData": {
+        "customer": "سارا محمدی",
+        "marketingSMS": "غیرفعال (Opt-out به درخواست مشتری)",
+        "orderNotificationsSMS": "فعال (Opt-in جهت دریافت وضعیت سفارش)"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/customers",
+        "تغییر وضعیت رضایت‌نامه بازاریابی پیامکی و ثبت لاگ زمان انصراف",
+        "✅ سناریوی 48 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 49,
+      "title": "برچسب‌گذاری داینامیک مشتریان و دسته‌بندی سگمنت مشتریان VIP",
+      "enTitle": "Dynamic Customer Tagging & VIP Segmentation",
+      "route": "/app/customers",
+      "persianData": {
+        "tags": [
+          "مشتری وفادار سالن",
+          "علاقه‌مند به غذاهای رژیمی",
+          "تولد در مرداد"
+        ],
+        "targetSegment": "کمپین تخفیف ویژه زادروز"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/customers",
+        "الصاق برچسب‌های سگمنتیشن به پروفایل مشتری و فیلتر بر اساس تگ",
+        "✅ سناریوی 49 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 50,
+      "title": "پذیرش ارز خارجی (دلار و یورو) در صندوق با تبدیل خودکار به ریال",
+      "enTitle": "Multi-Currency Tender Acceptance (USD / EUR with Auto-Conversion)",
+      "route": "/app/pos",
+      "persianData": {
+        "currencyTendered": "$20.00 USD نقدی",
+        "exchangeRate": "۱ دلار = ۶۰۰,۰۰۰ ریال",
+        "orderTotal": "۹,۰۰۰,۰۰۰ ریال",
+        "changeReturned": "۳,۰۰۰,۰۰۰ ریال مابقی پول به ریال"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pos",
+        "انتخاب متد پرداخت ارزی دلار و محاسبه نرخ برابری تبدیل به ریال",
+        "بررسی مسیر تکمیلی /app/payments",
+        "✅ سناریوی 50 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 51,
+      "title": "تفکیک و هدایت همزمان اقلام یک فاکتور به ۳ نمایشگر KDS مجزا",
+      "enTitle": "Multi-Station KDS Simultaneous Split Routing",
+      "route": "/app/kds",
+      "persianData": {
+        "orderContent": "۱x برگر (گریل) + ۱x پیتزا (فر) + ۱x اسموتی (بار)",
+        "routingPolicy": "ارسال همزمان به نمایشگرهای اختصاصی آشپزخانه"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/kds",
+        "بررسی توزیع هوشمند اقلام در ایستگاه‌های مختلف KDS",
+        "بررسی مسیر تکمیلی /app/operations/kds-configuration",
+        "✅ سناریوی 51 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 52,
+      "title": "نمایشگر تجمیع نهایی سرآشپز (Expediter) و اعلام اتمام کل سفارش",
+      "enTitle": "Kitchen Expediter Screen Ticket Aggregation & All-Ready Bump Flow",
+      "route": "/app/kds",
+      "persianData": {
+        "station": "ایستگاه اکسپدایتر (سرآشپز ارشد تحویل غذا)",
+        "state": "آماده‌شدن تدریجی آیتم‌ها و اعلام بسته کامل جهت تحویل"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/kds",
+        "مشاهده تجمیع اقلام از ایستگاه‌ها و بامپ یکپارچه کل سفارش",
+        "✅ سناریوی 52 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 53,
+      "title": "رزرو میز VIP در سالن و انتقال خودکار به وضعیت نشسته با ورود مهمان",
+      "enTitle": "Dine-In VIP Table Reservation & Walk-In Occupancy Transition",
+      "route": "/app/dine-in/floor",
+      "persianData": {
+        "table": "میز اختصاصی شماره ۰۱ VIP",
+        "reservedFor": "مهندس حسینی (ساعت ۲۰:۳۰ - ۴ نفر)",
+        "transition": "تغییر از حالت رزرو شده (RESERVED) به حضور یافته (OCCUPIED)"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/dine-in/floor",
+        "ثبت رزرو میز VIP و فعال‌سازی سفارش میز در سالن",
+        "✅ سناریوی 53 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 54,
+      "title": "معافیت مالیات ارزش افزوده فاکتور دیپلماتیک با رمز سرپرست",
+      "enTitle": "Diplomatic Tax & Service Charge Exemption with Supervisor PIN",
+      "route": "/app/pos",
+      "persianData": {
+        "customerType": "هیات دیپلماتیک سفارتخانه",
+        "exemption": "معافیت کامل ۱۰٪ مالیات بر ارزش افزوده و حق سرویس",
+        "supervisorPin": "9999 (تایید معافیت قانونی)"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pos",
+        "اعمال معافیت مالیات دیپلماتیک و ثبت شماره معرفی‌نامه رسمی",
+        "بررسی مسیر تکمیلی /app/settings/approvals",
+        "✅ سناریوی 54 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 55,
+      "title": "ثبت حضور و غیاب شیفت سفیر و اتصال به کارتخوان سیار (mPOS Pairing)",
+      "enTitle": "Courier Shift Attendance & Mobile POS Terminal Pairing",
+      "route": "/app/delivery/couriers",
+      "persianData": {
+        "courier": "آرش احمدی",
+        "mposDevice": "پوز سیار بی‌سیم PAX D210 (سریال SN-889922)",
+        "shiftState": "حاضر در شیفت و آماده دریافت سفارش"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/delivery/couriers",
+        "ثبت شروع شیفت سفیر و اتصال دستگاه کارتخوان سیار به پروفایل",
+        "بررسی مسیر تکمیلی /app/operations/terminals",
+        "✅ سناریوی 55 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 56,
+      "title": "بسته‌بندی و ارسال گروهی چند سفارش هم‌مسیر در یک نوبت اعزام پیک",
+      "enTitle": "Multi-Stop Delivery Order Route Batching & Dispatch",
+      "route": "/app/delivery/orders",
+      "persianData": {
+        "zone": "منطقه ۱ - فرمانیه و کامرانیه",
+        "batchedOrders": [
+          "سفارش #1045",
+          "سفارش #1046",
+          "سفارش #1048"
+        ],
+        "assignedCourier": "فرهاد بهرامی"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/delivery/orders",
+        "تجمیع سفارش‌های هم‌مسیر منطقه ۱ و ارسال گروهی با یک سفیر",
+        "✅ سناریوی 56 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 57,
+      "title": "عدم پاسخگویی مشتری دلیوری، لغو تحویل و بازگشت غذا به رستوران",
+      "enTitle": "Delivery Failed Attempt & Customer Unreachable Protocol",
+      "route": "/app/delivery/orders",
+      "persianData": {
+        "reason": "عدم پاسخ به ۳ تماس سفیر و عدم حضور در آدرس",
+        "protocol": "بازگشت کالا به رستوران، ثبت ضایعات غذا و ابطال فاکتور"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/delivery/orders",
+        "ثبت گزارش عدم تحویل به علت عدم حضور مشتری و ثبت در لاگ ضایعات",
+        "بررسی مسیر تکمیلی /app/audit",
+        "✅ سناریوی 57 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 58,
+      "title": "خروجی اکسل دسته‌جمعی از کل کاتالوگ محصولات و ماتریس قیمت‌ها",
+      "enTitle": "Catalog Product & Price Matrix Excel Bulk Export",
+      "route": "/app/catalog/import-export",
+      "persianData": {
+        "exportFormat": "فایل اکسل جامع (.xlsx)",
+        "includes": "شامل گروه‌های قیمتی، بارکدها و مادیفایرهای هر محصول"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/catalog/import-export",
+        "✅ سناریوی 58 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 59,
+      "title": "ورود فایل CSV محصولات جدید و حل تعارض کدهای تکراری (Duplicate SKU)",
+      "enTitle": "Catalog CSV Bulk Import & Duplicate SKU Error Resolution",
+      "route": "/app/catalog/import-export",
+      "persianData": {
+        "importedRows": "۲۵ قلم کالای جدید کافی‌شاپ",
+        "conflictSKU": "SKU-COF-001 (تکراری)",
+        "resolutionAction": "به‌روزرسانی قیمت و اطلاعات کالا به جای خطا"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/catalog/import-export",
+        "شبیه‌سازی ویزارد ورود دسته‌جمعی CSV و حل هوشمند تعارض SKU",
+        "بررسی مسیر تکمیلی /app/catalog/products",
+        "✅ سناریوی 59 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    },
+    {
+      "id": 60,
+      "title": "قرارداد تشریفات و کیترینگ شرکتی ۵۰ نفره با بیعانه و تسویه دفتری",
+      "enTitle": "Corporate Catering Event Contract Order & Credit Account Settle",
+      "route": "/app/pos",
+      "persianData": {
+        "client": "هلدینگ سرمایه‌گذاری سینا",
+        "orderScale": "۵۰ پرس غذای سنتی + پیش‌غذا و دسر",
+        "depositPaid": "۱۰,۰۰۰,۰۰۰ ریال پیش‌پرداخت نقدی",
+        "balanceOnCredit": "۴۰,۰۰۰,۰۰۰ ریال روی حساب اعتباری ۳۰ روزه"
+      },
+      "logs": [
+        "شروع اجرای سناریو در مسیر /app/pos",
+        "ثبت سفارش کیترینگ بزرگ ۵۰ نفره با پیش‌پرداخت بیعانه و تسویه دفتری",
+        "بررسی مسیر تکمیلی /app/credit/accounts",
+        "✅ سناریوی 60 با موفقیت به زبان فارسی و بدون خطای سیستمی اجرا شد."
+      ],
+      "untranslatedCount": 0,
+      "untranslatedItems": [],
+      "status": "SUCCESS"
+    }
+  ]
+}

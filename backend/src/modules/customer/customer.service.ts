@@ -169,7 +169,7 @@ export class CustomerService {
   async createCustomer(
     tenantId: string,
     data: {
-      code: string;
+      code?: string;
       first_name: string;
       last_name: string;
       mobile: string;
@@ -180,18 +180,24 @@ export class CustomerService {
     },
     correlationId: string,
   ) {
-    const code = data.code.toUpperCase();
+    const normMobile = normalizePhone(data.mobile);
+    const rawMobile = data.mobile ? data.mobile.trim() : '';
+    const rawCode = data.code ? data.code.trim() : '';
+
+    const code = (rawCode || normMobile || rawMobile).toUpperCase();
+    if (!code) {
+      throw new BadRequestException('Mobile phone number is required to register customer');
+    }
+
     const existing = await this.customerRepo.findOne({ where: { tenant_id: tenantId, code } });
     if (existing) throw new ConflictException(`Customer code ${code} already exists`);
-
-    const normMobile = normalizePhone(data.mobile);
 
     const customer = this.customerRepo.create({
       tenant_id: tenantId,
       code,
       first_name: data.first_name,
       last_name: data.last_name,
-      mobile: normMobile,
+      mobile: normMobile || rawMobile,
       email: data.email || null,
       customer_group_id: data.customer_group_id || null,
       national_id: data.national_id || null,

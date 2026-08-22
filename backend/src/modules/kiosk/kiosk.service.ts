@@ -16,6 +16,7 @@ import { Payment } from '../../entities/Payment.entity';
 import { Customer } from '../../entities/Customer.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { normalizePhone } from '../customer/customer.service';
 
 @Injectable()
 export class KioskService {
@@ -168,16 +169,22 @@ export class KioskService {
 
     let customerId = null;
     if (data.customer_phone && data.customer_phone.trim() !== '') {
+      const rawPhone = data.customer_phone.trim();
+      const normPhone = normalizePhone(rawPhone) || rawPhone;
       let customer = await this.customerRepo.findOne({
-        where: { tenant_id: tenantId, mobile: data.customer_phone.trim() },
+        where: [
+          { tenant_id: tenantId, mobile: rawPhone },
+          { tenant_id: tenantId, mobile: normPhone },
+          { tenant_id: tenantId, code: normPhone },
+        ],
       });
       if (!customer) {
         customer = this.customerRepo.create({
           tenant_id: tenantId,
-          code: `CUST-${Date.now().toString().slice(-6)}`,
+          code: normPhone,
           first_name: data.customer_name || 'Kiosk',
           last_name: 'Guest',
-          mobile: data.customer_phone.trim(),
+          mobile: normPhone,
           is_active: true,
         });
         customer = await this.customerRepo.save(customer);

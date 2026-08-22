@@ -1,0 +1,1719 @@
+{
+  "generatedAt": "2026-08-19T16:22:22.848Z",
+  "totalScenarios": 60,
+  "totalDistinctRoutes": 52,
+  "totalUniqueUntranslatedStrings": 9,
+  "scenarios": [
+    {
+      "id": 1,
+      "name": "Morning Day Opening & Cashier Shift Initialization",
+      "routes": [
+        "/app/cashier/business-days",
+        "/app/cashier/shifts"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Morning Prep & 86'd / Out-of-Stock Item Suspension",
+      "routes": [
+        "/app/catalog/availability",
+        "/app/pos"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Walk-In Counter Order with Item Modifiers (Cash)",
+      "routes": [
+        "/app/pos"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Walk-In Counter Order with Split Tender (Cash + Card)",
+      "routes": [
+        "/app/pos",
+        "/app/payments"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Dine-In Guest Seating & Multi-Course Table Order",
+      "routes": [
+        "/app/dine-in/floor",
+        "/app/pos"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Dine-In Order Additions, Table Transfer & Merging",
+      "routes": [
+        "/app/dine-in/floor"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Kitchen Display System (KDS) Preparation & Bump Flow",
+      "routes": [
+        "/app/kds"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 8,
+      "name": "High-Priority (VIP/Rush) Ticket Escalation & Recall",
+      "routes": [
+        "/app/kds"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 9,
+      "name": "Customer Registration & Loyalty Cashback Accrual",
+      "routes": [
+        "/app/customers",
+        "/app/pos"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 10,
+      "name": "Wallet Cashback Balance Redemption & Coupon Codes",
+      "routes": [
+        "/app/pos",
+        "/app/discounts/coupons"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 11,
+      "name": "Delivery Phone Order Creation & Courier Dispatch",
+      "routes": [
+        "/app/pos",
+        "/app/delivery/orders"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 12,
+      "name": "Courier Delivery Completion & COD Collection",
+      "routes": [
+        "/app/delivery/orders",
+        "/app/delivery/couriers"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 13,
+      "name": "External Food Aggregator (Snappfood) Order Injection",
+      "routes": [
+        "/app/simulation/snappfood",
+        "/app/kds"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 14,
+      "name": "Mid-Day Cash Drawer Drop & Petty Cash Payout",
+      "routes": [
+        "/app/cashier/shifts"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 15,
+      "name": "Line-Item Void & Supervisor PIN Override",
+      "routes": [
+        "/app/pos",
+        "/app/settings/approvals"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 16,
+      "name": "Full & Partial Order Refunds with Wallet Reversal",
+      "routes": [
+        "/app/refunds",
+        "/app/orders"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 17,
+      "name": "Corporate B2B Dining on Credit Account (On-Tab)",
+      "routes": [
+        "/app/pos",
+        "/app/credit/accounts"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 18,
+      "name": "Self-Service Kiosk Customer Order & Self-Checkout",
+      "routes": [
+        "/app/kiosk"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 19,
+      "name": "End-of-Shift Courier Batch Settlement Reconciliation",
+      "routes": [
+        "/app/delivery/settlements"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 20,
+      "name": "End-of-Shift Z-Report & End-of-Day (EOD) Business Close",
+      "routes": [
+        "/app/cashier/shifts",
+        "/app/reports"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 21,
+      "name": "Park / Hold Cart Order & Recall for Later Checkout",
+      "routes": [
+        "/app/pos"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 22,
+      "name": "Split Bill by Line Items Between Dine-In Guests",
+      "routes": [
+        "/app/dine-in/floor",
+        "/app/pos"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 23,
+      "name": "Offline POS Sync Simulation & Network Recovery",
+      "routes": [
+        "/app/simulation/offline-sync",
+        "/app/pos"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 24,
+      "name": "Tara BNPL Installment Payment Flow Simulation",
+      "routes": [
+        "/app/simulation/payments-printers",
+        "/app/payments"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 25,
+      "name": "Printer Hardware Fault Injection & Print Job Retry",
+      "routes": [
+        "/app/operations/print-queue",
+        "/app/simulation/payments-printers"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 26,
+      "name": "Discount PIN Authorization Exceeding Cashier Threshold",
+      "routes": [
+        "/app/pos",
+        "/app/settings/approvals"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 27,
+      "name": "Customer Duplicate Profile Detection & Merge",
+      "routes": [
+        "/app/customers"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 28,
+      "name": "KDS Multi-Station Routing & Tab Filter Views",
+      "routes": [
+        "/app/kds"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 29,
+      "name": "Dynamic Price Book Activation (Happy Hour Specials)",
+      "routes": [
+        "/app/pricing/price-book",
+        "/app/pos"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 30,
+      "name": "Delivery Breakdown Rejection & Courier Re-dispatch",
+      "routes": [
+        "/app/delivery/orders"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 31,
+      "name": "Inventory Safety Stock Depletion & Alert Banner",
+      "routes": [
+        "/app/inventory/stock",
+        "/app/operations/monitoring"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 32,
+      "name": "Itemized Partial Refund with Customer Wallet Credit",
+      "routes": [
+        "/app/refunds",
+        "/app/customer-club/wallet"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 33,
+      "name": "Customer Tier Upgrade & Cashback Ledger Verification",
+      "routes": [
+        "/app/customer-club/discounts",
+        "/app/customers"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 34,
+      "name": "Business Day Reopen & Emergency Audit Adjustment",
+      "routes": [
+        "/app/cashier/business-days",
+        "/app/audit"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 35,
+      "name": "Self-Service Kiosk Bilingual (Farsi/English) Ordering",
+      "routes": [
+        "/app/kiosk"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 36,
+      "name": "Bulk Product Price Adjustment with Preview Table",
+      "routes": [
+        "/app/pricing/bulk-update"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 37,
+      "name": "Courier Settlement Cash Shortage Penalty & Adjustment",
+      "routes": [
+        "/app/delivery/settlements"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 38,
+      "name": "Coupon Single-Use Limit Enforcement & Expired Check",
+      "routes": [
+        "/app/discounts/coupons",
+        "/app/pos"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 39,
+      "name": "Branch Emergency Pause & Aggregator Sync Lock",
+      "routes": [
+        "/app/operations/branches",
+        "/app/simulation/snappfood"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 40,
+      "name": "Comprehensive Financial Audit Trail & JSON Payload Review",
+      "routes": [
+        "/app/audit",
+        "/app/reports"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 41,
+      "name": "Customer Group Creation & Policy Discount Binding",
+      "routes": [
+        "/app/customers"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 42,
+      "name": "Customer Directory Group Filtering & Multi-Factor Search",
+      "routes": [
+        "/app/customers"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 43,
+      "name": "Dedicated Price Group Creation & Airport/Downtown Tier Assignment",
+      "routes": [
+        "/app/pricing/price-groups",
+        "/app/operations/branches"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 44,
+      "name": "Price Group Item-Level Price Overrides via Matrix Editor",
+      "routes": [
+        "/app/pricing/price-groups",
+        "/app/pricing/price-book"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 45,
+      "name": "POS Dynamic Group Price Resolution Across Multiple Branches",
+      "routes": [
+        "/app/pos",
+        "/app/pricing/price-book"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 46,
+      "name": "Category-Wide Percentage Bulk Price Adjustment with Rounding",
+      "routes": [
+        "/app/pricing/bulk-update"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 47,
+      "name": "Fixed-Amount Bulk Price Surcharge on Specific Price Group",
+      "routes": [
+        "/app/pricing/bulk-update",
+        "/app/pricing/price-groups"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 48,
+      "name": "Customer Marketing Consent & Privacy Preference Management",
+      "routes": [
+        "/app/customers",
+        "/app/settings/general"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 49,
+      "name": "Dynamic Customer Tagging & VIP Segmentation",
+      "routes": [
+        "/app/customers",
+        "/app/discounts/campaigns"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 50,
+      "name": "Multi-Currency Tender Acceptance (USD / EUR with Auto-Conversion)",
+      "routes": [
+        "/app/pos",
+        "/app/payments",
+        "/app/cashier/shifts"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 51,
+      "name": "Multi-Station KDS Simultaneous Split Routing",
+      "routes": [
+        "/app/kds",
+        "/app/operations/kds-configuration",
+        "/app/pos"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 52,
+      "name": "Kitchen Expediter Screen Ticket Aggregation & All-Ready Bump Flow",
+      "routes": [
+        "/app/kds",
+        "/app/orders"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 53,
+      "name": "Dine-In VIP Table Reservation & Walk-In Occupancy Transition",
+      "routes": [
+        "/app/dine-in/floor"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 54,
+      "name": "Diplomatic Tax & Service Charge Exemption with Supervisor PIN",
+      "routes": [
+        "/app/pos",
+        "/app/settings/approvals"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 55,
+      "name": "Courier Shift Attendance & Mobile POS Terminal Pairing",
+      "routes": [
+        "/app/delivery/couriers",
+        "/app/operations/terminals"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 56,
+      "name": "Multi-Stop Delivery Order Route Batching & Dispatch",
+      "routes": [
+        "/app/delivery/orders",
+        "/app/delivery/couriers"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 57,
+      "name": "Delivery Failed Attempt & Customer Unreachable Protocol",
+      "routes": [
+        "/app/delivery/orders",
+        "/app/inventory/stock",
+        "/app/audit"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 58,
+      "name": "Catalog Product & Price Matrix Excel Bulk Export",
+      "routes": [
+        "/app/catalog/import-export",
+        "/app/reports"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 59,
+      "name": "Catalog CSV Bulk Import & Duplicate SKU Error Resolution",
+      "routes": [
+        "/app/catalog/import-export",
+        "/app/catalog/products"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    },
+    {
+      "id": 60,
+      "name": "Corporate Catering Event Contract Order & Credit Account Settle",
+      "routes": [
+        "/app/pos",
+        "/app/credit/accounts",
+        "/app/kds",
+        "/app/delivery/orders"
+      ],
+      "untranslatedCount": 9,
+      "untranslatedElements": [
+        "Jwt",
+        "Firebase",
+        "Amplify",
+        "Auth0",
+        "Supabase",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+        "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+      ]
+    }
+  ],
+  "routeDetails": {
+    "/app/cashier/business-days": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/cashier/shifts": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/catalog/availability": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/pos": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/payments": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/dine-in/floor": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/kds": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/customers": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/discounts/coupons": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/delivery/orders": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/delivery/couriers": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/simulation/snappfood": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/settings/approvals": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/refunds": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/orders": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/credit/accounts": [],
+    "/app/kiosk": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/delivery/settlements": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/reports": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/simulation/offline-sync": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/simulation/payments-printers": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/operations/print-queue": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/pricing/price-book": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/inventory/stock": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/operations/monitoring": [],
+    "/app/customer-club/wallet": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/customer-club/discounts": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/audit": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/pricing/bulk-update": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/operations/branches": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/pricing/price-groups": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/settings/general": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/discounts/campaigns": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/operations/kds-configuration": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/operations/terminals": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/catalog/import-export": [],
+    "/app/catalog/products": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/dashboard": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/catalog/categories": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/catalog/modifiers": [],
+    "/app/catalog/menus": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/operations/printers": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/settings/order-workflow": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/settings/discounts-credit": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/settings/discount-authorizations": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/settings/payments-refunds": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/settings/reasons": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/settings/localization": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/settings/data-reset": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/app/simulation/logs": [
+      "Jwt",
+      "Firebase",
+      "Amplify",
+      "Auth0",
+      "Supabase",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"admin\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"gnext\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"local\"",
+      "[در متن: \"حساب مدیر مشترک پروتوتایپنام کاربری: admin@gnext.local | رمز عبور: GnextDemo!2026\"] -> \"GnextDemo\""
+    ],
+    "/auth/jwt/sign-in": []
+  }
+}

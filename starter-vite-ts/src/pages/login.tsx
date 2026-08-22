@@ -58,8 +58,8 @@ export function LoginPage() {
     <AuthSplitLayout
       slotProps={{
         section: {
-          title: t('app.welcome'),
-          subtitle: `${t('app.title')} - Multi-Tenant Operations & Master Catalog`,
+          title: t('app.welcome', 'Welcome to Gnext Prototype'),
+          subtitle: `${t('app.title')} - ${t('app.multiTenantSubtitle', 'Multi-Tenant Operations & Master Catalog')}`,
         },
       }}
     >
@@ -85,7 +85,7 @@ export function LoginPage() {
         <Alert severity="info" sx={{ mb: 3, fontSize: '0.85rem' }}>
           <strong>{t('app.sharedAdminNotice')}</strong>
           <br />
-          Username: <code>admin@gnext.local</code> | Password: <code>GnextDemo!2026</code>
+          {t('auth.username', 'Username')}: <code>admin@gnext.local</code> | {t('auth.password', 'Password')}: <code>GnextDemo!2026</code>
         </Alert>
 
         {error && (

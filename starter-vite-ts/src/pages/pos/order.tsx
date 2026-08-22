@@ -75,6 +75,7 @@ import { discountsApi } from 'src/api/discountsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 
 import { CheckoutModal } from 'src/components/CheckoutModal';
+import { toast, showErrorToast } from 'src/components/snackbar';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 
 interface CartItem {
@@ -92,6 +93,29 @@ const DISCOUNT_REASONS = [
   { code: 'DAMAGED_ITEM', label: 'Minor Defect / Packaging Issue' },
   { code: 'VIP_COURTESY', label: 'VIP Club Member Courtesy' },
 ];
+
+function formatRejectionReason(reason?: string, fallback: string = 'Discount was not applied') {
+  switch (reason) {
+    case 'INVALID_OR_INACTIVE_COUPON':
+      return 'Coupon code is invalid or inactive';
+    case 'COUPON_NOT_YET_ACTIVE':
+      return 'Coupon code is not active yet';
+    case 'COUPON_EXPIRED':
+      return 'Coupon code has expired';
+    case 'COUPON_MAX_USES_REACHED':
+      return 'Coupon has reached its maximum usage limit';
+    case 'COUPON_ALREADY_REDEEMED_BY_CUSTOMER':
+      return 'Coupon has already been used by this customer';
+    case 'MINIMUM_SUBTOTAL_NOT_MET':
+    case 'CAMPAIGN_MINIMUM_NOT_MET':
+      return 'Order subtotal does not meet the minimum required for this coupon';
+    case 'NEVER_DISCOUNT':
+    case 'CAMPAIGN_EXCLUDED':
+      return 'Selected items in cart are excluded from promotional discounts';
+    default:
+      return reason || fallback;
+  }
+}
 
 export function PosOrderPage() {
   const { t: _t } = useTranslation();
@@ -132,6 +156,7 @@ export function PosOrderPage() {
       setCreatingCustomer(true);
       setCustomerError(null);
       const created = await customerApi.createCustomer({
+        code: newCustMobile.trim(),
         first_name: newCustFirstName.trim(),
         last_name: newCustLastName.trim(),
         mobile: newCustMobile.trim(),
@@ -413,11 +438,14 @@ export function PosOrderPage() {
       }
 
       setHoldSuccessMessage(`Order #${draft.order_number} held successfully in Drafts.`);
+      toast.success(`Order #${draft.order_number} held in Drafts`);
       handleClearCart();
       fetchHeldOrders(selectedBranchId);
       setError(null);
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to hold order');
+      const msg = err.detail || err.message || 'Failed to hold order';
+      setError(msg);
+      showErrorToast(err, msg);
     }
   };
 
@@ -470,8 +498,10 @@ export function PosOrderPage() {
       setHeldOrdersDrawerOpen(false);
       setHoldSuccessMessage(null);
       setError(null);
-    } catch {
+      toast.success(`Resumed draft #${fullOrder.order_number}`);
+    } catch (err: any) {
       setError('Failed to resume held draft order');
+      showErrorToast(err, 'Failed to resume held draft order');
     }
   };
 
@@ -480,11 +510,16 @@ export function PosOrderPage() {
     try {
       await orderApi.cancelOrder(orderId, undefined, 'Discarded from held drafts');
       if (activeDraftOrderId === orderId) {
-        setActiveDraftOrderId(null);
+        handleClearCart();
+      } else if (selectedBranchId) {
+        fetchHeldOrders(selectedBranchId);
       }
-      fetchHeldOrders(selectedBranchId);
-    } catch {
-      setError('Failed to discard held draft');
+      toast.info('Held draft order discarded');
+      setError(null);
+    } catch (err: any) {
+      const msg = 'Failed to discard held draft';
+      setError(msg);
+      showErrorToast(err, msg);
     }
   };
 
@@ -547,20 +582,27 @@ export function PosOrderPage() {
 
       if (applied) {
         const approvedBadge = appliedManualDiscount?.approvalRequestId ? ' [Manager Approved]' : '';
-        setDiscountMessage(
-          `Applied ${applied.campaignName}${approvedBadge}: -${MoneyUtil.formatCurrency(discAmount)} IRR`
-        );
+        const msg = `Applied ${applied.campaignName}${approvedBadge}: -${MoneyUtil.formatCurrency(discAmount)} IRR`;
+        setDiscountMessage(msg);
         setError(null);
+        if (appliedCouponCode) {
+          toast.success(msg);
+        }
       } else if (rejected) {
         setDiscountMessage(null);
-        if (!quoteRes.approvalRequired) {
-          setError(rejected.rejectionReason || 'Discount was not applied');
+        const reasonMsg = formatRejectionReason(rejected.rejectionReason);
+        if (appliedCouponCode) {
+          toast.error(reasonMsg);
+          setAppliedCouponCode('');
         }
       } else {
         setDiscountMessage(null);
       }
-    } catch {
-      // Ignore routine typing auto-quote errors
+    } catch (err: any) {
+      if (appliedCouponCode) {
+        showErrorToast(err, 'Failed to evaluate coupon discount');
+        setAppliedCouponCode('');
+      }
     }
   }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType]);
 
@@ -571,7 +613,14 @@ export function PosOrderPage() {
   // Coupon Actions
   const handleApplyCoupon = () => {
     const trimmed = couponInput.trim().toUpperCase();
-    if (!trimmed) return;
+    if (!trimmed) {
+      toast.error('Please enter a coupon code');
+      return;
+    }
+    if (cart.length === 0) {
+      toast.error('Cart is empty. Add items to order before applying a coupon.');
+      return;
+    }
     setAppliedManualDiscount(null);
     setAppliedCouponCode(trimmed);
   };
@@ -586,17 +635,23 @@ export function PosOrderPage() {
   // Manual Discount Actions
   const handleApplyManualDiscount = () => {
     if (!manualValue || !MoneyUtil.greaterThan(manualValue, '0')) {
-      setError('Please enter a valid discount amount or percentage');
+      const msg = 'Please enter a valid discount amount or percentage';
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
     if (manualCalcType === 'PERCENTAGE' && Number(manualValue) > 30) {
-      setError('Percentage discount exceeds maximum policy ceiling of 30%');
+      const msg = 'Percentage discount exceeds maximum policy ceiling of 30%';
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
     if (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > 300000) {
-      setError('Fixed discount exceeds maximum policy ceiling of 300,000 IRR');
+      const msg = 'Fixed discount exceeds maximum policy ceiling of 300,000 IRR';
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
@@ -708,11 +763,14 @@ export function PosOrderPage() {
 
       setPlacedOrder(submitted);
       setCheckoutModalOpen(true);
+      toast.success(`Order #${submitted.order_number || ''} submitted successfully!`);
       handleClearCart();
       fetchHeldOrders(selectedBranchId);
       setError(null);
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to place order');
+      const msg = err.detail || err.message || 'Failed to place order';
+      setError(msg);
+      showErrorToast(err, msg);
     }
   };
 
@@ -729,12 +787,6 @@ export function PosOrderPage() {
 
   return (
     <Box>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2.5 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
       {holdSuccessMessage && (
         <Alert severity="info" sx={{ mb: 2.5 }} onClose={() => setHoldSuccessMessage(null)}>
           {holdSuccessMessage}

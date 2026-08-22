@@ -2,6 +2,7 @@ import type { IconButtonProps } from '@mui/material/IconButton';
 
 import { m } from 'framer-motion';
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { usePopover } from 'minimal-shared/hooks';
 
 import MenuList from '@mui/material/MenuList';
@@ -31,6 +32,7 @@ export const DEFAULT_LANGS = [
 ];
 
 export function LanguagePopover({ data = DEFAULT_LANGS, sx, ...other }: LanguagePopoverProps) {
+  const { t } = useTranslation();
   const langs = data.length > 0 ? data : DEFAULT_LANGS;
   const { open, anchorEl, onClose, onOpen } = usePopover();
   const { locale, setLocale } = useAuthStore();
@@ -72,7 +74,7 @@ export function LanguagePopover({ data = DEFAULT_LANGS, sx, ...other }: Language
         whileTap={varTap(0.96)}
         whileHover={varHover(1.04)}
         transition={transitionTap()}
-        aria-label="Languages button"
+        aria-label={t('common.languages', 'Languages')}
         onClick={onOpen}
         sx={[
           (theme) => ({

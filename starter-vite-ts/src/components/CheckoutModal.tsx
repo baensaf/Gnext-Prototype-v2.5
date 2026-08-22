@@ -40,6 +40,8 @@ import { orderApi } from 'src/api/orderApi';
 import { paymentApi } from 'src/api/paymentApi';
 import { settingsApi } from 'src/api/settingsApi';
 
+import { toast, showErrorToast } from 'src/components/snackbar';
+
 interface CheckoutModalProps {
   open: boolean;
   orderId: string | null;
@@ -108,12 +110,15 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
 
       const updatedPays = await paymentApi.getOrderPayments(orderId);
       setPayments(updatedPays);
+      toast.success(t('pos.paymentSuccess', 'Payment recorded successfully'));
 
       if (MoneyUtil.isZero(res.order.due_amount) && onPaymentComplete) {
         onPaymentComplete();
       }
     } catch (err: any) {
-      setError(err.detail || 'Payment failed');
+      const errorMsg = err.detail || 'Payment failed';
+      setError(errorMsg);
+      showErrorToast(err, errorMsg);
     }
   };
 

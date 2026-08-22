@@ -28,32 +28,17 @@ export function DashboardContent({
 }: DashboardContentProps) {
   const settings = useSettingsContext();
 
-  const isNavHorizontal = settings.state.navLayout === 'horizontal';
-
   return (
     <Container
       className={mergeClasses([layoutClasses.content, className])}
       maxWidth={settings.state.compactLayout ? maxWidth : false}
+      disableGutters
       sx={[
-        (theme) => ({
+        () => ({
           display: 'flex',
           flex: '1 1 auto',
           flexDirection: 'column',
-          pt: 'var(--layout-dashboard-content-pt)',
-          pb: 'var(--layout-dashboard-content-pb)',
-          [theme.breakpoints.up(layoutQuery)]: {
-            px: 'var(--layout-dashboard-content-px)',
-            ...(isNavHorizontal && { '--layout-dashboard-content-pt': '40px' }),
-          },
-          ...(disablePadding && {
-            p: {
-              xs: 0,
-              sm: 0,
-              md: 0,
-              lg: 0,
-              xl: 0,
-            },
-          }),
+          width: '100%',
         }),
         ...(Array.isArray(sx) ? sx : [sx]),
       ]}

@@ -1,6 +1,7 @@
 import type { IconButtonProps } from '@mui/material/IconButton';
 
 import { m } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 
 import Badge from '@mui/material/Badge';
 import SvgIcon from '@mui/material/SvgIcon';
@@ -12,6 +13,7 @@ import { varTap, varHover, transitionTap } from 'src/components/animate';
 // ----------------------------------------------------------------------
 
 export function SettingsButton({ sx, ...other }: IconButtonProps) {
+  const { t } = useTranslation();
   const settings = useSettingsContext();
 
   return (
@@ -20,7 +22,7 @@ export function SettingsButton({ sx, ...other }: IconButtonProps) {
       whileTap={varTap(0.96)}
       whileHover={varHover(1.04)}
       transition={transitionTap()}
-      aria-label="Settings button"
+      aria-label={t('common.settings', 'Settings')}
       onClick={settings.onToggleDrawer}
       sx={[{ p: 0, width: 40, height: 40 }, ...(Array.isArray(sx) ? sx : [sx])]}
       {...other}

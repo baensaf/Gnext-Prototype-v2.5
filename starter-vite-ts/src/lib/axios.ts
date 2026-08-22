@@ -4,6 +4,8 @@ import axios from 'axios';
 
 import { CONFIG } from 'src/global-config';
 
+import { showErrorToast } from 'src/components/snackbar';
+
 // ----------------------------------------------------------------------
 
 const axiosInstance = axios.create({
@@ -32,6 +34,9 @@ axiosInstance.interceptors.response.use(
   (error) => {
     const message = error?.response?.data?.message || error?.message || 'Something went wrong!';
     console.error('Axios error:', message);
+    if (!error.response || error.response.status >= 500) {
+      showErrorToast(message);
+    }
     return Promise.reject(new Error(message));
   }
 );

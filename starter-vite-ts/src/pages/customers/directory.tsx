@@ -106,8 +106,9 @@ export function CustomersPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const finalCode = code.trim() || mobile.trim();
       await customerApi.createCustomer({
-        code,
+        code: finalCode,
         first_name: firstName,
         last_name: lastName,
         mobile,
@@ -365,9 +366,24 @@ export function CustomersPage() {
           <form onSubmit={handleCreate}>
             <Stack spacing={2.5}>
               <TextField
-                label="Customer Code"
-                placeholder="e.g. CUST-1002"
+                label="Mobile Phone Number"
+                placeholder="e.g. 09120000000 / +989120000000"
                 required
+                fullWidth
+                value={mobile}
+                onChange={(e) => {
+                  const newMobile = e.target.value;
+                  // If code was empty or was keeping in sync with previous mobile value, update it
+                  if (!code || code === mobile.toUpperCase()) {
+                    setCode(newMobile.toUpperCase());
+                  }
+                  setMobile(newMobile);
+                }}
+              />
+              <TextField
+                label="Customer Code"
+                placeholder="Defaults to phone number"
+                helperText="Customer code defaults to the customer's phone number."
                 fullWidth
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
@@ -388,14 +404,6 @@ export function CustomersPage() {
                   onChange={(e) => setLastName(e.target.value)}
                 />
               </Stack>
-              <TextField
-                label="Mobile Phone Number"
-                placeholder="e.g. +989120000000"
-                required
-                fullWidth
-                value={mobile}
-                onChange={(e) => setMobile(e.target.value)}
-              />
               <TextField
                 label="Email Address"
                 type="email"

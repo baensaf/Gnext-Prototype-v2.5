@@ -9,6 +9,7 @@ import { Product } from '../../entities/Product.entity';
 import { Category } from '../../entities/Category.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { normalizePhone } from '../customer/customer.service';
 
 export interface AutoMapResult {
   header: string;
@@ -460,7 +461,8 @@ export class ImportExportService {
           const tenantId = job.tenant_id;
 
           if (job.entity_type === 'CUSTOMERS') {
-            const customerCode = data.code || `CUST-IMP-${Date.now().toString().slice(-6)}-${row.row_number}`;
+            const normMobile = data.mobile ? normalizePhone(data.mobile) || data.mobile : '';
+            const customerCode = data.code || normMobile || `CUST-IMP-${Date.now().toString().slice(-6)}-${row.row_number}`;
             let customer = await manager.findOne(Customer, { where: { tenant_id: tenantId, code: customerCode } });
 
             const isActive = data.is_active === 'false' || data.is_active === '0' || data.is_active === 'غیرفعال' ? false : true;
@@ -471,7 +473,7 @@ export class ImportExportService {
                 code: customerCode,
                 first_name: data.first_name,
                 last_name: data.last_name,
-                mobile: data.mobile,
+                mobile: normMobile || data.mobile,
                 email: data.email || null,
                 national_id: data.national_id || null,
                 is_active: isActive,
@@ -480,7 +482,7 @@ export class ImportExportService {
             } else {
               customer.first_name = data.first_name;
               customer.last_name = data.last_name;
-              customer.mobile = data.mobile;
+              customer.mobile = normMobile || data.mobile;
               if (data.email) customer.email = data.email;
               if (data.national_id) customer.national_id = data.national_id;
               customer.is_active = isActive;

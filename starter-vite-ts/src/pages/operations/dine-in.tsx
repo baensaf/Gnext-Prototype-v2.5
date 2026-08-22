@@ -1,9 +1,11 @@
 import type { OrderHeader } from 'src/api/orderApi';
 import type { DiningArea, DiningTable } from 'src/api/dineInApi';
 
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
+import { useTheme } from '@mui/material/styles';
 import PeopleIcon from '@mui/icons-material/People';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import TableBarIcon from '@mui/icons-material/TableBar';
@@ -43,6 +45,9 @@ import { dineInApi } from 'src/api/dineInApi';
 import { Label } from 'src/components/label';
 
 export function DineInPage() {
+  const { t } = useTranslation();
+  const theme = useTheme();
+
   const [areas, setAreas] = useState<DiningArea[]>([]);
   const [tables, setTables] = useState<DiningTable[]>([]);
   const [selectedAreaId, setSelectedAreaId] = useState<string>('ALL');
@@ -128,12 +133,11 @@ export function DineInPage() {
 
   const handleOpenMergeDialog = (tbl: DiningTable) => {
     setSelectedTable(tbl);
-    // Find all other occupied table orders
     const otherOrderIds = tables
-      .filter((t) => t.id !== tbl.id && t.active_order_id)
-      .map((t) => t.active_order_id!);
+      .filter((tableItem) => tableItem.id !== tbl.id && tableItem.active_order_id)
+      .map((tableItem) => tableItem.active_order_id!);
     setSourceMergeOrderIds(otherOrderIds.slice(0, 1));
-    setMergeReason('Customer requested table merge');
+    setMergeReason(t('dineIn.mergeReasonPlaceholder', 'Combined party table'));
     setMergeDialogOpen(true);
   };
 
@@ -237,7 +241,7 @@ export function DineInPage() {
     }
   };
 
-  const filteredTables = selectedAreaId === 'ALL' ? tables : tables.filter((t) => t.dining_area_id === selectedAreaId);
+  const filteredTables = selectedAreaId === 'ALL' ? tables : tables.filter((tableItem) => tableItem.dining_area_id === selectedAreaId);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -254,26 +258,49 @@ export function DineInPage() {
     }
   };
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'AVAILABLE':
+        return t('dineIn.statusAvailable', 'Available');
+      case 'OCCUPIED':
+        return t('dineIn.statusOccupied', 'Occupied');
+      case 'BILL_PRINTED':
+        return t('dineIn.statusBillPrinted', 'Bill Printed');
+      case 'CLEANING':
+        return t('dineIn.statusCleaning', 'Cleaning');
+      case 'RESERVED':
+        return t('dineIn.statusReserved', 'Reserved');
+      default:
+        return status;
+    }
+  };
+
+  const occupiedCount = tables.filter((tableItem) => tableItem.status === 'OCCUPIED' || tableItem.status === 'BILL_PRINTED').length;
+  const availableCount = tables.filter((tableItem) => tableItem.status === 'AVAILABLE').length;
+  const totalGuests = tables.reduce((sum, tableItem) => sum + (tableItem.guest_count || 0), 0);
+
+  const drawerAnchor = theme.direction === 'rtl' ? 'left' : 'right';
+
   return (
     <Box>
-      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            Dine-In Floor Plan & Operations <Label color="info">V4</Label>
+            {t('dineIn.title', 'Dine-In Floor Plan & Operations')} <Label color="info">V4</Label>
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Slice R17 — Table management, occupancy, move, merge, split orders, item transfers, and guest bill
+            {t('dineIn.subtitle', 'Slice R17 — Table management, occupancy, move, merge, split orders, item transfers, and guest bill')}
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2}>
+        <Stack direction="row" spacing={1.5}>
           <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
-            Refresh
+            {t('dineIn.refresh', 'Refresh')}
           </Button>
           <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setAreaDrawerOpen(true)}>
-            Add Section
+            {t('dineIn.addSection', 'Add Section')}
           </Button>
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => setTableDrawerOpen(true)}>
-            Add Table
+            {t('dineIn.addTable', 'Add Table')}
           </Button>
         </Stack>
       </Stack>
@@ -284,10 +311,54 @@ export function DineInPage() {
         </Alert>
       )}
 
+      {/* Floor Overview KPI Summary */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 1.5, textAlign: 'center' }}>
+            <Typography variant="caption" color="text.secondary">
+              {t('dineIn.totalTables', 'Total Tables')}
+            </Typography>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 0.5 }}>
+              {tables.length}
+            </Typography>
+          </Paper>
+        </Grid>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 1.5, textAlign: 'center', borderColor: 'error.light', bgcolor: 'error.lighter' }}>
+            <Typography variant="caption" color="error.main" sx={{ fontWeight: 'bold' }}>
+              {t('dineIn.statusOccupied', 'Occupied')}
+            </Typography>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'error.darker', mt: 0.5 }}>
+              {occupiedCount}
+            </Typography>
+          </Paper>
+        </Grid>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 1.5, textAlign: 'center', borderColor: 'success.light', bgcolor: 'success.lighter' }}>
+            <Typography variant="caption" color="success.main" sx={{ fontWeight: 'bold' }}>
+              {t('dineIn.statusAvailable', 'Available')}
+            </Typography>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'success.darker', mt: 0.5 }}>
+              {availableCount}
+            </Typography>
+          </Paper>
+        </Grid>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 1.5, textAlign: 'center' }}>
+            <Typography variant="caption" color="text.secondary">
+              {t('dineIn.activeGuests', 'Active Guests')}
+            </Typography>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 0.5 }}>
+              {totalGuests}
+            </Typography>
+          </Paper>
+        </Grid>
+      </Grid>
+
       {/* Section Selector Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={selectedAreaId} onChange={(_, val) => setSelectedAreaId(val)}>
-          <Tab label="All Sections" value="ALL" />
+        <Tabs value={selectedAreaId} onChange={(_, val) => setSelectedAreaId(val)} variant="scrollable" scrollButtons="auto">
+          <Tab label={t('dineIn.allSections', 'All Sections')} value="ALL" />
           {areas.map((a) => (
             <Tab key={a.id} label={a.name} value={a.id} />
           ))}
@@ -298,10 +369,17 @@ export function DineInPage() {
       <Grid container spacing={3}>
         {filteredTables.length === 0 ? (
           <Grid size={12}>
-            <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
-              <Typography variant="body1" color="text.secondary">
-                No dining tables configured in this section. Click &quot;Add Table&quot; to create your layout.
+            <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 2 }}>
+              <TableBarIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1.5 }} />
+              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+                {t('dineIn.noTablesTitle', 'No dining tables configured in this section')}
               </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+                {t('dineIn.noTablesDesc', 'Click "Add Table" to create your layout.')}
+              </Typography>
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setTableDrawerOpen(true)}>
+                {t('dineIn.addTable', 'Add Table')}
+              </Button>
             </Paper>
           </Grid>
         ) : (
@@ -310,33 +388,36 @@ export function DineInPage() {
               <Card
                 variant="outlined"
                 sx={{
-                  borderLeft: 6,
-                  borderLeftColor: `${getStatusColor(tbl.status)}.main`,
-                  transition: 'transform 0.2s',
+                  borderInlineStart: 6,
+                  borderInlineStartColor: `${getStatusColor(tbl.status)}.main`,
+                  borderRadius: 1.5,
+                  transition: 'all 0.2s',
                   '&:hover': { transform: 'translateY(-2px)' },
                 }}
               >
-                <CardContent>
+                <CardContent sx={{ p: 2.5 }}>
                   <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                     <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                      Table {tbl.table_number}
+                      {t('dineIn.table', 'Table')} {tbl.table_number}
                     </Typography>
-                    <Chip label={tbl.status} color={getStatusColor(tbl.status) as any} size="small" />
+                    <Chip label={getStatusLabel(tbl.status)} color={getStatusColor(tbl.status) as any} size="small" sx={{ fontWeight: 'bold' }} />
                   </Stack>
 
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-                    Capacity: {tbl.seating_capacity} Guests • Shape: {tbl.shape}
+                    {t('dineIn.capacity', 'Capacity')}: {tbl.seating_capacity} {t('dineIn.guests', 'Guests')} • {t('dineIn.shape', 'Shape')}: {tbl.shape}
                   </Typography>
 
                   {tbl.status === 'OCCUPIED' || tbl.status === 'BILL_PRINTED' ? (
-                    <Stack spacing={1} sx={{ mb: 2, bgcolor: 'action.hover', p: 1.5, borderRadius: 1 }}>
+                    <Stack spacing={1.25} sx={{ mb: 2, bgcolor: 'action.hover', p: 1.5, borderRadius: 1 }}>
                       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                         <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
                           <PeopleIcon fontSize="small" color="action" />
-                          <Typography variant="body2">{tbl.guest_count} Guests</Typography>
+                          <Typography variant="body2" sx={{ unicodeBidi: 'isolate' }}>
+                            {tbl.guest_count} {t('dineIn.guests', 'Guests')}
+                          </Typography>
                         </Stack>
                         {tbl.order_number && (
-                          <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+                          <Typography variant="caption" sx={{ fontWeight: 'bold', direction: 'ltr', unicodeBidi: 'isolate' }}>
                             #{tbl.order_number}
                           </Typography>
                         )}
@@ -344,10 +425,12 @@ export function DineInPage() {
                       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                         <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
                           <AccessTimeIcon fontSize="small" color="action" />
-                          <Typography variant="caption">{tbl.elapsed_minutes} mins</Typography>
+                          <Typography variant="caption" sx={{ unicodeBidi: 'isolate', display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                            <Box component="span" sx={{ direction: 'ltr', display: 'inline-block' }}>{tbl.elapsed_minutes}</Box> {t('dineIn.mins', 'mins')}
+                          </Typography>
                         </Stack>
                         {tbl.grand_total && (
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main', direction: 'ltr', unicodeBidi: 'isolate' }}>
                             {tbl.grand_total}
                           </Typography>
                         )}
@@ -356,7 +439,7 @@ export function DineInPage() {
                   ) : (
                     <Box sx={{ py: 2, textAlign: 'center' }}>
                       <Typography variant="body2" color="text.secondary">
-                        Ready for Guests
+                        {t('dineIn.readyForGuests', 'Ready for Guests')}
                       </Typography>
                     </Box>
                   )}
@@ -373,12 +456,12 @@ export function DineInPage() {
                           setSeatDialogOpen(true);
                         }}
                       >
-                        Seat Guests
+                        {t('dineIn.seatGuests', 'Seat Guests')}
                       </Button>
                     ) : (
                       <>
                         <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'space-between' }}>
-                          <Tooltip title="Move Order to Another Table">
+                          <Tooltip title={t('dineIn.moveOrder', 'Move Order to Another Table')}>
                             <IconButton
                               size="small"
                               color="primary"
@@ -390,24 +473,24 @@ export function DineInPage() {
                               <SwapHorizIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Merge Orders">
+                          <Tooltip title={t('dineIn.mergeOrders', 'Merge Orders')}>
                             <IconButton size="small" color="secondary" onClick={() => handleOpenMergeDialog(tbl)}>
                               <MergeTypeIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Split Order Items">
+                          <Tooltip title={t('dineIn.splitOrder', 'Split Order Items')}>
                             <IconButton size="small" color="info" onClick={() => handleOpenSplitDialog(tbl)}>
                               <CallSplitIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Guest Bill Preview">
+                          <Tooltip title={t('dineIn.guestBillPreview', 'Guest Bill Preview')}>
                             <IconButton size="small" color="warning" onClick={() => handleOpenGuestBill(tbl)}>
                               <ReceiptLongIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                         </Stack>
                         <Button variant="outlined" size="small" color="success" fullWidth startIcon={<CheckCircleIcon />} onClick={() => handleReleaseTable(tbl.id)}>
-                          Release / Vacate
+                          {t('dineIn.releaseVacate', 'Release / Vacate')}
                         </Button>
                       </>
                     )}
@@ -421,11 +504,13 @@ export function DineInPage() {
 
       {/* Seat Guests Dialog */}
       <Dialog open={seatDialogOpen} onClose={() => setSeatDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>Seat Guests — Table {selectedTable?.table_number}</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>
+          {t('dineIn.seatDialogTitle', 'Seat Guests — Table')} {selectedTable?.table_number}
+        </DialogTitle>
         <Box component="form" onSubmit={handleSeatGuests}>
           <DialogContent>
             <TextField
-              label="Number of Guests"
+              label={t('dineIn.numberOfGuests', 'Number of Guests')}
               type="number"
               value={guestCount}
               onChange={(e) => setGuestCount(e.target.value)}
@@ -436,9 +521,9 @@ export function DineInPage() {
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setSeatDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => setSeatDialogOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
             <Button type="submit" variant="contained" color="primary">
-              Confirm Seating
+              {t('dineIn.confirmSeating', 'Confirm Seating')}
             </Button>
           </DialogActions>
         </Box>
@@ -446,92 +531,98 @@ export function DineInPage() {
 
       {/* Move Table Dialog */}
       <Dialog open={moveDialogOpen} onClose={() => setMoveDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>Move Order from Table {selectedTable?.table_number}</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>
+          {t('dineIn.moveDialogTitle', 'Move Order from Table')} {selectedTable?.table_number}
+        </DialogTitle>
         <DialogContent>
           <TextField
             select
-            label="Target Available Table"
+            label={t('dineIn.targetTable', 'Target Available Table')}
             value={targetMoveTableId}
             onChange={(e) => setTargetMoveTableId(e.target.value)}
             fullWidth
             sx={{ mt: 1 }}
           >
             {tables
-              .filter((t) => t.id !== selectedTable?.id && t.status === 'AVAILABLE')
-              .map((t) => (
-                <MenuItem key={t.id} value={t.id}>
-                  Table {t.table_number} (Capacity: {t.seating_capacity})
+              .filter((tbl) => tbl.id !== selectedTable?.id && tbl.status === 'AVAILABLE')
+              .map((tbl) => (
+                <MenuItem key={tbl.id} value={tbl.id}>
+                  {t('dineIn.table', 'Table')} {tbl.table_number} ({t('dineIn.capacity', 'Capacity')}: {tbl.seating_capacity})
                 </MenuItem>
               ))}
           </TextField>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setMoveDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setMoveDialogOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
           <Button variant="contained" color="primary" onClick={handleMoveTable} disabled={!targetMoveTableId}>
-            Confirm Move
+            {t('dineIn.confirmMove', 'Confirm Move')}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Merge Orders Dialog */}
       <Dialog open={mergeDialogOpen} onClose={() => setMergeDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>Merge Orders into Table {selectedTable?.table_number}</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>
+          {t('dineIn.mergeDialogTitle', 'Merge Orders into Table')} {selectedTable?.table_number}
+        </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Select occupied orders to merge into Target Order #{selectedTable?.order_number}. Items will be moved and target order totals recalculated.
+            {t('dineIn.mergeDialogDesc', 'Select occupied orders to merge into Target Order. Items will be moved and target order totals recalculated.')}
           </Typography>
           <TextField
             select
-            label="Source Order to Merge"
+            label={t('dineIn.sourceOrder', 'Source Order to Merge')}
             value={sourceMergeOrderIds[0] || ''}
             onChange={(e) => setSourceMergeOrderIds([e.target.value])}
             fullWidth
             sx={{ mb: 2 }}
           >
             {tables
-              .filter((t) => t.id !== selectedTable?.id && t.active_order_id)
-              .map((t) => (
-                <MenuItem key={t.id} value={t.active_order_id!}>
-                  Table {t.table_number} — Order #{t.order_number} ({t.grand_total})
+              .filter((tbl) => tbl.id !== selectedTable?.id && tbl.active_order_id)
+              .map((tbl) => (
+                <MenuItem key={tbl.id} value={tbl.active_order_id!}>
+                  {t('dineIn.table', 'Table')} {tbl.table_number} — #{tbl.order_number} ({tbl.grand_total})
                 </MenuItem>
               ))}
           </TextField>
           <TextField
-            label="Reason for Merge"
+            label={t('dineIn.mergeReason', 'Reason for Merge')}
             value={mergeReason}
             onChange={(e) => setMergeReason(e.target.value)}
             fullWidth
-            placeholder="e.g. Combined party table"
+            placeholder={t('dineIn.mergeReasonPlaceholder', 'e.g. Combined party table')}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setMergeDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setMergeDialogOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
           <Button variant="contained" color="primary" onClick={handleMergeOrders} disabled={sourceMergeOrderIds.length === 0}>
-            Merge Orders
+            {t('dineIn.confirmMerge', 'Merge Orders')}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Split Order Dialog */}
       <Dialog open={splitDialogOpen} onClose={() => setSplitDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>Split Order #{currentOrder?.order_number}</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>
+          {t('dineIn.splitDialogTitle', 'Split Order')} #{currentOrder?.order_number}
+        </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Select quantities of items to move to a new child order.
+            {t('dineIn.splitDialogDesc', 'Select quantities of items to move to a new child order.')}
           </Typography>
           <Grid container spacing={2} sx={{ mb: 2 }}>
             {(currentOrder?.items || []).map((item) => (
               <Grid size={{ xs: 12, sm: 6 }} key={item.id}>
-                <Paper variant="outlined" sx={{ p: 1.5 }}>
+                <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 1 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
                     {item.product_name} {item.variant_name ? `(${item.variant_name})` : ''}
                   </Typography>
 
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                    Price: {item.unit_price} | Current Qty: {item.quantity}
+                    {t('dineIn.price', 'Price')}: {item.unit_price} | {t('dineIn.currentQty', 'Current Qty')}: {item.quantity}
                   </Typography>
                   <TextField
-                    label="Split Qty"
+                    label={t('dineIn.splitQty', 'Split Qty')}
                     type="number"
                     size="small"
                     value={splitQuantities[item.id] || 0}
@@ -548,32 +639,32 @@ export function DineInPage() {
           </Grid>
           <TextField
             select
-            label="Target Table for Split Order (Optional)"
+            label={t('dineIn.targetTableOptional', 'Target Table for Split Order (Optional)')}
             value={splitTargetTableId}
             onChange={(e) => setSplitTargetTableId(e.target.value)}
             fullWidth
           >
-            <MenuItem value="">Same Table</MenuItem>
+            <MenuItem value="">{t('dineIn.sameTable', 'Same Table')}</MenuItem>
             {tables
-              .filter((t) => t.status === 'AVAILABLE')
-              .map((t) => (
-                <MenuItem key={t.id} value={t.id}>
-                  Table {t.table_number} (Capacity: {t.seating_capacity})
+              .filter((tbl) => tbl.status === 'AVAILABLE')
+              .map((tbl) => (
+                <MenuItem key={tbl.id} value={tbl.id}>
+                  {t('dineIn.table', 'Table')} {tbl.table_number} ({t('dineIn.capacity', 'Capacity')}: {tbl.seating_capacity})
                 </MenuItem>
               ))}
           </TextField>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSplitDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setSplitDialogOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
           <Button variant="contained" color="primary" onClick={handleSplitOrder}>
-            Execute Split
+            {t('dineIn.executeSplit', 'Execute Split')}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Guest Bill Dialog */}
       <Dialog open={billDialogOpen} onClose={() => setBillDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>Guest Bill Preview</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>{t('dineIn.guestBillTitle', 'Guest Bill Preview')}</DialogTitle>
         <DialogContent>
           <Box
             sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden', p: 1, minHeight: 300 }}
@@ -581,25 +672,25 @@ export function DineInPage() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setBillDialogOpen(false)}>Close</Button>
+          <Button onClick={() => setBillDialogOpen(false)}>{t('common.close', 'Close')}</Button>
           <Button variant="contained" onClick={() => window.print()}>
-            Print Preview
+            {t('dineIn.printPreview', 'Print Preview')}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Add Section Drawer */}
-      <Drawer anchor="right" open={areaDrawerOpen} onClose={() => setAreaDrawerOpen(false)}>
+      <Drawer anchor={drawerAnchor} open={areaDrawerOpen} onClose={() => setAreaDrawerOpen(false)}>
         <Box sx={{ width: 400, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Add Dining Section
+            {t('dineIn.addSectionTitle', 'Add Dining Section')}
           </Typography>
           <Box component="form" onSubmit={handleCreateArea}>
             <Stack spacing={2.5}>
-              <TextField label="Section Code" value={areaCode} onChange={(e) => setAreaCode(e.target.value)} required fullWidth placeholder="e.g. MAIN_HALL" />
-              <TextField label="Section Name" value={areaName} onChange={(e) => setAreaName(e.target.value)} required fullWidth placeholder="e.g. Main Dining Hall" />
+              <TextField label={t('dineIn.sectionCode', 'Section Code')} value={areaCode} onChange={(e) => setAreaCode(e.target.value)} required fullWidth placeholder="e.g. MAIN_HALL" />
+              <TextField label={t('dineIn.sectionName', 'Section Name')} value={areaName} onChange={(e) => setAreaName(e.target.value)} required fullWidth placeholder="e.g. Main Dining Hall" />
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ mt: 2 }}>
-                Save Section
+                {t('dineIn.saveSection', 'Save Section')}
               </Button>
             </Stack>
           </Box>
@@ -607,26 +698,26 @@ export function DineInPage() {
       </Drawer>
 
       {/* Add Table Drawer */}
-      <Drawer anchor="right" open={tableDrawerOpen} onClose={() => setTableDrawerOpen(false)}>
+      <Drawer anchor={drawerAnchor} open={tableDrawerOpen} onClose={() => setTableDrawerOpen(false)}>
         <Box sx={{ width: 400, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Add Dining Table
+            {t('dineIn.addTableTitle', 'Add Dining Table')}
           </Typography>
           <Box component="form" onSubmit={handleCreateTable}>
             <Stack spacing={2.5}>
-              <TextField select label="Dining Section" value={tblAreaId} onChange={(e) => setTblAreaId(e.target.value)} required fullWidth>
+              <TextField select label={t('dineIn.diningSection', 'Dining Section')} value={tblAreaId} onChange={(e) => setTblAreaId(e.target.value)} required fullWidth>
                 {areas.map((a) => (
                   <MenuItem key={a.id} value={a.id}>
                     {a.name}
                   </MenuItem>
                 ))}
               </TextField>
-              <TextField label="Table Code" value={tblCode} onChange={(e) => setTblCode(e.target.value)} required fullWidth placeholder="e.g. T-01" />
-              <TextField label="Table Number" value={tblNumber} onChange={(e) => setTblNumber(e.target.value)} required fullWidth placeholder="e.g. 1" />
-              <TextField label="Seating Capacity" type="number" value={tblCapacity} onChange={(e) => setTblCapacity(e.target.value)} required fullWidth />
+              <TextField label={t('dineIn.tableCode', 'Table Code')} value={tblCode} onChange={(e) => setTblCode(e.target.value)} required fullWidth placeholder="e.g. T-01" />
+              <TextField label={t('dineIn.tableNumber', 'Table Number')} value={tblNumber} onChange={(e) => setTblNumber(e.target.value)} required fullWidth placeholder="e.g. 1" />
+              <TextField label={t('dineIn.seatingCapacity', 'Seating Capacity')} type="number" value={tblCapacity} onChange={(e) => setTblCapacity(e.target.value)} required fullWidth />
 
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ mt: 2 }}>
-                Save Table
+                {t('dineIn.saveTable', 'Save Table')}
               </Button>
             </Stack>
           </Box>

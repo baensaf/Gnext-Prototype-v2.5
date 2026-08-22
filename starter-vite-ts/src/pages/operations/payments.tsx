@@ -37,7 +37,7 @@ import { paymentApi } from 'src/api/paymentApi';
 import { httpClient } from 'src/api/httpClient';
 
 export function PaymentsPage() {
-  const { t: _t } = useTranslation();
+  const { t } = useTranslation();
 
   const [tabIndex, setTabIndex] = useState(0);
   const [transactions, setTransactions] = useState<PaymentRecord[]>([]);
@@ -98,12 +98,12 @@ export function PaymentsPage() {
           );
         }
       } catch {
-        // Fallback: graceful empty list
+        // Fallback to empty if endpoint not populated
       }
 
       setError(null);
     } catch (err: any) {
-      setError(err.detail || 'Failed to load payment infrastructure');
+      setError(err.detail || 'Failed to load payment infrastructure data');
     } finally {
       setLoading(false);
     }
@@ -121,7 +121,7 @@ export function PaymentsPage() {
         name: devName,
         serial_number: devSerial || undefined,
         device_type: devType as any,
-        branch_id: devBranchId || undefined,
+        branch_id: devBranchId,
         settlement_account_id: devAccountId || undefined,
       });
       setDeviceDrawerOpen(false);
@@ -159,24 +159,24 @@ export function PaymentsPage() {
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Payments & Settlement Infrastructure
+            {t('payments.title', 'Payments & Settlement Infrastructure')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Slice 12 — POS devices, mobile POS classification, and bank settlement accounts
+            {t('nav.payments', 'مدیریت تراکنش‌های پرداخت، پایانه‌های فروشگاهی و حساب‌های تسویه‌حساب بانکی')}
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
           <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
-            Refresh
+            {t('monitoring.refresh', 'Refresh')}
           </Button>
           {tabIndex === 1 && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDeviceDrawerOpen(true)}>
-              Register Device
+              {t('payments.addDevice', 'Register Device')}
             </Button>
           )}
           {tabIndex === 2 && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAccDrawerOpen(true)}>
-              Create Account
+              {t('payments.addAccount', 'Create Account')}
             </Button>
           )}
         </Stack>
@@ -190,9 +190,9 @@ export function PaymentsPage() {
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={tabIndex} onChange={(_, val) => setTabIndex(val)}>
-          <Tab icon={<ReceiptLongIcon />} label="Payment Transactions Ledger" iconPosition="start" />
-          <Tab icon={<PointOfSaleIcon />} label="Payment Devices & Terminals" iconPosition="start" />
-          <Tab icon={<AccountBalanceIcon />} label="Bank Settlement Accounts" iconPosition="start" />
+          <Tab icon={<ReceiptLongIcon />} label={t('payments.tabTransactions', 'Payment Transactions Ledger')} iconPosition="start" />
+          <Tab icon={<PointOfSaleIcon />} label={t('payments.tabDevices', 'Payment Devices & Terminals')} iconPosition="start" />
+          <Tab icon={<AccountBalanceIcon />} label={t('payments.tabAccounts', 'Bank Settlement Accounts')} iconPosition="start" />
         </Tabs>
       </Box>
 
@@ -201,13 +201,13 @@ export function PaymentsPage() {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Payment Number</TableCell>
-                <TableCell>Order ID</TableCell>
-                <TableCell>Method</TableCell>
-                <TableCell>Amount</TableCell>
-                <TableCell>Reference / RRN</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Timestamp</TableCell>
+                <TableCell>{t('payments.columnPaymentNumber', 'Payment Number')}</TableCell>
+                <TableCell>{t('payments.columnOrder', 'Order ID')}</TableCell>
+                <TableCell>{t('payments.columnMethod', 'Method')}</TableCell>
+                <TableCell>{t('payments.columnAmount', 'Amount')}</TableCell>
+                <TableCell>{t('payments.columnReference', 'Reference / RRN')}</TableCell>
+                <TableCell>{t('payments.columnStatus', 'Status')}</TableCell>
+                <TableCell>{t('payments.columnDate', 'Timestamp')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -215,46 +215,26 @@ export function PaymentsPage() {
                 <TableRow>
                   <TableCell colSpan={7} align="center">
                     <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
-                      No payment transactions recorded yet. Transactions will appear here as orders are placed via POS, Kiosk, or Delivery.
+                      {t('grid.noRowsLabel', 'هیچ تراکنش پرداختی ثبت نشده است.')}
                     </Typography>
                   </TableCell>
                 </TableRow>
               ) : (
                 transactions.map((tx) => (
                   <TableRow key={tx.id}>
-                    <TableCell>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                        {tx.payment_number}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                        {tx.order_id}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={tx.method_kind} size="small" variant="outlined" />
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>
-                      {MoneyUtil.formatCurrency(tx.amount)} {tx.currency_code || 'IRR'}
-                    </TableCell>
-                    <TableCell>{tx.reference || '-'}</TableCell>
+                    <TableCell><code>{tx.payment_number}</code></TableCell>
+                    <TableCell>{tx.order_id}</TableCell>
+                    <TableCell><Chip label={tx.method_kind} size="small" variant="outlined" /></TableCell>
+                    <TableCell><strong>{MoneyUtil.format(tx.amount)} {tx.currency_code}</strong></TableCell>
+                    <TableCell><code>{tx.reference || '-'}</code></TableCell>
                     <TableCell>
                       <Chip
                         label={tx.status}
-                        color={
-                          tx.status === 'SUCCEEDED'
-                            ? 'success'
-                            : tx.status === 'REVERSED' || tx.status === 'REFUNDED'
-                            ? 'warning'
-                            : tx.status === 'FAILED'
-                            ? 'error'
-                            : 'info'
-                        }
+                        color={tx.status === 'SUCCEEDED' ? 'success' : tx.status === 'FAILED' ? 'error' : 'warning'}
                         size="small"
                       />
                     </TableCell>
-                    <TableCell>{tx.recorded_at ? new Date(tx.recorded_at).toLocaleString() : '-'}</TableCell>
+                    <TableCell>{new Date(tx.business_date).toLocaleString()}</TableCell>
                   </TableRow>
                 ))
               )}

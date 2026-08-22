@@ -110,4 +110,88 @@ describe('CustomerService (Unit)', () => {
       service.postCreditTransaction('t-1', 'cust-1', { transaction_type: 'CHARGE', amount: '1000.0000' }, 'corr-1'),
     ).rejects.toThrow(BadRequestException);
   });
+
+  it('should create customer with customer code set to normalized phone number when code is omitted', async () => {
+    customerRepo.findOne.mockResolvedValue(null);
+    customerRepo.create.mockImplementation((dto: any) => ({ id: 'new-c-1', ...dto }));
+    customerRepo.save.mockImplementation((c: any) => Promise.resolve(c));
+
+    const saved = await service.createCustomer(
+      't-1',
+      {
+        first_name: 'Sara',
+        last_name: 'Ahmadi',
+        mobile: '09121234567',
+        credit_limit: '5000000',
+      },
+      'corr-1',
+    );
+
+    expect(customerRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenant_id: 't-1',
+        code: '+989121234567',
+        mobile: '+989121234567',
+        first_name: 'Sara',
+        last_name: 'Ahmadi',
+      }),
+    );
+    expect(saved.code).toBe('+989121234567');
+  });
+
+  it('should allow custom code when explicitly provided', async () => {
+    customerRepo.findOne.mockResolvedValue(null);
+    customerRepo.create.mockImplementation((dto: any) => ({ id: 'new-c-2', ...dto }));
+    customerRepo.save.mockImplementation((c: any) => Promise.resolve(c));
+
+    const saved = await service.createCustomer(
+      't-1',
+      {
+        code: 'VIP-001',
+        first_name: 'Ali',
+        last_name: 'Rezaei',
+        mobile: '09129998877',
+      },
+      'corr-2',
+    );
+
+    expect(customerRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenant_id: 't-1',
+        code: 'VIP-001',
+        mobile: '+989129998877',
+      }),
+    );
+    expect(saved.code).toBe('VIP-001');
+  });
+
+  it('should throw ConflictException if customer code already exists', async () => {
+    customerRepo.findOne.mockResolvedValue({ id: 'c-existing', code: '+989121234567' });
+
+    await expect(
+      service.createCustomer(
+        't-1',
+        {
+          first_name: 'Duplicate',
+          last_name: 'User',
+          mobile: '09121234567',
+        },
+        'corr-3',
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('should throw BadRequestException if mobile phone is empty and no code is provided', async () => {
+    await expect(
+      service.createCustomer(
+        't-1',
+        {
+          first_name: 'No',
+          last_name: 'Phone',
+          mobile: '',
+        },
+        'corr-4',
+      ),
+    ).rejects.toThrow(BadRequestException);
+  });
 });
