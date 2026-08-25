@@ -6,7 +6,6 @@ import { Payment } from '../../entities/Payment.entity';
 import { Refund } from '../../entities/Refund.entity';
 import { AuditEvent } from '../../entities/AuditEvent.entity';
 import { IntegrationLog } from '../../entities/IntegrationLog.entity';
-import { CashDrawerShift } from '../../entities/CashDrawerShift.entity';
 import { CashierShift } from '../../entities/CashierShift.entity';
 import { CourierSettlement } from '../../entities/CourierSettlement.entity';
 import { CourierSettlementLine } from '../../entities/CourierSettlementLine.entity';
@@ -41,7 +40,6 @@ import { AuditAlertsAliasController } from './audit-alerts-alias.controller';
       Refund,
       AuditEvent,
       IntegrationLog,
-      CashDrawerShift,
       CashierShift,
       CourierSettlement,
       CourierSettlementLine,

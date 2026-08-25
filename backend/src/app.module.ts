@@ -21,8 +21,6 @@ import { DiscountsModule } from './modules/discounts/discounts.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { OrderModule } from './modules/order/order.module';
 import { PaymentModule } from './modules/payment/payment.module';
-import { CashDrawerModule } from './modules/cash-drawer/cash-drawer.module';
-import { InventoryModule } from './modules/inventory/inventory.module';
 import { ApprovalModule } from './modules/approval/approval.module';
 import { RefundModule } from './modules/refund/refund.module';
 import { DineInModule } from './modules/dine-in/dine-in.module';
@@ -45,7 +43,6 @@ import { Refund } from './entities/Refund.entity';
 import { DiningArea } from './entities/DiningArea.entity';
 import { DiningTable } from './entities/DiningTable.entity';
 import { TableSession } from './entities/TableSession.entity';
-import { TableEvent } from './entities/TableEvent.entity';
 import { TableOccupancyEvent } from './entities/TableOccupancyEvent.entity';
 import { KitchenStation } from './entities/KitchenStation.entity';
 import { KdsScreen } from './entities/KdsScreen.entity';
@@ -54,7 +51,6 @@ import { KitchenTicket } from './entities/KitchenTicket.entity';
 import { KitchenTicketItem } from './entities/KitchenTicketItem.entity';
 import { KdsEvent } from './entities/KdsEvent.entity';
 import { Printer } from './entities/Printer.entity';
-import { PrinterDevice } from './entities/PrinterDevice.entity';
 import { PrinterGroup } from './entities/PrinterGroup.entity';
 import { PrinterGroupMember } from './entities/PrinterGroupMember.entity';
 import { PrintRoute } from './entities/PrintRoute.entity';
@@ -108,7 +104,6 @@ import { CustomerDiscount } from './entities/CustomerDiscount.entity';
 import { CustomerPhone } from './entities/CustomerPhone.entity';
 import { CustomerAddress } from './entities/CustomerAddress.entity';
 import { CustomerCreditAccount } from './entities/CustomerCreditAccount.entity';
-import { CustomerCreditTransaction } from './entities/CustomerCreditTransaction.entity';
 import { CreditEntry } from './entities/CreditEntry.entity';
 import { CustomFieldDefinition } from './entities/CustomFieldDefinition.entity';
 import { CustomerCustomValue } from './entities/CustomerCustomValue.entity';
@@ -142,10 +137,6 @@ import { DeliveryEvent } from './entities/DeliveryEvent.entity';
 import { CashierShift } from './entities/CashierShift.entity';
 import { CashMovement } from './entities/CashMovement.entity';
 import { BusinessDayClose } from './entities/BusinessDayClose.entity';
-import { CashDrawerShift } from './entities/CashDrawerShift.entity';
-import { CashDrawerTransaction } from './entities/CashDrawerTransaction.entity';
-import { InventoryItem } from './entities/InventoryItem.entity';
-import { InventoryTransaction } from './entities/InventoryTransaction.entity';
 import { IntegrationLog } from './entities/IntegrationLog.entity';
 import { OfflineQueueItem } from './entities/OfflineQueueItem.entity';
 import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
@@ -181,19 +172,19 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
           Menu, MenuCategory, MenuProduct, ProductAvailability,
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,
           Discount, Coupon, DiscountCampaign, DiscountScope, DiscountUsage, CustomerDiscount,
-          CustomerGroup, Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CustomerCreditTransaction, CreditEntry,
+          CustomerGroup, Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CreditEntry,
           CustomFieldDefinition, CustomerCustomValue, CustomerTag, CustomerTagLink, CustomerSegment,
           CustomerConsent, CustomerMerge,
           OrderHeader, OrderItem, OrderItemOption, OrderAdjustment, OrderNote, OrderLink, OrderStateEvent, OrderSequence,
           Payment, SettlementAccount, PaymentDevice, PaymentAllocation, PaymentAttempt,
           RefundRequest, RefundItem, RefundAllocation, Refund,
-          DiningArea, DiningTable, TableSession, TableEvent, TableOccupancyEvent,
+          DiningArea, DiningTable, TableSession, TableOccupancyEvent,
           KitchenStation, KdsScreen, KdsRoutingRule, KitchenTicket, KitchenTicketItem, KdsEvent,
-          Printer, PrinterDevice, PrinterGroup, PrinterGroupMember, PrintRoute, PrintJob, PrintAttempt,
+          Printer, PrinterGroup, PrinterGroupMember, PrintRoute, PrintJob, PrintAttempt,
           Courier, DeliveryAssignment, CourierSettlement, CourierSettlementLine,
           DeliveryZone, CourierAttendance, CourierTerminalAssignment, Delivery, DeliveryEvent,
-          CashierShift, CashMovement, BusinessDayClose, CashDrawerShift, CashDrawerTransaction,
-          InventoryItem, InventoryTransaction, IntegrationLog,
+          CashierShift, CashMovement, BusinessDayClose,
+          IntegrationLog,
           OfflineQueueItem, SyncConflictRecord, SyncCategoryLog,
           ImportJob, ImportRow,
           OperationalAlert, SavedReportView, ReportExportJob,
@@ -215,9 +206,7 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
     CustomerModule,
     OrderModule,
     PaymentModule,
-    CashDrawerModule,
     CashierModule,
-    InventoryModule,
     ApprovalModule,
     RefundModule,
     DineInModule,

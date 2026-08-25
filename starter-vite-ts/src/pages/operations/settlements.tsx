@@ -265,9 +265,12 @@ export function CourierSettlementsPage() {
     <Box sx={{ p: 3 }}>
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            {t('Courier Settlements') || 'Courier Settlements'}
-          </Typography>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+            <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+              {t('Courier Settlements') || 'Courier Settlements'}
+            </Typography>
+            <Chip label="V5" color="info" size="small" sx={{ fontWeight: 'bold' }} />
+          </Stack>
           <Typography variant="body2" color="text.secondary">
             {t('Reconcile courier cash, mobile POS collections, discrepancies, and statements (Slice 17)') ||
               'Reconcile courier cash, mobile POS collections, discrepancies, and statements'}
@@ -280,7 +283,7 @@ export function CourierSettlementsPage() {
 
       <Tabs value={tabValue} onChange={(_, val) => setTabValue(val)} sx={{ mb: 3 }}>
         <Tab label="Unsettled Couriers Overview" />
-        <Tab label={`Settlement Batches (${batches.length})`} />
+        <Tab label={`Settlement Batches (V5) (${batches.length})`} />
       </Tabs>
 
       {/* TAB 0: Unsettled Couriers Overview */}

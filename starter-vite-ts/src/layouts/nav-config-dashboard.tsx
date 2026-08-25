@@ -82,6 +82,7 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.courierSettlements', 'Courier Settlements'),
           path: '/app/delivery/settlements',
           icon: ICONS.reasons,
+          info: <Label color="info">V5</Label>,
         },
         {
           title: t('nav.cashier', 'Cashier & Shifts'),
@@ -245,16 +246,6 @@ export function useNavData(): NavSectionProps['data'] {
         },
       ],
     },
-    {
-      subheader: t('nav.v5GroupHeader', 'Future — V5 Preview'),
-      items: [
-        {
-          title: t('nav.v5Preview', 'Inventory Stock & Movement'),
-          path: '/app/inventory/stock',
-          icon: ICONS.inventory,
-          info: <Label color="warning">V5 Preview</Label>,
-        },
-      ],
-    },
   ];
 }
+

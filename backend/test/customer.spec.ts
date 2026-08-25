@@ -6,7 +6,6 @@ import { Customer } from '../src/entities/Customer.entity';
 import { CustomerPhone } from '../src/entities/CustomerPhone.entity';
 import { CustomerAddress } from '../src/entities/CustomerAddress.entity';
 import { CustomerCreditAccount } from '../src/entities/CustomerCreditAccount.entity';
-import { CustomerCreditTransaction } from '../src/entities/CustomerCreditTransaction.entity';
 import { CustomFieldDefinition } from '../src/entities/CustomFieldDefinition.entity';
 import { CustomerCustomValue } from '../src/entities/CustomerCustomValue.entity';
 import { CustomerTag } from '../src/entities/CustomerTag.entity';
@@ -23,13 +22,11 @@ describe('CustomerService (Unit)', () => {
   let service: CustomerService;
   let customerRepo: any;
   let accountRepo: any;
-  let txRepo: any;
   let auditWriter: any;
 
   beforeEach(async () => {
     customerRepo = { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
     accountRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
-    txRepo = { find: jest.fn(), create: jest.fn(), save: jest.fn() };
     auditWriter = { write: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -40,7 +37,6 @@ describe('CustomerService (Unit)', () => {
         { provide: getRepositoryToken(CustomerPhone), useValue: { create: jest.fn(), save: jest.fn() } },
         { provide: getRepositoryToken(CustomerAddress), useValue: {} },
         { provide: getRepositoryToken(CustomerCreditAccount), useValue: accountRepo },
-        { provide: getRepositoryToken(CustomerCreditTransaction), useValue: txRepo },
         { provide: getRepositoryToken(CustomFieldDefinition), useValue: {} },
         { provide: getRepositoryToken(CustomerCustomValue), useValue: {} },
         { provide: getRepositoryToken(CustomerTag), useValue: {} },
@@ -74,41 +70,6 @@ describe('CustomerService (Unit)', () => {
     expect(candidates[0].match_score).toBe(100);
     expect(candidates[0].target_customer_id).toBe('c-1');
     expect(candidates[0].source_customer_id).toBe('c-2');
-  });
-
-  it('should post charge transaction and update credit account balance', async () => {
-    accountRepo.findOne.mockResolvedValue({
-      id: 'acc-1',
-      customer_id: 'cust-1',
-      credit_limit: '10000000.0000',
-      current_balance: '2500000.0000',
-      is_blocked: false,
-    });
-    accountRepo.save.mockImplementation((acc) => Promise.resolve(acc));
-    txRepo.create.mockReturnValue({ id: 'tx-1' });
-    txRepo.save.mockResolvedValue({ id: 'tx-1' });
-
-    const result = await service.postCreditTransaction(
-      't-1',
-      'cust-1',
-      { transaction_type: 'CHARGE', amount: '1000000.0000', note: 'Top up' },
-      'corr-1',
-    );
-
-    expect(result.account.current_balance).toBe('3500000.0000');
-  });
-
-  it('should throw BadRequestException if customer credit account is blocked', async () => {
-    accountRepo.findOne.mockResolvedValue({
-      id: 'acc-1',
-      customer_id: 'cust-1',
-      current_balance: '0.0000',
-      is_blocked: true,
-    });
-
-    await expect(
-      service.postCreditTransaction('t-1', 'cust-1', { transaction_type: 'CHARGE', amount: '1000.0000' }, 'corr-1'),
-    ).rejects.toThrow(BadRequestException);
   });
 
   it('should create customer with customer code set to normalized phone number when code is omitted', async () => {

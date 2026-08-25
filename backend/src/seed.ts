@@ -23,8 +23,6 @@ export async function runSeed() {
   const catRepo = AppDataSource.getRepository('Category');
   const prodRepo = AppDataSource.getRepository('Product');
   const variantRepo = AppDataSource.getRepository('ProductVariant');
-  const invItemRepo = AppDataSource.getRepository('InventoryItem');
-  const invTxRepo = AppDataSource.getRepository('InventoryTransaction');
   const zoneRepo = AppDataSource.getRepository('DeliveryZone');
 
   // 1. Idempotent Tenant Seed
@@ -195,78 +193,6 @@ export async function runSeed() {
       if (!existingVar) {
         await variantRepo.save(variantRepo.create(v));
       }
-    }
-  }
-
-  // 9. Idempotent V5 Inventory Seed Items
-  const prodFries = await prodRepo.findOne({ where: { tenant_id: tenant.id, code: 'PROD-FRIES' } });
-  const prodCola = await prodRepo.findOne({ where: { tenant_id: tenant.id, code: 'PROD-COLA' } });
-
-  if (branchTeh && prodBurger && prodFries && prodCola) {
-    let itemBurger = await invItemRepo.findOne({ where: { tenant_id: tenant.id, branch_id: branchTeh.id, product_id: prodBurger.id } });
-    if (!itemBurger) {
-      itemBurger = await invItemRepo.save(invItemRepo.create({
-        tenant_id: tenant.id,
-        branch_id: branchTeh.id,
-        product_id: prodBurger.id,
-        product_code: prodBurger.code,
-        product_name: prodBurger.name,
-        quantity_on_hand: '50.0000',
-        reorder_level: '10.0000',
-        unit_of_measure: 'UNIT',
-        last_counted_at: new Date(),
-      }));
-      await invTxRepo.save(invTxRepo.create({
-        tenant_id: tenant.id,
-        inventory_item_id: itemBurger.id,
-        transaction_type: 'PURCHASE_RECEIPT',
-        quantity_delta: '50.0000',
-        note: 'Initial inventory stock count for Cheeseburger',
-      }));
-    }
-
-    let itemFries = await invItemRepo.findOne({ where: { tenant_id: tenant.id, branch_id: branchTeh.id, product_id: prodFries.id } });
-    if (!itemFries) {
-      itemFries = await invItemRepo.save(invItemRepo.create({
-        tenant_id: tenant.id,
-        branch_id: branchTeh.id,
-        product_id: prodFries.id,
-        product_code: prodFries.code,
-        product_name: prodFries.name,
-        quantity_on_hand: '100.0000',
-        reorder_level: '15.0000',
-        unit_of_measure: 'PORTION',
-        last_counted_at: new Date(),
-      }));
-      await invTxRepo.save(invTxRepo.create({
-        tenant_id: tenant.id,
-        inventory_item_id: itemFries.id,
-        transaction_type: 'PURCHASE_RECEIPT',
-        quantity_delta: '100.0000',
-        note: 'Initial inventory stock count for French Fries',
-      }));
-    }
-
-    let itemCola = await invItemRepo.findOne({ where: { tenant_id: tenant.id, branch_id: branchTeh.id, product_id: prodCola.id } });
-    if (!itemCola) {
-      itemCola = await invItemRepo.save(invItemRepo.create({
-        tenant_id: tenant.id,
-        branch_id: branchTeh.id,
-        product_id: prodCola.id,
-        product_code: prodCola.code,
-        product_name: prodCola.name,
-        quantity_on_hand: '5.0000', // Low stock alert trigger
-        reorder_level: '10.0000',
-        unit_of_measure: 'CAN',
-        last_counted_at: new Date(),
-      }));
-      await invTxRepo.save(invTxRepo.create({
-        tenant_id: tenant.id,
-        inventory_item_id: itemCola.id,
-        transaction_type: 'PURCHASE_RECEIPT',
-        quantity_delta: '5.0000',
-        note: 'Initial inventory stock count for Cola (Low stock trigger)',
-      }));
     }
   }
 

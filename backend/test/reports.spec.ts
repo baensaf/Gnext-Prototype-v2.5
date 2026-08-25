@@ -7,7 +7,6 @@ import { Payment } from '../src/entities/Payment.entity';
 import { Refund } from '../src/entities/Refund.entity';
 import { AuditEvent } from '../src/entities/AuditEvent.entity';
 import { IntegrationLog } from '../src/entities/IntegrationLog.entity';
-import { CashDrawerShift } from '../src/entities/CashDrawerShift.entity';
 import { CashierShift } from '../src/entities/CashierShift.entity';
 import { CourierSettlement } from '../src/entities/CourierSettlement.entity';
 import { CourierSettlementLine } from '../src/entities/CourierSettlementLine.entity';
@@ -123,7 +122,6 @@ describe('ReportsService (Unit)', () => {
         { provide: getRepositoryToken(Refund), useValue: mockRepo },
         { provide: getRepositoryToken(AuditEvent), useValue: auditRepo },
         { provide: getRepositoryToken(IntegrationLog), useValue: mockRepo },
-        { provide: getRepositoryToken(CashDrawerShift), useValue: mockRepo },
         { provide: getRepositoryToken(CashierShift), useValue: mockRepo },
         { provide: getRepositoryToken(CourierSettlement), useValue: mockRepo },
         { provide: getRepositoryToken(CourierSettlementLine), useValue: mockRepo },

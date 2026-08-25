@@ -10,8 +10,8 @@ import { varTap, varHover, AnimateBorder, transitionTap } from 'src/components/a
 // ----------------------------------------------------------------------
 
 export type AccountButtonProps = IconButtonProps & {
-  photoURL: string;
   displayName: string;
+  photoURL?: string;
 };
 
 export function AccountButton({ photoURL, displayName, sx, ...other }: AccountButtonProps) {

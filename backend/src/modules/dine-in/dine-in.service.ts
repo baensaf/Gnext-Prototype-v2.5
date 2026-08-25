@@ -4,7 +4,6 @@ import { Repository, DataSource, In } from 'typeorm';
 import { DiningArea } from '../../entities/DiningArea.entity';
 import { DiningTable } from '../../entities/DiningTable.entity';
 import { TableSession } from '../../entities/TableSession.entity';
-import { TableEvent } from '../../entities/TableEvent.entity';
 import { TableOccupancyEvent } from '../../entities/TableOccupancyEvent.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
@@ -22,7 +21,6 @@ export class DineInService {
     @InjectRepository(DiningArea) private readonly areaRepo: Repository<DiningArea>,
     @InjectRepository(DiningTable) private readonly tableRepo: Repository<DiningTable>,
     @InjectRepository(TableSession) private readonly sessionRepo: Repository<TableSession>,
-    @InjectRepository(TableEvent) private readonly eventRepo: Repository<TableEvent>,
     @InjectRepository(TableOccupancyEvent) private readonly occupancyRepo: Repository<TableOccupancyEvent>,
     @InjectRepository(OrderHeader) private readonly orderRepo: Repository<OrderHeader>,
     private readonly auditWriter: AuditWriter,
@@ -260,14 +258,6 @@ export class DineInService {
       seated_at: new Date(),
     });
     const savedSession = await this.sessionRepo.save(session);
-
-    const event = this.eventRepo.create({
-      tenant_id: tenantId,
-      table_session_id: savedSession.id,
-      event_type: 'SEATED',
-      payload: { guestCount, orderId },
-    });
-    await this.eventRepo.save(event);
 
     const occ = this.occupancyRepo.create({
       tenant_id: tenantId,

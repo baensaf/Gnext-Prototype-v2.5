@@ -13,10 +13,10 @@ import { paths } from 'src/routes/paths';
 import { usePathname } from 'src/routes/hooks';
 import { RouterLink } from 'src/routes/components';
 
+import { useAuthStore } from 'src/store/useAuthStore';
+
 import { Label } from 'src/components/label';
 import { CustomPopover } from 'src/components/custom-popover';
-
-import { useAuthContext } from 'src/auth/hooks';
 
 import { AccountButton } from './account-button';
 import { SignOutButton } from './sign-out-button';
@@ -37,7 +37,7 @@ export function AccountPopover({ data = [], sx, ...other }: AccountPopoverProps)
 
   const { open, anchorEl, onClose, onOpen } = usePopover();
 
-  const { user } = useAuthContext();
+  const user = useAuthStore((state) => state.user);
 
   const renderMenuActions = () => (
     <CustomPopover
@@ -48,11 +48,11 @@ export function AccountPopover({ data = [], sx, ...other }: AccountPopoverProps)
     >
       <Box sx={{ p: 2, pb: 1.5 }}>
         <Typography variant="subtitle2" noWrap>
-          {user?.displayName}
+          {user?.displayName || user?.username}
         </Typography>
 
         <Typography variant="body2" sx={{ color: 'text.secondary' }} noWrap>
-          {user?.email}
+          {user?.username}
         </Typography>
       </Box>
 
@@ -117,8 +117,7 @@ export function AccountPopover({ data = [], sx, ...other }: AccountPopoverProps)
     <>
       <AccountButton
         onClick={onOpen}
-        photoURL={user?.photoURL}
-        displayName={user?.displayName}
+        displayName={user?.displayName || user?.username || 'User'}
         sx={sx}
         {...other}
       />

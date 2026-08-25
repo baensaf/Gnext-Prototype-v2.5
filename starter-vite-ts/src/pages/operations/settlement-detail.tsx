@@ -143,6 +143,7 @@ export function SettlementDetailPage() {
           </Box>
         </Stack>
         <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1 }}>
+          <Chip label="V5" color="info" size="small" sx={{ fontWeight: 'bold' }} />
           <Chip
             label={settlement.status || 'DRAFT'}
             color={getStatusColor(settlement.status)}

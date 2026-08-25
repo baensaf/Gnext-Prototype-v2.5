@@ -8,7 +8,6 @@ import { Payment } from '../../entities/Payment.entity';
 import { Refund } from '../../entities/Refund.entity';
 import { AuditEvent } from '../../entities/AuditEvent.entity';
 import { IntegrationLog } from '../../entities/IntegrationLog.entity';
-import { CashDrawerShift } from '../../entities/CashDrawerShift.entity';
 import { CashierShift } from '../../entities/CashierShift.entity';
 import { CourierSettlement } from '../../entities/CourierSettlement.entity';
 import { CourierSettlementLine } from '../../entities/CourierSettlementLine.entity';
@@ -41,7 +40,6 @@ export class ReportsService {
     @InjectRepository(Refund) private readonly refundRepo: Repository<Refund>,
     @InjectRepository(AuditEvent) private readonly auditRepo: Repository<AuditEvent>,
     @InjectRepository(IntegrationLog) private readonly integrationLogRepo: Repository<IntegrationLog>,
-    @InjectRepository(CashDrawerShift) private readonly shiftRepo: Repository<CashDrawerShift>,
     @InjectRepository(CashierShift) private readonly cashierShiftRepo: Repository<CashierShift>,
     @InjectRepository(CourierSettlement) private readonly settlementRepo: Repository<CourierSettlement>,
     @InjectRepository(CourierSettlementLine) private readonly settlementLineRepo: Repository<CourierSettlementLine>,

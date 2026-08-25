@@ -12,13 +12,6 @@ export interface FeatureRegistryItem {
 }
 
 export const FEATURE_REGISTRY: Record<string, FeatureRegistryItem> = {
-  inventory: {
-    id: 'inventory',
-    version: 'V5 Preview',
-    status: 'V5_PREVIEW',
-    labelKey: 'nav.v5Preview',
-    isV5Preview: true,
-  },
   approvals: {
     id: 'approvals',
     version: 'V5 Preview',

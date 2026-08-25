@@ -5,7 +5,6 @@ import { Customer } from '../../entities/Customer.entity';
 import { CustomerPhone } from '../../entities/CustomerPhone.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { CustomerCreditAccount } from '../../entities/CustomerCreditAccount.entity';
-import { CustomerCreditTransaction } from '../../entities/CustomerCreditTransaction.entity';
 import { CreditEntry } from '../../entities/CreditEntry.entity';
 import { CustomFieldDefinition } from '../../entities/CustomFieldDefinition.entity';
 import { CustomerCustomValue } from '../../entities/CustomerCustomValue.entity';
@@ -29,7 +28,6 @@ import { AuditModule } from '../audit/audit.module';
       CustomerPhone,
       CustomerAddress,
       CustomerCreditAccount,
-      CustomerCreditTransaction,
       CreditEntry,
       CustomFieldDefinition,
       CustomerCustomValue,

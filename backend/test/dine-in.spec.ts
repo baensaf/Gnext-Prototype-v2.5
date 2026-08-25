@@ -4,7 +4,6 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { DiningArea } from '../src/entities/DiningArea.entity';
 import { DiningTable } from '../src/entities/DiningTable.entity';
 import { TableSession } from '../src/entities/TableSession.entity';
-import { TableEvent } from '../src/entities/TableEvent.entity';
 import { TableOccupancyEvent } from '../src/entities/TableOccupancyEvent.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { OrderItem } from '../src/entities/OrderItem.entity';
@@ -18,7 +17,6 @@ describe('DineInService & Operations (Unit)', () => {
   let areaRepo: any;
   let tableRepo: any;
   let sessionRepo: any;
-  let eventRepo: any;
   let occupancyRepo: any;
   let orderRepo: any;
   let auditWriter: any;
@@ -28,7 +26,6 @@ describe('DineInService & Operations (Unit)', () => {
     areaRepo = { find: jest.fn(), create: jest.fn(), save: jest.fn(), findOne: jest.fn() };
     tableRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() };
     sessionRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
-    eventRepo = { create: jest.fn(), save: jest.fn() };
     occupancyRepo = { create: jest.fn(), save: jest.fn() };
     orderRepo = { findOne: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() };
     auditWriter = { write: jest.fn() };
@@ -47,7 +44,6 @@ describe('DineInService & Operations (Unit)', () => {
         { provide: getRepositoryToken(DiningArea), useValue: areaRepo },
         { provide: getRepositoryToken(DiningTable), useValue: tableRepo },
         { provide: getRepositoryToken(TableSession), useValue: sessionRepo },
-        { provide: getRepositoryToken(TableEvent), useValue: eventRepo },
         { provide: getRepositoryToken(TableOccupancyEvent), useValue: occupancyRepo },
         { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
         { provide: AuditWriter, useValue: auditWriter },
@@ -63,14 +59,12 @@ describe('DineInService & Operations (Unit)', () => {
     sessionRepo.findOne.mockResolvedValue(null); // Table available
     sessionRepo.create.mockImplementation((dto) => dto);
     sessionRepo.save.mockImplementation((dto) => Promise.resolve({ ...dto, id: 'sess-1' }));
-    eventRepo.create.mockImplementation((dto) => dto);
     occupancyRepo.create.mockImplementation((dto) => dto);
 
     const session = await service.seatGuests('t-1', 'tbl-1', 4, undefined, 'corr-seat');
 
     expect(session.status).toBe('OCCUPIED');
     expect(session.guest_count).toBe(4);
-    expect(eventRepo.save).toHaveBeenCalled();
     expect(occupancyRepo.save).toHaveBeenCalled();
   });
 

@@ -5,6 +5,7 @@ import * as argon2 from 'argon2';
 import { AppModule } from '../src/app.module';
 import { ReportsService } from '../src/modules/reports/reports.service';
 import { CustomerService } from '../src/modules/customer/customer.service';
+import { CreditService } from '../src/modules/customer/credit.service';
 import { SimulationService } from '../src/modules/simulation/simulation.service';
 import { KioskService } from '../src/modules/kiosk/kiosk.service';
 import { ImportExportService } from '../src/modules/import-export/import-export.service';
@@ -34,6 +35,7 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
   let dataSource: DataSource;
   let reportsService: ReportsService;
   let customerService: CustomerService;
+  let creditService: CreditService;
   let simulationService: SimulationService;
   let kioskService: KioskService;
   let importExportService: ImportExportService;
@@ -62,6 +64,7 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
     dataSource = moduleRef.get<DataSource>(DataSource);
     reportsService = moduleRef.get<ReportsService>(ReportsService);
     customerService = moduleRef.get<CustomerService>(CustomerService);
+    creditService = moduleRef.get<CreditService>(CreditService);
     simulationService = moduleRef.get<SimulationService>(SimulationService);
     kioskService = moduleRef.get<KioskService>(KioskService);
     importExportService = moduleRef.get<ImportExportService>(ImportExportService);
@@ -268,15 +271,19 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
       }),
     );
 
-    // 2. Post Repayment / Top-Up via CustomerService
-    const repayRes = await customerService.postRepayment(
+    // 2. Post Repayment / Top-Up via CreditService
+    const creditAccount = await dataSource.getRepository(CustomerCreditAccount).findOne({ where: { tenant_id: testTenantId, customer_id: customer.id } });
+    expect(creditAccount).toBeDefined();
+
+    const repayRes = await creditService.postRepayment(
       testTenantId,
-      customer.id,
-      { amount: '500000.0000', note: 'Initial Credit Repayment / Top-Up' },
+      creditAccount!.id,
+      { amount: '500000.0000', reason: 'Initial Credit Repayment / Top-Up' },
+      testAdminUserId,
       `corr-repay-${tag}`,
     );
-    expect(repayRes.account).toBeDefined();
-    expect(Number(repayRes.account.current_balance)).toBeGreaterThanOrEqual(500000);
+    expect(repayRes.entry).toBeDefined();
+    expect(Number(repayRes.entry.balance_after)).toBeGreaterThanOrEqual(500000);
 
     // 3. Partial Credit + Terminal Payment Order Split
     const order = await orderRepo.save(
@@ -297,16 +304,14 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
     );
 
     // Credit Payment portion (200,000 IRR)
-    await customerService.postCreditTransaction(
+    await creditService.postPurchase(
       testTenantId,
-      customer.id,
+      creditAccount!.id,
       {
-        transaction_type: 'DEBIT',
         amount: '200000.0000',
-        reference_id: order.id,
-        note: 'Partial Credit Purchase',
+        orderId: order.id,
       },
-      `corr-credit-debit-${tag}`,
+      testAdminUserId,
     );
 
     await paymentRepo.save(
@@ -335,12 +340,12 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
     );
 
     // 4. Assert Statement and Credit Aging Subledger
-    const statement = await customerService.getCreditStatement(testTenantId, customer.id);
-    expect(statement.customer.id).toBe(customer.id);
-    expect(statement.transactions.length).toBeGreaterThanOrEqual(2);
+    const statement = await creditService.getAccountStatement(testTenantId, creditAccount!.id, {});
+    expect(statement.customerId).toBe(customer.id);
+    expect(statement.entries.length).toBeGreaterThanOrEqual(2);
 
-    const agingReport = await customerService.getCreditAgingReport(testTenantId);
-    expect(agingReport.find((c: any) => c.customer_id === customer.id)).toBeDefined();
+    const agingReport = await creditService.getCreditAging(testTenantId, {});
+    expect(agingReport.customers.find((c: any) => c.customerId === customer.id)).toBeDefined();
 
     // 5. Manager Approval Check for Alternative Method
     const pinVerification = await approvalService.verifyManagerPin(

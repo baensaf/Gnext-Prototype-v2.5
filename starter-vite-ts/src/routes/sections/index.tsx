@@ -29,7 +29,6 @@ import { PrintersPage } from 'src/pages/operations/printers';
 import { CategoriesPage } from 'src/pages/catalog/categories';
 import { CustomersPage } from 'src/pages/customers/directory';
 import { DiscountRulesPage } from 'src/pages/discounts/rules';
-import { InventoryStockPage } from 'src/pages/inventory/stock';
 import { TerminalsPage } from 'src/pages/operations/terminals';
 import { OrdersWorkflowPage } from 'src/pages/orders/workflow';
 import { CustomerCreditPage } from 'src/pages/customers/credit';
@@ -160,38 +159,7 @@ export const routesSection: RouteObject[] = [
       { path: 'settings/reasons', element: <ReasonCodesPage /> },
       { path: 'settings/localization', element: <MediaLocalizationDemoPage /> },
       { path: 'settings/data-reset', element: <DataResetPage /> },
-      { path: 'inventory/stock', element: <InventoryStockPage /> },
-
-      /* --- Legacy Alias Redirects (Section 9.1 Conformance) --- */
-      { path: 'pos/order', element: <Navigate to="/app/pos" replace /> },
       { path: 'pos/receipt/:id', element: <ReceiptPage /> },
-      { path: 'operations/orders', element: <Navigate to="/app/orders" replace /> },
-      { path: 'operations/dine-in', element: <Navigate to="/app/dine-in/floor" replace /> },
-      { path: 'operations/kds', element: <Navigate to="/app/kds" replace /> },
-      { path: 'operations/delivery', element: <Navigate to="/app/delivery/orders" replace /> },
-      { path: 'operations/settlements', element: <Navigate to="/app/delivery/settlements" replace /> },
-      { path: 'operations/cash-drawer', element: <Navigate to="/app/cashier/shifts" replace /> },
-      { path: 'orders/refunds', element: <Navigate to="/app/refunds" replace /> },
-      { path: 'reports/catalog', element: <Navigate to="/app/reports/sales-summary" replace /> },
-      { path: 'operations/audit', element: <Navigate to="/app/audit" replace /> },
-      { path: 'discounts/rules', element: <Navigate to="/app/discounts/campaigns" replace /> },
-      { path: 'customers/credit', element: <Navigate to="/app/credit/accounts" replace /> },
-      { path: 'customers/groups', element: <CustomersPage /> },
-      { path: 'simulation/center', element: <Navigate to="/app/simulation" replace /> },
-      { path: 'simulation/media-localization', element: <Navigate to="/app/settings/localization" replace /> },
-      { path: 'tools/import-wizard', element: <Navigate to="/app/catalog/import-export" replace /> },
-      { path: 'tools/data-reset', element: <Navigate to="/app/settings/data-reset" replace /> },
-      { path: 'settings/branches', element: <Navigate to="/app/operations/branches" replace /> },
-      { path: 'settings/terminals', element: <Navigate to="/app/operations/terminals" replace /> },
-      { path: 'settings/kds-configuration', element: <Navigate to="/app/operations/kds-configuration" replace /> },
-      { path: 'settings/printers', element: <Navigate to="/app/operations/printers" replace /> },
-      { path: 'settings/payments', element: <Navigate to="/app/settings/payments-refunds" replace /> },
-      { path: 'settings/offline-sync', element: <Navigate to="/app/simulation/offline-sync" replace /> },
-      { path: 'settings/import-wizard', element: <Navigate to="/app/catalog/import-export" replace /> },
-      { path: 'settings/audit', element: <Navigate to="/app/audit" replace /> },
-      { path: 'settings/logs', element: <Navigate to="/app/simulation/logs" replace /> },
-      { path: 'settings/snappfood', element: <Navigate to="/app/simulation/snappfood" replace /> },
-      { path: 'settings/simulation', element: <Navigate to="/app/simulation" replace /> },
 
       {
         path: '*',
