@@ -36,7 +36,7 @@ import { MoneyUtil } from 'src/utils/money.util';
 import { catalogApi } from 'src/api/catalogApi';
 
 export function OptionsPage() {
-  const { t: _t } = useTranslation();
+  const { t } = useTranslation();
 
   const [optionGroups, setOptionGroups] = useState<OptionGroup[]>([]);
   const [_loading, setLoading] = useState(true);
@@ -64,7 +64,7 @@ export function OptionsPage() {
       setOptionGroups(data);
       setError(null);
     } catch (err: any) {
-      setError(err.detail || 'Failed to load option groups');
+      setError(err.detail || t('catalog.optionsPage.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -92,7 +92,7 @@ export function OptionsPage() {
       setIsRequired(false);
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to create option group');
+      setError(err.detail || t('catalog.optionsPage.errors.createGroupFailed'));
     }
   };
 
@@ -111,7 +111,7 @@ export function OptionsPage() {
       setPriceDelta('150000');
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to add option item');
+      setError(err.detail || t('catalog.optionsPage.errors.addItemFailed'));
     }
   };
 
@@ -121,12 +121,12 @@ export function OptionsPage() {
         <Box>
           <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
             <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-              Modifier Option Groups & Items
+              {t('catalog.optionsPage.title')}
             </Typography>
             <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Configure product add-ons, sizes, toppings, and modifier selection rules (V5 Feature)
+            {t('catalog.optionsPage.subtitle')}
           </Typography>
         </Box>
         <Button
@@ -135,7 +135,7 @@ export function OptionsPage() {
           onClick={() => setGroupDrawerOpen(true)}
           sx={{ fontWeight: 'bold' }}
         >
-          Create Option Group
+          {t('catalog.optionsPage.newGroup')}
         </Button>
       </Stack>
 
@@ -157,12 +157,12 @@ export function OptionsPage() {
                     </Typography>
                     <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
                       <Chip
-                        label={`Min: ${group.min_selection} | Max: ${group.max_selection}`}
+                        label={`${t('catalog.optionsPage.minSelection')}: ${group.min_selection} | ${t('catalog.optionsPage.maxSelection')}: ${group.max_selection}`}
                         size="small"
                         color="info"
                       />
                       {group.is_required && (
-                        <Chip label="Required" color="error" size="small" sx={{ fontWeight: 'bold' }} />
+                        <Chip label={t('catalog.optionsPage.requiredBadge')} color="error" size="small" sx={{ fontWeight: 'bold' }} />
                       )}
                     </Stack>
                   </Box>
@@ -176,7 +176,7 @@ export function OptionsPage() {
                       setItemDialogOpen(true);
                     }}
                   >
-                    Add Option
+                    {t('catalog.optionsPage.addItem')}
                   </Button>
                 </Stack>
 
@@ -184,16 +184,16 @@ export function OptionsPage() {
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>Code</TableCell>
-                        <TableCell>Option Item</TableCell>
-                        <TableCell align="right">Price Delta</TableCell>
+                        <TableCell>{t('catalog.optionsPage.itemCode')}</TableCell>
+                        <TableCell>{t('catalog.optionsPage.itemName')}</TableCell>
+                        <TableCell align="right">{t('catalog.optionsPage.priceDeltaLabel')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {(!group.items || group.items.length === 0) && (
                         <TableRow>
                           <TableCell colSpan={3} align="center">
-                            No options added to this group yet.
+                            {t('catalog.optionsPage.noItems')}
                           </TableCell>
                         </TableRow>
                       )}
@@ -202,9 +202,11 @@ export function OptionsPage() {
                           <TableCell><code>{item.code}</code></TableCell>
                           <TableCell sx={{ fontWeight: 'bold' }}>{item.name}</TableCell>
                           <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                            {MoneyUtil.greaterThan(item.price_delta || '0', '0')
-                              ? `+${MoneyUtil.formatCurrency(item.price_delta)} IRR`
-                              : '0 IRR'}
+                            <span dir="ltr">
+                              {MoneyUtil.greaterThan(item.price_delta || '0', '0')
+                                ? `+${MoneyUtil.formatCurrency(item.price_delta)} IRR`
+                                : '0 IRR'}
+                            </span>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -221,12 +223,12 @@ export function OptionsPage() {
       <Drawer anchor="right" open={groupDrawerOpen} onClose={() => setGroupDrawerOpen(false)}>
         <Box sx={{ width: 400, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Create Option Group
+            {t('catalog.optionsPage.createDrawerTitle')}
           </Typography>
           <form onSubmit={handleCreateGroup}>
             <Stack spacing={2.5}>
               <TextField
-                label="Group Code"
+                label={t('catalog.optionsPage.groupCode')}
                 placeholder="e.g. GRP-TOPPINGS"
                 required
                 fullWidth
@@ -234,7 +236,7 @@ export function OptionsPage() {
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
               />
               <TextField
-                label="Group Name"
+                label={t('catalog.optionsPage.groupName')}
                 placeholder="e.g. Extra Pizza Toppings"
                 required
                 fullWidth
@@ -243,14 +245,14 @@ export function OptionsPage() {
               />
               <Stack direction="row" spacing={2}>
                 <TextField
-                  label="Min Selection"
+                  label={t('catalog.optionsPage.minSelection')}
                   type="number"
                   fullWidth
                   value={minSelection}
                   onChange={(e) => setMinSelection(parseInt(e.target.value, 10) || 0)}
                 />
                 <TextField
-                  label="Max Selection"
+                  label={t('catalog.optionsPage.maxSelection')}
                   type="number"
                   fullWidth
                   value={maxSelection}
@@ -264,10 +266,10 @@ export function OptionsPage() {
                     onChange={(e) => setIsRequired(e.target.checked)}
                   />
                 }
-                label="Required Selection (At least Min Selection mandatory)"
+                label={t('catalog.optionsPage.isRequired')}
               />
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>
-                Save Option Group
+                {t('catalog.optionsPage.submitCreateGroup')}
               </Button>
             </Stack>
           </form>
@@ -277,12 +279,12 @@ export function OptionsPage() {
       {/* Add Option Item Dialog */}
       <Dialog open={itemDialogOpen} onClose={() => setItemDialogOpen(false)}>
         <DialogTitle sx={{ fontWeight: 'bold' }}>
-          Add Modifier Option Item
+          {t('catalog.optionsPage.addItemModalTitle')}
         </DialogTitle>
         <DialogContent sx={{ minWidth: 360, pt: 2 }}>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
-              label="Option Code"
+              label={t('catalog.optionsPage.itemCode')}
               placeholder="e.g. OPT-EXTRACHEESE"
               required
               fullWidth
@@ -290,7 +292,7 @@ export function OptionsPage() {
               onChange={(e) => setItemCode(e.target.value.toUpperCase())}
             />
             <TextField
-              label="Option Display Name"
+              label={t('catalog.optionsPage.itemName')}
               placeholder="e.g. Extra Mozzarella Cheese"
               required
               fullWidth
@@ -298,7 +300,7 @@ export function OptionsPage() {
               onChange={(e) => setItemName(e.target.value)}
             />
             <TextField
-              label="Price Delta (IRR)"
+              label={t('catalog.optionsPage.priceDelta')}
               type="number"
               required
               fullWidth
@@ -308,9 +310,9 @@ export function OptionsPage() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setItemDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setItemDialogOpen(false)}>{t('catalog.optionsPage.cancel')}</Button>
           <Button variant="contained" onClick={handleAddItem} sx={{ fontWeight: 'bold' }}>
-            Add Option
+            {t('catalog.optionsPage.submitAddItem')}
           </Button>
         </DialogActions>
       </Dialog>

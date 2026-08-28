@@ -45,7 +45,7 @@ import { ImageUploader } from 'src/components/ImageUploader';
 
 export function ProductsPage() {
   const navigate = useNavigate();
-  const { t: _t } = useTranslation();
+  const { t } = useTranslation();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -82,11 +82,11 @@ export function ProductsPage() {
       setAllOptionGroups(ogList);
       setError(null);
     } catch (err: any) {
-      setError(err.detail || 'Failed to load products');
+      setError(err.detail || t('catalog.productsPage.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [selectedCategoryId]);
+  }, [selectedCategoryId, t]);
 
   useEffect(() => {
     loadData();
@@ -95,7 +95,7 @@ export function ProductsPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!categoryId) {
-      setError('Please select a category');
+      setError(t('catalog.productsPage.errors.selectCategory'));
       return;
     }
     try {
@@ -114,7 +114,7 @@ export function ProductsPage() {
       resetForm();
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to create product');
+      setError(err.detail || t('catalog.productsPage.errors.createFailed'));
     }
   };
 
@@ -131,12 +131,12 @@ export function ProductsPage() {
   };
 
   const handleArchive = async (id: string, prodName: string) => {
-    if (window.confirm(`Are you sure you want to archive product "${prodName}"?`)) {
+    if (window.confirm(t('catalog.productsPage.archiveConfirm', { name: prodName }))) {
       try {
         await catalogApi.archiveProduct(id);
         loadData();
       } catch (err: any) {
-        setError(err.detail || 'Failed to archive product');
+        setError(err.detail || t('catalog.productsPage.errors.archiveFailed'));
       }
     }
   };
@@ -155,7 +155,7 @@ export function ProductsPage() {
       setSelectedOptionGroupId('');
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to attach option group');
+      setError(err.detail || t('catalog.productsPage.errors.attachFailed'));
     }
   };
 
@@ -164,10 +164,10 @@ export function ProductsPage() {
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Product Catalog
+            {t('catalog.productsPage.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage master items, base pricing, tax rates, and modifier option groups
+            {t('catalog.productsPage.subtitle')}
           </Typography>
         </Box>
         <Button
@@ -176,7 +176,7 @@ export function ProductsPage() {
           onClick={() => setDrawerOpen(true)}
           sx={{ fontWeight: 'bold' }}
         >
-          Create Product
+          {t('catalog.productsPage.newProduct')}
         </Button>
       </Stack>
 
@@ -189,13 +189,13 @@ export function ProductsPage() {
       {/* Category Filter */}
       <Box sx={{ mb: 3, maxWidth: 300 }}>
         <FormControl fullWidth size="small">
-          <InputLabel>Filter by Category</InputLabel>
+          <InputLabel>{t('catalog.productsPage.category')}</InputLabel>
           <Select
             value={selectedCategoryId}
-            label="Filter by Category"
+            label={t('catalog.productsPage.category')}
             onChange={(e) => setSelectedCategoryId(e.target.value)}
           >
-            <MenuItem value="">All Categories</MenuItem>
+            <MenuItem value="">{t('catalog.productsPage.allCategories')}</MenuItem>
             {categories.map((c) => (
               <MenuItem key={c.id} value={c.id}>
                 {c.name} ({c.code})
@@ -211,13 +211,13 @@ export function ProductsPage() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Code</TableCell>
-                  <TableCell>Product Name</TableCell>
-                  <TableCell>Category</TableCell>
-                  <TableCell align="right">Base Price (IRR)</TableCell>
-                  <TableCell align="center">VAT Tax Rate</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="center">Actions</TableCell>
+                  <TableCell>{t('catalog.productsPage.code')}</TableCell>
+                  <TableCell>{t('catalog.productsPage.name')}</TableCell>
+                  <TableCell>{t('catalog.productsPage.category')}</TableCell>
+                  <TableCell align="right">{t('catalog.productsPage.basePrice')}</TableCell>
+                  <TableCell align="center">{t('catalog.productsPage.taxRate')}</TableCell>
+                  <TableCell>{t('common.status', 'Status')}</TableCell>
+                  <TableCell align="center">{t('catalog.productsPage.actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -229,35 +229,35 @@ export function ProductsPage() {
                       <TableCell sx={{ fontWeight: 'bold' }}>{p.name}</TableCell>
                       <TableCell>{catObj ? catObj.name : '—'}</TableCell>
                       <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                        {MoneyUtil.formatCurrency(p.base_price)} IRR
+                        <span dir="ltr">{MoneyUtil.formatCurrency(p.base_price)} IRR</span>
                       </TableCell>
                       <TableCell align="center">
                         <Chip label={`${MoneyUtil.multiply(p.tax_rate || '0', '100', 0)}%`} size="small" />
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={p.is_active ? 'Active' : 'Archived'}
+                          label={p.is_active ? t('common.active', 'Active') : t('common.archived', 'Archived')}
                           color={p.is_active ? 'success' : 'default'}
                           size="small"
                         />
                       </TableCell>
                       <TableCell align="center">
                         <IconButton
-                          title="Edit Product & Manage Variants"
+                          title={t('catalog.productsPage.editDetails')}
                           color="primary"
                           onClick={() => navigate(`/app/catalog/products/${p.id}`)}
                         >
                           <EditIcon />
                         </IconButton>
                         <IconButton
-                          title="Attach Modifier Option Group"
+                          title={t('catalog.productsPage.attachModifier')}
                           color="info"
                           onClick={() => handleOpenAttachDialog(p)}
                         >
                           <TuneIcon />
                         </IconButton>
                         <IconButton
-                          title="Archive Product"
+                          title={t('catalog.productsPage.archive')}
                           color="error"
                           onClick={() => handleArchive(p.id, p.name)}
                         >
@@ -277,15 +277,15 @@ export function ProductsPage() {
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Box sx={{ width: 450, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Create New Master Product
+            {t('catalog.productsPage.createDrawerTitle')}
           </Typography>
           <form onSubmit={handleCreate}>
             <Stack spacing={2.5}>
               <FormControl fullWidth required>
-                <InputLabel>Category</InputLabel>
+                <InputLabel>{t('catalog.productsPage.category')}</InputLabel>
                 <Select
                   value={categoryId}
-                  label="Category"
+                  label={t('catalog.productsPage.category')}
                   onChange={(e) => setCategoryId(e.target.value)}
                 >
                   {categories.map((c) => (
@@ -297,7 +297,7 @@ export function ProductsPage() {
               </FormControl>
 
               <TextField
-                label="Product Code"
+                label={t('catalog.productsPage.code')}
                 placeholder="e.g. PROD-DOUBLEBURGER"
                 required
                 fullWidth
@@ -306,7 +306,7 @@ export function ProductsPage() {
               />
 
               <TextField
-                label="Product Name"
+                label={t('catalog.productsPage.name')}
                 placeholder="e.g. Double Beef Burger"
                 required
                 fullWidth
@@ -315,7 +315,7 @@ export function ProductsPage() {
               />
 
               <TextField
-                label="Base Price (IRR)"
+                label={t('catalog.productsPage.basePrice')}
                 type="number"
                 required
                 fullWidth
@@ -324,7 +324,7 @@ export function ProductsPage() {
               />
 
               <TextField
-                label="Tax Rate (VAT)"
+                label={t('catalog.productsPage.taxRate')}
                 placeholder="e.g. 0.1000 for 10%"
                 fullWidth
                 value={taxRate}
@@ -332,12 +332,12 @@ export function ProductsPage() {
               />
 
               <ImageUploader
-                label="Product Media Image Asset"
+                label={t('catalog.productsPage.productImage')}
                 onUploadSuccess={(asset) => setImageAssetId(asset.id)}
               />
 
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>
-                Save Product
+                {t('catalog.productsPage.submitCreate')}
               </Button>
             </Stack>
           </form>
@@ -347,14 +347,14 @@ export function ProductsPage() {
       {/* Attach Option Group Dialog */}
       <Dialog open={attachDialogOpen} onClose={() => setAttachDialogOpen(false)}>
         <DialogTitle sx={{ fontWeight: 'bold' }}>
-          Attach Modifier Option Group to {selectedProduct?.name}
+          {t('catalog.productsPage.attachModalTitle', { name: selectedProduct?.name })}
         </DialogTitle>
         <DialogContent sx={{ minWidth: 360, pt: 2 }}>
           <FormControl fullWidth sx={{ mt: 1 }}>
-            <InputLabel>Select Option Group</InputLabel>
+            <InputLabel>{t('catalog.productsPage.selectOptionGroup')}</InputLabel>
             <Select
               value={selectedOptionGroupId}
-              label="Select Option Group"
+              label={t('catalog.productsPage.selectOptionGroup')}
               onChange={(e) => setSelectedOptionGroupId(e.target.value)}
             >
               {allOptionGroups.map((og) => (
@@ -366,9 +366,9 @@ export function ProductsPage() {
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAttachDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setAttachDialogOpen(false)}>{t('catalog.productsPage.cancel')}</Button>
           <Button variant="contained" onClick={handleAttachOptionGroup} sx={{ fontWeight: 'bold' }}>
-            Attach Group
+            {t('catalog.productsPage.submitAttach')}
           </Button>
         </DialogActions>
       </Dialog>

@@ -3,6 +3,7 @@ import type { Customer } from 'src/api/customerApi';
 import type { ReceiptData } from 'src/api/paymentApi';
 import type { ReasonCode } from 'src/api/settingsApi';
 
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
 import CodeIcon from '@mui/icons-material/Code';
@@ -68,6 +69,8 @@ import { httpClient as axios } from 'src/api/httpClient';
 
 
 export function OrdersWorkflowPage() {
+  const { t } = useTranslation();
+
   const [orders, setOrders] = useState<OrderHeader[]>([]);
   const [reasonCodes, setReasonCodes] = useState<ReasonCode[]>([]);
   const [customersMap, setCustomersMap] = useState<Map<string, Customer>>(new Map());
@@ -94,6 +97,38 @@ export function OrdersWorkflowPage() {
   const [loadingDrawerDetails, setLoadingDrawerDetails] = useState(false);
   const [drawerTab, setDrawerTab] = useState<'details' | 'audit'>('details');
   const [inspectingJson, setInspectingJson] = useState<any>(null);
+
+  const getOrderTypeLabel = (orderType: string) => {
+    switch (orderType) {
+      case 'DINE_IN':
+        return t('orders.types.dineIn');
+      case 'TAKEAWAY':
+        return t('orders.types.takeaway');
+      case 'DELIVERY':
+        return t('orders.types.delivery');
+      default:
+        return orderType;
+    }
+  };
+
+  const getOrderStatusLabel = (status: string) => {
+    switch (status) {
+      case 'SUBMITTED':
+        return t('orders.statuses.submitted');
+      case 'KITCHEN_PREPARING':
+        return t('orders.statuses.kitchenPreparing');
+      case 'READY':
+        return t('orders.statuses.ready');
+      case 'COMPLETED':
+        return t('orders.statuses.completed');
+      case 'CANCELLED':
+        return t('orders.statuses.cancelled');
+      case 'REFUNDED':
+        return t('orders.statuses.refunded');
+      default:
+        return status;
+    }
+  };
 
   const handleOpenOrderDrawer = async (order: OrderHeader) => {
     setSelectedOrder(order);
@@ -131,7 +166,7 @@ export function OrdersWorkflowPage() {
 
       setError(null);
     } catch (err: any) {
-      setError(err.detail || 'Failed to load active orders');
+      setError(err.detail || t('orders.errors.loadFailed'));
     }
   };
 
@@ -145,7 +180,7 @@ export function OrdersWorkflowPage() {
       const c = customersMap.get(order.customer_id)!;
       return `${c.first_name} ${c.last_name}`;
     }
-    return 'Walk-in Customer';
+    return t('orders.table.walkInCustomer');
   };
 
   const getCustomerMobile = (order: OrderHeader) => {
@@ -161,7 +196,7 @@ export function OrdersWorkflowPage() {
       await orderApi.updateOrderStatus(orderId, nextStatus);
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to update order status');
+      setError(err.detail || t('orders.errors.updateStatusFailed'));
     }
   };
 
@@ -173,7 +208,7 @@ export function OrdersWorkflowPage() {
 
   const handleConfirmCancel = async () => {
     if (!selectedOrder || !reasonCodeId) {
-      setError('Please select a cancellation reason code');
+      setError(t('orders.cancelDialog.reasonRequired'));
       return;
     }
     try {
@@ -182,7 +217,7 @@ export function OrdersWorkflowPage() {
       setSelectedOrder(null);
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to cancel order');
+      setError(err.detail || t('orders.errors.cancelFailed'));
     }
   };
 
@@ -192,7 +227,7 @@ export function OrdersWorkflowPage() {
       setReceiptData(data);
       setReceiptModalOpen(true);
     } catch (err: any) {
-      setError(err.detail || 'Failed to load receipt details');
+      setError(err.detail || t('orders.errors.receiptFailed'));
     }
   };
 
@@ -238,10 +273,10 @@ export function OrdersWorkflowPage() {
       >
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 800 }}>
-            Order Management & Dispatch
+            {t('orders.title')}
           </Typography>
           <Typography color="text.secondary" variant="body2">
-            Real-time order registry, interactive state machine controls, and KDS workflow status board
+            {t('orders.subtitle')}
           </Typography>
         </Box>
 
@@ -256,15 +291,15 @@ export function OrdersWorkflowPage() {
             value={viewMode}
           >
             <ToggleButton value="table">
-              <TableChartIcon sx={{ mr: 0.5 }} /> Table View
+              <TableChartIcon sx={{ mr: 0.5 }} /> {t('orders.tableView')}
             </ToggleButton>
             <ToggleButton value="kanban">
-              <ViewKanbanIcon sx={{ mr: 0.5 }} /> Kanban Board
+              <ViewKanbanIcon sx={{ mr: 0.5 }} /> {t('orders.kanbanBoard')}
             </ToggleButton>
           </ToggleButtonGroup>
 
           <Button onClick={loadData} startIcon={<RefreshIcon />} variant="outlined">
-            Refresh
+            {t('orders.refresh')}
           </Button>
         </Stack>
       </Stack>
@@ -289,17 +324,17 @@ export function OrdersWorkflowPage() {
               value={statusFilter}
               variant="scrollable"
             >
-              <Tab label={`All (${orders.length})`} value="ALL" />
-              <Tab label={`Submitted (${getOrdersByStatus('SUBMITTED').length})`} value="SUBMITTED" />
-              <Tab label={`Preparing (${getOrdersByStatus('KITCHEN_PREPARING').length})`} value="KITCHEN_PREPARING" />
-              <Tab label={`Ready (${getOrdersByStatus('READY').length})`} value="READY" />
-              <Tab label={`Completed (${getOrdersByStatus('COMPLETED').length})`} value="COMPLETED" />
-              <Tab label={`Cancelled (${getOrdersByStatus('CANCELLED').length})`} value="CANCELLED" />
+              <Tab label={t('orders.tabs.all', { count: orders.length })} value="ALL" />
+              <Tab label={t('orders.tabs.submitted', { count: getOrdersByStatus('SUBMITTED').length })} value="SUBMITTED" />
+              <Tab label={t('orders.tabs.preparing', { count: getOrdersByStatus('KITCHEN_PREPARING').length })} value="KITCHEN_PREPARING" />
+              <Tab label={t('orders.tabs.ready', { count: getOrdersByStatus('READY').length })} value="READY" />
+              <Tab label={t('orders.tabs.completed', { count: getOrdersByStatus('COMPLETED').length })} value="COMPLETED" />
+              <Tab label={t('orders.tabs.cancelled', { count: getOrdersByStatus('CANCELLED').length })} value="CANCELLED" />
             </Tabs>
 
             <TextField
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by order #, customer name, table..."
+              placeholder={t('orders.searchPlaceholder')}
               size="small"
               slotProps={{
                 input: {
@@ -323,17 +358,17 @@ export function OrdersWorkflowPage() {
           <TableContainer component={Paper} variant="outlined">
             <Table>
               <TableHead>
-                <TableRow sx={{ bgcolor: (t) => (t.palette.mode === 'dark' ? 'grey.800' : 'grey.100') }}>
-                  <TableCell sx={{ fontWeight: 700 }}>Order Number</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Customer Name</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Table / Notes</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Items Summary</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>Total Amount</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>Paid / Due</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 700 }}>Placed At</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 700 }}>Status</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 700 }}>Actions</TableCell>
+                <TableRow sx={{ bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100') }}>
+                  <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.orderNumber')}</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.customerName')}</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.type')}</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.tableNotes')}</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.itemsSummary')}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>{t('orders.table.totalAmount')}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>{t('orders.table.paidDue')}</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 700 }}>{t('orders.table.placedAt')}</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 700 }}>{t('orders.table.status')}</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 700 }}>{t('orders.table.actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -341,7 +376,7 @@ export function OrdersWorkflowPage() {
                   <TableRow>
                     <TableCell align="center" colSpan={10} sx={{ py: 6 }}>
                       <Typography color="text.secondary" variant="body1">
-                        No orders found matching your filter criteria.
+                        {t('orders.table.empty')}
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -387,18 +422,18 @@ export function OrdersWorkflowPage() {
                         <TableCell>
                           <Chip
                             color={order.order_type === 'DINE_IN' ? 'primary' : 'info'}
-                            label={order.order_type}
+                            label={getOrderTypeLabel(order.order_type)}
                             size="small"
                           />
                         </TableCell>
                         <TableCell>
                           {order.table_number ? (
                             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                              Table {order.table_number}
+                              {t('orders.table.tableNumber', { number: order.table_number })}
                             </Typography>
                           ) : (
                             <Typography color="text.secondary" variant="caption">
-                              {order.notes || 'Counter / Takeaway'}
+                              {order.notes || t('orders.table.counterTakeaway')}
                             </Typography>
                           )}
                         </TableCell>
@@ -415,18 +450,18 @@ export function OrdersWorkflowPage() {
                           </Stack>
                         </TableCell>
                         <TableCell align="right" sx={{ color: 'primary.main', fontWeight: 700 }}>
-                          {MoneyUtil.formatCurrency(order.total_amount)} IRR
+                          <span dir="ltr">{MoneyUtil.formatCurrency(order.total_amount)} IRR</span>
                         </TableCell>
                         <TableCell align="right">
                           <Typography color="success.main" sx={{ display: 'block', fontWeight: 600 }} variant="caption">
-                            Paid: {MoneyUtil.formatCurrency(order.paid_amount)}
+                            <span dir="ltr">{t('orders.table.paid', { amount: MoneyUtil.formatCurrency(order.paid_amount) })} IRR</span>
                           </Typography>
                           {MoneyUtil.greaterThan(order.due_amount, '0') ? (
                             <Typography color="error.main" sx={{ fontWeight: 700 }} variant="caption">
-                              Due: {MoneyUtil.formatCurrency(order.due_amount)}
+                              <span dir="ltr">{t('orders.table.due', { amount: MoneyUtil.formatCurrency(order.due_amount) })} IRR</span>
                             </Typography>
                           ) : (
-                            <Chip color="success" label="FULLY PAID" size="small" sx={{ fontSize: 9, height: 18 }} />
+                            <Chip color="success" label={t('orders.table.fullyPaid')} size="small" sx={{ fontSize: 9, height: 18 }} />
                           )}
                         </TableCell>
                         <TableCell align="center">
@@ -437,7 +472,7 @@ export function OrdersWorkflowPage() {
                         <TableCell align="center">
                           <Chip
                             color={getStatusChipColor(order.status) as any}
-                            label={order.status}
+                            label={getOrderStatusLabel(order.status)}
                             size="small"
                             sx={{ fontWeight: 700 }}
                           />
@@ -454,7 +489,7 @@ export function OrdersWorkflowPage() {
                               variant="outlined"
                               color="primary"
                             >
-                              Details
+                              {t('orders.actions.details')}
                             </Button>
 
                             <Button
@@ -466,7 +501,7 @@ export function OrdersWorkflowPage() {
                               startIcon={<ReceiptIcon />}
                               variant="outlined"
                             >
-                              Receipt
+                              {t('orders.actions.receipt')}
                             </Button>
 
                             {order.status === 'SUBMITTED' && (
@@ -480,7 +515,7 @@ export function OrdersWorkflowPage() {
                                 startIcon={<PlayArrowIcon />}
                                 variant="contained"
                               >
-                                Prep
+                                {t('orders.actions.prep')}
                               </Button>
                             )}
 
@@ -495,7 +530,7 @@ export function OrdersWorkflowPage() {
                                 startIcon={<CheckCircleIcon />}
                                 variant="contained"
                               >
-                                Ready
+                                {t('orders.actions.ready')}
                               </Button>
                             )}
 
@@ -510,7 +545,7 @@ export function OrdersWorkflowPage() {
                                 startIcon={<DoneAllIcon />}
                                 variant="contained"
                               >
-                                Complete
+                                {t('orders.actions.complete')}
                               </Button>
                             )}
 
@@ -525,7 +560,7 @@ export function OrdersWorkflowPage() {
                                 startIcon={<CancelIcon />}
                                 variant="outlined"
                               >
-                                Cancel
+                                {t('orders.actions.cancel')}
                               </Button>
                             )}
                           </Stack>
@@ -544,10 +579,10 @@ export function OrdersWorkflowPage() {
       {viewMode === 'kanban' && (
         <Grid container spacing={2}>
           {[
-            { color: 'info.main', key: 'SUBMITTED', title: 'Submitted Orders' },
-            { color: 'warning.main', key: 'KITCHEN_PREPARING', title: 'Kitchen Preparing' },
-            { color: 'success.main', key: 'READY', title: 'Ready for Pickup' },
-            { color: 'text.secondary', key: 'COMPLETED', title: 'Completed' },
+            { color: 'info.main', key: 'SUBMITTED', title: t('orders.kanban.submitted') },
+            { color: 'warning.main', key: 'KITCHEN_PREPARING', title: t('orders.kanban.preparing') },
+            { color: 'success.main', key: 'READY', title: t('orders.kanban.ready') },
+            { color: 'text.secondary', key: 'COMPLETED', title: t('orders.kanban.completed') },
           ].map((col) => (
             <Grid key={col.key} size={{ md: 3, sm: 6, xs: 12 }}>
               <Card sx={{ bgcolor: 'background.neutral', borderRadius: 3, boxShadow: 2, minHeight: 600 }}>
@@ -581,7 +616,7 @@ export function OrdersWorkflowPage() {
                             <Typography sx={{ fontWeight: 'bold' }} variant="subtitle2">
                               <code>{order.order_number}</code>
                             </Typography>
-                            <Chip label={order.order_type} size="small" variant="outlined" />
+                            <Chip label={getOrderTypeLabel(order.order_type)} size="small" variant="outlined" />
                           </Stack>
 
                           <Typography color="text.primary" sx={{ fontWeight: 700, mb: 0.5 }} variant="body2">
@@ -590,12 +625,12 @@ export function OrdersWorkflowPage() {
 
                           {order.table_number && (
                             <Typography color="text.secondary" sx={{ display: 'block', mb: 1 }} variant="caption">
-                              Table: <strong>{order.table_number}</strong>
+                              {t('orders.kanban.table', { number: order.table_number })}
                             </Typography>
                           )}
 
                           <Typography color="text.secondary" sx={{ display: 'block', mb: 1.5 }} variant="caption">
-                            Placed: {new Date(order.placed_at).toLocaleTimeString()}
+                            {t('orders.kanban.placed', { time: new Date(order.placed_at).toLocaleTimeString() })}
                           </Typography>
 
                           <Box sx={{ bgcolor: 'background.paper', borderRadius: 1, mb: 1.5, p: 1 }}>
@@ -614,7 +649,7 @@ export function OrdersWorkflowPage() {
                           </Box>
 
                           <Typography color="primary.main" sx={{ fontWeight: 'bold', mb: 1.5 }} variant="subtitle2">
-                            Total: {MoneyUtil.formatCurrency(order.total_amount)} IRR
+                            <span dir="ltr">{t('orders.kanban.total', { amount: MoneyUtil.formatCurrency(order.total_amount) })}</span>
                           </Typography>
 
                           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
@@ -630,7 +665,7 @@ export function OrdersWorkflowPage() {
                               variant="outlined"
                               sx={{ mb: 0.5 }}
                             >
-                              Details & Audit Log
+                              {t('orders.actions.detailsAudit')}
                             </Button>
 
                             {order.status === 'SUBMITTED' && (
@@ -646,7 +681,7 @@ export function OrdersWorkflowPage() {
                                 sx={{ fontWeight: 'bold' }}
                                 variant="contained"
                               >
-                                Start Preparing
+                                {t('orders.actions.startPrep')}
                               </Button>
                             )}
 
@@ -663,7 +698,7 @@ export function OrdersWorkflowPage() {
                                 sx={{ fontWeight: 'bold' }}
                                 variant="contained"
                               >
-                                Mark Ready
+                                {t('orders.actions.markReady')}
                               </Button>
                             )}
 
@@ -680,7 +715,7 @@ export function OrdersWorkflowPage() {
                                 sx={{ fontWeight: 'bold' }}
                                 variant="contained"
                               >
-                                Complete Order
+                                {t('orders.actions.completeOrder')}
                               </Button>
                             )}
 
@@ -697,7 +732,7 @@ export function OrdersWorkflowPage() {
                                 sx={{ mt: 0.5 }}
                                 variant="outlined"
                               >
-                                Cancel
+                                {t('orders.actions.cancel')}
                               </Button>
                             )}
                           </Stack>
@@ -715,17 +750,17 @@ export function OrdersWorkflowPage() {
       {/* Cancellation Reason Dialog */}
       <Dialog onClose={() => setCancelDialogOpen(false)} open={cancelDialogOpen}>
         <DialogTitle sx={{ fontWeight: 'bold' }}>
-          Cancel Order {selectedOrder?.order_number}
+          {t('orders.cancelDialog.title', { orderNumber: selectedOrder?.order_number })}
         </DialogTitle>
         <DialogContent sx={{ minWidth: 360, pt: 2 }}>
           <Typography color="text.secondary" sx={{ mb: 2 }} variant="body2">
-            Per operational specification, a mandatory reason code is required when cancelling an active order.
+            {t('orders.cancelDialog.description')}
           </Typography>
 
           <FormControl fullWidth sx={{ mt: 1 }}>
-            <InputLabel>Cancellation Reason Code</InputLabel>
+            <InputLabel>{t('orders.cancelDialog.reasonLabel')}</InputLabel>
             <Select
-              label="Cancellation Reason Code"
+              label={t('orders.cancelDialog.reasonLabel')}
               onChange={(e) => setReasonCodeId(e.target.value)}
               value={reasonCodeId}
             >
@@ -738,9 +773,9 @@ export function OrdersWorkflowPage() {
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCancelDialogOpen(false)}>Keep Order</Button>
+          <Button onClick={() => setCancelDialogOpen(false)}>{t('orders.cancelDialog.keepOrder')}</Button>
           <Button color="error" onClick={handleConfirmCancel} sx={{ fontWeight: 'bold' }} variant="contained">
-            Confirm Cancellation
+            {t('orders.cancelDialog.confirm')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -749,7 +784,7 @@ export function OrdersWorkflowPage() {
       <Dialog maxWidth="xs" onClose={() => setReceiptModalOpen(false)} open={receiptModalOpen} fullWidth>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 'bold' }}>
           <ReceiptIcon color="primary" />
-          Receipt #{receiptData?.receipt_header.order_number}
+          {t('orders.receiptModal.title', { orderNumber: receiptData?.receipt_header.order_number })}
         </DialogTitle>
         <DialogContent>
           {receiptData && (
@@ -773,7 +808,7 @@ export function OrdersWorkflowPage() {
               </Typography>
 
               <Typography sx={{ borderBottom: 1, borderColor: 'divider', display: 'block', fontWeight: 700, mb: 1, pb: 0.5 }} variant="caption">
-                ITEMS:
+                {t('orders.receiptModal.items')}
               </Typography>
               {receiptData.items.map((it, idx) => (
                 <Stack key={idx} direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
@@ -781,16 +816,16 @@ export function OrdersWorkflowPage() {
                     {MoneyUtil.format(it.quantity, 0)}x {it.product_name}
                   </Typography>
                   <Typography sx={{ fontWeight: 700 }} variant="caption">
-                    {MoneyUtil.formatCurrency(it.total_amount)}
+                    <span dir="ltr">{MoneyUtil.formatCurrency(it.total_amount)} IRR</span>
                   </Typography>
                 </Stack>
               ))}
 
               <Typography sx={{ borderTop: 1, borderColor: 'divider', display: 'block', fontWeight: 700, mt: 1.5, pt: 1 }} variant="caption">
-                TOTAL: {MoneyUtil.formatCurrency(receiptData.totals.total_amount)} IRR
+                <span dir="ltr">{t('orders.receiptModal.total')} {MoneyUtil.formatCurrency(receiptData.totals.total_amount)} IRR</span>
               </Typography>
               <Typography color="success.main" sx={{ display: 'block', fontWeight: 700 }} variant="caption">
-                PAID: {MoneyUtil.formatCurrency(receiptData.totals.paid_amount)} IRR
+                <span dir="ltr">{t('orders.receiptModal.paid')} {MoneyUtil.formatCurrency(receiptData.totals.paid_amount)} IRR</span>
               </Typography>
 
               <Typography align="center" color="text.secondary" sx={{ display: 'block', mt: 2 }} variant="caption">
@@ -800,7 +835,7 @@ export function OrdersWorkflowPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setReceiptModalOpen(false)}>Close</Button>
+          <Button onClick={() => setReceiptModalOpen(false)}>{t('orders.receiptModal.close')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -830,13 +865,13 @@ export function OrdersWorkflowPage() {
                     {selectedDrawerOrder.order_number}
                   </Typography>
                   <Chip
-                    label={selectedDrawerOrder.status}
+                    label={getOrderStatusLabel(selectedDrawerOrder.status)}
                     color={getStatusChipColor(selectedDrawerOrder.status) as any}
                     size="small"
                     sx={{ fontWeight: 700 }}
                   />
                   <Chip
-                    label={selectedDrawerOrder.order_type}
+                    label={getOrderTypeLabel(selectedDrawerOrder.order_type)}
                     size="small"
                     variant="outlined"
                     color={selectedDrawerOrder.order_type === 'DINE_IN' ? 'primary' : 'default'}
@@ -848,9 +883,9 @@ export function OrdersWorkflowPage() {
               </Stack>
 
               <Typography variant="caption" color="text.secondary">
-                Placed on {selectedDrawerOrder.placed_at ? new Date(selectedDrawerOrder.placed_at).toLocaleString() : 'Just now'}
-                {selectedDrawerOrder.table_number && ` • Table ${selectedDrawerOrder.table_number}`}
-                {selectedDrawerOrder.notes && ` • Note: ${selectedDrawerOrder.notes}`}
+                {t('orders.drawer.placedOn', { date: selectedDrawerOrder.placed_at ? new Date(selectedDrawerOrder.placed_at).toLocaleString() : t('orders.drawer.justNow') })}
+                {selectedDrawerOrder.table_number && ` • ${t('orders.drawer.table', { number: selectedDrawerOrder.table_number })}`}
+                {selectedDrawerOrder.notes && ` • ${t('orders.drawer.note', { note: selectedDrawerOrder.notes })}`}
               </Typography>
 
               {/* Tabs */}
@@ -861,14 +896,14 @@ export function OrdersWorkflowPage() {
               >
                 <Tab
                   value="details"
-                  label="Order Summary & Items"
+                  label={t('orders.drawer.tabs.summary')}
                   icon={<ReceiptLongIcon sx={{ fontSize: 18 }} />}
                   iconPosition="start"
                   sx={{ minHeight: 38, py: 0.5, fontWeight: 700 }}
                 />
                 <Tab
                   value="audit"
-                  label={`Audit Trail & Timeline (${(orderAuditLogs.length + (selectedDrawerOrder.stateEvents?.length || 0)) || 1})`}
+                  label={t('orders.drawer.tabs.audit', { count: (orderAuditLogs.length + (selectedDrawerOrder.stateEvents?.length || 0)) || 1 })}
                   icon={<HistoryIcon sx={{ fontSize: 18 }} />}
                   iconPosition="start"
                   sx={{ minHeight: 38, py: 0.5, fontWeight: 700 }}
@@ -887,26 +922,26 @@ export function OrdersWorkflowPage() {
                   {/* Customer Info Card */}
                   <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <PersonIcon fontSize="small" color="primary" /> Customer & Dining Context
+                      <PersonIcon fontSize="small" color="primary" /> {t('orders.drawer.customerContext')}
                     </Typography>
                     <Grid container spacing={1.5}>
                       <Grid size={{ xs: 6 }}>
-                        <Typography variant="caption" color="text.secondary">Customer Name</Typography>
+                        <Typography variant="caption" color="text.secondary">{t('orders.drawer.customerName')}</Typography>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>{getCustomerDisplayName(selectedDrawerOrder)}</Typography>
                       </Grid>
                       <Grid size={{ xs: 6 }}>
-                        <Typography variant="caption" color="text.secondary">Contact Phone</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{getCustomerMobile(selectedDrawerOrder) || 'Walk-In'}</Typography>
+                        <Typography variant="caption" color="text.secondary">{t('orders.drawer.contactPhone')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{getCustomerMobile(selectedDrawerOrder) || t('orders.drawer.walkIn')}</Typography>
                       </Grid>
                       {selectedDrawerOrder.table_number && (
                         <Grid size={{ xs: 6 }}>
-                          <Typography variant="caption" color="text.secondary">Dine-In Table</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>Table {selectedDrawerOrder.table_number}</Typography>
+                          <Typography variant="caption" color="text.secondary">{t('orders.drawer.dineInTable')}</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('orders.drawer.table', { number: selectedDrawerOrder.table_number })}</Typography>
                         </Grid>
                       )}
                       {selectedDrawerOrder.notes && (
                         <Grid size={{ xs: 12 }}>
-                          <Typography variant="caption" color="text.secondary">Special Instructions / Notes</Typography>
+                          <Typography variant="caption" color="text.secondary">{t('orders.drawer.specialInstructions')}</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 500, bgcolor: 'background.neutral', p: 1, borderRadius: 1 }}>
                             {selectedDrawerOrder.notes}
                           </Typography>
@@ -918,16 +953,16 @@ export function OrdersWorkflowPage() {
                   {/* Items List */}
                   <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
-                      Ordered Items ({(selectedDrawerOrder.items || []).length})
+                      {t('orders.drawer.orderedItems', { count: (selectedDrawerOrder.items || []).length })}
                     </Typography>
                     <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
                       <Table size="small">
                         <TableHead sx={{ bgcolor: 'background.neutral' }}>
                           <TableRow>
-                            <TableCell sx={{ fontWeight: 700 }}>Item</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 700 }}>Qty</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>Unit Price</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>Total</TableCell>
+                            <TableCell sx={{ fontWeight: 700 }}>{t('orders.drawer.item')}</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 700 }}>{t('orders.drawer.qty')}</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700 }}>{t('orders.drawer.unitPrice')}</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700 }}>{t('orders.drawer.total')}</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -954,10 +989,10 @@ export function OrdersWorkflowPage() {
                                 {MoneyUtil.format(item.quantity, 0)}
                               </TableCell>
                               <TableCell align="right">
-                                {MoneyUtil.formatCurrency(item.unit_price)}
+                                <span dir="ltr">{MoneyUtil.formatCurrency(item.unit_price)}</span>
                               </TableCell>
                               <TableCell align="right" sx={{ fontWeight: 700 }}>
-                                {MoneyUtil.formatCurrency(item.total_amount || MoneyUtil.multiply(item.quantity, item.unit_price, 2))} IRR
+                                <span dir="ltr">{MoneyUtil.formatCurrency(item.total_amount || MoneyUtil.multiply(item.quantity, item.unit_price, 2))} IRR</span>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -969,41 +1004,41 @@ export function OrdersWorkflowPage() {
                   {/* Financial Breakdown */}
                   <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'background.neutral' }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
-                      Financial Breakdown
+                      {t('orders.drawer.financialBreakdown')}
                     </Typography>
                     <Stack spacing={1}>
                       <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                        <Typography variant="body2" color="text.secondary">Gross Subtotal</Typography>
-                        <Typography variant="body2">{MoneyUtil.formatCurrency(selectedDrawerOrder.subtotal_amount || selectedDrawerOrder.total_amount)} IRR</Typography>
+                        <Typography variant="body2" color="text.secondary">{t('orders.drawer.grossSubtotal')}</Typography>
+                        <Typography variant="body2" dir="ltr">{MoneyUtil.formatCurrency(selectedDrawerOrder.subtotal_amount || selectedDrawerOrder.total_amount)} IRR</Typography>
                       </Stack>
                       {MoneyUtil.greaterThan(selectedDrawerOrder.discount_amount || '0', '0') && (
                         <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                          <Typography variant="body2" color="success.main">Discount Applied</Typography>
-                          <Typography variant="body2" color="success.main">-{MoneyUtil.formatCurrency(selectedDrawerOrder.discount_amount)} IRR</Typography>
+                          <Typography variant="body2" color="success.main">{t('orders.drawer.discountApplied')}</Typography>
+                          <Typography variant="body2" color="success.main" dir="ltr">-{MoneyUtil.formatCurrency(selectedDrawerOrder.discount_amount)} IRR</Typography>
                         </Stack>
                       )}
                       {MoneyUtil.greaterThan(selectedDrawerOrder.tax_amount || '0', '0') && (
                         <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                          <Typography variant="body2" color="text.secondary">Value Added Tax (VAT)</Typography>
-                          <Typography variant="body2">+{MoneyUtil.formatCurrency(selectedDrawerOrder.tax_amount)} IRR</Typography>
+                          <Typography variant="body2" color="text.secondary">{t('orders.drawer.vat')}</Typography>
+                          <Typography variant="body2" dir="ltr">+{MoneyUtil.formatCurrency(selectedDrawerOrder.tax_amount)} IRR</Typography>
                         </Stack>
                       )}
                       <Divider sx={{ my: 0.5 }} />
                       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Grand Total</Typography>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 800, color: 'primary.main' }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{t('orders.drawer.grandTotal')}</Typography>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800, color: 'primary.main' }} dir="ltr">
                           {MoneyUtil.formatCurrency(selectedDrawerOrder.total_amount)} IRR
                         </Typography>
                       </Stack>
                       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="body2" color="text.secondary">Paid Amount</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main' }}>
+                        <Typography variant="body2" color="text.secondary">{t('orders.drawer.paidAmount')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main' }} dir="ltr">
                           {MoneyUtil.formatCurrency(selectedDrawerOrder.paid_amount || '0')} IRR
                         </Typography>
                       </Stack>
                       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="body2" color="text.secondary">Outstanding Balance</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 700, color: MoneyUtil.greaterThan(selectedDrawerOrder.due_amount || '0', '0') ? 'error.main' : 'success.main' }}>
+                        <Typography variant="body2" color="text.secondary">{t('orders.drawer.outstandingBalance')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: MoneyUtil.greaterThan(selectedDrawerOrder.due_amount || '0', '0') ? 'error.main' : 'success.main' }} dir="ltr">
                           {MoneyUtil.formatCurrency(selectedDrawerOrder.due_amount || '0')} IRR
                         </Typography>
                       </Stack>
@@ -1015,9 +1050,9 @@ export function OrdersWorkflowPage() {
                 <Stack spacing={2.5}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <SecurityIcon color="primary" fontSize="small" /> Immutable Order Audit Log
+                      <SecurityIcon color="primary" fontSize="small" /> {t('orders.drawer.auditLogTitle')}
                     </Typography>
-                    <Chip label="Append-Only Trail" color="success" size="small" variant="outlined" />
+                    <Chip label={t('orders.drawer.appendOnly')} color="success" size="small" variant="outlined" />
                   </Box>
 
                   {/* Unified Chronological Event Timeline */}
@@ -1025,7 +1060,7 @@ export function OrdersWorkflowPage() {
                     <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderRadius: 2 }}>
                       <HistoryIcon color="disabled" sx={{ fontSize: 40, mb: 1 }} />
                       <Typography variant="body2" color="text.secondary">
-                        Order was created as {selectedDrawerOrder.status}. No previous lifecycle events registered.
+                        {t('orders.drawer.noEvents', { status: getOrderStatusLabel(selectedDrawerOrder.status) })}
                       </Typography>
                     </Paper>
                   ) : (
@@ -1046,31 +1081,31 @@ export function OrdersWorkflowPage() {
                           <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                               <Chip
-                                label={evt.action || evt.to_state}
+                                label={getOrderStatusLabel(evt.to_state)}
                                 color={getStatusChipColor(evt.to_state) as any}
                                 size="small"
                                 sx={{ fontWeight: 700 }}
                               />
                               <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                                {evt.from_state ? `${evt.from_state} → ${evt.to_state}` : evt.to_state}
+                                {evt.from_state ? `${getOrderStatusLabel(evt.from_state)} → ${getOrderStatusLabel(evt.to_state)}` : getOrderStatusLabel(evt.to_state)}
                               </Typography>
                             </Stack>
                             <Typography variant="caption" color="text.secondary">
-                              {evt.occurred_at ? new Date(evt.occurred_at).toLocaleTimeString() : 'Just now'}
+                              {evt.occurred_at ? new Date(evt.occurred_at).toLocaleTimeString() : t('orders.drawer.justNow')}
                             </Typography>
                           </Stack>
 
                           <Typography variant="body2" sx={{ mb: 0.5 }}>
-                            <strong>Actor:</strong> {evt.actor_user_id ? 'Authenticated User' : 'System / POS'}
+                            <strong>{t('orders.drawer.actor')}</strong> {evt.actor_user_id ? t('orders.drawer.authenticatedUser') : t('orders.drawer.systemPos')}
                           </Typography>
                           {evt.reason && (
                             <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
-                              <strong>Reason Code:</strong> {evt.reason}
+                              <strong>{t('orders.drawer.reasonCode')}</strong> {evt.reason}
                             </Typography>
                           )}
                           {evt.notes && (
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                              Note: {evt.notes}
+                              {t('orders.drawer.noteLabel')} {evt.notes}
                             </Typography>
                           )}
                         </Paper>
@@ -1110,7 +1145,7 @@ export function OrdersWorkflowPage() {
 
                           <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
                             <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
-                              Corr: {log.correlation_id ? log.correlation_id.substring(0, 8) + '...' : '-'}
+                              {t('orders.drawer.corr')} {log.correlation_id ? log.correlation_id.substring(0, 8) + '...' : '-'}
                             </Typography>
                             <Button
                               size="small"
@@ -1118,7 +1153,7 @@ export function OrdersWorkflowPage() {
                               onClick={() => setInspectingJson(log)}
                               sx={{ textTransform: 'none', py: 0.25, fontSize: '0.75rem' }}
                             >
-                              Inspect Snapshot
+                              {t('orders.drawer.inspectSnapshot')}
                             </Button>
                           </Stack>
                         </Paper>
@@ -1139,7 +1174,7 @@ export function OrdersWorkflowPage() {
                     handleViewReceipt(selectedDrawerOrder.id);
                   }}
                 >
-                  Receipt
+                  {t('orders.actions.receipt')}
                 </Button>
                 {selectedDrawerOrder.status === 'SUBMITTED' && (
                   <Button
@@ -1151,7 +1186,7 @@ export function OrdersWorkflowPage() {
                       handleOpenOrderDrawer({ ...selectedDrawerOrder, status: 'KITCHEN_PREPARING' });
                     }}
                   >
-                    Start Prep
+                    {t('orders.actions.startPrep')}
                   </Button>
                 )}
                 {selectedDrawerOrder.status === 'KITCHEN_PREPARING' && (
@@ -1164,7 +1199,7 @@ export function OrdersWorkflowPage() {
                       handleOpenOrderDrawer({ ...selectedDrawerOrder, status: 'READY' });
                     }}
                   >
-                    Mark Ready
+                    {t('orders.actions.markReady')}
                   </Button>
                 )}
                 {selectedDrawerOrder.status === 'READY' && (
@@ -1177,7 +1212,7 @@ export function OrdersWorkflowPage() {
                       handleOpenOrderDrawer({ ...selectedDrawerOrder, status: 'COMPLETED' });
                     }}
                   >
-                    Complete Order
+                    {t('orders.actions.completeOrder')}
                   </Button>
                 )}
                 {selectedDrawerOrder.status !== 'COMPLETED' && selectedDrawerOrder.status !== 'CANCELLED' && (
@@ -1190,7 +1225,7 @@ export function OrdersWorkflowPage() {
                       handleOpenCancelDialog(selectedDrawerOrder);
                     }}
                   >
-                    Cancel Order
+                    {t('orders.actions.cancelOrder')}
                   </Button>
                 )}
               </Stack>
@@ -1208,11 +1243,11 @@ export function OrdersWorkflowPage() {
       >
         <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
           <CodeIcon color="primary" />
-          Audit Snapshot: {inspectingJson?.action}
+          {t('orders.drawer.inspectTitle', { action: inspectingJson?.action })}
         </DialogTitle>
         <DialogContent>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-            Timestamp: {inspectingJson && new Date(inspectingJson.occurred_at).toLocaleString()} • Actor: {inspectingJson?.actor_type}
+            {t('orders.drawer.timestamp')} {inspectingJson && new Date(inspectingJson.occurred_at).toLocaleString()} • {t('orders.drawer.actor')} {inspectingJson?.actor_type}
           </Typography>
           <Box
             component="pre"
@@ -1241,7 +1276,7 @@ export function OrdersWorkflowPage() {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setInspectingJson(null)}>Close</Button>
+          <Button onClick={() => setInspectingJson(null)}>{t('orders.drawer.close')}</Button>
         </DialogActions>
       </Dialog>
     </Box>

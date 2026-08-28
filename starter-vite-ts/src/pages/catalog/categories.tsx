@@ -29,7 +29,7 @@ import {
 import { catalogApi } from 'src/api/catalogApi';
 
 export function CategoriesPage() {
-  const { t: _t } = useTranslation();
+  const { t } = useTranslation();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [_loading, setLoading] = useState(true);
@@ -47,7 +47,7 @@ export function CategoriesPage() {
       setCategories(data);
       setError(null);
     } catch (err: any) {
-      setError(err.detail || 'Failed to load categories');
+      setError(err.detail || t('catalog.categoriesPage.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -67,17 +67,17 @@ export function CategoriesPage() {
       setSortOrder(1);
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to create category');
+      setError(err.detail || t('catalog.categoriesPage.errors.createFailed'));
     }
   };
 
   const handleArchive = async (id: string, catName: string) => {
-    if (window.confirm(`Are you sure you want to archive category "${catName}"?`)) {
+    if (window.confirm(t('catalog.categoriesPage.archiveConfirm', { name: catName }))) {
       try {
         await catalogApi.archiveCategory(id);
         loadData();
       } catch (err: any) {
-        setError(err.detail || 'Failed to archive category');
+        setError(err.detail || t('catalog.categoriesPage.errors.archiveFailed'));
       }
     }
   };
@@ -87,10 +87,10 @@ export function CategoriesPage() {
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Catalog Categories
+            {t('catalog.categoriesPage.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage product categories and menu hierarchy
+            {t('catalog.categoriesPage.subtitle')}
           </Typography>
         </Box>
         <Button
@@ -99,7 +99,7 @@ export function CategoriesPage() {
           onClick={() => setDrawerOpen(true)}
           sx={{ fontWeight: 'bold' }}
         >
-          Create Category
+          {t('catalog.categoriesPage.newCategory')}
         </Button>
       </Stack>
 
@@ -115,11 +115,11 @@ export function CategoriesPage() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Code</TableCell>
-                  <TableCell>Category Name</TableCell>
-                  <TableCell align="center">Sort Order</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="center">Actions</TableCell>
+                  <TableCell>{t('catalog.categoriesPage.code')}</TableCell>
+                  <TableCell>{t('catalog.categoriesPage.name')}</TableCell>
+                  <TableCell align="center">{t('catalog.categoriesPage.sortOrder')}</TableCell>
+                  <TableCell>{t('catalog.categoriesPage.status')}</TableCell>
+                  <TableCell align="center">{t('catalog.categoriesPage.actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -130,14 +130,14 @@ export function CategoriesPage() {
                     <TableCell align="center">{c.sort_order}</TableCell>
                     <TableCell>
                       <Chip
-                        label={c.is_active ? 'Active' : 'Archived'}
+                        label={c.is_active ? t('catalog.categoriesPage.active') : t('common.archived', 'Archived')}
                         color={c.is_active ? 'success' : 'default'}
                         size="small"
                       />
                     </TableCell>
                     <TableCell align="center">
                       <IconButton
-                        title="Archive Category"
+                        title={t('catalog.categoriesPage.archive')}
                         color="error"
                         onClick={() => handleArchive(c.id, c.name)}
                       >
@@ -156,12 +156,12 @@ export function CategoriesPage() {
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Box sx={{ width: 400, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Create New Category
+            {t('catalog.categoriesPage.createDrawerTitle')}
           </Typography>
           <form onSubmit={handleCreate}>
             <Stack spacing={2.5}>
               <TextField
-                label="Category Code"
+                label={t('catalog.categoriesPage.code')}
                 placeholder="e.g. CAT-DESSERTS"
                 required
                 fullWidth
@@ -169,7 +169,7 @@ export function CategoriesPage() {
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
               />
               <TextField
-                label="Category Name"
+                label={t('catalog.categoriesPage.name')}
                 placeholder="e.g. Desserts & Cakes"
                 required
                 fullWidth
@@ -177,14 +177,14 @@ export function CategoriesPage() {
                 onChange={(e) => setName(e.target.value)}
               />
               <TextField
-                label="Sort Order"
+                label={t('catalog.categoriesPage.sortOrder')}
                 type="number"
                 fullWidth
                 value={sortOrder}
                 onChange={(e) => setSortOrder(parseInt(e.target.value, 10) || 0)}
               />
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>
-                Save Category
+                {t('catalog.categoriesPage.submitCreate')}
               </Button>
             </Stack>
           </form>

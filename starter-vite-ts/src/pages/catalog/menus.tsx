@@ -1,6 +1,7 @@
 import type { Branch } from 'src/api/tenantApi';
 import type { Menu, Product, Category } from 'src/api/catalogApi';
 
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
@@ -32,6 +33,8 @@ import { tenantApi } from 'src/api/tenantApi';
 import { catalogApi } from 'src/api/catalogApi';
 
 export function MenusPage() {
+  const { t } = useTranslation();
+
   const [menus, setMenus] = useState<Menu[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [_categories, setCategories] = useState<Category[]>([]);
@@ -67,7 +70,7 @@ export function MenusPage() {
       setProducts(pList);
       setError(null);
     } catch (err: any) {
-      setError(err.detail || 'Failed to load menu composer data');
+      setError(err.detail || t('catalog.menusPage.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -105,17 +108,17 @@ export function MenusPage() {
       setChannel('ALL');
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to create menu');
+      setError(err.detail || t('catalog.menusPage.errors.createFailed'));
     }
   };
 
-  const handleDeleteMenu = async (menuId: string) => {
-    if (!window.confirm('Are you sure you want to delete this menu?')) return;
+  const handleDeleteMenu = async (menu: Menu) => {
+    if (!window.confirm(t('catalog.menusPage.deleteMenuConfirm', { name: menu.name }))) return;
     try {
-      await catalogApi.deleteMenu(menuId);
+      await catalogApi.deleteMenu(menu.id);
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to delete menu');
+      setError(err.detail || t('catalog.menusPage.errors.deleteFailed'));
     }
   };
 
@@ -129,7 +132,7 @@ export function MenusPage() {
       setOverridePrice('');
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to add product to menu');
+      setError(err.detail || t('catalog.menusPage.errors.attachFailed'));
     }
   };
 
@@ -138,18 +141,18 @@ export function MenusPage() {
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Menus Composer
+            {t('catalog.menusPage.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Slice 5 — Branch & Channel Specific Menu Management
+            {t('catalog.menusPage.subtitle')}
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
           <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
-            Refresh
+            {t('catalog.menusPage.refresh')}
           </Button>
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)}>
-            Create Menu
+            {t('catalog.menusPage.newMenu')}
           </Button>
         </Stack>
       </Stack>
@@ -165,13 +168,13 @@ export function MenusPage() {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Code</TableCell>
-                <TableCell>Name</TableCell>
-                <TableCell>Target Branch</TableCell>
-                <TableCell>Sales Channel</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Assigned Items</TableCell>
-                <TableCell align="right">Actions</TableCell>
+                <TableCell>{t('catalog.menusPage.code')}</TableCell>
+                <TableCell>{t('catalog.menusPage.name')}</TableCell>
+                <TableCell>{t('catalog.menusPage.branch')}</TableCell>
+                <TableCell>{t('catalog.menusPage.channel')}</TableCell>
+                <TableCell>{t('common.status', 'Status')}</TableCell>
+                <TableCell>{t('catalog.menusPage.itemsAttached')}</TableCell>
+                <TableCell align="right">{t('catalog.menusPage.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -179,13 +182,13 @@ export function MenusPage() {
                 <TableRow>
                   <TableCell colSpan={7} align="center">
                     <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
-                      No menus created yet. Click &quot;Create Menu&quot; to build your first channel or branch menu.
+                      {t('catalog.menusPage.noItems')}
                     </Typography>
                   </TableCell>
                 </TableRow>
               ) : (
                 menus.map((m) => {
-                  const branchName = branches.find((b) => b.id === m.branch_id)?.name || 'All Branches';
+                  const branchName = branches.find((b) => b.id === m.branch_id)?.name || t('catalog.menusPage.allBranches');
                   const itemCount = m.products?.length || 0;
 
                   return (
@@ -198,12 +201,12 @@ export function MenusPage() {
                       <TableCell>{m.name}</TableCell>
                       <TableCell>{branchName}</TableCell>
                       <TableCell>
-                        <Chip label={m.channel} color={m.channel === 'ALL' ? 'default' : 'primary'} size="small" />
+                        <Chip label={t(`catalog.menusPage.channels.${m.channel}`, m.channel)} color={m.channel === 'ALL' ? 'default' : 'primary'} size="small" />
                       </TableCell>
                       <TableCell>
-                        <Chip label={m.is_active ? 'Active' : 'Inactive'} color={m.is_active ? 'success' : 'default'} size="small" />
+                        <Chip label={m.is_active ? t('common.active', 'Active') : t('common.inactive', 'Inactive')} color={m.is_active ? 'success' : 'default'} size="small" />
                       </TableCell>
-                      <TableCell>{itemCount} products</TableCell>
+                      <TableCell>{itemCount}</TableCell>
                       <TableCell align="right">
                         <Button
                           size="small"
@@ -214,9 +217,9 @@ export function MenusPage() {
                             setAttachDrawerOpen(true);
                           }}
                         >
-                          Add Items
+                          {t('catalog.menusPage.manageItems')}
                         </Button>
-                        <IconButton color="error" size="small" onClick={() => handleDeleteMenu(m.id)}>
+                        <IconButton color="error" size="small" onClick={() => handleDeleteMenu(m)}>
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </TableCell>
@@ -233,31 +236,29 @@ export function MenusPage() {
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Box sx={{ width: 400, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Create New Menu
+            {t('catalog.menusPage.createDrawerTitle')}
           </Typography>
           <Box component="form" onSubmit={handleCreateMenu}>
             <Stack spacing={2}>
-              <TextField label="Menu Code" value={code} onChange={(e) => setCode(e.target.value)} required fullWidth placeholder="e.g. DINE_IN_LUNCH" />
-              <TextField label="Menu Name" value={name} onChange={(e) => setName(e.target.value)} required fullWidth placeholder="e.g. Weekend Dine-In Menu" />
-              <TextField select label="Branch (Optional)" value={branchId} onChange={(e) => setBranchId(e.target.value)} fullWidth>
-                <MenuItem value="">All Branches</MenuItem>
+              <TextField label={t('catalog.menusPage.code')} value={code} onChange={(e) => setCode(e.target.value)} required fullWidth placeholder="e.g. DINE_IN_LUNCH" />
+              <TextField label={t('catalog.menusPage.name')} value={name} onChange={(e) => setName(e.target.value)} required fullWidth placeholder="e.g. Weekend Dine-In Menu" />
+              <TextField select label={t('catalog.menusPage.branch')} value={branchId} onChange={(e) => setBranchId(e.target.value)} fullWidth>
+                <MenuItem value="">{t('catalog.menusPage.allBranches')}</MenuItem>
                 {branches.map((b) => (
                   <MenuItem key={b.id} value={b.id}>
                     {b.name} ({b.code})
                   </MenuItem>
                 ))}
               </TextField>
-              <TextField select label="Sales Channel" value={channel} onChange={(e) => setChannel(e.target.value)} fullWidth>
-                <MenuItem value="ALL">All Channels</MenuItem>
-                <MenuItem value="DINE_IN">Dine-In</MenuItem>
-                <MenuItem value="DELIVERY">Delivery</MenuItem>
-                <MenuItem value="TAKEAWAY">Takeaway</MenuItem>
-                <MenuItem value="KIOSK">Kiosk</MenuItem>
-                <MenuItem value="AGGREGATOR">Aggregator (Snappfood)</MenuItem>
+              <TextField select label={t('catalog.menusPage.channel')} value={channel} onChange={(e) => setChannel(e.target.value)} fullWidth>
+                <MenuItem value="ALL">{t('catalog.menusPage.channels.ALL')}</MenuItem>
+                <MenuItem value="POS">{t('catalog.menusPage.channels.POS')}</MenuItem>
+                <MenuItem value="DELIVERY">{t('catalog.menusPage.channels.DELIVERY')}</MenuItem>
+                <MenuItem value="KIOSK">{t('catalog.menusPage.channels.KIOSK')}</MenuItem>
               </TextField>
 
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ mt: 2 }}>
-                Save Menu
+                {t('catalog.menusPage.submitCreate')}
               </Button>
             </Stack>
           </Box>
@@ -268,31 +269,30 @@ export function MenusPage() {
       <Drawer anchor="right" open={attachDrawerOpen} onClose={() => setAttachDrawerOpen(false)}>
         <Box sx={{ width: 400, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-            Add Item to Menu
+            {t('catalog.menusPage.attachDrawerTitle', { name: selectedMenu?.name })}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Menu: {selectedMenu?.name} ({selectedMenu?.channel})
+            {selectedMenu?.code} ({t(`catalog.menusPage.channels.${selectedMenu?.channel}`, selectedMenu?.channel || '')})
           </Typography>
           <Box component="form" onSubmit={handleAddProductToMenu}>
             <Stack spacing={2}>
-              <TextField select label="Select Product" value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} required fullWidth>
+              <TextField select label={t('catalog.menusPage.selectProduct')} value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} required fullWidth>
                 {products.map((p) => (
                   <MenuItem key={p.id} value={p.id}>
-                    {p.name} ({p.code}) — Base: {p.base_price}
+                    {p.name} ({p.code}) — {p.base_price} IRR
                   </MenuItem>
                 ))}
               </TextField>
               <TextField
-                label="Menu Price Override (Optional)"
+                label={t('catalog.menusPage.priceOverride')}
                 value={overridePrice}
                 onChange={(e) => setOverridePrice(e.target.value)}
                 fullWidth
-                placeholder="Leave blank to use base price"
-                helperText="Specific price override for this menu channel"
+                placeholder={t('catalog.menusPage.overridePricePlaceholder')}
               />
 
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ mt: 2 }}>
-                Attach Item to Menu
+                {t('catalog.menusPage.attachProduct')}
               </Button>
             </Stack>
           </Box>

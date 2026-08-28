@@ -121,11 +121,11 @@ export function ProductDetailPage() {
       setImageAssetId(prod.image_asset_id);
       setError(null);
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to load product details');
+      setError(err.detail || err.message || t('catalog.productDetailPage.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => {
     loadData();
@@ -150,9 +150,9 @@ export function ProductDetailPage() {
         image_asset_id: imageAssetId,
       });
       setProduct(updated);
-      setSuccessMsg('Product details saved successfully');
+      setSuccessMsg(t('catalog.productDetailPage.messages.saved'));
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to save product');
+      setError(err.detail || err.message || t('catalog.productDetailPage.errors.saveFailed'));
     } finally {
       setSavingGeneral(false);
     }
@@ -212,9 +212,9 @@ export function ProductDetailPage() {
       setVariantDialogOpen(false);
       const updatedList = await catalogApi.getProductVariants(id);
       setVariants(updatedList);
-      setSuccessMsg(editingVariant ? 'Variant updated' : 'Variant added');
+      setSuccessMsg(editingVariant ? t('catalog.productDetailPage.messages.variantUpdated') : t('catalog.productDetailPage.messages.variantAdded'));
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to save variant');
+      setError(err.detail || err.message || t('catalog.productDetailPage.errors.saveVariantFailed'));
     } finally {
       setSavingVariant(false);
     }
@@ -222,14 +222,14 @@ export function ProductDetailPage() {
 
   const handleDeleteVariant = async (variantId: string) => {
     if (!id) return;
-    if (!window.confirm('Are you sure you want to archive this variant?')) return;
+    if (!window.confirm(t('catalog.productDetailPage.variants.deleteConfirm'))) return;
     try {
       await catalogApi.deleteProductVariant(id, variantId);
       const updatedList = await catalogApi.getProductVariants(id);
       setVariants(updatedList);
-      setSuccessMsg('Variant removed');
+      setSuccessMsg(t('catalog.productDetailPage.messages.variantRemoved'));
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to delete variant');
+      setError(err.detail || err.message || t('catalog.productDetailPage.errors.deleteVariantFailed'));
     }
   };
 
@@ -239,9 +239,9 @@ export function ProductDetailPage() {
       await catalogApi.updateProductVariant(id, variantId, { is_default: true });
       const updatedList = await catalogApi.getProductVariants(id);
       setVariants(updatedList);
-      setSuccessMsg('Default variant updated');
+      setSuccessMsg(t('catalog.productDetailPage.messages.defaultUpdated'));
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to set default variant');
+      setError(err.detail || err.message || t('catalog.productDetailPage.errors.setDefaultFailed'));
     }
   };
 
@@ -254,9 +254,9 @@ export function ProductDetailPage() {
       setSelectedOptionGroupId('');
       const prod = await catalogApi.getProductById(id);
       setProduct(prod);
-      setSuccessMsg('Modifier group attached');
+      setSuccessMsg(t('catalog.productDetailPage.messages.groupAttached'));
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to attach modifier group');
+      setError(err.detail || err.message || t('catalog.productDetailPage.errors.attachGroupFailed'));
     } finally {
       setAttachingGroup(false);
     }
@@ -270,10 +270,10 @@ export function ProductDetailPage() {
       <Stack sx={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
           <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/app/catalog/products')}>
-            {t('common.back', 'Back to Products')}
+            {t('catalog.productDetailPage.backToProducts')}
           </Button>
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            {product?.name || 'Product Details'}
+            {product?.name || t('catalog.productDetailPage.defaultTitle')}
           </Typography>
           <Chip label={product?.code} variant="outlined" sx={{ fontWeight: 'bold' }} />
           {currentCategory && <Chip label={currentCategory.name} color="primary" size="small" />}
@@ -295,11 +295,11 @@ export function ProductDetailPage() {
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={currentTab} onChange={(_, val) => setCurrentTab(val)}>
-          <Tab label="General Info & Pricing" />
+          <Tab label={t('catalog.productDetailPage.tabs.general')} />
           <Tab
             label={
               <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 0.75 }}>
-                <span>Variants ({variants.length})</span>
+                <span>{t('catalog.productDetailPage.tabs.variants', { count: variants.length })}</span>
                 <Chip label="V5" size="small" color="info" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 'bold' }} />
               </Stack>
             }
@@ -307,7 +307,7 @@ export function ProductDetailPage() {
           <Tab
             label={
               <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 0.75 }}>
-                <span>Modifiers & Options ({product?.optionGroups?.length || 0})</span>
+                <span>{t('catalog.productDetailPage.tabs.modifiers', { count: product?.optionGroups?.length || 0 })}</span>
                 <Chip label="V5" size="small" color="info" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 'bold' }} />
               </Stack>
             }
@@ -322,12 +322,12 @@ export function ProductDetailPage() {
             <Grid size={{ xs: 12, md: 8 }}>
               <Card sx={{ p: 3, mb: 3 }}>
                 <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-                  Basic Product Information
+                  {t('catalog.productDetailPage.general.title')}
                 </Typography>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
-                      label="Product Code"
+                      label={t('catalog.productDetailPage.general.code')}
                       value={code}
                       onChange={(e) => setCode(e.target.value.toUpperCase())}
                       fullWidth
@@ -336,7 +336,7 @@ export function ProductDetailPage() {
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
-                      label="Product Name"
+                      label={t('catalog.productDetailPage.general.name')}
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       fullWidth
@@ -345,10 +345,10 @@ export function ProductDetailPage() {
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <FormControl fullWidth required>
-                      <InputLabel>Category</InputLabel>
+                      <InputLabel>{t('catalog.productDetailPage.general.category')}</InputLabel>
                       <Select
                         value={categoryId}
-                        label="Category"
+                        label={t('catalog.productDetailPage.general.category')}
                         onChange={(e) => setCategoryId(e.target.value)}
                       >
                         {categories.map((c) => (
@@ -361,7 +361,7 @@ export function ProductDetailPage() {
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
-                      label="Default Base Price (IRR)"
+                      label={t('catalog.productDetailPage.general.basePrice')}
                       type="number"
                       value={basePrice}
                       onChange={(e) => setBasePrice(e.target.value)}
@@ -371,7 +371,7 @@ export function ProductDetailPage() {
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
-                      label="Tax Rate (e.g. 0.09 for 9%)"
+                      label={t('catalog.productDetailPage.general.taxRate')}
                       type="number"
                       value={taxRate}
                       onChange={(e) => setTaxRate(e.target.value)}
@@ -380,7 +380,7 @@ export function ProductDetailPage() {
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
-                      label="SKU"
+                      label={t('catalog.productDetailPage.general.sku')}
                       value={sku}
                       onChange={(e) => setSku(e.target.value)}
                       fullWidth
@@ -388,7 +388,7 @@ export function ProductDetailPage() {
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
-                      label="Barcode"
+                      label={t('catalog.productDetailPage.general.barcode')}
                       value={barcode}
                       onChange={(e) => setBarcode(e.target.value)}
                       fullWidth
@@ -396,7 +396,7 @@ export function ProductDetailPage() {
                   </Grid>
                   <Grid size={{ xs: 12 }}>
                     <TextField
-                      label="Description"
+                      label={t('catalog.productDetailPage.general.description')}
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       fullWidth
@@ -414,7 +414,7 @@ export function ProductDetailPage() {
                     disabled={savingGeneral}
                     sx={{ fontWeight: 'bold', px: 4 }}
                   >
-                    {savingGeneral ? 'Saving...' : 'Save Product'}
+                    {savingGeneral ? t('catalog.productDetailPage.general.saving') : t('catalog.productDetailPage.general.save')}
                   </Button>
                 </Box>
               </Card>
@@ -423,7 +423,7 @@ export function ProductDetailPage() {
             <Grid size={{ xs: 12, md: 4 }}>
               <Card sx={{ p: 3 }}>
                 <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-                  Product Image
+                  {t('catalog.productDetailPage.general.imageTitle')}
                 </Typography>
                 <ImageUploader
                   value={imageAssetId}
@@ -442,12 +442,12 @@ export function ProductDetailPage() {
             <Box>
               <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1 }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  Product Variants
+                  {t('catalog.productDetailPage.variants.title')}
                 </Typography>
                 <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                Configure distinct purchasable versions (e.g. Single Patty, Double Patty, Sizes) with independent SKUs and prices (V5 Feature).
+                {t('catalog.productDetailPage.variants.subtitle')}
               </Typography>
             </Box>
             <Button
@@ -456,20 +456,20 @@ export function ProductDetailPage() {
               onClick={handleOpenAddVariant}
               sx={{ fontWeight: 'bold' }}
             >
-              Add Variant
+              {t('catalog.productDetailPage.variants.addVariant')}
             </Button>
           </Stack>
 
           {variants.length === 0 ? (
             <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', bgcolor: 'background.neutral' }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                No variants configured yet
+                {t('catalog.productDetailPage.variants.noVariantsTitle')}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                This product currently uses only its single default base price ({MoneyUtil.formatCurrency(basePrice)} IRR).
+                {t('catalog.productDetailPage.variants.noVariantsDesc', { price: MoneyUtil.formatCurrency(basePrice) })}
               </Typography>
               <Button variant="outlined" startIcon={<AddIcon />} onClick={handleOpenAddVariant}>
-                Create First Variant
+                {t('catalog.productDetailPage.variants.createFirst')}
               </Button>
             </Paper>
           ) : (
@@ -477,13 +477,13 @@ export function ProductDetailPage() {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Default</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Variant Name</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Code</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>SKU</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Barcode</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Base Price</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }} align="right">Actions</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.default')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.variantName')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.code')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.sku')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.barcode')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.basePrice')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }} align="right">{t('catalog.productDetailPage.variants.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -494,12 +494,12 @@ export function ProductDetailPage() {
                           size="small"
                           color={v.is_default ? 'warning' : 'default'}
                           onClick={() => handleSetDefaultVariant(v.id)}
-                          title={v.is_default ? 'Default Variant' : 'Click to set as default'}
+                          title={v.is_default ? t('catalog.productDetailPage.variants.isDefaultTitle') : t('catalog.productDetailPage.variants.setDefaultTitle')}
                         >
                           {v.is_default ? <StarIcon /> : <StarBorderIcon />}
                         </IconButton>
                         {v.is_default && (
-                          <Chip label="Default" size="small" color="primary" sx={{ ml: 1, fontSize: '0.7rem' }} />
+                          <Chip label={t('catalog.productDetailPage.variants.defaultBadge')} size="small" color="primary" sx={{ ml: 1, fontSize: '0.7rem' }} />
                         )}
                       </TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>{v.name}</TableCell>
@@ -507,7 +507,7 @@ export function ProductDetailPage() {
                       <TableCell>{v.sku || '—'}</TableCell>
                       <TableCell>{v.barcode || '—'}</TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>
-                        {MoneyUtil.formatCurrency(v.base_price)} IRR
+                        <span dir="ltr">{MoneyUtil.formatCurrency(v.base_price)} IRR</span>
                       </TableCell>
                       <TableCell align="right">
                         <IconButton size="small" color="primary" onClick={() => handleOpenEditVariant(v)}>
@@ -533,12 +533,12 @@ export function ProductDetailPage() {
             <Box>
               <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1 }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  Attached Modifiers & Option Groups
+                  {t('catalog.productDetailPage.modifiers.title')}
                 </Typography>
                 <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                Optional or required add-ons and preparation customizations (e.g. Extra Cheese, Sauces, Notes) (V5 Feature).
+                {t('catalog.productDetailPage.modifiers.subtitle')}
               </Typography>
             </Box>
             <Button
@@ -547,20 +547,20 @@ export function ProductDetailPage() {
               onClick={() => setAttachDialogOpen(true)}
               sx={{ fontWeight: 'bold' }}
             >
-              Attach Modifier Group
+              {t('catalog.productDetailPage.modifiers.attachGroup')}
             </Button>
           </Stack>
 
           {(!product?.optionGroups || product.optionGroups.length === 0) ? (
             <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', bgcolor: 'background.neutral' }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                No modifier groups attached
+                {t('catalog.productDetailPage.modifiers.noGroupsTitle')}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Attach modifier groups to allow cashiers and customers to add toppings or customize preparation.
+                {t('catalog.productDetailPage.modifiers.noGroupsDesc')}
               </Typography>
               <Button variant="outlined" startIcon={<TuneIcon />} onClick={() => setAttachDialogOpen(true)}>
-                Attach Modifier Group
+                {t('catalog.productDetailPage.modifiers.attachGroup')}
               </Button>
             </Paper>
           ) : (
@@ -572,10 +572,10 @@ export function ProductDetailPage() {
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                         {group.name}
                       </Typography>
-                      {group.is_required && <Chip label="REQUIRED" color="error" size="small" />}
+                      {group.is_required && <Chip label={t('catalog.productDetailPage.modifiers.requiredBadge')} color="error" size="small" />}
                     </Stack>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                      Code: {group.code} • Min: {group.min_selection} • Max: {group.max_selection}
+                      {t('catalog.productDetailPage.modifiers.code')}: {group.code} • {t('catalog.productDetailPage.modifiers.min')}: {group.min_selection} • {t('catalog.productDetailPage.modifiers.max')}: {group.max_selection}
                     </Typography>
 
                     <Stack spacing={0.5}>
@@ -591,7 +591,9 @@ export function ProductDetailPage() {
                         >
                           <Typography variant="body2">{item.name}</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                            {Number(item.price_delta) > 0 ? `+${MoneyUtil.formatCurrency(item.price_delta)} IRR` : 'Free'}
+                            <span dir="ltr">
+                              {Number(item.price_delta) > 0 ? `+${MoneyUtil.formatCurrency(item.price_delta)} IRR` : t('catalog.productDetailPage.modifiers.free')}
+                            </span>
                           </Typography>
                         </Stack>
                       ))}
@@ -608,13 +610,13 @@ export function ProductDetailPage() {
       <Dialog open={variantDialogOpen} onClose={() => setVariantDialogOpen(false)} maxWidth="sm" fullWidth>
         <form onSubmit={handleSaveVariant}>
           <DialogTitle sx={{ fontWeight: 'bold' }}>
-            {editingVariant ? 'Edit Product Variant' : 'Add New Product Variant'}
+            {editingVariant ? t('catalog.productDetailPage.variants.editDialogTitle') : t('catalog.productDetailPage.variants.addDialogTitle')}
           </DialogTitle>
           <DialogContent sx={{ pt: 2 }}>
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
-                  label="Variant Code"
+                  label={t('catalog.productDetailPage.variants.variantCode')}
                   placeholder="e.g. VAR-CHB-DBL"
                   value={varCode}
                   onChange={(e) => setVarCode(e.target.value.toUpperCase())}
@@ -624,7 +626,7 @@ export function ProductDetailPage() {
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
-                  label="Variant Name"
+                  label={t('catalog.productDetailPage.variants.variantName')}
                   placeholder="e.g. Double Patty"
                   value={varName}
                   onChange={(e) => setVarName(e.target.value)}
@@ -634,7 +636,7 @@ export function ProductDetailPage() {
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
-                  label="SKU"
+                  label={t('catalog.productDetailPage.variants.sku')}
                   placeholder="e.g. CHB-DBL"
                   value={varSku}
                   onChange={(e) => setVarSku(e.target.value)}
@@ -643,7 +645,7 @@ export function ProductDetailPage() {
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
-                  label="Barcode"
+                  label={t('catalog.productDetailPage.variants.barcode')}
                   value={varBarcode}
                   onChange={(e) => setVarBarcode(e.target.value)}
                   fullWidth
@@ -651,7 +653,7 @@ export function ProductDetailPage() {
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
-                  label="Variant Base Price (IRR)"
+                  label={t('catalog.productDetailPage.variants.basePrice')}
                   type="number"
                   value={varPrice}
                   onChange={(e) => setVarPrice(e.target.value)}
@@ -661,7 +663,7 @@ export function ProductDetailPage() {
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
-                  label="Sort Order"
+                  label={t('catalog.productDetailPage.variants.sortOrder')}
                   type="number"
                   value={varSortOrder}
                   onChange={(e) => setVarSortOrder(e.target.value)}
@@ -677,15 +679,15 @@ export function ProductDetailPage() {
                       color="primary"
                     />
                   }
-                  label="Set as Default Variant for this product"
+                  label={t('catalog.productDetailPage.variants.setDefaultSwitch')}
                 />
               </Grid>
             </Grid>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setVariantDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => setVariantDialogOpen(false)}>{t('catalog.productDetailPage.variants.cancel')}</Button>
             <Button type="submit" variant="contained" disabled={savingVariant} sx={{ fontWeight: 'bold' }}>
-              {savingVariant ? 'Saving...' : 'Save Variant'}
+              {savingVariant ? t('catalog.productDetailPage.variants.savingVariant') : t('catalog.productDetailPage.variants.saveVariant')}
             </Button>
           </DialogActions>
         </form>
@@ -693,13 +695,13 @@ export function ProductDetailPage() {
 
       {/* Attach Option Group Dialog */}
       <Dialog open={attachDialogOpen} onClose={() => setAttachDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>Attach Modifier Group</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.modifiers.dialogTitle')}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <FormControl fullWidth sx={{ mt: 1 }}>
-            <InputLabel>Select Option Group</InputLabel>
+            <InputLabel>{t('catalog.productDetailPage.modifiers.selectGroup')}</InputLabel>
             <Select
               value={selectedOptionGroupId}
-              label="Select Option Group"
+              label={t('catalog.productDetailPage.modifiers.selectGroup')}
               onChange={(e) => setSelectedOptionGroupId(e.target.value)}
             >
               {allOptionGroups.map((og) => (
@@ -711,14 +713,14 @@ export function ProductDetailPage() {
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAttachDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setAttachDialogOpen(false)}>{t('catalog.productDetailPage.modifiers.cancel')}</Button>
           <Button
             variant="contained"
             onClick={handleAttachOptionGroup}
             disabled={!selectedOptionGroupId || attachingGroup}
             sx={{ fontWeight: 'bold' }}
           >
-            {attachingGroup ? 'Attaching...' : 'Attach Group'}
+            {attachingGroup ? t('catalog.productDetailPage.modifiers.attachingButton') : t('catalog.productDetailPage.modifiers.attachButton')}
           </Button>
         </DialogActions>
       </Dialog>
