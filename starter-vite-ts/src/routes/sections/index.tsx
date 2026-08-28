@@ -41,6 +41,7 @@ import { CashDrawerPage } from 'src/pages/operations/cash-drawer';
 import { PrintQueuePage } from 'src/pages/operations/print-queue';
 /* Detail & Simulation Sub-Pages */
 import { OrdersDetailPage } from 'src/pages/orders/orders-detail';
+import { PaymentSettingsPage } from 'src/pages/settings/payments';
 import { BusinessDaysPage } from 'src/pages/cashier/business-days';
 import { ReportViewerPage } from 'src/pages/reports/report-viewer';
 import { OfflineSyncPage } from 'src/pages/simulation/offline-sync';
@@ -56,6 +57,7 @@ import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
 import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
 import { KdsConfigurationPage } from 'src/pages/operations/kds-configuration';
 import { SettlementDetailPage } from 'src/pages/operations/settlement-detail';
+import { OrderWorkflowSettingsPage } from 'src/pages/settings/order-workflow';
 import CustomerDiscountsPage from 'src/pages/customer-club/customer-discounts';
 import DiscountAuthorizationsPage from 'src/pages/settings/discount-authorizations';
 import { MediaLocalizationDemoPage } from 'src/pages/simulation/media-localization';
@@ -151,10 +153,10 @@ export const routesSection: RouteObject[] = [
       { path: 'audit', element: <AuditExplorerPage /> },
       { path: 'settings', element: <SettingsHubPage /> },
       { path: 'settings/general', element: <GeneralSettingsPage /> },
-      { path: 'settings/order-workflow', element: <OrdersWorkflowPage /> },
-      { path: 'settings/discounts-credit', element: <DiscountRulesPage /> },
+      { path: 'settings/order-workflow', element: <OrderWorkflowSettingsPage /> },
       { path: 'settings/discount-authorizations', element: <DiscountAuthorizationsPage /> },
-      { path: 'settings/payments-refunds', element: <PaymentsPage /> },
+      { path: 'settings/payments-refunds', element: <PaymentSettingsPage /> },
+      { path: 'settings/payments', element: <PaymentSettingsPage /> },
       { path: 'settings/approvals', element: <ApprovalsSettingsPage /> },
       { path: 'settings/reasons', element: <ReasonCodesPage /> },
       { path: 'settings/localization', element: <MediaLocalizationDemoPage /> },
