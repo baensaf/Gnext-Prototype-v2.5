@@ -1,6 +1,7 @@
 import type { Branch } from 'src/api/tenantApi';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
 import {
   Box,
@@ -30,11 +31,15 @@ import {
   TableContainer,
   FormControlLabel,
 } from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import SyncIcon from '@mui/icons-material/Sync';
 
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 import { tenantApi } from 'src/api/tenantApi';
 import { httpClient as axios } from 'src/api/httpClient';
 
 export function OfflineSyncPage() {
+  const { t } = useTranslation();
   const [syncStatus, setSyncStatus] = useState<any>(null);
   const [queueItems, setQueueItems] = useState<any[]>([]);
   const [conflicts, setConflicts] = useState<any[]>([]);
@@ -47,6 +52,15 @@ export function OfflineSyncPage() {
   const [activeConflict, setActiveConflict] = useState<any>(null);
   const [selectedStrategy, setSelectedStrategy] = useState<'ACCEPT_CLIENT' | 'ACCEPT_SERVER' | 'MANUAL_OVERRIDE'>('ACCEPT_CLIENT');
   const [customOverrideJson, setCustomOverrideJson] = useState<string>('{}');
+
+  const isOverrideJsonValid = useMemo(() => {
+    try {
+      JSON.parse(customOverrideJson);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [customOverrideJson]);
 
   useEffect(() => {
     tenantApi
@@ -223,28 +237,41 @@ export function OfflineSyncPage() {
   const isOnline = syncStatus?.is_online ?? true;
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Stack direction="row" spacing={1.5} sx={{ mb: 1, alignItems: 'center' }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-          Offline Sync & Conflict Simulator
-        </Typography>
-        <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
-      </Stack>
+    <Box sx={{ p: { xs: 2, md: 3 } }}>
+      <CustomBreadcrumbs
+        heading={t('simulation.sync.title', 'Offline Sync & Conflict Simulator')}
+        links={[
+          { name: t('nav.dashboard', 'Home'), href: '/app/pos' },
+          { name: t('simulation.breadcrumb', 'Simulation Hub'), href: '/app/simulation' },
+          { name: t('simulation.sync.title', 'Offline Sync Engine') },
+        ]}
+        action={
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={() => fetchSyncData()}
+            disabled={loading}
+            sx={{ fontWeight: 'bold' }}
+          >
+            {t('simulation.hub.refreshLogs', 'Refresh Status')}
+          </Button>
+        }
+      />
 
       <Alert severity="info" variant="outlined" sx={{ mb: 3, borderRadius: 2, fontWeight: 500 }}>
-        V5 Preview Module: Cloud-branch offline operation envelope queue, DLQ retry workers & conflict resolution engine. Retained for V5 architectural validation.
+        {t('simulation.sync.v5Notice', 'V5 Preview Module: Cloud-branch offline operation envelope queue, DLQ retry workers & conflict resolution engine. Retained for V5 architectural validation.')}
       </Alert>
 
       {/* Branch Context Selector */}
       <Paper sx={{ p: 2, mb: 3, borderRadius: 3 }}>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
           <FormControl size="small" sx={{ minWidth: 300 }}>
-            <InputLabel id="branch-select-label">Active Branch Context</InputLabel>
+            <InputLabel id="branch-select-label">{t('simulation.sync.branchLabel', 'Active Branch Context')}</InputLabel>
             <Select
               labelId="branch-select-label"
               id="branch-select"
               value={selectedBranchId}
-              label="Active Branch Context"
+              label={t('simulation.sync.branchLabel', 'Active Branch Context')}
               onChange={(e) => setSelectedBranchId(e.target.value)}
             >
               {branches.map((b) => (
@@ -255,14 +282,14 @@ export function OfflineSyncPage() {
             </Select>
           </FormControl>
           <Typography variant="caption" color="text.secondary">
-            Selected Branch UUID: <strong>{selectedBranchId || 'None Selected'}</strong>
+            {t('simulation.sync.branchUuid', 'Selected Branch UUID')}: <strong>{selectedBranchId || t('simulation.sync.noBranch', 'None Selected')}</strong>
           </Typography>
         </Stack>
       </Paper>
 
       {!selectedBranchId && (
         <Alert severity="warning" sx={{ mb: 3, borderRadius: 3 }}>
-          No branch context selected. Please select a valid branch to perform offline sync operations.
+          {t('simulation.sync.noBranchWarning', 'No branch context selected. Please select a valid branch to perform offline sync operations.')}
         </Alert>
       )}
 
@@ -279,26 +306,26 @@ export function OfflineSyncPage() {
                 color="success"
               />
             }
-            label={isOnline ? 'ONLINE' : 'OFFLINE SIMULATED'}
+            label={isOnline ? t('simulation.sync.online', 'ONLINE') : t('simulation.sync.offline', 'OFFLINE SIMULATED')}
             sx={{ fontWeight: 'bold' }}
           />
         }
       >
         <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-          Branch Connectivity Mode: {isOnline ? 'Online Connected' : 'Offline Disconnected'}
+          {t('simulation.sync.connectivityTitle', 'Branch Connectivity Mode')}: {isOnline ? t('simulation.sync.connected', 'Online Connected') : t('simulation.sync.disconnected', 'Offline Disconnected')}
         </Typography>
         <Typography variant="body2">
-          Agent Version: <strong>{syncStatus?.agent_version || 'v2.0.0-sim'}</strong> | Health: <strong>{syncStatus?.agent_health || 'HEALTHY'}</strong>
+          {t('simulation.sync.agentVersion', 'Agent Version')}: <strong>{syncStatus?.agent_version || 'v2.0.0-sim'}</strong> | {t('simulation.sync.health', 'Health')}: <strong>{syncStatus?.agent_health || 'HEALTHY'}</strong>
         </Typography>
         <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
-          Last Sync: {syncStatus?.last_synced_at ? new Date(syncStatus.last_synced_at).toLocaleString() : 'Never'} | Offline Since: {syncStatus?.offline_since ? new Date(syncStatus.offline_since).toLocaleString() : 'N/A'}
+          {t('simulation.sync.lastSync', 'Last Sync')}: {syncStatus?.last_synced_at ? new Date(syncStatus.last_synced_at).toLocaleString() : 'Never'} | {t('simulation.sync.offlineSince', 'Offline Since')}: {syncStatus?.offline_since ? new Date(syncStatus.offline_since).toLocaleString() : 'N/A'}
         </Typography>
       </Alert>
 
       {workerResult && (
         <Alert severity={workerResult.advanced_last_sync ? 'success' : 'warning'} sx={{ mb: 3, borderRadius: 3 }} onClose={() => setWorkerResult(null)}>
           <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-            Sync Worker Run Results: {workerResult.advanced_last_sync ? '100% Batch Succeeded (Last Sync Advanced)' : 'Batch Included Conflicts/Failures (Last Sync Preserved)'}
+            {t('simulation.sync.workerTitle', 'Sync Worker Run Results')}: {workerResult.advanced_last_sync ? t('simulation.sync.batchSuccess', '100% Batch Succeeded (Last Sync Advanced)') : t('simulation.sync.batchConflict', 'Batch Included Conflicts/Failures (Last Sync Preserved)')}
           </Typography>
           <Typography variant="body2">
             Processed: {workerResult.processed_count} | Synced: {workerResult.synced_count} | Conflicts: {workerResult.conflict_count} | DLQ Failures: {workerResult.dlq_count}
@@ -315,7 +342,7 @@ export function OfflineSyncPage() {
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, md: 3 }}>
           <Card sx={{ p: 3, borderRadius: 3, textAlign: 'center' }}>
-            <Typography color="text.secondary">Pending Queue Items</Typography>
+            <Typography color="text.secondary">{t('simulation.sync.pendingCount', 'Pending Queue Items')}</Typography>
             <Typography variant="h3" color="warning.main" sx={{ fontWeight: 'bold' }}>
               {syncStatus?.pending_queue_count ?? 0}
             </Typography>
@@ -323,7 +350,7 @@ export function OfflineSyncPage() {
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
           <Card sx={{ p: 3, borderRadius: 3, textAlign: 'center' }}>
-            <Typography color="text.secondary">DLQ / Failed Items</Typography>
+            <Typography color="text.secondary">{t('simulation.sync.dlqCount', 'DLQ / Failed Items')}</Typography>
             <Typography variant="h3" color="error.main" sx={{ fontWeight: 'bold' }}>
               {syncStatus?.dlq_count ?? 0}
             </Typography>
@@ -332,23 +359,23 @@ export function OfflineSyncPage() {
         <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ p: 3, borderRadius: 3 }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-              Sync Engine & Queue Controls
+              {t('simulation.sync.controlsTitle', 'Sync Engine & Queue Controls')}
             </Typography>
             <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', gap: 1.5 }}>
               <Button variant="outlined" color="primary" onClick={() => handleEnqueueSampleOrder('NORMAL')} disabled={loading}>
-                + Offline Order
+                {t('simulation.sync.btnOfflineOrder', '+ Offline Order')}
               </Button>
               <Button variant="outlined" color="warning" onClick={() => handleEnqueueSampleOrder('CONFLICT')} disabled={loading}>
-                + Price Conflict
+                {t('simulation.sync.btnConflictOrder', '+ Price Conflict')}
               </Button>
               <Button variant="outlined" color="error" onClick={() => handleEnqueueSampleOrder('DLQ')} disabled={loading}>
-                + DLQ Failure
+                {t('simulation.sync.btnDlqOrder', '+ DLQ Failure')}
               </Button>
               <Button variant="outlined" color="info" onClick={() => handleEnqueueSampleOrder('DEDUPE')} disabled={loading}>
-                + Dedupe Key Order
+                {t('simulation.sync.btnDedupeOrder', '+ Dedupe Key Order')}
               </Button>
-              <Button variant="contained" color="primary" onClick={handleTriggerSyncWorker} disabled={loading}>
-                Trigger Sync Worker
+              <Button variant="contained" color="primary" startIcon={<SyncIcon />} onClick={handleTriggerSyncWorker} disabled={loading} sx={{ fontWeight: 'bold' }}>
+                {t('simulation.sync.btnTriggerWorker', 'Trigger Sync Worker')}
               </Button>
             </Stack>
           </Card>
@@ -358,19 +385,19 @@ export function OfflineSyncPage() {
       {/* Pending / Synced Queue Table */}
       <Card sx={{ p: 3, borderRadius: 3, mb: 3 }}>
         <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-          Offline Transaction Queue ({(Array.isArray(queueItems) ? queueItems : []).length} items)
+          {t('simulation.sync.queueTitle', 'Offline Transaction Queue')} ({(Array.isArray(queueItems) ? queueItems : []).length} items)
         </Typography>
-        <TableContainer component={Paper} variant="outlined">
+        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
           <Table size="small">
             <TableHead sx={{ bgcolor: 'background.neutral' }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 'bold' }}>Item ID</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Entity Type</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Dedupe Key</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Retries</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Conflict / Error</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Actions</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.sync.table.itemId', 'Item ID')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.sync.table.entityType', 'Entity Type')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.sync.table.status', 'Status')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.sync.table.dedupeKey', 'Dedupe Key')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.sync.table.retries', 'Retries')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.sync.table.conflictError', 'Conflict / Error')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.sync.table.actions', 'Actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -403,12 +430,19 @@ export function OfflineSyncPage() {
                   <TableCell>
                     {item.status === 'DLQ_FAILED' && (
                       <Button size="small" variant="contained" color="secondary" onClick={() => handleCloneDlqItem(item.id)} disabled={loading}>
-                        Clone for Retry
+                        {t('simulation.sync.table.cloneDlq', 'Clone for Retry')}
                       </Button>
                     )}
                   </TableCell>
                 </TableRow>
               ))}
+              {queueItems.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                    {t('simulation.sync.noQueue', 'No queued transactions in this branch context.')}
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </TableContainer>
@@ -417,17 +451,17 @@ export function OfflineSyncPage() {
       {/* Conflicts Table */}
       <Card sx={{ p: 3, borderRadius: 3 }}>
         <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-          Sync Conflict Resolution Center ({(Array.isArray(conflicts) ? conflicts : []).length} records)
+          {t('simulation.sync.conflictTitle', 'Sync Conflict Resolution Center')} ({(Array.isArray(conflicts) ? conflicts : []).length} records)
         </Typography>
-        <TableContainer component={Paper} variant="outlined">
+        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
           <Table size="small">
             <TableHead sx={{ bgcolor: 'background.neutral' }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 'bold' }}>Conflict ID</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Conflict Type</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Resolution Strategy</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Timestamp</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Action</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.sync.table.conflictId', 'Conflict ID')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.sync.table.conflictType', 'Conflict Type')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.sync.table.strategy', 'Resolution Strategy')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.sync.table.timestamp', 'Timestamp')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.sync.table.action', 'Action')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -456,11 +490,18 @@ export function OfflineSyncPage() {
                         setCustomOverrideJson(JSON.stringify(conf.client_state, null, 2));
                       }}
                     >
-                      Resolve Diff
+                      {t('simulation.sync.btnResolveDiff', 'Resolve Diff')}
                     </Button>
                   </TableCell>
                 </TableRow>
               ))}
+              {conflicts.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                    {t('simulation.sync.noConflicts', 'No active sync conflicts recorded.')}
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </TableContainer>
@@ -471,24 +512,24 @@ export function OfflineSyncPage() {
         {activeConflict && (
           <>
             <DialogTitle sx={{ fontWeight: 'bold' }}>
-              Resolve Sync Conflict: {activeConflict.conflict_type}
+              {t('simulation.sync.modal.title', 'Resolve Sync Conflict')}: {activeConflict.conflict_type}
             </DialogTitle>
             <DialogContent dividers>
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, color: 'primary.main' }}>
-                    Client State (Local Original):
+                    {t('simulation.sync.modal.clientState', 'Client State (Local Original)')}:
                   </Typography>
-                  <Paper sx={{ p: 2, bgcolor: 'background.neutral', fontFamily: 'monospace' }} variant="outlined">
+                  <Paper sx={{ p: 2, bgcolor: '#1e1e1e', color: '#00ffcc', fontFamily: 'monospace', fontSize: 12, maxHeight: 220, overflow: 'auto' }} variant="outlined">
                     <pre style={{ margin: 0 }}>{JSON.stringify(activeConflict.client_state, null, 2)}</pre>
                   </Paper>
                 </Grid>
 
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, color: 'secondary.main' }}>
-                    Server State (Cloud Original):
+                    {t('simulation.sync.modal.serverState', 'Server State (Cloud Original)')}:
                   </Typography>
-                  <Paper sx={{ p: 2, bgcolor: 'background.neutral', fontFamily: 'monospace' }} variant="outlined">
+                  <Paper sx={{ p: 2, bgcolor: '#1e1e1e', color: '#ffcc00', fontFamily: 'monospace', fontSize: 12, maxHeight: 220, overflow: 'auto' }} variant="outlined">
                     <pre style={{ margin: 0 }}>{JSON.stringify(activeConflict.server_state, null, 2)}</pre>
                   </Paper>
                 </Grid>
@@ -496,44 +537,53 @@ export function OfflineSyncPage() {
 
               <Box sx={{ mt: 3 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                  Choose Resolution Strategy:
+                  {t('simulation.sync.modal.chooseStrategy', 'Choose Resolution Strategy')}:
                 </Typography>
-                <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+                <Stack direction="row" spacing={2} sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}>
                   <Button
                     variant={selectedStrategy === 'ACCEPT_CLIENT' ? 'contained' : 'outlined'}
                     color="primary"
                     onClick={() => setSelectedStrategy('ACCEPT_CLIENT')}
                   >
-                    Accept Local Version
+                    {t('simulation.sync.modal.acceptLocal', 'Accept Local Version')}
                   </Button>
                   <Button
                     variant={selectedStrategy === 'ACCEPT_SERVER' ? 'contained' : 'outlined'}
                     color="secondary"
                     onClick={() => setSelectedStrategy('ACCEPT_SERVER')}
                   >
-                    Accept Cloud Version
+                    {t('simulation.sync.modal.acceptCloud', 'Accept Cloud Version')}
                   </Button>
                   <Button
                     variant={selectedStrategy === 'MANUAL_OVERRIDE' ? 'contained' : 'outlined'}
                     color="warning"
                     onClick={() => setSelectedStrategy('MANUAL_OVERRIDE')}
                   >
-                    Merged / Manual Override
+                    {t('simulation.sync.modal.manualOverride', 'Merged / Manual Override')}
                   </Button>
                 </Stack>
 
                 {selectedStrategy === 'MANUAL_OVERRIDE' && (
                   <Box sx={{ mt: 2 }}>
                     <Alert severity="warning" sx={{ mb: 2 }}>
-                      Financial payloads must obey domain validation rules. Arbitrary or unvalidated financial JSON will be rejected.
+                      {t('simulation.sync.modal.validationWarning', 'Financial payloads must obey domain validation rules. Arbitrary or unvalidated financial JSON will be rejected.')}
                     </Alert>
+                    <Box sx={{ mb: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                      <Chip
+                        label={isOverrideJsonValid ? 'JSON Valid' : 'Invalid JSON Syntax'}
+                        color={isOverrideJsonValid ? 'success' : 'error'}
+                        size="small"
+                      />
+                    </Box>
                     <TextField
                       fullWidth
                       multiline
                       rows={6}
-                      label="Merged Domain Payload (JSON)"
+                      label={t('simulation.sync.modal.overridePayloadLabel', 'Merged Domain Payload (JSON)')}
                       value={customOverrideJson}
                       onChange={(e) => setCustomOverrideJson(e.target.value)}
+                      error={!isOverrideJsonValid}
+                      helperText={!isOverrideJsonValid ? 'Please provide valid JSON syntax' : ''}
                       sx={{ fontFamily: 'monospace' }}
                     />
                   </Box>
@@ -541,9 +591,16 @@ export function OfflineSyncPage() {
               </Box>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setActiveConflict(null)}>Cancel</Button>
-              <Button variant="contained" color="success" onClick={handleResolveConflict}>
-                Confirm Resolution
+              <Button onClick={() => setActiveConflict(null)}>
+                {t('simulation.sync.modal.cancel', 'Cancel')}
+              </Button>
+              <Button
+                variant="contained"
+                color="success"
+                onClick={handleResolveConflict}
+                disabled={selectedStrategy === 'MANUAL_OVERRIDE' && !isOverrideJsonValid}
+              >
+                {t('simulation.sync.modal.confirm', 'Confirm Resolution')}
               </Button>
             </DialogActions>
           </>

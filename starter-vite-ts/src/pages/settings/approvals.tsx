@@ -17,7 +17,6 @@ import {
   Drawer,
   TableRow,
   MenuItem,
-  useTheme,
   TableBody,
   TableCell,
   TableHead,
@@ -32,7 +31,6 @@ import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function ApprovalsSettingsPage() {
   const { t, i18n } = useTranslation();
-  const theme = useTheme();
 
   const DEFAULT_ACTIONS = [
     { code: 'DISCOUNT', label: t('settings.approvalsPage.actions.DISCOUNT', 'Manual Cashier Discount (%)') },
@@ -182,7 +180,7 @@ export function ApprovalsSettingsPage() {
               <TableCell>{t('settings.approvalsPage.colSteps', 'Required Approval Steps')}</TableCell>
               <TableCell>{t('settings.approvalsPage.colRole', 'Required Approver Role')}</TableCell>
               <TableCell>{t('settings.approvalsPage.colStatus', 'Status')}</TableCell>
-              <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
+              <TableCell align="right">
                 {t('settings.approvalsPage.colActions', 'Actions')}
               </TableCell>
             </TableRow>
@@ -242,7 +240,7 @@ export function ApprovalsSettingsPage() {
                       size="small"
                     />
                   </TableCell>
-                  <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
+                  <TableCell align="right">
                     <IconButton
                       color="primary"
                       onClick={() => {
@@ -330,7 +328,7 @@ export function ApprovalsSettingsPage() {
 
       {/* Drawer Form */}
       <Drawer
-        anchor={theme.direction === 'rtl' ? 'left' : 'right'}
+        anchor="right"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
       >

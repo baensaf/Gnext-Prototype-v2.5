@@ -17,7 +17,6 @@ import {
   Drawer,
   Switch,
   TableRow,
-  useTheme,
   Checkbox,
   TableBody,
   TableCell,
@@ -47,7 +46,6 @@ const DOMAIN_OPTIONS = [
 
 export function ReasonCodesPage() {
   const { t } = useTranslation();
-  const theme = useTheme();
 
   const [reasons, setReasons] = useState<ReasonCode[]>([]);
   const [_loading, setLoading] = useState(true);
@@ -175,7 +173,7 @@ export function ReasonCodesPage() {
                   <TableCell>{t('settings.reasonsPage.colAppliesTo', 'Applies To')}</TableCell>
                   <TableCell align="center">{t('settings.reasonsPage.colRequiresNote', 'Requires Note')}</TableCell>
                   <TableCell align="center">{t('settings.reasonsPage.colActive', 'Active')}</TableCell>
-                  <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
+                  <TableCell align="right">
                     {t('common.actions', 'Actions')}
                   </TableCell>
                 </TableRow>
@@ -210,7 +208,7 @@ export function ReasonCodesPage() {
                         onChange={(e) => handleToggleActive(r, e.target.checked)}
                       />
                     </TableCell>
-                    <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
+                    <TableCell align="right">
                       <IconButton size="small" onClick={() => handleOpenEdit(r)}>
                         <EditIcon fontSize="small" />
                       </IconButton>
@@ -225,7 +223,7 @@ export function ReasonCodesPage() {
 
       {/* Create / Edit Reason Code Drawer */}
       <Drawer
-        anchor={theme.direction === 'rtl' ? 'left' : 'right'}
+        anchor="right"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
       >

@@ -19,7 +19,6 @@ import {
   Button,
   Drawer,
   TableRow,
-  useTheme,
   TableBody,
   TableCell,
   TableHead,
@@ -38,7 +37,6 @@ import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function BranchesPage() {
   const { t } = useTranslation();
-  const theme = useTheme();
   const navigate = useNavigate();
 
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -213,7 +211,7 @@ export function BranchesPage() {
 
       {/* Create Branch Drawer */}
       <Drawer
-        anchor={theme.direction === 'rtl' ? 'left' : 'right'}
+        anchor="right"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
       >

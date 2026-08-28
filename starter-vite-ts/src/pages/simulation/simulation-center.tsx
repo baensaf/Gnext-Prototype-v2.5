@@ -1,12 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router';
+import React, { useState, useEffect, useCallback } from 'react';
 
+import ReplayIcon from '@mui/icons-material/Replay';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import PrintDisabledIcon from '@mui/icons-material/PrintDisabled';
+import SyncProblemIcon from '@mui/icons-material/SyncProblem';
+import ElectricBoltIcon from '@mui/icons-material/ElectricBolt';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import WifiOffIcon from '@mui/icons-material/WifiOff';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import {
   Box,
-  Tab,
   Card,
   Grid,
   Chip,
-  Tabs,
   Table,
   Paper,
   Stack,
@@ -18,391 +28,512 @@ import {
   TableBody,
   TableCell,
   TableHead,
-  TextField,
   Typography,
+  IconButton,
   DialogTitle,
   DialogContent,
   DialogActions,
   TableContainer,
+  useTheme,
 } from '@mui/material';
 
-import { MoneyUtil } from 'src/utils/money.util';
-
+import { RouterLink } from 'src/routes/components';
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 import { httpClient as axios } from 'src/api/httpClient';
+import { tenantApi } from 'src/api/tenantApi';
+import { kdsApi } from 'src/api/kdsApi';
 
 export function SimulationCenterPage() {
-  const [activeTab, setActiveTab] = useState<number>(0);
-  const [_scenarios, setScenarios] = useState<any[]>([]);
+  const { t } = useTranslation();
+  const theme = useTheme();
+  const navigate = useNavigate();
+  const isRtl = theme.direction === 'rtl';
+
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [quickActionAlert, setQuickActionAlert] = useState<{ type: 'success' | 'warning' | 'error' | 'info'; message: string } | null>(null);
 
-  // Snappfood simulation form
-  const [snappCustomerName, setSnappCustomerName] = useState('Snappfood User');
-  const [snappNotes, setSnappNotes] = useState('Extra hot sauce please');
-  const [rawWebhookPayload, setRawWebhookPayload] = useState('{\n  "event_id": "evt-custom-100",\n  "order_code": "SF-9988",\n  "items": [{"product_name": "Gourmet Pizza", "quantity": 1, "price": 22.0}]\n}');
-  const [lastGeneratedResponse, setLastGeneratedResponse] = useState<any>(null);
-
-  // Tara simulation form
-  const [taraNationalId, setTaraNationalId] = useState('0012345678');
-  const [taraAmount, setTaraAmount] = useState('150.00');
-  const [taraResponse, setTaraResponse] = useState<any>(null);
+  // Subsystem Metrics State
+  const [stats, setStats] = useState({
+    totalLogs: 0,
+    snappfoodOrders: 0,
+    printersOnline: 0,
+    syncQueuePending: 0,
+  });
 
   // Log Inspection Dialog
   const [inspectingLog, setInspectingLog] = useState<any>(null);
 
-  const fetchScenariosAndLogs = async () => {
+  const fetchHubData = useCallback(async () => {
     setLoading(true);
     try {
-      const [scenariosRes, logsRes] = await Promise.all([
-        axios.get('/api/v1/simulation/scenarios'),
+      const [logsRes, printersRes, terminalsRes, syncStatusRes] = await Promise.allSettled([
         axios.get('/api/v1/simulation/logs'),
+        kdsApi.getPrinters(),
+        tenantApi.getTerminals(),
+        axios.get('/api/v1/sync/status'),
       ]);
-      setScenarios(scenariosRes.data);
-      setLogs(logsRes.data);
+
+      const logData = logsRes.status === 'fulfilled' && Array.isArray(logsRes.value.data) ? logsRes.value.data : [];
+      setLogs(logData);
+
+      const snappCount = logData.filter((l: any) => l.provider === 'SNAPPFOOD').length;
+      const printerCount = printersRes.status === 'fulfilled' && Array.isArray(printersRes.value) ? printersRes.value.length : 0;
+      const termCount = terminalsRes.status === 'fulfilled' && Array.isArray(terminalsRes.value) ? terminalsRes.value.length : 0;
+      const queuePending = syncStatusRes.status === 'fulfilled' ? (syncStatusRes.value.data?.pending_queue_count ?? 0) : 0;
+
+      setStats({
+        totalLogs: logData.length,
+        snappfoodOrders: snappCount,
+        printersOnline: printerCount + termCount,
+        syncQueuePending: queuePending,
+      });
     } catch (err) {
-      console.error('Failed to load simulation center data:', err);
+      console.error('Failed to load simulation hub data:', err);
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchScenariosAndLogs();
   }, []);
 
-  const handleGenerateSnappfoodOrder = async () => {
+  useEffect(() => {
+    fetchHubData();
+  }, [fetchHubData]);
+
+  // Quick Action 1: Generate Quick Snappfood Order
+  const handleQuickSnappfoodOrder = async () => {
     setLoading(true);
     try {
-      const res = await axios.post('/api/v1/simulation/snappfood/generate', {
-        customer_name: snappCustomerName,
-        notes: snappNotes,
+      const res = await axios.post('/api/v1/simulation/snappfood/orders', {
+        customer_name: 'کاربر تستی سریع',
+        customer_phone: '+989129990000',
+        address: 'تهران، خیابان ولیعصر، پلاک ۱۰۰',
+        expeditionType: 'DELIVERY',
+        price: 3200,
+        paidPrice: 3200,
+        notes: 'سفارش ثبت‌شده از داشبورد کلی شبیه‌ساز',
+        bikerName: 'پیک شبیه‌ساز',
+        bikerStatusV2: 'REQUESTED',
       });
-      setLastGeneratedResponse(res.data);
-      fetchScenariosAndLogs();
-    } catch (err) {
-      alert('Failed to generate Snappfood order: ' + ((err as any).response?.data?.message || (err as any).message));
+      setQuickActionAlert({
+        type: 'success',
+        message: `${t('simulation.snappfood.webhook.successAlert', 'Order created successfully')}: ${res.data?.order?.order_number || 'SNP-OK'}`,
+      });
+      fetchHubData();
+    } catch (err: any) {
+      setQuickActionAlert({
+        type: 'error',
+        message: err.response?.data?.message || err.message || 'Failed to generate Snappfood order',
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSendRawWebhook = async () => {
+  // Quick Action 2: Trigger Printer Outage
+  const handleQuickPrinterOutage = () => {
+    setQuickActionAlert({
+      type: 'warning',
+      message: t('simulation.hardware.printers.jobResult', 'Print Job Result:') + ' Primary Kitchen Thermal Printer #1 Out-Of-Paper simulated. Auto-rerouted to auxiliary printer.',
+    });
+  };
+
+  // Quick Action 3: Trigger Sync Worker
+  const handleQuickTriggerSync = async () => {
     setLoading(true);
     try {
-      const parsed = JSON.parse(rawWebhookPayload);
-      const res = await axios.post('/api/v1/simulation/snappfood/webhook', parsed);
-      setLastGeneratedResponse(res.data);
-      fetchScenariosAndLogs();
-    } catch (err) {
-      alert('Webhook error: ' + ((err as any).response?.data?.message || (err as any).message));
+      const res = await axios.post('/api/v1/sync/trigger', {});
+      setQuickActionAlert({
+        type: 'info',
+        message: `Sync worker finished: ${res.data?.synced_count ?? 0} synced, ${res.data?.conflict_count ?? 0} conflicts.`,
+      });
+      fetchHubData();
+    } catch (err: any) {
+      setQuickActionAlert({
+        type: 'error',
+        message: err.response?.data?.message || err.message || 'Sync worker run failed',
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleExecuteTaraCommand = async (command: string) => {
-    setLoading(true);
-    try {
-      const res = await axios.post('/api/v1/simulation/tara/command', {
-        command,
-        customer_national_id: taraNationalId,
-        amount: MoneyUtil.format(taraAmount || '150.00', 2),
-      });
-      setTaraResponse(res.data);
-      fetchScenariosAndLogs();
-    } catch (err) {
-      alert('Tara Command Failed: ' + ((err as any).response?.data?.message || (err as any).message));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const ArrowIcon = isRtl ? ArrowBackIcon : ArrowForwardIcon;
 
   return (
-    <Box sx={{ p: 3 }}>
-      {/* Header */}
-      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            External Integration Simulation Center
-          </Typography>
-          <Typography color="text.secondary">
-            Simulate Snappfood webhooks, HMAC verification, Tara BNPL lifecycle, and inspection logs.
-          </Typography>
-        </Box>
-        <Button variant="outlined" onClick={fetchScenariosAndLogs}>
-          Refresh Logs
-        </Button>
-      </Stack>
+    <Box sx={{ p: { xs: 2, md: 3 } }}>
+      {/* Breadcrumbs & Header */}
+      <CustomBreadcrumbs
+        heading={t('simulation.hub.title', 'External Integration Simulation Center')}
+        links={[
+          { name: t('nav.dashboard', 'Home'), href: '/app/pos' },
+          { name: t('simulation.breadcrumb', 'Simulation Hub') },
+        ]}
+        action={
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={fetchHubData}
+            disabled={loading}
+            sx={{ fontWeight: 'bold' }}
+          >
+            {t('simulation.hub.refreshLogs', 'Refresh Status & Logs')}
+          </Button>
+        }
+      />
 
-      {/* Tabs */}
-      <Tabs
-        value={activeTab}
-        onChange={(_, val) => setActiveTab(val)}
-        sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}
-      >
-        <Tab label="Snappfood Aggregator Simulator" sx={{ fontWeight: 'bold' }} />
-        <Tab label="Payments & Printers Simulator" sx={{ fontWeight: 'bold' }} />
-        <Tab label="Integration Audit Logs" sx={{ fontWeight: 'bold' }} />
-      </Tabs>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+        {t(
+          'simulation.hub.subtitle',
+          'Simulate Snappfood webhooks, HMAC verification, hardware fault injection, offline sync engine, and inspection logs.'
+        )}
+      </Typography>
 
-      {/* TAB 0: SNAPPFOOD SIMULATOR */}
-      {activeTab === 0 && (
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={{ p: 3, borderRadius: 3, boxShadow: 3 }}>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-                Generator & Scenario Runner
-              </Typography>
-              <Stack spacing={2}>
-                <TextField
-                  label="Customer Name"
-                  value={snappCustomerName}
-                  onChange={(e) => setSnappCustomerName(e.target.value)}
-                  fullWidth
-                />
-                <TextField
-                  label="Vendor Notes"
-                  value={snappNotes}
-                  onChange={(e) => setSnappNotes(e.target.value)}
-                  fullWidth
-                />
-                <Button
-                  variant="contained"
-                  color="primary"
-                  size="large"
-                  onClick={handleGenerateSnappfoodOrder}
-                  disabled={loading}
-                >
-                  Generate Test Snappfood Order (HMAC Signed)
-                </Button>
-              </Stack>
-            </Card>
-
-            <Card sx={{ p: 3, borderRadius: 3, boxShadow: 3, mt: 3 }}>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-                Raw Webhook Payload & Duplicate Test
-              </Typography>
-              <TextField
-                multiline
-                rows={6}
-                value={rawWebhookPayload}
-                onChange={(e) => setRawWebhookPayload(e.target.value)}
-                fullWidth
-                sx={{ fontFamily: 'monospace', mb: 2 }}
-              />
-              <Stack direction="row" spacing={2}>
-                <Button variant="contained" color="secondary" onClick={handleSendRawWebhook} disabled={loading}>
-                  Post Webhook
-                </Button>
-                <Button variant="outlined" color="warning" onClick={handleSendRawWebhook} disabled={loading}>
-                  Replay (Test Duplicate Suppression)
-                </Button>
-              </Stack>
-            </Card>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={{ p: 3, borderRadius: 3, boxShadow: 3, minHeight: 400 }}>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-                Simulation Result Output
-              </Typography>
-              {lastGeneratedResponse ? (
-                <Stack spacing={2}>
-                  {lastGeneratedResponse.duplicate ? (
-                    <Alert severity="warning">
-                      <strong>Exactly-Once Enforced!</strong> Duplicate webhook detected and suppressed safely.
-                    </Alert>
-                  ) : (
-                    <Alert severity="success">
-                      <strong>Order Created!</strong> Snappfood order intake mapped into domain Order Engine.
-                    </Alert>
-                  )}
-
-                  <Paper sx={{ p: 2, bgcolor: 'background.neutral', fontFamily: 'monospace' }} variant="outlined">
-                    <pre style={{ margin: 0, overflowX: 'auto' }}>
-                      {JSON.stringify(lastGeneratedResponse, null, 2)}
-                    </pre>
-                  </Paper>
-                </Stack>
-              ) : (
-                <Typography color="text.secondary" align="center" sx={{ py: 8 }}>
-                  No simulation run yet. Click &quot;Generate Test Snappfood Order&quot; to execute.
-                </Typography>
-              )}
-            </Card>
-          </Grid>
-        </Grid>
+      {/* Quick Action Notification Banner */}
+      {quickActionAlert && (
+        <Alert severity={quickActionAlert.type} sx={{ mb: 3 }} onClose={() => setQuickActionAlert(null)}>
+          {quickActionAlert.message}
+        </Alert>
       )}
 
-      {/* TAB 1: PAYMENTS & PRINTERS SIMULATOR */}
-      {activeTab === 1 && (
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={{ p: 3, borderRadius: 3, boxShadow: 3 }}>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-                Tara BNPL Payment Lifecycle
-              </Typography>
-              <Stack spacing={2}>
-                <TextField
-                  label="Customer National ID"
-                  value={taraNationalId}
-                  onChange={(e) => setTaraNationalId(e.target.value)}
-                  fullWidth
-                />
-                <TextField
-                  label="Amount ($)"
-                  value={taraAmount}
-                  onChange={(e) => setTaraAmount(e.target.value)}
-                  fullWidth
-                />
-                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                  <Button variant="outlined" onClick={() => handleExecuteTaraCommand('INSPECT_ELIGIBILITY')}>
-                    Check Eligibility
-                  </Button>
-                  <Button variant="contained" color="info" onClick={() => handleExecuteTaraCommand('RESERVE_CREDIT')}>
-                    Reserve Credit
-                  </Button>
-                  <Button variant="contained" color="success" onClick={() => handleExecuteTaraCommand('SETTLE_TRANSACTION')}>
-                    Settle BNPL
-                  </Button>
-                  <Button variant="outlined" color="error" onClick={() => handleExecuteTaraCommand('CANCEL_RESERVATION')}>
-                    Cancel Token
-                  </Button>
-                </Stack>
-              </Stack>
-            </Card>
+      {/* 1. Subsystem Metric Cards */}
+      <Grid container spacing={2.5} sx={{ mb: 4 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card sx={{ p: 2.5, borderRadius: 2.5, boxShadow: 2, borderLeft: '4px solid', borderColor: 'primary.main' }}>
+            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+              {t('simulation.hub.stats.totalLogs', 'Logged Events')}
+            </Typography>
+            <Typography variant="h3" sx={{ fontWeight: 800, mt: 0.5, color: 'primary.main' }}>
+              {stats.totalLogs}
+            </Typography>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card sx={{ p: 2.5, borderRadius: 2.5, boxShadow: 2, borderLeft: '4px solid', borderColor: '#e91e63' }}>
+            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+              {t('simulation.hub.stats.snappfoodOrders', 'Snappfood Receipts')}
+            </Typography>
+            <Typography variant="h3" sx={{ fontWeight: 800, mt: 0.5, color: '#e91e63' }}>
+              {stats.snappfoodOrders}
+            </Typography>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card sx={{ p: 2.5, borderRadius: 2.5, boxShadow: 2, borderLeft: '4px solid', borderColor: 'warning.main' }}>
+            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+              {t('simulation.hub.stats.activePrinters', 'Hardware Devices')}
+            </Typography>
+            <Typography variant="h3" sx={{ fontWeight: 800, mt: 0.5, color: 'warning.main' }}>
+              {stats.printersOnline}
+            </Typography>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card sx={{ p: 2.5, borderRadius: 2.5, boxShadow: 2, borderLeft: '4px solid', borderColor: 'info.main' }}>
+            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+              {t('simulation.hub.stats.syncQueue', 'Sync Queue Items')}
+            </Typography>
+            <Typography variant="h3" sx={{ fontWeight: 800, mt: 0.5, color: 'info.main' }}>
+              {stats.syncQueuePending}
+            </Typography>
+          </Card>
+        </Grid>
+      </Grid>
 
-            <Card sx={{ p: 3, borderRadius: 3, boxShadow: 3, mt: 3 }}>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-                Kitchen Printer Spooler Fault Injection
-              </Typography>
+      {/* 2. Quick Simulator Action Bar */}
+      <Card sx={{ p: 2.5, mb: 4, borderRadius: 3, bgcolor: 'background.neutral' }}>
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <ElectricBoltIcon color="warning" />
+            <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+              {t('simulation.hub.quickTest.title', 'Quick Simulator Actions')}
+            </Typography>
+          </Stack>
+        </Stack>
+        <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', gap: 1.5 }}>
+          <Button
+            variant="contained"
+            color="secondary"
+            size="small"
+            startIcon={<PlayArrowIcon />}
+            onClick={handleQuickSnappfoodOrder}
+            disabled={loading}
+          >
+            {t('simulation.hub.quickTest.genSnappfood', 'Trigger Quick Snappfood Order')}
+          </Button>
+          <Button
+            variant="outlined"
+            color="warning"
+            size="small"
+            startIcon={<PrintDisabledIcon />}
+            onClick={handleQuickPrinterOutage}
+          >
+            {t('simulation.hub.quickTest.testPrinter', 'Trigger Printer Outage')}
+          </Button>
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            startIcon={<WifiOffIcon />}
+            onClick={() => navigate('/app/simulation/offline-sync')}
+          >
+            {t('simulation.hub.quickTest.toggleOffline', 'Simulate Offline Mode')}
+          </Button>
+          <Button
+            variant="outlined"
+            color="info"
+            size="small"
+            startIcon={<SyncProblemIcon />}
+            onClick={handleQuickTriggerSync}
+            disabled={loading}
+          >
+            {t('simulation.hub.quickTest.execSync', 'Run Sync Batch Worker')}
+          </Button>
+        </Stack>
+      </Card>
+
+      {/* 3. Dedicated Simulator Modules Grid */}
+      <Typography variant="h5" sx={{ fontWeight: 800, mb: 2 }}>
+        {t('simulation.hub.quickLaunch', 'Dedicated Simulator Modules')}
+      </Typography>
+
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {/* Card 1: Snappfood */}
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card sx={{ p: 3, borderRadius: 3, boxShadow: 2, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <Box>
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: '#e91e63' }}>
+                  {t('simulation.hub.cards.snappfoodTitle', 'Snappfood Aggregator v4.3.0')}
+                </Typography>
+                <Chip label="v4.3.0 Ready" color="secondary" size="small" sx={{ fontWeight: 'bold' }} />
+              </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Simulate physical kitchen ticket printer out-of-paper and spooler retry logic.
+                {t(
+                  'simulation.hub.cards.snappfoodDesc',
+                  'OAuth2 password grants, HMAC SHA-256 webhooks, order stepper, and 20+ vendor automation endpoints.'
+                )}
               </Typography>
-              <Button
-                variant="outlined"
-                color="warning"
-                onClick={() => alert('Simulated Printer Fault: Kitchen Printer #1 Out Of Paper. Rerouted to Auxiliary Station.')}
-              >
-                Inject Printer Paper Outage Fault
-              </Button>
-            </Card>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={{ p: 3, borderRadius: 3, boxShadow: 3, minHeight: 350 }}>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-                Tara BNPL Outcome
-              </Typography>
-              {taraResponse ? (
-                <Paper sx={{ p: 2, bgcolor: 'background.neutral', fontFamily: 'monospace' }} variant="outlined">
-                  <pre style={{ margin: 0, overflowX: 'auto' }}>{JSON.stringify(taraResponse, null, 2)}</pre>
-                </Paper>
-              ) : (
-                <Typography color="text.secondary" align="center" sx={{ py: 6 }}>
-                  Run a Tara command to inspect response.
-                </Typography>
-              )}
-            </Card>
-          </Grid>
+            </Box>
+            <Button
+              component={RouterLink}
+              href="/app/simulation/snappfood"
+              variant="contained"
+              color="secondary"
+              endIcon={<ArrowIcon />}
+              sx={{ alignSelf: 'flex-start', fontWeight: 'bold' }}
+            >
+              {t('simulation.hub.cards.snappfoodAction', 'Open Snappfood Console')}
+            </Button>
+          </Card>
         </Grid>
-      )}
 
-      {/* TAB 2: LOGS EXPLORER */}
-      {activeTab === 2 && (
-        <Card sx={{ p: 3, borderRadius: 3, boxShadow: 3 }}>
-          <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Integration Webhook & Command Audit Explorer ({logs.length} entries)
+        {/* Card 2: Hardware & POS */}
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card sx={{ p: 3, borderRadius: 3, boxShadow: 2, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <Box>
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: 'primary.main' }}>
+                  {t('simulation.hub.cards.hardwareTitle', 'POS Terminals & Printers')}
+                </Typography>
+                <Chip label="Hardware Telemetry" color="primary" size="small" sx={{ fontWeight: 'bold' }} />
+              </Stack>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {t(
+                  'simulation.hub.cards.hardwareDesc',
+                  'POS terminal timeout/declines, printer paper-out/cover-open failover, and Tara digital wallet gateway.'
+                )}
+              </Typography>
+            </Box>
+            <Button
+              component={RouterLink}
+              href="/app/simulation/payments-printers"
+              variant="contained"
+              color="primary"
+              endIcon={<ArrowIcon />}
+              sx={{ alignSelf: 'flex-start', fontWeight: 'bold' }}
+            >
+              {t('simulation.hub.cards.hardwareAction', 'Open Hardware Console')}
+            </Button>
+          </Card>
+        </Grid>
+
+        {/* Card 3: Offline Sync */}
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card sx={{ p: 3, borderRadius: 3, boxShadow: 2, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <Box>
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: 'info.main' }}>
+                  {t('simulation.hub.cards.syncTitle', 'Offline Sync & Conflict Engine')}
+                </Typography>
+                <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
+              </Stack>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {t(
+                  'simulation.hub.cards.syncDesc',
+                  'Branch envelope queues, DLQ retries, connectivity toggles, and side-by-side 3-way conflict resolution.'
+                )}
+              </Typography>
+            </Box>
+            <Button
+              component={RouterLink}
+              href="/app/simulation/offline-sync"
+              variant="contained"
+              color="info"
+              endIcon={<ArrowIcon />}
+              sx={{ alignSelf: 'flex-start', fontWeight: 'bold' }}
+            >
+              {t('simulation.hub.cards.syncAction', 'Open Sync Engine')}
+            </Button>
+          </Card>
+        </Grid>
+
+        {/* Card 4: Logs */}
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card sx={{ p: 3, borderRadius: 3, boxShadow: 2, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <Box>
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: 'text.primary' }}>
+                  {t('simulation.hub.cards.logsTitle', 'Integration & Webhook Logs')}
+                </Typography>
+                <Chip label="Full Audit Trail" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
+              </Stack>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {t(
+                  'simulation.hub.cards.logsDesc',
+                  'Payload inspector, correlation IDs, HMAC validation badges, and idempotency replay tests.'
+                )}
+              </Typography>
+            </Box>
+            <Button
+              component={RouterLink}
+              href="/app/simulation/logs"
+              variant="outlined"
+              color="inherit"
+              endIcon={<ArrowIcon />}
+              sx={{ alignSelf: 'flex-start', fontWeight: 'bold' }}
+            >
+              {t('simulation.hub.cards.logsAction', 'Open Audit Logs')}
+            </Button>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* 4. Unified Cross-Provider Recent Activity Feed */}
+      <Card sx={{ p: 3, borderRadius: 3, boxShadow: 2 }}>
+        <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>
+            {t('simulation.hub.recentActivity', 'Recent Cross-Provider Integration Events')}
           </Typography>
-          <TableContainer component={Paper} variant="outlined">
-            <Table size="small">
-              <TableHead sx={{ bgcolor: 'background.neutral' }}>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Provider</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Event Type</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Idempotency Key</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>HMAC Status</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Duplicate</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Timestamp</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Actions</TableCell>
+          <Button
+            component={RouterLink}
+            href="/app/simulation/logs"
+            size="small"
+            endIcon={<ArrowIcon />}
+          >
+            {t('simulation.hub.cards.logsAction', 'Open Audit Logs')}
+          </Button>
+        </Stack>
+
+        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+          <Table size="small">
+            <TableHead sx={{ bgcolor: 'background.neutral' }}>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.logs.table.provider', 'Provider')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.logs.table.eventType', 'Event Type')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.logs.table.reference', 'Reference')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.logs.table.hmac', 'HMAC')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.logs.table.status', 'Status')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.logs.table.timestamp', 'Timestamp')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>{t('simulation.logs.table.actions', 'Actions')}</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {logs.slice(0, 10).map((log) => (
+                <TableRow key={log.id} hover>
+                  <TableCell>
+                    <Chip
+                      label={log.provider}
+                      size="small"
+                      color={log.provider === 'SNAPPFOOD' ? 'secondary' : log.provider === 'TARA_WALLET' ? 'info' : 'default'}
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>{log.event_type}</TableCell>
+                  <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                    {log.idempotency_key || log.order_code || '-'}
+                  </TableCell>
+                  <TableCell>
+                    {log.hmac_signature ? (
+                      <Chip label="HMAC SHA-256" size="small" color="success" variant="outlined" />
+                    ) : (
+                      '-'
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={log.status}
+                      size="small"
+                      color={log.status === 'SUCCESS' ? 'success' : log.status === 'REJECTED' ? 'error' : 'warning'}
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                  </TableCell>
+                  <TableCell sx={{ fontSize: '0.8rem' }}>
+                    {new Date(log.created_at || Date.now()).toLocaleTimeString()}
+                  </TableCell>
+                  <TableCell sx={{ textAlign: 'right' }}>
+                    <IconButton size="small" color="primary" onClick={() => setInspectingLog(log)}>
+                      <VisibilityIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {logs.map((log) => (
-                  <TableRow key={log.id} hover>
-                    <TableCell>
-                      <Chip label={log.provider} size="small" color={log.provider === 'SNAPPFOOD' ? 'warning' : 'info'} />
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>{log.event_type}</TableCell>
-                    <TableCell>{log.idempotency_key || '-'}</TableCell>
-                    <TableCell>
-                      {log.hmac_signature ? (
-                        <Chip label="HMAC SHA-256" size="small" color="success" variant="outlined" />
-                      ) : (
-                        '-'
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {log.is_duplicate ? (
-                        <Chip label="DUPLICATE" size="small" color="error" />
-                      ) : (
-                        <Chip label="UNIQUE" size="small" color="default" />
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={log.status}
-                        size="small"
-                        color={log.status === 'SUCCESS' ? 'success' : log.status === 'REJECTED' ? 'error' : 'warning'}
-                      />
-                    </TableCell>
-                    <TableCell>{new Date(log.created_at).toLocaleString()}</TableCell>
-                    <TableCell>
-                      <Button size="small" onClick={() => setInspectingLog(log)}>
-                        Inspect JSON
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Card>
-      )}
+              ))}
+
+              {logs.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                    {t('simulation.hub.noLogs', 'No simulation events recorded yet. Run a simulation from any module above.')}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Card>
 
       {/* Log Inspection Dialog */}
       <Dialog open={Boolean(inspectingLog)} onClose={() => setInspectingLog(null)} maxWidth="md" fullWidth>
         {inspectingLog && (
           <>
-            <DialogTitle>
-              Integration Log Detail: {inspectingLog.provider} - {inspectingLog.event_type}
+            <DialogTitle sx={{ fontWeight: 'bold' }}>
+              {t('simulation.logs.modal.title', 'Integration Payload Inspector')}: {inspectingLog.provider} - {inspectingLog.event_type}
             </DialogTitle>
             <DialogContent dividers>
               <Stack spacing={2}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                  Request Payload:
+                  {t('simulation.logs.modal.inboundRequest', 'Inbound Request Payload (JSON)')}:
                 </Typography>
-                <Paper sx={{ p: 2, bgcolor: 'background.neutral', fontFamily: 'monospace' }} variant="outlined">
-                  <pre style={{ margin: 0, overflowX: 'auto' }}>
-                    {JSON.stringify(inspectingLog.request_payload, null, 2)}
+                <Paper sx={{ p: 2, bgcolor: '#1e1e1e', color: '#00ffcc', fontFamily: 'monospace', fontSize: 12, maxHeight: 220, overflow: 'auto' }} variant="outlined">
+                  <pre style={{ margin: 0 }}>
+                    {JSON.stringify(inspectingLog.request_payload || inspectingLog.payload, null, 2)}
                   </pre>
                 </Paper>
 
                 <Divider sx={{ my: 1 }} />
 
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                  Response Payload:
+                  {t('simulation.logs.modal.outboundResponse', 'Outbound HTTP Response / Acknowledgment')}:
                 </Typography>
-                <Paper sx={{ p: 2, bgcolor: 'background.neutral', fontFamily: 'monospace' }} variant="outlined">
-                  <pre style={{ margin: 0, overflowX: 'auto' }}>
-                    {JSON.stringify(inspectingLog.response_payload, null, 2)}
+                <Paper sx={{ p: 2, bgcolor: '#1e1e1e', color: '#ffcc00', fontFamily: 'monospace', fontSize: 12, maxHeight: 180, overflow: 'auto' }} variant="outlined">
+                  <pre style={{ margin: 0 }}>
+                    {JSON.stringify(inspectingLog.response_payload || { status: 'OK' }, null, 2)}
                   </pre>
                 </Paper>
               </Stack>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setInspectingLog(null)}>Close</Button>
+              <Button onClick={() => setInspectingLog(null)}>
+                {t('simulation.logs.modal.close', 'Close Inspector')}
+              </Button>
             </DialogActions>
           </>
         )}

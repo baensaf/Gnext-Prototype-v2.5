@@ -19,7 +19,6 @@ import {
   Select,
   TableRow,
   MenuItem,
-  useTheme,
   TableBody,
   TableCell,
   TableHead,
@@ -40,7 +39,6 @@ import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function TerminalsPage() {
   const { t } = useTranslation();
-  const theme = useTheme();
 
   const [terminals, setTerminals] = useState<Terminal[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -251,7 +249,7 @@ export function TerminalsPage() {
 
       {/* Create Terminal Drawer */}
       <Drawer
-        anchor={theme.direction === 'rtl' ? 'left' : 'right'}
+        anchor="right"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
       >

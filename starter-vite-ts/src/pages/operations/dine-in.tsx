@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
-import { useTheme } from '@mui/material/styles';
 import PeopleIcon from '@mui/icons-material/People';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import TableBarIcon from '@mui/icons-material/TableBar';
@@ -46,7 +45,6 @@ import { Label } from 'src/components/label';
 
 export function DineInPage() {
   const { t } = useTranslation();
-  const theme = useTheme();
 
   const [areas, setAreas] = useState<DiningArea[]>([]);
   const [tables, setTables] = useState<DiningTable[]>([]);
@@ -278,8 +276,6 @@ export function DineInPage() {
   const occupiedCount = tables.filter((tableItem) => tableItem.status === 'OCCUPIED' || tableItem.status === 'BILL_PRINTED').length;
   const availableCount = tables.filter((tableItem) => tableItem.status === 'AVAILABLE').length;
   const totalGuests = tables.reduce((sum, tableItem) => sum + (tableItem.guest_count || 0), 0);
-
-  const drawerAnchor = theme.direction === 'rtl' ? 'left' : 'right';
 
   return (
     <Box>
@@ -680,7 +676,7 @@ export function DineInPage() {
       </Dialog>
 
       {/* Add Section Drawer */}
-      <Drawer anchor={drawerAnchor} open={areaDrawerOpen} onClose={() => setAreaDrawerOpen(false)}>
+      <Drawer anchor="right" open={areaDrawerOpen} onClose={() => setAreaDrawerOpen(false)}>
         <Box sx={{ width: 400, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
             {t('dineIn.addSectionTitle', 'Add Dining Section')}
@@ -698,7 +694,7 @@ export function DineInPage() {
       </Drawer>
 
       {/* Add Table Drawer */}
-      <Drawer anchor={drawerAnchor} open={tableDrawerOpen} onClose={() => setTableDrawerOpen(false)}>
+      <Drawer anchor="right" open={tableDrawerOpen} onClose={() => setTableDrawerOpen(false)}>
         <Box sx={{ width: 400, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
             {t('dineIn.addTableTitle', 'Add Dining Table')}

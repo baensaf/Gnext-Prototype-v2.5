@@ -22,11 +22,19 @@ import CardHeader from '@mui/material/CardHeader';
 import Typography from '@mui/material/Typography';
 import InputLabel from '@mui/material/InputLabel';
 import FormControl from '@mui/material/FormControl';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import PrintIcon from '@mui/icons-material/Print';
+import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import HistoryIcon from '@mui/icons-material/History';
+import AddCircleIcon from '@mui/icons-material/AddCircle';
 import CircularProgress from '@mui/material/CircularProgress';
 
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 import { kdsApi } from 'src/api/kdsApi';
 import { tenantApi } from 'src/api/tenantApi';
 import { httpClient as axios } from 'src/api/httpClient';
+import { MoneyUtil } from 'src/utils/money.util';
 
 export function SimulationPaymentsPrintersPage() {
   const { t } = useTranslation();
@@ -89,6 +97,27 @@ export function SimulationPaymentsPrintersPage() {
     loadData();
   }, []);
 
+  const handleSeedMockHardware = () => {
+    const mockPrinters: PrinterDevice[] = [
+      { id: 'mock-p1', name: 'Kitchen Hot Line (Thermal 80mm)', code: 'PRN-KIT-1', simulated_address: '192.168.1.101', role: 'KITCHEN' } as any,
+      { id: 'mock-p2', name: 'Front Counter Cashier Slip', code: 'PRN-FOH-1', simulated_address: '192.168.1.102', role: 'RECEIPT' } as any,
+      { id: 'mock-p3', name: 'Bar & Beverage Station', code: 'PRN-BAR-1', simulated_address: '192.168.1.103', role: 'BAR' } as any,
+    ];
+    const mockTerminals: Terminal[] = [
+      { id: 'mock-term1', name: 'Saman POS Terminal #1', code: 'POS-SAMAN-01', ip_address: '192.168.1.120' } as any,
+      { id: 'mock-term2', name: 'Pasargad Mobile POS #2', code: 'POS-PAS-02', ip_address: '192.168.1.121' } as any,
+    ];
+    setPrinters(mockPrinters);
+    setTerminals(mockTerminals);
+    setSelectedTerminal(mockTerminals[0].id);
+    const initialStatus: Record<string, { status: string; paper: boolean; cover: boolean }> = {};
+    mockPrinters.forEach((p) => {
+      initialStatus[p.id] = { status: 'ONLINE', paper: true, cover: true };
+    });
+    setPrinterStatuses(initialStatus);
+    setSuccessMsg('Mock hardware devices injected for simulation.');
+  };
+
   const handleTestPos = async () => {
     setPosTesting(true);
     setPosResult(null);
@@ -117,9 +146,9 @@ export function SimulationPaymentsPrintersPage() {
 
       const elapsed = Date.now() - startTime;
       const res = {
-        terminalId: selectedTerminal,
+        terminalId: selectedTerminal || 'POS-DEFAULT-01',
         scenario: posScenario,
-        amount: posAmount,
+        amount: MoneyUtil.format(posAmount || '500000', 0),
         status: outcomeStatus,
         responseCode: outcomeCode,
         message: msg,
@@ -239,43 +268,75 @@ export function SimulationPaymentsPrintersPage() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Stack spacing={3}>
-        <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box>
-            <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-              {t('simulation.hardwareTitle', 'Hardware Failure & Response Simulator')}
-            </Typography>
-            <Typography color="text.secondary">
-              {t('simulation.hardwareDesc', 'Simulate mobile POS timeouts, paper-out printer errors, network drops, and device failover rerouting.')}
-            </Typography>
-          </Box>
-          <Chip label="SIMULATION ACTIVE" color="warning" sx={{ fontWeight: 'bold' }} />
-        </Stack>
+    <Box sx={{ p: { xs: 2, md: 3 } }}>
+      <CustomBreadcrumbs
+        heading={t('simulation.hardware.title', 'Hardware Failure & Response Simulator')}
+        links={[
+          { name: t('nav.dashboard', 'Home'), href: '/app/pos' },
+          { name: t('simulation.breadcrumb', 'Simulation Hub'), href: '/app/simulation' },
+          { name: t('simulation.hardware.title', 'Payments & Printers') },
+        ]}
+        action={
+          <Stack direction="row" spacing={1}>
+            {printers.length === 0 && (
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<AddCircleIcon />}
+                onClick={handleSeedMockHardware}
+              >
+                {t('simulation.hardware.seedMock', 'Seed Demo Hardware')}
+              </Button>
+            )}
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={loadData}
+              sx={{ fontWeight: 'bold' }}
+            >
+              {t('simulation.hub.refreshLogs', 'Refresh')}
+            </Button>
+          </Stack>
+        }
+      />
 
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+        {t(
+          'simulation.hardware.subtitle',
+          'Simulate mobile POS timeouts, paper-out printer errors, network drops, and device failover rerouting.'
+        )}
+      </Typography>
+
+      <Stack spacing={3}>
         {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
         {successMsg && <Alert severity="success" onClose={() => setSuccessMsg(null)}>{successMsg}</Alert>}
 
-        <Paper sx={{ borderRadius: 2 }}>
-          <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ px: 2, pt: 1, borderBottom: 1, borderColor: 'divider' }}>
-            <Tab label="POS Terminal Simulator" value="POS" />
-            <Tab label="Printers & Paper Sensors" value="PRINTERS" />
-            <Tab label="Digital Wallets & Gateway" value="GATEWAY" />
-            <Tab label="Simulation Event Log" value="HISTORY" />
+        <Paper sx={{ borderRadius: 3, boxShadow: 2 }}>
+          <Tabs
+            value={tab}
+            onChange={(_, v) => setTab(v)}
+            sx={{ px: 2, pt: 1, borderBottom: 1, borderColor: 'divider' }}
+          >
+            <Tab icon={<PointOfSaleIcon />} iconPosition="start" label={t('simulation.hardware.tabs.pos', 'POS Terminal Simulator')} value="POS" sx={{ fontWeight: 'bold' }} />
+            <Tab icon={<PrintIcon />} iconPosition="start" label={t('simulation.hardware.tabs.printers', 'Printers & Paper Sensors')} value="PRINTERS" sx={{ fontWeight: 'bold' }} />
+            <Tab icon={<AccountBalanceWalletIcon />} iconPosition="start" label={t('simulation.hardware.tabs.gateway', 'Digital Wallets & Gateway')} value="GATEWAY" sx={{ fontWeight: 'bold' }} />
+            <Tab icon={<HistoryIcon />} iconPosition="start" label={t('simulation.hardware.tabs.history', 'Simulation Event Log')} value="HISTORY" sx={{ fontWeight: 'bold' }} />
           </Tabs>
 
           <Box sx={{ p: 3 }}>
             {tab === 'POS' && (
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Card variant="outlined" sx={{ p: 3 }}>
-                    <Typography variant="h6" sx={{ mb: 2 }}>Inject POS Terminal Event</Typography>
+                  <Card variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
+                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+                      {t('simulation.hardware.pos.cardTitle', 'Inject POS Terminal Event')}
+                    </Typography>
                     <Stack spacing={2.5}>
                       <FormControl fullWidth size="small">
-                        <InputLabel>Target POS Terminal</InputLabel>
+                        <InputLabel>{t('simulation.hardware.pos.terminalLabel', 'Target POS Terminal')}</InputLabel>
                         <Select
                           value={selectedTerminal}
-                          label="Target POS Terminal"
+                          label={t('simulation.hardware.pos.terminalLabel', 'Target POS Terminal')}
                           onChange={(e) => setSelectedTerminal(e.target.value)}
                         >
                           {terminals.map((term) => (
@@ -283,34 +344,34 @@ export function SimulationPaymentsPrintersPage() {
                               {term.name || term.code} ({(term as any).type || 'POS'})
                             </MenuItem>
                           ))}
-                          {terminals.length === 0 && <MenuItem value="">Default POS Terminal</MenuItem>}
+                          {terminals.length === 0 && <MenuItem value="">Default Simulated POS Terminal</MenuItem>}
                         </Select>
                       </FormControl>
 
                       <FormControl fullWidth size="small">
-                        <InputLabel>Simulation Scenario</InputLabel>
+                        <InputLabel>{t('simulation.hardware.pos.scenarioLabel', 'Simulation Scenario')}</InputLabel>
                         <Select
                           value={posScenario}
-                          label="Simulation Scenario"
+                          label={t('simulation.hardware.pos.scenarioLabel', 'Simulation Scenario')}
                           onChange={(e) => setPosScenario(e.target.value)}
                         >
-                          <MenuItem value="SUCCESS">Success (Approved Auth Code: 00)</MenuItem>
-                          <MenuItem value="TIMEOUT">Terminal Timeout (HTTP 504 / 15s delay)</MenuItem>
-                          <MenuItem value="DECLINED">Card Declined / Wrong PIN (Code: 51)</MenuItem>
-                          <MenuItem value="NETWORK_DROP">Network Connection Drop / Socket Reset</MenuItem>
+                          <MenuItem value="SUCCESS">{t('simulation.hardware.pos.scenarioSuccess', 'Success (Approved Auth Code: 00)')}</MenuItem>
+                          <MenuItem value="TIMEOUT">{t('simulation.hardware.pos.scenarioTimeout', 'Terminal Timeout (HTTP 504 / 15s delay)')}</MenuItem>
+                          <MenuItem value="DECLINED">{t('simulation.hardware.pos.scenarioDeclined', 'Card Declined / Wrong PIN (Code: 51)')}</MenuItem>
+                          <MenuItem value="NETWORK_DROP">{t('simulation.hardware.pos.scenarioNetworkDrop', 'Network Connection Drop / Socket Reset')}</MenuItem>
                         </Select>
                       </FormControl>
 
                       <Stack direction="row" spacing={2}>
                         <TextField
-                          label="Amount (IRR)"
+                          label={t('simulation.hardware.pos.amount', 'Amount (IRR)')}
                           size="small"
                           fullWidth
                           value={posAmount}
                           onChange={(e) => setPosAmount(e.target.value)}
                         />
                         <TextField
-                          label="Latency (ms)"
+                          label={t('simulation.hardware.pos.latency', 'Latency (ms)')}
                           size="small"
                           fullWidth
                           value={posLatency}
@@ -325,16 +386,21 @@ export function SimulationPaymentsPrintersPage() {
                         onClick={handleTestPos}
                         disabled={posTesting}
                         startIcon={posTesting ? <CircularProgress size={20} color="inherit" /> : null}
+                        sx={{ fontWeight: 'bold' }}
                       >
-                        {posTesting ? 'Transmitting to Simulated POS...' : 'Simulate POS Transaction'}
+                        {posTesting
+                          ? t('simulation.hardware.pos.testing', 'Transmitting to Simulated POS...')
+                          : t('simulation.hardware.pos.simulateBtn', 'Simulate POS Transaction')}
                       </Button>
                     </Stack>
                   </Card>
                 </Grid>
 
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Card variant="outlined" sx={{ p: 3, height: '100%' }}>
-                    <Typography variant="h6" sx={{ mb: 2 }}>Terminal Response & Telemetry</Typography>
+                  <Card variant="outlined" sx={{ p: 3, height: '100%', borderRadius: 2 }}>
+                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+                      {t('simulation.hardware.pos.responseTitle', 'Terminal Response & Telemetry')}
+                    </Typography>
                     {posResult ? (
                       <Stack spacing={2}>
                         <Alert
@@ -346,13 +412,13 @@ export function SimulationPaymentsPrintersPage() {
                           <Typography variant="body2">{posResult.message}</Typography>
                         </Alert>
 
-                        <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50', fontFamily: 'monospace', fontSize: 13 }}>
+                        <Paper variant="outlined" sx={{ p: 2, bgcolor: '#1e1e1e', color: '#00ffcc', fontFamily: 'monospace', fontSize: 13 }}>
                           <pre style={{ margin: 0 }}>{JSON.stringify(posResult, null, 2)}</pre>
                         </Paper>
                       </Stack>
                     ) : (
                       <Box sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
-                        <Typography>Trigger a transaction to inspect live terminal response.</Typography>
+                        <Typography>{t('simulation.hardware.pos.placeholder', 'Trigger a transaction to inspect live terminal response.')}</Typography>
                       </Box>
                     )}
                   </Card>
@@ -362,13 +428,15 @@ export function SimulationPaymentsPrintersPage() {
 
             {tab === 'PRINTERS' && (
               <Stack spacing={3}>
-                <Typography variant="h6">Configured Printers & Hardware Sensors</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                  {t('simulation.hardware.printers.title', 'Configured Printers & Hardware Sensors')}
+                </Typography>
                 <Grid container spacing={2}>
                   {printers.map((p) => {
                     const st = printerStatuses[p.id] || { status: 'ONLINE', paper: true, cover: true };
                     return (
                       <Grid key={p.id} size={{ xs: 12, md: 6, lg: 4 }}>
-                        <Card variant="outlined" sx={{ p: 2.5 }}>
+                        <Card variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
                           <CardHeader
                             title={p.name}
                             subheader={`Code: ${p.code} | Address: ${p.simulated_address || '192.168.1.100'}`}
@@ -386,26 +454,30 @@ export function SimulationPaymentsPrintersPage() {
 
                           <Stack spacing={1.5}>
                             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Typography variant="body2">Paper Roll Sensor:</Typography>
+                              <Typography variant="body2">{t('simulation.hardware.printers.paperSensor', 'Paper Roll Sensor')}:</Typography>
                               <Button
                                 size="small"
                                 variant={st.paper ? 'outlined' : 'contained'}
                                 color={st.paper ? 'primary' : 'error'}
                                 onClick={() => handleTogglePrinterPaper(p.id)}
                               >
-                                {st.paper ? 'Paper OK' : 'Trigger Paper Out'}
+                                {st.paper
+                                  ? t('simulation.hardware.printers.paperOk', 'Paper OK')
+                                  : t('simulation.hardware.printers.triggerPaperOut', 'Trigger Paper Out')}
                               </Button>
                             </Stack>
 
                             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Typography variant="body2">Cover Sensor:</Typography>
+                              <Typography variant="body2">{t('simulation.hardware.printers.coverSensor', 'Cover Sensor')}:</Typography>
                               <Button
                                 size="small"
                                 variant={st.cover ? 'outlined' : 'contained'}
                                 color={st.cover ? 'primary' : 'warning'}
                                 onClick={() => handleTogglePrinterCover(p.id)}
                               >
-                                {st.cover ? 'Cover Closed' : 'Trigger Cover Open'}
+                                {st.cover
+                                  ? t('simulation.hardware.printers.coverClosed', 'Cover Closed')
+                                  : t('simulation.hardware.printers.triggerCoverOpen', 'Trigger Cover Open')}
                               </Button>
                             </Stack>
 
@@ -415,9 +487,11 @@ export function SimulationPaymentsPrintersPage() {
                               size="small"
                               onClick={() => handleTestPrint(p)}
                               disabled={printTesting === p.id}
-                              sx={{ mt: 1 }}
+                              sx={{ mt: 1, fontWeight: 'bold' }}
                             >
-                              {printTesting === p.id ? 'Testing Slip...' : 'Test Print Slip'}
+                              {printTesting === p.id
+                                ? t('simulation.hardware.printers.testingSlip', 'Testing Slip...')
+                                : t('simulation.hardware.printers.testPrintSlip', 'Test Print Slip')}
                             </Button>
                           </Stack>
                         </Card>
@@ -427,9 +501,9 @@ export function SimulationPaymentsPrintersPage() {
                 </Grid>
 
                 {printResult && (
-                  <Card variant="outlined" sx={{ p: 3, mt: 2 }}>
+                  <Card variant="outlined" sx={{ p: 3, mt: 2, borderRadius: 2 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                      Print Job Result: {printResult.printerName}
+                      {t('simulation.hardware.printers.jobResult', 'Print Job Result:')} {printResult.printerName}
                     </Typography>
                     <Alert severity={printResult.status === 'PRINTED' ? 'success' : (printResult.status === 'FAILOVER' ? 'warning' : 'error')}>
                       {printResult.message}
@@ -442,25 +516,27 @@ export function SimulationPaymentsPrintersPage() {
             {tab === 'GATEWAY' && (
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Card variant="outlined" sx={{ p: 3 }}>
-                    <Typography variant="h6" sx={{ mb: 2 }}>Tara Digital Wallet & IPG Gateway</Typography>
+                  <Card variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
+                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+                      {t('simulation.hardware.gateway.title', 'Tara Digital Wallet & IPG Gateway')}
+                    </Typography>
                     <Stack spacing={2.5}>
                       <FormControl fullWidth size="small">
-                        <InputLabel>Gateway Action</InputLabel>
+                        <InputLabel>{t('simulation.hardware.gateway.actionLabel', 'Gateway Action')}</InputLabel>
                         <Select
                           value={gatewayAction}
-                          label="Gateway Action"
+                          label={t('simulation.hardware.gateway.actionLabel', 'Gateway Action')}
                           onChange={(e) => setGatewayAction(e.target.value)}
                         >
-                          <MenuItem value="AUTHORIZE">Authorize Payment (OTP Required)</MenuItem>
-                          <MenuItem value="CAPTURE">Direct Capture / Settle</MenuItem>
-                          <MenuItem value="BALANCE_INQUIRY">Customer Credit Limit Inquiry</MenuItem>
-                          <MenuItem value="REFUND">Reverse / Refund Wallet Payment</MenuItem>
+                          <MenuItem value="AUTHORIZE">{t('simulation.hardware.gateway.authorize', 'Authorize Payment (OTP Required)')}</MenuItem>
+                          <MenuItem value="CAPTURE">{t('simulation.hardware.gateway.capture', 'Direct Capture / Settle')}</MenuItem>
+                          <MenuItem value="BALANCE_INQUIRY">{t('simulation.hardware.gateway.balanceInquiry', 'Customer Credit Limit Inquiry')}</MenuItem>
+                          <MenuItem value="REFUND">{t('simulation.hardware.gateway.refund', 'Reverse / Refund Wallet Payment')}</MenuItem>
                         </Select>
                       </FormControl>
 
                       <TextField
-                        label="Customer Mobile"
+                        label={t('simulation.hardware.gateway.customerMobile', 'Customer Mobile')}
                         size="small"
                         fullWidth
                         value={gatewayMobile}
@@ -468,7 +544,7 @@ export function SimulationPaymentsPrintersPage() {
                       />
 
                       <TextField
-                        label="Transaction Amount (IRR)"
+                        label={t('simulation.hardware.gateway.amount', 'Transaction Amount (IRR)')}
                         size="small"
                         fullWidth
                         value={gatewayAmount}
@@ -481,23 +557,28 @@ export function SimulationPaymentsPrintersPage() {
                         onClick={handleTestGateway}
                         disabled={gatewayTesting}
                         startIcon={gatewayTesting ? <CircularProgress size={20} color="inherit" /> : null}
+                        sx={{ fontWeight: 'bold' }}
                       >
-                        {gatewayTesting ? 'Executing Gateway Call...' : 'Execute Gateway Command'}
+                        {gatewayTesting
+                          ? t('simulation.hardware.gateway.executing', 'Executing Gateway Call...')
+                          : t('simulation.hardware.gateway.executeBtn', 'Execute Gateway Command')}
                       </Button>
                     </Stack>
                   </Card>
                 </Grid>
 
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Card variant="outlined" sx={{ p: 3, height: '100%' }}>
-                    <Typography variant="h6" sx={{ mb: 2 }}>Gateway Transaction Log</Typography>
+                  <Card variant="outlined" sx={{ p: 3, height: '100%', borderRadius: 2 }}>
+                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+                      {t('simulation.hardware.gateway.responseTitle', 'Gateway Transaction Log')}
+                    </Typography>
                     {gatewayResult ? (
-                      <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50', fontFamily: 'monospace', fontSize: 13 }}>
+                      <Paper variant="outlined" sx={{ p: 2, bgcolor: '#1e1e1e', color: '#ffcc00', fontFamily: 'monospace', fontSize: 13 }}>
                         <pre style={{ margin: 0 }}>{JSON.stringify(gatewayResult, null, 2)}</pre>
                       </Paper>
                     ) : (
                       <Box sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
-                        <Typography>Execute a gateway action to view response payload.</Typography>
+                        <Typography>{t('simulation.hardware.gateway.placeholder', 'Execute a gateway action to view response payload.')}</Typography>
                       </Box>
                     )}
                   </Card>
@@ -507,9 +588,11 @@ export function SimulationPaymentsPrintersPage() {
 
             {tab === 'HISTORY' && (
               <Stack spacing={2}>
-                <Typography variant="h6">Recent Hardware Simulation Events</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                  {t('simulation.hardware.history.title', 'Recent Hardware Simulation Events')}
+                </Typography>
                 {simLogs.map((log, idx) => (
-                  <Card key={idx} variant="outlined" sx={{ p: 2 }}>
+                  <Card key={idx} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                     <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
                         {log.scenario || log.printerName || log.action || 'SIMULATION_EVENT'}
@@ -529,7 +612,7 @@ export function SimulationPaymentsPrintersPage() {
                   </Card>
                 ))}
                 {simLogs.length === 0 && (
-                  <Alert severity="info">No simulation events recorded yet. Run a POS or printer test above.</Alert>
+                  <Alert severity="info">{t('simulation.hardware.history.noLogs', 'No simulation events recorded yet. Run a POS or printer test above.')}</Alert>
                 )}
               </Stack>
             )}

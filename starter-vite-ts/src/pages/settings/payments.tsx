@@ -22,7 +22,6 @@ import {
   Divider,
   TableRow,
   MenuItem,
-  useTheme,
   TextField,
   TableBody,
   TableCell,
@@ -41,7 +40,6 @@ import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function PaymentSettingsPage() {
   const { t } = useTranslation();
-  const theme = useTheme();
 
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
@@ -203,7 +201,7 @@ export function PaymentSettingsPage() {
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colDevice', 'Device / Reference')}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colRefund', 'Refund Policy')}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colStatus', 'Status')}</TableCell>
-                <TableCell sx={{ fontWeight: 700, textAlign: theme.direction === 'rtl' ? 'left' : 'right' }}>
+                <TableCell sx={{ fontWeight: 700 }} align="right">
                   {t('settings.paymentsPage.colActions', 'Actions')}
                 </TableCell>
               </TableRow>
@@ -266,7 +264,7 @@ export function PaymentSettingsPage() {
                       color="primary"
                     />
                   </TableCell>
-                  <TableCell sx={{ textAlign: theme.direction === 'rtl' ? 'left' : 'right' }}>
+                  <TableCell align="right">
                     <IconButton size="small" onClick={() => handleOpenEdit(m)}>
                       <EditIcon fontSize="small" />
                     </IconButton>
@@ -289,7 +287,7 @@ export function PaymentSettingsPage() {
 
       {/* Create / Edit Drawer */}
       <Drawer
-        anchor={theme.direction === 'rtl' ? 'left' : 'right'}
+        anchor="right"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
       >

@@ -187,16 +187,16 @@ export function useNavData(): NavSectionProps['data'] {
       subheader: t('nav.demoSandbox', 'Simulation Sandbox'),
       items: [
         {
-          title: t('nav.simulation', 'Simulation Hub'),
+          title: t('nav.simulationHub', 'Simulation Hub'),
           path: '/app/simulation',
           icon: ICONS.terminal,
           children: [
             {
-              title: t('nav.simulation', 'Overview & Mocks'),
+              title: t('nav.simulationOverview', 'Overview & Sandbox Hub'),
               path: '/app/simulation',
             },
             {
-              title: t('nav.snappfoodSim', 'Snappfood Simulator'),
+              title: t('nav.snappfoodSim', 'Snappfood Simulator (v4.3.0)'),
               path: '/app/simulation/snappfood',
             },
             {
@@ -208,7 +208,7 @@ export function useNavData(): NavSectionProps['data'] {
               path: '/app/simulation/offline-sync',
             },
             {
-              title: t('nav.logsSim', 'Integration Logs'),
+              title: t('nav.logsSim', 'Integration Audit Logs'),
               path: '/app/simulation/logs',
             },
           ],

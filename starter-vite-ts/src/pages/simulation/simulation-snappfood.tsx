@@ -1,6 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import {
   Box,
   Tab,
@@ -22,7 +25,6 @@ import {
   TableCell,
   TableHead,
   TextField,
-  Container,
   Typography,
   InputLabel,
   FormControl,
@@ -34,6 +36,8 @@ import {
   AccordionDetails,
 } from '@mui/material';
 
+import { RouterLink } from 'src/routes/components';
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 import { httpClient as axios } from 'src/api/httpClient';
 
 export function SimulationSnappfoodPage() {
@@ -282,46 +286,66 @@ export function SimulationSnappfoodPage() {
   const getStatusBadge = (code: number) => {
     switch (code) {
       case 56:
-        return <Chip label="56: New Order (سفارش جدید)" color="primary" sx={{ fontWeight: 'bold' }} />;
+        return <Chip label="56: New Order" color="primary" sx={{ fontWeight: 'bold' }} />;
       case 714:
-        return <Chip label="714: Sent to Store (ارسال به فروشگاه)" color="info" sx={{ fontWeight: 'bold' }} />;
+        return <Chip label="714: Sent to Store" color="info" sx={{ fontWeight: 'bold' }} />;
       case 61:
-        return <Chip label="61: Received (دریافت شده - Ack)" color="info" sx={{ fontWeight: 'bold' }} />;
+        return <Chip label="61: Received (Ack)" color="info" sx={{ fontWeight: 'bold' }} />;
       case 713:
-        return <Chip label="713: Opened (باز شده - Pick)" color="warning" sx={{ fontWeight: 'bold' }} />;
+        return <Chip label="713: Opened (Pick)" color="warning" sx={{ fontWeight: 'bold' }} />;
       case 42:
-        return <Chip label="42: Accepted (تایید شده)" color="success" sx={{ fontWeight: 'bold' }} />;
+        return <Chip label="42: Accepted" color="success" sx={{ fontWeight: 'bold' }} />;
       case 51:
-        return <Chip label="51: Rejected (رد شده)" color="error" sx={{ fontWeight: 'bold' }} />;
+        return <Chip label="51: Rejected" color="error" sx={{ fontWeight: 'bold' }} />;
       case 54:
-        return <Chip label="54: Cancelled (کنسل شده)" color="default" sx={{ fontWeight: 'bold' }} />;
+        return <Chip label="54: Cancelled" color="default" sx={{ fontWeight: 'bold' }} />;
       case 71:
-        return <Chip label="71: Extra Payment (پرداخت اضافه)" color="secondary" sx={{ fontWeight: 'bold' }} />;
+        return <Chip label="71: Extra Payment" color="secondary" sx={{ fontWeight: 'bold' }} />;
       default:
-        return <Chip label={`${code}: Unknown`} color="default" />;
+        return <Chip label={`${code}: Status`} color="default" />;
     }
   };
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Box sx={{ p: { xs: 2, md: 3 } }}>
+      <CustomBreadcrumbs
+        heading={t('simulation.snappfood.title', 'Snappfood Annex v4.3.0 Console')}
+        links={[
+          { name: t('nav.dashboard', 'Home'), href: '/app/pos' },
+          { name: t('simulation.breadcrumb', 'Simulation Hub'), href: '/app/simulation' },
+          { name: t('simulation.snappfood.title', 'Snappfood Simulator') },
+        ]}
+        action={
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={fetchLogs}
+            disabled={loading}
+            sx={{ fontWeight: 'bold' }}
+          >
+            {t('simulation.hub.refreshLogs', 'Refresh Status & Logs')}
+          </Button>
+        }
+      />
+
       <Stack spacing={3}>
         {/* Header Alert */}
-        <Alert severity="info" icon={false} sx={{ borderLeft: '6px solid #e91e63' }}>
+        <Alert severity="info" icon={false} sx={{ borderLeft: '6px solid #e91e63', borderRadius: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
             <Box>
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                <Chip label="SIMULATED" color="secondary" size="small" sx={{ fontWeight: 'bold' }} />
+                <Chip label="v4.3.0 Ready" color="secondary" size="small" sx={{ fontWeight: 'bold' }} />
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                  اسنپ‌فود - نسخه رستورانی ۴.۳.۰ (Snappfood Integration Annex v4.3.0 Console)
+                  {t('simulation.snappfood.title', 'Snappfood Annex v4.3.0 Console')}
                 </Typography>
               </Box>
               <Typography variant="body2" color="text.secondary">
-                {t('simulation.snappfoodNotice', 'Comprehensive mock test bench for Snappfood OAuth2 Authentication, v4.3.0 Webhooks (bikerStatusV2, paidPrice, orderCoupon), Order Status Stepper, & Vendor Automation APIs.')}
+                {t(
+                  'simulation.snappfood.subtitle',
+                  'Comprehensive test bench for Snappfood OAuth2 Authentication, v4.3.0 Webhooks (bikerStatusV2, paidPrice, orderCoupon), Order Status Stepper, & Vendor Automation APIs.'
+                )}
               </Typography>
             </Box>
-            <Button variant="contained" color="secondary" onClick={fetchLogs}>
-              Refresh Audit Logs
-            </Button>
           </Box>
         </Alert>
 
@@ -334,11 +358,11 @@ export function SimulationSnappfoodPage() {
             scrollButtons="auto"
             sx={{ borderBottom: 1, borderColor: 'divider', px: 2, pt: 1 }}
           >
-            <Tab label="🔐 OAuth2 Auth & Token (/token)" sx={{ fontWeight: 'bold' }} />
-            <Tab label="🚀 Webhook Generator (v4.3.0)" sx={{ fontWeight: 'bold' }} />
-            <Tab label="🔄 Order Lifecycle Stepper" sx={{ fontWeight: 'bold' }} />
-            <Tab label="🛠️ Vendor Automation APIs (20+ Endpoints)" sx={{ fontWeight: 'bold' }} />
-            <Tab label="📜 Integration Audit Logs" sx={{ fontWeight: 'bold' }} />
+            <Tab label={t('simulation.snappfood.tabs.oauth', '🔐 OAuth2 Auth & Token (/token)')} sx={{ fontWeight: 'bold' }} />
+            <Tab label={t('simulation.snappfood.tabs.webhook', '🚀 Webhook Generator (v4.3.0)')} sx={{ fontWeight: 'bold' }} />
+            <Tab label={t('simulation.snappfood.tabs.stepper', '🔄 Order Lifecycle Stepper')} sx={{ fontWeight: 'bold' }} />
+            <Tab label={t('simulation.snappfood.tabs.vendorApi', '🛠️ Vendor Automation APIs (20+ Endpoints)')} sx={{ fontWeight: 'bold' }} />
+            <Tab label={t('simulation.snappfood.tabs.logs', '📜 Integration Audit Logs')} sx={{ fontWeight: 'bold' }} />
           </Tabs>
 
           <Box sx={{ p: 3 }}>
@@ -348,27 +372,27 @@ export function SimulationSnappfoodPage() {
                 <Grid size={{ xs: 12, md: 6 }}>
                   <Card sx={{ p: 3, bgcolor: 'background.neutral', borderRadius: 2 }}>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-                      OAuth2 Password Grant Simulator
+                      {t('simulation.snappfood.oauth.cardTitle', 'OAuth2 Password Grant Simulator')}
                     </Typography>
                     <Stack spacing={2}>
                       <FormControl fullWidth size="small">
-                        <InputLabel>Environment / Server Endpoint</InputLabel>
-                        <Select value={authEnv} label="Environment" onChange={(e) => setAuthEnv(e.target.value as any)}>
-                          <MenuItem value="staging">Staging (https://staging-auth.snappfood.dev/token)</MenuItem>
-                          <MenuItem value="production">Production (https://auth.snappfood.ir/token)</MenuItem>
+                        <InputLabel>{t('simulation.snappfood.oauth.envLabel', 'Environment / Server Endpoint')}</InputLabel>
+                        <Select value={authEnv} label={t('simulation.snappfood.oauth.envLabel', 'Environment / Server Endpoint')} onChange={(e) => setAuthEnv(e.target.value as any)}>
+                          <MenuItem value="staging">{t('simulation.snappfood.oauth.staging', 'Staging (https://staging-auth.snappfood.dev/token)')}</MenuItem>
+                          <MenuItem value="production">{t('simulation.snappfood.oauth.production', 'Production (https://auth.snappfood.ir/token)')}</MenuItem>
                         </Select>
                       </FormControl>
-                      <TextField label="Client ID" size="small" value={clientId} onChange={(e) => setClientId(e.target.value)} fullWidth />
-                      <TextField label="Client Secret" size="small" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} fullWidth />
-                      <TextField label="Username" size="small" value={username} onChange={(e) => setUsername(e.target.value)} fullWidth />
-                      <TextField label="Password" size="small" type="password" value={password} onChange={(e) => setPassword(e.target.value)} fullWidth />
+                      <TextField label={t('simulation.snappfood.oauth.clientId', 'Client ID')} size="small" value={clientId} onChange={(e) => setClientId(e.target.value)} fullWidth />
+                      <TextField label={t('simulation.snappfood.oauth.clientSecret', 'Client Secret')} size="small" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} fullWidth />
+                      <TextField label={t('simulation.snappfood.oauth.username', 'Username')} size="small" value={username} onChange={(e) => setUsername(e.target.value)} fullWidth />
+                      <TextField label={t('simulation.snappfood.oauth.password', 'Password')} size="small" type="password" value={password} onChange={(e) => setPassword(e.target.value)} fullWidth />
 
-                      <Box sx={{ display: 'flex', gap: 2, pt: 1 }}>
+                      <Box sx={{ display: 'flex', gap: 2, pt: 1, flexWrap: 'wrap' }}>
                         <Button variant="contained" color="primary" onClick={() => handleRequestToken()} disabled={loading}>
-                          Request Access Token
+                          {t('simulation.snappfood.oauth.requestToken', 'Request Access Token')}
                         </Button>
                         <Button variant="outlined" color="error" onClick={() => handleRequestToken(3001)} disabled={loading}>
-                          Simulate Token Error 3001
+                          {t('simulation.snappfood.oauth.simulateError', 'Simulate Token Error 3001')}
                         </Button>
                       </Box>
                     </Stack>
@@ -378,14 +402,16 @@ export function SimulationSnappfoodPage() {
                 <Grid size={{ xs: 12, md: 6 }}>
                   <Card sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-                      Token Response Output
+                      {t('simulation.snappfood.oauth.responseTitle', 'Token Response Output')}
                     </Typography>
                     {tokenResponse ? (
                       <Box component="pre" sx={{ p: 2, bgcolor: '#1e1e1e', color: '#00ffcc', borderRadius: 1, overflow: 'auto', fontSize: 13 }}>
                         {JSON.stringify(tokenResponse, null, 2)}
                       </Box>
                     ) : (
-                      <Typography color="text.secondary">No token requested yet. Click &quot;Request Access Token&quot;.</Typography>
+                      <Typography color="text.secondary">
+                        {t('simulation.snappfood.oauth.noToken', 'No token requested yet. Click "Request Access Token".')}
+                      </Typography>
                     )}
                   </Card>
                 </Grid>
@@ -398,45 +424,45 @@ export function SimulationSnappfoodPage() {
                 <Grid size={{ xs: 12, md: 7 }}>
                   <Card sx={{ p: 3, borderRadius: 2 }}>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-                      Generate v4.3.0 Order Webhook (HMAC Signed)
+                      {t('simulation.snappfood.webhook.cardTitle', 'Generate v4.3.0 Order Webhook (HMAC Signed)')}
                     </Typography>
                     <Grid container spacing={2}>
                       <Grid size={{ xs: 12, sm: 6 }}>
-                        <TextField label="Customer Name (نام مشتری)" size="small" value={customerName} onChange={(e) => setCustomerName(e.target.value)} fullWidth />
+                        <TextField label={t('simulation.snappfood.webhook.customerName', 'Customer Name')} size="small" value={customerName} onChange={(e) => setCustomerName(e.target.value)} fullWidth />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
-                        <TextField label="Phone (تلفن)" size="small" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} fullWidth />
+                        <TextField label={t('simulation.snappfood.webhook.phone', 'Phone Number')} size="small" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} fullWidth />
                       </Grid>
                       <Grid size={{ xs: 12 }}>
-                        <TextField label="Address (آدرس تحویل)" size="small" value={deliverAddress} onChange={(e) => setDeliverAddress(e.target.value)} fullWidth />
+                        <TextField label={t('simulation.snappfood.webhook.address', 'Delivery Address')} size="small" value={deliverAddress} onChange={(e) => setDeliverAddress(e.target.value)} fullWidth />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 4 }}>
                         <FormControl fullWidth size="small">
-                          <InputLabel>Expedition Type</InputLabel>
-                          <Select value={expeditionType} label="Expedition Type" onChange={(e) => setExpeditionType(e.target.value)}>
-                            <MenuItem value="DELIVERY">DELIVERY (پیک رستوران)</MenuItem>
-                            <MenuItem value="ZF_EXPRESS">ZF_EXPRESS (پیک اکسپرس)</MenuItem>
-                            <MenuItem value="MIARE">MIARE (میاره)</MenuItem>
-                            <MenuItem value="PICKUP">PICKUP (حضوری)</MenuItem>
-                            <MenuItem value="PICK_MAN">PICK_MAN (پیک اختصاصی)</MenuItem>
+                          <InputLabel>{t('simulation.snappfood.webhook.expeditionType', 'Expedition Type')}</InputLabel>
+                          <Select value={expeditionType} label={t('simulation.snappfood.webhook.expeditionType', 'Expedition Type')} onChange={(e) => setExpeditionType(e.target.value)}>
+                            <MenuItem value="DELIVERY">DELIVERY</MenuItem>
+                            <MenuItem value="ZF_EXPRESS">ZF_EXPRESS</MenuItem>
+                            <MenuItem value="MIARE">MIARE</MenuItem>
+                            <MenuItem value="PICKUP">PICKUP</MenuItem>
+                            <MenuItem value="PICK_MAN">PICK_MAN</MenuItem>
                           </Select>
                         </FormControl>
                       </Grid>
                       <Grid size={{ xs: 12, sm: 4 }}>
-                        <TextField label="Total Price (مبلغ کل - تومان)" type="number" size="small" value={price} onChange={(e) => setPrice(Number(e.target.value))} fullWidth />
+                        <TextField label={t('simulation.snappfood.webhook.totalPrice', 'Total Price (Toman)')} type="number" size="small" value={price} onChange={(e) => setPrice(Number(e.target.value))} fullWidth />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 4 }}>
-                        <TextField label="Paid Price (مبلغ پرداختی)" type="number" size="small" value={paidPrice} onChange={(e) => setPaidPrice(Number(e.target.value))} fullWidth />
+                        <TextField label={t('simulation.snappfood.webhook.paidPrice', 'Paid Price (Toman)')} type="number" size="small" value={paidPrice} onChange={(e) => setPaidPrice(Number(e.target.value))} fullWidth />
                       </Grid>
 
                       {/* v4.3.0 Biker & Coupon details */}
                       <Grid size={{ xs: 12, sm: 4 }}>
-                        <TextField label="Biker Name (نام پیک)" size="small" value={bikerName} onChange={(e) => setBikerName(e.target.value)} fullWidth />
+                        <TextField label={t('simulation.snappfood.webhook.bikerName', 'Biker Name')} size="small" value={bikerName} onChange={(e) => setBikerName(e.target.value)} fullWidth />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 4 }}>
                         <FormControl fullWidth size="small">
-                          <InputLabel>Biker Status V2</InputLabel>
-                          <Select value={bikerStatusV2} label="Biker Status V2" onChange={(e) => setBikerStatusV2(e.target.value)}>
+                          <InputLabel>{t('simulation.snappfood.webhook.bikerStatus', 'Biker Status V2')}</InputLabel>
+                          <Select value={bikerStatusV2} label={t('simulation.snappfood.webhook.bikerStatus', 'Biker Status V2')} onChange={(e) => setBikerStatusV2(e.target.value)}>
                             <MenuItem value="REQUESTED">REQUESTED</MenuItem>
                             <MenuItem value="ASSIGNED">ASSIGNED</MenuItem>
                             <MenuItem value="ACK">ACK</MenuItem>
@@ -449,27 +475,27 @@ export function SimulationSnappfoodPage() {
                       </Grid>
                       <Grid size={{ xs: 12, sm: 4 }}>
                         <FormControl fullWidth size="small">
-                          <InputLabel>Order Coupon (کوپن)</InputLabel>
-                          <Select value={couponType} label="Order Coupon" onChange={(e) => setCouponType(e.target.value)}>
-                            <MenuItem value="none">No Coupon (بدون کوپن)</MenuItem>
-                            <MenuItem value="extra_item">extra_item (آیتم اضافه/نوشابه)</MenuItem>
-                            <MenuItem value="free_delivery_fee">free_delivery_fee (ارسال رایگان)</MenuItem>
-                            <MenuItem value="total_discount">total_discount (تخفیف کل)</MenuItem>
+                          <InputLabel>{t('simulation.snappfood.webhook.orderCoupon', 'Order Coupon')}</InputLabel>
+                          <Select value={couponType} label={t('simulation.snappfood.webhook.orderCoupon', 'Order Coupon')} onChange={(e) => setCouponType(e.target.value)}>
+                            <MenuItem value="none">{t('simulation.snappfood.webhook.noCoupon', 'No Coupon')}</MenuItem>
+                            <MenuItem value="extra_item">{t('simulation.snappfood.webhook.extraItemCoupon', 'extra_item (Free Beverage / Item)')}</MenuItem>
+                            <MenuItem value="free_delivery_fee">{t('simulation.snappfood.webhook.freeDeliveryCoupon', 'free_delivery_fee (Free Delivery)')}</MenuItem>
+                            <MenuItem value="total_discount">{t('simulation.snappfood.webhook.totalDiscountCoupon', 'total_discount (25% Total Discount)')}</MenuItem>
                           </Select>
                         </FormControl>
                       </Grid>
 
                       <Grid size={{ xs: 12 }}>
-                        <TextField label="Vendor Notes / Comment (توضیحات سفارش)" multiline rows={2} size="small" value={notes} onChange={(e) => setNotes(e.target.value)} fullWidth />
+                        <TextField label={t('simulation.snappfood.webhook.notes', 'Vendor Notes / Comment')} multiline rows={2} size="small" value={notes} onChange={(e) => setNotes(e.target.value)} fullWidth />
                       </Grid>
 
                       <Grid size={{ xs: 12 }}>
-                        <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+                        <Box sx={{ display: 'flex', gap: 2, mt: 1, flexWrap: 'wrap' }}>
                           <Button variant="contained" color="secondary" onClick={handleGenerateWebhook} disabled={loading}>
-                            Submit Webhook (Post Order)
+                            {t('simulation.snappfood.webhook.submit', 'Submit Webhook (Post Order)')}
                           </Button>
                           <Button variant="outlined" color="warning" onClick={handleReplayDuplicate} disabled={loading}>
-                            Replay (Test Duplicate Suppression)
+                            {t('simulation.snappfood.webhook.replay', 'Replay (Test Duplicate Suppression)')}
                           </Button>
                         </Box>
                       </Grid>
@@ -480,22 +506,52 @@ export function SimulationSnappfoodPage() {
                 <Grid size={{ xs: 12, md: 5 }}>
                   <Card sx={{ p: 3, borderRadius: 2 }}>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-                      Webhook Response & Order Created
+                      {t('simulation.snappfood.webhook.responseTitle', 'Webhook Response & Order Created')}
                     </Typography>
                     {generatedResult ? (
                       <Stack spacing={2}>
                         <Alert severity={generatedResult.duplicate ? 'warning' : 'success'}>
-                          <Typography variant="subtitle2">
-                            {generatedResult.duplicate ? 'DUPLICATE WEBHOOK IGNORED (Exactly-Once Enforced)' : 'ORDER CREATED SUCCESSFULLY'}
+                          <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                            {generatedResult.duplicate
+                              ? t('simulation.snappfood.webhook.duplicateAlert', 'DUPLICATE WEBHOOK IGNORED (Exactly-Once Enforced)')
+                              : t('simulation.snappfood.webhook.successAlert', 'ORDER CREATED SUCCESSFULLY')}
                           </Typography>
                           Log ID: {generatedResult.log_id || 'N/A'}
                         </Alert>
+
+                        {/* Order Navigation Quick Links */}
+                        {generatedResult?.order?.id && (
+                          <Stack direction="row" spacing={1}>
+                            <Button
+                              component={RouterLink}
+                              href={`/app/orders/${generatedResult.order.id}`}
+                              variant="outlined"
+                              size="small"
+                              startIcon={<ReceiptLongIcon />}
+                            >
+                              {t('simulation.snappfood.webhook.viewInOrders', 'View in Orders Directory')}
+                            </Button>
+                            <Button
+                              component={RouterLink}
+                              href="/app/pos"
+                              variant="outlined"
+                              color="secondary"
+                              size="small"
+                              startIcon={<PointOfSaleIcon />}
+                            >
+                              {t('simulation.snappfood.webhook.openInPos', 'Open POS Register')}
+                            </Button>
+                          </Stack>
+                        )}
+
                         <Box component="pre" sx={{ p: 2, bgcolor: '#1e1e1e', color: '#66ff66', borderRadius: 1, overflow: 'auto', maxHeight: 350, fontSize: 12 }}>
                           {JSON.stringify(generatedResult, null, 2)}
                         </Box>
                       </Stack>
                     ) : (
-                      <Typography color="text.secondary">No order generated yet. Fill the form and click Submit Webhook.</Typography>
+                      <Typography color="text.secondary">
+                        {t('simulation.snappfood.webhook.noOrder', 'No order generated yet. Fill the form and click Submit Webhook.')}
+                      </Typography>
                     )}
                   </Card>
                 </Grid>
@@ -506,46 +562,46 @@ export function SimulationSnappfoodPage() {
             {activeTab === 2 && (
               <Stack spacing={3}>
                 <Card sx={{ p: 3, borderRadius: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
                     <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                      Order Status Lifecycle State Machine
+                      {t('simulation.snappfood.stepper.title', 'Order Status Lifecycle State Machine')}
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                      <Typography variant="subtitle2">Target Order Code:</Typography>
+                      <Typography variant="subtitle2">{t('simulation.snappfood.stepper.targetCode', 'Target Order Code')}:</Typography>
                       <TextField size="small" value={orderCode} onChange={(e) => setOrderCode(e.target.value)} sx={{ width: 140 }} />
                     </Box>
                   </Box>
 
                   <Box sx={{ p: 2, bgcolor: 'background.neutral', borderRadius: 2, mb: 3 }}>
                     <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', justifyContent: 'center' }}>
-                      <Typography variant="subtitle2">Current State Code:</Typography>
+                      <Typography variant="subtitle2">{t('simulation.snappfood.stepper.currentState', 'Current State Code')}:</Typography>
                       {getStatusBadge(currentStatus)}
                     </Box>
                   </Box>
 
                   {/* Actions Bar */}
                   <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                    Available Vendor Actions (API Endpoints):
+                    {t('simulation.snappfood.stepper.availableActions', 'Available Vendor Actions (API Endpoints):')}
                   </Typography>
                   <Grid container spacing={2}>
                     <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                       <Button fullWidth variant="outlined" color="info" onClick={() => handleExecuteAction('ACK')} disabled={loading}>
-                        1. Ack Order (POST /ack) → Code 61
+                        {t('simulation.snappfood.stepper.ack', '1. Ack Order (POST /ack) → Code 61')}
                       </Button>
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                       <Button fullWidth variant="outlined" color="warning" onClick={() => handleExecuteAction('PICK')} disabled={loading}>
-                        2. Pick Order (POST /pick) → Code 713
+                        {t('simulation.snappfood.stepper.pick', '2. Pick Order (POST /pick) → Code 713')}
                       </Button>
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                       <Button fullWidth variant="contained" color="success" onClick={() => handleExecuteAction('ACCEPT')} disabled={loading}>
-                        3. Accept Order (POST /accept) → Code 42
+                        {t('simulation.snappfood.stepper.accept', '3. Accept Order (POST /accept) → Code 42')}
                       </Button>
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                       <Button fullWidth variant="contained" color="error" onClick={() => handleExecuteAction('REJECT')} disabled={loading}>
-                        4. Reject Order (POST /reject) → Code 51
+                        {t('simulation.snappfood.stepper.reject', '4. Reject Order (POST /reject) → Code 51')}
                       </Button>
                     </Grid>
                   </Grid>
@@ -554,32 +610,32 @@ export function SimulationSnappfoodPage() {
                   <Accordion sx={{ mt: 3, boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
                     <AccordionSummary>
                       <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                        ⚙️ Accept & Reject Parameters Customization (Max Limits Test)
+                        {t('simulation.snappfood.stepper.optionsTitle', 'Accept & Reject Parameters Customization')}
                       </Typography>
                     </AccordionSummary>
                     <AccordionDetails>
                       <Grid container spacing={2}>
                         <Grid size={{ xs: 12, sm: 4 }}>
-                          <TextField label="Accept: deliveryTime (Max 70m)" type="number" size="small" value={acceptDeliveryTime} onChange={(e) => setAcceptDeliveryTime(Number(e.target.value))} fullWidth />
+                          <TextField label={t('simulation.snappfood.stepper.deliveryTime', 'Accept: deliveryTime (Max 70m)')} type="number" size="small" value={acceptDeliveryTime} onChange={(e) => setAcceptDeliveryTime(Number(e.target.value))} fullWidth />
                         </Grid>
                         <Grid size={{ xs: 12, sm: 4 }}>
-                          <TextField label="Accept: riderPickupTime (min)" type="number" size="small" value={acceptRiderPickupTime} onChange={(e) => setAcceptRiderPickupTime(Number(e.target.value))} fullWidth />
+                          <TextField label={t('simulation.snappfood.stepper.riderPickupTime', 'Accept: riderPickupTime (min)')} type="number" size="small" value={acceptRiderPickupTime} onChange={(e) => setAcceptRiderPickupTime(Number(e.target.value))} fullWidth />
                         </Grid>
                         <Grid size={{ xs: 12, sm: 4 }}>
-                          <TextField label="Accept: delta (Max 500)" type="number" size="small" value={acceptDelta} onChange={(e) => setAcceptDelta(Number(e.target.value))} fullWidth />
+                          <TextField label={t('simulation.snappfood.stepper.delta', 'Accept: delta (Max 500)')} type="number" size="small" value={acceptDelta} onChange={(e) => setAcceptDelta(Number(e.target.value))} fullWidth />
                         </Grid>
                         <Grid size={{ xs: 12, sm: 6 }}>
                           <FormControl fullWidth size="small">
-                            <InputLabel>Reject: Decline Reason (دلیل رد)</InputLabel>
-                            <Select value={declineReasonId} label="Decline Reason" onChange={(e) => setDeclineReasonId(Number(e.target.value))}>
-                              <MenuItem value={113}>113: رستوران پیک ندارد</MenuItem>
-                              <MenuItem value={153}>153: تاخیر در زمان ارسال</MenuItem>
-                              <MenuItem value={154}>154: تغییر هزینه پیک</MenuItem>
+                            <InputLabel>{t('simulation.snappfood.stepper.declineReason', 'Reject: Decline Reason')}</InputLabel>
+                            <Select value={declineReasonId} label={t('simulation.snappfood.stepper.declineReason', 'Reject: Decline Reason')} onChange={(e) => setDeclineReasonId(Number(e.target.value))}>
+                              <MenuItem value={113}>{t('simulation.snappfood.stepper.reasonNoBiker', '113: Restaurant has no rider')}</MenuItem>
+                              <MenuItem value={153}>{t('simulation.snappfood.stepper.reasonDelay', '153: Delivery delay')}</MenuItem>
+                              <MenuItem value={154}>{t('simulation.snappfood.stepper.reasonDeliveryFee', '154: Delivery fee changed')}</MenuItem>
                             </Select>
                           </FormControl>
                         </Grid>
                         <Grid size={{ xs: 12, sm: 6 }}>
-                          <TextField label="Reject: Comment" size="small" value={rejectComment} onChange={(e) => setRejectComment(e.target.value)} fullWidth />
+                          <TextField label={t('simulation.snappfood.stepper.rejectComment', 'Reject: Comment')} size="small" value={rejectComment} onChange={(e) => setRejectComment(e.target.value)} fullWidth />
                         </Grid>
                       </Grid>
                     </AccordionDetails>
@@ -589,7 +645,7 @@ export function SimulationSnappfoodPage() {
                 {actionResponse && (
                   <Card sx={{ p: 3, borderRadius: 2 }}>
                     <Typography variant="h6" sx={{ mb: 1, fontWeight: 'bold' }}>
-                      Action Response
+                      {t('simulation.snappfood.stepper.actionResponse', 'Action Response')}
                     </Typography>
                     <Box component="pre" sx={{ p: 2, bgcolor: '#1e1e1e', color: '#ffcc00', borderRadius: 1, fontSize: 13 }}>
                       {JSON.stringify(actionResponse, null, 2)}
@@ -605,40 +661,40 @@ export function SimulationSnappfoodPage() {
                 <Grid size={{ xs: 12, md: 5 }}>
                   <Card sx={{ p: 3, borderRadius: 2 }}>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-                      Vendor Automation API Test Console (v4.3.0)
+                      {t('simulation.snappfood.vendorApi.title', 'Vendor Automation API Test Console (v4.3.0)')}
                     </Typography>
                     <Stack spacing={2}>
                       <FormControl fullWidth size="small">
-                        <InputLabel>Select Endpoint</InputLabel>
-                        <Select value={apiEndpoint} label="Select Endpoint" onChange={(e) => setApiEndpoint(e.target.value)}>
-                          <MenuItem value="GET_CATALOG">GET /va/v1.1/product/ (Get Catalog)</MenuItem>
-                          <MenuItem value="SYNC_CATEGORY">POST /va/v1/category/sync/categoryId (Sync Category)</MenuItem>
-                          <MenuItem value="SYNC_PRODUCT">POST /va/v1/product/sync/productId (Sync Product)</MenuItem>
-                          <MenuItem value="TOGGLE_PRODUCT">PUT /va/v1/product/ (Toggle Product Status)</MenuItem>
-                          <MenuItem value="GET_TOPPINGS">GET /va/v1/topping/groups (Get Toppings)</MenuItem>
-                          <MenuItem value="GET_STATUS">GET /va/v1/vendor/status (Get Vendor Status)</MenuItem>
-                          <MenuItem value="GET_DELIVERIES">GET /va/v1/vendor/vendorDeliveries (Service Polygons)</MenuItem>
-                          <MenuItem value="GET_DECLINE_REASONS">GET /va/v1/order/decline-reason (Decline Reasons)</MenuItem>
-                          <MenuItem value="LATEST_ORDERS">POST /va/v1/order/latest (Recent Orders)</MenuItem>
+                        <InputLabel>{t('simulation.snappfood.vendorApi.selectEndpoint', 'Select Endpoint')}</InputLabel>
+                        <Select value={apiEndpoint} label={t('simulation.snappfood.vendorApi.selectEndpoint', 'Select Endpoint')} onChange={(e) => setApiEndpoint(e.target.value)}>
+                          <MenuItem value="GET_CATALOG">{t('simulation.snappfood.vendorApi.getCatalog', 'GET /va/v1.1/product/ (Get Catalog)')}</MenuItem>
+                          <MenuItem value="SYNC_CATEGORY">{t('simulation.snappfood.vendorApi.syncCategory', 'POST /va/v1/category/sync/categoryId (Sync Category)')}</MenuItem>
+                          <MenuItem value="SYNC_PRODUCT">{t('simulation.snappfood.vendorApi.syncProduct', 'POST /va/v1/product/sync/productId (Sync Product)')}</MenuItem>
+                          <MenuItem value="TOGGLE_PRODUCT">{t('simulation.snappfood.vendorApi.toggleProduct', 'PUT /va/v1/product/ (Toggle Product Status)')}</MenuItem>
+                          <MenuItem value="GET_TOPPINGS">{t('simulation.snappfood.vendorApi.getToppings', 'GET /va/v1/topping/groups (Get Toppings)')}</MenuItem>
+                          <MenuItem value="GET_STATUS">{t('simulation.snappfood.vendorApi.getStatus', 'GET /va/v1/vendor/status (Get Vendor Status)')}</MenuItem>
+                          <MenuItem value="GET_DELIVERIES">{t('simulation.snappfood.vendorApi.getDeliveries', 'GET /va/v1/vendor/vendorDeliveries (Service Polygons)')}</MenuItem>
+                          <MenuItem value="GET_DECLINE_REASONS">{t('simulation.snappfood.vendorApi.getDeclineReasons', 'GET /va/v1/order/decline-reason (Decline Reasons)')}</MenuItem>
+                          <MenuItem value="LATEST_ORDERS">{t('simulation.snappfood.vendorApi.latestOrders', 'POST /va/v1/order/latest (Recent Orders)')}</MenuItem>
                         </Select>
                       </FormControl>
 
                       {apiEndpoint === 'SYNC_CATEGORY' && (
                         <Stack spacing={2}>
-                          <TextField label="Category ID" type="number" size="small" value={syncCategoryId} onChange={(e) => setSyncCategoryId(Number(e.target.value))} fullWidth />
-                          <TextField label="Category Code" size="small" value={syncCategoryCode} onChange={(e) => setSyncCategoryCode(e.target.value)} fullWidth />
+                          <TextField label={t('simulation.snappfood.vendorApi.categoryId', 'Category ID')} type="number" size="small" value={syncCategoryId} onChange={(e) => setSyncCategoryId(Number(e.target.value))} fullWidth />
+                          <TextField label={t('simulation.snappfood.vendorApi.categoryCode', 'Category Code')} size="small" value={syncCategoryCode} onChange={(e) => setSyncCategoryCode(e.target.value)} fullWidth />
                         </Stack>
                       )}
 
                       {apiEndpoint === 'SYNC_PRODUCT' && (
                         <Stack spacing={2}>
-                          <TextField label="Product ID" type="number" size="small" value={syncProductId} onChange={(e) => setSyncProductId(Number(e.target.value))} fullWidth />
-                          <TextField label="Product Code" size="small" value={syncProductCode} onChange={(e) => setSyncProductCode(e.target.value)} fullWidth />
+                          <TextField label={t('simulation.snappfood.vendorApi.productId', 'Product ID')} type="number" size="small" value={syncProductId} onChange={(e) => setSyncProductId(Number(e.target.value))} fullWidth />
+                          <TextField label={t('simulation.snappfood.vendorApi.productCode', 'Product Code')} size="small" value={syncProductCode} onChange={(e) => setSyncProductCode(e.target.value)} fullWidth />
                         </Stack>
                       )}
 
                       <Button variant="contained" color="primary" onClick={handleRunVendorApi} disabled={loading}>
-                        Execute API Endpoint
+                        {t('simulation.snappfood.vendorApi.execute', 'Execute API Endpoint')}
                       </Button>
                     </Stack>
                   </Card>
@@ -647,14 +703,16 @@ export function SimulationSnappfoodPage() {
                 <Grid size={{ xs: 12, md: 7 }}>
                   <Card sx={{ p: 3, borderRadius: 2 }}>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-                      API Response Payload
+                      {t('simulation.snappfood.vendorApi.response', 'API Response Payload')}
                     </Typography>
                     {apiResponse ? (
                       <Box component="pre" sx={{ p: 2, bgcolor: '#1e1e1e', color: '#00e676', borderRadius: 1, overflow: 'auto', maxHeight: 400, fontSize: 13 }}>
                         {JSON.stringify(apiResponse, null, 2)}
                       </Box>
                     ) : (
-                      <Typography color="text.secondary">Select an endpoint and click Execute API Endpoint.</Typography>
+                      <Typography color="text.secondary">
+                        {t('simulation.snappfood.vendorApi.placeholder', 'Select an endpoint and click Execute API Endpoint.')}
+                      </Typography>
                     )}
                   </Card>
                 </Grid>
@@ -665,18 +723,18 @@ export function SimulationSnappfoodPage() {
             {activeTab === 4 && (
               <Stack spacing={2}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  Snappfood Webhook & Integration Receipts Audit
+                  {t('simulation.logs.title', 'Snappfood Webhook & Integration Receipts Audit')}
                 </Typography>
                 <TableContainer component={Card} sx={{ borderRadius: 2 }}>
                   <Table size="small">
                     <TableHead>
                       <TableRow sx={{ bgcolor: 'background.neutral' }}>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Time</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Event Type</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Idempotency Key</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Duplicate?</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Action</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.logs.table.timestamp', 'Time')}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.logs.table.eventType', 'Event Type')}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.logs.table.reference', 'Idempotency Key')}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.logs.table.hmac', 'Duplicate?')}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.logs.table.status', 'Status')}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>{t('simulation.logs.table.actions', 'Action')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -694,7 +752,7 @@ export function SimulationSnappfoodPage() {
                             </TableCell>
                             <TableCell>
                               <Button size="small" variant="outlined" onClick={() => setSelectedLog(log)}>
-                                Inspect Payload
+                                {t('simulation.logs.table.actions', 'Inspect Payload')}
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -702,7 +760,7 @@ export function SimulationSnappfoodPage() {
                       ) : (
                         <TableRow>
                           <TableCell colSpan={6} align="center" sx={{ py: 3, color: 'text.secondary' }}>
-                            No Snappfood integration logs recorded yet.
+                            {t('simulation.logs.table.noLogs', 'No Snappfood integration logs recorded yet.')}
                           </TableCell>
                         </TableRow>
                       )}
@@ -718,22 +776,26 @@ export function SimulationSnappfoodPage() {
       {/* Log Inspection Dialog */}
       <Dialog open={Boolean(selectedLog)} onClose={() => setSelectedLog(null)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ fontWeight: 'bold' }}>
-          Inspect Integration Receipt [{selectedLog?.idempotency_key}]
+          {t('simulation.logs.modal.title', 'Inspect Integration Receipt')} [{selectedLog?.idempotency_key}]
         </DialogTitle>
         <DialogContent dividers>
           {selectedLog && (
             <Stack spacing={2}>
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <Typography variant="subtitle2">Provider: {selectedLog.provider}</Typography>
-                <Typography variant="subtitle2">Event: {selectedLog.event_type}</Typography>
-                <Typography variant="subtitle2">HMAC: {selectedLog.hmac_signature ? 'VERIFIED' : 'NONE'}</Typography>
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                <Typography variant="subtitle2">{t('simulation.logs.modal.provider', 'Provider')}: {selectedLog.provider}</Typography>
+                <Typography variant="subtitle2">{t('simulation.logs.modal.eventType', 'Event')}: {selectedLog.event_type}</Typography>
+                <Typography variant="subtitle2">{t('simulation.logs.modal.hmacSignature', 'HMAC')}: {selectedLog.hmac_signature ? 'VERIFIED' : 'NONE'}</Typography>
               </Box>
               <Divider />
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Request Payload (v4.3.0):</Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                {t('simulation.logs.modal.inboundRequest', 'Request Payload (v4.3.0):')}
+              </Typography>
               <Box component="pre" sx={{ p: 2, bgcolor: '#1e1e1e', color: '#00ffcc', borderRadius: 1, fontSize: 12, overflow: 'auto', maxHeight: 250 }}>
                 {JSON.stringify(selectedLog.request_payload, null, 2)}
               </Box>
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Response Payload:</Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                {t('simulation.logs.modal.outboundResponse', 'Response Payload:')}
+              </Typography>
               <Box component="pre" sx={{ p: 2, bgcolor: '#1e1e1e', color: '#ffcc00', borderRadius: 1, fontSize: 12, overflow: 'auto', maxHeight: 200 }}>
                 {JSON.stringify(selectedLog.response_payload, null, 2)}
               </Box>
@@ -741,10 +803,12 @@ export function SimulationSnappfoodPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSelectedLog(null)}>Close</Button>
+          <Button onClick={() => setSelectedLog(null)}>
+            {t('simulation.logs.modal.close', 'Close')}
+          </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+    </Box>
   );
 }
 
