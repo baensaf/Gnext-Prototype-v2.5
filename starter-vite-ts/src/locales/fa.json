@@ -21,6 +21,13 @@
   "nav": {
     "home": "خانه",
     "dashboard": "داشبورد",
+    "liveOperations": "عملیات زنده",
+    "businessManagement": "مدیریت کسب‌وکار",
+    "reportsAudit": "گزارش‌ها و ممیزی",
+    "demoSandbox": "جعبه‌ابزار شبیه‌سازی (دمو)",
+    "catalogSubmenu": "کاتالوگ و منوها",
+    "customersCredit": "مشتریان و اعتبارات",
+    "discountsLoyalty": "تخفیف‌ها و وفاداری",
     "sell": "فروش",
     "pos": "صندوق فروش POS",
     "dineIn": "سالن و میزها",

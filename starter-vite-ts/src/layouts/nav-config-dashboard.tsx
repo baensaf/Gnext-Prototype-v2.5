@@ -38,7 +38,7 @@ export function useNavData(): NavSectionProps['data'] {
 
   return [
     {
-      subheader: t('nav.sell', 'Sell'),
+      subheader: t('nav.liveOperations', 'Live Operations'),
       items: [
         {
           title: t('nav.pos', 'POS Register'),
@@ -49,40 +49,17 @@ export function useNavData(): NavSectionProps['data'] {
         {
           title: t('nav.dineIn', 'Dine-In Floor'),
           path: '/app/dine-in/floor',
-          icon: ICONS.pos,
-          info: <Label color="info">V4</Label>,
+          icon: ICONS.store,
         },
-        {
-          title: t('nav.orders', 'Orders Directory'),
-          path: '/app/orders',
-          icon: ICONS.kds,
-        },
-        {
-          title: t('nav.kiosk', 'Self-Service Kiosk'),
-          path: '/app/kiosk',
-          icon: ICONS.pos,
-        },
-      ],
-    },
-    {
-      subheader: t('nav.operations', 'Operations'),
-      items: [
         {
           title: t('nav.kds', 'Kitchen KDS'),
           path: '/app/kds',
           icon: ICONS.kds,
-          info: <Label color="info">V4</Label>,
         },
         {
-          title: t('nav.delivery', 'Delivery Management'),
+          title: t('nav.delivery', 'Delivery Orders'),
           path: '/app/delivery/orders',
-          icon: ICONS.kds,
-        },
-        {
-          title: t('nav.courierSettlements', 'Courier Settlements'),
-          path: '/app/delivery/settlements',
-          icon: ICONS.reasons,
-          info: <Label color="info">V5</Label>,
+          icon: ICONS.terminal,
         },
         {
           title: t('nav.cashier', 'Cashier & Shifts'),
@@ -90,13 +67,108 @@ export function useNavData(): NavSectionProps['data'] {
           icon: ICONS.drawer,
         },
         {
-          title: t('nav.payments', 'Payment Transactions'),
-          path: '/app/payments',
-          icon: ICONS.credit,
+          title: t('nav.orders', 'Orders Directory'),
+          path: '/app/orders',
+          icon: ICONS.inventory,
         },
         {
-          title: t('nav.refunds', 'Refunds & Returns'),
-          path: '/app/refunds',
+          title: t('nav.kiosk', 'Self-Service Kiosk'),
+          path: '/app/kiosk',
+          icon: ICONS.terminal,
+        },
+      ],
+    },
+    {
+      subheader: t('nav.businessManagement', 'Business Management'),
+      items: [
+        {
+          title: t('nav.catalogSubmenu', 'Catalog & Menus'),
+          path: '/app/catalog/menus',
+          icon: ICONS.catalog,
+          children: [
+            {
+              title: t('nav.menus', 'Menus Composer'),
+              path: '/app/catalog/menus',
+            },
+            {
+              title: t('nav.products', 'Products Catalog'),
+              path: '/app/catalog/products',
+            },
+            {
+              title: t('nav.categories', 'Categories'),
+              path: '/app/catalog/categories',
+            },
+            {
+              title: t('nav.modifiers', 'Modifiers & Options'),
+              path: '/app/catalog/modifiers',
+            },
+            {
+              title: t('nav.availability', 'Availability & Suspensions'),
+              path: '/app/catalog/availability',
+            },
+          ],
+        },
+        {
+          title: t('nav.pricing', 'Price Book & Groups'),
+          path: '/app/pricing/price-book',
+          icon: ICONS.pricing,
+        },
+        {
+          title: t('nav.customersCredit', 'Customers & Credit'),
+          path: '/app/customers',
+          icon: ICONS.customers,
+          children: [
+            {
+              title: t('nav.customers', 'Customer Directory'),
+              path: '/app/customers',
+            },
+            {
+              title: t('nav.credit', 'Credit Accounts & Aging'),
+              path: '/app/credit/accounts',
+            },
+          ],
+        },
+        {
+          title: t('nav.discountsLoyalty', 'Discounts & Loyalty'),
+          path: '/app/discounts/campaigns',
+          icon: ICONS.discounts,
+          children: [
+            {
+              title: t('nav.discounts', 'Discount Campaigns'),
+              path: '/app/discounts/campaigns',
+            },
+            {
+              title: t('nav.coupons', 'One-Time Coupons Studio'),
+              path: '/app/discounts/coupons',
+            },
+            {
+              title: t('nav.customerDiscounts', 'Customer Discounts'),
+              path: '/app/customer-club/discounts',
+            },
+            {
+              title: t('nav.customerWallet', 'Wallet & Cashback'),
+              path: '/app/customer-club/wallet',
+            },
+          ],
+        },
+        {
+          title: t('nav.courierSettlements', 'Courier Settlements'),
+          path: '/app/delivery/settlements',
+          icon: ICONS.reasons,
+        },
+      ],
+    },
+    {
+      subheader: t('nav.reportsAudit', 'Reports & Compliance'),
+      items: [
+        {
+          title: t('nav.reports', 'Reports & Analytics'),
+          path: '/app/reports/sales-summary',
+          icon: ICONS.dashboard,
+        },
+        {
+          title: t('nav.audit', 'Audit Explorer'),
+          path: '/app/audit',
           icon: ICONS.reasons,
         },
         {
@@ -104,145 +176,47 @@ export function useNavData(): NavSectionProps['data'] {
           path: '/app/operations/monitoring',
           icon: ICONS.dashboard,
         },
-        {
-          title: t('nav.printQueue', 'Print Queue'),
-          path: '/app/operations/print-queue',
-          icon: ICONS.drawer,
-        },
       ],
     },
     {
-      subheader: t('nav.customerClubGroup', 'Customer Club & Loyalty'),
-      items: [
-        {
-          title: t('nav.customerDiscounts', 'Customer Discounts'),
-          path: '/app/customer-club/discounts',
-          icon: ICONS.discounts,
-        },
-        {
-          title: t('nav.discounts', 'Discount Campaigns'),
-          path: '/app/discounts/campaigns',
-          icon: ICONS.discounts,
-        },
-        {
-          title: t('nav.coupons', 'One-Time Coupons Studio'),
-          path: '/app/discounts/coupons',
-          icon: ICONS.coupons,
-        },
-        {
-          title: t('nav.customerWallet', 'Wallet & Cashback'),
-          path: '/app/customer-club/wallet',
-          icon: ICONS.credit,
-        },
-        {
-          title: t('nav.customers', 'Customer Directory'),
-          path: '/app/customers',
-          icon: ICONS.customers,
-        },
-        {
-          title: t('nav.credit', 'Credit Accounts & Aging'),
-          path: '/app/credit/accounts',
-          icon: ICONS.credit,
-        },
-      ],
-    },
-    {
-      subheader: t('nav.catalogGroup', 'Catalog & Pricing'),
-      items: [
-        {
-          title: t('nav.categories', 'Categories'),
-          path: '/app/catalog/categories',
-          icon: ICONS.category,
-        },
-        {
-          title: t('nav.products', 'Products Catalog'),
-          path: '/app/catalog/products',
-          icon: ICONS.catalog,
-        },
-        {
-          title: t('nav.modifiers', 'Modifiers'),
-          path: '/app/catalog/modifiers',
-          icon: ICONS.options,
-        },
-        {
-          title: t('nav.menus', 'Menus Composer'),
-          path: '/app/catalog/menus',
-          icon: ICONS.catalog,
-        },
-        {
-          title: t('nav.availability', 'Availability & Suspensions'),
-          path: '/app/catalog/availability',
-          icon: ICONS.options,
-        },
-        {
-          title: t('nav.importExport', 'Import & Export'),
-          path: '/app/catalog/import-export',
-          icon: ICONS.media,
-        },
-        {
-          title: t('nav.pricing', 'Price Book & Groups'),
-          path: '/app/pricing/price-book',
-          icon: ICONS.pricing,
-        },
-      ],
-    },
-    {
-      subheader: t('nav.reportsGroup', 'Reports'),
-      items: [
-        {
-          title: t('nav.reports', 'Reports & Analytics'),
-          path: '/app/reports/sales-summary',
-          icon: ICONS.dashboard,
-        },
-      ],
-    },
-    {
-      subheader: t('nav.simulationGroup', 'Simulation Center'),
-      items: [
-        {
-          title: t('nav.simulation', 'Simulation Hub'),
-          path: '/app/simulation',
-          icon: ICONS.terminal,
-        },
-        {
-          title: t('nav.snappfoodSim', 'Snappfood Simulator'),
-          path: '/app/simulation/snappfood',
-          icon: ICONS.terminal,
-        },
-        {
-          title: t('nav.hardwareSim', 'Payments & Printers'),
-          path: '/app/simulation/payments-printers',
-          icon: ICONS.terminal,
-        },
-        {
-          title: t('nav.syncSim', 'Offline Sync Simulation'),
-          path: '/app/simulation/offline-sync',
-          icon: ICONS.terminal,
-        },
-        {
-          title: t('nav.logsSim', 'Integration Logs'),
-          path: '/app/simulation/logs',
-          icon: ICONS.drawer,
-        },
-      ],
-    },
-    {
-      subheader: t('nav.auditGroup', 'Audit'),
-      items: [
-        {
-          title: t('nav.audit', 'Audit Explorer'),
-          path: '/app/audit',
-          icon: ICONS.reasons,
-        },
-      ],
-    },
-    {
-      subheader: t('nav.settingsGroup', 'Settings'),
+      subheader: t('nav.settingsGroup', 'Settings & System'),
       items: [
         {
           title: t('nav.settingsHub', 'Settings Hub'),
           path: '/app/settings',
           icon: ICONS.settings,
+        },
+      ],
+    },
+    {
+      subheader: t('nav.demoSandbox', 'Simulation Sandbox'),
+      items: [
+        {
+          title: t('nav.simulation', 'Simulation Hub'),
+          path: '/app/simulation',
+          icon: ICONS.terminal,
+          children: [
+            {
+              title: t('nav.simulation', 'Overview & Mocks'),
+              path: '/app/simulation',
+            },
+            {
+              title: t('nav.snappfoodSim', 'Snappfood Simulator'),
+              path: '/app/simulation/snappfood',
+            },
+            {
+              title: t('nav.hardwareSim', 'Payments & Printers Mock'),
+              path: '/app/simulation/payments-printers',
+            },
+            {
+              title: t('nav.syncSim', 'Offline Sync Engine'),
+              path: '/app/simulation/offline-sync',
+            },
+            {
+              title: t('nav.logsSim', 'Integration Logs'),
+              path: '/app/simulation/logs',
+            },
+          ],
         },
       ],
     },

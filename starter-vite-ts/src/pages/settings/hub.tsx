@@ -1,18 +1,13 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SyncIcon from '@mui/icons-material/Sync';
 import TuneIcon from '@mui/icons-material/Tune';
-import SellIcon from '@mui/icons-material/Sell';
 import GavelIcon from '@mui/icons-material/Gavel';
 import PrintIcon from '@mui/icons-material/Print';
 import ShieldIcon from '@mui/icons-material/Shield';
 import SearchIcon from '@mui/icons-material/Search';
-import ListAltIcon from '@mui/icons-material/ListAlt';
-import ScienceIcon from '@mui/icons-material/Science';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import TranslateIcon from '@mui/icons-material/Translate';
-import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
@@ -20,8 +15,6 @@ import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import CountertopsIcon from '@mui/icons-material/Countertops';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
 import {
   Box,
   Card,
@@ -72,7 +65,7 @@ export function SettingsHubPage() {
       categoryTitle: t('settings.hub.domains.organization.title', 'Organization & Stores'),
       categoryDescription: t(
         'settings.hub.domains.organization.description',
-        'Tenant profile, branch locations, terminal registers, and currency settings.'
+        'Tenant profile, branch locations, operating schedules, and multi-currency settings.'
       ),
       icon: <StorefrontIcon color="primary" sx={{ fontSize: 28 }} />,
       items: [
@@ -100,6 +93,17 @@ export function SettingsHubPage() {
           badge: { color: 'success', label: t('settings.hub.items.branches.badge', '3 Locations') },
           tags: ['branches', 'stores', 'hours', 'locations', 'tables', 'tax', 'schedules'],
         },
+      ],
+    },
+    {
+      id: 'hardware',
+      categoryTitle: t('settings.hub.domains.hardware.title', 'Hardware & Peripherals'),
+      categoryDescription: t(
+        'settings.hub.domains.hardware.description',
+        'POS hardware terminals, network receipt printers, kitchen routing, and bump screens.'
+      ),
+      icon: <PointOfSaleIcon color="info" sx={{ fontSize: 28 }} />,
+      items: [
         {
           id: 'terminals',
           title: t('settings.hub.items.terminals.title', 'Terminals Registry'),
@@ -112,14 +116,73 @@ export function SettingsHubPage() {
           badge: { color: 'primary', label: t('settings.hub.items.terminals.badge', 'Active Pairs') },
           tags: ['terminals', 'pos', 'registers', 'devices', 'hardware', 'pairing', 'serials'],
         },
+        {
+          id: 'printers',
+          title: t('settings.hub.items.printers.title', 'Printers & Print Routing'),
+          description: t(
+            'settings.hub.items.printers.description',
+            'Network receipt printers, kitchen ticket routing, print templates, and queue failover.'
+          ),
+          path: '/app/operations/printers',
+          icon: <PrintIcon sx={{ color: 'secondary.main' }} />,
+          badge: { color: 'secondary', label: t('settings.hub.items.printers.badge', 'Station Routing') },
+          tags: ['printers', 'receipts', 'kitchen tickets', 'routing', 'templates', 'queue', 'hardware'],
+        },
+        {
+          id: 'kds',
+          title: t('settings.hub.items.kds.title', 'KDS Configuration'),
+          description: t(
+            'settings.hub.items.kds.description',
+            'Kitchen display screens, preparation timers, item routing, and order bumping rules.'
+          ),
+          path: '/app/operations/kds-configuration',
+          icon: <CountertopsIcon sx={{ color: 'info.main' }} />,
+          badge: { color: 'info', label: t('settings.hub.items.kds.badge', 'KDS Active') },
+          tags: ['kds', 'kitchen', 'screens', 'preparation', 'timers', 'bumping', 'stations'],
+        },
       ],
     },
     {
-      id: 'orderPos',
-      categoryTitle: t('settings.hub.domains.orderPos.title', 'Order & POS Workflows'),
+      id: 'security',
+      categoryTitle: t('settings.hub.domains.securityAudit.title', 'Security & Approvals'),
+      categoryDescription: t(
+        'settings.hub.domains.securityAudit.description',
+        'PIN escalation governance, role discount authorizations, and anti-fraud thresholds.'
+      ),
+      icon: <ShieldIcon color="error" sx={{ fontSize: 28 }} />,
+      items: [
+        {
+          id: 'approvals',
+          title: t('settings.hub.items.approvals.title', 'Approval Policies & PIN Escalation'),
+          description: t(
+            'settings.hub.items.approvals.description',
+            'Manager override thresholds, void/reprint rules, self-approval prevention, and escalation paths.'
+          ),
+          path: '/app/settings/approvals',
+          icon: <ShieldIcon sx={{ color: 'info.main' }} />,
+          badge: { color: 'info', label: t('settings.hub.items.approvals.badge', 'Policy Engine') },
+          tags: ['approvals', 'manager', 'security', 'limits', 'overrides', 'policy', 'escalations', 'pin'],
+        },
+        {
+          id: 'discountAuthorizations',
+          title: t('settings.hub.items.discountAuthorizations.title', 'Manual Discount Authorizations'),
+          description: t(
+            'settings.hub.items.discountAuthorizations.description',
+            'Role-based manual discount percentage and fixed amount caps for cashiers, supervisors, and managers.'
+          ),
+          path: '/app/settings/discount-authorizations',
+          icon: <GavelIcon sx={{ color: 'warning.main' }} />,
+          badge: { color: 'warning', label: t('settings.hub.items.discountAuthorizations.badge', 'Role Limits') },
+          tags: ['discounts', 'authorizations', 'roles', 'limits', 'cashier', 'supervisor', 'manager', 'caps', 'policy'],
+        },
+      ],
+    },
+    {
+      id: 'workflow',
+      categoryTitle: t('settings.hub.domains.orderPos.title', 'Order & Financial Policies'),
       categoryDescription: t(
         'settings.hub.domains.orderPos.description',
-        'Order workflows, payment methods, tax profiles, kitchen KDS, and printers.'
+        'Order lifecycle states, auto-acceptance rules, reason codes, and payment gateways.'
       ),
       icon: <ReceiptLongIcon color="warning" sx={{ fontSize: 28 }} />,
       items: [
@@ -148,101 +211,6 @@ export function SettingsHubPage() {
           tags: ['payments', 'refunds', 'gateways', 'eft', 'cash drawer', 'cards', 'transactions'],
         },
         {
-          id: 'kds',
-          title: t('settings.hub.items.kds.title', 'KDS Configuration'),
-          description: t(
-            'settings.hub.items.kds.description',
-            'Kitchen display screens, preparation timers, item routing, and order bumping rules.'
-          ),
-          path: '/app/operations/kds-configuration',
-          icon: <CountertopsIcon sx={{ color: 'info.main' }} />,
-          badge: { color: 'info', label: t('settings.hub.items.kds.badge', 'KDS Active') },
-          tags: ['kds', 'kitchen', 'screens', 'preparation', 'timers', 'bumping', 'stations'],
-        },
-        {
-          id: 'printers',
-          title: t('settings.hub.items.printers.title', 'Printers & Print Routing'),
-          description: t(
-            'settings.hub.items.printers.description',
-            'Network receipt printers, kitchen ticket routing, print templates, and queue failover.'
-          ),
-          path: '/app/operations/printers',
-          icon: <PrintIcon sx={{ color: 'secondary.main' }} />,
-          badge: { color: 'secondary', label: t('settings.hub.items.printers.badge', 'Station Routing') },
-          tags: ['printers', 'receipts', 'kitchen tickets', 'routing', 'templates', 'queue', 'hardware'],
-        },
-      ],
-    },
-    {
-      id: 'commercial',
-      categoryTitle: t('settings.hub.domains.commercial.title', 'Commercial & Catalog'),
-      categoryDescription: t(
-        'settings.hub.domains.commercial.description',
-        'Catalog defaults, price books, discount campaigns, approvals policy, and reasons.'
-      ),
-      icon: <SellIcon color="success" sx={{ fontSize: 28 }} />,
-      items: [
-        {
-          id: 'menus',
-          title: t('settings.hub.items.menus.title', 'Menus & Catalog Composer'),
-          description: t(
-            'settings.hub.items.menus.description',
-            'Menu categories, default product availability, modifier groups, and combo options.'
-          ),
-          path: '/app/catalog/menus',
-          icon: <RestaurantMenuIcon sx={{ color: 'primary.main' }} />,
-          badge: { color: 'primary', label: t('settings.hub.items.menus.badge', 'Catalog Core') },
-          tags: ['menus', 'catalog', 'categories', 'modifiers', 'combos', 'products', 'availability'],
-        },
-        {
-          id: 'pricing',
-          title: t('settings.hub.items.pricing.title', 'Price Book & Groups'),
-          description: t(
-            'settings.hub.items.pricing.description',
-            'Base price books, customer group pricing, price tiers, and bulk price updates.'
-          ),
-          path: '/app/pricing/price-book',
-          icon: <SellIcon sx={{ color: 'success.main' }} />,
-          badge: { color: 'success', label: t('settings.hub.items.pricing.badge', 'Price Books') },
-          tags: ['pricing', 'price book', 'groups', 'tiers', 'discounts', 'bulk update'],
-        },
-        {
-          id: 'discounts',
-          title: t('settings.hub.items.discounts.title', 'Discounts & Credit Policies'),
-          description: t(
-            'settings.hub.items.discounts.description',
-            'Promotion campaigns, discount percentage caps, coupon codes, and customer credit limits.'
-          ),
-          path: '/app/settings/discounts-credit',
-          icon: <LocalOfferIcon sx={{ color: 'warning.main' }} />,
-          badge: { color: 'warning', label: t('settings.hub.items.discounts.badge', 'Promotions') },
-          tags: ['discounts', 'campaigns', 'promotions', 'coupons', 'credit', 'limits', 'caps'],
-        },
-        {
-          id: 'discountAuthorizations',
-          title: t('settings.hub.items.discountAuthorizations.title', 'Manual Discount Authorizations'),
-          description: t(
-            'settings.hub.items.discountAuthorizations.description',
-            'Role-based manual discount percentage and fixed amount caps for cashiers, supervisors, and managers.'
-          ),
-          path: '/app/settings/discount-authorizations',
-          icon: <GavelIcon sx={{ color: 'warning.main' }} />,
-          badge: { color: 'warning', label: t('settings.hub.items.discountAuthorizations.badge', 'Role Limits') },
-          tags: ['discounts', 'authorizations', 'roles', 'limits', 'cashier', 'supervisor', 'manager', 'caps', 'policy'],
-        },
-        {
-          id: 'approvals',
-          title: t('settings.hub.items.approvals.title', 'Approval Policies & Security'),
-          description: t(
-            'settings.hub.items.approvals.description',
-            'Manager override thresholds, discount cap policy, self-approval prevention, and escalations.'
-          ),
-          path: '/app/settings/approvals',
-          icon: <ShieldIcon sx={{ color: 'info.main' }} />,
-          badge: { color: 'info', label: t('settings.hub.items.approvals.badge', 'Policy Engine') },
-          tags: ['approvals', 'manager', 'security', 'limits', 'overrides', 'policy', 'escalations'],
-        },
-        {
           id: 'reasons',
           title: t('settings.hub.items.reasons.title', 'Reason Codes & Compliance'),
           description: t(
@@ -257,67 +225,8 @@ export function SettingsHubPage() {
       ],
     },
     {
-      id: 'deliveryIntegrations',
-      categoryTitle: t('settings.hub.domains.deliveryIntegrations.title', 'Delivery & Integrations'),
-      categoryDescription: t(
-        'settings.hub.domains.deliveryIntegrations.description',
-        'Delivery management, couriers, offline sync engine, and external service simulations.'
-      ),
-      icon: <LocalShippingIcon color="info" sx={{ fontSize: 28 }} />,
-      items: [
-        {
-          id: 'delivery',
-          title: t('settings.hub.items.delivery.title', 'Delivery & Courier Roster'),
-          description: t(
-            'settings.hub.items.delivery.description',
-            'Delivery zones, courier rosters, delivery fee rules, and courier settlements.'
-          ),
-          path: '/app/delivery/orders',
-          icon: <LocalShippingIcon sx={{ color: 'info.main' }} />,
-          badge: { color: 'info', label: t('settings.hub.items.delivery.badge', 'Logistics') },
-          tags: ['delivery', 'couriers', 'zones', 'settlements', 'roster', 'logistics', 'dispatch'],
-        },
-        {
-          id: 'offlineSync',
-          title: t('settings.hub.items.offlineSync.title', 'Offline & Sync Engine'),
-          description: t(
-            'settings.hub.items.offlineSync.description',
-            'Local IndexedDB storage parameters, background sync interval, manual sync triggers, and queue limits.'
-          ),
-          path: '/app/simulation/offline-sync',
-          icon: <SyncIcon sx={{ color: 'warning.main' }} />,
-          badge: { color: 'warning', label: t('settings.hub.items.offlineSync.badge', 'Sync Engine') },
-          tags: ['offline', 'sync', 'indexeddb', 'queue', 'storage', 'background', 'conflict'],
-        },
-        {
-          id: 'snappfood',
-          title: t('settings.hub.items.snappfood.title', 'Snappfood Integration Simulator'),
-          description: t(
-            'settings.hub.items.snappfood.description',
-            'Simulate online order webhooks, menu sync status, and delivery platform integration.'
-          ),
-          path: '/app/simulation/snappfood',
-          icon: <ScienceIcon sx={{ color: 'secondary.main' }} />,
-          badge: { color: 'secondary', label: t('settings.hub.items.snappfood.badge', 'Integrations') },
-          tags: ['snappfood', 'integration', 'webhooks', 'orders', 'online', 'simulation', 'third party'],
-        },
-        {
-          id: 'simulation',
-          title: t('settings.hub.items.simulation.title', 'Simulation Center & Mocks'),
-          description: t(
-            'settings.hub.items.simulation.description',
-            'Hardware mocks, printer failover tests, payment terminal simulation, and test harnesses.'
-          ),
-          path: '/app/simulation',
-          icon: <ScienceIcon sx={{ color: 'primary.main' }} />,
-          badge: { color: 'default', label: t('settings.hub.items.simulation.badge', 'Test Center') },
-          tags: ['simulation', 'mocks', 'hardware', 'printers', 'payments', 'testing', 'harness'],
-        },
-      ],
-    },
-    {
-      id: 'localizationData',
-      categoryTitle: t('settings.hub.domains.localizationData.title', 'Localization & Data Tools'),
+      id: 'system',
+      categoryTitle: t('settings.hub.domains.localizationData.title', 'System & Localization'),
       categoryDescription: t(
         'settings.hub.domains.localizationData.description',
         'Language and media localization, bulk Excel import/export, and data resets.'
@@ -359,53 +268,6 @@ export function SettingsHubPage() {
           icon: <RestartAltIcon sx={{ color: 'error.main' }} />,
           badge: { color: 'error', label: t('settings.hub.items.dataReset.badge', 'Admin Tools') },
           tags: ['data reset', 'reset', 'seed', 'wipe', 'maintenance', 'database', 'environment'],
-        },
-      ],
-    },
-    {
-      id: 'securityAudit',
-      categoryTitle: t('settings.hub.domains.securityAudit.title', 'Security & Audit Logs'),
-      categoryDescription: t(
-        'settings.hub.domains.securityAudit.description',
-        'Security governance, policy escalation rules, and system audit logs.'
-      ),
-      icon: <ShieldIcon color="error" sx={{ fontSize: 28 }} />,
-      items: [
-        {
-          id: 'securityApprovals',
-          title: t('settings.hub.items.approvals.title', 'Approval Policies & Security'),
-          description: t(
-            'settings.hub.items.approvals.description',
-            'Manager override thresholds, discount cap policy, self-approval prevention, and escalations.'
-          ),
-          path: '/app/settings/approvals',
-          icon: <ShieldIcon sx={{ color: 'info.main' }} />,
-          badge: { color: 'info', label: t('settings.hub.items.approvals.badge', 'Policy Engine') },
-          tags: ['security', 'approvals', 'manager', 'rbac', 'overrides', 'policy', 'audit'],
-        },
-        {
-          id: 'audit',
-          title: t('settings.hub.items.audit.title', 'Audit Explorer & Event Logs'),
-          description: t(
-            'settings.hub.items.audit.description',
-            'Complete system audit logs, manager override trails, void histories, and operational events.'
-          ),
-          path: '/app/audit',
-          icon: <GavelIcon sx={{ color: 'error.main' }} />,
-          badge: { color: 'error', label: t('settings.hub.items.audit.badge', 'System Audit') },
-          tags: ['audit', 'logs', 'events', 'overrides', 'voids', 'history', 'security', 'trails'],
-        },
-        {
-          id: 'logs',
-          title: t('settings.hub.items.logs.title', 'Integration & System Logs'),
-          description: t(
-            'settings.hub.items.logs.description',
-            'Background worker queue logs, transactional outbox monitor, and API event logs.'
-          ),
-          path: '/app/simulation/logs',
-          icon: <ListAltIcon sx={{ color: 'warning.main' }} />,
-          badge: { color: 'warning', label: t('settings.hub.items.logs.badge', 'Outbox Logs') },
-          tags: ['logs', 'outbox', 'integration', 'queues', 'background', 'webhooks', 'api'],
         },
       ],
     },

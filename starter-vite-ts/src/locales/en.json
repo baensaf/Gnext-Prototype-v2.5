@@ -21,6 +21,13 @@
   "nav": {
     "home": "Home",
     "dashboard": "Dashboard",
+    "liveOperations": "Live Operations",
+    "businessManagement": "Business Management",
+    "reportsAudit": "Reports & Compliance",
+    "demoSandbox": "Simulation Sandbox",
+    "catalogSubmenu": "Catalog & Menus",
+    "customersCredit": "Customers & Credit",
+    "discountsLoyalty": "Discounts & Loyalty",
     "sell": "Sell",
     "pos": "POS Register",
     "dineIn": "Dine-In Floor",
