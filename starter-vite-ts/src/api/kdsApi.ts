@@ -224,8 +224,12 @@ export const kdsApi = {
     const res = await httpClient.get('/api/v1/printer-groups', { params: { branchId } });
     return res.data;
   },
-  createPrinterGroup: async (data: Partial<PrinterGroup>): Promise<PrinterGroup> => {
+  createPrinterGroup: async (data: Partial<PrinterGroup> & { branch_id?: string; members?: PrinterGroupMember[] }): Promise<PrinterGroup> => {
     const res = await httpClient.post('/api/v1/printer-groups', data);
+    return res.data;
+  },
+  updatePrinterGroup: async (id: string, data: Partial<PrinterGroup> & { branch_id?: string; members?: PrinterGroupMember[] }): Promise<PrinterGroup> => {
+    const res = await httpClient.patch(`/api/v1/printer-groups/${id}`, data);
     return res.data;
   },
   deletePrinterGroup: async (id: string): Promise<any> => {
@@ -238,6 +242,10 @@ export const kdsApi = {
   },
   createPrintRoute: async (data: Partial<PrintRoute>): Promise<PrintRoute> => {
     const res = await httpClient.post('/api/v1/print-routes', data);
+    return res.data;
+  },
+  updatePrintRoute: async (id: string, data: Partial<PrintRoute>): Promise<PrintRoute> => {
+    const res = await httpClient.patch(`/api/v1/print-routes/${id}`, data);
     return res.data;
   },
   deletePrintRoute: async (id: string): Promise<any> => {

@@ -128,6 +128,37 @@ export class PrintersController {
     return savedGroup;
   }
 
+  @Patch('printer-groups/:id')
+  async updateGroup(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const group = await this.groupRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!group) throw new NotFoundException('Printer group not found');
+
+    if (body.name !== undefined) group.name = body.name;
+    if (body.code !== undefined) group.code = body.code.toUpperCase();
+    if (body.branch_id || body.branchId) group.branch_id = body.branch_id || body.branchId;
+
+    const savedGroup = await this.groupRepo.save(group);
+
+    if (body.members && Array.isArray(body.members)) {
+      await this.memberRepo.delete({ group_id: id });
+      const savedMembers = [];
+      for (const m of body.members) {
+        const member = this.memberRepo.create({
+          group_id: savedGroup.id,
+          printer_id: m.printer_id || m.printerId,
+          priority: m.priority || 0,
+          copies: m.copies || 1,
+        });
+        savedMembers.push(await this.memberRepo.save(member));
+      }
+      return { ...savedGroup, members: savedMembers };
+    }
+
+    const members = await this.memberRepo.find({ where: { group_id: id }, order: { priority: 'ASC' } });
+    return { ...savedGroup, members };
+  }
+
   @Delete('printer-groups/:id')
   async deleteGroup(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -158,6 +189,28 @@ export class PrintersController {
       priority: body.priority || 0,
       copies: body.copies || 1,
     });
+    return await this.routeRepo.save(route);
+  }
+
+  @Patch('print-routes/:id')
+  async updateRoute(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const route = await this.routeRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!route) throw new NotFoundException('Print route not found');
+
+    if (body.document_type !== undefined || body.documentType !== undefined) {
+      route.document_type = body.document_type || body.documentType;
+    }
+    if (body.printer_group_id !== undefined || body.printerGroupId !== undefined) {
+      route.printer_group_id = body.printer_group_id || body.printerGroupId;
+    }
+    if (body.priority !== undefined) route.priority = Number(body.priority);
+    if (body.copies !== undefined) route.copies = Number(body.copies);
+    if ('product_id' in body) route.product_id = body.product_id || null;
+    if ('category_id' in body) route.category_id = body.category_id || null;
+    if ('station_id' in body) route.station_id = body.station_id || null;
+    if (body.branch_id || body.branchId) route.branch_id = body.branch_id || body.branchId;
+
     return await this.routeRepo.save(route);
   }
 
