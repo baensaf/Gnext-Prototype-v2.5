@@ -129,25 +129,29 @@ export function useNavData(): NavSectionProps['data'] {
           ],
         },
         {
-          title: t('nav.discountsLoyalty', 'Discounts & Loyalty'),
+          title: t('nav.discountsLoyalty', 'Discounts & Promotions Hub'),
           path: '/app/discounts/campaigns',
           icon: ICONS.discounts,
           children: [
             {
-              title: t('nav.discounts', 'Discount Campaigns'),
+              title: t('nav.discounts', 'Promotional Campaigns'),
               path: '/app/discounts/campaigns',
+            },
+            {
+              title: t('nav.customerDiscounts', 'Customer-Specific Rates'),
+              path: '/app/discounts/customer-rates',
             },
             {
               title: t('nav.coupons', 'One-Time Coupons Studio'),
               path: '/app/discounts/coupons',
             },
             {
-              title: t('nav.customerDiscounts', 'Customer Discounts'),
-              path: '/app/customer-club/discounts',
+              title: t('nav.discountAuthorizations', 'Cashier Role Caps & Policy'),
+              path: '/app/discounts/authorizations',
             },
             {
               title: t('nav.customerWallet', 'Wallet & Cashback'),
-              path: '/app/customer-club/wallet',
+              path: '/app/discounts/wallet',
             },
           ],
         },

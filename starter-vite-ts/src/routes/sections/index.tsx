@@ -18,9 +18,9 @@ import { OptionsPage } from 'src/pages/catalog/options';
 import { PricingPage } from 'src/pages/catalog/pricing';
 import { SettingsHubPage } from 'src/pages/settings/hub';
 import { ProductsPage } from 'src/pages/catalog/products';
-import { CouponsPage } from 'src/pages/discounts/coupons';
 import { DineInPage } from 'src/pages/operations/dine-in';
 import { DataResetPage } from 'src/pages/tools/data-reset';
+import { DiscountsHubPage } from 'src/pages/discounts/hub';
 import { BranchesPage } from 'src/pages/operations/branches';
 import { DeliveryPage } from 'src/pages/operations/delivery';
 import { PaymentsPage } from 'src/pages/operations/payments';
@@ -28,7 +28,6 @@ import { ReasonCodesPage } from 'src/pages/settings/reasons';
 import { PrintersPage } from 'src/pages/operations/printers';
 import { CategoriesPage } from 'src/pages/catalog/categories';
 import { CustomersPage } from 'src/pages/customers/directory';
-import { DiscountRulesPage } from 'src/pages/discounts/rules';
 import { TerminalsPage } from 'src/pages/operations/terminals';
 import { OrdersWorkflowPage } from 'src/pages/orders/workflow';
 import { CustomerCreditPage } from 'src/pages/customers/credit';
@@ -50,7 +49,6 @@ import { ProductDetailPage } from 'src/pages/catalog/product-detail';
 import { BranchDetailPage } from 'src/pages/operations/branch-detail';
 import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
 import { CourierDetailPage } from 'src/pages/operations/courier-detail';
-import WalletCashbackPage from 'src/pages/customer-club/wallet-cashback';
 import { CampaignDetailPage } from 'src/pages/discounts/campaign-detail';
 import { CourierSettlementsPage } from 'src/pages/operations/settlements';
 import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
@@ -58,8 +56,6 @@ import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
 import { KdsConfigurationPage } from 'src/pages/operations/kds-configuration';
 import { SettlementDetailPage } from 'src/pages/operations/settlement-detail';
 import { OrderWorkflowSettingsPage } from 'src/pages/settings/order-workflow';
-import CustomerDiscountsPage from 'src/pages/customer-club/customer-discounts';
-import DiscountAuthorizationsPage from 'src/pages/settings/discount-authorizations';
 import { MediaLocalizationDemoPage } from 'src/pages/simulation/media-localization';
 import { SimulationSnappfoodPage } from 'src/pages/simulation/simulation-snappfood';
 import { SimulationPaymentsPrintersPage } from 'src/pages/simulation/simulation-payments-printers';
@@ -117,8 +113,8 @@ export const routesSection: RouteObject[] = [
       { path: 'cashier/business-days', element: <BusinessDaysPage /> },
       { path: 'payments', element: <PaymentsPage /> },
       { path: 'refunds', element: <RefundsPage /> },
-      { path: 'customer-club/discounts', element: <CustomerDiscountsPage /> },
-      { path: 'customer-club/wallet', element: <WalletCashbackPage /> },
+      { path: 'customer-club/discounts', element: <DiscountsHubPage defaultTab={1} /> },
+      { path: 'customer-club/wallet', element: <DiscountsHubPage defaultTab={4} /> },
       { path: 'customers', element: <CustomersPage /> },
       { path: 'customers/:id', element: <CustomersPage /> },
       { path: 'credit/accounts', element: <CustomerCreditPage /> },
@@ -134,9 +130,13 @@ export const routesSection: RouteObject[] = [
       { path: 'pricing/price-book', element: <PricingPage /> },
       { path: 'pricing/price-groups', element: <PricingPage /> },
       { path: 'pricing/bulk-update', element: <PricingPage /> },
-      { path: 'discounts/campaigns', element: <DiscountRulesPage /> },
+      { path: 'discounts', element: <DiscountsHubPage /> },
+      { path: 'discounts/campaigns', element: <DiscountsHubPage defaultTab={0} /> },
       { path: 'discounts/campaigns/:id', element: <CampaignDetailPage /> },
-      { path: 'discounts/coupons', element: <CouponsPage /> },
+      { path: 'discounts/customer-rates', element: <DiscountsHubPage defaultTab={1} /> },
+      { path: 'discounts/coupons', element: <DiscountsHubPage defaultTab={2} /> },
+      { path: 'discounts/authorizations', element: <DiscountsHubPage defaultTab={3} /> },
+      { path: 'discounts/wallet', element: <DiscountsHubPage defaultTab={4} /> },
       { path: 'operations/branches', element: <BranchesPage /> },
       { path: 'operations/branches/:id', element: <BranchDetailPage /> },
       { path: 'operations/terminals', element: <TerminalsPage /> },
@@ -154,7 +154,7 @@ export const routesSection: RouteObject[] = [
       { path: 'settings', element: <SettingsHubPage /> },
       { path: 'settings/general', element: <GeneralSettingsPage /> },
       { path: 'settings/order-workflow', element: <OrderWorkflowSettingsPage /> },
-      { path: 'settings/discount-authorizations', element: <DiscountAuthorizationsPage /> },
+      { path: 'settings/discount-authorizations', element: <DiscountsHubPage defaultTab={3} /> },
       { path: 'settings/payments-refunds', element: <PaymentSettingsPage /> },
       { path: 'settings/payments', element: <PaymentSettingsPage /> },
       { path: 'settings/approvals', element: <ApprovalsSettingsPage /> },

@@ -7,7 +7,6 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import SoupKitchenIcon from '@mui/icons-material/SoupKitchen';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import {
@@ -146,11 +145,6 @@ export function KdsPage() {
 
   return (
     <Box sx={{ p: 3 }}>
-      {/* SIMULATED HARDWARE BANNER */}
-      <Alert severity="info" variant="filled" icon={<SoupKitchenIcon />} sx={{ mb: 3, fontWeight: 'bold' }}>
-        SIMULATED KITCHEN DISPLAY SYSTEM (KDS) & PREPARATION ROUTING
-      </Alert>
-
       {/* Header */}
       <Stack direction="row" sx={{ mb: 3, justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>

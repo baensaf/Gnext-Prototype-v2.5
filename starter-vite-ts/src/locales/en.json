@@ -358,6 +358,13 @@
   },
   "discounts": {
     "title": "Discount Campaigns & Coupons",
+    "hubTitle": "Discounts & Promotions Hub",
+    "hubSubtitle": "Centralized promotional engine. Manage automated campaigns, customer-specific pricing, voucher coupons, cashier policy limits, and loyalty wallet rules.",
+    "tabCampaigns": "Promotional Campaigns",
+    "tabCustomerRates": "Customer-Specific Rates",
+    "tabCoupons": "One-Time Coupons Studio",
+    "tabAuthorizations": "Cashier Role Caps & PIN Rules",
+    "tabWallet": "Loyalty Wallet & Cashback",
     "campaignDetail": "Discount Campaign",
     "campaignRules": "Campaign Rules & Limits",
     "campaignId": "Campaign ID",
