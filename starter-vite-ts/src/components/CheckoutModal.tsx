@@ -7,7 +7,9 @@ import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import PrintIcon from '@mui/icons-material/Print';
+import FlashOnIcon from '@mui/icons-material/FlashOn';
 import PaymentIcon from '@mui/icons-material/Payment';
+import CreditCardIcon from '@mui/icons-material/CreditCard';
 import {
   Box,
   Chip,
@@ -122,6 +124,64 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     }
   };
 
+  const handleFastTender = useCallback(
+    async (methodKind: 'CASH' | 'CARD' | 'POS') => {
+      if (!order || !orderId || MoneyUtil.isZero(order.due_amount)) return;
+
+      const matchedMethod = paymentMethods.find((m) => m.kind === methodKind) || paymentMethods[0];
+      if (!matchedMethod) return;
+
+      try {
+        setLoading(true);
+        const res = await paymentApi.postPayment({
+          order_id: orderId,
+          payment_method_id: matchedMethod.id,
+          amount: order.due_amount || '0',
+          reference_number:
+            methodKind === 'CARD' || methodKind === 'POS' ? `POS-${Date.now().toString().slice(-6)}` : undefined,
+        });
+
+        setOrder(res.order);
+        setPayAmount(res.order.due_amount || '0');
+        setRefNumber('');
+
+        const updatedPays = await paymentApi.getOrderPayments(orderId);
+        setPayments(updatedPays);
+        toast.success(t('pos.paymentSuccess', 'Payment recorded successfully'));
+
+        if (MoneyUtil.isZero(res.order.due_amount) && onPaymentComplete) {
+          onPaymentComplete();
+        }
+      } catch (err: any) {
+        const errorMsg = err.detail || 'Fast tender payment failed';
+        setError(errorMsg);
+        showErrorToast(err, errorMsg);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [order, orderId, paymentMethods, t, onPaymentComplete]
+  );
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F8') {
+        e.preventDefault();
+        handleFastTender('CASH');
+      } else if (e.key === 'F9') {
+        e.preventDefault();
+        handleFastTender('CARD');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open, handleFastTender]);
+
   const isFullyPaid = order ? MoneyUtil.isZero(order.due_amount) : false;
 
   return (
@@ -167,9 +227,63 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
               </Alert>
             ) : (
               <Box component="form" onSubmit={handleAddPayment} sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 2 }}>
+                {/* 1-Click Fast Tender Actions */}
+                <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 1 }}>
+                  FAST 1-CLICK TENDER (HOTKEYS)
+                </Typography>
+                <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    color="success"
+                    startIcon={<FlashOnIcon />}
+                    onClick={() => handleFastTender('CASH')}
+                    sx={{ fontWeight: 700, py: 1 }}
+                  >
+                    Exact Cash [F8]
+                  </Button>
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    color="primary"
+                    startIcon={<CreditCardIcon />}
+                    onClick={() => handleFastTender('CARD')}
+                    sx={{ fontWeight: 700, py: 1 }}
+                  >
+                    EFT POS [F9]
+                  </Button>
+                </Stack>
+
+                <Divider sx={{ my: 2 }}>
+                  <Chip label="Or Custom Tender" size="small" />
+                </Divider>
+
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1.5 }}>
                   {t('pos.postPayment')}
                 </Typography>
+
+                {/* Quick Cash Presets */}
+                <Stack direction="row" spacing={0.75} sx={{ mb: 2, flexWrap: 'wrap', gap: 0.75 }}>
+                  <Chip
+                    label="Exact"
+                    clickable
+                    color="primary"
+                    variant="outlined"
+                    size="small"
+                    onClick={() => setPayAmount(order.due_amount || '0')}
+                  />
+                  {['500000', '1000000', '2000000', '5000000', '10000000'].map((val) => (
+                    <Chip
+                      key={val}
+                      label={`${(Number(val) / 10).toLocaleString('fa-IR')} ت`}
+                      clickable
+                      variant="outlined"
+                      size="small"
+                      onClick={() => setPayAmount(val)}
+                    />
+                  ))}
+                </Stack>
+
                 <Stack spacing={2}>
                   <FormControl fullWidth size="small">
                     <InputLabel>{t('payments.instrument')}</InputLabel>

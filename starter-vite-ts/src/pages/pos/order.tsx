@@ -225,6 +225,8 @@ export function PosOrderPage() {
   const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+
   const fetchHeldOrders = useCallback(async (branchId?: string) => {
     try {
       setLoadingHeldOrders(true);
@@ -717,7 +719,7 @@ export function PosOrderPage() {
   };
 
   // Order Placement
-  const handlePlaceOrder = async () => {
+  const handlePlaceOrder = useCallback(async () => {
     if (cart.length === 0) {
       setError('Cart is empty');
       return;
@@ -772,7 +774,100 @@ export function PosOrderPage() {
       setError(msg);
       showErrorToast(err, msg);
     }
-  };
+  }, [
+    cart,
+    selectedBranchId,
+    approvalRequired,
+    orderType,
+    selectedCustomerId,
+    appliedCouponCode,
+    tableNumber,
+    orderNotes,
+    activeDraftOrderId,
+    manualApprovalRequestId,
+    fetchHeldOrders,
+  ]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // F2 or Ctrl+F / Ctrl+K: Focus search input
+      if (e.key === 'F2' || ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'k'))) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        return;
+      }
+
+      // F4: Toggle Held Orders Drawer
+      if (e.key === 'F4') {
+        e.preventDefault();
+        setHeldOrdersDrawerOpen((prev) => !prev);
+        return;
+      }
+
+      // F6: Open Manual Discount Modal
+      if (e.key === 'F6') {
+        e.preventDefault();
+        if (cart.length > 0) {
+          setManualDiscountModalOpen(true);
+        } else {
+          toast.warning('Add items to cart before applying discount');
+        }
+        return;
+      }
+
+      // F8: Fast Place Order / Cash Tender
+      if (e.key === 'F8') {
+        e.preventDefault();
+        if (placedOrder) {
+          setCheckoutModalOpen(true);
+        } else if (cart.length > 0) {
+          handlePlaceOrder();
+        }
+        return;
+      }
+
+      // F9: Fast Place Order / EFT Card Tender
+      if (e.key === 'F9') {
+        e.preventDefault();
+        if (placedOrder) {
+          setCheckoutModalOpen(true);
+        } else if (cart.length > 0) {
+          handlePlaceOrder();
+        }
+        return;
+      }
+
+      // Esc: Close any modal or clear search
+      if (e.key === 'Escape') {
+        if (notesModalOpen) setNotesModalOpen(false);
+        else if (optionDialogOpen) setOptionDialogOpen(false);
+        else if (heldOrdersDrawerOpen) setHeldOrdersDrawerOpen(false);
+        else if (manualDiscountModalOpen) setManualDiscountModalOpen(false);
+        else if (checkoutModalOpen) setCheckoutModalOpen(false);
+        else if (quickAddCustomerOpen) setQuickAddCustomerOpen(false);
+        else if (approvalModalOpen) setApprovalModalOpen(false);
+        else if (searchQuery) setSearchQuery('');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [
+    cart.length,
+    placedOrder,
+    handlePlaceOrder,
+    notesModalOpen,
+    optionDialogOpen,
+    heldOrdersDrawerOpen,
+    manualDiscountModalOpen,
+    checkoutModalOpen,
+    quickAddCustomerOpen,
+    approvalModalOpen,
+    searchQuery,
+  ]);
 
   // Product Filtering (Search + Category)
   const filteredProducts = products.filter((p) => {
@@ -833,6 +928,45 @@ export function PosOrderPage() {
         </Alert>
       )}
 
+      {/* Keyboard Shortcuts Fast-Action Bar */}
+      <Paper
+        variant="outlined"
+        sx={{
+          px: 2,
+          py: 1,
+          mb: 2,
+          borderRadius: 2,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 1,
+          bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100'),
+          border: '1px dashed',
+          borderColor: 'divider',
+        }}
+      >
+        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+          <Chip size="small" label="F2 / ⌘F" color="primary" variant="filled" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
+          <Typography variant="caption" sx={{ fontWeight: 600, mr: 1.5 }}>Search Catalog</Typography>
+
+          <Chip size="small" label="F4" color="info" variant="filled" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
+          <Typography variant="caption" sx={{ fontWeight: 600, mr: 1.5 }}>Held Orders ({heldOrders.length})</Typography>
+
+          <Chip size="small" label="F6" color="warning" variant="filled" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
+          <Typography variant="caption" sx={{ fontWeight: 600, mr: 1.5 }}>Manual Discount</Typography>
+
+          <Chip size="small" label="F8" color="success" variant="filled" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
+          <Typography variant="caption" sx={{ fontWeight: 600, mr: 1.5 }}>Cash Pay / Submit</Typography>
+
+          <Chip size="small" label="F9" color="secondary" variant="filled" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
+          <Typography variant="caption" sx={{ fontWeight: 600, mr: 1.5 }}>EFT POS Pay</Typography>
+
+          <Chip size="small" label="Esc" color="default" variant="filled" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
+          <Typography variant="caption" sx={{ fontWeight: 600 }}>Clear / Close</Typography>
+        </Stack>
+      </Paper>
+
       <Grid container spacing={2.5}>
         {/* Left Column: High-Density Product Catalog with Categories Rail */}
         <Grid size={{ xs: 12, md: 7, lg: 8 }}>
@@ -859,9 +993,10 @@ export function PosOrderPage() {
               }}
             >
               <TextField
+                inputRef={searchInputRef}
                 fullWidth
                 size="small"
-                placeholder="Search products by English/Persian name, SKU or code (e.g. Cheese, همبرگر, PROD-01)..."
+                placeholder="[F2] Search products by English/Persian name, SKU or code (e.g. Cheese, همبرگر, PROD-01)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 slotProps={{
@@ -1526,7 +1661,7 @@ export function PosOrderPage() {
                     onClick={() => setManualDiscountModalOpen(true)}
                     sx={{ fontWeight: 600, flexShrink: 0, whiteSpace: 'nowrap' }}
                   >
-                    {appliedManualDiscount ? 'Discount (Active)' : 'Discount'}
+                    {appliedManualDiscount ? 'Discount [F6] (Active)' : 'Discount [F6]'}
                   </Button>
                 </Tooltip>
               </Stack>
@@ -1607,7 +1742,7 @@ export function PosOrderPage() {
                   startIcon={<PauseIcon />}
                   sx={{ fontWeight: 'bold', py: 1.25, flexShrink: 0 }}
                 >
-                  Hold
+                  Hold [F4]
                 </Button>
                 <Button
                   variant="contained"
@@ -1617,7 +1752,7 @@ export function PosOrderPage() {
                   onClick={handlePlaceOrder}
                   sx={{ fontWeight: 'bold', py: 1.25, fontSize: '1rem' }}
                 >
-                  {activeDraftOrderId ? 'Update & Place Order' : 'Place Order'}
+                  {activeDraftOrderId ? 'Update & Place [F8]' : 'Place Order [F8]'}
                 </Button>
               </Stack>
             </CardContent>
