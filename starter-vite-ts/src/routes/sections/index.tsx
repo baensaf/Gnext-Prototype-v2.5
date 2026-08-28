@@ -61,13 +61,15 @@ import { SimulationSnappfoodPage } from 'src/pages/simulation/simulation-snappfo
 import { SimulationPaymentsPrintersPage } from 'src/pages/simulation/simulation-payments-printers';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, fetchMe, isLoading } = useAuthStore();
+  const { isAuthenticated, fetchMe, isInitialized } = useAuthStore();
 
   useEffect(() => {
-    fetchMe();
-  }, [fetchMe]);
+    if (!isInitialized) {
+      fetchMe();
+    }
+  }, [fetchMe, isInitialized]);
 
-  if (isLoading) {
+  if (!isInitialized) {
     return null;
   }
 
@@ -113,8 +115,8 @@ export const routesSection: RouteObject[] = [
       { path: 'cashier/business-days', element: <BusinessDaysPage /> },
       { path: 'payments', element: <PaymentsPage /> },
       { path: 'refunds', element: <RefundsPage /> },
-      { path: 'customer-club/discounts', element: <DiscountsHubPage defaultTab={1} /> },
-      { path: 'customer-club/wallet', element: <DiscountsHubPage defaultTab={4} /> },
+      { path: 'customer-club/discounts', element: <DiscountsHubPage defaultTab={0} /> },
+      { path: 'customer-club/wallet', element: <DiscountsHubPage defaultTab={3} /> },
       { path: 'customers', element: <CustomersPage /> },
       { path: 'customers/:id', element: <CustomersPage /> },
       { path: 'credit/accounts', element: <CustomerCreditPage /> },
@@ -130,13 +132,13 @@ export const routesSection: RouteObject[] = [
       { path: 'pricing/price-book', element: <PricingPage /> },
       { path: 'pricing/price-groups', element: <PricingPage /> },
       { path: 'pricing/bulk-update', element: <PricingPage /> },
-      { path: 'discounts', element: <DiscountsHubPage /> },
-      { path: 'discounts/campaigns', element: <DiscountsHubPage defaultTab={0} /> },
-      { path: 'discounts/campaigns/:id', element: <CampaignDetailPage /> },
-      { path: 'discounts/customer-rates', element: <DiscountsHubPage defaultTab={1} /> },
-      { path: 'discounts/coupons', element: <DiscountsHubPage defaultTab={2} /> },
-      { path: 'discounts/authorizations', element: <DiscountsHubPage defaultTab={3} /> },
-      { path: 'discounts/wallet', element: <DiscountsHubPage defaultTab={4} /> },
+      { path: 'discounts', element: <DiscountsHubPage defaultTab={0} /> },
+      { path: 'discounts/campaigns', element: <Navigate to="/app/discounts/customer-rates" replace /> },
+      { path: 'discounts/campaigns/:id', element: <Navigate to="/app/discounts/customer-rates" replace /> },
+      { path: 'discounts/customer-rates', element: <DiscountsHubPage defaultTab={0} /> },
+      { path: 'discounts/coupons', element: <DiscountsHubPage defaultTab={1} /> },
+      { path: 'discounts/authorizations', element: <DiscountsHubPage defaultTab={2} /> },
+      { path: 'discounts/wallet', element: <DiscountsHubPage defaultTab={3} /> },
       { path: 'operations/branches', element: <BranchesPage /> },
       { path: 'operations/branches/:id', element: <BranchDetailPage /> },
       { path: 'operations/terminals', element: <TerminalsPage /> },
@@ -154,7 +156,7 @@ export const routesSection: RouteObject[] = [
       { path: 'settings', element: <SettingsHubPage /> },
       { path: 'settings/general', element: <GeneralSettingsPage /> },
       { path: 'settings/order-workflow', element: <OrderWorkflowSettingsPage /> },
-      { path: 'settings/discount-authorizations', element: <DiscountsHubPage defaultTab={3} /> },
+      { path: 'settings/discount-authorizations', element: <DiscountsHubPage defaultTab={2} /> },
       { path: 'settings/payments-refunds', element: <PaymentSettingsPage /> },
       { path: 'settings/payments', element: <PaymentSettingsPage /> },
       { path: 'settings/approvals', element: <ApprovalsSettingsPage /> },

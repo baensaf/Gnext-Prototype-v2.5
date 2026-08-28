@@ -16,6 +16,7 @@ import {
   Button,
   Switch,
   TableRow,
+  useTheme,
   TableBody,
   TableCell,
   TableHead,
@@ -24,16 +25,20 @@ import {
   IconButton,
   CardContent,
   TableContainer,
+  CircularProgress,
 } from '@mui/material';
 
 import { tenantApi } from 'src/api/tenantApi';
 
-const DAY_NAMES = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
+
+const DAY_KEYS = ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const;
 
 export function BranchDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { t: _t } = useTranslation();
+  const { t } = useTranslation();
+  const theme = useTheme();
 
   const [branch, setBranch] = useState<Branch | null>(null);
   const [hours, setHours] = useState<BranchOperatingHour[]>([]);
@@ -48,13 +53,13 @@ export function BranchDetailPage() {
       const b = await tenantApi.getBranchById(id);
       const h = await tenantApi.getBranchHours(id);
       setBranch(b);
-      setHours(h);
+      setHours(h || []);
     } catch (err: any) {
-      setError(err.detail || 'Failed to load branch details');
+      setError(err.detail || err.message || t('operations.branchDetail.loadError', 'Failed to load branch details'));
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => {
     loadData();
@@ -70,31 +75,59 @@ export function BranchDetailPage() {
     if (!id) return;
     try {
       await tenantApi.updateBranchHours(id, hours);
-      setSuccess('Operating hours updated successfully');
+      setSuccess(t('operations.branchDetail.saveSuccess', 'Branch operating hours schedule saved successfully'));
       setError(null);
     } catch (err: any) {
-      setError(err.detail || 'Failed to update operating hours');
+      setError(err.detail || err.message || t('operations.branchDetail.saveError', 'Failed to update operating hours'));
     }
   };
 
-  if (loading) return <Typography>Loading branch details...</Typography>;
-  if (!branch) return <Typography color="error">Branch not found</Typography>;
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 8 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!branch) {
+    return (
+      <Box sx={{ p: 4 }}>
+        <Alert severity="error">{t('operations.branchDetail.notFound', 'Branch not found')}</Alert>
+      </Box>
+    );
+  }
 
   return (
-    <Box>
-      <Stack direction="row" sx={{ alignItems: 'center', mb: 3, gap: 2 }}>
-        <IconButton onClick={() => navigate('/app/operations/branches')}>
-          <ArrowBackIcon />
-        </IconButton>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            {branch.name} (<code>{branch.code}</code>)
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {branch.address || 'No address specified'} | {branch.phone || 'No phone'}
-          </Typography>
-        </Box>
-      </Stack>
+    <Box sx={{ pb: 6 }}>
+      <CustomBreadcrumbs
+        heading={`${branch.name} (${branch.code})`}
+        links={[
+          { name: t('nav.home', 'Home'), href: '/app/dashboard' },
+          { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
+          { name: t('operations.branches.title', 'Branches'), href: '/app/operations/branches' },
+          { name: branch.name },
+        ]}
+        action={
+          <Button
+            variant="outlined"
+            startIcon={
+              <ArrowBackIcon
+                sx={{
+                  transform: theme.direction === 'rtl' ? 'rotate(180deg)' : 'none',
+                }}
+              />
+            }
+            onClick={() => navigate('/app/operations/branches')}
+          >
+            {t('operations.branchDetail.backToBranches', 'Back to Branches')}
+          </Button>
+        }
+      />
+
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        {branch.address || t('operations.branchDetail.noAddress', 'No address specified')} | {branch.phone || t('operations.branchDetail.noPhone', 'No phone')}
+      </Typography>
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
@@ -112,7 +145,7 @@ export function BranchDetailPage() {
         <CardContent>
           <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-              7-Day Operating Hours Schedule
+              {t('operations.branchDetail.title', 'Branch Operating Hours Schedule')}
             </Typography>
             <Button
               variant="contained"
@@ -120,7 +153,7 @@ export function BranchDetailPage() {
               onClick={handleSaveHours}
               sx={{ fontWeight: 'bold' }}
             >
-              Save Schedule
+              {t('operations.branchDetail.saveSchedule', 'Save Schedule')}
             </Button>
           </Stack>
 
@@ -128,15 +161,15 @@ export function BranchDetailPage() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Day of Week</TableCell>
-                  <TableCell align="center">Is Closed</TableCell>
-                  <TableCell>Open Time</TableCell>
-                  <TableCell>Close Time</TableCell>
-                  <TableCell align="center">Spans Midnight</TableCell>
+                  <TableCell>{t('operations.branchDetail.dayOfWeek', 'Day of Week')}</TableCell>
+                  <TableCell align="center">{t('operations.branchDetail.isClosed', 'Is Closed')}</TableCell>
+                  <TableCell>{t('operations.branchDetail.openTime', 'Open Time')}</TableCell>
+                  <TableCell>{t('operations.branchDetail.closeTime', 'Close Time')}</TableCell>
+                  <TableCell align="center">{t('operations.branchDetail.spansMidnight', 'Spans Midnight')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {DAY_NAMES.map((dayName, index) => {
+                {DAY_KEYS.map((dayKey, index) => {
                   const hourRow = hours.find((h) => h.day_of_week === index) || {
                     day_of_week: index,
                     open_time: '08:00:00',
@@ -146,8 +179,10 @@ export function BranchDetailPage() {
                   };
 
                   return (
-                    <TableRow key={index}>
-                      <TableCell sx={{ fontWeight: 'bold' }}>{dayName}</TableCell>
+                    <TableRow key={dayKey} hover>
+                      <TableCell sx={{ fontWeight: 'bold' }}>
+                        {t(`operations.branchDetail.days.${dayKey}`, dayKey)}
+                      </TableCell>
                       <TableCell align="center">
                         <Switch
                           checked={hourRow.is_closed}

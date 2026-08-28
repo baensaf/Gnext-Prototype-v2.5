@@ -41,7 +41,11 @@ interface CreditAccount {
   };
 }
 
-export default function WalletCashbackPage() {
+interface WalletCashbackPageProps {
+  isEmbedded?: boolean;
+}
+
+export default function WalletCashbackPage({ isEmbedded = false }: WalletCashbackPageProps) {
   const { t } = useTranslation();
 
   const [accounts, setAccounts] = useState<CreditAccount[]>([]);
@@ -88,7 +92,7 @@ export default function WalletCashbackPage() {
 
       setSuccess(t('wallet.policySaved', 'Cashback policy saved successfully. Eligible orders will earn cashback on completion.'));
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to update cashback policy setting');
+      setError(err.detail || err.message || t('wallet.failedToSave', 'Failed to update cashback policy setting'));
     } finally {
       setSavingPolicy(false);
     }
@@ -96,11 +100,13 @@ export default function WalletCashbackPage() {
 
   const totalBalance = accounts.reduce((sum, a) => MoneyUtil.add(sum, a.current_balance || '0'), '0');
 
-  return (
-    <DashboardContent>
+  const content = (
+    <Box sx={{ width: '100%' }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box>
-          <Typography variant="h4">{t('wallet.title', 'Customer Club Wallet & Cashback')}</Typography>
+          <Typography variant={isEmbedded ? 'h5' : 'h4'} sx={{ fontWeight: 'bold' }}>
+            {t('wallet.title', 'Customer Club Wallet & Cashback')}
+          </Typography>
           <Typography variant="body2" color="text.secondary">
             {t('wallet.subtitle', 'Configure purchase-based cashback earning rules and manage customer credit wallet balances.')}
           </Typography>
@@ -159,7 +165,7 @@ export default function WalletCashbackPage() {
         <Grid size={{ xs: 12, md: 4 }}>
           <Card sx={{ p: 3, bgcolor: 'background.neutral' }}>
             <Typography variant="overline">{t('wallet.totalWalletBalance', 'Total Net Wallet Credit Balance')}</Typography>
-            <Typography variant="h3">{MoneyUtil.formatCurrency(totalBalance)} IRR</Typography>
+            <Typography variant="h3">{MoneyUtil.formatCurrency(totalBalance)} {t('common.irr', 'IRR')}</Typography>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
@@ -215,7 +221,7 @@ export default function WalletCashbackPage() {
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={acc.status}
+                        label={acc.status === 'ACTIVE' ? t('common.active', 'Active') : acc.status}
                         color={acc.status === 'ACTIVE' ? 'success' : 'default'}
                         size="small"
                       />
@@ -227,6 +233,8 @@ export default function WalletCashbackPage() {
           </Table>
         </Card>
       )}
-    </DashboardContent>
+    </Box>
   );
+
+  return isEmbedded ? content : <DashboardContent>{content}</DashboardContent>;
 }

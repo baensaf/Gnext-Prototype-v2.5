@@ -29,7 +29,11 @@ interface RolePolicy {
   adminMaxFixed: number;
 }
 
-export default function DiscountAuthorizationsPage() {
+interface DiscountAuthorizationsPageProps {
+  isEmbedded?: boolean;
+}
+
+export default function DiscountAuthorizationsPage({ isEmbedded = false }: DiscountAuthorizationsPageProps) {
   const { t } = useTranslation();
 
   const [policy, setPolicy] = useState<RolePolicy>({
@@ -85,17 +89,19 @@ export default function DiscountAuthorizationsPage() {
       await axios.patch('/api/v1/settings/DISCOUNT_AUTHORIZATIONS', policy);
       setSuccess(t('authPolicy.savedSuccess', 'Role-based manual discount authorization policy saved successfully.'));
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to save discount authorization settings');
+      setError(err.detail || err.message || t('authPolicy.failedToSave', 'Failed to save discount authorization settings'));
     } finally {
       setSaving(false);
     }
   };
 
-  return (
-    <DashboardContent>
+  const content = (
+    <Box sx={{ width: '100%' }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box>
-          <Typography variant="h4">{t('authPolicy.title', 'Cashier Manual Discount Authorizations')}</Typography>
+          <Typography variant={isEmbedded ? 'h5' : 'h4'} sx={{ fontWeight: 'bold' }}>
+            {t('authPolicy.title', 'Cashier Manual Discount Authorizations')}
+          </Typography>
           <Typography variant="body2" color="text.secondary">
             {t('authPolicy.subtitle', 'Configure role-based percentage and fixed-amount manual discount thresholds and escalation PIN approvals.')}
           </Typography>
@@ -144,14 +150,14 @@ export default function DiscountAuthorizationsPage() {
                   label={t('authPolicy.maxPct', 'Max Percentage Discount (%)')}
                   value={policy.cashierMaxPct}
                   onChange={(e) => setPolicy({ ...policy, cashierMaxPct: Number(e.target.value) })}
-                  helperText="Default: 10%"
+                  helperText={t('authPolicy.defaultPct', 'Default: {{pct}}%', { pct: 10 })}
                 />
                 <TextField
                   type="number"
                   label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction (IRR)')}
                   value={policy.cashierMaxFixed}
                   onChange={(e) => setPolicy({ ...policy, cashierMaxFixed: Number(e.target.value) })}
-                  helperText="Default: 50,000 IRR"
+                  helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} IRR', { amount: '50,000' })}
                 />
               </Stack>
             </Card>
@@ -173,14 +179,14 @@ export default function DiscountAuthorizationsPage() {
                   label={t('authPolicy.maxPct', 'Max Percentage Discount (%)')}
                   value={policy.supervisorMaxPct}
                   onChange={(e) => setPolicy({ ...policy, supervisorMaxPct: Number(e.target.value) })}
-                  helperText="Default: 20%"
+                  helperText={t('authPolicy.defaultPct', 'Default: {{pct}}%', { pct: 20 })}
                 />
                 <TextField
                   type="number"
                   label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction (IRR)')}
                   value={policy.supervisorMaxFixed}
                   onChange={(e) => setPolicy({ ...policy, supervisorMaxFixed: Number(e.target.value) })}
-                  helperText="Default: 150,000 IRR"
+                  helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} IRR', { amount: '150,000' })}
                 />
               </Stack>
             </Card>
@@ -202,14 +208,14 @@ export default function DiscountAuthorizationsPage() {
                   label={t('authPolicy.maxPct', 'Max Percentage Discount (%)')}
                   value={policy.managerMaxPct}
                   onChange={(e) => setPolicy({ ...policy, managerMaxPct: Number(e.target.value) })}
-                  helperText="Default: 30%"
+                  helperText={t('authPolicy.defaultPct', 'Default: {{pct}}%', { pct: 30 })}
                 />
                 <TextField
                   type="number"
                   label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction (IRR)')}
                   value={policy.managerMaxFixed}
                   onChange={(e) => setPolicy({ ...policy, managerMaxFixed: Number(e.target.value) })}
-                  helperText="Default: 300,000 IRR"
+                  helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} IRR', { amount: '300,000' })}
                 />
               </Stack>
             </Card>
@@ -232,6 +238,8 @@ export default function DiscountAuthorizationsPage() {
           </Grid>
         </Grid>
       )}
-    </DashboardContent>
+    </Box>
   );
+
+  return isEmbedded ? content : <DashboardContent>{content}</DashboardContent>;
 }

@@ -24,6 +24,7 @@ import {
 } from '@mui/material';
 
 import { settingsApi } from 'src/api/settingsApi';
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function OrderWorkflowSettingsPage() {
   const { t } = useTranslation();
@@ -112,22 +113,19 @@ export function OrderWorkflowSettingsPage() {
 
   return (
     <Box sx={{ pb: 6 }}>
-      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 800 }}>
-            {t('settings.orderWorkflow.title', 'Order & Workflow Policies')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t(
-              'settings.orderWorkflow.subtitle',
-              'Configure order lifecycle automation, cashier edit and cancellation time windows, and channel policies.'
-            )}
-          </Typography>
-        </Box>
-        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadSettings} disabled={saving}>
-          {t('common.refresh', 'Refresh')}
-        </Button>
-      </Stack>
+      <CustomBreadcrumbs
+        heading={t('settings.orderWorkflow.title', 'Order & Workflow Policies')}
+        links={[
+          { name: t('nav.home', 'Home'), href: '/app/dashboard' },
+          { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
+          { name: t('settings.orderWorkflow.title', 'Order Workflow') },
+        ]}
+        action={
+          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadSettings} disabled={saving}>
+            {t('common.refresh', 'Refresh')}
+          </Button>
+        }
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
@@ -329,7 +327,9 @@ export function OrderWorkflowSettingsPage() {
                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                   <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, textAlign: 'center' }}>
                     <RoomServiceIcon sx={{ fontSize: 36, color: 'primary.main', mb: 1 }} />
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Dine-In Service</Typography>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                      {t('settings.orderWorkflow.channels.dineIn', 'Dine-In Service')}
+                    </Typography>
                     <Switch
                       checked={enableDineIn}
                       onChange={(e) => setEnableDineIn(e.target.checked)}
@@ -341,7 +341,9 @@ export function OrderWorkflowSettingsPage() {
                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                   <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, textAlign: 'center' }}>
                     <LocalDiningIcon sx={{ fontSize: 36, color: 'warning.main', mb: 1 }} />
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Takeaway & Counter</Typography>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                      {t('settings.orderWorkflow.channels.takeaway', 'Takeaway & Counter')}
+                    </Typography>
                     <Switch
                       checked={enableTakeaway}
                       onChange={(e) => setEnableTakeaway(e.target.checked)}
@@ -353,7 +355,9 @@ export function OrderWorkflowSettingsPage() {
                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                   <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, textAlign: 'center' }}>
                     <LocalDiningIcon sx={{ fontSize: 36, color: 'info.main', mb: 1 }} />
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Direct Delivery</Typography>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                      {t('settings.orderWorkflow.channels.delivery', 'Direct Delivery')}
+                    </Typography>
                     <Switch
                       checked={enableDelivery}
                       onChange={(e) => setEnableDelivery(e.target.checked)}
@@ -365,7 +369,9 @@ export function OrderWorkflowSettingsPage() {
                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                   <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, textAlign: 'center' }}>
                     <AutoAwesomeIcon sx={{ fontSize: 36, color: 'secondary.main', mb: 1 }} />
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Snappfood & Aggregators</Typography>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                      {t('settings.orderWorkflow.channels.aggregators', 'Snappfood & Aggregators')}
+                    </Typography>
                     <Switch
                       checked={enableAggregators}
                       onChange={(e) => setEnableAggregators(e.target.checked)}

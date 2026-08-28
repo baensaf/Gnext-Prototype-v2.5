@@ -1,6 +1,7 @@
 import type { ApprovalRule, ApprovalRequest } from 'src/api/approvalApi';
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import EditIcon from '@mui/icons-material/Edit';
 import ShieldIcon from '@mui/icons-material/Shield';
@@ -16,6 +17,7 @@ import {
   Drawer,
   TableRow,
   MenuItem,
+  useTheme,
   TableBody,
   TableCell,
   TableHead,
@@ -26,18 +28,22 @@ import {
 } from '@mui/material';
 
 import { approvalApi } from 'src/api/approvalApi';
-
-const DEFAULT_ACTIONS = [
-  { code: 'DISCOUNT', label: 'Manual Cashier Discount (%)' },
-  { code: 'PRICE_OVERRIDE', label: 'Manual Price Override (IRR)' },
-  { code: 'REFUND', label: 'Order Refund (IRR)' },
-  { code: 'CANCEL', label: 'Paid Order Cancellation' },
-  { code: 'CREDIT_OVERRIDE', label: 'Customer Credit Limit Override' },
-  { code: 'REOPEN_ORDER', label: 'Reopen Closed Order' },
-  { code: 'SHIFT_CLOSE', label: 'Shift Close Overage/Shortage' },
-];
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function ApprovalsSettingsPage() {
+  const { t, i18n } = useTranslation();
+  const theme = useTheme();
+
+  const DEFAULT_ACTIONS = [
+    { code: 'DISCOUNT', label: t('settings.approvalsPage.actions.DISCOUNT', 'Manual Cashier Discount (%)') },
+    { code: 'PRICE_OVERRIDE', label: t('settings.approvalsPage.actions.PRICE_OVERRIDE', 'Manual Price Override') },
+    { code: 'REFUND', label: t('settings.approvalsPage.actions.REFUND', 'Order Refund') },
+    { code: 'CANCEL', label: t('settings.approvalsPage.actions.CANCEL', 'Paid Order Cancellation') },
+    { code: 'CREDIT_OVERRIDE', label: t('settings.approvalsPage.actions.CREDIT_OVERRIDE', 'Customer Credit Limit Override') },
+    { code: 'REOPEN_ORDER', label: t('settings.approvalsPage.actions.REOPEN_ORDER', 'Reopen Closed Order') },
+    { code: 'SHIFT_CLOSE', label: t('settings.approvalsPage.actions.SHIFT_CLOSE', 'Shift Close Overage/Shortage') },
+  ];
+
   const [rules, setRules] = useState<ApprovalRule[]>([]);
   const [requests, setRequests] = useState<ApprovalRequest[]>([]);
   const [_loading, setLoading] = useState(true);
@@ -60,7 +66,7 @@ export function ApprovalsSettingsPage() {
       setRequests(reqList);
       setError(null);
     } catch (err: any) {
-      setError(err.detail || 'Failed to load approval settings');
+      setError(err?.response?.data?.message || err.detail || t('settings.approvalsPage.loadError', 'Failed to load approval settings'));
     } finally {
       setLoading(false);
     }
@@ -80,40 +86,74 @@ export function ApprovalsSettingsPage() {
         required_steps: parseInt(requiredSteps, 10),
         approver_role: approverRole,
       });
-      setSuccess(`Approval rule for ${action} saved successfully`);
+      setSuccess(
+        t('settings.approvalsPage.saveSuccess', 'Approval rule for {{action}} saved successfully', { action })
+      );
       setDrawerOpen(false);
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to save approval rule');
+      setError(err?.response?.data?.message || err.detail || t('settings.approvalsPage.saveError', 'Failed to save approval rule'));
+    }
+  };
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return '—';
+    try {
+      const d = new Date(dateString);
+      const isFa = i18n.language === 'fa';
+      return new Intl.DateTimeFormat(isFa ? 'fa-IR-u-ca-persian' : 'en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(d);
+    } catch {
+      return dateString;
+    }
+  };
+
+  const formatTime = (dateString: string | null) => {
+    if (!dateString) return '—';
+    try {
+      const d = new Date(dateString);
+      const isFa = i18n.language === 'fa';
+      return new Intl.DateTimeFormat(isFa ? 'fa-IR-u-ca-persian' : 'en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }).format(d);
+    } catch {
+      return dateString;
     }
   };
 
   return (
-    <Box>
-      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Stack direction="row" spacing={1.5} sx={{ mb: 0.5, alignItems: 'center' }}>
-            <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-              Approval Workflows & Policies
-            </Typography>
-            <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
+    <Box sx={{ pb: 6 }}>
+      <CustomBreadcrumbs
+        heading={t('settings.approvalsPage.title', 'Approval Workflows & Policies')}
+        links={[
+          { name: t('nav.home', 'Home'), href: '/app/dashboard' },
+          { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
+          { name: t('settings.approvalsPage.title', 'Approvals') },
+        ]}
+        action={
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
+              {t('common.refresh', 'Refresh')}
+            </Button>
+            <Button variant="contained" startIcon={<ShieldIcon />} onClick={() => setDrawerOpen(true)}>
+              {t('settings.approvalsPage.configureRule', 'Configure Policy Rule')}
+            </Button>
           </Stack>
-          <Typography variant="body2" color="text.secondary">
-            Multi-step manager escalation rules, Argon2 PIN verification, and approval decision logs
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={2}>
-          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
-            Refresh
-          </Button>
-          <Button variant="contained" startIcon={<ShieldIcon />} onClick={() => setDrawerOpen(true)}>
-            Configure Policy Rule
-          </Button>
-        </Stack>
-      </Stack>
+        }
+      />
 
       <Alert severity="info" variant="outlined" sx={{ mb: 3, borderRadius: 2, fontWeight: 500 }}>
-        V5 Preview Module: Advanced multi-step approval workflow rules & Argon2 PIN hashing engine. Retained for V5 architectural evaluation.
+        {t(
+          'settings.approvalsPage.previewBanner',
+          'V5 Preview Module: Advanced multi-step approval workflow rules & Argon2 PIN hashing engine. Retained for V5 architectural evaluation.'
+        )}
       </Alert>
 
       {error && (
@@ -130,19 +170,21 @@ export function ApprovalsSettingsPage() {
 
       {/* Rules Policy Matrix */}
       <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-        Active Escalation Rules & Limits
+        {t('settings.approvalsPage.activeRulesTitle', 'Active Escalation Rules & Limits')}
       </Typography>
 
       <TableContainer component={Paper} variant="outlined" sx={{ mb: 4 }}>
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Operational Action</TableCell>
-              <TableCell>Threshold Limit</TableCell>
-              <TableCell>Required Approval Steps</TableCell>
-              <TableCell>Required Approver Role</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell align="right">Actions</TableCell>
+              <TableCell>{t('settings.approvalsPage.colAction', 'Operational Action')}</TableCell>
+              <TableCell>{t('settings.approvalsPage.colThreshold', 'Threshold Limit')}</TableCell>
+              <TableCell>{t('settings.approvalsPage.colSteps', 'Required Approval Steps')}</TableCell>
+              <TableCell>{t('settings.approvalsPage.colRole', 'Required Approver Role')}</TableCell>
+              <TableCell>{t('settings.approvalsPage.colStatus', 'Status')}</TableCell>
+              <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
+                {t('settings.approvalsPage.colActions', 'Actions')}
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -160,17 +202,47 @@ export function ApprovalsSettingsPage() {
                   </TableCell>
                   <TableCell>
                     {rule ? (
-                      <Chip label={`> ${rule.threshold_value} ${rule.threshold_type === 'PERCENTAGE' ? '%' : 'IRR'}`} color="warning" size="small" />
+                      <Chip
+                        label={`> ${rule.threshold_value} ${rule.threshold_type === 'PERCENTAGE' ? '%' : ''}`}
+                        color="warning"
+                        size="small"
+                      />
                     ) : (
-                      <Chip label="Default (No Limit)" variant="outlined" size="small" />
+                      <Chip
+                        label={t('settings.approvalsPage.defaultNoLimit', 'Default (No Limit)')}
+                        variant="outlined"
+                        size="small"
+                      />
                     )}
                   </TableCell>
-                  <TableCell>{rule ? `${rule.required_steps} Step (${rule.required_steps === 2 ? 'Multi-Step' : 'Single'})` : '1 Step'}</TableCell>
-                  <TableCell>{rule ? rule.approver_role : 'SUPERVISOR'}</TableCell>
                   <TableCell>
-                    <Chip label={rule?.is_active ? 'Active' : 'Configured'} color={rule?.is_active ? 'success' : 'default'} size="small" />
+                    {rule
+                      ? rule.required_steps === 2
+                        ? t('settings.approvalsPage.stepMulti', '2 Step (Multi-Step)')
+                        : t('settings.approvalsPage.stepSingle', '1 Step (Single)')
+                      : t('settings.approvalsPage.stepSingle', '1 Step (Single)')}
                   </TableCell>
-                  <TableCell align="right">
+                  <TableCell>
+                    {rule
+                      ? rule.approver_role === 'ADMIN'
+                        ? t('settings.approvalsPage.roleAdmin', 'Tenant Administrator')
+                        : rule.approver_role === 'MANAGER'
+                        ? t('settings.approvalsPage.roleManager', 'Branch Manager')
+                        : t('settings.approvalsPage.roleSupervisor', 'Supervisor')
+                      : t('settings.approvalsPage.roleSupervisor', 'Supervisor')}
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={
+                        rule?.is_active
+                          ? t('settings.approvalsPage.statusActive', 'Active')
+                          : t('settings.approvalsPage.statusConfigured', 'Configured')
+                      }
+                      color={rule?.is_active ? 'success' : 'default'}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
                     <IconButton
                       color="primary"
                       onClick={() => {
@@ -196,19 +268,19 @@ export function ApprovalsSettingsPage() {
 
       {/* Audit Log of Approval Requests */}
       <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-        Approval Request Audit Log
+        {t('settings.approvalsPage.auditTitle', 'Approval Request Audit Log')}
       </Typography>
 
       <TableContainer component={Paper} variant="outlined">
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Request Code</TableCell>
-              <TableCell>Action</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Current Step</TableCell>
-              <TableCell>Expires At</TableCell>
-              <TableCell>Requested Date</TableCell>
+              <TableCell>{t('settings.approvalsPage.colReqCode', 'Request Code')}</TableCell>
+              <TableCell>{t('settings.approvalsPage.colAction', 'Action')}</TableCell>
+              <TableCell>{t('settings.approvalsPage.colStatus', 'Status')}</TableCell>
+              <TableCell>{t('settings.approvalsPage.colSteps', 'Current Step')}</TableCell>
+              <TableCell>{t('settings.approvalsPage.colExpires', 'Expires At')}</TableCell>
+              <TableCell>{t('settings.approvalsPage.colReqDate', 'Requested Date')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -216,7 +288,7 @@ export function ApprovalsSettingsPage() {
               <TableRow>
                 <TableCell colSpan={6} align="center">
                   <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
-                    No approval requests generated yet.
+                    {t('settings.approvalsPage.noRequests', 'No approval requests generated yet.')}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -226,10 +298,12 @@ export function ApprovalsSettingsPage() {
                   <TableCell>
                     <code>{req.code}</code>
                   </TableCell>
-                  <TableCell>{req.action}</TableCell>
+                  <TableCell>
+                    {t(`settings.approvalsPage.actions.${req.action}`, req.action)}
+                  </TableCell>
                   <TableCell>
                     <Chip
-                      label={req.status}
+                      label={t(`settings.approvalsPage.statuses.${req.status}`, req.status)}
                       color={
                         req.status === 'APPROVED'
                           ? 'success'
@@ -243,10 +317,10 @@ export function ApprovalsSettingsPage() {
                     />
                   </TableCell>
                   <TableCell>
-                    Step {req.current_step} of {req.total_steps}
+                    {req.current_step} / {req.total_steps}
                   </TableCell>
-                  <TableCell>{new Date(req.expires_at).toLocaleTimeString()}</TableCell>
-                  <TableCell>{new Date(req.created_at).toLocaleString()}</TableCell>
+                  <TableCell>{formatTime(req.expires_at)}</TableCell>
+                  <TableCell>{formatDate(req.created_at)}</TableCell>
                 </TableRow>
               ))
             )}
@@ -255,14 +329,24 @@ export function ApprovalsSettingsPage() {
       </TableContainer>
 
       {/* Drawer Form */}
-      <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <Box sx={{ width: 400, p: 3 }}>
+      <Drawer
+        anchor={theme.direction === 'rtl' ? 'left' : 'right'}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+      >
+        <Box sx={{ width: { xs: 320, sm: 400 }, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Configure Policy Rule
+            {t('settings.approvalsPage.drawerTitle', 'Configure Policy Rule')}
           </Typography>
           <Box component="form" onSubmit={handleSaveRule}>
             <Stack spacing={2.5}>
-              <TextField select label="Action" value={action} onChange={(e) => setAction(e.target.value)} fullWidth>
+              <TextField
+                select
+                label={t('settings.approvalsPage.formAction', 'Action')}
+                value={action}
+                onChange={(e) => setAction(e.target.value)}
+                fullWidth
+              >
                 {DEFAULT_ACTIONS.map((a) => (
                   <MenuItem key={a.code} value={a.code}>
                     {a.label}
@@ -270,34 +354,52 @@ export function ApprovalsSettingsPage() {
                 ))}
               </TextField>
 
-              <TextField select label="Threshold Type" value={thresholdType} onChange={(e) => setThresholdType(e.target.value)} fullWidth>
-                <MenuItem value="PERCENTAGE">Percentage (%)</MenuItem>
-                <MenuItem value="AMOUNT">Fixed Amount (IRR)</MenuItem>
+              <TextField
+                select
+                label={t('settings.approvalsPage.formThresholdType', 'Threshold Type')}
+                value={thresholdType}
+                onChange={(e) => setThresholdType(e.target.value)}
+                fullWidth
+              >
+                <MenuItem value="PERCENTAGE">{t('settings.approvalsPage.typePercentage', 'Percentage (%)')}</MenuItem>
+                <MenuItem value="AMOUNT">{t('settings.approvalsPage.typeAmount', 'Fixed Amount (Base Currency)')}</MenuItem>
               </TextField>
 
               <TextField
-                label="Threshold Limit Value"
+                label={t('settings.approvalsPage.formThresholdValue', 'Threshold Limit Value')}
                 value={thresholdValue}
                 onChange={(e) => setThresholdValue(e.target.value)}
                 required
                 fullWidth
-                placeholder="e.g. 10 for >10%"
-                helperText="Operations exceeding this limit require manager PIN approval"
+                placeholder={t('settings.approvalsPage.formThresholdPlaceholder', 'e.g. 10 for >10%')}
+                helperText={t('settings.approvalsPage.formThresholdHelper', 'Operations exceeding this limit require manager PIN approval')}
               />
 
-              <TextField select label="Approval Workflow Steps" value={requiredSteps} onChange={(e) => setRequiredSteps(e.target.value)} fullWidth>
-                <MenuItem value="1">1 Step Approval (Supervisor)</MenuItem>
-                <MenuItem value="2">2 Step Approval (Supervisor → Manager)</MenuItem>
+              <TextField
+                select
+                label={t('settings.approvalsPage.formSteps', 'Approval Workflow Steps')}
+                value={requiredSteps}
+                onChange={(e) => setRequiredSteps(e.target.value)}
+                fullWidth
+              >
+                <MenuItem value="1">{t('settings.approvalsPage.stepOption1', '1 Step Approval (Supervisor)')}</MenuItem>
+                <MenuItem value="2">{t('settings.approvalsPage.stepOption2', '2 Step Approval (Supervisor → Manager)')}</MenuItem>
               </TextField>
 
-              <TextField select label="Required Approver Role" value={approverRole} onChange={(e) => setApproverRole(e.target.value)} fullWidth>
-                <MenuItem value="SUPERVISOR">Supervisor</MenuItem>
-                <MenuItem value="MANAGER">Branch Manager</MenuItem>
-                <MenuItem value="ADMIN">Tenant Administrator</MenuItem>
+              <TextField
+                select
+                label={t('settings.approvalsPage.formRole', 'Required Approver Role')}
+                value={approverRole}
+                onChange={(e) => setApproverRole(e.target.value)}
+                fullWidth
+              >
+                <MenuItem value="SUPERVISOR">{t('settings.approvalsPage.roleSupervisor', 'Supervisor')}</MenuItem>
+                <MenuItem value="MANAGER">{t('settings.approvalsPage.roleManager', 'Branch Manager')}</MenuItem>
+                <MenuItem value="ADMIN">{t('settings.approvalsPage.roleAdmin', 'Tenant Administrator')}</MenuItem>
               </TextField>
 
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ mt: 2 }}>
-                Save Policy Rule
+                {t('settings.approvalsPage.saveButton', 'Save Policy Rule')}
               </Button>
             </Stack>
           </Box>

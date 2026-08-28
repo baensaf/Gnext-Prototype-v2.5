@@ -2,10 +2,11 @@ import type { Branch } from 'src/api/tenantApi';
 
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import {
   Box,
@@ -18,6 +19,7 @@ import {
   Button,
   Drawer,
   TableRow,
+  useTheme,
   TableBody,
   TableCell,
   TableHead,
@@ -26,17 +28,23 @@ import {
   IconButton,
   CardContent,
   TableContainer,
+  CircularProgress,
 } from '@mui/material';
 
 import { tenantApi } from 'src/api/tenantApi';
 
+import { ConfirmDialog } from 'src/components/confirm-dialog';
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
+
 export function BranchesPage() {
-  const { t: _t } = useTranslation();
+  const { t } = useTranslation();
+  const theme = useTheme();
   const navigate = useNavigate();
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [code, setCode] = useState('');
@@ -44,22 +52,29 @@ export function BranchesPage() {
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
 
-  const loadBranches = async () => {
+  // Confirm dialog state for archive
+  const [archiveConfirm, setArchiveConfirm] = useState<{ id: string; name: string; open: boolean }>({
+    open: false,
+    id: '',
+    name: '',
+  });
+
+  const loadBranches = useCallback(async () => {
     setLoading(true);
     try {
       const data = await tenantApi.getBranches();
-      setBranches(data);
+      setBranches(data || []);
       setError(null);
     } catch (err: any) {
-      setError(err.detail || 'Failed to load branches');
+      setError(err.detail || err.message || t('operations.branches.loadError', 'Failed to load branches'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
     loadBranches();
-  }, []);
+  }, [loadBranches]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,47 +85,59 @@ export function BranchesPage() {
       setName('');
       setPhone('');
       setAddress('');
+      setSuccess(t('operations.branches.saveSuccess', 'Branch created successfully'));
       loadBranches();
     } catch (err: any) {
-      setError(err.detail || 'Failed to create branch');
+      setError(err.detail || err.message || t('operations.branches.createError', 'Failed to create branch'));
     }
   };
 
-  const handleArchive = async (id: string, branchName: string) => {
-    if (window.confirm(`Are you sure you want to archive branch "${branchName}"?`)) {
-      try {
-        await tenantApi.archiveBranch(id);
-        loadBranches();
-      } catch (err: any) {
-        setError(err.detail || 'Failed to archive branch');
-      }
+  const handleConfirmArchive = async () => {
+    try {
+      await tenantApi.archiveBranch(archiveConfirm.id);
+      setArchiveConfirm({ open: false, id: '', name: '' });
+      setSuccess(t('operations.branches.archiveSuccess', 'Branch archived successfully'));
+      loadBranches();
+    } catch (err: any) {
+      setError(err.detail || err.message || t('operations.branches.archiveError', 'Failed to archive branch'));
     }
   };
 
   return (
-    <Box>
-      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Branch Management
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Configure tenant branches, locations, and operating schedules
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setDrawerOpen(true)}
-          sx={{ fontWeight: 'bold' }}
-        >
-          Create Branch
-        </Button>
-      </Stack>
+    <Box sx={{ pb: 6 }}>
+      <CustomBreadcrumbs
+        heading={t('operations.branches.title', 'Branch Management')}
+        links={[
+          { name: t('nav.home', 'Home'), href: '/app/dashboard' },
+          { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
+          { name: t('operations.branches.title', 'Branch Management') },
+        ]}
+        action={
+          <Stack direction="row" spacing={1.5}>
+            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadBranches}>
+              {t('common.refresh', 'Refresh')}
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setDrawerOpen(true)}
+              sx={{ fontWeight: 'bold' }}
+            >
+              {t('operations.branches.createBranch', 'Create Branch')}
+            </Button>
+          </Stack>
+        }
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
           {error}
+        </Alert>
+      )}
+
+      {success && (
+        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess(null)}>
+          {success}
         </Alert>
       )}
 
@@ -120,55 +147,64 @@ export function BranchesPage() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Code</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Phone</TableCell>
-                  <TableCell>Address</TableCell>
-                  <TableCell>Time Zone</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="center">Actions</TableCell>
+                  <TableCell>{t('operations.branches.code', 'Code')}</TableCell>
+                  <TableCell>{t('operations.branches.name', 'Name')}</TableCell>
+                  <TableCell>{t('operations.branches.phone', 'Phone')}</TableCell>
+                  <TableCell>{t('operations.branches.address', 'Address')}</TableCell>
+                  <TableCell>{t('operations.branches.timeZone', 'Time Zone')}</TableCell>
+                  <TableCell>{t('operations.branches.status', 'Status')}</TableCell>
+                  <TableCell align="center">{t('operations.branches.actions', 'Actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {branches.length === 0 && !loading && (
+                {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
-                      No branches found. Click &quot;Create Branch&quot; to add one.
+                    <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                      <CircularProgress size={32} />
                     </TableCell>
                   </TableRow>
+                ) : branches.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                      <Typography color="text.secondary">
+                        {t('operations.branches.noBranches', 'No branches found. Click "Create Branch" to add one.')}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  branches.map((b) => (
+                    <TableRow key={b.id} hover>
+                      <TableCell><code>{b.code}</code></TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>{b.name}</TableCell>
+                      <TableCell>{b.phone || '—'}</TableCell>
+                      <TableCell>{b.address || '—'}</TableCell>
+                      <TableCell>{b.time_zone || 'Asia/Tehran'}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={b.is_active ? t('operations.branches.active', 'Active') : t('operations.branches.archived', 'Archived')}
+                          color={b.is_active ? 'success' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        <IconButton
+                          title={t('operations.branches.schedule', 'Hours Schedule')}
+                          color="primary"
+                          onClick={() => navigate(`/app/operations/branches/${b.id}`)}
+                        >
+                          <AccessTimeIcon />
+                        </IconButton>
+                        <IconButton
+                          title={t('operations.branches.archive', 'Archive Branch')}
+                          color="error"
+                          onClick={() => setArchiveConfirm({ open: true, id: b.id, name: b.name })}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
-                {branches.map((b) => (
-                  <TableRow key={b.id}>
-                    <TableCell><code>{b.code}</code></TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>{b.name}</TableCell>
-                    <TableCell>{b.phone || '—'}</TableCell>
-                    <TableCell>{b.address || '—'}</TableCell>
-                    <TableCell>{b.time_zone || 'Asia/Tehran'}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={b.is_active ? 'Active' : 'Archived'}
-                        color={b.is_active ? 'success' : 'default'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell align="center">
-                      <IconButton
-                        title="Hours Schedule"
-                        color="primary"
-                        onClick={() => navigate(`/app/operations/branches/${b.id}`)}
-                      >
-                        <AccessTimeIcon />
-                      </IconButton>
-                      <IconButton
-                        title="Archive Branch"
-                        color="error"
-                        onClick={() => handleArchive(b.id, b.name)}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
               </TableBody>
             </Table>
           </TableContainer>
@@ -176,15 +212,19 @@ export function BranchesPage() {
       </Card>
 
       {/* Create Branch Drawer */}
-      <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <Box sx={{ width: 400, p: 3 }}>
+      <Drawer
+        anchor={theme.direction === 'rtl' ? 'left' : 'right'}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+      >
+        <Box sx={{ width: { xs: 320, sm: 400 }, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Create New Branch
+            {t('operations.branches.newBranch', 'New Branch Location')}
           </Typography>
           <form onSubmit={handleCreate}>
             <Stack spacing={2.5}>
               <TextField
-                label="Branch Code"
+                label={t('operations.branches.branchCode', 'Branch Code')}
                 placeholder="e.g. TEH-WEST"
                 required
                 fullWidth
@@ -192,7 +232,7 @@ export function BranchesPage() {
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
               />
               <TextField
-                label="Branch Name"
+                label={t('operations.branches.branchName', 'Branch Name')}
                 placeholder="e.g. Tehran West Branch"
                 required
                 fullWidth
@@ -200,14 +240,14 @@ export function BranchesPage() {
                 onChange={(e) => setName(e.target.value)}
               />
               <TextField
-                label="Phone Number"
+                label={t('operations.branches.phoneNumber', 'Phone Number')}
                 placeholder="e.g. +982188000003"
                 fullWidth
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
               />
               <TextField
-                label="Address"
+                label={t('operations.branches.address', 'Address')}
                 multiline
                 rows={3}
                 fullWidth
@@ -215,12 +255,27 @@ export function BranchesPage() {
                 onChange={(e) => setAddress(e.target.value)}
               />
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>
-                Save Branch
+                {t('operations.branches.saveBranch', 'Save Branch')}
               </Button>
             </Stack>
           </form>
         </Box>
       </Drawer>
+
+      {/* Archive Confirm Dialog */}
+      <ConfirmDialog
+        open={archiveConfirm.open}
+        onClose={() => setArchiveConfirm({ open: false, id: '', name: '' })}
+        onConfirm={handleConfirmArchive}
+        title={t('operations.branches.archiveConfirmTitle', 'Archive Branch Location')}
+        content={t(
+          'operations.branches.archiveConfirmContent',
+          'Are you sure you want to archive branch "{{name}}"? This will hide the location from active POS routing.',
+          { name: archiveConfirm.name }
+        )}
+        confirmLabel={t('operations.branches.archive', 'Archive')}
+        confirmColor="warning"
+      />
     </Box>
   );
 }

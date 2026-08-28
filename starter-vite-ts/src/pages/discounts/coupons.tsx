@@ -40,7 +40,11 @@ interface Coupon {
   campaign_id?: string;
 }
 
-export function CouponsPage() {
+interface CouponsPageProps {
+  isEmbedded?: boolean;
+}
+
+export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
   const { t } = useTranslation();
 
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -71,7 +75,7 @@ export function CouponsPage() {
       setCoupons(Array.isArray(cList) ? cList : cList.data || []);
       setError(null);
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to load coupons');
+      setError(err.detail || err.message || t('coupons.failedToLoad', 'Failed to load coupons'));
     } finally {
       setLoading(false);
     }
@@ -100,7 +104,7 @@ export function CouponsPage() {
       resetForm();
       await loadData();
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to create one-time coupon');
+      setError(err.detail || err.message || t('coupons.failedToCreate', 'Failed to create one-time coupon'));
     } finally {
       setSaving(false);
     }
@@ -117,7 +121,7 @@ export function CouponsPage() {
       });
       setValidationResult(res.data);
     } catch (err: any) {
-      setTestError(err.detail || err.message || 'Coupon validation failed');
+      setTestError(err.detail || err.message || t('coupons.validationFailed', 'Coupon validation failed'));
     }
   };
 
@@ -131,10 +135,10 @@ export function CouponsPage() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: isEmbedded ? 0 : 3, width: '100%' }}>
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+          <Typography variant={isEmbedded ? 'h5' : 'h4'} sx={{ fontWeight: 'bold' }}>
             {t('coupons.title', 'One-Time Promotional Coupons')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -199,10 +203,12 @@ export function CouponsPage() {
           {validationResult && (
             <Alert severity="success" sx={{ mt: 2, borderRadius: 2 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                Coupon VALID! Applied Discount: -{MoneyUtil.formatCurrency(validationResult.calculatedAmount)} IRR
+                {t('coupons.couponValid', 'Coupon VALID! Applied Discount: -{{amount}} IRR', {
+                  amount: MoneyUtil.formatCurrency(validationResult.calculatedAmount),
+                })}
               </Typography>
               <Typography variant="caption">
-                Rule: <strong>{validationResult.discount?.name || 'Discount'}</strong>
+                {t('coupons.ruleLabel', 'Rule:')} <strong>{validationResult.discount?.name || 'Discount'}</strong>
               </Typography>
             </Alert>
           )}
@@ -253,7 +259,11 @@ export function CouponsPage() {
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={isRedeemed ? 'Redeemed (1/1)' : `Available (${uses}/${max})`}
+                            label={
+                              isRedeemed
+                                ? t('coupons.redeemed', 'Redeemed ({{uses}}/{{max}})', { uses, max })
+                                : t('coupons.available', 'Available ({{uses}}/{{max}})', { uses, max })
+                            }
                             color={isRedeemed ? 'error' : 'success'}
                             variant={isRedeemed ? 'outlined' : 'filled'}
                             size="small"
@@ -262,19 +272,19 @@ export function CouponsPage() {
                         <TableCell>
                           {coupon.effective_from || coupon.effective_to ? (
                             <Typography variant="caption">
-                              {coupon.effective_from ? new Date(coupon.effective_from).toLocaleDateString() : 'Start'}
+                              {coupon.effective_from ? new Date(coupon.effective_from).toLocaleDateString() : t('coupons.start', 'Start')}
                               {' — '}
-                              {coupon.effective_to ? new Date(coupon.effective_to).toLocaleDateString() : 'Expires'}
+                              {coupon.effective_to ? new Date(coupon.effective_to).toLocaleDateString() : t('coupons.expires', 'Expires')}
                             </Typography>
                           ) : (
                             <Typography variant="caption" color="text.secondary">
-                              No Date Limit
+                              {t('coupons.noDateLimit', 'No Date Limit')}
                             </Typography>
                           )}
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={coupon.is_active ? 'Active' : 'Inactive'}
+                            label={coupon.is_active ? t('common.active', 'Active') : t('common.inactive', 'Inactive')}
                             color={coupon.is_active ? 'success' : 'default'}
                             size="small"
                           />
@@ -301,7 +311,7 @@ export function CouponsPage() {
                 label={t('coupons.codeLabel', 'Unique Coupon Code')}
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="e.g. WELCOME15"
+                placeholder={t('coupons.codePlaceholder', 'e.g. WELCOME15')}
               />
 
               <TextField

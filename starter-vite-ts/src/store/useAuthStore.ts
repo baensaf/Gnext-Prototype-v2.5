@@ -27,6 +27,7 @@ interface AuthStore {
   tenant: TenantState | null;
   csrfToken: string | null;
   isAuthenticated: boolean;
+  isInitialized: boolean;
   isLoading: boolean;
   error: ProblemDetails | null;
   locale: string;
@@ -44,6 +45,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   tenant: null,
   csrfToken: null,
   isAuthenticated: false,
+  isInitialized: false,
   isLoading: false,
   error: null,
   locale: localStorage.getItem('gnext_locale') || 'fa',
@@ -61,6 +63,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         tenant,
         csrfToken,
         isAuthenticated: true,
+        isInitialized: true,
         isLoading: false,
         error: null,
       });
@@ -76,6 +79,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         error: err as ProblemDetails,
         isLoading: false,
         isAuthenticated: false,
+        isInitialized: true,
       });
       return false;
     }
@@ -94,6 +98,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         tenant: null,
         csrfToken: null,
         isAuthenticated: false,
+        isInitialized: true,
         isLoading: false,
       });
     }
@@ -114,6 +119,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         tenant,
         csrfToken,
         isAuthenticated: true,
+        isInitialized: true,
         isLoading: false,
         error: null,
       });
@@ -127,6 +133,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         tenant: null,
         csrfToken: null,
         isAuthenticated: false,
+        isInitialized: true,
         isLoading: false,
       });
     }

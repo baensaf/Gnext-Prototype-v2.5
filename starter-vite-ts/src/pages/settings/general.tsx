@@ -15,6 +15,7 @@ import {
   Alert,
   Button,
   Switch,
+  MenuItem,
   TableRow,
   TableBody,
   TableCell,
@@ -28,10 +29,11 @@ import {
 import { tenantApi } from 'src/api/tenantApi';
 import { settingsApi } from 'src/api/settingsApi';
 import { useAuthStore } from 'src/store/useAuthStore';
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function GeneralSettingsPage() {
-  const { t: _t } = useTranslation();
-  const { tenant } = useAuthStore();
+  const { t } = useTranslation();
+  const { tenant, fetchMe } = useAuthStore();
 
   const [tenantName, setTenantName] = useState(tenant?.name || 'Gnext Prototype');
   const [defaultLocale, setDefaultLocale] = useState(tenant?.defaultLocale || 'fa');
@@ -54,7 +56,7 @@ export function GeneralSettingsPage() {
         if (profile.time_zone || profile.timeZone) setTimeZone(profile.time_zone || profile.timeZone);
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.detail || 'Failed to load settings');
+      setError(err?.response?.data?.message || err.detail || t('settings.generalPage.loadError', 'Failed to load settings'));
     }
   };
 
@@ -70,10 +72,13 @@ export function GeneralSettingsPage() {
         default_locale: defaultLocale,
         time_zone: timeZone,
       });
-      setSuccess('Tenant settings updated successfully');
+      if (fetchMe) {
+        await fetchMe().catch(() => {});
+      }
+      setSuccess(t('settings.generalPage.saveSuccess', 'Tenant settings updated successfully'));
       setError(null);
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.detail || 'Failed to update settings');
+      setError(err?.response?.data?.message || err.detail || t('settings.generalPage.updateError', 'Failed to update settings'));
     }
   };
 
@@ -82,18 +87,20 @@ export function GeneralSettingsPage() {
       await settingsApi.updateCurrency(currency.id, { is_enabled: enabled });
       loadData();
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.detail || 'Failed to update currency status');
+      setError(err?.response?.data?.message || err.detail || t('settings.generalPage.currencyStatusError', 'Failed to update currency status'));
     }
   };
 
   return (
-    <Box>
-      <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
-        General Settings & Currencies
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Manage tenant profile, timezone, locale defaults, and system currencies
-      </Typography>
+    <Box sx={{ pb: 6 }}>
+      <CustomBreadcrumbs
+        heading={t('settings.generalPage.title', 'General Settings & Currencies')}
+        links={[
+          { name: t('nav.home', 'Home'), href: '/app/dashboard' },
+          { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
+          { name: t('settings.generalPage.title', 'General Settings') },
+        ]}
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
@@ -113,45 +120,57 @@ export function GeneralSettingsPage() {
           <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
             <CardContent>
               <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-                Tenant Organization Profile
+                {t('settings.generalPage.tenantProfile', 'Tenant Organization Profile')}
               </Typography>
 
               <form onSubmit={handleSaveTenant}>
                 <Stack spacing={2.5}>
                   <TextField
-                    label="Tenant Code"
+                    label={t('settings.generalPage.tenantCode', 'Tenant Code')}
                     value={tenant?.code || 'GNEXT'}
                     disabled
                     fullWidth
                   />
                   <TextField
-                    label="Tenant Name"
+                    label={t('settings.generalPage.tenantName', 'Tenant Name')}
                     value={tenantName}
                     onChange={(e) => setTenantName(e.target.value)}
                     required
                     fullWidth
                   />
                   <TextField
-                    label="Default Locale"
+                    select
+                    label={t('settings.generalPage.defaultLocale', 'Default Locale')}
                     value={defaultLocale}
                     onChange={(e) => setDefaultLocale(e.target.value)}
                     required
                     fullWidth
-                  />
+                  >
+                    <MenuItem value="fa">فارسی (Persian - fa)</MenuItem>
+                    <MenuItem value="en">English (en)</MenuItem>
+                  </TextField>
                   <TextField
-                    label="Time Zone"
+                    select
+                    label={t('settings.generalPage.timeZone', 'Time Zone')}
                     value={timeZone}
                     onChange={(e) => setTimeZone(e.target.value)}
                     required
                     fullWidth
-                  />
+                  >
+                    <MenuItem value="Asia/Tehran">Asia/Tehran (UTC+03:30)</MenuItem>
+                    <MenuItem value="UTC">UTC (GMT+00:00)</MenuItem>
+                    <MenuItem value="Asia/Dubai">Asia/Dubai (UTC+04:00)</MenuItem>
+                    <MenuItem value="Europe/Istanbul">Europe/Istanbul (UTC+03:00)</MenuItem>
+                    <MenuItem value="Europe/London">Europe/London (UTC+00:00)</MenuItem>
+                    <MenuItem value="America/New_York">America/New_York (UTC-05:00)</MenuItem>
+                  </TextField>
                   <Button
                     type="submit"
                     variant="contained"
                     startIcon={<SaveIcon />}
                     sx={{ fontWeight: 'bold' }}
                   >
-                    Save Tenant Settings
+                    {t('settings.generalPage.saveTenant', 'Save Tenant Settings')}
                   </Button>
                 </Stack>
               </form>
@@ -165,21 +184,21 @@ export function GeneralSettingsPage() {
             <CardContent>
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  Supported Currencies
+                  {t('settings.generalPage.supportedCurrencies', 'Supported Currencies')}
                 </Typography>
-                <Chip label="One Currency per Order (AD-10)" color="info" size="small" />
+                <Chip label={t('settings.generalPage.oneCurrencyNotice', 'One Currency per Order (AD-10)')} color="info" size="small" />
               </Stack>
 
               <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell>Code</TableCell>
-                      <TableCell>Symbol</TableCell>
-                      <TableCell align="center">Precision</TableCell>
-                      <TableCell align="center">Increment</TableCell>
-                      <TableCell align="center">Base</TableCell>
-                      <TableCell align="center">Enabled</TableCell>
+                      <TableCell>{t('settings.generalPage.colCode', 'Code')}</TableCell>
+                      <TableCell>{t('settings.generalPage.colSymbol', 'Symbol')}</TableCell>
+                      <TableCell align="center">{t('settings.generalPage.colPrecision', 'Precision')}</TableCell>
+                      <TableCell align="center">{t('settings.generalPage.colIncrement', 'Increment')}</TableCell>
+                      <TableCell align="center">{t('settings.generalPage.colBase', 'Base')}</TableCell>
+                      <TableCell align="center">{t('settings.generalPage.colEnabled', 'Enabled')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -191,7 +210,7 @@ export function GeneralSettingsPage() {
                         <TableCell align="center">{c.rounding_increment}</TableCell>
                         <TableCell align="center">
                           {c.is_base ? (
-                            <Chip label="BASE" color="primary" size="small" sx={{ fontWeight: 'bold' }} />
+                            <Chip label={t('settings.generalPage.baseBadge', 'BASE')} color="primary" size="small" sx={{ fontWeight: 'bold' }} />
                           ) : (
                             '—'
                           )}

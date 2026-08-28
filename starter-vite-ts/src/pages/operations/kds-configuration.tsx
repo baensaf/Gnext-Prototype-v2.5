@@ -1,6 +1,7 @@
 import type { KdsScreen, KitchenStation, KdsRoutingRule } from 'src/api/kdsApi';
 
-import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -21,6 +22,7 @@ import {
   Select,
   TableRow,
   MenuItem,
+  useTheme,
   TableBody,
   TableCell,
   TableHead,
@@ -32,12 +34,19 @@ import {
   FormControl,
   DialogContent,
   DialogActions,
+  CircularProgress,
 } from '@mui/material';
 
 import { kdsApi } from 'src/api/kdsApi';
 import { catalogApi } from 'src/api/catalogApi';
 
+import { ConfirmDialog } from 'src/components/confirm-dialog';
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
+
 export function KdsConfigurationPage() {
+  const { t } = useTranslation();
+  const theme = useTheme();
+
   const [tab, setTab] = useState<'STATIONS' | 'SCREENS' | 'RULES'>('STATIONS');
 
   const [stations, setStations] = useState<KitchenStation[]>([]);
@@ -45,8 +54,21 @@ export function KdsConfigurationPage() {
   const [rules, setRules] = useState<KdsRoutingRule[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
-  const [_loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Deletion confirm dialog state
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    id: string;
+    name?: string;
+    open: boolean;
+    type: 'STATION' | 'SCREEN' | 'RULE';
+  }>({
+    open: false,
+    id: '',
+    name: '',
+    type: 'STATION',
+  });
 
   // Dialogs
   const [stationModalOpen, setStationModalOpen] = useState(false);
@@ -58,7 +80,7 @@ export function KdsConfigurationPage() {
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
   const [ruleForm, setRuleForm] = useState({ station_id: '', selector_type: 'PRODUCT', product_id: '', category_id: '', priority: 1 });
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [stList, scList, rlList, prodList, catList] = await Promise.all([
@@ -68,22 +90,22 @@ export function KdsConfigurationPage() {
         catalogApi.getProducts().catch(() => []),
         catalogApi.getCategories().catch(() => []),
       ]);
-      setStations(stList);
-      setScreens(scList);
-      setRules(rlList);
+      setStations(stList || []);
+      setScreens(scList || []);
+      setRules(rlList || []);
       setProducts(Array.isArray(prodList) ? prodList : (prodList as any).items || []);
       setCategories(Array.isArray(catList) ? catList : (catList as any).items || []);
       setError(null);
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to load KDS configuration');
+      setError(err.detail || err.message || t('operations.kds.loadError', 'Failed to load KDS configuration'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const handleCreateStation = async () => {
     try {
@@ -92,16 +114,23 @@ export function KdsConfigurationPage() {
       setStationForm({ code: '', name: '', target_minutes: 10 });
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to create station');
+      setError(err.detail || t('operations.kds.createStationError', 'Failed to create station'));
     }
   };
 
-  const handleDeleteStation = async (id: string) => {
+  const handleConfirmDelete = async () => {
     try {
-      await kdsApi.deleteStation(id);
+      if (deleteConfirm.type === 'STATION') {
+        await kdsApi.deleteStation(deleteConfirm.id);
+      } else if (deleteConfirm.type === 'SCREEN') {
+        await kdsApi.deleteScreen(deleteConfirm.id);
+      } else if (deleteConfirm.type === 'RULE') {
+        await kdsApi.deleteRoutingRule(deleteConfirm.id);
+      }
+      setDeleteConfirm({ open: false, id: '', name: '', type: 'STATION' });
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to delete station');
+      setError(err.detail || t('common.deleteError', 'Failed to delete item'));
     }
   };
 
@@ -109,7 +138,7 @@ export function KdsConfigurationPage() {
     try {
       const targetBranchId = (stations[0] as any)?.branch_id || stations[0]?.id;
       if (!targetBranchId) {
-        setError('No active station/branch context');
+        setError(t('operations.kds.noContextError', 'No active station/branch context'));
         return;
       }
       await kdsApi.createScreen({
@@ -120,16 +149,7 @@ export function KdsConfigurationPage() {
       setScreenForm({ code: '', name: '', station_ids: [] });
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to create screen');
-    }
-  };
-
-  const handleDeleteScreen = async (id: string) => {
-    try {
-      await kdsApi.deleteScreen(id);
-      loadData();
-    } catch (err: any) {
-      setError(err.detail || 'Failed to delete screen');
+      setError(err.detail || t('operations.kds.createScreenError', 'Failed to create screen'));
     }
   };
 
@@ -137,7 +157,7 @@ export function KdsConfigurationPage() {
     try {
       const targetBranchId = (stations[0] as any)?.branch_id || stations[0]?.id;
       if (!targetBranchId) {
-        setError('No active station/branch context');
+        setError(t('operations.kds.noContextError', 'No active station/branch context'));
         return;
       }
       await kdsApi.createRoutingRule({
@@ -151,210 +171,284 @@ export function KdsConfigurationPage() {
       setRuleForm({ station_id: '', selector_type: 'PRODUCT', product_id: '', category_id: '', priority: 1 });
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to create routing rule');
-    }
-  };
-
-  const handleDeleteRule = async (id: string) => {
-    try {
-      await kdsApi.deleteRoutingRule(id);
-      loadData();
-    } catch (err: any) {
-      setError(err.detail || 'Failed to delete routing rule');
+      setError(err.detail || t('operations.kds.createRuleError', 'Failed to create routing rule'));
     }
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Stack direction="row" sx={{ mb: 3, justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-            <SoupKitchenIcon color="primary" /> KDS Configuration
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Configure kitchen stations, KDS screens, and product/category preparation routing rules.
-          </Typography>
-        </Box>
+    <Box sx={{ pb: 6 }}>
+      <CustomBreadcrumbs
+        heading={t('operations.kds.title', 'KDS Configuration & Station Routing')}
+        links={[
+          { name: t('nav.home', 'Home'), href: '/app/dashboard' },
+          { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
+          { name: t('operations.kds.title', 'KDS Configuration') },
+        ]}
+        action={
+          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
+            {t('common.refresh', 'Refresh')}
+          </Button>
+        }
+      />
 
-        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
-          Refresh
-        </Button>
-      </Stack>
-
-      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+      {error && <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>{error}</Alert>}
 
       <Paper sx={{ mb: 3, borderRadius: 2 }}>
         <Tabs value={tab} onChange={(_, val) => setTab(val)}>
-          <Tab label="Kitchen Stations" value="STATIONS" />
-          <Tab label="KDS Screens" value="SCREENS" />
-          <Tab label="Station Routing Rules" value="RULES" />
+          <Tab label={t('operations.kds.tabs.stations', 'Kitchen Preparation Stations')} value="STATIONS" />
+          <Tab label={t('operations.kds.tabs.screens', 'KDS Bump Screens')} value="SCREENS" />
+          <Tab label={t('operations.kds.tabs.rules', 'Station Routing Rules')} value="RULES" />
         </Tabs>
       </Paper>
 
-      {/* STATIONS TAB */}
-      {tab === 'STATIONS' && (
-        <Card sx={{ p: 3, borderRadius: 2 }}>
-          <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Kitchen Stations ({stations.length})</Typography>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setStationModalOpen(true)}>
-              Add Station
-            </Button>
-          </Stack>
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 8 }}>
+          <CircularProgress />
+        </Box>
+      ) : (
+        <>
+          {/* STATIONS TAB */}
+          {tab === 'STATIONS' && (
+            <Card sx={{ p: 3, borderRadius: 2 }}>
+              <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                  {t('operations.kds.tabs.stations', 'Kitchen Preparation Stations')} ({stations.length})
+                </Typography>
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setStationModalOpen(true)}>
+                  {t('operations.kds.addStation', 'Add Prep Station')}
+                </Button>
+              </Stack>
 
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Code</TableCell>
-                <TableCell>Name</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Target Minutes</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {stations.map((st) => (
-                <TableRow key={st.id}>
-                  <TableCell><strong>{st.code}</strong></TableCell>
-                  <TableCell>{st.name}</TableCell>
-                  <TableCell><Chip label={st.station_type || 'HOT_KITCHEN'} size="small" /></TableCell>
-                  <TableCell>{st.target_minutes || 10} mins</TableCell>
-                  <TableCell><Chip label={st.is_active ? 'Active' : 'Inactive'} color={st.is_active ? 'success' : 'default'} size="small" /></TableCell>
-                  <TableCell align="right">
-                    <IconButton color="error" onClick={() => handleDeleteStation(st.id)}>
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
-      )}
-
-      {/* SCREENS TAB */}
-      {tab === 'SCREENS' && (
-        <Card sx={{ p: 3, borderRadius: 2 }}>
-          <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>KDS Display Screens ({screens.length})</Typography>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setScreenModalOpen(true)}>
-              Add KDS Screen
-            </Button>
-          </Stack>
-
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Code</TableCell>
-                <TableCell>Screen Name</TableCell>
-                <TableCell>Assigned Stations</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {screens.map((sc) => (
-                <TableRow key={sc.id}>
-                  <TableCell><strong>{sc.code}</strong></TableCell>
-                  <TableCell>{sc.name}</TableCell>
-                  <TableCell>
-                    {(sc.station_ids || []).map((stId) => {
-                      const st = stations.find((s) => s.id === stId);
-                      return <Chip key={stId} label={st ? st.name : stId} size="small" sx={{ mr: 0.5 }} />;
-                    })}
-                  </TableCell>
-                  <TableCell><Chip label={sc.is_active ? 'Active' : 'Inactive'} color={sc.is_active ? 'success' : 'default'} size="small" /></TableCell>
-                  <TableCell align="right">
-                    <IconButton color="error" onClick={() => handleDeleteScreen(sc.id)}>
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
-      )}
-
-      {/* RULES TAB */}
-      {tab === 'RULES' && (
-        <Card sx={{ p: 3, borderRadius: 2 }}>
-          <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Routing Rules ({rules.length})</Typography>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setRuleModalOpen(true)}>
-              Add Routing Rule
-            </Button>
-          </Stack>
-
-          <Alert severity="info" sx={{ mb: 2 }}>
-            Specificity Order: Product-level rules override Category-level rules. If no rule matches, item defaults to Main Kitchen.
-          </Alert>
-
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Priority</TableCell>
-                <TableCell>Target Station</TableCell>
-                <TableCell>Target Product / Category</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rules.map((rl) => {
-                const st = stations.find((s) => s.id === rl.station_id);
-                const prod = products.find((p) => p.id === rl.product_id);
-                const cat = categories.find((c) => c.id === rl.category_id);
-
-                return (
-                  <TableRow key={rl.id}>
-                    <TableCell><Chip label={`P${rl.priority}`} color="primary" size="small" /></TableCell>
-                    <TableCell><strong>{st ? st.name : rl.station_id}</strong></TableCell>
-                    <TableCell>
-                      {rl.product_id && <Chip label={`Product: ${prod ? prod.name : rl.product_id}`} color="success" size="small" />}
-                      {rl.category_id && <Chip label={`Category: ${cat ? cat.name : rl.category_id}`} color="info" size="small" />}
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton color="error" onClick={() => handleDeleteRule(rl.id)}>
-                        <DeleteIcon />
-                      </IconButton>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t('operations.kds.colCode', 'Code')}</TableCell>
+                    <TableCell>{t('operations.kds.colName', 'Name')}</TableCell>
+                    <TableCell>{t('operations.kds.colTargetMinutes', 'Target Prep Time')}</TableCell>
+                    <TableCell>{t('operations.kds.colStatus', 'Status')}</TableCell>
+                    <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
+                      {t('operations.kds.colActions', 'Actions')}
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </Card>
+                </TableHead>
+                <TableBody>
+                  {stations.map((st) => (
+                    <TableRow key={st.id}>
+                      <TableCell><strong>{st.code}</strong></TableCell>
+                      <TableCell>{st.name}</TableCell>
+                      <TableCell>{t('operations.kds.colMinutesVal', '{{minutes}} min', { minutes: st.target_minutes || 10 })}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={st.is_active ? t('common.active', 'Active') : t('common.inactive', 'Inactive')}
+                          color={st.is_active ? 'success' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
+                        <IconButton
+                          color="error"
+                          onClick={() =>
+                            setDeleteConfirm({
+                              open: true,
+                              id: st.id,
+                              name: st.name,
+                              type: 'STATION',
+                            })
+                          }
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
+
+          {/* SCREENS TAB */}
+          {tab === 'SCREENS' && (
+            <Card sx={{ p: 3, borderRadius: 2 }}>
+              <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                  {t('operations.kds.tabs.screens', 'KDS Bump Screens')} ({screens.length})
+                </Typography>
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setScreenModalOpen(true)}>
+                  {t('operations.kds.addScreen', 'Add KDS Screen')}
+                </Button>
+              </Stack>
+
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t('operations.kds.colScreenCode', 'Screen Code')}</TableCell>
+                    <TableCell>{t('operations.kds.colScreenName', 'Screen Name')}</TableCell>
+                    <TableCell>{t('operations.kds.colAssignedStations', 'Assigned Stations')}</TableCell>
+                    <TableCell>{t('operations.kds.colStatus', 'Status')}</TableCell>
+                    <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
+                      {t('operations.kds.colActions', 'Actions')}
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {screens.map((sc) => (
+                    <TableRow key={sc.id}>
+                      <TableCell><strong>{sc.code}</strong></TableCell>
+                      <TableCell>{sc.name}</TableCell>
+                      <TableCell>
+                        {(sc.station_ids || []).map((stId) => {
+                          const st = stations.find((s) => s.id === stId);
+                          return <Chip key={stId} label={st ? st.name : stId} size="small" sx={{ mr: 0.5 }} />;
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={sc.is_active ? t('common.active', 'Active') : t('common.inactive', 'Inactive')}
+                          color={sc.is_active ? 'success' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
+                        <IconButton
+                          color="error"
+                          onClick={() =>
+                            setDeleteConfirm({
+                              open: true,
+                              id: sc.id,
+                              name: sc.name,
+                              type: 'SCREEN',
+                            })
+                          }
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
+
+          {/* RULES TAB */}
+          {tab === 'RULES' && (
+            <Card sx={{ p: 3, borderRadius: 2 }}>
+              <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                  {t('operations.kds.tabs.rules', 'Station Routing Rules')} ({rules.length})
+                </Typography>
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setRuleModalOpen(true)}>
+                  {t('operations.kds.addRule', 'Add Routing Rule')}
+                </Button>
+              </Stack>
+
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t('operations.printers.colPriority', 'Priority')}</TableCell>
+                    <TableCell>{t('operations.kds.colTargetStation', 'Target Station')}</TableCell>
+                    <TableCell>{t('operations.kds.colCategory', 'Menu Category / Product')}</TableCell>
+                    <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
+                      {t('operations.kds.colActions', 'Actions')}
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {rules.map((rl) => {
+                    const st = stations.find((s) => s.id === rl.station_id);
+                    const prod = products.find((p) => p.id === rl.product_id);
+                    const cat = categories.find((c) => c.id === rl.category_id);
+
+                    return (
+                      <TableRow key={rl.id}>
+                        <TableCell><Chip label={`P${rl.priority}`} color="primary" size="small" /></TableCell>
+                        <TableCell><strong>{st ? st.name : rl.station_id}</strong></TableCell>
+                        <TableCell>
+                          {rl.product_id && <Chip label={`Product: ${prod ? prod.name : rl.product_id}`} color="success" size="small" />}
+                          {rl.category_id && <Chip label={`Category: ${cat ? cat.name : rl.category_id}`} color="info" size="small" />}
+                        </TableCell>
+                        <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
+                          <IconButton
+                            color="error"
+                            onClick={() =>
+                              setDeleteConfirm({
+                                open: true,
+                                id: rl.id,
+                                name: st ? st.name : rl.station_id,
+                                type: 'RULE',
+                              })
+                            }
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
+        </>
       )}
 
       {/* Add Station Modal */}
       <Dialog open={stationModalOpen} onClose={() => setStationModalOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Add Kitchen Station</DialogTitle>
+        <DialogTitle>{t('operations.kds.createStationModal', 'Create Kitchen Preparation Station')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField label="Station Code" value={stationForm.code} onChange={(e) => setStationForm({ ...stationForm, code: e.target.value })} fullWidth />
-            <TextField label="Station Name" value={stationForm.name} onChange={(e) => setStationForm({ ...stationForm, name: e.target.value })} fullWidth />
-            <TextField label="Target Prep Minutes" type="number" value={stationForm.target_minutes} onChange={(e) => setStationForm({ ...stationForm, target_minutes: Number(e.target.value) })} fullWidth />
+            <TextField
+              label={t('operations.kds.formStationCode', 'Station Code')}
+              value={stationForm.code}
+              onChange={(e) => setStationForm({ ...stationForm, code: e.target.value })}
+              fullWidth
+            />
+            <TextField
+              label={t('operations.kds.formStationName', 'Station Name')}
+              value={stationForm.name}
+              onChange={(e) => setStationForm({ ...stationForm, name: e.target.value })}
+              fullWidth
+            />
+            <TextField
+              label={t('operations.kds.formTargetMinutes', 'Target Preparation Time (Minutes)')}
+              type="number"
+              value={stationForm.target_minutes}
+              onChange={(e) => setStationForm({ ...stationForm, target_minutes: Number(e.target.value) })}
+              fullWidth
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setStationModalOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleCreateStation}>Save Station</Button>
+          <Button onClick={() => setStationModalOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
+          <Button variant="contained" onClick={handleCreateStation}>
+            {t('operations.kds.createStationBtn', 'Save Station')}
+          </Button>
         </DialogActions>
       </Dialog>
 
       {/* Add Screen Modal */}
       <Dialog open={screenModalOpen} onClose={() => setScreenModalOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Add KDS Screen</DialogTitle>
+        <DialogTitle>{t('operations.kds.createScreenModal', 'Configure KDS Bump Screen')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField label="Screen Code" value={screenForm.code} onChange={(e) => setScreenForm({ ...screenForm, code: e.target.value })} fullWidth />
-            <TextField label="Screen Name" value={screenForm.name} onChange={(e) => setScreenForm({ ...screenForm, name: e.target.value })} fullWidth />
+            <TextField
+              label={t('operations.kds.formScreenCode', 'Screen Code')}
+              value={screenForm.code}
+              onChange={(e) => setScreenForm({ ...screenForm, code: e.target.value })}
+              fullWidth
+            />
+            <TextField
+              label={t('operations.kds.formScreenName', 'Screen Name')}
+              value={screenForm.name}
+              onChange={(e) => setScreenForm({ ...screenForm, name: e.target.value })}
+              fullWidth
+            />
             <FormControl fullWidth>
-              <InputLabel>Assigned Stations</InputLabel>
+              <InputLabel>{t('operations.kds.formAssignedStations', 'Assigned Stations')}</InputLabel>
               <Select
                 multiple
                 value={screenForm.station_ids}
-                label="Assigned Stations"
+                label={t('operations.kds.formAssignedStations', 'Assigned Stations')}
                 onChange={(e) => setScreenForm({ ...screenForm, station_ids: typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value })}
                 renderValue={(selected) => (
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -373,19 +467,25 @@ export function KdsConfigurationPage() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setScreenModalOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleCreateScreen}>Save Screen</Button>
+          <Button onClick={() => setScreenModalOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
+          <Button variant="contained" onClick={handleCreateScreen}>
+            {t('operations.kds.createScreenBtn', 'Save Screen')}
+          </Button>
         </DialogActions>
       </Dialog>
 
       {/* Add Rule Modal */}
       <Dialog open={ruleModalOpen} onClose={() => setRuleModalOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Add Routing Rule</DialogTitle>
+        <DialogTitle>{t('operations.kds.createRuleModal', 'Configure Category Station Routing Rule')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <FormControl fullWidth>
-              <InputLabel>Target Station</InputLabel>
-              <Select value={ruleForm.station_id} label="Target Station" onChange={(e) => setRuleForm({ ...ruleForm, station_id: e.target.value })}>
+              <InputLabel>{t('operations.kds.formTargetStation', 'Target Station')}</InputLabel>
+              <Select
+                value={ruleForm.station_id}
+                label={t('operations.kds.formTargetStation', 'Target Station')}
+                onChange={(e) => setRuleForm({ ...ruleForm, station_id: e.target.value })}
+              >
                 {stations.map((st) => (
                   <MenuItem key={st.id} value={st.id}>{st.name}</MenuItem>
                 ))}
@@ -393,41 +493,57 @@ export function KdsConfigurationPage() {
             </FormControl>
 
             <FormControl fullWidth>
-              <InputLabel>Rule Selector Type</InputLabel>
-              <Select value={ruleForm.selector_type} label="Rule Selector Type" onChange={(e) => setRuleForm({ ...ruleForm, selector_type: e.target.value })}>
-                <MenuItem value="PRODUCT">Specific Product</MenuItem>
-                <MenuItem value="CATEGORY">Whole Category</MenuItem>
+              <InputLabel>{t('operations.kds.formCategory', 'Menu Category')}</InputLabel>
+              <Select
+                value={ruleForm.category_id}
+                label={t('operations.kds.formCategory', 'Menu Category')}
+                onChange={(e) => setRuleForm({ ...ruleForm, selector_type: 'CATEGORY', category_id: e.target.value })}
+              >
+                {categories.map((c) => (
+                  <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                ))}
               </Select>
             </FormControl>
 
-            {ruleForm.selector_type === 'PRODUCT' ? (
-              <FormControl fullWidth>
-                <InputLabel>Product</InputLabel>
-                <Select value={ruleForm.product_id} label="Product" onChange={(e) => setRuleForm({ ...ruleForm, product_id: e.target.value })}>
-                  {products.map((p) => (
-                    <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            ) : (
-              <FormControl fullWidth>
-                <InputLabel>Category</InputLabel>
-                <Select value={ruleForm.category_id} label="Category" onChange={(e) => setRuleForm({ ...ruleForm, category_id: e.target.value })}>
-                  {categories.map((c) => (
-                    <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-
-            <TextField label="Priority" type="number" value={ruleForm.priority} onChange={(e) => setRuleForm({ ...ruleForm, priority: Number(e.target.value) })} fullWidth />
+            <TextField
+              label={t('operations.printers.formPriority', 'Priority')}
+              type="number"
+              value={ruleForm.priority}
+              onChange={(e) => setRuleForm({ ...ruleForm, priority: Number(e.target.value) })}
+              fullWidth
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRuleModalOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleCreateRule}>Save Rule</Button>
+          <Button onClick={() => setRuleModalOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
+          <Button variant="contained" onClick={handleCreateRule}>
+            {t('operations.kds.createRuleBtn', 'Save Rule')}
+          </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        onClose={() => setDeleteConfirm({ open: false, id: '', name: '', type: 'STATION' })}
+        onConfirm={handleConfirmDelete}
+        title={
+          deleteConfirm.type === 'STATION'
+            ? t('operations.kds.deleteStationTitle', 'Delete Kitchen Station')
+            : deleteConfirm.type === 'SCREEN'
+            ? t('operations.kds.deleteScreenTitle', 'Delete KDS Bump Screen')
+            : t('operations.kds.deleteRuleTitle', 'Delete Station Routing Rule')
+        }
+        content={
+          deleteConfirm.type === 'STATION'
+            ? t('operations.kds.deleteStationContent', 'Are you sure you want to delete prep station "{{name}}"? This will remove all items routed to this station.', { name: deleteConfirm.name })
+            : deleteConfirm.type === 'SCREEN'
+            ? t('operations.kds.deleteScreenContent', 'Are you sure you want to delete KDS screen "{{name}}"?', { name: deleteConfirm.name })
+            : t('operations.kds.deleteRuleContent', 'Are you sure you want to delete this kitchen station routing rule?')
+        }
+        confirmLabel={t('common.delete', 'Delete')}
+        confirmColor="error"
+      />
     </Box>
   );
 }

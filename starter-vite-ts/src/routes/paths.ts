@@ -67,9 +67,10 @@ export const paths = {
       bulkUpdate: `${ROOTS.APP}/pricing/bulk-update`,
     },
     discounts: {
-      campaigns: `${ROOTS.APP}/discounts/campaigns`,
-      campaignDetail: (id: string) => `${ROOTS.APP}/discounts/campaigns/${id}`,
+      customerRates: `${ROOTS.APP}/discounts/customer-rates`,
       coupons: `${ROOTS.APP}/discounts/coupons`,
+      authorizations: `${ROOTS.APP}/discounts/authorizations`,
+      wallet: `${ROOTS.APP}/discounts/wallet`,
     },
     operations: {
       branches: `${ROOTS.APP}/operations/branches`,

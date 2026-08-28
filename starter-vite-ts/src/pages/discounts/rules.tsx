@@ -37,7 +37,7 @@ import { MoneyUtil } from 'src/utils/money.util';
 import { discountsApi } from 'src/api/discountsApi';
 
 export function DiscountRulesPage() {
-  const { t: _t } = useTranslation();
+  const { t } = useTranslation();
 
   const [discounts, setDiscounts] = useState<DiscountCampaign[]>([]);
   const [_loading, setLoading] = useState(true);
@@ -63,7 +63,7 @@ export function DiscountRulesPage() {
       setDiscounts(data);
       setError(null);
     } catch (err: any) {
-      setError(err.detail || 'Failed to load discount rules');
+      setError(err.detail || t('discounts.rules.loadError', 'Failed to load discount rules'));
     } finally {
       setLoading(false);
     }
@@ -92,7 +92,7 @@ export function DiscountRulesPage() {
       resetForm();
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to create discount rule');
+      setError(err.detail || t('discounts.rules.createError', 'Failed to create discount rule'));
     }
   };
 
@@ -110,12 +110,12 @@ export function DiscountRulesPage() {
   };
 
   const handleArchive = async (id: string, discName: string) => {
-    if (window.confirm(`Are you sure you want to archive discount rule "${discName}"?`)) {
+    if (window.confirm(t('discounts.rules.confirmArchive', 'Are you sure you want to archive discount rule "{{name}}"?', { name: discName }))) {
       try {
         await discountsApi.archiveDiscount(id);
         loadData();
       } catch (err: any) {
-        setError(err.detail || 'Failed to archive discount');
+        setError(err.detail || t('discounts.rules.archiveError', 'Failed to archive discount'));
       }
     }
   };
@@ -127,22 +127,25 @@ export function DiscountRulesPage() {
       return `${MoneyUtil.format(val, 0)}%`;
     }
     if (dType === 'FREE_DELIVERY') {
-      return 'Free Delivery';
+      return t('discounts.rules.freeDelivery', 'Free Delivery');
     }
     if (dType === 'FREE_ITEM') {
-      return 'Free Item Reward';
+      return t('discounts.rules.freeItemReward', 'Free Item Reward');
     }
-    return `${MoneyUtil.formatCurrency(val)} IRR`;
+    return `${MoneyUtil.formatCurrency(val)} ${t('common.irr', 'IRR')}`;
   };
 
   return (
     <Box sx={{ p: 3 }}>
       <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
         <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-          V5 Preview Experience — Advanced Campaign Engine
+          {t('discounts.rules.v5AlertTitle', 'V5 Preview Experience — Advanced Campaign Engine')}
         </Typography>
         <Typography variant="body2">
-          Advanced campaign types (free item rewards, free delivery waivers, complex multi-scopes, stacking groups, and funding sources) are part of the V5 Preview platform. For standard Phase 1 setups, use Customer Club Discounts, One-Time Coupons, or Cashier Manual Discount Authorizations.
+          {t(
+            'discounts.rules.v5AlertDesc',
+            'Advanced campaign types (free item rewards, free delivery waivers, complex multi-scopes, stacking groups, and funding sources) are part of the V5 Preview platform. For standard Phase 1 setups, use Customer Club Discounts, One-Time Coupons, or Cashier Manual Discount Authorizations.'
+          )}
         </Typography>
       </Alert>
 
@@ -150,12 +153,12 @@ export function DiscountRulesPage() {
         <Box>
           <Stack direction="row" sx={{ alignItems: 'center' }} spacing={1}>
             <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-              Advanced Discount Campaigns
+              {t('discounts.rules.title', 'Advanced Discount Campaigns')}
             </Typography>
-            <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
+            <Chip label={t('discounts.rules.v5Preview', 'V5 Preview')} color="info" size="small" sx={{ fontWeight: 'bold' }} />
           </Stack>
           <Typography variant="body2" color="text.secondary">
-            Multi-scope, multi-level campaign rules and stacking groups (V5 Preview)
+            {t('discounts.rules.subtitle', 'Multi-scope, multi-level campaign rules and stacking groups (V5 Preview)')}
           </Typography>
         </Box>
         <Button
@@ -164,7 +167,7 @@ export function DiscountRulesPage() {
           onClick={() => setDrawerOpen(true)}
           sx={{ fontWeight: 'bold' }}
         >
-          Create V5 Campaign
+          {t('discounts.rules.createV5Campaign', 'Create V5 Campaign')}
         </Button>
       </Stack>
 
@@ -180,59 +183,67 @@ export function DiscountRulesPage() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Code</TableCell>
-                  <TableCell>Campaign Name</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell align="right">Value</TableCell>
-                  <TableCell align="center">Priority</TableCell>
-                  <TableCell align="center">Stackable</TableCell>
-                  <TableCell align="center">Coupon Req.</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="center">Actions</TableCell>
+                  <TableCell>{t('discounts.rules.thCode', 'Code')}</TableCell>
+                  <TableCell>{t('discounts.rules.thName', 'Campaign Name')}</TableCell>
+                  <TableCell>{t('discounts.rules.thType', 'Type')}</TableCell>
+                  <TableCell align="right">{t('discounts.rules.thValue', 'Value')}</TableCell>
+                  <TableCell align="center">{t('discounts.rules.thPriority', 'Priority')}</TableCell>
+                  <TableCell align="center">{t('discounts.rules.thStackable', 'Stackable')}</TableCell>
+                  <TableCell align="center">{t('discounts.rules.thCouponReq', 'Coupon Req.')}</TableCell>
+                  <TableCell>{t('discounts.rules.thStatus', 'Status')}</TableCell>
+                  <TableCell align="center">{t('common.actions', 'Actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {discounts.map((d) => (
-                  <TableRow key={d.id}>
-                    <TableCell><code>{d.code}</code></TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>{d.name}</TableCell>
-                    <TableCell>
-                      <Chip label={d.discount_type || (d as any).calculation_type} size="small" color="info" />
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                      {formatValue(d)}
-                    </TableCell>
-                    <TableCell align="center">
-                      <Chip label={`P${d.priority ?? 30}`} size="small" variant="outlined" />
-                    </TableCell>
-                    <TableCell align="center">
-                      <Chip label={d.is_stackable ?? true ? 'Yes' : 'No'} size="small" />
-                    </TableCell>
-                    <TableCell align="center">
-                      <Chip
-                        label={d.coupon_required ? 'Coupon' : 'Automatic'}
-                        color={d.coupon_required ? 'warning' : 'default'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={d.is_active ? 'Active' : 'Archived'}
-                        color={d.is_active ? 'success' : 'default'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell align="center">
-                      <IconButton
-                        title="Archive Discount"
-                        color="error"
-                        onClick={() => handleArchive(d.id, d.name)}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
+                {discounts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                      {t('discounts.rules.noDiscounts', 'No discount campaign rules found.')}
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  discounts.map((d) => (
+                    <TableRow key={d.id}>
+                      <TableCell><code>{d.code}</code></TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>{d.name}</TableCell>
+                      <TableCell>
+                        <Chip label={d.discount_type || (d as any).calculation_type} size="small" color="info" />
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                        {formatValue(d)}
+                      </TableCell>
+                      <TableCell align="center">
+                        <Chip label={`P${d.priority ?? 30}`} size="small" variant="outlined" />
+                      </TableCell>
+                      <TableCell align="center">
+                        <Chip label={(d.is_stackable ?? true) ? t('common.yes', 'Yes') : t('common.no', 'No')} size="small" />
+                      </TableCell>
+                      <TableCell align="center">
+                        <Chip
+                          label={d.coupon_required ? t('discounts.rules.couponRequiredBadge', 'Coupon') : t('discounts.rules.automaticBadge', 'Automatic')}
+                          color={d.coupon_required ? 'warning' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={d.is_active ? t('common.active', 'Active') : t('common.archived', 'Archived')}
+                          color={d.is_active ? 'success' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        <IconButton
+                          title={t('discounts.rules.archiveTooltip', 'Archive Discount')}
+                          color="error"
+                          onClick={() => handleArchive(d.id, d.name)}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </TableContainer>
@@ -243,21 +254,21 @@ export function DiscountRulesPage() {
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Box sx={{ width: 440, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Create Campaign Rule
+            {t('discounts.rules.drawerTitle', 'Create Campaign Rule')}
           </Typography>
           <form onSubmit={handleCreate}>
             <Stack spacing={2.5}>
               <TextField
-                label="Campaign Code"
-                placeholder="e.g. DISC-15PCT"
+                label={t('discounts.rules.formCode', 'Campaign Code')}
+                placeholder={t('discounts.rules.formCodePlaceholder', 'e.g. DISC-15PCT')}
                 required
                 fullWidth
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
               />
               <TextField
-                label="Campaign Display Name"
-                placeholder="e.g. 15% Summer Special Promotion"
+                label={t('discounts.rules.formName', 'Campaign Display Name')}
+                placeholder={t('discounts.rules.formNamePlaceholder', 'e.g. 15% Summer Special Promotion')}
                 required
                 fullWidth
                 value={name}
@@ -265,22 +276,22 @@ export function DiscountRulesPage() {
               />
 
               <FormControl fullWidth required>
-                <InputLabel>Discount Type</InputLabel>
+                <InputLabel>{t('discounts.rules.formType', 'Discount Type')}</InputLabel>
                 <Select
                   value={discountType}
-                  label="Discount Type"
+                  label={t('discounts.rules.formType', 'Discount Type')}
                   onChange={(e) => setDiscountType(e.target.value as any)}
                 >
-                  <MenuItem value="PERCENTAGE">PERCENTAGE</MenuItem>
-                  <MenuItem value="FIXED_AMOUNT">FIXED_AMOUNT</MenuItem>
-                  <MenuItem value="FREE_DELIVERY">FREE_DELIVERY</MenuItem>
-                  <MenuItem value="FREE_ITEM">FREE_ITEM</MenuItem>
+                  <MenuItem value="PERCENTAGE">{t('discounts.types.percentage', 'PERCENTAGE')}</MenuItem>
+                  <MenuItem value="FIXED_AMOUNT">{t('discounts.types.fixedAmount', 'FIXED_AMOUNT')}</MenuItem>
+                  <MenuItem value="FREE_DELIVERY">{t('discounts.types.freeDelivery', 'FREE_DELIVERY')}</MenuItem>
+                  <MenuItem value="FREE_ITEM">{t('discounts.types.freeItem', 'FREE_ITEM')}</MenuItem>
                 </Select>
               </FormControl>
 
               {discountType === 'PERCENTAGE' && (
                 <TextField
-                  label="Percentage Value (%)"
+                  label={t('discounts.rules.formPercentage', 'Percentage Value (%)')}
                   required
                   fullWidth
                   value={percentage}
@@ -290,7 +301,7 @@ export function DiscountRulesPage() {
 
               {discountType === 'FIXED_AMOUNT' && (
                 <TextField
-                  label="Fixed Amount (IRR)"
+                  label={t('discounts.rules.formAmount', 'Fixed Amount (IRR)')}
                   required
                   fullWidth
                   value={amount}
@@ -299,7 +310,7 @@ export function DiscountRulesPage() {
               )}
 
               <TextField
-                label="Priority (Lower number evaluates first, e.g. 10, 20, 30)"
+                label={t('discounts.rules.formPriority', 'Priority (Lower number evaluates first, e.g. 10, 20, 30)')}
                 type="number"
                 fullWidth
                 value={priority}
@@ -307,14 +318,14 @@ export function DiscountRulesPage() {
               />
 
               <TextField
-                label="Stacking Group"
+                label={t('discounts.rules.formStackingGroup', 'Stacking Group')}
                 fullWidth
                 value={stackingGroup}
                 onChange={(e) => setStackingGroup(e.target.value)}
               />
 
               <TextField
-                label="Min Order Subtotal (IRR)"
+                label={t('discounts.rules.formMinSubtotal', 'Min Order Subtotal (IRR)')}
                 type="number"
                 fullWidth
                 value={minSubtotal}
@@ -328,7 +339,7 @@ export function DiscountRulesPage() {
                     onChange={(e) => setIsStackable(e.target.checked)}
                   />
                 }
-                label="Allow Stacking with other campaigns"
+                label={t('discounts.rules.formAllowStacking', 'Allow Stacking with other campaigns')}
               />
 
               <FormControlLabel
@@ -338,11 +349,11 @@ export function DiscountRulesPage() {
                     onChange={(e) => setCouponRequired(e.target.checked)}
                   />
                 }
-                label="Requires Coupon Code Input"
+                label={t('discounts.rules.formCouponRequired', 'Requires Coupon Code Input')}
               />
 
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>
-                Save Campaign Rule
+                {t('discounts.rules.formSave', 'Save Campaign Rule')}
               </Button>
             </Stack>
           </form>

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
 import {
   Box,
   Card,
@@ -16,18 +17,21 @@ import {
   Drawer,
   Switch,
   TableRow,
+  useTheme,
   Checkbox,
   TableBody,
   TableCell,
   TableHead,
   TextField,
   Typography,
+  IconButton,
   CardContent,
   TableContainer,
   FormControlLabel,
 } from '@mui/material';
 
 import { settingsApi } from 'src/api/settingsApi';
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 const DOMAIN_OPTIONS = [
   'ORDER_CANCEL',
@@ -42,13 +46,16 @@ const DOMAIN_OPTIONS = [
 ];
 
 export function ReasonCodesPage() {
-  const { t: _t } = useTranslation();
+  const { t } = useTranslation();
+  const theme = useTheme();
 
   const [reasons, setReasons] = useState<ReasonCode[]>([]);
   const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editingReason, setEditingReason] = useState<ReasonCode | null>(null);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [appliesTo, setAppliesTo] = useState<string[]>(['ORDER_CANCEL']);
@@ -58,10 +65,10 @@ export function ReasonCodesPage() {
     setLoading(true);
     try {
       const data = await settingsApi.getReasonCodes();
-      setReasons(data);
+      setReasons(data || []);
       setError(null);
     } catch (err: any) {
-      setError(err.detail || 'Failed to load reason codes');
+      setError(err?.response?.data?.message || err.detail || t('settings.reasonsPage.loadError', 'Failed to load reason codes'));
     } finally {
       setLoading(false);
     }
@@ -71,18 +78,41 @@ export function ReasonCodesPage() {
     loadData();
   }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleOpenCreate = () => {
+    setEditingReason(null);
+    setCode('');
+    setName('');
+    setAppliesTo(['ORDER_CANCEL']);
+    setRequiresNote(false);
+    setDrawerOpen(true);
+  };
+
+  const handleOpenEdit = (r: ReasonCode) => {
+    setEditingReason(r);
+    setCode(r.code);
+    setName(r.name);
+    setAppliesTo(r.applies_to || []);
+    setRequiresNote(r.requires_note);
+    setDrawerOpen(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await settingsApi.createReasonCode({ code, name, applies_to: appliesTo, requires_note: requiresNote });
+      if (editingReason) {
+        await settingsApi.updateReasonCode(editingReason.id, {
+          name,
+          applies_to: appliesTo,
+          requires_note: requiresNote,
+        });
+      } else {
+        await settingsApi.createReasonCode({ code, name, applies_to: appliesTo, requires_note: requiresNote });
+      }
+      setSuccess(t('settings.reasonsPage.saveSuccess', 'Reason code saved successfully'));
       setDrawerOpen(false);
-      setCode('');
-      setName('');
-      setAppliesTo(['ORDER_CANCEL']);
-      setRequiresNote(false);
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to create reason code');
+      setError(err?.response?.data?.message || err.detail || t('settings.reasonsPage.saveError', 'Failed to save reason code'));
     }
   };
 
@@ -97,34 +127,40 @@ export function ReasonCodesPage() {
       await settingsApi.updateReasonCode(reason.id, { is_active: active });
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to update reason code status');
+      setError(err?.response?.data?.message || err.detail || t('settings.reasonsPage.statusError', 'Failed to update reason code status'));
     }
   };
 
   return (
-    <Box>
-      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Reason Codes Management
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Configure standardized operational reasons for cancellations, refunds, shifts, and overrides
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setDrawerOpen(true)}
-          sx={{ fontWeight: 'bold' }}
-        >
-          Create Reason Code
-        </Button>
-      </Stack>
+    <Box sx={{ pb: 6 }}>
+      <CustomBreadcrumbs
+        heading={t('settings.reasonsPage.title', 'Reason Codes Management')}
+        links={[
+          { name: t('nav.home', 'Home'), href: '/app/dashboard' },
+          { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
+          { name: t('settings.reasonsPage.title', 'Reason Codes') },
+        ]}
+        action={
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleOpenCreate}
+            sx={{ fontWeight: 'bold' }}
+          >
+            {t('settings.reasonsPage.createReason', 'Create Reason Code')}
+          </Button>
+        }
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
           {error}
+        </Alert>
+      )}
+
+      {success && (
+        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess(null)}>
+          {success}
         </Alert>
       )}
 
@@ -134,11 +170,14 @@ export function ReasonCodesPage() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Code</TableCell>
-                  <TableCell>Reason Name</TableCell>
-                  <TableCell>Applies To</TableCell>
-                  <TableCell align="center">Requires Note</TableCell>
-                  <TableCell align="center">Active</TableCell>
+                  <TableCell>{t('settings.reasonsPage.colCode', 'Code')}</TableCell>
+                  <TableCell>{t('settings.reasonsPage.colName', 'Reason Name')}</TableCell>
+                  <TableCell>{t('settings.reasonsPage.colAppliesTo', 'Applies To')}</TableCell>
+                  <TableCell align="center">{t('settings.reasonsPage.colRequiresNote', 'Requires Note')}</TableCell>
+                  <TableCell align="center">{t('settings.reasonsPage.colActive', 'Active')}</TableCell>
+                  <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
+                    {t('common.actions', 'Actions')}
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -149,13 +188,18 @@ export function ReasonCodesPage() {
                     <TableCell>
                       <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                         {r.applies_to.map((domain) => (
-                          <Chip key={domain} label={domain} size="small" variant="outlined" />
+                          <Chip
+                            key={domain}
+                            label={t(`settings.reasonsPage.domains.${domain}`, domain)}
+                            size="small"
+                            variant="outlined"
+                          />
                         ))}
                       </Stack>
                     </TableCell>
                     <TableCell align="center">
                       <Chip
-                        label={r.requires_note ? 'Yes' : 'No'}
+                        label={r.requires_note ? t('settings.reasonsPage.yes', 'Yes') : t('settings.reasonsPage.no', 'No')}
                         color={r.requires_note ? 'warning' : 'default'}
                         size="small"
                       />
@@ -166,6 +210,11 @@ export function ReasonCodesPage() {
                         onChange={(e) => handleToggleActive(r, e.target.checked)}
                       />
                     </TableCell>
+                    <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
+                      <IconButton size="small" onClick={() => handleOpenEdit(r)}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -174,27 +223,34 @@ export function ReasonCodesPage() {
         </CardContent>
       </Card>
 
-      {/* Create Reason Code Drawer */}
-      <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <Box sx={{ width: 420, p: 3 }}>
+      {/* Create / Edit Reason Code Drawer */}
+      <Drawer
+        anchor={theme.direction === 'rtl' ? 'left' : 'right'}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+      >
+        <Box sx={{ width: { xs: 320, sm: 420 }, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Create Reason Code
+            {editingReason
+              ? t('settings.reasonsPage.drawerTitleEdit', 'Edit Reason Code')
+              : t('settings.reasonsPage.drawerTitleCreate', 'Create Reason Code')}
           </Typography>
 
-          <form onSubmit={handleCreate}>
+          <form onSubmit={handleSave}>
             <Stack spacing={2.5}>
               <TextField
-                label="Reason Code"
-                placeholder="e.g. CUSTOMER_CANCEL"
+                label={t('settings.reasonsPage.formCode', 'Reason Code')}
+                placeholder={t('settings.reasonsPage.formCodePlaceholder', 'e.g. CUSTOMER_CANCEL')}
                 required
                 fullWidth
+                disabled={Boolean(editingReason)}
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
               />
 
               <TextField
-                label="Reason Display Name"
-                placeholder="e.g. Customer Requested Cancellation"
+                label={t('settings.reasonsPage.formName', 'Reason Display Name')}
+                placeholder={t('settings.reasonsPage.formNamePlaceholder', 'e.g. Customer Requested Cancellation')}
                 required
                 fullWidth
                 value={name}
@@ -203,7 +259,7 @@ export function ReasonCodesPage() {
 
               <Box>
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                  Applies To Operational Domains
+                  {t('settings.reasonsPage.formDomains', 'Applies To Operational Domains')}
                 </Typography>
                 <Stack spacing={0.5}>
                   {DOMAIN_OPTIONS.map((d) => (
@@ -215,7 +271,7 @@ export function ReasonCodesPage() {
                           onChange={() => handleToggleDomain(d)}
                         />
                       }
-                      label={d}
+                      label={t(`settings.reasonsPage.domains.${d}`, d)}
                     />
                   ))}
                 </Stack>
@@ -228,11 +284,11 @@ export function ReasonCodesPage() {
                     onChange={(e) => setRequiresNote(e.target.checked)}
                   />
                 }
-                label="Requires Cashier Note When Selected"
+                label={t('settings.reasonsPage.formRequiresNote', 'Requires Cashier Note When Selected')}
               />
 
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>
-                Save Reason Code
+                {t('settings.reasonsPage.saveButton', 'Save Reason Code')}
               </Button>
             </Stack>
           </form>

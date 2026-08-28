@@ -2,6 +2,7 @@ import type { ChangeEvent } from 'react';
 import type { ImportJobDto, ImportRowDto } from 'src/api/importExportApi';
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   Box,
@@ -18,7 +19,6 @@ import {
   Divider,
   MenuItem,
   TableRow,
-  Container,
   StepLabel,
   TextField,
   TableBody,
@@ -32,41 +32,32 @@ import {
 import { importExportApi } from 'src/api/importExportApi';
 
 import { Iconify } from 'src/components/iconify';
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 type ImportEntityType = 'CUSTOMERS' | 'PRODUCTS' | 'CATEGORIES';
 
-const STEPS = [
-  'Upload File & Target Entity',
-  'Column Mapping & Auto-Match',
-  'Value Mapping',
-  'Validation Preview',
-  'Import Summary',
-];
-
-const TARGET_FIELDS: Record<ImportEntityType, { field: string; label: string; required?: boolean }[]> = {
+const TARGET_FIELDS: Record<ImportEntityType, { field: string; labelKey: string; required?: boolean }[]> = {
   CUSTOMERS: [
-    { field: 'code', label: 'Customer Code' },
-    { field: 'first_name', label: 'First Name', required: true },
-    { field: 'last_name', label: 'Last Name', required: true },
-    { field: 'mobile', label: 'Mobile Number', required: true },
-    { field: 'email', label: 'Email Address' },
-    { field: 'national_id', label: 'National Code / SSN' },
-    { field: 'is_active', label: 'Active Status' },
+    { field: 'code', labelKey: 'tools.importWizard.fields.code' },
+    { field: 'first_name', labelKey: 'tools.importWizard.fields.first_name', required: true },
+    { field: 'last_name', labelKey: 'tools.importWizard.fields.last_name', required: true },
+    { field: 'mobile', labelKey: 'tools.importWizard.fields.mobile', required: true },
+    { field: 'email', labelKey: 'tools.importWizard.fields.email' },
+    { field: 'national_id', labelKey: 'tools.importWizard.fields.national_id' },
+    { field: 'is_active', labelKey: 'tools.importWizard.fields.is_active' },
   ],
   PRODUCTS: [
-    { field: 'code', label: 'Product Code / SKU', required: true },
-    { field: 'name_fa', label: 'Persian Product Name', required: true },
-    { field: 'name_en', label: 'English Product Name' },
-    { field: 'category_code', label: 'Category Code' },
-    { field: 'base_price', label: 'Base Unit Price', required: true },
-    { field: 'is_active', label: 'Active Status' },
+    { field: 'code', labelKey: 'tools.importWizard.fields.code', required: true },
+    { field: 'name_fa', labelKey: 'tools.importWizard.fields.name_fa', required: true },
+    { field: 'name_en', labelKey: 'tools.importWizard.fields.name_en' },
+    { field: 'category_code', labelKey: 'tools.importWizard.fields.category_code' },
+    { field: 'is_active', labelKey: 'tools.importWizard.fields.is_active' },
   ],
   CATEGORIES: [
-    { field: 'code', label: 'Category Code', required: true },
-    { field: 'name_fa', label: 'Persian Category Title', required: true },
-    { field: 'name_en', label: 'English Category Title' },
-    { field: 'sort_order', label: 'Sort Display Order' },
-    { field: 'is_active', label: 'Active Status' },
+    { field: 'code', labelKey: 'tools.importWizard.fields.code', required: true },
+    { field: 'name_fa', labelKey: 'tools.importWizard.fields.name_fa', required: true },
+    { field: 'name_en', labelKey: 'tools.importWizard.fields.name_en' },
+    { field: 'is_active', labelKey: 'tools.importWizard.fields.is_active' },
   ],
 };
 
@@ -77,12 +68,22 @@ const DEFAULT_CSV_TEMPLATES: Record<ImportEntityType, string> = {
 };
 
 export function ImportWizardPage() {
+  const { t } = useTranslation();
+
+  const STEPS = [
+    t('tools.importWizard.steps.step1', 'Upload File & Target Entity'),
+    t('tools.importWizard.steps.step2', 'Column Mapping & Auto-Match'),
+    t('tools.importWizard.steps.step3', 'Value Mapping'),
+    t('tools.importWizard.steps.step4', 'Validation Preview'),
+    t('tools.importWizard.steps.step5', 'Import Summary'),
+  ];
+
   const [activeStep, setActiveStep] = useState(0);
   const [entityType, setEntityType] = useState<ImportEntityType>('PRODUCTS');
   const [fileName, setFileName] = useState<string>('products_catalog.csv');
   const [fileContent, setFileContent] = useState<string>(DEFAULT_CSV_TEMPLATES.PRODUCTS);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  
+
   const [activeJob, setActiveJob] = useState<ImportJobDto | null>(null);
   const [jobRows, setJobRows] = useState<ImportRowDto[]>([]);
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
@@ -160,29 +161,25 @@ export function ImportWizardPage() {
         setActiveStep(1);
       } else if (activeStep === 1) {
         if (!activeJob) throw new Error('Active staged import job missing');
-        // Extract distinct raw values for mapped enum fields
         const distinct = await importExportApi.getDistinctValues(activeJob.id, columnMapping);
         setDistinctValues(distinct);
         setActiveStep(2);
       } else if (activeStep === 2) {
         if (!activeJob) throw new Error('Active staged import job missing');
-        // Dry-run validate job via backend API
         const validatedJob = await importExportApi.validateJob(activeJob.id, columnMapping, valueMapping);
         setActiveJob(validatedJob);
 
-        // Fetch row results from database
         const detail = await importExportApi.getJobDetail(activeJob.id);
         setJobRows(detail.rows);
         setActiveStep(3);
       } else if (activeStep === 3) {
         if (!activeJob) throw new Error('Active staged import job missing');
-        // Execute atomic database insertion transaction
         const result = await importExportApi.executeJob(activeJob.id);
         setImportSummary(result);
         setActiveStep(4);
       }
     } catch (err: any) {
-      setErrorMsg(err.detail || err.message || 'Import step operation failed');
+      setErrorMsg(err.detail || err.message || t('common.errorOccurred', 'Import step operation failed'));
     } finally {
       setIsProcessing(false);
     }
@@ -194,18 +191,15 @@ export function ImportWizardPage() {
   };
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
-      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Advanced Excel & CSV Import Engine
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Real Backend-Driven Multi-Entity Import Engine (Staged Jobs, Auto-Mapping, Row Validation & DB Execution)
-          </Typography>
-        </Box>
-        <Chip label="Real Import API" color="primary" variant="filled" sx={{ fontWeight: 'bold' }} />
-      </Stack>
+    <Box sx={{ pb: 6 }}>
+      <CustomBreadcrumbs
+        heading={t('tools.importWizard.title', 'Data Import & Bulk Migration Wizard')}
+        links={[
+          { name: t('nav.home', 'Home'), href: '/app/dashboard' },
+          { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
+          { name: t('tools.importWizard.title', 'Data Import Wizard') },
+        ]}
+      />
 
       {errorMsg && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setErrorMsg(null)}>
@@ -227,25 +221,25 @@ export function ImportWizardPage() {
       {activeStep === 0 && (
         <Card sx={{ p: 4 }}>
           <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
-            Step 1: Select Target Entity & Upload Spreadsheet (.xlsx / .csv)
+            {t('tools.importWizard.steps.step1', 'Step 1: Select Target Entity & Upload Spreadsheet (.xlsx / .csv)')}
           </Typography>
           <Grid container spacing={3}>
             <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 select
                 fullWidth
-                label="Target Import Entity"
+                label={t('tools.importWizard.targetEntity', 'Target Import Entity')}
                 value={entityType}
                 onChange={(e) => handleEntityChange(e.target.value as ImportEntityType)}
               >
-                <MenuItem value="PRODUCTS">Products Catalog (Products, Prices & Categories)</MenuItem>
-                <MenuItem value="CUSTOMERS">Customer Directory (Profiles, Phone Numbers & Identifiers)</MenuItem>
-                <MenuItem value="CATEGORIES">Menu Categories (Category Codes & Ordering)</MenuItem>
+                <MenuItem value="PRODUCTS">{t('tools.importWizard.entities.PRODUCTS', 'Products Catalog (Products, Prices & Categories)')}</MenuItem>
+                <MenuItem value="CUSTOMERS">{t('tools.importWizard.entities.CUSTOMERS', 'Customer Directory (Profiles, Phone Numbers & Identifiers)')}</MenuItem>
+                <MenuItem value="CATEGORIES">{t('tools.importWizard.entities.CATEGORIES', 'Menu Categories (Category Codes & Ordering)')}</MenuItem>
               </TextField>
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
               <Button variant="outlined" component="label" fullWidth sx={{ height: 56 }}>
-                Choose File ({fileName})
+                {t('tools.importWizard.uploadFile', 'Choose File')} ({fileName})
                 <input type="file" hidden accept=".csv,.xlsx" onChange={handleFileUpload} />
               </Button>
             </Grid>
@@ -253,10 +247,10 @@ export function ImportWizardPage() {
               {selectedFile ? (
                 <Alert severity="info" sx={{ p: 2 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                    Excel Workbook Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 0.5 }}>
-                    Binary Excel spreadsheet file ready for backend parsing and auto-mapping. Click <strong>Next Step</strong> to proceed.
+                    {t('tools.importWizard.fileSelected', 'Excel Workbook Selected: {{name}} ({{size}} KB)', {
+                      name: selectedFile.name,
+                      size: (selectedFile.size / 1024).toFixed(1),
+                    })}
                   </Typography>
                 </Alert>
               ) : (
@@ -264,7 +258,7 @@ export function ImportWizardPage() {
                   fullWidth
                   multiline
                   rows={6}
-                  label="File Raw CSV Content Preview / Editor"
+                  label={t('tools.importWizard.dropFile', 'File Raw CSV Content Preview / Editor')}
                   value={fileContent}
                   onChange={(e) => setFileContent(e.target.value)}
                 />
@@ -278,18 +272,20 @@ export function ImportWizardPage() {
       {activeStep === 1 && (
         <Card sx={{ p: 4 }}>
           <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
-            Step 2: Column Mapping & Auto-Match Engine
+            {t('tools.importWizard.steps.step2', 'Step 2: Column Mapping & Auto-Match Engine')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Auto-detected spreadsheet headers mapped against {entityType} schema in Job #{activeJob?.id}.
+            {t('tools.importWizard.autoMatchSuccess', 'Auto-mapped {{count}} columns successfully', {
+              count: Object.keys(columnMapping).length,
+            })}
           </Typography>
           <TableContainer component={Paper} variant="outlined">
             <Table>
               <TableHead sx={{ bgcolor: 'action.hover' }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Spreadsheet Header</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Mapping Status</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Target Schema Field</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>{t('tools.importWizard.colSource', 'Spreadsheet Header')}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>{t('common.status', 'Mapping Status')}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>{t('tools.importWizard.colTarget', 'Target Schema Field')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -298,9 +294,9 @@ export function ImportWizardPage() {
                     <TableCell sx={{ fontWeight: 'medium' }}>{header}</TableCell>
                     <TableCell>
                       {columnMapping[header] ? (
-                        <Chip label="Auto Mapped" color="success" size="small" variant="soft" />
+                        <Chip label={t('common.active', 'Auto Mapped')} color="success" size="small" />
                       ) : (
-                        <Chip label="Unmapped" color="warning" size="small" variant="soft" />
+                        <Chip label={t('common.inactive', 'Unmapped')} color="warning" size="small" />
                       )}
                     </TableCell>
                     <TableCell>
@@ -312,11 +308,11 @@ export function ImportWizardPage() {
                         onChange={(e) => setColumnMapping({ ...columnMapping, [header]: e.target.value })}
                       >
                         <MenuItem value="">
-                          <em>-- Do Not Import (Skip) --</em>
+                          <em>-- {t('common.none', 'Do Not Import (Skip)')} --</em>
                         </MenuItem>
                         {TARGET_FIELDS[entityType].map((f) => (
                           <MenuItem key={f.field} value={f.field}>
-                            {f.label} {f.required ? '*' : ''} ({f.field})
+                            {t(f.labelKey, f.field)} {f.required ? '*' : ''} ({f.field})
                           </MenuItem>
                         ))}
                       </TextField>
@@ -333,22 +329,22 @@ export function ImportWizardPage() {
       {activeStep === 2 && (
         <Card sx={{ p: 4 }}>
           <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
-            Step 3: Distinct Spreadsheet Value Mapping
+            {t('tools.importWizard.steps.step3', 'Step 3: Distinct Spreadsheet Value Mapping')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Map distinct raw spreadsheet cell values to internal enum codes.
+            {t('tools.importWizard.subtitle', 'Map distinct raw spreadsheet cell values to internal enum codes.')}
           </Typography>
 
           {Object.keys(distinctValues).length === 0 ? (
             <Alert severity="info" sx={{ mb: 3 }}>
-              No distinct lookup fields require custom value transformation for this entity. Click Next to proceed to dry-run validation.
+              {t('common.none', 'No distinct lookup fields require custom value transformation for this entity. Click Next to proceed to dry-run validation.')}
             </Alert>
           ) : (
             <Grid container spacing={2}>
               {Object.entries(distinctValues).map(([field, vals]) => (
                 <Grid size={{ xs: 12 }} key={field}>
                   <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                    Field: {field} (Distinct Raw Values: {vals.join(', ') || 'None'})
+                    {field} ({vals.join(', ') || 'None'})
                   </Typography>
                   <Grid container spacing={2}>
                     {vals.map((v) => (
@@ -356,7 +352,7 @@ export function ImportWizardPage() {
                         <TextField
                           fullWidth
                           size="small"
-                          label={`Raw Value: "${v}"`}
+                          label={`"${v}"`}
                           value={valueMapping[field]?.[v] ?? v}
                           onChange={(e) =>
                             setValueMapping({
@@ -379,18 +375,18 @@ export function ImportWizardPage() {
       {activeStep === 3 && activeJob && (
         <Card sx={{ p: 4 }}>
           <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
-            Step 4: Backend Dry-Run Validation & Row Error Inspection
+            {t('tools.importWizard.steps.step4', 'Step 4: Backend Dry-Run Validation & Row Error Inspection')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Validation results stored in backend database for Job #{activeJob.id}.
+            Job #{activeJob.id}
           </Typography>
 
           <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
             <Alert severity="success" sx={{ flex: 1 }}>
-              Valid Rows Ready for Import: <strong>{activeJob.valid_rows}</strong>
+              {t('tools.importWizard.validationSuccess', 'Valid Rows Ready for Import: {{valid}}', { valid: activeJob.valid_rows })}
             </Alert>
             <Alert severity="error" sx={{ flex: 1 }}>
-              Invalid Rows (Will Be Skipped): <strong>{activeJob.error_rows}</strong>
+              {t('tools.importWizard.validationWarnings', 'Invalid Rows: {{invalid}}', { invalid: activeJob.error_rows })}
             </Alert>
           </Stack>
 
@@ -399,9 +395,9 @@ export function ImportWizardPage() {
               <TableHead sx={{ bgcolor: 'action.hover' }}>
                 <TableRow>
                   <TableCell>Row #</TableCell>
-                  <TableCell>Validation Status</TableCell>
-                  <TableCell>Parsed Data Preview</TableCell>
-                  <TableCell>Validation Messages / Errors</TableCell>
+                  <TableCell>{t('common.status', 'Validation Status')}</TableCell>
+                  <TableCell>{t('tools.importWizard.colSample', 'Parsed Data Preview')}</TableCell>
+                  <TableCell>{t('common.actions', 'Validation Messages / Errors')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -417,15 +413,15 @@ export function ImportWizardPage() {
                           <Chip label="VALID" color="success" size="small" />
                         )}
                       </TableCell>
-                      <TableCell>{JSON.stringify(r.parsed_data || r.raw_data)}</TableCell>
+                      <TableCell><code>{JSON.stringify(r.parsed_data || r.raw_data)}</code></TableCell>
                       <TableCell>
                         {isError ? (
                           <Typography variant="caption" color="error.main" sx={{ fontWeight: 600 }}>
-                            {r.errors?.join(', ') || 'Row failed domain schema validation'}
+                            {r.errors?.join(', ') || 'Row failed validation'}
                           </Typography>
                         ) : (
                           <Typography variant="caption" color="success.main">
-                            Ready for database commit
+                            Ready
                           </Typography>
                         )}
                       </TableCell>
@@ -441,22 +437,19 @@ export function ImportWizardPage() {
       {/* STEP 4: Execution & Summary */}
       {activeStep === 4 && importSummary && (
         <Card sx={{ p: 4, textAlign: 'center' }}>
-          <Iconify icon={"solar:check-circle-bold" as any} width={64} height={64} sx={{ color: 'success.main', mb: 2 }} />
+          <Iconify icon={'solar:check-circle-bold' as any} width={64} height={64} sx={{ color: 'success.main', mb: 2 }} />
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
-            Import Job Executed Successfully!
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-            Batch database transaction completed with audit event log write.
+            {t('tools.importWizard.importCompleted', 'Import Job Executed Successfully!')}
           </Typography>
 
-          <Grid container spacing={3} sx={{ justifyContent: 'center', mb: 4 }}>
+          <Grid container spacing={3} sx={{ justifyContent: 'center', mb: 4, mt: 2 }}>
             <Grid size={{ xs: 12, sm: 4 }}>
               <Paper variant="outlined" sx={{ p: 2, bgcolor: 'success.lighter' }}>
                 <Typography variant="h4" color="success.dark" sx={{ fontWeight: 700 }}>
                   {importSummary.importedCount}
                 </Typography>
                 <Typography variant="subtitle2" color="success.dark">
-                  Successfully Inserted / Updated
+                  {t('common.active', 'Successfully Inserted / Updated')}
                 </Typography>
               </Paper>
             </Grid>
@@ -466,14 +459,14 @@ export function ImportWizardPage() {
                   {importSummary.failedCount}
                 </Typography>
                 <Typography variant="subtitle2" color="error.dark">
-                  Skipped / Invalid Rows
+                  {t('common.inactive', 'Skipped / Invalid Rows')}
                 </Typography>
               </Paper>
             </Grid>
           </Grid>
 
           <Button variant="contained" size="large" onClick={() => { setActiveStep(0); setActiveJob(null); }}>
-            Start Another Import
+            {t('tools.importWizard.startImport', 'Start Another Import')}
           </Button>
         </Card>
       )}
@@ -481,9 +474,6 @@ export function ImportWizardPage() {
       {isProcessing && (
         <Box sx={{ mt: 3 }}>
           <LinearProgress />
-          <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
-            Processing real backend API request...
-          </Typography>
         </Box>
       )}
 
@@ -492,13 +482,15 @@ export function ImportWizardPage() {
       {activeStep < 4 && (
         <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
           <Button disabled={activeStep === 0 || isProcessing} onClick={handleBack} variant="outlined">
-            Back
+            {t('tools.importWizard.prevStep', 'Back')}
           </Button>
           <Button variant="contained" onClick={handleNext} disabled={isProcessing}>
-            {activeStep === 3 ? 'Execute Import' : 'Next Step'}
+            {activeStep === 3
+              ? t('tools.importWizard.startImport', 'Execute Import')
+              : t('tools.importWizard.nextStep', 'Next Step')}
           </Button>
         </Stack>
       )}
-    </Container>
+    </Box>
   );
 }

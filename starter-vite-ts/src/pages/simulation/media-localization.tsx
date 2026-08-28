@@ -1,6 +1,7 @@
 import type { FileAssetDto } from 'src/api/mediaApi';
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import SaveIcon from '@mui/icons-material/Save';
 import {
@@ -20,6 +21,8 @@ import { ImageUploader } from 'src/components/ImageUploader';
 import { BilingualInput } from 'src/components/BilingualInput';
 
 export function MediaLocalizationDemoPage() {
+  const { t } = useTranslation();
+
   const [productTitleFa, setProductTitleFa] = useState('همبرگر مخصوص اسپشال');
   const [productTitleEn, setProductTitleEn] = useState('Special Beef Burger');
 
@@ -30,7 +33,8 @@ export function MediaLocalizationDemoPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [entityId, _setEntityId] = useState('prod-demo-01');
+  // Use valid UUID format for PostgreSQL UUID column compatibility
+  const [entityId, _setEntityId] = useState('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11');
 
   const handleSaveTranslations = async () => {
     try {
@@ -40,20 +44,23 @@ export function MediaLocalizationDemoPage() {
         { entity_type: 'PRODUCT', entity_id: entityId, field_name: 'description', locale: 'fa', text_value: descriptionFa },
         { entity_type: 'PRODUCT', entity_id: entityId, field_name: 'description', locale: 'en', text_value: descriptionEn },
       ]);
-      setStatus('Bilingual localized strings saved successfully!');
+      setStatus(t('settings.localizationPage.saveSuccess', 'Bilingual localized strings saved successfully!'));
       setError(null);
     } catch (err: any) {
-      setError(err.detail || 'Failed to save translations');
+      setError(err?.response?.data?.message || err.detail || t('settings.localizationPage.saveError', 'Failed to save translations'));
     }
   };
 
   return (
     <Box>
       <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
-        Media Assets & Bilingual Localization Studio
+        {t('settings.localizationPage.title', 'Media Assets & Bilingual Localization Studio')}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Upload media images with SHA256 checksums and manage bilingual Persian/English product translations
+        {t(
+          'settings.localizationPage.subtitle',
+          'Upload media images with SHA256 checksums and manage bilingual Persian/English product translations'
+        )}
       </Typography>
 
       {status && (
@@ -74,20 +81,20 @@ export function MediaLocalizationDemoPage() {
           <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
             <CardContent>
               <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-                Media File Asset Upload (AD-18)
+                {t('settings.localizationPage.mediaCardTitle', 'Media File Asset Upload (AD-18)')}
               </Typography>
               <ImageUploader
-                label="Product Image Media Asset"
+                label={t('settings.localizationPage.uploaderLabel', 'Product Image Media Asset')}
                 onUploadSuccess={(asset) => {
                   setUploadedAsset(asset);
-                  setStatus(`Image asset uploaded successfully: ${asset.url}`);
+                  setStatus(t('settings.localizationPage.uploadSuccess', 'Image asset uploaded successfully: {{url}}', { url: asset.url }));
                 }}
               />
 
               {uploadedAsset && (
                 <Box sx={{ mt: 3, p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                    Asset Metadata:
+                    {t('settings.localizationPage.assetMetadata', 'Asset Metadata:')}
                   </Typography>
                   <Typography variant="body2">ID: <code>{uploadedAsset.id}</code></Typography>
                   <Typography variant="body2">URL: <code>{uploadedAsset.url}</code></Typography>
@@ -104,12 +111,12 @@ export function MediaLocalizationDemoPage() {
           <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
             <CardContent>
               <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-                Bilingual Localized Content (Persian & English)
+                {t('settings.localizationPage.bilingualCardTitle', 'Bilingual Localized Content (Persian & English)')}
               </Typography>
 
               <Stack spacing={3}>
                 <BilingualInput
-                  label="Product Title"
+                  label={t('settings.localizationPage.productTitle', 'Product Title')}
                   faValue={productTitleFa}
                   enValue={productTitleEn}
                   onFaChange={setProductTitleFa}
@@ -118,7 +125,7 @@ export function MediaLocalizationDemoPage() {
                 />
 
                 <BilingualInput
-                  label="Product Description"
+                  label={t('settings.localizationPage.productDescription', 'Product Description')}
                   multiline
                   rows={3}
                   faValue={descriptionFa}
@@ -133,7 +140,7 @@ export function MediaLocalizationDemoPage() {
                   onClick={handleSaveTranslations}
                   sx={{ fontWeight: 'bold', alignSelf: 'flex-start' }}
                 >
-                  Save Localized Strings
+                  {t('settings.localizationPage.saveButton', 'Save Localized Strings')}
                 </Button>
               </Stack>
             </CardContent>

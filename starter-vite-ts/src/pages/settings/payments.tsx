@@ -22,6 +22,7 @@ import {
   Divider,
   TableRow,
   MenuItem,
+  useTheme,
   TextField,
   TableBody,
   TableCell,
@@ -36,9 +37,11 @@ import {
 } from '@mui/material';
 
 import { settingsApi } from 'src/api/settingsApi';
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function PaymentSettingsPage() {
   const { t } = useTranslation();
+  const theme = useTheme();
 
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,11 +69,11 @@ export function PaymentSettingsPage() {
       const list = await settingsApi.getPaymentMethods();
       setMethods(list || []);
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.detail || err.message || 'Failed to load payment methods');
+      setError(err?.response?.data?.message || err.detail || err.message || t('settings.paymentsPage.loadError', 'Failed to load payment methods'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadData();
@@ -109,7 +112,7 @@ export function PaymentSettingsPage() {
       await settingsApi.updatePaymentMethod(m.id, { is_active: active });
       loadData();
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.detail || err.message || 'Failed to update payment method status');
+      setError(err?.response?.data?.message || err.detail || err.message || t('settings.paymentsPage.statusError', 'Failed to update payment method status'));
     }
   };
 
@@ -133,15 +136,15 @@ export function PaymentSettingsPage() {
     try {
       if (editingMethod) {
         await settingsApi.updatePaymentMethod(editingMethod.id, payload);
-        setSuccess('Payment method updated successfully');
+        setSuccess(t('settings.paymentsPage.updatedSuccess', 'Payment method updated successfully'));
       } else {
         await settingsApi.createPaymentMethod(payload);
-        setSuccess('Payment method created successfully');
+        setSuccess(t('settings.paymentsPage.createdSuccess', 'Payment method created successfully'));
       }
       setDrawerOpen(false);
       loadData();
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.detail || err.message || 'Failed to save payment method');
+      setError(err?.response?.data?.message || err.detail || err.message || t('settings.paymentsPage.saveError', 'Failed to save payment method'));
     } finally {
       setSavingMethod(false);
     }
@@ -157,27 +160,24 @@ export function PaymentSettingsPage() {
 
   return (
     <Box sx={{ pb: 6 }}>
-      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 800 }}>
-            {t('settings.payments.title', 'Payment & Refund Methods')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t(
-              'settings.payments.subtitle',
-              'Configure tender instruments (Cash, EFT POS, Tara Pay, Credit), device requirements, and alternative refund permissions.'
-            )}
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={1.5}>
-          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
-            {t('common.refresh', 'Refresh')}
-          </Button>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
-            {t('settings.payments.addMethod', 'Add Payment Method')}
-          </Button>
-        </Stack>
-      </Stack>
+      <CustomBreadcrumbs
+        heading={t('settings.paymentsPage.title', 'Payment & Refund Methods')}
+        links={[
+          { name: t('nav.home', 'Home'), href: '/app/dashboard' },
+          { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
+          { name: t('settings.paymentsPage.title', 'Payments & Refunds') },
+        ]}
+        action={
+          <Stack direction="row" spacing={1.5}>
+            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
+              {t('common.refresh', 'Refresh')}
+            </Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
+              {t('settings.paymentsPage.addMethod', 'Add Payment Method')}
+            </Button>
+          </Stack>
+        }
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
@@ -196,14 +196,16 @@ export function PaymentSettingsPage() {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>Code</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Kind</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Currency</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Device / Reference</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Refund Policy</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
-                <TableCell sx={{ fontWeight: 700, textAlign: 'right' }}>Actions</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colCode', 'Code')}</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colName', 'Name')}</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colKind', 'Kind')}</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colCurrency', 'Currency')}</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colDevice', 'Device / Reference')}</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colRefund', 'Refund Policy')}</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colStatus', 'Status')}</TableCell>
+                <TableCell sx={{ fontWeight: 700, textAlign: theme.direction === 'rtl' ? 'left' : 'right' }}>
+                  {t('settings.paymentsPage.colActions', 'Actions')}
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -218,7 +220,7 @@ export function PaymentSettingsPage() {
                   <TableCell>
                     <Chip
                       size="small"
-                      label={m.kind}
+                      label={t(`settings.paymentsPage.kinds.${m.kind}`, m.kind)}
                       color={
                         m.kind === 'CASH'
                           ? 'success'
@@ -233,20 +235,26 @@ export function PaymentSettingsPage() {
                   <TableCell>{m.currency_code || 'IRR'}</TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={0.5}>
-                      {m.requires_device && <Chip size="small" label="Hardware POS" variant="outlined" />}
-                      {m.requires_reference && <Chip size="small" label="Ref Required" variant="outlined" />}
-                      {!m.requires_device && !m.requires_reference && <Typography variant="caption" color="text.secondary">None</Typography>}
+                      {m.requires_device && (
+                        <Chip size="small" label={t('settings.paymentsPage.hardwarePos', 'Hardware POS')} variant="outlined" />
+                      )}
+                      {m.requires_reference && (
+                        <Chip size="small" label={t('settings.paymentsPage.refRequired', 'Ref Required')} variant="outlined" />
+                      )}
+                      {!m.requires_device && !m.requires_reference && (
+                        <Typography variant="caption" color="text.secondary">—</Typography>
+                      )}
                     </Stack>
                   </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={0.5}>
                       {m.allows_refund ? (
-                        <Chip size="small" label="Refundable" color="success" variant="outlined" />
+                        <Chip size="small" label={t('settings.paymentsPage.refundable', 'Refundable')} color="success" variant="outlined" />
                       ) : (
-                        <Chip size="small" label="No Refund" color="error" variant="outlined" />
+                        <Chip size="small" label={t('settings.paymentsPage.noRefund', 'No Refund')} color="error" variant="outlined" />
                       )}
                       {m.allows_alternative_refund && (
-                        <Chip size="small" label="Alt Refund Allowed" color="warning" variant="outlined" />
+                        <Chip size="small" label={t('settings.paymentsPage.altRefund', 'Alt Refund Allowed')} color="warning" variant="outlined" />
                       )}
                     </Stack>
                   </TableCell>
@@ -258,7 +266,7 @@ export function PaymentSettingsPage() {
                       color="primary"
                     />
                   </TableCell>
-                  <TableCell sx={{ textAlign: 'right' }}>
+                  <TableCell sx={{ textAlign: theme.direction === 'rtl' ? 'left' : 'right' }}>
                     <IconButton size="small" onClick={() => handleOpenEdit(m)}>
                       <EditIcon fontSize="small" />
                     </IconButton>
@@ -268,7 +276,9 @@ export function PaymentSettingsPage() {
               {methods.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4 }}>
-                    <Typography color="text.secondary">No payment methods configured.</Typography>
+                    <Typography color="text.secondary">
+                      {t('settings.paymentsPage.noMethods', 'No payment methods configured.')}
+                    </Typography>
                   </TableCell>
                 </TableRow>
               )}
@@ -278,51 +288,61 @@ export function PaymentSettingsPage() {
       </Card>
 
       {/* Create / Edit Drawer */}
-      <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+      <Drawer
+        anchor={theme.direction === 'rtl' ? 'left' : 'right'}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+      >
         <Box sx={{ width: { xs: 320, sm: 420 }, p: 3 }} component="form" onSubmit={handleSaveMethod}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-            {editingMethod ? 'Edit Payment Method' : 'New Payment Method'}
+            {editingMethod
+              ? t('settings.paymentsPage.editMethod', 'Edit Payment Method')
+              : t('settings.paymentsPage.newMethod', 'New Payment Method')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Configure instrument parameters, reconciliation flags, and alternative refund rules.
+            {t('settings.paymentsPage.drawerSubtitle', 'Configure instrument parameters, reconciliation flags, and alternative refund rules.')}
           </Typography>
 
           <Stack spacing={2.5}>
             <TextField
               required
               fullWidth
-              label="Method Code"
+              label={t('settings.paymentsPage.formCode', 'Method Code')}
               value={formCode}
               onChange={(e) => setFormCode(e.target.value)}
               disabled={Boolean(editingMethod)}
-              placeholder="e.g. CARD_POS, CASH, TARA_PAY"
+              placeholder={t('settings.paymentsPage.formCodePlaceholder', 'e.g. CARD_POS, CASH, TARA_PAY')}
             />
 
             <TextField
               required
               fullWidth
-              label="Display Name"
+              label={t('settings.paymentsPage.formName', 'Display Name')}
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
-              placeholder="e.g. Bank POS Terminal, Cash Tender"
+              placeholder={t('settings.paymentsPage.formNamePlaceholder', 'e.g. Bank POS Terminal, Cash Tender')}
             />
 
             <FormControl fullWidth>
-              <InputLabel>Instrument Kind</InputLabel>
-              <Select value={formKind} label="Instrument Kind" onChange={(e) => setFormKind(e.target.value)}>
-                <MenuItem value="CASH">Cash Tender</MenuItem>
-                <MenuItem value="CARD">Card / EFT POS</MenuItem>
-                <MenuItem value="POS">Mobile POS (Courier)</MenuItem>
-                <MenuItem value="CREDIT">Customer Credit Account</MenuItem>
-                <MenuItem value="ONLINE">Online Payment Gateway</MenuItem>
-                <MenuItem value="BANK_TRANSFER">Bank Transfer / Sheba</MenuItem>
-                <MenuItem value="OTHER">Other / Tara Pay</MenuItem>
+              <InputLabel>{t('settings.paymentsPage.formKind', 'Instrument Kind')}</InputLabel>
+              <Select
+                value={formKind}
+                label={t('settings.paymentsPage.formKind', 'Instrument Kind')}
+                onChange={(e) => setFormKind(e.target.value)}
+              >
+                <MenuItem value="CASH">{t('settings.paymentsPage.kinds.CASH', 'Cash Tender')}</MenuItem>
+                <MenuItem value="CARD">{t('settings.paymentsPage.kinds.CARD', 'Card / EFT POS')}</MenuItem>
+                <MenuItem value="POS">{t('settings.paymentsPage.kinds.POS', 'Mobile POS (Courier)')}</MenuItem>
+                <MenuItem value="CREDIT">{t('settings.paymentsPage.kinds.CREDIT', 'Customer Credit Account')}</MenuItem>
+                <MenuItem value="ONLINE">{t('settings.paymentsPage.kinds.ONLINE', 'Online Payment Gateway')}</MenuItem>
+                <MenuItem value="BANK_TRANSFER">{t('settings.paymentsPage.kinds.BANK_TRANSFER', 'Bank Transfer / Sheba')}</MenuItem>
+                <MenuItem value="OTHER">{t('settings.paymentsPage.kinds.OTHER', 'Other / Tara Pay')}</MenuItem>
               </Select>
             </FormControl>
 
             <TextField
               fullWidth
-              label="Currency Code"
+              label={t('settings.paymentsPage.formCurrency', 'Currency Code')}
               value={formCurrency}
               onChange={(e) => setFormCurrency(e.target.value.toUpperCase())}
             />
@@ -331,27 +351,27 @@ export function PaymentSettingsPage() {
 
             <FormControlLabel
               control={<Switch checked={formRequiresDevice} onChange={(e) => setFormRequiresDevice(e.target.checked)} />}
-              label="Requires Hardware EFT POS Terminal"
+              label={t('settings.paymentsPage.reqDevice', 'Requires Hardware EFT POS Terminal')}
             />
 
             <FormControlLabel
               control={<Switch checked={formRequiresRef} onChange={(e) => setFormRequiresRef(e.target.checked)} />}
-              label="Requires Transaction Reference / RRN"
+              label={t('settings.paymentsPage.reqRef', 'Requires Transaction Reference / RRN')}
             />
 
             <FormControlLabel
               control={<Switch checked={formAllowsRefund} onChange={(e) => setFormAllowsRefund(e.target.checked)} />}
-              label="Allows Direct Refund"
+              label={t('settings.paymentsPage.allowRefund', 'Allows Direct Refund')}
             />
 
             <FormControlLabel
               control={<Switch checked={formAllowsAltRefund} onChange={(e) => setFormAllowsAltRefund(e.target.checked)} />}
-              label="Allows Alternative Refund Method (e.g. Cash for Card)"
+              label={t('settings.paymentsPage.allowAltRefund', 'Allows Alternative Refund Method (e.g. Cash for Card)')}
             />
 
             <FormControlLabel
               control={<Switch checked={formActive} onChange={(e) => setFormActive(e.target.checked)} />}
-              label="Active & Available at POS"
+              label={t('settings.paymentsPage.formActive', 'Active & Available at POS')}
             />
 
             <Button
@@ -363,7 +383,11 @@ export function PaymentSettingsPage() {
               disabled={savingMethod}
               sx={{ mt: 2, fontWeight: 700 }}
             >
-              {savingMethod ? 'Saving...' : editingMethod ? 'Update Method' : 'Create Method'}
+              {savingMethod
+                ? '...'
+                : editingMethod
+                ? t('settings.paymentsPage.updateButton', 'Update Method')
+                : t('settings.paymentsPage.createButton', 'Create Method')}
             </Button>
           </Stack>
         </Box>

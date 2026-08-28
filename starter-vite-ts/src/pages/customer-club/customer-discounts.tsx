@@ -50,7 +50,11 @@ interface CustomerDiscountItem {
   customer?: CustomerOption;
 }
 
-export default function CustomerDiscountsPage() {
+interface CustomerDiscountsPageProps {
+  isEmbedded?: boolean;
+}
+
+export default function CustomerDiscountsPage({ isEmbedded = false }: CustomerDiscountsPageProps) {
   const { t } = useTranslation();
 
   const [discounts, setDiscounts] = useState<CustomerDiscountItem[]>([]);
@@ -127,7 +131,7 @@ export default function CustomerDiscountsPage() {
       resetForm();
       await fetchData();
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to save customer discount');
+      setError(err.detail || err.message || t('customerClub.failedToSave', 'Failed to save customer discount'));
     } finally {
       setSaving(false);
     }
@@ -144,7 +148,7 @@ export default function CustomerDiscountsPage() {
             discount_percentage: bulkPct,
             effective_from: bulkFrom || undefined,
             effective_to: bulkTo || undefined,
-            note: bulkNote || 'Bulk Assignment',
+            note: bulkNote || t('customerClub.bulkAssignmentDefaultNote', 'Bulk Assignment'),
           }),
         ),
       );
@@ -154,7 +158,7 @@ export default function CustomerDiscountsPage() {
       setBulkSearch('');
       await fetchData();
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to save bulk discounts');
+      setError(err.detail || err.message || t('customerClub.failedToSaveBulk', 'Failed to save bulk discounts'));
     } finally {
       setSaving(false);
     }
@@ -168,7 +172,7 @@ export default function CustomerDiscountsPage() {
       await axios.delete(`/api/v1/customer-discounts/${id}`);
       await fetchData();
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to revoke discount');
+      setError(err.detail || err.message || t('customerClub.failedToRevoke', 'Failed to revoke discount'));
     }
   };
 
@@ -202,11 +206,13 @@ export default function CustomerDiscountsPage() {
     return fullName.includes(bulkSearch.toLowerCase());
   });
 
-  return (
-    <DashboardContent>
+    const content = (
+    <Box sx={{ width: '100%' }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box>
-          <Typography variant="h4">{t('customerClub.title', 'Customer Specific Discounts')}</Typography>
+          <Typography variant={isEmbedded ? 'h5' : 'h4'} sx={{ fontWeight: 'bold' }}>
+            {t('customerClub.title', 'Customer Specific Discounts')}
+          </Typography>
           <Typography variant="body2" color="text.secondary">
             {t('customerClub.subtitle', 'Assign dedicated percentage discount entitlements to individual customers or in bulk without complex campaigns.')}
           </Typography>
@@ -301,9 +307,9 @@ export default function CustomerDiscountsPage() {
                     <TableCell>
                       {row.effective_from || row.effective_to ? (
                         <Typography variant="caption">
-                          {row.effective_from ? new Date(row.effective_from).toLocaleDateString() : 'Start'}
+                          {row.effective_from ? new Date(row.effective_from).toLocaleDateString() : t('customerClub.start', 'Start')}
                           {' — '}
-                          {row.effective_to ? new Date(row.effective_to).toLocaleDateString() : 'Always'}
+                          {row.effective_to ? new Date(row.effective_to).toLocaleDateString() : t('customerClub.always', 'Always')}
                         </Typography>
                       ) : (
                         <Typography variant="caption" color="text.secondary">
@@ -418,7 +424,7 @@ export default function CustomerDiscountsPage() {
         <DialogContent>
           <Stack spacing={3} sx={{ pt: 1 }}>
             <Typography variant="body2" color="text.secondary">
-              Search and select multiple customers to assign uniform percentage discount entitlements in a single workflow.
+              {t('customerClub.bulkDesc', 'Search and select multiple customers to assign uniform percentage discount entitlements in a single workflow.')}
             </Typography>
 
             <Stack direction="row" spacing={2}>
@@ -498,7 +504,10 @@ export default function CustomerDiscountsPage() {
             </Box>
 
             <Alert severity="info">
-              Review: <strong>{bulkSelectedIds.length}</strong> customer(s) selected for <strong>{bulkPct}%</strong> discount.
+              {t('customerClub.bulkReview', 'Review: {{count}} customer(s) selected for {{pct}}% discount.', {
+                count: bulkSelectedIds.length,
+                pct: bulkPct,
+              })}
             </Alert>
           </Stack>
         </DialogContent>
@@ -511,10 +520,12 @@ export default function CustomerDiscountsPage() {
             onClick={handleSaveBulk}
             disabled={bulkSelectedIds.length === 0 || !bulkPct || saving}
           >
-            {saving ? <CircularProgress size={24} /> : t('customerClub.confirmBulk', `Assign to ${bulkSelectedIds.length} Customer(s)`)}
+            {saving ? <CircularProgress size={24} /> : t('customerClub.confirmBulk', 'Assign to {{count}} Customer(s)', { count: bulkSelectedIds.length })}
           </Button>
         </DialogActions>
       </Dialog>
-    </DashboardContent>
+    </Box>
   );
+
+  return isEmbedded ? content : <DashboardContent>{content}</DashboardContent>;
 }

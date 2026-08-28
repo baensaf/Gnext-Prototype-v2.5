@@ -130,13 +130,9 @@ export function useNavData(): NavSectionProps['data'] {
         },
         {
           title: t('nav.discountsLoyalty', 'Discounts & Promotions Hub'),
-          path: '/app/discounts/campaigns',
+          path: '/app/discounts/customer-rates',
           icon: ICONS.discounts,
           children: [
-            {
-              title: t('nav.discounts', 'Promotional Campaigns'),
-              path: '/app/discounts/campaigns',
-            },
             {
               title: t('nav.customerDiscounts', 'Customer-Specific Rates'),
               path: '/app/discounts/customer-rates',
