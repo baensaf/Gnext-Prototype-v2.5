@@ -1,0 +1,63 @@
+﻿services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gnext_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: appdb
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U admin -d appdb]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gnext_backend
+    restart: unless-stopped
+    ports:
+      - 3100:3100
+    environment:
+      NODE_ENV: production
+      PORT: 3100
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: admin
+      DB_PASSWORD: admin
+      DB_NAME: appdb
+      ADMIN_USERNAME: admin@gnext.local
+      ADMIN_PASSWORD: GnextDemo!2026
+      APPROVER_DEMO_PIN: 2468
+      SEED_PROFILE: minimal
+      DATA_DIR: /app/data
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./starter-vite-ts
+      dockerfile: Dockerfile
+    container_name: gnext_frontend
+    restart: unless-stopped
+    ports:
+      - 8080:80
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  backend_uploads:
+  backend_data:

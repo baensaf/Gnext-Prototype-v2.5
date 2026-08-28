@@ -220,6 +220,9 @@ export class CustomerService {
     const account = this.accountRepo.create({
       tenant_id: tenantId,
       customer_id: saved.id,
+      currency_code: 'IRR',
+      mode: 'FINITE',
+      status: 'ACTIVE',
       credit_limit: MoneyUtil.format(data.credit_limit || '0'),
       current_balance: '0.0000',
       is_blocked: false,

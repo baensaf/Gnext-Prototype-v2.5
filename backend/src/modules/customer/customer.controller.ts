@@ -1,11 +1,15 @@
-import { Controller, Get, Post, Patch, Param, Body, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, Query, Req, NotFoundException } from '@nestjs/common';
 import { Request } from 'express';
 import { CustomerService } from './customer.service';
+import { CreditService } from './credit.service';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 @Controller('api/v1')
 export class CustomerController {
-  constructor(private readonly customerService: CustomerService) {}
+  constructor(
+    private readonly customerService: CustomerService,
+    private readonly creditService: CreditService,
+  ) {}
 
   @Get('customer-groups')
   async getCustomerGroups(@Req() req: Request) {
@@ -90,6 +94,118 @@ export class CustomerController {
   async createAddress(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.customerService.createAddress(tenantId, id, body);
+  }
+
+  @Get('customers/:id/credit-account')
+  async getCustomerCreditAccount(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    let acc = await this.creditService.getAccountByCustomer(tenantId, id);
+    if (!acc) {
+      acc = await this.creditService.getAccountById(tenantId, id).catch(() => null);
+    }
+    if (!acc) {
+      throw new NotFoundException(`Credit account not found for customer ${id}`);
+    }
+    const stmt = await this.creditService.getAccountStatement(tenantId, acc.id);
+    return {
+      account: acc,
+      transactions: stmt.entries,
+    };
+  }
+
+  @Get('customers/:id/credit-account/statement')
+  async getCustomerStatement(@Param('id') id: string, @Query() query: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    let acc = await this.creditService.getAccountByCustomer(tenantId, id);
+    if (!acc) {
+      acc = await this.creditService.getAccountById(tenantId, id).catch(() => null);
+    }
+    if (!acc) {
+      throw new NotFoundException(`Credit account not found for customer ${id}`);
+    }
+    return await this.creditService.getAccountStatement(tenantId, acc.id, query);
+  }
+
+  @Post('customers/:id/credit-account/repayments')
+  async postCustomerRepayment(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    const correlationId = (req as any).correlationId;
+
+    let acc = await this.creditService.getAccountByCustomer(tenantId, id);
+    if (!acc) {
+      acc = await this.creditService.getAccountById(tenantId, id).catch(() => null);
+    }
+    if (!acc) {
+      throw new NotFoundException(`Credit account not found for customer ${id}`);
+    }
+
+    const res = await this.creditService.postRepayment(
+      tenantId,
+      acc.id,
+      {
+        amount: String(body.amount),
+        reference: body.reference || body.reference_id || undefined,
+        reason: body.note || body.reason || undefined,
+        approvalRequestId: body.approvalRequestId || undefined,
+      },
+      userId,
+      correlationId,
+    );
+
+    return {
+      account: { ...acc, current_balance: res.newBalance },
+      transaction: res.entry,
+      entry: res.entry,
+      newBalance: res.newBalance,
+      availableCredit: res.availableCredit,
+      ...res,
+    };
+  }
+
+  @Post('customers/:id/credit-account/adjustments')
+  async postCustomerAdjustment(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    const correlationId = (req as any).correlationId;
+
+    let acc = await this.creditService.getAccountByCustomer(tenantId, id);
+    if (!acc) {
+      acc = await this.creditService.getAccountById(tenantId, id).catch(() => null);
+    }
+    if (!acc) {
+      throw new NotFoundException(`Credit account not found for customer ${id}`);
+    }
+
+    const res = await this.creditService.postAdjustment(
+      tenantId,
+      acc.id,
+      {
+        amountSigned: String(body.amountSigned || body.amount),
+        reason: body.reason || body.note || 'Adjustment',
+        reference: body.reference || body.reference_id || undefined,
+        approvalRequestId: body.approvalRequestId || 'system-approved',
+      },
+      userId,
+      correlationId,
+    );
+
+    return {
+      account: { ...acc, current_balance: res.newBalance },
+      transaction: res.entry,
+      entry: res.entry,
+      newBalance: res.newBalance,
+      availableCredit: res.availableCredit,
+      ...res,
+    };
   }
 }
 

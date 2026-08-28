@@ -42,7 +42,7 @@ export class CreditAccountUpdateDto {
   policyNote?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   approvalRequestId?: string;
 
   @IsOptional()
@@ -55,7 +55,7 @@ export class CreditAccountStatusDto {
   reason: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   approvalRequestId?: string;
 
   @IsOptional()
@@ -80,7 +80,7 @@ export class CreditRepaymentDto {
   reason?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   approvalRequestId?: string;
 
   @IsOptional()
@@ -93,7 +93,7 @@ export class CreditAdjustmentDto {
   amountSigned: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   reasonCodeId?: string;
 
   @IsString()
@@ -103,7 +103,7 @@ export class CreditAdjustmentDto {
   @IsString()
   reference?: string;
 
-  @IsUUID()
+  @IsString()
   approvalRequestId: string;
 
   @IsOptional()

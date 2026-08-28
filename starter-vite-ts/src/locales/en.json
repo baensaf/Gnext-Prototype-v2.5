@@ -819,15 +819,117 @@
     "balance": "Current Balance"
   },
   "credit": {
-    "title": "Customer Credit Accounts",
+    "title": "Customer Credit Subledger & Aging",
+    "subtitle": "Credit limits, repayments, statement ledgers, and credit aging reports (AD-12 / Section 8.6)",
+    "refresh": "Refresh Subledger",
+    "openAccount": "Open Credit Account",
+    "totalLimit": "Total Approved Credit Limit",
+    "totalBalance": "Total Current Balance (Deposits)",
+    "totalDebt": "Total Outstanding Debt",
+    "totalAvailable": "Total Available Purchasing Credit",
+    "directoryTitle": "Customer Credit Accounts Directory",
+    "searchPlaceholder": "Search by customer name, code or phone...",
     "aging": "Aging Summary",
     "repayment": "Repayment / Top-Up",
     "postRepayment": "Post Repayment",
+    "adjustment": "Manual Adjustment",
     "statement": "Credit Statement",
-    "current": "Current",
+    "suspend": "Suspend",
+    "activate": "Activate",
+    "current": "Current (0-30d)",
     "days30": "30 Days",
     "days60": "60 Days",
-    "days90Plus": "90+ Days"
+    "days90Plus": "90+ Days",
+    "status": {
+      "all": "All Statuses",
+      "active": "Active",
+      "suspended": "Suspended",
+      "closed": "Closed"
+    },
+    "mode": {
+      "all": "All Modes",
+      "finite": "Finite Limit",
+      "unlimited": "Unlimited",
+      "policy": "Custom Policy"
+    },
+    "currency": {
+      "all": "All Currencies"
+    },
+    "balanceFilter": {
+      "all": "All Balances",
+      "inDebt": "In Debt (Overdraft)",
+      "hasDeposit": "Positive Balance (Deposits)",
+      "zero": "Zero Balance"
+    },
+    "table": {
+      "customerCode": "Customer Code",
+      "customerName": "Customer Name",
+      "mode": "Mode",
+      "currency": "Currency",
+      "creditLimit": "Credit Limit",
+      "currentBalance": "Current Balance",
+      "availableCredit": "Available Credit",
+      "status": "Status",
+      "aging": "Aging (0-30d)",
+      "actions": "Actions",
+      "noRecords": "No credit accounts matching the criteria"
+    },
+    "repayDialog": {
+      "title": "Post Credit Repayment / Top-Up",
+      "amount": "Repayment Amount (IRR)",
+      "reference": "Reference / Receipt Number",
+      "note": "Note / Reference",
+      "approvalId": "Approval Request ID (if creating surplus)",
+      "cancel": "Cancel",
+      "confirm": "Confirm Repayment",
+      "success": "Credit repayment posted successfully",
+      "error": "Failed to post repayment"
+    },
+    "adjustDialog": {
+      "title": "Post Manual Credit Adjustment",
+      "amount": "Signed Amount (+ for credit, - for debit)",
+      "reason": "Adjustment Reason",
+      "reference": "Reference Number",
+      "approvalId": "Approval Request ID",
+      "approvalHelper": "Manual adjustments strictly require an approved manager request ID.",
+      "cancel": "Cancel",
+      "confirm": "Confirm Adjustment",
+      "success": "Credit adjustment posted successfully",
+      "error": "Adjustment failed"
+    },
+    "statusDialog": {
+      "suspendTitle": "Suspend Credit Account",
+      "activateTitle": "Activate Credit Account",
+      "reason": "Reason for status change",
+      "cancel": "Cancel",
+      "confirmSuspend": "Suspend Account",
+      "confirmActivate": "Activate Account",
+      "successSuspend": "Credit account suspended",
+      "successActivate": "Credit account activated",
+      "error": "Failed to update account status"
+    },
+    "statementModal": {
+      "title": "Customer Credit Statement",
+      "mobile": "Mobile:",
+      "limit": "Credit Limit:",
+      "balance": "Current Balance:",
+      "available": "Available Credit:",
+      "history": "Subledger Transaction History",
+      "dateFrom": "From Date",
+      "dateTo": "To Date",
+      "allTypes": "All Entry Types",
+      "time": "Time / Date",
+      "type": "Type",
+      "reference": "Order / Payment / Ref",
+      "amount": "Amount",
+      "balanceAfter": "Running Balance",
+      "note": "Note",
+      "close": "Close",
+      "agingCard0_30": "Current (0–30 Days)",
+      "agingCard31_60": "31–60 Days",
+      "agingCard61_90": "61–90 Days",
+      "agingCard90Plus": "90+ Days"
+    }
   },
   "catalog": {
     "title": "Master Catalog",

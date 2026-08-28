@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, EntityManager } from 'typeorm';
+import { Repository, DataSource, EntityManager, In } from 'typeorm';
 import { CustomerCreditAccount, CreditMode, CreditAccountStatus } from '../../entities/CustomerCreditAccount.entity';
 import { CreditEntry, CreditEntryType } from '../../entities/CreditEntry.entity';
 import { Customer } from '../../entities/Customer.entity';
@@ -49,20 +49,41 @@ export class CreditService {
       .where('a.tenant_id = :tenantId', { tenantId });
 
     if (query.customer) qb.andWhere('a.customer_id = :customer', { customer: query.customer });
-    if (query.status) qb.andWhere('a.status = :status', { status: query.status });
-    if (query.currency) qb.andWhere('a.currency_code = :currency', { currency: query.currency });
+    if (query.status && query.status !== 'ALL') qb.andWhere('a.status = :status', { status: query.status });
+    if (query.currency && query.currency !== 'ALL') qb.andWhere('a.currency_code = :currency', { currency: query.currency });
+    if (query.mode && query.mode !== 'ALL') qb.andWhere('a.mode = :mode', { mode: query.mode });
 
     qb.orderBy('a.created_at', 'DESC');
     const page = parseInt(query.page || '1', 10);
-    const limit = parseInt(query.limit || '50', 10);
+    const limit = parseInt(query.limit || '100', 10);
     qb.skip((page - 1) * limit).take(limit);
 
     const [accounts, total] = await qb.getManyAndCount();
 
-    const data = accounts.map((acc) => ({
-      ...acc,
-      availableCredit: this.calculateAvailableCredit(acc),
-    }));
+    const customerIds = accounts.map((a) => a.customer_id).filter(Boolean);
+    const customers = customerIds.length > 0 && typeof this.customerRepo?.find === 'function'
+      ? await this.customerRepo.find({ where: { tenant_id: tenantId, id: In(customerIds) } })
+      : [];
+    const customerMap = new Map(customers.map((c) => [c.id, c]));
+
+    const data = accounts.map((acc) => {
+      const cust = customerMap.get(acc.customer_id);
+      return {
+        ...acc,
+        customer: cust
+          ? {
+              id: cust.id,
+              code: cust.code,
+              first_name: cust.first_name,
+              last_name: cust.last_name,
+              name: `${cust.first_name} ${cust.last_name}`.trim(),
+              mobile: cust.mobile,
+              email: cust.email,
+            }
+          : null,
+        availableCredit: this.calculateAvailableCredit(acc),
+      };
+    });
 
     return { data, total, page, limit };
   }
@@ -73,8 +94,24 @@ export class CreditService {
       relations: ['entries'],
     });
     if (!acc) throw new NotFoundException(`Credit account ${id} not found`);
+
+    const customer = await this.customerRepo.findOne({
+      where: { id: acc.customer_id, tenant_id: tenantId },
+    });
+
     return {
       ...acc,
+      customer: customer
+        ? {
+            id: customer.id,
+            code: customer.code,
+            first_name: customer.first_name,
+            last_name: customer.last_name,
+            name: `${customer.first_name} ${customer.last_name}`.trim(),
+            mobile: customer.mobile,
+            email: customer.email,
+          }
+        : null,
       availableCredit: this.calculateAvailableCredit(acc),
     };
   }
@@ -313,8 +350,8 @@ export class CreditService {
       const signedAmount = repaymentAmount;
       const newBalance = MoneyUtil.add(acc.current_balance, signedAmount);
 
-      // Over-repayment check: if new balance becomes > 0, check approval
-      if (MoneyUtil.greaterThan(newBalance, '0.0000') && MoneyUtil.lessThanOrEqual(acc.current_balance, '0.0000')) {
+      // Over-repayment check: if customer was in debt (< 0) and repayment results in positive balance, check approval
+      if (MoneyUtil.greaterThan(newBalance, '0.0000') && MoneyUtil.lessThan(acc.current_balance, '0.0000')) {
         if (!dto.approvalRequestId) {
           throw new ForbiddenException('Over-repayment resulting in a positive balance requires approval');
         }
@@ -418,7 +455,7 @@ export class CreditService {
     });
   }
 
-  async getAccountStatement(tenantId: string, accountId: string, query: any) {
+  async getAccountStatement(tenantId: string, accountId: string, query: any = {}) {
     const acc = await this.accountRepo.findOne({ where: { id: accountId, tenant_id: tenantId } });
     if (!acc) throw new NotFoundException(`Credit account ${accountId} not found`);
 
@@ -426,8 +463,8 @@ export class CreditService {
       .createQueryBuilder('e')
       .where('e.account_id = :accountId', { accountId });
 
-    if (query.dateFrom) qb.andWhere('e.business_date >= :dateFrom', { dateFrom: query.dateFrom });
-    if (query.dateTo) qb.andWhere('e.business_date <= :dateTo', { dateTo: query.dateTo });
+    if (query?.dateFrom) qb.andWhere('e.business_date >= :dateFrom', { dateFrom: query.dateFrom });
+    if (query?.dateTo) qb.andWhere('e.business_date <= :dateTo', { dateTo: query.dateTo });
 
     qb.orderBy('e.posted_at', 'ASC');
     const entries = await qb.getMany();
@@ -451,13 +488,42 @@ export class CreditService {
       closingBalance = MoneyUtil.add(closingBalance, e.amount);
     }
 
+    const customer = await this.customerRepo.findOne({
+      where: { id: acc.customer_id, tenant_id: tenantId },
+    });
+
     return {
       accountId: acc.id,
+      account_id: acc.id,
+      credit_account: {
+        ...acc,
+        available_credit: this.calculateAvailableCredit(acc),
+        availableCredit: this.calculateAvailableCredit(acc),
+      },
+      account: {
+        ...acc,
+        available_credit: this.calculateAvailableCredit(acc),
+        availableCredit: this.calculateAvailableCredit(acc),
+      },
+      customer: customer
+        ? {
+            id: customer.id,
+            code: customer.code,
+            first_name: customer.first_name,
+            last_name: customer.last_name,
+            name: `${customer.first_name} ${customer.last_name}`.trim(),
+            mobile: customer.mobile,
+            email: customer.email,
+          }
+        : null,
       customerId: acc.customer_id,
+      customer_id: acc.customer_id,
       currencyCode: acc.currency_code,
+      currency_code: acc.currency_code,
       openingBalance,
       closingBalance,
       entries,
+      transactions: entries,
     };
   }
 
@@ -522,6 +588,29 @@ export class CreditService {
       }
     }
 
+    const agingCustIds = customerAgingList.map((a) => a.customerId).filter(Boolean);
+    const agingCustomers = agingCustIds.length > 0 && typeof this.customerRepo?.find === 'function'
+      ? await this.customerRepo.find({ where: { tenant_id: tenantId, id: In(agingCustIds) } })
+      : [];
+    const agingCustMap = new Map(agingCustomers.map((c) => [c.id, c]));
+
+    const enrichedCustomers = customerAgingList.map((item) => {
+      const cust = agingCustMap.get(item.customerId);
+      return {
+        ...item,
+        customer: cust
+          ? {
+              id: cust.id,
+              code: cust.code,
+              first_name: cust.first_name,
+              last_name: cust.last_name,
+              name: `${cust.first_name} ${cust.last_name}`.trim(),
+              mobile: cust.mobile,
+            }
+          : null,
+      };
+    });
+
     return {
       asOf: asOfDate.toISOString().slice(0, 10),
       totals: {
@@ -531,7 +620,7 @@ export class CreditService {
         days61_90: bucket61_90,
         days90Plus: bucket90Plus,
       },
-      customers: customerAgingList,
+      customers: enrichedCustomers,
     };
   }
 

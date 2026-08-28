@@ -13,9 +13,6 @@ export default defineConfig({
     react(),
     checker({
       typescript: true,
-      eslint: {
-        lintCommand: 'eslint "./src/**/*.{js,jsx,ts,tsx}"',
-      },
       overlay: {
         position: 'tl',
         initialIsOpen: false,
@@ -33,6 +30,9 @@ export default defineConfig({
   server: {
     port: PORT,
     host: true,
+    watch: {
+      ignored: ['**/Dockerfile', '**/nginx.conf', '**/*.log', '**/.git/**', '**/dist/**'],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:3100',

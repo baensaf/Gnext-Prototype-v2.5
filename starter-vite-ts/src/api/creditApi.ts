@@ -1,5 +1,15 @@
 import { httpClient } from './httpClient';
 
+export interface CreditAccountCustomer {
+  id: string;
+  code: string;
+  first_name: string;
+  last_name: string;
+  name?: string;
+  mobile: string;
+  email?: string;
+}
+
 export interface CreditAccount {
   id: string;
   customer_id: string;
@@ -8,34 +18,64 @@ export interface CreditAccount {
   credit_limit?: string;
   current_balance: string;
   availableCredit: string;
+  available_credit?: string;
   status: 'ACTIVE' | 'SUSPENDED' | 'CLOSED';
   is_blocked: boolean;
   policy_note?: string;
   created_at: string;
+  updated_at?: string;
+  customer?: CreditAccountCustomer | null;
 }
 
 export interface CreditEntry {
   id: string;
   account_id: string;
-  entry_type: 'PURCHASE' | 'REPAYMENT' | 'ADJUSTMENT' | 'REFUND' | 'REVERSAL';
+  entry_type:
+    | 'PURCHASE'
+    | 'REPAYMENT'
+    | 'ADJUSTMENT'
+    | 'REFUND'
+    | 'REVERSAL'
+    | 'LOYALTY_CASHBACK'
+    | 'LOYALTY_CASHBACK_REVERSAL';
   amount: string;
   currency_code: string;
   order_id?: string;
   payment_id?: string;
+  reason_code_id?: string;
   reason_text?: string;
   reference?: string;
   business_date: string;
   posted_at: string;
+  posted_by?: string;
   balance_after: string;
 }
 
 export interface CreditStatement {
   accountId: string;
+  account_id?: string;
   customerId: string;
+  customer_id?: string;
   currencyCode: string;
+  currency_code?: string;
   openingBalance: string;
   closingBalance: string;
   entries: CreditEntry[];
+  transactions?: CreditEntry[];
+  customer?: CreditAccountCustomer | null;
+  account?: CreditAccount | null;
+  credit_account?: CreditAccount | null;
+}
+
+export interface CreditAgingCustomerItem {
+  accountId: string;
+  customerId: string;
+  totalExposure: string;
+  current: string;
+  days31_60: string;
+  days61_90: string;
+  days90Plus: string;
+  customer?: CreditAccountCustomer | null;
 }
 
 export interface CreditAging {
@@ -47,15 +87,7 @@ export interface CreditAging {
     days61_90: string;
     days90Plus: string;
   };
-  customers: Array<{
-    accountId: string;
-    customerId: string;
-    totalExposure: string;
-    current: string;
-    days31_60: string;
-    days61_90: string;
-    days90Plus: string;
-  }>;
+  customers: CreditAgingCustomerItem[];
 }
 
 export const creditApi = {
@@ -109,7 +141,7 @@ export const creditApi = {
   },
 
   getStatement: async (id: string, params?: Record<string, any>): Promise<CreditStatement> => {
-    const res = await httpClient.get(`/api/v1/credit-accounts/${id}/statement`, { params });
+    const res = await httpClient.get(`/api/v1/customers/${id}/credit-account/statement`, { params });
     return res.data;
   },
 
@@ -123,7 +155,7 @@ export const creditApi = {
       approvalRequestId?: string;
     },
   ): Promise<{ entry: CreditEntry; newBalance: string; availableCredit: string }> => {
-    const res = await httpClient.post(`/api/v1/credit-accounts/${id}/repayments`, data);
+    const res = await httpClient.post(`/api/v1/customers/${id}/credit-account/repayments`, data);
     return res.data;
   },
 
@@ -137,7 +169,7 @@ export const creditApi = {
       approvalRequestId: string;
     },
   ): Promise<{ entry: CreditEntry; newBalance: string; availableCredit: string }> => {
-    const res = await httpClient.post(`/api/v1/credit-accounts/${id}/adjustments`, data);
+    const res = await httpClient.post(`/api/v1/customers/${id}/credit-account/adjustments`, data);
     return res.data;
   },
 

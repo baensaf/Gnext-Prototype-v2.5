@@ -19,7 +19,7 @@ describe('Customer Credit Subledger Suite (R14)', () => {
   beforeEach(async () => {
     accountRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), find: jest.fn().mockResolvedValue([]), createQueryBuilder: jest.fn() };
     entryRepo = { find: jest.fn().mockResolvedValue([]), create: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() };
-    customerRepo = { findOne: jest.fn() };
+    customerRepo = { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]) };
     auditWriter = { write: jest.fn() };
 
     const mockEntityManager: any = {
