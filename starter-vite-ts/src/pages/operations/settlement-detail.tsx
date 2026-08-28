@@ -64,10 +64,10 @@ export function SettlementDetailPage() {
     if (!id) return;
     try {
       await deliveryApi.reviewSettlement(id);
-      setActionMessage('Settlement marked as REVIEWED');
+      setActionMessage(t('settlements.alerts.movedToReview'));
       fetchSettlement();
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || 'Review failed');
+      setError(err?.response?.data?.message || err.message || t('settlements.errors.reviewFailed'));
     }
   };
 
@@ -75,10 +75,10 @@ export function SettlementDetailPage() {
     if (!id) return;
     try {
       await deliveryApi.closeSettlement(id);
-      setActionMessage('Settlement successfully CLOSED');
+      setActionMessage(t('settlements.alerts.closed'));
       fetchSettlement();
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || 'Close failed');
+      setError(err?.response?.data?.message || err.message || t('settlements.errors.closeFailed'));
     }
   };
 
@@ -112,6 +112,7 @@ export function SettlementDetailPage() {
         return 'success';
       case 'REVIEWED':
       case 'PENDING':
+      case 'UNDER_REVIEW':
         return 'warning';
       case 'DRAFT':
         return 'info';
@@ -120,6 +121,23 @@ export function SettlementDetailPage() {
         return 'error';
       default:
         return 'default';
+    }
+  };
+
+  const getStatusLabel = (status?: string) => {
+    switch (status) {
+      case 'CLOSED':
+        return t('settlements.statuses.closed');
+      case 'REVIEWED':
+        return t('settlements.statuses.reviewed');
+      case 'PENDING':
+        return t('settlements.statuses.pending');
+      case 'UNDER_REVIEW':
+        return t('settlements.statuses.underReview');
+      case 'REVERSED':
+        return t('settlements.statuses.reversed');
+      default:
+        return t('settlements.statuses.draft');
     }
   };
 
@@ -145,7 +163,7 @@ export function SettlementDetailPage() {
         <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1 }}>
           <Chip label="V5" color="info" size="small" sx={{ fontWeight: 'bold' }} />
           <Chip
-            label={settlement.status || 'DRAFT'}
+            label={getStatusLabel(settlement.status)}
             color={getStatusColor(settlement.status)}
             variant="filled"
           />
@@ -233,7 +251,7 @@ export function SettlementDetailPage() {
                 <Stack spacing={2}>
                   <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Typography color="text.secondary">{t('settlements.status', 'Status')}:</Typography>
-                    <Chip size="small" label={settlement.status || 'DRAFT'} color={getStatusColor(settlement.status)} />
+                    <Chip size="small" label={getStatusLabel(settlement.status)} color={getStatusColor(settlement.status)} />
                   </Stack>
                   <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Typography color="text.secondary">{t('settlements.businessDate', 'Business Date')}:</Typography>

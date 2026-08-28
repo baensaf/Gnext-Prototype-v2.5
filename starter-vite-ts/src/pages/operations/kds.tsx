@@ -1,5 +1,6 @@
 import type { KitchenTicket, KitchenStation } from 'src/api/kdsApi';
 
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import UndoIcon from '@mui/icons-material/Undo';
@@ -38,6 +39,7 @@ import { kdsApi } from 'src/api/kdsApi';
 import { Label } from 'src/components/label';
 
 export function KdsPage() {
+  const { t } = useTranslation();
   const [stations, setStations] = useState<KitchenStation[]>([]);
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
   const [selectedStationId, setSelectedStationId] = useState<string>('ALL');
@@ -60,11 +62,11 @@ export function KdsPage() {
       setTickets(tkList);
       setError(null);
     } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to load KDS tickets');
+      setError(err.detail || err.message || t('kds.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [selectedStationId]);
+  }, [selectedStationId, t]);
 
   useEffect(() => {
     loadData();
@@ -77,7 +79,7 @@ export function KdsPage() {
       await kdsApi.startTicket(ticketId);
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to start ticket');
+      setError(err.detail || t('kds.errors.startFailed'));
     }
   };
 
@@ -86,7 +88,7 @@ export function KdsPage() {
       await kdsApi.bumpTicket(ticketId);
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to bump ticket');
+      setError(err.detail || t('kds.errors.bumpFailed'));
     }
   };
 
@@ -95,7 +97,7 @@ export function KdsPage() {
       await kdsApi.recallTicket(ticketId);
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to recall ticket');
+      setError(err.detail || t('kds.errors.recallFailed'));
     }
   };
 
@@ -112,7 +114,7 @@ export function KdsPage() {
       setPriorityDialogOpen(false);
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to set priority');
+      setError(err.detail || t('kds.errors.priorityFailed'));
     }
   };
 
@@ -122,7 +124,7 @@ export function KdsPage() {
       await kdsApi.updateItemState(itemId, nextState);
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to update item state');
+      setError(err.detail || t('kds.errors.itemStateFailed'));
     }
   };
 
@@ -149,19 +151,19 @@ export function KdsPage() {
       <Stack direction="row" sx={{ mb: 3, justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            Kitchen Display Board <LocalFireDepartmentIcon color="error" /> <Label color="info">V4</Label>
+            {t('kds.title')} <LocalFireDepartmentIcon color="error" /> <Label color="info">{t('kds.version')}</Label>
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Live order ticket routing by product & category rules with automated readiness roll-up.
+            {t('kds.subtitle')}
           </Typography>
         </Box>
 
         <Stack direction="row" spacing={2}>
           <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
-            Refresh
+            {t('kds.refresh')}
           </Button>
           <Button variant="outlined" startIcon={<UndoIcon />} onClick={() => setRecallDrawerOpen(true)}>
-            Recall / History
+            {t('kds.recallHistory')}
           </Button>
         </Stack>
       </Stack>
@@ -175,9 +177,9 @@ export function KdsPage() {
           scrollButtons="auto"
           sx={{ px: 2 }}
         >
-          <Tab label="All Stations" value="ALL" />
+          <Tab label={t('kds.allStations')} value="ALL" />
           {stations.map((st) => (
-            <Tab key={st.id} label={`${st.name} (${st.target_minutes || 10}m)`} value={st.id} />
+            <Tab key={st.id} label={`${st.name} (${st.target_minutes || 10} ${t('kds.minutesShort')})`} value={st.id} />
           ))}
         </Tabs>
       </Paper>
@@ -195,9 +197,9 @@ export function KdsPage() {
           <Paper sx={{ p: 2, bg: '#fafafa', borderRadius: 2, height: '100%', minHeight: 600 }}>
             <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="h6" color="info.main" sx={{ fontWeight: 'bold' }}>
-                New ({newTickets.length})
+                {t('kds.columns.new')} ({newTickets.length})
               </Typography>
-              <Chip label="Queued" color="info" size="small" />
+              <Chip label={t('kds.columns.queued')} color="info" size="small" />
             </Stack>
             <Divider sx={{ mb: 2 }} />
 
@@ -217,7 +219,7 @@ export function KdsPage() {
 
               {newTickets.length === 0 && (
                 <Typography variant="body2" color="text.secondary" sx={{ py: 6, textAlign: 'center' }}>
-                  No new tickets.
+                  {t('kds.columns.noNewTickets')}
                 </Typography>
               )}
             </Stack>
@@ -229,9 +231,9 @@ export function KdsPage() {
           <Paper sx={{ p: 2, bg: '#fafafa', borderRadius: 2, height: '100%', minHeight: 600 }}>
             <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="h6" color="warning.main" sx={{ fontWeight: 'bold' }}>
-                In Preparation ({inPrepTickets.length})
+                {t('kds.columns.inPrep')} ({inPrepTickets.length})
               </Typography>
-              <Chip label="Cooking" color="warning" size="small" />
+              <Chip label={t('kds.columns.cooking')} color="warning" size="small" />
             </Stack>
             <Divider sx={{ mb: 2 }} />
 
@@ -250,7 +252,7 @@ export function KdsPage() {
 
               {inPrepTickets.length === 0 && (
                 <Typography variant="body2" color="text.secondary" sx={{ py: 6, textAlign: 'center' }}>
-                  No tickets in preparation.
+                  {t('kds.columns.noPrepTickets')}
                 </Typography>
               )}
             </Stack>
@@ -262,9 +264,9 @@ export function KdsPage() {
           <Paper sx={{ p: 2, bg: '#fafafa', borderRadius: 2, height: '100%', minHeight: 600 }}>
             <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="h6" color="success.main" sx={{ fontWeight: 'bold' }}>
-                Ready / Bumped ({readyTickets.length})
+                {t('kds.columns.ready')} ({readyTickets.length})
               </Typography>
-              <Chip label="Pass Table" color="success" size="small" />
+              <Chip label={t('kds.columns.passTable')} color="success" size="small" />
             </Stack>
             <Divider sx={{ mb: 2 }} />
 
@@ -282,7 +284,7 @@ export function KdsPage() {
 
               {readyTickets.length === 0 && (
                 <Typography variant="body2" color="text.secondary" sx={{ py: 6, textAlign: 'center' }}>
-                  No bumped tickets.
+                  {t('kds.columns.noBumpedTickets')}
                 </Typography>
               )}
             </Stack>
@@ -292,10 +294,10 @@ export function KdsPage() {
 
       {/* Priority Dialog */}
       <Dialog open={priorityDialogOpen} onClose={() => setPriorityDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Set Ticket Priority</DialogTitle>
+        <DialogTitle>{t('kds.priorityDialog.title')}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 3 }}>
-            Adjust priority score (0 = Normal, 9 = Rush / High Priority) for Ticket #{selectedTicketForPriority?.ticket_number}
+            {t('kds.priorityDialog.description', { ticketNumber: selectedTicketForPriority?.ticket_number })}
           </Typography>
           <Slider
             value={priorityValue}
@@ -308,9 +310,9 @@ export function KdsPage() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPriorityDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setPriorityDialogOpen(false)}>{t('kds.priorityDialog.cancel')}</Button>
           <Button variant="contained" onClick={handleSavePriority}>
-            Save Priority
+            {t('kds.priorityDialog.save')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -324,10 +326,10 @@ export function KdsPage() {
       >
         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-            Completed & Bumped Tickets ({readyTickets.length})
+            {t('kds.recallDrawer.title', { count: readyTickets.length })}
           </Typography>
           <Button size="small" onClick={() => setRecallDrawerOpen(false)}>
-            Close
+            {t('kds.recallDrawer.close')}
           </Button>
         </Stack>
         <Divider sx={{ mb: 2 }} />
@@ -349,7 +351,7 @@ export function KdsPage() {
 
           {readyTickets.length === 0 && (
             <Typography variant="body2" color="text.secondary" sx={{ py: 6, textAlign: 'center' }}>
-              No completed tickets in history.
+              {t('kds.recallDrawer.noHistory')}
             </Typography>
           )}
         </Stack>
@@ -377,7 +379,41 @@ function KdsTicketCard({
   onPriority?: () => void;
   onToggleItemState: (itemId: string, currentState: string) => void;
 }) {
+  const { t } = useTranslation();
   const timerColor = getTimerColor(ticket.prep_time_seconds, ticket.target_minutes || 10);
+
+  const getOrderTypeLabel = (type?: string) => {
+    switch (type) {
+      case 'DINE_IN':
+        return t('kds.orderTypes.dineIn');
+      case 'TAKEAWAY':
+        return t('kds.orderTypes.takeaway');
+      case 'DELIVERY':
+        return t('kds.orderTypes.delivery');
+      case 'AGGREGATOR':
+      case 'SNAPPFOOD':
+        return t('kds.orderTypes.aggregators');
+      default:
+        return type || t('kds.orderTypes.dineIn');
+    }
+  };
+
+  const getItemStatusLabel = (state?: string) => {
+    switch (state) {
+      case 'READY':
+        return t('kds.itemStatus.ready');
+      case 'IN_PROGRESS':
+        return t('kds.itemStatus.inProgress');
+      case 'NEW':
+        return t('kds.itemStatus.new');
+      case 'DONE':
+        return t('kds.itemStatus.done');
+      case 'BUMPED':
+        return t('kds.itemStatus.bumped');
+      default:
+        return state || t('kds.itemStatus.new');
+    }
+  };
 
   return (
     <Card elevation={3} sx={{ borderRadius: 2, borderLeft: 6, borderColor: `${timerColor}.main` }}>
@@ -388,7 +424,7 @@ function KdsTicketCard({
               #{ticket.order_number || ticket.ticket_number}
             </Typography>
             <Chip label={ticket.ticket_number} size="small" variant="outlined" />
-            {ticket.is_aggregator && <Chip label="SNAPPFOOD" color="error" size="small" />}
+            {ticket.is_aggregator && <Chip label={t('kds.snappfood')} color="error" size="small" />}
           </Stack>
 
           <Chip
@@ -401,10 +437,10 @@ function KdsTicketCard({
         </Stack>
 
         <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-          <Chip label={ticket.order_type || 'DINE_IN'} size="small" color="primary" />
-          {ticket.table_number && <Chip label={`Table ${ticket.table_number}`} size="small" color="secondary" />}
+          <Chip label={getOrderTypeLabel(ticket.order_type)} size="small" color="primary" />
+          {ticket.table_number && <Chip label={`${t('kds.table')} ${ticket.table_number}`} size="small" color="secondary" />}
           {ticket.priority > 0 && (
-            <Chip icon={<PriorityHighIcon />} label={`P${ticket.priority}`} color="error" size="small" />
+            <Chip icon={<PriorityHighIcon />} label={`${t('kds.priorityScore')} ${ticket.priority}`} color="error" size="small" />
           )}
         </Stack>
 
@@ -430,7 +466,7 @@ function KdsTicketCard({
                   {parseFloat(item.quantity).toFixed(0)}x {item.product_name}
                 </Typography>
                 <Chip
-                  label={item.state || item.status}
+                  label={getItemStatusLabel(item.state || item.status)}
                   size="small"
                   color={item.state === 'READY' || item.status === 'DONE' ? 'success' : 'default'}
                 />
@@ -455,7 +491,7 @@ function KdsTicketCard({
         {/* Card Actions */}
         <Stack direction="row" sx={{ pt: 1, justifyContent: 'space-between', alignItems: 'center' }}>
           {onPriority && (
-            <Tooltip title="Change Priority">
+            <Tooltip title={t('kds.actions.changePriority')}>
               <IconButton size="small" onClick={onPriority}>
                 <PriorityHighIcon fontSize="small" />
               </IconButton>
@@ -465,17 +501,17 @@ function KdsTicketCard({
           <Stack direction="row" spacing={1}>
             {onStart && (
               <Button size="small" variant="contained" color="info" startIcon={<PlayArrowIcon />} onClick={onStart}>
-                Start
+                {t('kds.actions.start')}
               </Button>
             )}
             {onBump && (
               <Button size="small" variant="contained" color="success" startIcon={<CheckCircleIcon />} onClick={onBump}>
-                Bump
+                {t('kds.actions.bump')}
               </Button>
             )}
             {onRecall && (
               <Button size="small" variant="outlined" color="warning" startIcon={<UndoIcon />} onClick={onRecall}>
-                Recall
+                {t('kds.actions.recall')}
               </Button>
             )}
           </Stack>

@@ -36,8 +36,10 @@
     "operations": "عملیات",
     "kds": "نمایشگر آشپزخانه KDS",
     "delivery": "سفارش‌های تحویلی",
+    "deliveryHub": "مرکز ارسال و ناوگان پیک",
+    "deliveryOrders": "تابلوی دیسپچ و ارسال",
     "couriers": "فهرست سفیران",
-    "courierSettlements": "تسویه‌حساب سفیران",
+    "courierSettlements": "تسویه‌حساب و مغایرت ناوگان",
     "cashier": "شیفت‌های صندوق‌دار",
     "businessDays": "روزهای کاری",
     "payments": "تراکنش‌های پرداخت",
@@ -149,7 +151,10 @@
     "orderType": "نوع سفارش",
     "dineIn": "سالن",
     "takeaway": "بیرون‌بر",
-    "delivery": "ارسال با پیک"
+    "delivery": "ارسال با پیک",
+    "cartEmpty": "سبد خرید خالی است. ابتدا اقلام را انتخاب کنید.",
+    "paymentSuccess": "پرداخت با موفقیت ثبت شد",
+    "directTerminalPay": "پرداخت سریع کارتخوان (PC-POS)"
   },
   "kiosk": {
     "title": "کیوسک خودسفارش‌دهی",
@@ -253,12 +258,238 @@
   },
   "kds": {
     "title": "نمایشگر آشپزخانه KDS",
+    "subtitle": "مسیردهی زنده سفارشات بر اساس قوانین محصول و دسته‌بندی با تجمیع خودکار وضعیت آمادگی.",
+    "version": "نسخه ۴",
+    "refresh": "تازه‌سازی",
+    "recallHistory": "سوابق / بازخوانی",
+    "allStations": "همه ایستگاه‌ها",
+    "minutesShort": "دقیقه",
+    "columns": {
+      "new": "سفارش‌های جدید",
+      "queued": "در صف",
+      "noNewTickets": "هیچ سفارش جدیدی وجود ندارد.",
+      "inPrep": "در حال آماده‌سازی",
+      "cooking": "در حال پخت",
+      "noPrepTickets": "هیچ سفارشی در حال آماده‌سازی نیست.",
+      "ready": "آماده / خارج شده",
+      "passTable": "میز تحویل",
+      "noBumpedTickets": "هیچ سفارش آماده‌ای وجود ندارد."
+    },
+    "orderTypes": {
+      "dineIn": "سالن",
+      "takeaway": "بیرون‌بر",
+      "delivery": "ارسال پیک",
+      "aggregators": "سفارش آنلاین"
+    },
+    "table": "میز",
+    "priority": "اولویت",
+    "priorityScore": "اولویت",
+    "snappfood": "اسنپ‌فود",
+    "itemStatus": {
+      "new": "جدید",
+      "inProgress": "در حال پخت",
+      "ready": "آماده",
+      "done": "تکمیل",
+      "bumped": "خارج شده"
+    },
+    "actions": {
+      "start": "شروع",
+      "bump": "آماده شد / خروج",
+      "recall": "بازخوانی",
+      "changePriority": "تغییر اولویت"
+    },
+    "priorityDialog": {
+      "title": "تعیین اولویت سفارش",
+      "description": "تنظیم امتیاز اولویت (۰ = عادی، ۹ = فوری / اولویت بالا) برای فیش شماره {{ticketNumber}}",
+      "cancel": "انصراف",
+      "save": "ذخیره اولویت"
+    },
+    "recallDrawer": {
+      "title": "سفارش‌های تکمیل و خارج‌شده ({{count}})",
+      "close": "بستن",
+      "noHistory": "هیچ سفارش تکمیل‌شده‌ای در سوابق نیست."
+    },
+    "errors": {
+      "loadFailed": "خطا در بارگذاری فیش‌های KDS",
+      "startFailed": "خطا در شروع سفارش",
+      "bumpFailed": "خطا در تغییر وضعیت سفارش",
+      "recallFailed": "خطا در بازخوانی سفارش",
+      "priorityFailed": "خطا در ذخیره اولویت",
+      "itemStateFailed": "خطا در به‌روزرسانی وضعیت آیتم"
+    },
     "bump": "تغییر وضعیت / آماده شد",
     "prepTime": "زمان آماده‌سازی",
     "orderNumber": "شماره سفارش"
   },
   "delivery": {
     "title": "مدیریت سفارش‌های تحویلی",
+    "subtitle": "دیسپچ سفارش‌های تحویلی، کنترل حضور و غیاب ناوگان، مدیریت پایانه‌های کارت‌خوان سیار و تسویه نقدی/الکترونیکی.",
+    "banner": "اجرای تحویل و سامانه دیسپچ ناوگان سفیران",
+    "activeBranch": "شعبه فعال",
+    "refresh": "تازه‌سازی",
+    "tabs": {
+      "board": "تابلو دیسپچ",
+      "couriers": "فهرست سفیران و حضور",
+      "settlements": "تسویه‌حساب ناوگان",
+      "zones": "محدوده‌ها و کرایه‌ها",
+      "audit": "گزارش رویدادهای تحویل"
+    },
+    "columns": {
+      "unassigned": "تخصیص‌نیافته",
+      "needsCourier": "نیازمند سفیر",
+      "assigned": "تخصیص‌یافته",
+      "readyToDepart": "آماده ارسال",
+      "enRoute": "در مسیر تحویل",
+      "outForDelivery": "در حال ارسال",
+      "history": "سوابق تحویل",
+      "terminal": "نهایی شده"
+    },
+    "card": {
+      "order": "سفارش",
+      "zone": "محدوده",
+      "fee": "کرایه",
+      "total": "مبلغ کل",
+      "courier": "سفیر",
+      "phone": "تلفن",
+      "noPhone": "ثبت‌نشده",
+      "expCash": "نقد مورد انتظار",
+      "expPos": "کارت‌خوان مورد انتظار",
+      "compensation": "دستمزد",
+      "assignCourier": "تخصیص سفیر",
+      "depart": "خروج / ارسال",
+      "reassign": "تغییر سفیر",
+      "complete": "تکمیل و تسویه",
+      "failed": "عدم تحویل",
+      "requeue": "ارسال مجدد به صف"
+    },
+    "states": {
+      "unassigned": "تخصیص‌نیافته",
+      "assigned": "تخصیص‌یافته",
+      "pickedUp": "تحویل به سفیر",
+      "enRoute": "در مسیر",
+      "delivered": "تحویل شد",
+      "failed": "ناموفق",
+      "cancelled": "لغو شد"
+    },
+    "couriers": {
+      "title": "فهرست و پروفایل سفیران",
+      "addCourier": "افزودن سفیر",
+      "code": "کد",
+      "nameAndPhone": "نام و تلفن",
+      "vehicle": "وسیله نقلیه",
+      "compensationPerDelivery": "دستمزد هر تحویل",
+      "attendance": "وضعیت حضور",
+      "availability": "در دسترس بودن",
+      "mobilePosAssignment": "کارت‌خوان سیار",
+      "activeLoad": "بار فعال",
+      "actions": "عملیات",
+      "checkIn": "ورود به شیفت",
+      "checkOut": "پایان شیفت",
+      "assignPos": "تخصیص کارت‌خوان",
+      "vehicleTypes": {
+        "motorcycle": "موتورسیکلت",
+        "bicycle": "دوچرخه",
+        "car": "خودرو",
+        "onFoot": "پیاده"
+      },
+      "attendanceStatus": {
+        "checkedIn": "حاضر در شیفت",
+        "checkedOut": "پایان شیفت",
+        "paused": "استراحت"
+      },
+      "availabilityStatus": {
+        "available": "آماده دریافت",
+        "busy": "مشغول تحویل",
+        "offline": "آفلاین"
+      }
+    },
+    "zones": {
+      "title": "محدوده‌های تحویل",
+      "addZone": "افزودن محدوده جدید",
+      "code": "کد",
+      "zoneName": "نام محدوده",
+      "standardFee": "کرایه مصوب",
+      "estimatedMinutes": "مدت تقریبی تحویل",
+      "status": "وضعیت",
+      "active": "فعال",
+      "inactive": "غیرفعال",
+      "mins": "دقیقه"
+    },
+    "audit": {
+      "title": "گاه‌شمار تغییر وضعیت سفارش",
+      "timestamp": "زمان رویداد",
+      "fromState": "وضعیت مبدا",
+      "toState": "وضعیت مقصد",
+      "reason": "توضیحات / علت",
+      "stateTransition": "تغییر وضعیت",
+      "empty": "برای مشاهده گاه‌شمار رویدادها، یک سفارش را از تابلو دیسپچ انتخاب کنید."
+    },
+    "modals": {
+      "assignCourier": {
+        "title": "تخصیص سفیر به سفارش",
+        "description": "انتخاب سفیر حاضر و در دسترس برای سفارش شماره #{{orderNumber}}",
+        "eligibleCourier": "سفیر واجد شرایط",
+        "noEligible": "در حال حاضر هیچ سفیری حاضر و دارای ظرفیت خالی نیست.",
+        "cancel": "انصراف",
+        "submit": "تخصیص سفیر"
+      },
+      "complete": {
+        "title": "تکمیل تحویل و ثبت مبالغ دریافتی",
+        "description": "ثبت مبالغ نقدی و کارت‌خوان دریافتی برای سفارش #{{orderNumber}}",
+        "cashLabel": "مبلغ نقد دریافتی سفیر (ریال)",
+        "posLabel": "مبلغ کارت‌خوان سیار شرکت (ریال)",
+        "cancel": "انصراف",
+        "submit": "تایید و ثبت تحویل"
+      },
+      "fail": {
+        "title": "ثبت عدم تحویل سفارش",
+        "reasonLabel": "علت عدم تحویل",
+        "cancel": "انصراف",
+        "submit": "ثبت عدم تحویل"
+      },
+      "addCourier": {
+        "title": "تعریف سفیر جدید",
+        "code": "کد سفیر",
+        "name": "نام سفیر",
+        "phone": "شماره تماس",
+        "vehicleType": "نوع وسیله نقلیه",
+        "compensation": "دستمزد هر تحویل (ریال)",
+        "cancel": "انصراف",
+        "submit": "ذخیره سفیر"
+      },
+      "addZone": {
+        "title": "تعریف محدوده تحویل جدید",
+        "code": "کد محدوده",
+        "name": "نام محدوده",
+        "fee": "کرایه تحویل (ریال)",
+        "estimatedMinutes": "مدت تقریبی تحویل (دقیقه)",
+        "cancel": "انصراف",
+        "submit": "ذخیره محدوده"
+      },
+      "assignTerminal": {
+        "title": "تخصیص کارت‌خوان سیار به سفیر",
+        "description": "تخصیص کارت‌خوان سیار اختصاصی شرکت به {{courierName}}",
+        "terminal": "دستگاه کارت‌خوان سیار",
+        "cancel": "انصراف",
+        "submit": "ذخیره تخصیص"
+      }
+    },
+    "errors": {
+      "loadFailed": "خطا در بارگذاری داده‌های تحویل",
+      "assignFailed": "خطا در تخصیص سفیر",
+      "departFailed": "خطا در خروج سفارش تحویل",
+      "completeFailed": "خطا در ثبت تکمیل تحویل",
+      "failFailed": "خطا در ثبت عدم موفقیت تحویل",
+      "requeueFailed": "خطا در قرار دادن مجدد سفارش در صف",
+      "attendanceFailed": "خطا در به‌روزرسانی حضور و غیاب",
+      "availabilityFailed": "خطا در تعیین وضعیت در دسترس بودن",
+      "createCourierFailed": "خطا در ایجاد پروفایل سفیر",
+      "createZoneFailed": "خطا در ایجاد محدوده تحویل",
+      "assignTerminalFailed": "خطا در تخصیص پایانه سیار",
+      "unassignTerminalFailed": "خطا در حذف تخصیص پایانه",
+      "timelineFailed": "خطا در بارگذاری گاه‌شمار سفارش",
+      "noBranch": "هیچ شعبه فعالی انتخاب نشده است"
+    },
     "couriersTab": "فهرست سفیران",
     "ordersTab": "سفارش‌های تحویلی",
     "courierDetail": "پروفایل سفیر",
@@ -272,12 +503,139 @@
   },
   "settlements": {
     "title": "تسویه‌حساب سفیران",
+    "subtitle": "تطبیق نقدینگی سفیران، دریافتی‌های کارت‌خوان سیار، مغایرت‌ها و صدور صورت‌حساب",
+    "refresh": "تازه‌سازی",
+    "tabs": {
+      "overview": "نمای کلی سفیران تسویه‌نشده",
+      "batches": "دسته‌های تسویه‌حساب (نسخه ۵) ({{count}})"
+    },
+    "statuses": {
+      "draft": "پیش‌نویس",
+      "underReview": "در حال بررسی",
+      "closed": "تسویه و بسته‌شده",
+      "reversed": "ابطال‌شده",
+      "pending": "در انتظار",
+      "reviewed": "بررسی‌شده"
+    },
+    "overview": {
+      "code": "کد",
+      "unsettled": "{{count}} تسویه‌نشده",
+      "expectedCash": "نقد مورد انتظار:",
+      "expectedPos": "کارت‌خوان سیار مورد انتظار:",
+      "totalDeliveryFees": "مجموع کرایه‌های تحویل:",
+      "startBatch": "ایجاد صورت تسویه‌حساب",
+      "empty": "هیچ سفیری یافت نشد یا سفارش تحویلی فعالی وجود ندارد."
+    },
+    "batches": {
+      "settlementNumber": "شماره تسویه",
+      "courier": "سفیر",
+      "status": "وضعیت",
+      "expectedCash": "نقد انتظار",
+      "actualCash": "نقد واقعی",
+      "cashDisc": "مغایرت نقد",
+      "expectedPos": "کارت‌خوان انتظار",
+      "actualPos": "کارت‌خوان واقعی",
+      "netTotal": "خالص تسویه",
+      "actions": "عملیات",
+      "detail": "جزئیات",
+      "statement": "صورت‌حساب",
+      "empty": "هنوز هیچ دسته تسویه‌حسابی ایجاد نشده است."
+    },
+    "previewModal": {
+      "title": "پیش‌نمایش تسویه‌حساب جدید سفیر",
+      "courier": "سفیر",
+      "expectedCash": "نقد مورد انتظار",
+      "expectedPos": "کارت‌خوان سیار مورد انتظار",
+      "deliveriesIncluded": "سفارش‌های مشمول ({{count}}):",
+      "orderNumber": "شماره سفارش",
+      "status": "وضعیت",
+      "paymentMethod": "روش پرداخت",
+      "expCash": "نقد انتظار",
+      "expPos": "کارت‌خوان انتظار",
+      "cancel": "انصراف",
+      "createDraft": "ایجاد پیش‌نویس تسویه"
+    },
+    "detailModal": {
+      "title": "تسویه‌حساب شماره #{{number}} - {{name}}",
+      "expectedActualCash": "نقد انتظار / نقد دریافتی",
+      "expectedActualPos": "کارت‌خوان انتظار / دریافتی",
+      "discrepancy": "مغایرت",
+      "compensationsAdjustments": "دستمزدها و تعدیلات",
+      "comp": "دستمزد:",
+      "adj": "تعدیل:",
+      "netSettlementTotal": "مبلغ خالص تسویه",
+      "totalComp": "مجموع دستمزد",
+      "totalAdj": "مجموع تعدیل",
+      "recalculateSave": "محاسبه مجدد و ذخیره پیش‌نویس",
+      "lineItemsTitle": "اقلام سفارشات و تایید فیش‌ها",
+      "verified": "تایید فیش",
+      "orderNumber": "شماره سفارش",
+      "status": "وضعیت",
+      "method": "روش پرداخت",
+      "expCash": "نقد انتظار",
+      "actCash": "نقد دریافتی",
+      "expPos": "کارت‌خوان انتظار",
+      "actPos": "کارت‌خوان دریافتی",
+      "closeWindow": "بستن پنجره",
+      "submitReview": "ارسال جهت بازبینی",
+      "finalizeClose": "نهایی‌سازی و بستن تسویه",
+      "reverseSettlement": "ابطال و برگشت تسویه"
+    },
+    "statementModal": {
+      "title": "صورت‌حساب تسویه ناوگان سفیران",
+      "date": "تاریخ",
+      "courier": "سفیر",
+      "status": "وضعیت",
+      "summary": "خلاصه مالی:",
+      "expectedCash": "نقد مورد انتظار:",
+      "actualCash": "نقد واقعی دریافتی:",
+      "cashDisc": "مغایرت نقدینگی:",
+      "expectedPos": "کارت‌خوان مورد انتظار:",
+      "actualPos": "کارت‌خوان واقعی دریافتی:",
+      "posDisc": "مغایرت کارت‌خوان:",
+      "netTotal": "مبلغ کل خالص تسویه‌حساب:",
+      "close": "بستن",
+      "print": "چاپ صورت‌حساب"
+    },
+    "alerts": {
+      "draftUpdated": "پیش‌نویس تسویه‌حساب با موفقیت به‌روزرسانی شد.",
+      "movedToReview": "وضعیت تسویه به در حال بازبینی تغییر یافت.",
+      "closed": "تسویه‌حساب با موفقیت بسته شد!",
+      "reversed": "تسویه‌حساب با موفقیت ابطال شد."
+    },
+    "prompts": {
+      "reverseReason": "علت ابطال تسویه‌حساب را وارد کنید:"
+    },
+    "errors": {
+      "previewFailed": "خطا در بارگذاری پیش‌نمایش تسویه‌حساب",
+      "createFailed": "خطا در ایجاد تسویه‌حساب",
+      "detailFailed": "خطا در بارگذاری جزئیات تسویه‌حساب",
+      "updateDraftFailed": "خطا در به‌روزرسانی پیش‌نویس تسویه‌حساب",
+      "reviewFailed": "خطا در تغییر وضعیت به بازبینی",
+      "closeFailed": "خطا در بستن تسویه‌حساب",
+      "reverseFailed": "خطا در ابطال تسویه‌حساب",
+      "statementFailed": "خطا در بارگذاری صورت‌حساب"
+    },
     "detailTitle": "جزئیات تسویه‌حساب سفیر",
     "summary": "خلاصه تسویه‌حساب",
     "expectedCash": "نقد مورد انتظار",
-    "actualCash": "نقد واقعی",
-    "variance": "مغایرت",
-    "confirmSettlement": "تایید تسویه‌حساب"
+    "actualCash": "نقد واقعی دریافتی",
+    "variance": "مغایرت نقدی (کسری / مازاد)",
+    "confirmSettlement": "تایید تسویه‌حساب",
+    "posAmount": "مجموع دریافتی کارت‌خوان سیار",
+    "compensation": "دستمزد و کمیسیون سفیر",
+    "netRemittance": "خالص پرداختی / دریافتی فروشگاه",
+    "meta": "اطلاعات تسویه‌حساب",
+    "status": "وضعیت",
+    "businessDate": "تاریخ کاری",
+    "created": "زمان ایجاد",
+    "notes": "یادداشت‌ها",
+    "actions": "عملیات تسویه",
+    "review": "تایید و ارسال برای بررسی",
+    "close": "بستن و نهایی‌سازی تسویه",
+    "deliveries": "سفارش‌ها و اقلام تحویلی مشمول",
+    "noLines": "هیچ سفارش جداگانه‌ای برای این تسویه‌حساب ثبت نشده است.",
+    "notFound": "تسویه‌حساب یافت نشد"
   },
   "cashier": {
     "title": "مدیریت شیفت‌های صندوق‌دار",

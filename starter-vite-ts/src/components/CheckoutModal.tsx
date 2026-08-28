@@ -7,12 +7,15 @@ import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import PrintIcon from '@mui/icons-material/Print';
+import DialpadIcon from '@mui/icons-material/Dialpad';
 import FlashOnIcon from '@mui/icons-material/FlashOn';
 import PaymentIcon from '@mui/icons-material/Payment';
-import CreditCardIcon from '@mui/icons-material/CreditCard';
+import BackspaceIcon from '@mui/icons-material/Backspace';
+import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import {
   Box,
   Chip,
+  Grid,
   Stack,
   Alert,
   Paper,
@@ -34,6 +37,7 @@ import {
   DialogContent,
   DialogActions,
   TableContainer,
+  CircularProgress,
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
@@ -62,7 +66,9 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const [payAmount, setPayAmount] = useState('');
   const [refNumber, setRefNumber] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [_loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [terminalProcessing, setTerminalProcessing] = useState(false);
+  const [showNumpad, setShowNumpad] = useState(true);
 
   const loadData = useCallback(async () => {
     if (!orderId) return;
@@ -73,9 +79,20 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       setPayAmount(o.due_amount || o.outstanding_total || '0');
 
       const pms = await settingsApi.getPaymentMethods();
-      setPaymentMethods(pms.filter((m) => m.is_active));
-      if (pms.length > 0 && !selectedMethodId) {
-        setSelectedMethodId(pms[0].id);
+      const activeMethods = pms.filter((m) => m.is_active);
+      setPaymentMethods(activeMethods);
+
+      if (activeMethods.length > 0) {
+        // Prefer CARD / POS (کارتخوان) as the 90% default in Iran
+        const preferredPos = activeMethods.find(
+          (m) =>
+            m.kind === 'CARD' ||
+            m.kind === 'POS' ||
+            m.code?.toUpperCase().includes('POS') ||
+            m.name?.includes('کارتخوان') ||
+            m.name?.toLowerCase().includes('card')
+        );
+        setSelectedMethodId(preferredPos ? preferredPos.id : activeMethods[0].id);
       }
 
       const pays = await paymentApi.getOrderPayments(orderId);
@@ -86,7 +103,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     } finally {
       setLoading(false);
     }
-  }, [orderId, selectedMethodId]);
+  }, [orderId]);
 
   useEffect(() => {
     if (open && orderId) {
@@ -94,33 +111,36 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     }
   }, [open, orderId, loadData]);
 
-  const handleAddPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddPayment = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!orderId || !selectedMethodId || !payAmount) return;
 
     try {
+      setLoading(true);
       const res = await paymentApi.postPayment({
         order_id: orderId,
         payment_method_id: selectedMethodId,
         amount: payAmount,
-        reference_number: refNumber || undefined,
+        reference_number: refNumber || `POS-${Date.now().toString().slice(-6)}`,
       });
 
       setOrder(res.order);
-      setPayAmount(res.order.due_amount);
+      setPayAmount(res.order?.due_amount || '0');
       setRefNumber('');
 
       const updatedPays = await paymentApi.getOrderPayments(orderId);
       setPayments(updatedPays);
       toast.success(t('pos.paymentSuccess', 'Payment recorded successfully'));
 
-      if (MoneyUtil.isZero(res.order.due_amount) && onPaymentComplete) {
+      if (res.order && MoneyUtil.isZero(res.order.due_amount) && onPaymentComplete) {
         onPaymentComplete();
       }
     } catch (err: any) {
       const errorMsg = err.detail || 'Payment failed';
       setError(errorMsg);
       showErrorToast(err, errorMsg);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -128,28 +148,29 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     async (methodKind: 'CASH' | 'CARD' | 'POS') => {
       if (!order || !orderId || MoneyUtil.isZero(order.due_amount)) return;
 
-      const matchedMethod = paymentMethods.find((m) => m.kind === methodKind) || paymentMethods[0];
+      const matchedMethod =
+        paymentMethods.find((m) => m.kind === methodKind || (methodKind === 'CARD' && m.kind === 'POS')) ||
+        paymentMethods[0];
       if (!matchedMethod) return;
 
       try {
-        setLoading(true);
+        setTerminalProcessing(true);
         const res = await paymentApi.postPayment({
           order_id: orderId,
           payment_method_id: matchedMethod.id,
           amount: order.due_amount || '0',
-          reference_number:
-            methodKind === 'CARD' || methodKind === 'POS' ? `POS-${Date.now().toString().slice(-6)}` : undefined,
+          reference_number: `POS-${Date.now().toString().slice(-6)}`,
         });
 
         setOrder(res.order);
-        setPayAmount(res.order.due_amount || '0');
+        setPayAmount(res.order?.due_amount || '0');
         setRefNumber('');
 
         const updatedPays = await paymentApi.getOrderPayments(orderId);
         setPayments(updatedPays);
         toast.success(t('pos.paymentSuccess', 'Payment recorded successfully'));
 
-        if (MoneyUtil.isZero(res.order.due_amount) && onPaymentComplete) {
+        if (res.order && MoneyUtil.isZero(res.order.due_amount) && onPaymentComplete) {
           onPaymentComplete();
         }
       } catch (err: any) {
@@ -157,12 +178,13 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         setError(errorMsg);
         showErrorToast(err, errorMsg);
       } finally {
-        setLoading(false);
+        setTerminalProcessing(false);
       }
     },
     [order, orderId, paymentMethods, t, onPaymentComplete]
   );
 
+  // Hotkeys: F8 = Cash, F9 = Terminal POS
   useEffect(() => {
     if (!open) return undefined;
 
@@ -182,14 +204,45 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     };
   }, [open, handleFastTender]);
 
+  // Touch Numpad handlers
+  const handleNumpadDigit = (digit: string) => {
+    setPayAmount((prev) => {
+      if (!prev || prev === '0') return digit;
+      return prev + digit;
+    });
+  };
+
+  const handleNumpadBackspace = () => {
+    setPayAmount((prev) => {
+      if (!prev || prev.length <= 1) return '';
+      return prev.slice(0, -1);
+    });
+  };
+
+  const handleNumpadClear = () => {
+    setPayAmount('');
+  };
+
   const isFullyPaid = order ? MoneyUtil.isZero(order.due_amount) : false;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-        <PaymentIcon color="primary" />
-        {t('pos.checkout')} — {order?.order_number}
+      <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <PaymentIcon color="primary" />
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            {t('pos.checkout', 'Checkout & Settlement')} — #{order?.order_number || ''}
+          </Typography>
+        </Stack>
+        <Chip
+          label="PC-POS Ready (90% Domestic Standard)"
+          color="success"
+          size="small"
+          variant="outlined"
+          sx={{ fontWeight: 600 }}
+        />
       </DialogTitle>
+
       <DialogContent sx={{ pt: 2 }}>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
@@ -198,168 +251,307 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         )}
 
         {order && (
-          <Stack spacing={2} sx={{ mb: 3, mt: 1 }}>
+          <Stack spacing={2} sx={{ mb: 2, mt: 1 }}>
+            {/* Financial Summary Box */}
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'background.neutral' }}>
               <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2" color="text.secondary">{t('orders.totalAmount')}:</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('orders.totalAmount', 'Total Amount')}:
+                </Typography>
                 <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                   {MoneyUtil.formatCurrency(order.total_amount)} IRR
                 </Typography>
               </Stack>
               <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2" color="text.secondary">{t('orders.paidAmount')}:</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('orders.paidAmount', 'Paid Amount')}:
+                </Typography>
                 <Typography variant="body2" color="success.main" sx={{ fontWeight: 'bold' }}>
                   {MoneyUtil.formatCurrency(order.paid_amount)} IRR
                 </Typography>
               </Stack>
               <Divider sx={{ my: 1 }} />
-              <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t('settlements.variance')}:</Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', color: isFullyPaid ? 'success.main' : 'error.main' }}>
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                  {t('orders.dueAmount', 'Remaining Due')}:
+                </Typography>
+                <Typography
+                  variant="h5"
+                  sx={{ fontWeight: 'bold', color: isFullyPaid ? 'success.main' : 'error.main' }}
+                >
                   {MoneyUtil.formatCurrency(order.due_amount)} IRR
                 </Typography>
               </Stack>
             </Paper>
 
             {isFullyPaid ? (
-              <Alert severity="success" sx={{ py: 1 }}>
-                <strong>{t('pos.orderSettled')}</strong>
+              <Alert severity="success" sx={{ py: 1.5, fontWeight: 700 }}>
+                {t('pos.orderSettled', 'Order is fully settled!')}
               </Alert>
             ) : (
-              <Box component="form" onSubmit={handleAddPayment} sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}>
-                {/* 1-Click Fast Tender Actions */}
-                <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 1 }}>
-                  FAST 1-CLICK TENDER (HOTKEYS)
+              <Box sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}>
+                {/* 1-CLICK PC-POS TERMINAL HERO ACTION */}
+                <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main', display: 'block', mb: 1, letterSpacing: 0.5 }}>
+                  🇮🇷 1-CLICK PC-POS TERMINAL SETTLEMENT (PRIMARY)
                 </Typography>
-                <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
+
+                <Button
+                  fullWidth
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  disabled={terminalProcessing || loading}
+                  startIcon={terminalProcessing ? <CircularProgress size={22} color="inherit" /> : <PointOfSaleIcon sx={{ fontSize: 26 }} />}
+                  onClick={() => handleFastTender('CARD')}
+                  sx={{
+                    py: 1.5,
+                    fontSize: '1.05rem',
+                    fontWeight: 800,
+                    borderRadius: 1.5,
+                    boxShadow: (theme) => theme.customShadows?.primary || 3,
+                    mb: 1.5,
+                  }}
+                >
+                  {terminalProcessing
+                    ? 'ارسال به کارتخوان و ثبت تراکنش...'
+                    : `پرداخت با کارتخوان بانکی (PC-POS) [F9] — ${MoneyUtil.formatCurrency(order.due_amount)} IRR`}
+                </Button>
+
+                {/* Secondary Fast Cash */}
+                <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
                   <Button
                     fullWidth
-                    variant="contained"
+                    variant="outlined"
                     color="success"
                     startIcon={<FlashOnIcon />}
                     onClick={() => handleFastTender('CASH')}
-                    sx={{ fontWeight: 700, py: 1 }}
+                    sx={{ fontWeight: 700, py: 0.75 }}
                   >
-                    Exact Cash [F8]
+                    تسویه نقدی دقیق [F8]
                   </Button>
                   <Button
-                    fullWidth
-                    variant="contained"
-                    color="primary"
-                    startIcon={<CreditCardIcon />}
-                    onClick={() => handleFastTender('CARD')}
-                    sx={{ fontWeight: 700, py: 1 }}
+                    variant="outlined"
+                    color="inherit"
+                    startIcon={<DialpadIcon />}
+                    onClick={() => setShowNumpad((prev) => !prev)}
+                    sx={{ fontWeight: 600, py: 0.75, flexShrink: 0 }}
                   >
-                    EFT POS [F9]
+                    {showNumpad ? 'مخفی‌سازی کیپد' : 'کیپد لمسی'}
                   </Button>
                 </Stack>
 
-                <Divider sx={{ my: 2 }}>
-                  <Chip label="Or Custom Tender" size="small" />
+                <Divider sx={{ my: 1.5 }}>
+                  <Chip label="پرداخت ترکیبی یا مبالغ دلخواه (Split / Custom)" size="small" />
                 </Divider>
 
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1.5 }}>
-                  {t('pos.postPayment')}
+                {/* Iranian Quick Toman / Rial Presets */}
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75, fontWeight: 600 }}>
+                  مبالغ پرتکرار تومانی / ریالی:
                 </Typography>
-
-                {/* Quick Cash Presets */}
                 <Stack direction="row" spacing={0.75} sx={{ mb: 2, flexWrap: 'wrap', gap: 0.75 }}>
                   <Chip
-                    label="Exact"
+                    label="کل مانده (Exact)"
                     clickable
                     color="primary"
-                    variant="outlined"
+                    variant={payAmount === order.due_amount ? 'filled' : 'outlined'}
                     size="small"
+                    sx={{ fontWeight: 700 }}
                     onClick={() => setPayAmount(order.due_amount || '0')}
                   />
-                  {['500000', '1000000', '2000000', '5000000', '10000000'].map((val) => (
+                  {[
+                    { val: '500000', label: '۵۰ هزار ت' },
+                    { val: '1000000', label: '۱۰۰ هزار ت' },
+                    { val: '2000000', label: '۲۰۰ هزار ت' },
+                    { val: '5000000', label: '۵۰۰ هزار ت' },
+                    { val: '10000000', label: '۱ میلیون ت' },
+                    { val: '20000000', label: '۲ میلیون ت' },
+                  ].map((preset) => (
                     <Chip
-                      key={val}
-                      label={`${(Number(val) / 10).toLocaleString('fa-IR')} ت`}
+                      key={preset.val}
+                      label={preset.label}
                       clickable
-                      variant="outlined"
+                      variant={payAmount === preset.val ? 'filled' : 'outlined'}
+                      color={payAmount === preset.val ? 'success' : 'default'}
                       size="small"
-                      onClick={() => setPayAmount(val)}
+                      sx={{ fontWeight: 600 }}
+                      onClick={() => setPayAmount(preset.val)}
                     />
                   ))}
                 </Stack>
 
-                <Stack spacing={2}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>{t('payments.instrument')}</InputLabel>
-                    <Select
-                      value={selectedMethodId}
-                      label={t('payments.instrument')}
-                      onChange={(e) => setSelectedMethodId(e.target.value)}
+                <Box component="form" onSubmit={handleAddPayment}>
+                  <Grid container spacing={2} sx={{ mb: 1.5 }}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>{t('payments.instrument', 'Payment Instrument')}</InputLabel>
+                        <Select
+                          value={selectedMethodId}
+                          label={t('payments.instrument', 'Payment Instrument')}
+                          onChange={(e) => setSelectedMethodId(e.target.value)}
+                        >
+                          {paymentMethods.map((m) => (
+                            <MenuItem key={m.id} value={m.id}>
+                              {m.name} ({m.kind || m.code})
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <TextField
+                        size="small"
+                        label={t('payments.amount', 'Amount (IRR)')}
+                        type="number"
+                        required
+                        fullWidth
+                        value={payAmount}
+                        onChange={(e) => setPayAmount(e.target.value)}
+                      />
+                    </Grid>
+                  </Grid>
+
+                  {/* On-Screen Touch Numpad */}
+                  {showNumpad && (
+                    <Paper
+                      variant="outlined"
+                      sx={{
+                        p: 1.5,
+                        mb: 2,
+                        borderRadius: 2,
+                        bgcolor: 'background.paper',
+                        border: '1px dashed',
+                        borderColor: 'primary.light',
+                      }}
                     >
-                      {paymentMethods.map((m) => (
-                        <MenuItem key={m.id} value={m.id}>
-                          {m.name} ({m.code})
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                      <Grid container spacing={1}>
+                        {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                          <Grid size={{ xs: 4 }} key={digit}>
+                            <Button
+                              fullWidth
+                              variant="outlined"
+                              size="medium"
+                              sx={{ fontWeight: 800, fontSize: '1.1rem', py: 0.75 }}
+                              onClick={() => handleNumpadDigit(digit)}
+                            >
+                              {digit}
+                            </Button>
+                          </Grid>
+                        ))}
+                        <Grid size={{ xs: 4 }}>
+                          <Button
+                            fullWidth
+                            variant="outlined"
+                            size="medium"
+                            sx={{ fontWeight: 800, fontSize: '0.95rem', py: 0.75 }}
+                            onClick={() => handleNumpadDigit('000')}
+                          >
+                            000
+                          </Button>
+                        </Grid>
+                        <Grid size={{ xs: 4 }}>
+                          <Button
+                            fullWidth
+                            variant="outlined"
+                            size="medium"
+                            sx={{ fontWeight: 800, fontSize: '1.1rem', py: 0.75 }}
+                            onClick={() => handleNumpadDigit('0')}
+                          >
+                            0
+                          </Button>
+                        </Grid>
+                        <Grid size={{ xs: 4 }}>
+                          <Button
+                            fullWidth
+                            variant="outlined"
+                            color="error"
+                            size="medium"
+                            sx={{ py: 0.75 }}
+                            onClick={handleNumpadBackspace}
+                          >
+                            <BackspaceIcon fontSize="small" />
+                          </Button>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                          <Button
+                            fullWidth
+                            variant="text"
+                            color="warning"
+                            size="small"
+                            sx={{ fontWeight: 700 }}
+                            onClick={handleNumpadClear}
+                          >
+                            پاک‌کردن (Clear)
+                          </Button>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                          <Button
+                            fullWidth
+                            variant="text"
+                            color="primary"
+                            size="small"
+                            sx={{ fontWeight: 700 }}
+                            onClick={() => setPayAmount(order.due_amount || '0')}
+                          >
+                            تسویه کل مانده
+                          </Button>
+                        </Grid>
+                      </Grid>
+                    </Paper>
+                  )}
 
-                  <TextField
-                    size="small"
-                    label={t('payments.amount')}
-                    type="number"
-                    required
+                  <Button
+                    type="submit"
+                    variant="contained"
                     fullWidth
-                    value={payAmount}
-                    onChange={(e) => setPayAmount(e.target.value)}
-                  />
-
-                  <TextField
-                    size="small"
-                    label={t('payments.reference')}
-                    placeholder="e.g. POS-998822"
-                    fullWidth
-                    value={refNumber}
-                    onChange={(e) => setRefNumber(e.target.value)}
-                  />
-
-                  <Button type="submit" variant="contained" fullWidth sx={{ fontWeight: 'bold' }}>
-                    {t('pos.postPayment')}
+                    disabled={loading || !payAmount}
+                    sx={{ fontWeight: 'bold', py: 1 }}
+                  >
+                    {loading ? <CircularProgress size={20} /> : `ثبت پرداخت بخش انتخابی (${MoneyUtil.formatCurrency(payAmount || '0')} IRR)`}
                   </Button>
-                </Stack>
+                </Box>
               </Box>
             )}
 
-            {/* Payments Table */}
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mt: 2 }}>
-              {t('payments.title')}
-            </Typography>
-            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, maxHeight: 180 }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>{t('common.time')}</TableCell>
-                    <TableCell align="right">{t('payments.amount')}</TableCell>
-                    <TableCell>{t('payments.reference')}</TableCell>
-                    <TableCell>{t('common.status')}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {payments.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell>{new Date(p.recorded_at).toLocaleTimeString()}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 'bold', color: 'success.main' }}>
-                        {MoneyUtil.formatCurrency(p.amount)} IRR
-                      </TableCell>
-                      <TableCell>{p.reference_number || '—'}</TableCell>
-                      <TableCell>
-                        <Chip label={p.status} color="success" size="small" />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            {/* Payments History Table */}
+            {payments.length > 0 && (
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                  {t('payments.title', 'Recorded Payments')} ({payments.length})
+                </Typography>
+                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, maxHeight: 160 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>{t('common.time', 'Time')}</TableCell>
+                        <TableCell align="right">{t('payments.amount', 'Amount')}</TableCell>
+                        <TableCell>{t('payments.reference', 'Ref / POS')}</TableCell>
+                        <TableCell>{t('common.status', 'Status')}</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {payments.map((p) => (
+                        <TableRow key={p.id}>
+                          <TableCell>{new Date(p.recorded_at).toLocaleTimeString()}</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 'bold', color: 'success.main' }}>
+                            {MoneyUtil.formatCurrency(p.amount)} IRR
+                          </TableCell>
+                          <TableCell>{p.reference_number || p.reference || '—'}</TableCell>
+                          <TableCell>
+                            <Chip label={p.status} color="success" size="small" />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            )}
           </Stack>
         )}
       </DialogContent>
-      <DialogActions>
+
+      <DialogActions sx={{ px: 3, pb: 2 }}>
         {isFullyPaid && (
           <Button
             variant="contained"
@@ -368,10 +560,10 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
             onClick={() => navigate(`/app/pos/receipt/${orderId}`)}
             sx={{ fontWeight: 'bold' }}
           >
-            {t('pos.printReceipt')}
+            {t('pos.printReceipt', 'Print Receipt')}
           </Button>
         )}
-        <Button onClick={onClose}>{t('common.close')}</Button>
+        <Button onClick={onClose}>{t('common.close', 'Close')}</Button>
       </DialogActions>
     </Dialog>
   );

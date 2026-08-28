@@ -36,6 +36,8 @@
     "operations": "Operations",
     "kds": "Kitchen KDS",
     "delivery": "Delivery Orders",
+    "deliveryHub": "Delivery & Fleet Hub",
+    "deliveryOrders": "Dispatch Board",
     "couriers": "Couriers Roster",
     "courierSettlements": "Courier Settlements",
     "cashier": "Cashier Shifts",
@@ -149,7 +151,10 @@
     "orderType": "Order Type",
     "dineIn": "Dine-In",
     "takeaway": "Takeaway",
-    "delivery": "Delivery"
+    "delivery": "Delivery",
+    "cartEmpty": "Cart is empty. Add items first.",
+    "paymentSuccess": "Payment recorded successfully",
+    "directTerminalPay": "Direct Terminal Pay (PC-POS)"
   },
   "kiosk": {
     "title": "SELF-SERVICE KIOSK",
@@ -252,13 +257,239 @@
     "activeGuests": "Active Guests"
   },
   "kds": {
-    "title": "Kitchen Display System",
+    "title": "Kitchen Display Board",
+    "subtitle": "Live order ticket routing by product & category rules with automated readiness roll-up.",
+    "version": "V4",
+    "refresh": "Refresh",
+    "recallHistory": "Recall / History",
+    "allStations": "All Stations",
+    "minutesShort": "m",
+    "columns": {
+      "new": "New",
+      "queued": "Queued",
+      "noNewTickets": "No new tickets.",
+      "inPrep": "In Preparation",
+      "cooking": "Cooking",
+      "noPrepTickets": "No tickets in preparation.",
+      "ready": "Ready / Bumped",
+      "passTable": "Pass Table",
+      "noBumpedTickets": "No bumped tickets."
+    },
+    "orderTypes": {
+      "dineIn": "Dine-in",
+      "takeaway": "Takeaway",
+      "delivery": "Delivery",
+      "aggregators": "Online"
+    },
+    "table": "Table",
+    "priority": "Priority",
+    "priorityScore": "P",
+    "snappfood": "SNAPPFOOD",
+    "itemStatus": {
+      "new": "New",
+      "inProgress": "In Progress",
+      "ready": "Ready",
+      "done": "Done",
+      "bumped": "Bumped"
+    },
+    "actions": {
+      "start": "Start",
+      "bump": "Bump",
+      "recall": "Recall",
+      "changePriority": "Change Priority"
+    },
+    "priorityDialog": {
+      "title": "Set Ticket Priority",
+      "description": "Adjust priority score (0 = Normal, 9 = Rush / High Priority) for Ticket #{{ticketNumber}}",
+      "cancel": "Cancel",
+      "save": "Save Priority"
+    },
+    "recallDrawer": {
+      "title": "Completed & Bumped Tickets ({{count}})",
+      "close": "Close",
+      "noHistory": "No completed tickets in history."
+    },
+    "errors": {
+      "loadFailed": "Failed to load KDS tickets",
+      "startFailed": "Failed to start ticket",
+      "bumpFailed": "Failed to bump ticket",
+      "recallFailed": "Failed to recall ticket",
+      "priorityFailed": "Failed to set priority",
+      "itemStateFailed": "Failed to update item state"
+    },
     "bump": "Bump / Mark Ready",
     "prepTime": "Prep Time",
     "orderNumber": "Order #"
   },
   "delivery": {
-    "title": "Delivery Operations",
+    "title": "Delivery Management",
+    "subtitle": "Dispatch delivery orders, enforce courier attendance & mobile terminal exclusivity, and instrument cash/POS expectations.",
+    "banner": "DELIVERY EXECUTION & COURIER INSTRUMENT DISPATCHER",
+    "activeBranch": "Active Branch",
+    "refresh": "Refresh",
+    "tabs": {
+      "board": "Dispatch Board",
+      "couriers": "Couriers & Roster",
+      "settlements": "Fleet Settlements",
+      "zones": "Zones & Fees",
+      "audit": "Delivery Audit Log"
+    },
+    "columns": {
+      "unassigned": "Unassigned",
+      "needsCourier": "Needs Courier",
+      "assigned": "Assigned",
+      "readyToDepart": "Ready to Depart",
+      "enRoute": "En Route",
+      "outForDelivery": "Out for Delivery",
+      "history": "History",
+      "terminal": "Terminal"
+    },
+    "card": {
+      "order": "Order",
+      "zone": "Zone",
+      "fee": "Fee",
+      "total": "Total",
+      "courier": "Courier",
+      "phone": "Phone",
+      "noPhone": "N/A",
+      "expCash": "Exp Cash",
+      "expPos": "Exp POS",
+      "compensation": "Compensation",
+      "assignCourier": "Assign Courier",
+      "depart": "Depart",
+      "reassign": "Reassign",
+      "complete": "Complete",
+      "failed": "Failed",
+      "requeue": "Re-queue Delivery"
+    },
+    "states": {
+      "unassigned": "Unassigned",
+      "assigned": "Assigned",
+      "pickedUp": "Picked Up",
+      "enRoute": "En Route",
+      "delivered": "Delivered",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "couriers": {
+      "title": "Courier Profiles & Roster",
+      "addCourier": "Add Courier",
+      "code": "Code",
+      "nameAndPhone": "Name & Phone",
+      "vehicle": "Vehicle",
+      "compensationPerDelivery": "Compensation / Delivery",
+      "attendance": "Attendance",
+      "availability": "Availability",
+      "mobilePosAssignment": "Mobile POS Assignment",
+      "activeLoad": "Active Load",
+      "actions": "Actions",
+      "checkIn": "Check-In",
+      "checkOut": "Check-Out",
+      "assignPos": "Assign POS",
+      "vehicleTypes": {
+        "motorcycle": "Motorcycle",
+        "bicycle": "Bicycle",
+        "car": "Car",
+        "onFoot": "On Foot"
+      },
+      "attendanceStatus": {
+        "checkedIn": "Checked In",
+        "checkedOut": "Checked Out",
+        "paused": "Paused"
+      },
+      "availabilityStatus": {
+        "available": "AVAILABLE",
+        "busy": "BUSY",
+        "offline": "OFF_LINE"
+      }
+    },
+    "zones": {
+      "title": "Delivery Zones",
+      "addZone": "Add Delivery Zone",
+      "code": "Code",
+      "zoneName": "Zone Name",
+      "standardFee": "Standard Delivery Fee",
+      "estimatedMinutes": "Estimated Minutes",
+      "status": "Status",
+      "active": "Active",
+      "inactive": "Inactive",
+      "mins": "mins"
+    },
+    "audit": {
+      "title": "Delivery State Timeline Events",
+      "timestamp": "Timestamp",
+      "fromState": "From State",
+      "toState": "To State",
+      "reason": "Reason / Note",
+      "stateTransition": "State transition",
+      "empty": "Select a delivery from the board to view its audit timeline."
+    },
+    "modals": {
+      "assignCourier": {
+        "title": "Assign Courier to Delivery",
+        "description": "Assign an eligible checked-in & available courier to Order #{{orderNumber}}",
+        "eligibleCourier": "Eligible Courier",
+        "noEligible": "No couriers are currently checked in and AVAILABLE under capacity limits.",
+        "cancel": "Cancel",
+        "submit": "Assign Courier"
+      },
+      "complete": {
+        "title": "Complete Delivery & Instrument Actuals",
+        "description": "Record collected instruments for Order #{{orderNumber}}",
+        "cashLabel": "Courier Cash Collected (IRR)",
+        "posLabel": "Company Mobile POS Amount (IRR)",
+        "cancel": "Cancel",
+        "submit": "Confirm Delivery"
+      },
+      "fail": {
+        "title": "Record Delivery Failure",
+        "reasonLabel": "Failure Reason",
+        "cancel": "Cancel",
+        "submit": "Submit Failure"
+      },
+      "addCourier": {
+        "title": "Add Courier Profile",
+        "code": "Courier Code",
+        "name": "Courier Name",
+        "phone": "Phone Number",
+        "vehicleType": "Vehicle Type",
+        "compensation": "Compensation per Delivery (IRR)",
+        "cancel": "Cancel",
+        "submit": "Save Courier"
+      },
+      "addZone": {
+        "title": "Add Delivery Zone",
+        "code": "Zone Code",
+        "name": "Zone Name",
+        "fee": "Delivery Fee (IRR)",
+        "estimatedMinutes": "Estimated Minutes",
+        "cancel": "Cancel",
+        "submit": "Save Zone"
+      },
+      "assignTerminal": {
+        "title": "Assign Mobile POS Terminal",
+        "description": "Assign exclusive company mobile POS terminal to {{courierName}}",
+        "terminal": "Mobile POS Terminal",
+        "cancel": "Cancel",
+        "submit": "Save Assignment"
+      }
+    },
+    "errors": {
+      "loadFailed": "Failed to load delivery data",
+      "assignFailed": "Failed to assign courier",
+      "departFailed": "Failed to depart delivery",
+      "completeFailed": "Failed to complete delivery",
+      "failFailed": "Failed to record delivery failure",
+      "requeueFailed": "Failed to requeue delivery",
+      "attendanceFailed": "Failed to update attendance",
+      "availabilityFailed": "Failed to set availability",
+      "createCourierFailed": "Failed to create courier profile",
+      "createZoneFailed": "Failed to create delivery zone",
+      "assignTerminalFailed": "Failed to assign mobile terminal",
+      "unassignTerminalFailed": "Failed to unassign terminal",
+      "timelineFailed": "Failed to load delivery timeline",
+      "noBranch": "No active branch selected"
+    },
     "couriersTab": "Couriers Roster",
     "ordersTab": "Delivery Orders",
     "courierDetail": "Courier Profile",
@@ -272,12 +503,139 @@
   },
   "settlements": {
     "title": "Courier Settlements",
+    "subtitle": "Reconcile courier cash, mobile POS collections, discrepancies, and statements",
+    "refresh": "Refresh",
+    "tabs": {
+      "overview": "Unsettled Couriers Overview",
+      "batches": "Settlement Batches (V5) ({{count}})"
+    },
+    "statuses": {
+      "draft": "DRAFT",
+      "underReview": "UNDER REVIEW",
+      "closed": "CLOSED",
+      "reversed": "REVERSED",
+      "pending": "PENDING",
+      "reviewed": "REVIEWED"
+    },
+    "overview": {
+      "code": "Code",
+      "unsettled": "{{count}} Unsettled",
+      "expectedCash": "Expected Cash:",
+      "expectedPos": "Expected Mobile POS:",
+      "totalDeliveryFees": "Total Delivery Fees:",
+      "startBatch": "Start Settlement Batch",
+      "empty": "No couriers found or no active delivery assignments."
+    },
+    "batches": {
+      "settlementNumber": "Settlement #",
+      "courier": "Courier",
+      "status": "Status",
+      "expectedCash": "Expected Cash",
+      "actualCash": "Actual Cash",
+      "cashDisc": "Cash Disc.",
+      "expectedPos": "Expected POS",
+      "actualPos": "Actual POS",
+      "netTotal": "Net Total",
+      "actions": "Actions",
+      "detail": "Detail",
+      "statement": "Statement",
+      "empty": "No settlement batches created yet."
+    },
+    "previewModal": {
+      "title": "Preview New Courier Settlement",
+      "courier": "Courier",
+      "expectedCash": "Expected Cash Collection",
+      "expectedPos": "Expected Mobile POS Collection",
+      "deliveriesIncluded": "Deliveries Included ({{count}}):",
+      "orderNumber": "Order #",
+      "status": "Status",
+      "paymentMethod": "Payment Method",
+      "expCash": "Exp Cash",
+      "expPos": "Exp POS",
+      "cancel": "Cancel",
+      "createDraft": "Create Draft Settlement"
+    },
+    "detailModal": {
+      "title": "Settlement #{{number}} - {{name}}",
+      "expectedActualCash": "Expected Cash / Actual Cash",
+      "expectedActualPos": "Expected POS / Actual POS",
+      "discrepancy": "Discrepancy",
+      "compensationsAdjustments": "Compensations / Adjustments",
+      "comp": "Comp:",
+      "adj": "Adj:",
+      "netSettlementTotal": "Net Settlement Total",
+      "totalComp": "Total Compensation",
+      "totalAdj": "Total Adjustment",
+      "recalculateSave": "Recalculate & Save Draft",
+      "lineItemsTitle": "Line Items & Receipt Verification",
+      "verified": "Verified",
+      "orderNumber": "Order #",
+      "status": "Status",
+      "method": "Method",
+      "expCash": "Exp Cash",
+      "actCash": "Act Cash",
+      "expPos": "Exp POS",
+      "actPos": "Act POS",
+      "closeWindow": "Close Window",
+      "submitReview": "Submit for Review",
+      "finalizeClose": "Finalize & Close Settlement",
+      "reverseSettlement": "Reverse Settlement"
+    },
+    "statementModal": {
+      "title": "COURIER SETTLEMENT STATEMENT",
+      "date": "Date",
+      "courier": "Courier",
+      "status": "Status",
+      "summary": "Summary:",
+      "expectedCash": "Expected Cash:",
+      "actualCash": "Actual Cash:",
+      "cashDisc": "Cash Disc:",
+      "expectedPos": "Expected POS:",
+      "actualPos": "Actual POS:",
+      "posDisc": "POS Disc:",
+      "netTotal": "NET SETTLEMENT TOTAL:",
+      "close": "Close",
+      "print": "Print Statement"
+    },
+    "alerts": {
+      "draftUpdated": "Settlement draft updated successfully.",
+      "movedToReview": "Settlement status moved to UNDER_REVIEW",
+      "closed": "Settlement closed successfully!",
+      "reversed": "Settlement reversed successfully."
+    },
+    "prompts": {
+      "reverseReason": "Enter reason for settlement reversal:"
+    },
+    "errors": {
+      "previewFailed": "Failed to preview settlement",
+      "createFailed": "Error creating settlement",
+      "detailFailed": "Failed to load settlement details",
+      "updateDraftFailed": "Failed to update settlement draft",
+      "reviewFailed": "Error changing status to review",
+      "closeFailed": "Error closing settlement",
+      "reverseFailed": "Error reversing settlement",
+      "statementFailed": "Failed to load statement payload"
+    },
     "detailTitle": "Courier Settlement Detail",
     "summary": "Settlement Summary",
     "expectedCash": "Expected Cash",
     "actualCash": "Actual Cash",
     "variance": "Variance",
-    "confirmSettlement": "Confirm Settlement"
+    "confirmSettlement": "Confirm Settlement",
+    "posAmount": "Mobile POS Total",
+    "compensation": "Courier Compensation/Fee",
+    "netRemittance": "Net Cash Due to Merchant",
+    "meta": "Settlement Information",
+    "status": "Status",
+    "businessDate": "Business Date",
+    "created": "Created At",
+    "notes": "Notes",
+    "actions": "Settlement Actions",
+    "review": "Mark as Reviewed",
+    "close": "Close Settlement",
+    "deliveries": "Included Deliveries & Orders",
+    "noLines": "No individual delivery lines recorded for this settlement.",
+    "notFound": "Settlement not found"
   },
   "cashier": {
     "title": "Cashier Shift Management",

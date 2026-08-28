@@ -57,7 +57,7 @@ export function useNavData(): NavSectionProps['data'] {
           icon: ICONS.kds,
         },
         {
-          title: t('nav.delivery', 'Delivery Orders'),
+          title: t('nav.deliveryHub', 'Delivery & Fleet Hub'),
           path: '/app/delivery/orders',
           icon: ICONS.terminal,
         },
@@ -154,11 +154,6 @@ export function useNavData(): NavSectionProps['data'] {
               path: '/app/discounts/wallet',
             },
           ],
-        },
-        {
-          title: t('nav.courierSettlements', 'Courier Settlements'),
-          path: '/app/delivery/settlements',
-          icon: ICONS.reasons,
         },
       ],
     },

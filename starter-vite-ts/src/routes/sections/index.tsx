@@ -106,7 +106,7 @@ export const routesSection: RouteObject[] = [
       { path: 'delivery/orders', element: <DeliveryPage /> },
       { path: 'delivery/couriers', element: <DeliveryPage /> },
       { path: 'delivery/couriers/:courierId', element: <CourierDetailPage /> },
-      { path: 'delivery/settlements', element: <CourierSettlementsPage /> },
+      { path: 'delivery/settlements', element: <DeliveryPage /> },
       { path: 'delivery/settlements/:settlementId', element: <SettlementDetailPage /> },
       { path: 'cashier/shifts', element: <CashDrawerPage /> },
       { path: 'cashier/shifts/:shiftId', element: <ShiftDetailPage /> },

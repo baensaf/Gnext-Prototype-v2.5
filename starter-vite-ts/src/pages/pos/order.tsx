@@ -8,22 +8,23 @@ import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
+import CheckIcon from '@mui/icons-material/Check';
 import ClearIcon from '@mui/icons-material/Clear';
 import PauseIcon from '@mui/icons-material/Pause';
-import CheckIcon from '@mui/icons-material/Check';
-import SearchIcon from '@mui/icons-material/Search';
-import RemoveIcon from '@mui/icons-material/Remove';
 import DeleteIcon from '@mui/icons-material/Delete';
-import LockOpenIcon from '@mui/icons-material/LockOpen';
-import VerifiedIcon from '@mui/icons-material/Verified';
+import RemoveIcon from '@mui/icons-material/Remove';
+import SearchIcon from '@mui/icons-material/Search';
 import EditNoteIcon from '@mui/icons-material/EditNote';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
 import TableBarIcon from '@mui/icons-material/TableBar';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import VerifiedIcon from '@mui/icons-material/Verified';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import RestaurantIcon from '@mui/icons-material/Restaurant';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import TakeoutDiningIcon from '@mui/icons-material/TakeoutDining';
 import DeliveryDiningIcon from '@mui/icons-material/DeliveryDining';
@@ -69,7 +70,9 @@ import { MoneyUtil } from 'src/utils/money.util';
 
 import { orderApi } from 'src/api/orderApi';
 import { dineInApi } from 'src/api/dineInApi';
+import { paymentApi } from 'src/api/paymentApi';
 import { catalogApi } from 'src/api/catalogApi';
+import { settingsApi } from 'src/api/settingsApi';
 import { customerApi } from 'src/api/customerApi';
 import { discountsApi } from 'src/api/discountsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
@@ -118,7 +121,7 @@ function formatRejectionReason(reason?: string, fallback: string = 'Discount was
 }
 
 export function PosOrderPage() {
-  const { t: _t } = useTranslation();
+  const { t } = useTranslation();
 
   const { selectedBranchId, setSelectedBranchId } = useBranchContext();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -388,7 +391,7 @@ export function PosOrderPage() {
     });
   };
 
-  const handleClearCart = () => {
+  const handleClearCart = useCallback(() => {
     setCart([]);
     setActiveDraftOrderId(null);
     setCouponInput('');
@@ -402,7 +405,7 @@ export function PosOrderPage() {
     setApprovalReason(null);
     setOrderNotes('');
     setError(null);
-  };
+  }, []);
 
   // Hold / Park Cart Order
   const handleHoldOrder = async () => {
@@ -718,7 +721,108 @@ export function PosOrderPage() {
     setError(null);
   };
 
-  // Order Placement
+  // 1-Click Direct Terminal POS Checkout (90% Iranian Standard)
+  const [terminalPayLoading, setTerminalPayLoading] = useState(false);
+
+  const handleDirectTerminalPay = useCallback(async () => {
+    if (cart.length === 0) {
+      toast.warning(t('pos.cartEmpty', 'Cart is empty. Add items first.'));
+      return;
+    }
+    if (!selectedBranchId) {
+      setError('Please select a branch');
+      return;
+    }
+    if (approvalRequired) {
+      setError('Cannot place order: Manager approval is required for this discount.');
+      setApprovalModalOpen(true);
+      return;
+    }
+
+    setTerminalPayLoading(true);
+    try {
+      const orderPayload: any = {
+        branch_id: selectedBranchId,
+        order_type: orderType,
+        customer_id: selectedCustomerId || undefined,
+        coupon_code: appliedCouponCode || undefined,
+        table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
+        notes: orderNotes.trim() || undefined,
+        items: cart.map((ci) => ({
+          product_id: ci.product.id,
+          variant_id: ci.selectedVariant?.id || undefined,
+          variant_name: ci.selectedVariant?.name || undefined,
+          quantity: ci.quantity,
+          options: ci.selectedOptions.map((o) => ({ option_item_id: o.id })),
+        })),
+      };
+
+      let draftId: string;
+      if (activeDraftOrderId) {
+        const updated = await orderApi.updateDraft(activeDraftOrderId, orderPayload);
+        draftId = updated.id;
+      } else {
+        const draft = await orderApi.createOrder(orderPayload);
+        draftId = draft.id;
+      }
+
+      const submitPayload = manualApprovalRequestId ? { approvalRequestIds: [manualApprovalRequestId] } : undefined;
+      const submitted = await orderApi.submitOrder(draftId, submitPayload);
+
+      // Instantly query active payment methods to find POS / CARD
+      const pms = await settingsApi.getPaymentMethods();
+      const activeMethods = pms.filter((m) => m.is_active);
+      const preferredPos =
+        activeMethods.find(
+          (m) =>
+            m.kind === 'CARD' ||
+            m.kind === 'POS' ||
+            m.code?.toUpperCase().includes('POS') ||
+            m.name?.includes('کارتخوان') ||
+            m.name?.toLowerCase().includes('card')
+        ) || activeMethods[0];
+
+      if (preferredPos) {
+        const payRes = await paymentApi.postPayment({
+          order_id: submitted.id,
+          payment_method_id: preferredPos.id,
+          amount: submitted.due_amount || submitted.total_amount || '0',
+          reference_number: `POS-${Date.now().toString().slice(-6)}`,
+        });
+        setPlacedOrder(payRes.order || submitted);
+      } else {
+        setPlacedOrder(submitted);
+      }
+
+      setCheckoutModalOpen(true);
+      toast.success(`سفارش #${submitted.order_number || ''} ثبت و با کارتخوان تسویه شد!`);
+      handleClearCart();
+      fetchHeldOrders(selectedBranchId);
+      setError(null);
+    } catch (err: any) {
+      const msg = err.detail || err.message || 'Direct Terminal Pay failed';
+      setError(msg);
+      showErrorToast(err, msg);
+    } finally {
+      setTerminalPayLoading(false);
+    }
+  }, [
+    cart,
+    selectedBranchId,
+    approvalRequired,
+    orderType,
+    selectedCustomerId,
+    appliedCouponCode,
+    tableNumber,
+    orderNotes,
+    activeDraftOrderId,
+    manualApprovalRequestId,
+    fetchHeldOrders,
+    handleClearCart,
+    t,
+  ]);
+
+  // Order Placement (Pay Later / Open Checkout)
   const handlePlaceOrder = useCallback(async () => {
     if (cart.length === 0) {
       setError('Cart is empty');
@@ -786,6 +890,7 @@ export function PosOrderPage() {
     activeDraftOrderId,
     manualApprovalRequestId,
     fetchHeldOrders,
+    handleClearCart,
   ]);
 
   useEffect(() => {
@@ -827,13 +932,13 @@ export function PosOrderPage() {
         return;
       }
 
-      // F9: Fast Place Order / EFT Card Tender
+      // F9: 1-Click Direct Terminal POS Checkout
       if (e.key === 'F9') {
         e.preventDefault();
         if (placedOrder) {
           setCheckoutModalOpen(true);
         } else if (cart.length > 0) {
-          handlePlaceOrder();
+          handleDirectTerminalPay();
         }
         return;
       }
@@ -859,6 +964,7 @@ export function PosOrderPage() {
     cart.length,
     placedOrder,
     handlePlaceOrder,
+    handleDirectTerminalPay,
     notesModalOpen,
     optionDialogOpen,
     heldOrdersDrawerOpen,
@@ -1427,12 +1533,12 @@ export function PosOrderPage() {
 
                         {diningTables.length > 0 ? (
                           <Box sx={{ maxHeight: 220, overflowY: 'auto' }}>
-                            {diningTables.map((t) => {
-                              const val = t.code || t.table_number;
+                            {diningTables.map((tbl) => {
+                              const val = tbl.code || tbl.table_number;
                               const isSelected = tableNumber === val;
                               return (
                                 <MenuItem
-                                  key={t.id}
+                                  key={tbl.id}
                                   selected={isSelected}
                                   onClick={() => {
                                     setTableNumber(val);
@@ -1454,17 +1560,17 @@ export function PosOrderPage() {
                                     )}
                                     <Box>
                                       <Typography variant="body2" sx={{ fontWeight: isSelected ? 700 : 500 }}>
-                                        {t.code || `Table ${t.table_number}`}
+                                        {tbl.code || `Table ${tbl.table_number}`}
                                       </Typography>
                                       <Typography variant="caption" color="text.secondary">
-                                        {t.seating_capacity} seats
+                                        {tbl.seating_capacity} seats
                                       </Typography>
                                     </Box>
                                   </Stack>
                                   <Chip
-                                    label={t.status}
+                                    label={tbl.status}
                                     size="small"
-                                    color={t.status === 'AVAILABLE' ? 'success' : t.status === 'OCCUPIED' ? 'warning' : 'default'}
+                                    color={tbl.status === 'AVAILABLE' ? 'success' : tbl.status === 'OCCUPIED' ? 'warning' : 'default'}
                                     sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600 }}
                                   />
                                 </MenuItem>
@@ -1733,27 +1839,52 @@ export function PosOrderPage() {
               </Stack>
 
               {/* Bottom Place Order CTA */}
-              <Stack direction="row" spacing={1.5}>
-                <Button
-                  variant="outlined"
-                  color="warning"
-                  disabled={cart.length === 0}
-                  onClick={handleHoldOrder}
-                  startIcon={<PauseIcon />}
-                  sx={{ fontWeight: 'bold', py: 1.25, flexShrink: 0 }}
-                >
-                  Hold [F4]
-                </Button>
+              <Stack spacing={1}>
+                {/* 1-Click Direct Terminal Pay (90% Standard in Iran) */}
                 <Button
                   variant="contained"
+                  color="primary"
                   size="large"
                   fullWidth
-                  disabled={cart.length === 0}
-                  onClick={handlePlaceOrder}
-                  sx={{ fontWeight: 'bold', py: 1.25, fontSize: '1rem' }}
+                  disabled={cart.length === 0 || terminalPayLoading}
+                  onClick={handleDirectTerminalPay}
+                  startIcon={terminalPayLoading ? <CircularProgress size={22} color="inherit" /> : <PointOfSaleIcon sx={{ fontSize: 24 }} />}
+                  sx={{
+                    fontWeight: 800,
+                    py: 1.35,
+                    fontSize: '1.02rem',
+                    borderRadius: 1.5,
+                    boxShadow: (theme) => theme.customShadows?.primary || 3,
+                  }}
                 >
-                  {activeDraftOrderId ? 'Update & Place [F8]' : 'Place Order [F8]'}
+                  {terminalPayLoading
+                    ? 'در حال ارسال به کارتخوان و تسویه...'
+                    : 'پرداخت سریع کارتخوان (PC-POS) [F9]'}
                 </Button>
+
+                <Stack direction="row" spacing={1.5}>
+                  <Button
+                    variant="outlined"
+                    color="warning"
+                    disabled={cart.length === 0}
+                    onClick={handleHoldOrder}
+                    startIcon={<PauseIcon />}
+                    sx={{ fontWeight: 'bold', py: 1, flexShrink: 0 }}
+                  >
+                    Hold [F4]
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="inherit"
+                    size="medium"
+                    fullWidth
+                    disabled={cart.length === 0}
+                    onClick={handlePlaceOrder}
+                    sx={{ fontWeight: 'bold', py: 1, fontSize: '0.92rem' }}
+                  >
+                    {activeDraftOrderId ? 'Update & Place [F8]' : 'Place Order [F8]'}
+                  </Button>
+                </Stack>
               </Stack>
             </CardContent>
           </Card>
