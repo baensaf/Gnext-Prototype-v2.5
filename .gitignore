@@ -32,3 +32,4 @@ backend/seed-assets/*
 *.db
 .DS_Store
 Thumbs.db
+screenshots/
