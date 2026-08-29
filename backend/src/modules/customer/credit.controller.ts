@@ -132,7 +132,7 @@ export class CreditController {
     }));
   }
 
-  @Get('customers/:customerId/credit-account')
+  @Get(['customers/:customerId/credit-account', 'customers/:customerId/credit'])
   async getCreditAccountByCustomer(@Param('customerId') customerId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const acc = await this.creditService.getAccountByCustomer(tenantId, customerId);
@@ -140,11 +140,38 @@ export class CreditController {
     const statement = await this.creditService.getAccountStatement(tenantId, acc.id, {});
     return {
       account: acc,
-      transactions: statement.entries,
+      transactions: statement.entries.map((e: any) => ({
+        ...e,
+        transaction_type: e.entry_type,
+        recorded_at: e.posted_at,
+        note: e.reason_text || e.reference,
+      })),
     };
   }
 
-  @Get('customers/:customerId/credit-account/statement')
+  @Post([
+    'customers/:customerId/credit-account/transactions',
+    'customers/:customerId/credit/transactions',
+  ])
+  async postCustomerCreditTransactionAlias(
+    @Param('customerId') customerId: string,
+    @Body() body: any,
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    const correlationId = (req as any).correlationId;
+
+    return await this.creditService.postCreditTransaction(
+      tenantId,
+      customerId,
+      body,
+      userId,
+      correlationId,
+    );
+  }
+
+  @Get(['customers/:customerId/credit-account/statement', 'customers/:customerId/credit/statement'])
   async getCustomerStatementAlias(@Param('customerId') customerId: string, @Query() query: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     let acc = await this.creditService.getAccountByCustomer(tenantId, customerId);
@@ -157,7 +184,7 @@ export class CreditController {
     return await this.creditService.getAccountStatement(tenantId, acc.id, query);
   }
 
-  @Post('customers/:customerId/credit-account/repayments')
+  @Post(['customers/:customerId/credit-account/repayments', 'customers/:customerId/credit/repayments'])
   async postCustomerRepaymentAlias(
     @Param('customerId') customerId: string,
     @Body() body: any,
@@ -195,7 +222,7 @@ export class CreditController {
     };
   }
 
-  @Post('customers/:customerId/credit-account/adjustments')
+  @Post(['customers/:customerId/credit-account/adjustments', 'customers/:customerId/credit/adjustments'])
   async postCustomerAdjustmentAlias(
     @Param('customerId') customerId: string,
     @Body() body: any,

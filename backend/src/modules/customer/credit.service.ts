@@ -455,6 +455,134 @@ export class CreditService {
     });
   }
 
+  async postCreditTransaction(
+    tenantId: string,
+    customerIdOrAccountId: string,
+    body: {
+      transaction_type?: string;
+      type?: string;
+      amount?: string | number;
+      amountSigned?: string | number;
+      note?: string;
+      reason?: string;
+      reason_text?: string;
+      reference?: string;
+      reference_id?: string;
+      approvalRequestId?: string;
+    },
+    userId?: string,
+    correlationId?: string,
+  ) {
+    return await this.dataSource.transaction(async (em) => {
+      let acc = await em.findOne(CustomerCreditAccount, {
+        where: { id: customerIdOrAccountId, tenant_id: tenantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!acc) {
+        acc = await em.findOne(CustomerCreditAccount, {
+          where: { customer_id: customerIdOrAccountId, tenant_id: tenantId },
+          lock: { mode: 'pessimistic_write' },
+        });
+      }
+      if (!acc) {
+        // If customer exists, auto-create account
+        const customer = await em.findOne(Customer, {
+          where: { id: customerIdOrAccountId, tenant_id: tenantId },
+        });
+        if (!customer) {
+          throw new NotFoundException(`Customer or credit account not found for ${customerIdOrAccountId}`);
+        }
+        const newAcc = em.create(CustomerCreditAccount, {
+          tenant_id: tenantId,
+          customer_id: customer.id,
+          currency_code: 'IRR',
+          mode: 'FINITE',
+          credit_limit: (customer as any).credit_limit || '0.0000',
+          current_balance: '0.0000',
+          status: 'ACTIVE',
+          is_blocked: false,
+          created_by: userId || null,
+        });
+        acc = await em.save(CustomerCreditAccount, newAcc);
+      }
+
+      if (acc.status === 'CLOSED') {
+        throw new BadRequestException('Cannot post transaction to a CLOSED credit account');
+      }
+
+      const txType = (body.transaction_type || body.type || 'CHARGE').toUpperCase();
+      const rawAmount = String(body.amountSigned !== undefined ? body.amountSigned : (body.amount || '0'));
+      const absAmount = MoneyUtil.abs(rawAmount);
+
+      let signedAmount = absAmount;
+      let entryType: CreditEntryType = 'ADJUSTMENT';
+
+      if (txType === 'DEBIT' || txType === 'PURCHASE' || txType === 'DEDUCT') {
+        signedAmount = `-${absAmount}`;
+        entryType = 'ADJUSTMENT';
+      } else if (txType === 'SETTLEMENT' || txType === 'REPAYMENT') {
+        signedAmount = absAmount;
+        entryType = 'REPAYMENT';
+      } else if (txType === 'CHARGE' || txType === 'TOPUP' || txType === 'DEPOSIT') {
+        signedAmount = absAmount;
+        entryType = 'ADJUSTMENT';
+      } else if (txType === 'ADJUSTMENT') {
+        signedAmount = MoneyUtil.format(rawAmount);
+        entryType = 'ADJUSTMENT';
+      }
+
+      if (MoneyUtil.isZero(signedAmount)) {
+        throw new BadRequestException('Transaction amount cannot be zero');
+      }
+
+      const newBalance = MoneyUtil.add(acc.current_balance, signedAmount);
+      const dateStr = new Date().toISOString().slice(0, 10);
+
+      const entry = em.create(CreditEntry, {
+        tenant_id: tenantId,
+        account_id: acc.id,
+        entry_type: entryType,
+        amount: signedAmount,
+        currency_code: acc.currency_code || 'IRR',
+        reason_text: body.note || body.reason || body.reason_text || `${txType} transaction via ledger`,
+        reference: body.reference || body.reference_id || null,
+        business_date: dateStr,
+        posted_by: userId || null,
+        balance_after: newBalance,
+      });
+      const savedEntry = await em.save(CreditEntry, entry);
+
+      acc.current_balance = newBalance;
+      const savedAcc = await em.save(CustomerCreditAccount, acc);
+
+      await this.auditWriter.write({
+        tenantId,
+        actorType: userId ? 'ADMIN' : 'SYSTEM',
+        actorId: userId,
+        action: `CREDIT_TRANSACTION_${txType}`,
+        entityType: 'CreditEntry',
+        entityId: savedEntry.id,
+        correlationId: correlationId || 'system',
+        afterData: savedEntry,
+      });
+
+      const mappedEntry = {
+        ...savedEntry,
+        transaction_type: txType,
+        recorded_at: savedEntry.posted_at,
+        note: savedEntry.reason_text || savedEntry.reference,
+      };
+
+      return {
+        account: savedAcc,
+        transaction: mappedEntry,
+        entry: mappedEntry,
+        newBalance: savedAcc.current_balance,
+        availableCredit: this.calculateAvailableCredit(savedAcc),
+      };
+    });
+  }
+
   async getAccountStatement(tenantId: string, accountId: string, query: any = {}) {
     const acc = await this.accountRepo.findOne({ where: { id: accountId, tenant_id: tenantId } });
     if (!acc) throw new NotFoundException(`Credit account ${accountId} not found`);

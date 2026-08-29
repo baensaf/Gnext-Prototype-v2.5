@@ -194,11 +194,19 @@ export class OrderService {
         throw new BadRequestException(`Only DRAFT orders can be updated via generic patch. Submitted orders require edit command.`);
       }
 
+      if (dto.branch_id !== undefined) order.branch_id = dto.branch_id;
+      if (dto.order_type !== undefined) order.order_type = dto.order_type as any;
       if (dto.customer_id !== undefined) order.customer_id = dto.customer_id;
       if (dto.table_id !== undefined) order.table_id = dto.table_id;
       if (dto.table_number !== undefined) order.table_number = dto.table_number;
       if (dto.guest_count !== undefined) order.guest_count = dto.guest_count;
       if (dto.notes !== undefined) order.notes = dto.notes;
+      if (dto.coupon_code !== undefined) order.coupon_code = dto.coupon_code;
+      if (dto.terminal_id !== undefined) order.terminal_id = dto.terminal_id;
+      if (dto.shift_id !== undefined) order.shift_id = dto.shift_id;
+      if (dto.channel !== undefined) order.channel = dto.channel;
+      if (dto.delivery_address_id !== undefined) order.customer_address_id = dto.delivery_address_id;
+      if (dto.currency_code !== undefined) order.currency_code = dto.currency_code;
 
       if (dto.items) {
         // Clear existing items and re-add

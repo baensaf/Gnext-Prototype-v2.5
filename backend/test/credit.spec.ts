@@ -121,4 +121,50 @@ describe('Customer Credit Subledger Suite (R14)', () => {
       expect(aging.customers.length).toBe(1);
     });
   });
+
+  describe('BUG-02: Customer Credit Ledger Popup (postCreditTransaction)', () => {
+    it('should post CHARGE transaction as positive adjustment to credit account', async () => {
+      const acc = { id: 'acc-1', tenant_id: 't-1', customer_id: 'c-1', currency_code: 'IRR', mode: 'FINITE', credit_limit: '100000.0000', current_balance: '10000.0000', status: 'ACTIVE' };
+      accountRepo.findOne.mockResolvedValue(acc);
+
+      const res = await service.postCreditTransaction('t-1', 'c-1', {
+        transaction_type: 'CHARGE',
+        amount: '50000.0000',
+        note: 'Wallet top-up',
+      });
+
+      expect(res.transaction).toBeDefined();
+      expect(res.transaction.amount).toBe('50000.0000');
+      expect(res.newBalance).toBe('60000.0000');
+      expect(res.transaction.transaction_type).toBe('CHARGE');
+    });
+
+    it('should post DEBIT transaction as negative adjustment to credit account', async () => {
+      const acc = { id: 'acc-1', tenant_id: 't-1', customer_id: 'c-1', currency_code: 'IRR', mode: 'FINITE', credit_limit: '100000.0000', current_balance: '60000.0000', status: 'ACTIVE' };
+      accountRepo.findOne.mockResolvedValue(acc);
+
+      const res = await service.postCreditTransaction('t-1', 'c-1', {
+        transaction_type: 'DEBIT',
+        amount: '20000.0000',
+        note: 'Manual debit',
+      });
+
+      expect(res.transaction).toBeDefined();
+      expect(res.transaction.amount).toBe('-20000.0000');
+      expect(res.newBalance).toBe('40000.0000');
+    });
+
+    it('should auto-create credit account if customer exists and account does not exist yet', async () => {
+      accountRepo.findOne.mockResolvedValue(null);
+      customerRepo.findOne.mockResolvedValue({ id: 'c-new', tenant_id: 't-1', credit_limit: '50000.0000' });
+
+      const res = await service.postCreditTransaction('t-1', 'c-new', {
+        transaction_type: 'CHARGE',
+        amount: '15000.0000',
+      });
+
+      expect(res.account).toBeDefined();
+      expect(res.newBalance).toBe('15000.0000');
+    });
+  });
 });

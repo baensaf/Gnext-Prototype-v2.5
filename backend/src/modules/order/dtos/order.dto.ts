@@ -33,6 +33,10 @@ export class OrderItemCreateDto {
   variant_id?: string;
 
   @IsOptional()
+  @IsString()
+  variant_name?: string;
+
+  @IsOptional()
   @IsNumberString()
   unit_price?: string;
 
@@ -114,6 +118,30 @@ export class OrderCreateDto {
 export class OrderUpdateDto {
   @IsOptional()
   @IsUUID()
+  branch_id?: string;
+
+  @IsOptional()
+  @IsUUID()
+  terminal_id?: string;
+
+  @IsOptional()
+  @IsUUID()
+  shift_id?: string;
+
+  @IsOptional()
+  @IsString()
+  channel?: string;
+
+  @IsOptional()
+  @IsString()
+  order_type?: string;
+
+  @IsOptional()
+  @IsString()
+  currency_code?: string;
+
+  @IsOptional()
+  @IsUUID()
   customer_id?: string;
 
   @IsOptional()
@@ -126,7 +154,16 @@ export class OrderUpdateDto {
 
   @IsOptional()
   @IsInt()
+  @Min(1)
   guest_count?: number;
+
+  @IsOptional()
+  @IsUUID()
+  delivery_address_id?: string;
+
+  @IsOptional()
+  @IsString()
+  coupon_code?: string;
 
   @IsOptional()
   @IsArray()

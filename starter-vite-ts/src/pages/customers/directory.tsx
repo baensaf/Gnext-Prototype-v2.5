@@ -550,18 +550,18 @@ export function CustomersPage() {
               <TableBody>
                 {transactions.map((t) => (
                   <TableRow key={t.id}>
-                    <TableCell>{new Date(t.recorded_at).toLocaleString()}</TableCell>
+                    <TableCell>{new Date(t.recorded_at || (t as any).posted_at || Date.now()).toLocaleString()}</TableCell>
                     <TableCell>
                       <Chip
-                        label={t.transaction_type}
+                        label={t.transaction_type || (t as any).entry_type || 'ADJUSTMENT'}
                         size="small"
-                        color={t.transaction_type === 'CHARGE' || t.transaction_type === 'SETTLEMENT' ? 'success' : 'warning'}
+                        color={t.transaction_type === 'CHARGE' || t.transaction_type === 'SETTLEMENT' || (t as any).entry_type === 'REPAYMENT' ? 'success' : 'warning'}
                       />
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                       {MoneyUtil.formatCurrency(t.amount)} IRR
                     </TableCell>
-                    <TableCell>{t.note || '—'}</TableCell>
+                    <TableCell>{t.note || (t as any).reason_text || (t as any).reference || '—'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
