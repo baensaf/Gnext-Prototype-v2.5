@@ -1,4 +1,4 @@
-﻿FROM node:22-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --legacy-peer-deps || npm install
@@ -14,4 +14,4 @@ COPY --from=builder /app/dist ./dist
 RUN mkdir -p /app/uploads /app/data
 
 EXPOSE 3100
-CMD [sh, -c, node dist/src/scripts/migration-fresh.js && node dist/src/main.js]
+CMD ["sh", "-c", "node dist/src/scripts/migration-fresh.js && node dist/src/main.js"]

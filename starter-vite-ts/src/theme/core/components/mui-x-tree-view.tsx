@@ -2,10 +2,10 @@ import type { Theme, Components } from '@mui/material/styles';
 
 // ----------------------------------------------------------------------
 
-const MuiTreeItem: Components<Theme>['MuiTreeItem'] = {
+const MuiTreeItem: any = {
   // ▼▼▼▼▼▼▼▼ 🎨 STYLE ▼▼▼▼▼▼▼▼
   styleOverrides: {
-    label: ({ theme }) => ({
+    label: ({ theme }: { theme: Theme }) => ({
       ...theme.typography.body2,
     }),
     iconContainer: {
@@ -19,4 +19,4 @@ const MuiTreeItem: Components<Theme>['MuiTreeItem'] = {
  * **********************************************************************/
 export const treeView: Components<Theme> = {
   MuiTreeItem,
-};
+} as any;

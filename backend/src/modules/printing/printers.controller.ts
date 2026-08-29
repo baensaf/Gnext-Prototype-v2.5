@@ -6,6 +6,7 @@ import { Printer } from '../../entities/Printer.entity';
 import { PrinterGroup } from '../../entities/PrinterGroup.entity';
 import { PrinterGroupMember } from '../../entities/PrinterGroupMember.entity';
 import { PrintRoute } from '../../entities/PrintRoute.entity';
+import { Branch } from '../../entities/Branch.entity';
 import { PrintQueueService } from './print-queue.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 
@@ -16,6 +17,7 @@ export class PrintersController {
     @InjectRepository(PrinterGroup) private readonly groupRepo: Repository<PrinterGroup>,
     @InjectRepository(PrinterGroupMember) private readonly memberRepo: Repository<PrinterGroupMember>,
     @InjectRepository(PrintRoute) private readonly routeRepo: Repository<PrintRoute>,
+    @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
     private readonly queueService: PrintQueueService,
     private readonly auditWriter: AuditWriter,
   ) {}
@@ -39,9 +41,22 @@ export class PrintersController {
       throw new BadRequestException('Printer cannot have itself as fallback printer');
     }
 
+    let branchId = body.branch_id || body.branchId;
+    if (!branchId) {
+      const defaultBranch = await this.branchRepo.findOne({
+        where: { tenant_id: tenantId, is_active: true },
+        order: { created_at: 'ASC' },
+      });
+      if (defaultBranch) {
+        branchId = defaultBranch.id;
+      } else {
+        throw new BadRequestException('branch_id is required and no active branch was found for tenant');
+      }
+    }
+
     const printer = this.printerRepo.create({
       tenant_id: tenantId,
-      branch_id: body.branch_id || body.branchId,
+      branch_id: branchId,
       code: (body.code || 'PRN-1').toUpperCase(),
       name: body.name,
       printer_type: body.printer_type || 'THERMAL_RECEIPT',

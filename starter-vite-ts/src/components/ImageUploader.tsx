@@ -45,7 +45,7 @@ export function ImageUploader({ value, onUploadSuccess, label = 'Upload Image' }
     try {
       const result = await mediaApi.uploadFile(file);
       setAsset(result);
-      setPreviewUrl(`http://localhost:3100${result.url}`);
+      setPreviewUrl(result.url);
       if (onUploadSuccess) {
         onUploadSuccess(result);
       }

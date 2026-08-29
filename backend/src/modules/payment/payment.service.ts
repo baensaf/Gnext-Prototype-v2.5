@@ -25,7 +25,7 @@ import {
   PaymentDeviceCreateDto,
   SettlementAccountCreateDto,
 } from './dtos/payment.dto';
-import { v4 as uuidv4 } from 'uuid';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class PaymentService {
@@ -380,7 +380,7 @@ export class PaymentService {
   }
 
   async correctPayment(tenantId: string, id: string, dto: PaymentCorrectionDto, userId?: string, correlationId?: string) {
-    const correctionGroupId = uuidv4();
+    const correctionGroupId = crypto.randomUUID();
 
     // 1. Reverse original payment
     const original = await this.reversePayment(tenantId, id, { reason: dto.reason }, userId, correlationId);

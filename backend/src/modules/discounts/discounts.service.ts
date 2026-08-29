@@ -44,7 +44,11 @@ export class DiscountsService {
     if (campaigns.length > 0) {
       return campaigns;
     }
-    return await this.discountRepo.find({ where: { tenant_id: tenantId }, order: { code: 'ASC' } });
+    try {
+      return await this.discountRepo.find({ where: { tenant_id: tenantId }, order: { code: 'ASC' } });
+    } catch {
+      return [];
+    }
   }
 
   async getDiscountById(tenantId: string, id: string) {
@@ -54,9 +58,14 @@ export class DiscountsService {
     });
     if (campaign) return campaign;
 
-    const discount = await this.discountRepo.findOne({ where: { id, tenant_id: tenantId } });
-    if (!discount) throw new NotFoundException('Discount campaign or rule not found');
-    return discount;
+    try {
+      const discount = await this.discountRepo.findOne({ where: { id, tenant_id: tenantId } });
+      if (!discount) throw new NotFoundException('Discount campaign or rule not found');
+      return discount;
+    } catch (err) {
+      if (err instanceof NotFoundException) throw err;
+      throw new NotFoundException('Discount campaign or rule not found');
+    }
   }
 
   async createDiscountCampaign(tenantId: string, dto: CreateDiscountCampaignDto, correlationId: string) {
