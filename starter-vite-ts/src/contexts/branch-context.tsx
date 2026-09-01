@@ -3,6 +3,7 @@ import type { Branch } from 'src/api/tenantApi';
 import { useState, useEffect, useContext, useCallback, createContext } from 'react';
 
 import { tenantApi } from 'src/api/tenantApi';
+import { useAuthStore } from 'src/store/useAuthStore';
 
 // ----------------------------------------------------------------------
 
@@ -28,6 +29,7 @@ export function useBranchContext(): BranchContextValue {
 const STORAGE_KEY = 'active_branch_id';
 
 export function BranchProvider({ children }: { children: React.ReactNode }) {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchIdState] = useState<string>(() => {
     try {
@@ -67,8 +69,14 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    fetchBranches();
-  }, [fetchBranches]);
+    if (isAuthenticated) {
+      fetchBranches();
+      return;
+    }
+
+    setBranches([]);
+    setLoading(false);
+  }, [fetchBranches, isAuthenticated]);
 
   const setSelectedBranchId = useCallback((id: string) => {
     setSelectedBranchIdState(id);

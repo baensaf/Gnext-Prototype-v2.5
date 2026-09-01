@@ -24,6 +24,15 @@ export async function runSeed() {
   const prodRepo = AppDataSource.getRepository('Product');
   const variantRepo = AppDataSource.getRepository('ProductVariant');
   const zoneRepo = AppDataSource.getRepository('DeliveryZone');
+  const diningAreaRepo = AppDataSource.getRepository('DiningArea');
+  const diningTableRepo = AppDataSource.getRepository('DiningTable');
+  const courierRepo = AppDataSource.getRepository('Courier');
+  const customerGroupRepo = AppDataSource.getRepository('CustomerGroup');
+  const customerRepo = AppDataSource.getRepository('Customer');
+  const customerPhoneRepo = AppDataSource.getRepository('CustomerPhone');
+  const customerAddressRepo = AppDataSource.getRepository('CustomerAddress');
+  const creditAccountRepo = AppDataSource.getRepository('CustomerCreditAccount');
+  const creditEntryRepo = AppDataSource.getRepository('CreditEntry');
 
   // 1. Idempotent Tenant Seed
   let tenant = await tenantRepo.findOne({ where: { id: DEFAULT_TENANT_ID } });
@@ -116,6 +125,62 @@ export async function runSeed() {
     }
   }
 
+  // 4c. Idempotent dine-in floor used by the default POS table selector.
+  let mainDiningArea = await diningAreaRepo.findOne({
+    where: { tenant_id: tenant.id, branch_id: branchTeh.id, code: 'AREA-MAIN' },
+  });
+  if (!mainDiningArea) {
+    mainDiningArea = await diningAreaRepo.save(diningAreaRepo.create({
+      tenant_id: tenant.id,
+      branch_id: branchTeh.id,
+      code: 'AREA-MAIN',
+      name: 'Main Dining Hall',
+      sort_order: 1,
+      is_active: true,
+    }));
+    console.log('Seeded Dining Area: Main Dining Hall');
+  }
+
+  const diningTables = Array.from({ length: 8 }, (_, index) => {
+    const number = `T-${String(index + 1).padStart(2, '0')}`;
+    return {
+      tenant_id: tenant.id,
+      dining_area_id: mainDiningArea.id,
+      code: number,
+      table_number: number,
+      seating_capacity: index < 4 ? 4 : 2,
+      shape: index % 2 === 0 ? 'SQUARE' : 'CIRCLE',
+      pos_x: (index % 4) * 180,
+      pos_y: Math.floor(index / 4) * 160,
+      is_active: true,
+    };
+  });
+  for (const table of diningTables) {
+    const existing = await diningTableRepo.findOne({
+      where: { tenant_id: tenant.id, dining_area_id: mainDiningArea.id, code: table.code },
+    });
+    if (!existing) {
+      await diningTableRepo.save(diningTableRepo.create(table));
+    }
+  }
+
+  const demoCourier = await courierRepo.findOne({ where: { tenant_id: tenant.id, code: 'CR-001' } });
+  if (!demoCourier) {
+    await courierRepo.save(courierRepo.create({
+      tenant_id: tenant.id,
+      branch_id: branchTeh.id,
+      code: 'CR-001',
+      name: 'Ali Rezaei',
+      phone: '09120000001',
+      vehicle_type: 'MOTORCYCLE',
+      status: 'AVAILABLE',
+      compensation_per_delivery: '50000.0000',
+      currency_code: 'IRR',
+      is_active: true,
+    }));
+    console.log('Seeded Courier: Ali Rezaei');
+  }
+
   // 5. Idempotent Terminals
   const terminals = [
     { tenant_id: tenant.id, branch_id: branchTeh.id, code: 'TERM-01', name: 'Main POS Register T-01', device_type: 'POS_STATION' },
@@ -152,6 +217,99 @@ export async function runSeed() {
     const existing = await reasonRepo.findOne({ where: { tenant_id: tenant.id, code: r.code } });
     if (!existing) {
       await reasonRepo.save(reasonRepo.create(r));
+    }
+  }
+
+  // 7b. Demo customers make directory, address, and credit-account screens useful
+  // immediately after a fresh deployment.
+  let vipGroup = await customerGroupRepo.findOne({ where: { tenant_id: tenant.id, code: 'VIP' } });
+  if (!vipGroup) {
+    vipGroup = await customerGroupRepo.save(customerGroupRepo.create({
+      tenant_id: tenant.id,
+      code: 'VIP',
+      name: 'VIP Customers',
+      is_active: true,
+    }));
+  }
+
+  const demoCustomers = [
+    { code: 'CUST-1001', first_name: 'Reza', last_name: 'Mohammadi', mobile: '09121234567', email: 'reza@example.test', credit_limit: '5000000.0000', current_balance: '-350000.0000' },
+    { code: 'CUST-1002', first_name: 'Sara', last_name: 'Ahmadi', mobile: '09121234568', email: 'sara@example.test', credit_limit: '3000000.0000', current_balance: '250000.0000' },
+    { code: 'CUST-1003', first_name: 'Nima', last_name: 'Hosseini', mobile: '09121234569', email: 'nima@example.test', credit_limit: '2000000.0000', current_balance: '0.0000' },
+  ];
+  for (const demo of demoCustomers) {
+    let customer = await customerRepo.findOne({ where: { tenant_id: tenant.id, code: demo.code } });
+    if (!customer) {
+      customer = await customerRepo.save(customerRepo.create({
+        tenant_id: tenant.id,
+        code: demo.code,
+        first_name: demo.first_name,
+        last_name: demo.last_name,
+        mobile: demo.mobile,
+        email: demo.email,
+        customer_group_id: vipGroup.id,
+        is_active: true,
+      }));
+    }
+
+    const phone = await customerPhoneRepo.findOne({ where: { tenant_id: tenant.id, customer_id: customer.id } });
+    if (!phone) {
+      await customerPhoneRepo.save(customerPhoneRepo.create({
+        tenant_id: tenant.id,
+        customer_id: customer.id,
+        phone_number: demo.mobile,
+        normalized_phone: demo.mobile,
+        label: 'PRIMARY_MOBILE',
+        is_primary: true,
+        is_verified: true,
+      }));
+    }
+
+    const address = await customerAddressRepo.findOne({ where: { tenant_id: tenant.id, customer_id: customer.id } });
+    if (!address) {
+      await customerAddressRepo.save(customerAddressRepo.create({
+        tenant_id: tenant.id,
+        customer_id: customer.id,
+        title: 'Home',
+        address_text: `Tehran demo address for ${demo.first_name} ${demo.last_name}`,
+        postal_code: `demo-${demo.code.toLowerCase()}`,
+        is_default: true,
+      }));
+    }
+
+    let account = await creditAccountRepo.findOne({
+      where: { tenant_id: tenant.id, customer_id: customer.id, currency_code: 'IRR' },
+    });
+    if (!account) {
+      account = await creditAccountRepo.save(creditAccountRepo.create({
+        tenant_id: tenant.id,
+        customer_id: customer.id,
+        currency_code: 'IRR',
+        mode: 'FINITE',
+        credit_limit: demo.credit_limit,
+        current_balance: demo.current_balance,
+        status: 'ACTIVE',
+        is_blocked: false,
+      }));
+    }
+
+    if (demo.current_balance.startsWith('-')) {
+      const openingEntry = await creditEntryRepo.findOne({
+        where: { tenant_id: tenant.id, account_id: account.id, reference: 'DEMO-OPENING-BALANCE' },
+      });
+      if (!openingEntry) {
+        await creditEntryRepo.save(creditEntryRepo.create({
+          tenant_id: tenant.id,
+          account_id: account.id,
+          entry_type: 'PURCHASE',
+          amount: demo.current_balance,
+          currency_code: 'IRR',
+          reason_text: 'Demo opening balance',
+          reference: 'DEMO-OPENING-BALANCE',
+          business_date: new Date().toISOString().slice(0, 10),
+          balance_after: demo.current_balance,
+        }));
+      }
     }
   }
 

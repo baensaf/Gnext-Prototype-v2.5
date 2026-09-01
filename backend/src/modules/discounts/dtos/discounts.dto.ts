@@ -254,6 +254,10 @@ export class QuoteItemDto {
   quantity: string;
 
   @IsOptional()
+  @IsNumberString()
+  taxRate?: string;
+
+  @IsOptional()
   @IsBoolean()
   neverDiscount?: boolean;
 

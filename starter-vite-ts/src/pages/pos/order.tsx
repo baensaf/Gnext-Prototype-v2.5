@@ -131,6 +131,7 @@ export function PosOrderPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>('DINE_IN');
   const [tableNumber, setTableNumber] = useState('T-01');
+  const [selectedTableId, setSelectedTableId] = useState<string>('');
   const [diningTables, setDiningTables] = useState<DiningTable[]>([]);
   const [tableMenuAnchorEl, setTableMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [customTableInput, setCustomTableInput] = useState('');
@@ -216,6 +217,7 @@ export function PosOrderPage() {
 
   // Quote & Totals
   const [appliedDiscountAmount, setAppliedDiscountAmount] = useState<string>('0');
+  const [quotedTaxAmount, setQuotedTaxAmount] = useState<string>('0');
   const [discountMessage, setDiscountMessage] = useState<string | null>(null);
   const [approvalRequired, setApprovalRequired] = useState(false);
   const [approvalReason, setApprovalReason] = useState<string | null>(null);
@@ -255,10 +257,11 @@ export function PosOrderPage() {
       const custs = await customerApi.getCustomers();
       setCustomers(custs);
 
-      const tList = await dineInApi.getTables().catch(() => [] as DiningTable[]);
+      const tList = await dineInApi.getTables(undefined, selectedBranchId).catch(() => [] as DiningTable[]);
       setDiningTables(tList);
       if (tList.length > 0 && (!tableNumber || tableNumber === 'T-01')) {
         setTableNumber(tList[0].code || tList[0].table_number || 'T-01');
+        setSelectedTableId(tList[0].id);
       }
     } catch {
       setError('Failed to load POS catalog data');
@@ -400,6 +403,7 @@ export function PosOrderPage() {
     setAppliedManualDiscount(null);
     setManualApprovalRequestId(undefined);
     setAppliedDiscountAmount('0');
+    setQuotedTaxAmount('0');
     setDiscountMessage(null);
     setApprovalRequired(false);
     setApprovalReason(null);
@@ -424,6 +428,7 @@ export function PosOrderPage() {
         order_type: orderType,
         customer_id: selectedCustomerId || undefined,
         coupon_code: appliedCouponCode || undefined,
+        table_id: orderType === 'DINE_IN' ? selectedTableId || undefined : undefined,
         table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
         notes: orderNotes.trim() || undefined,
         items: cart.map((ci) => ({
@@ -462,6 +467,7 @@ export function PosOrderPage() {
       setSelectedBranchId(fullOrder.branch_id);
       setOrderType((fullOrder.order_type as any) || 'DINE_IN');
       if (fullOrder.table_number) setTableNumber(fullOrder.table_number);
+      setSelectedTableId(fullOrder.table_id || '');
       setSelectedCustomerId(fullOrder.customer_id || '');
       setCouponInput(fullOrder.coupon_code || '');
       setAppliedCouponCode(fullOrder.coupon_code || '');
@@ -530,7 +536,7 @@ export function PosOrderPage() {
 
   // Cart financial math via decimal-safe MoneyUtil
   const cartSubtotal = cart.reduce((sum, item) => MoneyUtil.add(sum, item.lineSubtotal, 2), '0');
-  const cartTax = MoneyUtil.multiply(cartSubtotal, '0.10', 2); // 10% VAT
+  const cartTax = quotedTaxAmount;
   const subtotalPlusTax = MoneyUtil.add(cartSubtotal, cartTax, 2);
   const cartTotalDue = MoneyUtil.greaterThan(subtotalPlusTax, appliedDiscountAmount)
     ? MoneyUtil.subtract(subtotalPlusTax, appliedDiscountAmount, 2)
@@ -540,6 +546,7 @@ export function PosOrderPage() {
   const evaluateQuote = useCallback(async () => {
     if (cart.length === 0) {
       setAppliedDiscountAmount('0');
+      setQuotedTaxAmount('0');
       setDiscountMessage(null);
       setApprovalRequired(false);
       setApprovalReason(null);
@@ -578,6 +585,7 @@ export function PosOrderPage() {
 
       const discAmount = MoneyUtil.format(quoteRes.discountTotal || '0', 2);
       setAppliedDiscountAmount(discAmount);
+      setQuotedTaxAmount(MoneyUtil.format(quoteRes.taxTotal || '0', 2));
 
       setApprovalRequired(!!quoteRes.approvalRequired);
       setApprovalReason(quoteRes.approvalReason || null);
@@ -746,6 +754,7 @@ export function PosOrderPage() {
         order_type: orderType,
         customer_id: selectedCustomerId || undefined,
         coupon_code: appliedCouponCode || undefined,
+        table_id: orderType === 'DINE_IN' ? selectedTableId || undefined : undefined,
         table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
         notes: orderNotes.trim() || undefined,
         items: cart.map((ci) => ({
@@ -814,6 +823,7 @@ export function PosOrderPage() {
     selectedCustomerId,
     appliedCouponCode,
     tableNumber,
+    selectedTableId,
     orderNotes,
     activeDraftOrderId,
     manualApprovalRequestId,
@@ -844,6 +854,7 @@ export function PosOrderPage() {
         order_type: orderType,
         customer_id: selectedCustomerId || undefined,
         coupon_code: appliedCouponCode || undefined,
+        table_id: orderType === 'DINE_IN' ? selectedTableId || undefined : undefined,
         table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
         notes: orderNotes.trim() || undefined,
         items: cart.map((ci) => ({
@@ -886,6 +897,7 @@ export function PosOrderPage() {
     selectedCustomerId,
     appliedCouponCode,
     tableNumber,
+    selectedTableId,
     orderNotes,
     activeDraftOrderId,
     manualApprovalRequestId,
@@ -988,6 +1000,12 @@ export function PosOrderPage() {
 
   return (
     <Box>
+      {error && (
+        <Alert severity="error" sx={{ mb: 2.5 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
       {holdSuccessMessage && (
         <Alert severity="info" sx={{ mb: 2.5 }} onClose={() => setHoldSuccessMessage(null)}>
           {holdSuccessMessage}
@@ -1542,6 +1560,7 @@ export function PosOrderPage() {
                                   selected={isSelected}
                                   onClick={() => {
                                     setTableNumber(val);
+                                    setSelectedTableId(tbl.id);
                                     setTableMenuAnchorEl(null);
                                   }}
                                   sx={{
@@ -1596,6 +1615,7 @@ export function PosOrderPage() {
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' && customTableInput.trim()) {
                                   setTableNumber(customTableInput.trim());
+                                  setSelectedTableId('');
                                   setTableMenuAnchorEl(null);
                                 }
                               }}
@@ -1609,6 +1629,7 @@ export function PosOrderPage() {
                               onClick={() => {
                                 if (customTableInput.trim()) {
                                   setTableNumber(customTableInput.trim());
+                                  setSelectedTableId('');
                                   setTableMenuAnchorEl(null);
                                 }
                               }}
@@ -1816,7 +1837,7 @@ export function PosOrderPage() {
                   <Typography variant="body2">{MoneyUtil.formatCurrency(cartSubtotal)} IRR</Typography>
                 </Stack>
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">VAT (10%):</Typography>
+                  <Typography variant="body2" color="text.secondary">Tax / VAT:</Typography>
                   <Typography variant="body2">{MoneyUtil.formatCurrency(cartTax)} IRR</Typography>
                 </Stack>
                 {MoneyUtil.greaterThan(appliedDiscountAmount, '0') && (
@@ -2118,7 +2139,17 @@ export function PosOrderPage() {
                     </Stack>
                   </Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                    {MoneyUtil.formatCurrency(ho.total_amount || ho.grand_total || '0')} IRR
+                    {MoneyUtil.formatCurrency(
+                      MoneyUtil.greaterThan(ho.total_amount || ho.grand_total || '0', '0')
+                        ? (ho.total_amount || ho.grand_total || '0')
+                        : (ho.items || []).reduce(
+                            (sum, item) => MoneyUtil.add(
+                              sum,
+                              item.line_total || item.subtotal || MoneyUtil.multiply(item.unit_price || '0', item.quantity || '0'),
+                            ),
+                            '0',
+                          )
+                    )} IRR
                   </Typography>
                 </Stack>
 

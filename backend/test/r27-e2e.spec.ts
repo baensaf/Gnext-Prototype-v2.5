@@ -25,7 +25,6 @@ import { IntegrationLog } from '../src/entities/IntegrationLog.entity';
 import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
 import { AdminUser } from '../src/entities/AdminUser.entity';
 import { TenantSetting } from '../src/entities/TenantSetting.entity';
-import { Customer } from '../src/entities/Customer.entity';
 import { Product } from '../src/entities/Product.entity';
 import { Category } from '../src/entities/Category.entity';
 import { checkTranslations } from '../src/scripts/translation-check';
@@ -253,22 +252,22 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
   });
 
   it('Journey 2: Customer Credit, Partial Credit/Terminal Payment, Repayment, Aging/Statement, Refund & Manager Approval', async () => {
-    const custRepo = dataSource.getRepository(Customer);
     const orderRepo = dataSource.getRepository(OrderHeader);
     const paymentRepo = dataSource.getRepository(Payment);
 
     const tag = Date.now().toString();
 
     // 1. Create Customer with Credit Limit
-    const customer = await custRepo.save(
-      custRepo.create({
-        tenant_id: testTenantId,
+    const customer = await customerService.createCustomer(
+      testTenantId,
+      {
         code: `CUST-CRED-${tag}`,
         first_name: 'Ahmad',
         last_name: 'Rezaei',
         mobile: `0912${tag.slice(-7)}`,
-        is_active: true,
-      }),
+        credit_limit: '1000000.0000',
+      },
+      `corr-customer-${tag}`,
     );
 
     // 2. Post Repayment / Top-Up via CreditService
@@ -278,12 +277,12 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
     const repayRes = await creditService.postRepayment(
       testTenantId,
       creditAccount!.id,
-      { amount: '500000.0000', reason: 'Initial Credit Repayment / Top-Up' },
+      { amount: '100000.0000', reason: 'Initial Credit Repayment / Top-Up' },
       testAdminUserId,
       `corr-repay-${tag}`,
     );
     expect(repayRes.entry).toBeDefined();
-    expect(Number(repayRes.entry.balance_after)).toBeGreaterThanOrEqual(500000);
+    expect(Number(repayRes.entry.balance_after)).toBeGreaterThanOrEqual(100000);
 
     // 3. Partial Credit + Terminal Payment Order Split
     const order = await orderRepo.save(

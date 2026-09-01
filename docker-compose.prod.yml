@@ -4,15 +4,15 @@
     container_name: gnext_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin
-      POSTGRES_DB: appdb
-    ports:
-      - 5432:5432
+      POSTGRES_USER: ${DB_USER:-gnext}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the deployment .env file}
+      POSTGRES_DB: ${DB_NAME:-appdb}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [CMD-SHELL, pg_isready -U admin -d appdb]
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"'
       interval: 5s
       timeout: 5s
       retries: 5
@@ -23,19 +23,19 @@
       dockerfile: Dockerfile
     container_name: gnext_backend
     restart: unless-stopped
-    ports:
-      - 3100:3100
+    expose:
+      - "3100"
     environment:
       NODE_ENV: production
       PORT: 3100
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_USER: admin
-      DB_PASSWORD: admin
-      DB_NAME: appdb
-      ADMIN_USERNAME: admin@gnext.local
-      ADMIN_PASSWORD: GnextDemo!2026
-      APPROVER_DEMO_PIN: 2468
+      DB_USER: ${DB_USER:-gnext}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the deployment .env file}
+      DB_NAME: ${DB_NAME:-appdb}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin@gnext.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in the deployment .env file}
+      APPROVER_DEMO_PIN: ${APPROVER_DEMO_PIN:-2468}
       SEED_PROFILE: minimal
       DATA_DIR: /app/data
       UPLOAD_DIR: /app/uploads
@@ -45,6 +45,16 @@
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3100/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   frontend:
     build:
@@ -53,9 +63,17 @@
     container_name: gnext_frontend
     restart: unless-stopped
     ports:
-      - 8080:80
+      - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1/health/ready || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

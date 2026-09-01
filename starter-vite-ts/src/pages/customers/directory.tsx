@@ -499,8 +499,12 @@ export function CustomersPage() {
             <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1.5 }}>
               Top-Up, Deduct or Adjust Wallet Balance
             </Typography>
-            <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-              <FormControl size="small" sx={{ width: 200 }}>
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              spacing={2}
+              sx={{ alignItems: { xs: 'stretch', md: 'center' }, flexWrap: { md: 'wrap' } }}
+            >
+              <FormControl size="small" sx={{ width: { xs: '100%', md: 200 } }}>
                 <InputLabel>Transaction Type</InputLabel>
                 <Select value={txType} label="Transaction Type" onChange={(e) => setTxType(e.target.value)}>
                   <MenuItem value="CHARGE">CHARGE (Top-Up / Deposit +)</MenuItem>
@@ -516,7 +520,7 @@ export function CustomersPage() {
                 type="number"
                 value={txAmount}
                 onChange={(e) => setTxAmount(e.target.value)}
-                sx={{ width: 180 }}
+                sx={{ width: { xs: '100%', md: 180 } }}
               />
 
               <TextField
@@ -524,10 +528,15 @@ export function CustomersPage() {
                 label="Note / Reference"
                 value={txNote}
                 onChange={(e) => setTxNote(e.target.value)}
-                fullWidth
+                sx={{ flex: '1 1 220px' }}
               />
 
-              <Button type="submit" variant="contained" size="small" sx={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+              <Button
+                type="submit"
+                variant="contained"
+                size="small"
+                sx={{ fontWeight: 'bold', whiteSpace: 'nowrap', minHeight: 40 }}
+              >
                 Post Transaction
               </Button>
             </Stack>
