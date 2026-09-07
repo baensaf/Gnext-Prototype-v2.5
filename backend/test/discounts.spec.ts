@@ -293,6 +293,27 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
     });
   });
 
+  describe('Tax calculation', () => {
+    it('calculates tax from the discounted line total using the snapshotted product rate', async () => {
+      campaignRepo.find.mockResolvedValue([]);
+
+      const result = await evaluationService.evaluateQuote('t-1', {
+        orderDraft: {
+          items: [{
+            productId: 'p-1',
+            unitPrice: '150000.0000',
+            quantity: '1',
+            taxRate: '0.0900',
+          }],
+        },
+      });
+
+      expect(result.subtotal).toBe('150000.0000');
+      expect(result.taxTotal).toBe('13500.0000');
+      expect(result.grandTotal).toBe('163500.0000');
+    });
+  });
+
   describe('Transactional Usage Locking', () => {
     it('should lock campaign row and throw ConflictException if usage limit is reached during submission', async () => {
       const mockQb = {

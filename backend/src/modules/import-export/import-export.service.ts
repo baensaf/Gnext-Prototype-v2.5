@@ -624,8 +624,21 @@ export class ImportExportService {
       'import_job',
     ];
 
+    const clearedTables: string[] = [];
+
     await this.dataSource.transaction(async (manager) => {
       for (const table of resetTables) {
+        const existingTable = await manager.query(
+          `SELECT 1
+           FROM information_schema.tables
+           WHERE table_schema = current_schema()
+             AND table_name = $1`,
+          [table],
+        );
+        if (!existingTable || existingTable.length === 0) {
+          continue;
+        }
+
         const cols = await manager.query(
           `SELECT column_name FROM information_schema.columns WHERE table_name = $1 AND column_name = 'tenant_id'`,
           [table],
@@ -635,6 +648,7 @@ export class ImportExportService {
         } else {
           await manager.query(`DELETE FROM "${table}"`);
         }
+        clearedTables.push(table);
       }
     });
 
@@ -646,10 +660,10 @@ export class ImportExportService {
       entityType: 'SYSTEM',
       entityId: tenantId,
       correlationId: `RESET-${Date.now()}`,
-      afterData: { resetTables },
+      afterData: { resetTables: clearedTables },
     });
 
-    return { resetTables };
+    return { resetTables: clearedTables };
   }
 
   /**

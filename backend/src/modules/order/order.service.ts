@@ -208,16 +208,21 @@ export class OrderService {
       if (dto.delivery_address_id !== undefined) order.customer_address_id = dto.delivery_address_id;
       if (dto.currency_code !== undefined) order.currency_code = dto.currency_code;
 
+      // Update quoteVersion
+      order.quote_version = String(Date.now());
+      order.updated_by = userId || null;
+
+      // Persist header changes before replacing the loaded item relation. Saving
+      // the aggregate after deleting its loaded children makes TypeORM try to
+      // orphan those stale entities by setting order_id to NULL, which violates
+      // the non-null foreign key on order_item.
+      await em.save(OrderHeader, order);
+
       if (dto.items) {
         // Clear existing items and re-add
         await em.delete(OrderItem, { order_id: id });
         await this.addItemsToDraft(tenantId, order, dto.items, em);
       }
-
-      // Update quoteVersion
-      order.quote_version = String(Date.now());
-      order.updated_by = userId || null;
-      await em.save(OrderHeader, order);
 
       await this.auditWriter.write({
         tenantId,

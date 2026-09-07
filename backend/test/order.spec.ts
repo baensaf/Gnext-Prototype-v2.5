@@ -38,6 +38,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
   let auditWriter: any;
   let outboxWriter: any;
   let dataSource: any;
+  let mockEntityManager: any;
 
   beforeEach(async () => {
     orderRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() };
@@ -66,7 +67,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
     auditWriter = { write: jest.fn() };
     outboxWriter = { enqueueInTransaction: jest.fn(), enqueue: jest.fn() };
 
-    const mockEntityManager: any = {
+    mockEntityManager = {
       create: jest.fn((entityClass, data) => ({ ...data })),
       save: jest.fn((entityClass, data) => Promise.resolve(data || entityClass)),
       findOne: jest.fn((entityClass, options) => orderRepo.findOne(options)),
@@ -240,7 +241,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
         state: 'DRAFT',
         branch_id: 'b1111111-1111-1111-1111-111111111111',
         order_type: 'TAKEAWAY',
-        items: [],
+        items: [{ id: 'old-item-1', order_id: 'ord-draft-1' }],
       };
 
       orderRepo.findOne.mockResolvedValue(draftOrder);
@@ -267,6 +268,8 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       expect(draftOrder.order_type).toBe('DINE_IN');
       expect(draftOrder.table_number).toBe('T-12');
       expect(draftOrder.coupon_code).toBe('SUMMER20');
+      expect(mockEntityManager.save.mock.invocationCallOrder[0])
+        .toBeLessThan(mockEntityManager.delete.mock.invocationCallOrder[0]);
     });
   });
 });

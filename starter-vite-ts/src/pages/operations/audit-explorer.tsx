@@ -102,7 +102,7 @@ export function AuditExplorerPage() {
       ),
     },
     {
-      field: 'created_at',
+      field: 'occurred_at',
       headerName: t('audit.timestamp', 'Timestamp'),
       width: 200,
       renderCell: (params) => (
@@ -195,7 +195,11 @@ export function AuditExplorerPage() {
                 </Typography>
                 <Paper sx={{ p: 2, bgcolor: 'background.neutral', fontFamily: 'monospace' }} variant="outlined">
                   <pre style={{ margin: 0, overflowX: 'auto' }}>
-                    {JSON.stringify(inspectingLog.after_data || inspectingLog.before_data, null, 2)}
+                    {JSON.stringify(
+                      inspectingLog.after_data || inspectingLog.before_data || inspectingLog.details || {},
+                      null,
+                      2,
+                    )}
                   </pre>
                 </Paper>
               </Stack>

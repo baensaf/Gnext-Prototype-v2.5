@@ -1,6 +1,6 @@
-import { Injectable, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, ConflictException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, EntityManager } from 'typeorm';
+import { Repository, EntityManager, In } from 'typeorm';
 import { DiscountCampaign } from '../../entities/DiscountCampaign.entity';
 import { DiscountScope } from '../../entities/DiscountScope.entity';
 import { Coupon } from '../../entities/Coupon.entity';
@@ -8,6 +8,7 @@ import { DiscountUsage } from '../../entities/DiscountUsage.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { CustomerDiscount } from '../../entities/CustomerDiscount.entity';
 import { ApprovalRequest } from '../../entities/ApprovalRequest.entity';
+import { Product } from '../../entities/Product.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { DiscountQuoteRequestDto, QuoteItemDto, ManualDiscountDto } from './dtos/discounts.dto';
 
@@ -65,6 +66,9 @@ export class DiscountEvaluationService {
     private readonly customerDiscountRepo: Repository<CustomerDiscount>,
     @InjectRepository(ApprovalRequest)
     private readonly approvalRequestRepo?: Repository<ApprovalRequest>,
+    @Optional()
+    @InjectRepository(Product)
+    private readonly productRepo?: Repository<Product>,
   ) {}
 
   async evaluateQuote(
@@ -78,8 +82,15 @@ export class DiscountEvaluationService {
     const consideredDiscounts: ConsideredDiscount[] = [];
     const warnings: string[] = [];
 
+    const requestedItems = orderDraft.items || [];
+    const productIds = [...new Set(requestedItems.map((item) => item.productId).filter(Boolean))];
+    const products = this.productRepo && productIds.length > 0
+      ? await this.productRepo.find({ where: { tenant_id: tenantId, id: In(productIds) } })
+      : [];
+    const productTaxRates = new Map(products.map((product) => [product.id, product.tax_rate || '0.0000']));
+
     // 1. Process items & subtotals
-    const lineItems: QuotedLineItem[] = (orderDraft.items || []).map((item) => {
+    const lineItems: QuotedLineItem[] = requestedItems.map((item) => {
       const qty = item.quantity || '1';
       const uPrice = MoneyUtil.format(item.unitPrice || '0');
       const sub = MoneyUtil.multiply(uPrice, qty);
@@ -518,16 +529,23 @@ export class DiscountEvaluationService {
       }
     }
 
-    // Calculate line grand totals and order grand total
+    // Calculate line grand totals and tax after discounts. Product tax_rate is
+    // stored as a decimal fraction (for example 0.0900 for 9%). Explicit quote
+    // tax rates remain available for integrations that already snapshot them.
     let grandTotal = '0.0000';
-    for (const line of lineItems) {
+    let taxTotal = '0.0000';
+    for (let i = 0; i < lineItems.length; i++) {
+      const line = lineItems[i];
       line.grandTotal = MoneyUtil.subtract(line.subtotal, line.discountTotal);
       if (MoneyUtil.lessThan(line.grandTotal, '0')) {
         line.grandTotal = '0.0000';
       }
+      const taxRate = requestedItems[i]?.taxRate || productTaxRates.get(line.productId) || '0.0000';
+      taxTotal = MoneyUtil.add(taxTotal, MoneyUtil.multiply(line.grandTotal, taxRate));
       grandTotal = MoneyUtil.add(grandTotal, line.grandTotal);
     }
     grandTotal = MoneyUtil.add(grandTotal, deliveryFee);
+    grandTotal = MoneyUtil.add(grandTotal, taxTotal);
 
     return {
       quoteVersion: MoneyUtil.format('1'),
@@ -536,7 +554,7 @@ export class DiscountEvaluationService {
       subtotal,
       deliveryFee,
       discountTotal,
-      taxTotal: '0.0000',
+      taxTotal,
       grandTotal,
       consideredDiscounts,
       warnings,
