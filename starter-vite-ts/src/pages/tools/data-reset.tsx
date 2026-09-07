@@ -18,6 +18,7 @@ import {
   DialogContent,
   DialogActions,
   LinearProgress,
+  CircularProgress,
 } from '@mui/material';
 
 import { importExportApi } from 'src/api/importExportApi';
@@ -29,6 +30,7 @@ export function DataResetPage() {
 
   const [openResetDialog, setOpenResetDialog] = useState(false);
   const [openSeedDialog, setOpenSeedDialog] = useState(false);
+  const [openDemoResetDialog, setOpenDemoResetDialog] = useState(false);
   const [pin, setPin] = useState('');
   const [resetSuccess, setResetSuccess] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -94,6 +96,32 @@ export function DataResetPage() {
     }
   };
 
+  const handlePrepareCleanDemo = async () => {
+    if (!pin.trim()) {
+      setErrorMsg(t('settings.dataResetPage.pinRequired', 'Security Manager PIN is required'));
+      return;
+    }
+    setErrorMsg(null);
+    setIsLoading(true);
+
+    try {
+      const result = await importExportApi.resetAndSeedDemo(pin);
+      setOpenDemoResetDialog(false);
+      setPin('');
+      setResetSuccess(
+        t(
+          'settings.dataResetPage.demoResetSuccess',
+          'Clean demo is ready. Orders, KDS tickets, deliveries, and active shifts are reset to zero; {{profile}} master data is available.',
+          { profile: result.seedProfile },
+        ),
+      );
+    } catch (err: any) {
+      setErrorMsg(err?.response?.data?.message || err.detail || err.message || 'Failed to prepare a clean demo.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
@@ -131,6 +159,31 @@ export function DataResetPage() {
       {isLoading && <LinearProgress sx={{ mb: 3 }} />}
 
       <Grid container spacing={3}>
+        <Grid size={{ xs: 12 }}>
+          <Card sx={{ p: 4, border: '1px solid', borderColor: 'primary.main' }}>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ alignItems: { md: 'center' }, justifyContent: 'space-between' }}>
+              <Box>
+                <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 1 }}>
+                  <Iconify icon={"solar:restart-bold" as any} width={32} height={32} sx={{ color: 'primary.main' }} />
+                  <Typography variant="h6" sx={{ fontWeight: 700 }}>Prepare a Clean Demo</Typography>
+                </Stack>
+                <Typography variant="body2" color="text.secondary">
+                  Clears orders, payments, KDS tickets, deliveries, shifts, and other operational queues, then re-applies the demo catalog baseline in one repeatable action.
+                </Typography>
+              </Box>
+              <Button
+                variant="contained"
+                size="large"
+                disabled={isLoading}
+                onClick={() => { setPin(''); setOpenDemoResetDialog(true); }}
+                sx={{ minWidth: 220 }}
+              >
+                Prepare Clean Demo
+              </Button>
+            </Stack>
+          </Card>
+        </Grid>
+
         {/* DATA RESET CARD */}
         <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ p: 4, height: '100%' }}>
@@ -155,7 +208,7 @@ export function DataResetPage() {
               )}
             </Alert>
 
-            <Button variant="contained" color="error" size="large" onClick={() => { setPin(''); setOpenResetDialog(true); }}>
+            <Button variant="contained" color="error" size="large" disabled={isLoading} onClick={() => { setPin(''); setOpenResetDialog(true); }}>
               {t('settings.dataResetPage.executeReset', 'Execute System Data Reset')}
             </Button>
           </Card>
@@ -201,12 +254,41 @@ export function DataResetPage() {
               ))}
             </Stack>
 
-            <Button variant="outlined" color="primary" size="large" onClick={() => { setPin(''); setOpenSeedDialog(true); }}>
+            <Button variant="outlined" color="primary" size="large" disabled={isLoading} onClick={() => { setPin(''); setOpenSeedDialog(true); }}>
               {t('settings.dataResetPage.applySeed', 'Apply Selected Seed Profile')}
             </Button>
           </Card>
         </Grid>
       </Grid>
+
+      <Dialog open={openDemoResetDialog} onClose={() => !isLoading && setOpenDemoResetDialog(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Prepare a Clean Demo?</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            All current operational activity will be permanently cleared. Master configuration is retained and the demo catalog baseline is re-applied.
+          </Alert>
+          <TextField
+            fullWidth
+            type="password"
+            label={t('settings.dataResetPage.pinLabel', 'Security Manager PIN')}
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            disabled={isLoading}
+            placeholder="2468"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDemoResetDialog(false)} disabled={isLoading}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handlePrepareCleanDemo}
+            disabled={isLoading}
+            startIcon={isLoading ? <CircularProgress size={18} color="inherit" /> : undefined}
+          >
+            {isLoading ? 'Preparing…' : 'Reset & Prepare'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* RESET CONFIRMATION DIALOG */}
       <Dialog open={openResetDialog} onClose={() => setOpenResetDialog(false)} maxWidth="xs" fullWidth>

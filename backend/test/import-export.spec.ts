@@ -198,5 +198,17 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
       expect(profiles[0].id).toBe('MINIMAL');
       expect(profiles[1].id).toBe('DEMO_RESTAURANT');
     });
+
+    it('prepares a clean demo by resetting before applying the demo seed', async () => {
+      const resetSpy = jest.spyOn(service, 'systemReset').mockResolvedValue({ resetTables: ['order_header', 'delivery'] });
+      const seedSpy = jest.spyOn(service, 'applySeedProfile').mockResolvedValue({ success: true, profile: 'DEMO_RESTAURANT' });
+
+      const result = await service.resetAndSeedDemo('tenant-1', 'user-1');
+
+      expect(resetSpy).toHaveBeenCalledWith('tenant-1', 'user-1');
+      expect(seedSpy).toHaveBeenCalledWith('tenant-1', 'user-1', 'DEMO_RESTAURANT');
+      expect(resetSpy.mock.invocationCallOrder[0]).toBeLessThan(seedSpy.mock.invocationCallOrder[0]);
+      expect(result.baseline).toEqual({ orders: 0, kdsTickets: 0, deliveries: 0, activeShifts: 0 });
+    });
   });
 });

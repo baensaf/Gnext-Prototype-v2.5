@@ -710,6 +710,27 @@ export class ImportExportService {
   }
 
   /**
+   * Produce the same clean operational starting point for every prototype demo.
+   * Master data is retained, while the required demo catalog baseline is
+   * idempotently re-applied after all operational queues are cleared.
+   */
+  async resetAndSeedDemo(tenantId: string, userId: string) {
+    const reset = await this.systemReset(tenantId, userId);
+    const seed = await this.applySeedProfile(tenantId, userId, 'DEMO_RESTAURANT');
+
+    return {
+      resetTables: reset.resetTables,
+      seedProfile: seed.profile,
+      baseline: {
+        orders: 0,
+        kdsTickets: 0,
+        deliveries: 0,
+        activeShifts: 0,
+      },
+    };
+  }
+
+  /**
    * Get Available Seed Profiles
    */
   getSeedProfiles() {

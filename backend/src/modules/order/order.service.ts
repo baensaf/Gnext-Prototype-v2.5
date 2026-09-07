@@ -16,6 +16,7 @@ import { OrderNote } from '../../entities/OrderNote.entity';
 import { OrderLink } from '../../entities/OrderLink.entity';
 import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
 import { Product } from '../../entities/Product.entity';
+import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { OptionItem } from '../../entities/OptionItem.entity';
 import { PricingService } from '../pricing/pricing.service';
 import { DiscountEvaluationService } from '../discounts/discount-evaluation.service';
@@ -67,6 +68,7 @@ export class OrderService {
     @InjectRepository(OrderLink) private readonly linkRepo: Repository<OrderLink>,
     @InjectRepository(OrderStateEvent) private readonly stateEventRepo: Repository<OrderStateEvent>,
     @InjectRepository(Product) private readonly productRepo: Repository<Product>,
+    @InjectRepository(ProductVariant) private readonly variantRepo: Repository<ProductVariant>,
     @InjectRepository(OptionItem) private readonly optionItemRepo: Repository<OptionItem>,
     private readonly priceService: PricingService,
     private readonly discountEngine: DiscountEvaluationService,
@@ -699,7 +701,28 @@ export class OrderService {
       if (!product) throw new NotFoundException(`Product ${itemDto.product_id} not found`);
 
       const qty = itemDto.quantity || '1.0000';
-      const uPrice = itemDto.unit_price ? MoneyUtil.format(itemDto.unit_price) : MoneyUtil.format(product.base_price);
+      let variant: ProductVariant | null = null;
+      if (itemDto.variant_id) {
+        variant = await this.variantRepo.findOne({
+          where: {
+            id: itemDto.variant_id,
+            tenant_id: tenantId,
+            product_id: product.id,
+            is_active: true,
+          },
+        });
+        if (!variant) {
+          throw new BadRequestException(`Variant ${itemDto.variant_id} is not available for product ${product.id}`);
+        }
+      }
+
+      // Variant pricing is resolved from the catalog so a held order cannot silently
+      // fall back to the product's base price when it is resumed.
+      const uPrice = variant
+        ? MoneyUtil.format(variant.base_price)
+        : itemDto.unit_price
+          ? MoneyUtil.format(itemDto.unit_price)
+          : MoneyUtil.format(product.base_price);
       const sub = MoneyUtil.multiply(uPrice, qty);
 
       let modifierUnitDelta = '0.0000';
@@ -734,7 +757,8 @@ export class OrderService {
         product_id: product.id,
         product_code: product.code,
         product_name: product.name,
-        variant_id: itemDto.variant_id || null,
+        variant_id: variant?.id || null,
+        variant_name: variant?.name || null,
         quantity: qty,
         unit_price: uPrice,
         base_total: sub,

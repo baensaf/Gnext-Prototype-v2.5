@@ -320,12 +320,57 @@ export class DeliveryService {
   }
 
   // --- 4. DELIVERY EXECUTION & STATE MACHINE ---
-  async createDeliveryForOrder(tenantId: string, orderId: string, zoneId?: string, addressSnapshot?: any) {
-    const existing = await this.deliveryRepo.findOne({ where: { tenant_id: tenantId, order_id: orderId } });
-    if (existing) return existing;
+  private async reconcileDeliveryWithOrder(tenantId: string, delivery: Delivery, order: OrderHeader): Promise<Delivery> {
+    const orderState = String(order.state || order.status || '').toUpperCase();
+    let expectedState: DeliveryState | null = null;
 
+    if (orderState === 'COMPLETED') expectedState = 'DELIVERED';
+    if (orderState === 'CANCELLED') expectedState = 'CANCELLED';
+    if (orderState === 'OUT_FOR_DELIVERY' && !['DELIVERED', 'CANCELLED'].includes(delivery.state)) {
+      expectedState = 'EN_ROUTE';
+    }
+
+    if (!expectedState) return delivery;
+
+    const assignment = await this.assignmentRepo.findOne({
+      where: { tenant_id: tenantId, order_id: delivery.order_id },
+    });
+    if (assignment && assignment.status !== expectedState) {
+      assignment.status = expectedState;
+      if (expectedState === 'DELIVERED' && !assignment.delivered_at) {
+        assignment.delivered_at = order.completed_at || new Date();
+      }
+      await this.assignmentRepo.save(assignment);
+    }
+
+    if (delivery.state === expectedState) return delivery;
+
+    const fromState = delivery.state;
+    delivery.state = expectedState;
+    if (expectedState === 'DELIVERED' && !delivery.delivered_at) {
+      delivery.delivered_at = order.completed_at || new Date();
+    }
+    const saved = await this.deliveryRepo.save(delivery);
+    await this.logDeliveryEvent(
+      tenantId,
+      saved.id,
+      fromState,
+      expectedState,
+      `Reconciled from parent order state ${orderState}`,
+    );
+    return saved;
+  }
+
+  async createDeliveryForOrder(tenantId: string, orderId: string, zoneId?: string, addressSnapshot?: any) {
     const order = await this.orderRepo.findOne({ where: { id: orderId, tenant_id: tenantId } });
     if (!order) throw new NotFoundException(`Order ${orderId} not found`);
+
+    const existing = await this.deliveryRepo.findOne({ where: { tenant_id: tenantId, order_id: orderId } });
+    if (existing) return await this.reconcileDeliveryWithOrder(tenantId, existing, order);
+
+    if (['COMPLETED', 'CANCELLED'].includes(String(order.state || order.status).toUpperCase())) {
+      throw new BadRequestException(`Cannot create a delivery for a ${String(order.state || order.status).toLowerCase()} order`);
+    }
 
     let zoneFee = '0.0000';
     if (zoneId) {
@@ -351,6 +396,17 @@ export class DeliveryService {
   async assignCourier(tenantId: string, deliveryId: string, courierId: string, userId?: string) {
     const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId, tenant_id: tenantId } });
     if (!delivery) throw new NotFoundException('Delivery not found');
+
+    const order = await this.orderRepo.findOne({ where: { id: delivery.order_id, tenant_id: tenantId } });
+    if (!order) throw new NotFoundException('Parent order not found');
+    const orderState = String(order.state || order.status).toUpperCase();
+    if (['COMPLETED', 'CANCELLED'].includes(orderState)) {
+      await this.reconcileDeliveryWithOrder(tenantId, delivery, order);
+      throw new BadRequestException(`Cannot assign a courier to a ${orderState.toLowerCase()} order`);
+    }
+    if (['DELIVERED', 'CANCELLED'].includes(delivery.state)) {
+      throw new BadRequestException(`Cannot assign a courier to a ${delivery.state.toLowerCase()} delivery`);
+    }
 
     const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
     if (!courier) throw new NotFoundException('Courier not found');
@@ -416,6 +472,17 @@ export class DeliveryService {
     const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId, tenant_id: tenantId } });
     if (!delivery) throw new NotFoundException('Delivery not found');
 
+    const order = await this.orderRepo.findOne({ where: { id: delivery.order_id, tenant_id: tenantId } });
+    if (!order) throw new NotFoundException('Parent order not found');
+    const orderState = String(order.state || order.status).toUpperCase();
+    if (['COMPLETED', 'CANCELLED'].includes(orderState)) {
+      await this.reconcileDeliveryWithOrder(tenantId, delivery, order);
+      throw new BadRequestException(`Cannot depart a ${orderState.toLowerCase()} order`);
+    }
+    if (!['ASSIGNED', 'PICKED_UP'].includes(delivery.state)) {
+      throw new BadRequestException(`Delivery must be assigned before departure (current state: ${delivery.state})`);
+    }
+
     const fromState = delivery.state;
     delivery.state = 'EN_ROUTE';
     delivery.picked_up_at = new Date();
@@ -426,19 +493,16 @@ export class DeliveryService {
     if (delivery.courier_id) {
       const assignment = await this.assignmentRepo.findOne({ where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: delivery.courier_id } });
       if (assignment) {
-        assignment.status = 'DELIVERED';
+        assignment.status = 'OUT_FOR_DELIVERY';
         assignment.picked_up_at = new Date();
         await this.assignmentRepo.save(assignment);
       }
     }
 
-    const order = await this.orderRepo.findOne({ where: { id: delivery.order_id, tenant_id: tenantId } });
-    if (order) {
-      order.state = 'OUT_FOR_DELIVERY';
-      order.status = 'OUT_FOR_DELIVERY';
-      order.fulfillment_status = 'OUT_FOR_DELIVERY';
-      await this.orderRepo.save(order);
-    }
+    order.state = 'OUT_FOR_DELIVERY';
+    order.status = 'OUT_FOR_DELIVERY';
+    order.fulfillment_status = 'OUT_FOR_DELIVERY';
+    await this.orderRepo.save(order);
 
     return saved;
   }
@@ -446,6 +510,20 @@ export class DeliveryService {
   async completeDelivery(tenantId: string, deliveryId: string, data?: { cashCollected?: number; posAmount?: number }, userId?: string) {
     const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId, tenant_id: tenantId } });
     if (!delivery) throw new NotFoundException('Delivery not found');
+
+    const order = await this.orderRepo.findOne({ where: { id: delivery.order_id, tenant_id: tenantId } });
+    if (!order) throw new NotFoundException('Parent order not found');
+    const orderState = String(order.state || order.status).toUpperCase();
+    if (orderState === 'COMPLETED') {
+      return await this.reconcileDeliveryWithOrder(tenantId, delivery, order);
+    }
+    if (orderState === 'CANCELLED') {
+      await this.reconcileDeliveryWithOrder(tenantId, delivery, order);
+      throw new BadRequestException('Cannot complete a cancelled order');
+    }
+    if (!['EN_ROUTE', 'PICKED_UP'].includes(delivery.state)) {
+      throw new BadRequestException(`Delivery must be en route before completion (current state: ${delivery.state})`);
+    }
 
     const fromState = delivery.state;
     delivery.state = 'DELIVERED';
@@ -500,14 +578,11 @@ export class DeliveryService {
       await this.assignmentRepo.save(assignment);
     }
 
-    const order = await this.orderRepo.findOne({ where: { id: delivery.order_id, tenant_id: tenantId } });
-    if (order) {
-      order.state = 'COMPLETED';
-      order.status = 'COMPLETED';
-      order.fulfillment_status = 'DELIVERED';
-      order.completed_at = new Date();
-      await this.orderRepo.save(order);
-    }
+    order.state = 'COMPLETED';
+    order.status = 'COMPLETED';
+    order.fulfillment_status = 'DELIVERED';
+    order.completed_at = new Date();
+    await this.orderRepo.save(order);
 
     return saved;
   }
@@ -549,18 +624,21 @@ export class DeliveryService {
 
   async getDeliveries(tenantId: string, branchId?: string, state?: string) {
     const where: any = { tenant_id: tenantId };
-    if (state) where.state = state;
-
     const deliveries = await this.deliveryRepo.find({ where, order: { created_at: 'DESC' } });
     const result = [];
 
     for (const d of deliveries) {
-      const order = await this.orderRepo.findOne({ where: { id: d.order_id } });
-      const courier = d.courier_id ? await this.courierRepo.findOne({ where: { id: d.courier_id } }) : null;
-      const zone = d.zone_id ? await this.zoneRepo.findOne({ where: { id: d.zone_id } }) : null;
+      const order = await this.orderRepo.findOne({ where: { id: d.order_id, tenant_id: tenantId } });
+      if (!order || (branchId && order.branch_id !== branchId)) continue;
+
+      const reconciled = await this.reconcileDeliveryWithOrder(tenantId, d, order);
+      if (state && reconciled.state !== state) continue;
+
+      const courier = reconciled.courier_id ? await this.courierRepo.findOne({ where: { id: reconciled.courier_id, tenant_id: tenantId } }) : null;
+      const zone = reconciled.zone_id ? await this.zoneRepo.findOne({ where: { id: reconciled.zone_id, tenant_id: tenantId } }) : null;
 
       result.push({
-        ...d,
+        ...reconciled,
         order_number: order ? order.order_number : 'ORD-00',
         grand_total: order ? order.grand_total : '0.0000',
         customer_name: order ? (order as any).customer_name || 'Customer' : 'Customer',

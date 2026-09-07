@@ -90,6 +90,18 @@ export const importExportApi = {
     return res.data.data;
   },
 
+  resetAndSeedDemo: async (pin: string) => {
+    const res = await httpClient.post<{
+      success: boolean;
+      data: {
+        resetTables: string[];
+        seedProfile: string;
+        baseline: { orders: number; kdsTickets: number; deliveries: number; activeShifts: number };
+      };
+    }>('/api/v1/system/demo-reset', { pin });
+    return res.data.data;
+  },
+
   getSeedProfiles: async () => {
     const res = await httpClient.get<{ success: boolean; data: Array<{ id: string; name: string; description: string }> }>('/api/v1/system/seed-profiles');
     return res.data.data;

@@ -1,4 +1,3 @@
-import type { Branch } from 'src/api/tenantApi';
 import type { Courier, Delivery, DeliveryZone, DeliveryEvent } from 'src/api/deliveryApi';
 
 import { useLocation } from 'react-router';
@@ -43,14 +42,15 @@ import {
   CardContent,
   DialogContent,
   DialogActions,
+  LinearProgress,
+  CircularProgress,
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
 
-import { useBranchContext } from 'src/contexts/branch-context';
-
 import { tenantApi } from 'src/api/tenantApi';
 import { deliveryApi } from 'src/api/deliveryApi';
+import { useBranchContext } from 'src/contexts/branch-context';
 
 import { CourierSettlementsPage } from './settlements';
 
@@ -83,7 +83,8 @@ export function DeliveryPage() {
   const [selectedEvents, setSelectedEvents] = useState<DeliveryEvent[]>([]);
   const [_eventDeliveryId, setEventDeliveryId] = useState<string | null>(null);
 
-  const [_loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Dialogs
@@ -146,20 +147,26 @@ export function DeliveryPage() {
   const handleAssignCourier = async () => {
     if (!selectedDeliveryForAssign || !selectedCourierId) return;
     try {
+      setPendingAction(`assign:${selectedDeliveryForAssign.id}`);
       await deliveryApi.assignCourier(selectedDeliveryForAssign.id, selectedCourierId);
       setAssignCourierModalOpen(false);
-      loadData();
+      await loadData();
     } catch (err: any) {
       setError(err.detail || err.message || t('delivery.errors.assignFailed'));
+    } finally {
+      setPendingAction(null);
     }
   };
 
   const handleDepartDelivery = async (delId: string) => {
     try {
+      setPendingAction(`depart:${delId}`);
       await deliveryApi.departDelivery(delId);
-      loadData();
+      await loadData();
     } catch (err: any) {
       setError(err.detail || t('delivery.errors.departFailed'));
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -173,11 +180,14 @@ export function DeliveryPage() {
   const handleCompleteDelivery = async () => {
     if (!selectedDeliveryForComplete) return;
     try {
+      setPendingAction(`complete:${selectedDeliveryForComplete.id}`);
       await deliveryApi.completeDelivery(selectedDeliveryForComplete.id, cashCollected, posAmount);
       setCompleteModalOpen(false);
-      loadData();
+      await loadData();
     } catch (err: any) {
       setError(err.detail || t('delivery.errors.completeFailed'));
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -190,20 +200,26 @@ export function DeliveryPage() {
   const handleFailDelivery = async () => {
     if (!selectedDeliveryForFail || !failReason) return;
     try {
+      setPendingAction(`fail:${selectedDeliveryForFail.id}`);
       await deliveryApi.failDelivery(selectedDeliveryForFail.id, failReason);
       setFailModalOpen(false);
-      loadData();
+      await loadData();
     } catch (err: any) {
       setError(err.detail || t('delivery.errors.failFailed'));
+    } finally {
+      setPendingAction(null);
     }
   };
 
   const handleRequeueDelivery = async (delId: string) => {
     try {
+      setPendingAction(`requeue:${delId}`);
       await deliveryApi.requeueDelivery(delId);
-      loadData();
+      await loadData();
     } catch (err: any) {
       setError(err.detail || t('delivery.errors.requeueFailed'));
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -364,7 +380,7 @@ export function DeliveryPage() {
   );
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 3 }} aria-busy={loading || Boolean(pendingAction)}>
       <Alert severity="info" variant="filled" icon={<LocalShippingIcon />} sx={{ mb: 3, fontWeight: 'bold' }}>
         {t('delivery.banner')}
       </Alert>
@@ -381,13 +397,19 @@ export function DeliveryPage() {
         </Box>
 
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
-            {t('delivery.refresh')}
+          <Button
+            variant="outlined"
+            disabled={loading || Boolean(pendingAction)}
+            startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <RefreshIcon />}
+            onClick={loadData}
+          >
+            {loading ? 'Refreshing…' : t('delivery.refresh')}
           </Button>
         </Stack>
       </Stack>
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+      {(loading || pendingAction) && <LinearProgress sx={{ mb: 2 }} />}
 
       <Paper sx={{ mb: 3, borderRadius: 2 }}>
         <Tabs value={tab} onChange={(_, val) => setTab(val)}>
@@ -472,10 +494,11 @@ export function DeliveryPage() {
                           variant="contained"
                           color="warning"
                           size="small"
-                          startIcon={<LocalShippingIcon />}
+                          disabled={Boolean(pendingAction)}
+                          startIcon={pendingAction === `depart:${del.id}` ? <CircularProgress size={16} color="inherit" /> : <LocalShippingIcon />}
                           onClick={() => handleDepartDelivery(del.id)}
                         >
-                          {t('delivery.card.depart')}
+                          {pendingAction === `depart:${del.id}` ? 'Departing…' : t('delivery.card.depart')}
                         </Button>
                         <Button
                           variant="outlined"
@@ -528,6 +551,7 @@ export function DeliveryPage() {
                           variant="contained"
                           color="success"
                           size="small"
+                          disabled={Boolean(pendingAction)}
                           onClick={() => handleOpenCompleteModal(del)}
                         >
                           {t('delivery.card.complete')}
@@ -536,6 +560,7 @@ export function DeliveryPage() {
                           variant="outlined"
                           color="error"
                           size="small"
+                          disabled={Boolean(pendingAction)}
                           onClick={() => handleOpenFailModal(del)}
                         >
                           {t('delivery.card.failed')}
@@ -582,7 +607,8 @@ export function DeliveryPage() {
                           variant="outlined"
                           size="small"
                           color="warning"
-                          startIcon={<UndoIcon />}
+                          disabled={Boolean(pendingAction)}
+                          startIcon={pendingAction === `requeue:${del.id}` ? <CircularProgress size={16} color="inherit" /> : <UndoIcon />}
                           onClick={() => handleRequeueDelivery(del.id)}
                           sx={{ mt: 1 }}
                         >
@@ -797,8 +823,8 @@ export function DeliveryPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAssignCourierModalOpen(false)}>{t('delivery.modals.assignCourier.cancel')}</Button>
-          <Button variant="contained" disabled={!selectedCourierId} onClick={handleAssignCourier}>
-            {t('delivery.modals.assignCourier.submit')}
+          <Button variant="contained" disabled={!selectedCourierId || Boolean(pendingAction)} onClick={handleAssignCourier}>
+            {pendingAction?.startsWith('assign:') ? <CircularProgress size={20} color="inherit" /> : t('delivery.modals.assignCourier.submit')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -827,8 +853,8 @@ export function DeliveryPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCompleteModalOpen(false)}>{t('delivery.modals.complete.cancel')}</Button>
-          <Button variant="contained" color="success" onClick={handleCompleteDelivery}>
-            {t('delivery.modals.complete.submit')}
+          <Button variant="contained" color="success" disabled={Boolean(pendingAction)} onClick={handleCompleteDelivery}>
+            {pendingAction?.startsWith('complete:') ? <CircularProgress size={20} color="inherit" /> : t('delivery.modals.complete.submit')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -850,8 +876,8 @@ export function DeliveryPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setFailModalOpen(false)}>{t('delivery.modals.fail.cancel')}</Button>
-          <Button variant="contained" color="error" onClick={handleFailDelivery}>
-            {t('delivery.modals.fail.submit')}
+          <Button variant="contained" color="error" disabled={Boolean(pendingAction)} onClick={handleFailDelivery}>
+            {pendingAction?.startsWith('fail:') ? <CircularProgress size={20} color="inherit" /> : t('delivery.modals.fail.submit')}
           </Button>
         </DialogActions>
       </Dialog>

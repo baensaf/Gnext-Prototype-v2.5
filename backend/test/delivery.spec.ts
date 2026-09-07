@@ -79,7 +79,8 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
   });
 
   it('should enforce courier eligibility check (checked-in & available) when assigning delivery', async () => {
-    deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', state: 'UNASSIGNED' });
+    deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', state: 'UNASSIGNED' });
+    orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', state: 'READY' });
     courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', name: 'Ali', is_active: true });
 
     // Scenario 1: Not checked in today
@@ -126,5 +127,37 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
     expect(completed.state).toBe('DELIVERED');
     expect(completed.compensation_amount).toBe('15000.0000');
     expect(orderRepo.save).toHaveBeenCalledWith(expect.objectContaining({ state: 'COMPLETED' }));
+  });
+
+  it('reconciles a stale delivery with a completed parent order before returning the board', async () => {
+    const staleDelivery = { id: 'del-stale', tenant_id: 't-1', order_id: 'ord-done', state: 'UNASSIGNED' };
+    deliveryRepo.find.mockResolvedValue([staleDelivery]);
+    orderRepo.findOne.mockResolvedValue({
+      id: 'ord-done',
+      tenant_id: 't-1',
+      branch_id: 'branch-1',
+      order_number: 'ORD-001',
+      state: 'COMPLETED',
+      grand_total: '239800.0000',
+      completed_at: new Date('2026-09-07T10:00:00Z'),
+    });
+
+    const result = await service.getDeliveries('t-1', 'branch-1');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].state).toBe('DELIVERED');
+    expect(deliveryRepo.save).toHaveBeenCalledWith(expect.objectContaining({ state: 'DELIVERED' }));
+    expect(deliveryEventRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({ from_state: 'UNASSIGNED', to_state: 'DELIVERED' }),
+    );
+  });
+
+  it('rejects courier assignment when the parent order is already completed', async () => {
+    deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', state: 'UNASSIGNED' });
+    orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', state: 'COMPLETED' });
+
+    await expect(service.assignCourier('t-1', 'del-1', 'cour-1')).rejects.toThrow(BadRequestException);
+    expect(deliveryRepo.save).toHaveBeenCalledWith(expect.objectContaining({ state: 'DELIVERED' }));
+    expect(courierRepo.findOne).not.toHaveBeenCalled();
   });
 });

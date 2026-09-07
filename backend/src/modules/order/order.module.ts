@@ -9,6 +9,7 @@ import { OrderLink } from '../../entities/OrderLink.entity';
 import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
 import { OrderSequence } from '../../entities/OrderSequence.entity';
 import { Product } from '../../entities/Product.entity';
+import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { OptionItem } from '../../entities/OptionItem.entity';
 import { OptionGroup } from '../../entities/OptionGroup.entity';
 import { OrderService } from './order.service';
@@ -36,6 +37,7 @@ import { DeliveryModule } from '../delivery/delivery.module';
       OrderStateEvent,
       OrderSequence,
       Product,
+      ProductVariant,
       OptionItem,
       OptionGroup,
     ]),

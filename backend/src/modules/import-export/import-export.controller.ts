@@ -119,6 +119,22 @@ export class ImportExportController {
     return { success: true, data: profiles };
   }
 
+  @Post('system/demo-reset')
+  async resetAndSeedDemo(@Body() body: { pin?: string }, @Req() req: Request) {
+    const tenantId = (req as any)?.tenantId;
+    const userId = (req as any)?.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('User session required');
+    }
+    if (!body.pin) {
+      throw new BadRequestException('Manager PIN is required to prepare a clean demo');
+    }
+
+    await this.approvalService.verifyManagerPin(tenantId, userId, body.pin, 'SYSTEM_RESET');
+    const result = await this.importExportService.resetAndSeedDemo(tenantId, userId);
+    return { success: true, data: result };
+  }
+
   @Post('system/apply-seed')
   async applySeedProfile(@Body() body: { pin?: string; profileId?: string }, @Req() req: Request) {
     const tenantId = (req as any)?.tenantId;

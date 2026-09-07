@@ -61,8 +61,9 @@ import {
   DialogContent,
   DialogActions,
   InputAdornment,
-  FormControlLabel,
+  LinearProgress,
   CircularProgress,
+  FormControlLabel,
   ToggleButtonGroup,
 } from '@mui/material';
 
@@ -201,6 +202,9 @@ export function PosOrderPage() {
   const [heldOrdersDrawerOpen, setHeldOrdersDrawerOpen] = useState(false);
   const [heldOrders, setHeldOrders] = useState<OrderHeader[]>([]);
   const [loadingHeldOrders, setLoadingHeldOrders] = useState(false);
+  const [loadingInitialData, setLoadingInitialData] = useState(true);
+  const [holdingOrder, setHoldingOrder] = useState(false);
+  const [resumingOrderId, setResumingOrderId] = useState<string | null>(null);
   const [holdSuccessMessage, setHoldSuccessMessage] = useState<string | null>(null);
 
   // Coupon state
@@ -247,17 +251,17 @@ export function PosOrderPage() {
 
   const loadInitialData = async () => {
     try {
-      const cList = await catalogApi.getCategories();
+      setLoadingInitialData(true);
+      const [cList, pList, custs, tList] = await Promise.all([
+        catalogApi.getCategories(),
+        catalogApi.getProducts(),
+        customerApi.getCustomers(),
+        dineInApi.getTables(undefined, selectedBranchId).catch(() => [] as DiningTable[]),
+      ]);
       setCategories(cList);
       if (cList.length > 0) setActiveTab(cList[0].id);
-
-      const pList = await catalogApi.getProducts();
       setProducts(pList);
-
-      const custs = await customerApi.getCustomers();
       setCustomers(custs);
-
-      const tList = await dineInApi.getTables(undefined, selectedBranchId).catch(() => [] as DiningTable[]);
       setDiningTables(tList);
       if (tList.length > 0 && (!tableNumber || tableNumber === 'T-01')) {
         setTableNumber(tList[0].code || tList[0].table_number || 'T-01');
@@ -265,6 +269,8 @@ export function PosOrderPage() {
       }
     } catch {
       setError('Failed to load POS catalog data');
+    } finally {
+      setLoadingInitialData(false);
     }
   };
 
@@ -423,6 +429,7 @@ export function PosOrderPage() {
     }
 
     try {
+      setHoldingOrder(true);
       const orderPayload: any = {
         branch_id: selectedBranchId,
         order_type: orderType,
@@ -450,18 +457,21 @@ export function PosOrderPage() {
       setHoldSuccessMessage(`Order #${draft.order_number} held successfully in Drafts.`);
       toast.success(`Order #${draft.order_number} held in Drafts`);
       handleClearCart();
-      fetchHeldOrders(selectedBranchId);
+      await fetchHeldOrders(selectedBranchId);
       setError(null);
     } catch (err: any) {
       const msg = err.detail || err.message || 'Failed to hold order';
       setError(msg);
       showErrorToast(err, msg);
+    } finally {
+      setHoldingOrder(false);
     }
   };
 
   // Resume a Held Order
   const handleResumeOrder = async (order: OrderHeader) => {
     try {
+      setResumingOrderId(order.id);
       const fullOrder = await orderApi.getOrderById(order.id);
       setActiveDraftOrderId(fullOrder.id);
       setSelectedBranchId(fullOrder.branch_id);
@@ -474,8 +484,7 @@ export function PosOrderPage() {
       setOrderNotes(fullOrder.notes || '');
 
       // Reconstruct cart items
-      const loadedCart: CartItem[] = [];
-      for (const item of fullOrder.items || []) {
+      const loadedCart: CartItem[] = await Promise.all((fullOrder.items || []).map(async (item) => {
         const prod: Product = products.find((p) => p.id === item.product_id) || ({
           id: item.product_id,
           name: (item as any).item_name || (item as any).product_name || (item as any).name || 'Product',
@@ -487,9 +496,29 @@ export function PosOrderPage() {
           tax_rate: '0.10',
         } as Product);
 
+        let selectedVariant: ProductVariant | undefined;
+        if ((item as any).variant_id) {
+          const variants = prod.variants?.length
+            ? prod.variants
+            : await catalogApi.getProductVariants(item.product_id).catch(() => [] as ProductVariant[]);
+          selectedVariant = variants.find((variant) => variant.id === (item as any).variant_id);
+          if (!selectedVariant) {
+            selectedVariant = {
+              id: (item as any).variant_id,
+              product_id: item.product_id,
+              code: 'HELD-VARIANT',
+              name: (item as any).variant_name || 'Selected variant',
+              base_price: item.unit_price,
+              is_default: false,
+              sort_order: 0,
+              is_active: true,
+            };
+          }
+        }
+
         const selectedOpts: OptionItem[] = (item.options || []).map((opt: any) => ({
           id: opt.option_item_id || opt.id,
-          name: opt.option_name || opt.name || 'Modifier',
+          name: opt.option_item_name || opt.option_name || opt.name || 'Modifier',
           price_delta: opt.price_delta || '0',
           option_group_id: '',
           code: opt.code || 'OPT',
@@ -497,13 +526,14 @@ export function PosOrderPage() {
           sort_order: 0,
         }));
 
-        loadedCart.push({
+        return {
           product: prod,
+          selectedVariant,
           quantity: Number(item.quantity) || 1,
           selectedOptions: selectedOpts,
           lineSubtotal: (item as any).subtotal || (item as any).line_total || MoneyUtil.multiply(item.unit_price, item.quantity?.toString() || '1', 2),
-        });
-      }
+        };
+      }));
 
       setCart(loadedCart);
       setHeldOrdersDrawerOpen(false);
@@ -513,6 +543,8 @@ export function PosOrderPage() {
     } catch (err: any) {
       setError('Failed to resume held draft order');
       showErrorToast(err, 'Failed to resume held draft order');
+    } finally {
+      setResumingOrderId(null);
     }
   };
 
@@ -999,7 +1031,8 @@ export function PosOrderPage() {
   });
 
   return (
-    <Box>
+    <Box aria-busy={loadingInitialData || holdingOrder || Boolean(resumingOrderId)}>
+      {loadingInitialData && <LinearProgress sx={{ mb: 2 }} />}
       {error && (
         <Alert severity="error" sx={{ mb: 2.5 }} onClose={() => setError(null)}>
           {error}
@@ -1887,12 +1920,12 @@ export function PosOrderPage() {
                   <Button
                     variant="outlined"
                     color="warning"
-                    disabled={cart.length === 0}
+                    disabled={cart.length === 0 || holdingOrder}
                     onClick={handleHoldOrder}
-                    startIcon={<PauseIcon />}
+                    startIcon={holdingOrder ? <CircularProgress size={18} color="inherit" /> : <PauseIcon />}
                     sx={{ fontWeight: 'bold', py: 1, flexShrink: 0 }}
                   >
-                    Hold [F4]
+                    {holdingOrder ? 'Holding…' : 'Hold [F4]'}
                   </Button>
                   <Button
                     variant="outlined"
@@ -2173,11 +2206,12 @@ export function PosOrderPage() {
                   <Button
                     size="small"
                     variant="contained"
-                    startIcon={<PlayArrowIcon fontSize="small" />}
+                    disabled={Boolean(resumingOrderId)}
+                    startIcon={resumingOrderId === ho.id ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon fontSize="small" />}
                     onClick={() => handleResumeOrder(ho)}
                     sx={{ textTransform: 'none', fontWeight: 'bold' }}
                   >
-                    Resume Order
+                    {resumingOrderId === ho.id ? 'Resuming…' : 'Resume Order'}
                   </Button>
                 </Stack>
               </Paper>

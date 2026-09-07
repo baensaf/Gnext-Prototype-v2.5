@@ -15,6 +15,7 @@ import { OrderLink } from '../src/entities/OrderLink.entity';
 import { OrderStateEvent } from '../src/entities/OrderStateEvent.entity';
 import { OrderSequence } from '../src/entities/OrderSequence.entity';
 import { Product } from '../src/entities/Product.entity';
+import { ProductVariant } from '../src/entities/ProductVariant.entity';
 import { OptionItem } from '../src/entities/OptionItem.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { OutboxWriter } from '../src/modules/outbox/outbox-writer.service';
@@ -32,6 +33,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
   let stateEventRepo: any;
   let sequenceRepo: any;
   let productRepo: any;
+  let variantRepo: any;
   let optionItemRepo: any;
   let priceService: any;
   let discountEngine: any;
@@ -50,6 +52,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
     stateEventRepo = { find: jest.fn().mockResolvedValue([]), create: jest.fn(), save: jest.fn() };
     sequenceRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
     productRepo = { findOne: jest.fn() };
+    variantRepo = { findOne: jest.fn() };
     optionItemRepo = { findOne: jest.fn() };
     priceService = { resolvePrice: jest.fn() };
     discountEngine = {
@@ -93,6 +96,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
         { provide: getRepositoryToken(OrderStateEvent), useValue: stateEventRepo },
         { provide: getRepositoryToken(OrderSequence), useValue: sequenceRepo },
         { provide: getRepositoryToken(Product), useValue: productRepo },
+        { provide: getRepositoryToken(ProductVariant), useValue: variantRepo },
         { provide: getRepositoryToken(OptionItem), useValue: optionItemRepo },
         { provide: PricingService, useValue: priceService },
         { provide: DiscountEvaluationService, useValue: discountEngine },
@@ -245,7 +249,19 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       };
 
       orderRepo.findOne.mockResolvedValue(draftOrder);
-      productRepo.findOne.mockResolvedValue({ id: 'p1111111-1111-1111-1111-111111111111', name: 'Pizza' });
+      productRepo.findOne.mockResolvedValue({
+        id: 'p1111111-1111-1111-1111-111111111111',
+        code: 'PIZZA',
+        name: 'Pizza',
+        base_price: '50000.0000',
+      });
+      variantRepo.findOne.mockResolvedValue({
+        id: 'v1111111-1111-1111-1111-111111111111',
+        product_id: 'p1111111-1111-1111-1111-111111111111',
+        name: 'Large',
+        base_price: '85000.0000',
+        is_active: true,
+      });
       priceService.resolvePrice.mockResolvedValue('85000.0000');
 
       const updated = await service.updateDraft('t-1', 'ord-draft-1', {
@@ -270,6 +286,15 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       expect(draftOrder.coupon_code).toBe('SUMMER20');
       expect(mockEntityManager.save.mock.invocationCallOrder[0])
         .toBeLessThan(mockEntityManager.delete.mock.invocationCallOrder[0]);
+      expect(mockEntityManager.save).toHaveBeenCalledWith(
+        OrderItem,
+        expect.objectContaining({
+          variant_id: 'v1111111-1111-1111-1111-111111111111',
+          variant_name: 'Large',
+          unit_price: '85000.0000',
+          subtotal: '85000.0000',
+        }),
+      );
     });
   });
 });
