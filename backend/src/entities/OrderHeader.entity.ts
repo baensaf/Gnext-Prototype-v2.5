@@ -59,6 +59,9 @@ export class OrderHeader {
   customer_address_id: string;
 
   @Column({ type: 'uuid', nullable: true })
+  delivery_zone_id: string;
+
+  @Column({ type: 'uuid', nullable: true })
   table_id: string;
 
   @Column({ type: 'varchar', length: 20, nullable: true })

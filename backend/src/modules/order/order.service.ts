@@ -25,12 +25,15 @@ import { AuditWriter } from '../audit/audit-writer.service';
 import { OutboxWriter } from '../outbox/outbox-writer.service';
 import { KdsService } from '../kds/kds.service';
 import { PrintQueueService } from '../printing/print-queue.service';
-import { DeliveryService } from '../delivery/delivery.service';
 import { CreditService } from '../customer/credit.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import Decimal from 'decimal.js';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { DiningTable } from '../../entities/DiningTable.entity';
+import { CustomerAddress } from '../../entities/CustomerAddress.entity';
+import { DeliveryZone } from '../../entities/DeliveryZone.entity';
+import { Delivery } from '../../entities/Delivery.entity';
+import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
 import { TableOccupancyEvent } from '../../entities/TableOccupancyEvent.entity';
 import { SplitOrderDto, TransferItemsDto } from '../dine-in/dtos/dine-in.dto';
 import {
@@ -78,7 +81,6 @@ export class OrderService {
     private readonly dataSource: DataSource,
     @Optional() private readonly kdsService?: KdsService,
     @Optional() private readonly printQueueService?: PrintQueueService,
-    @Optional() private readonly deliveryService?: DeliveryService,
     @Optional() private readonly creditService?: CreditService,
   ) {}
 
@@ -140,7 +142,8 @@ export class OrderService {
         currency_code: currencyCode,
         quote_version: '1',
         customer_id: dto.customer_id || null,
-        delivery_address_id: dto.delivery_address_id || null,
+        customer_address_id: dto.delivery_address_id || null,
+        delivery_zone_id: dto.delivery_zone_id || null,
         table_id: dto.table_id || null,
         table_number: dto.table_number || null,
         guest_count: dto.guest_count || null,
@@ -149,6 +152,7 @@ export class OrderService {
         created_by: userId || null,
       });
 
+      await this.applyDeliveryZoneFee(tenantId, order, em);
       const savedOrder = await em.save(OrderHeader, order);
 
       // Add initial items if provided
@@ -208,7 +212,10 @@ export class OrderService {
       if (dto.shift_id !== undefined) order.shift_id = dto.shift_id;
       if (dto.channel !== undefined) order.channel = dto.channel;
       if (dto.delivery_address_id !== undefined) order.customer_address_id = dto.delivery_address_id;
+      if (dto.delivery_zone_id !== undefined) order.delivery_zone_id = dto.delivery_zone_id;
       if (dto.currency_code !== undefined) order.currency_code = dto.currency_code;
+
+      await this.applyDeliveryZoneFee(tenantId, order, em);
 
       // Update quoteVersion
       order.quote_version = String(Date.now());
@@ -302,6 +309,10 @@ export class OrderService {
       if (!order.items || order.items.length === 0) {
         throw new BadRequestException('Cannot submit an order with zero items');
       }
+
+      const deliveryContext = order.order_type === 'DELIVERY'
+        ? await this.validateDeliveryContext(tenantId, order, em, true)
+        : null;
 
       // Check stale quote if version provided
       if (dto.quoteVersion && dto.quoteVersion !== order.quote_version) {
@@ -401,6 +412,36 @@ export class OrderService {
 
       await em.save(OrderHeader, order);
 
+      if (deliveryContext) {
+        const existingDelivery = await em.findOne(Delivery, { where: { tenant_id: tenantId, order_id: order.id } });
+        if (!existingDelivery) {
+          const delivery = em.create(Delivery, {
+            tenant_id: tenantId,
+            order_id: order.id,
+            zone_id: deliveryContext.zone.id,
+            state: 'UNASSIGNED',
+            fee: deliveryContext.zone.fee,
+            currency_code: order.currency_code || 'IRR',
+            address_snapshot: {
+              address_id: deliveryContext.address.id,
+              title: deliveryContext.address.title,
+              address_text: deliveryContext.address.address_text,
+              postal_code: deliveryContext.address.postal_code || null,
+              customer_id: order.customer_id,
+            },
+          });
+          const savedDelivery = await em.save(Delivery, delivery);
+          await em.save(DeliveryEvent, em.create(DeliveryEvent, {
+            tenant_id: tenantId,
+            delivery_id: savedDelivery.id,
+            from_state: 'NONE',
+            to_state: 'UNASSIGNED',
+            reason: 'Delivery order submitted',
+            occurred_by: userId || null,
+          }));
+        }
+      }
+
       // Write OrderStateEvent
       const stateEvt = em.create(OrderStateEvent, {
         tenant_id: tenantId,
@@ -468,15 +509,51 @@ export class OrderService {
       }
     }
 
-    if (this.deliveryService && res && res.order_type === 'DELIVERY') {
-      try {
-        await this.deliveryService.createDeliveryForOrder(tenantId, id);
-      } catch (e) {
-        // Delivery side effect error must not fail submit
-      }
-    }
-
     return res;
+  }
+
+  /** Derive delivery cost from the selected active branch zone; never accept a client fee. */
+  private async applyDeliveryZoneFee(tenantId: string, order: OrderHeader, em: EntityManager) {
+    if (order.order_type !== 'DELIVERY') {
+      order.delivery_fee = '0.0000';
+      return;
+    }
+    if (!order.delivery_zone_id) {
+      order.delivery_fee = '0.0000';
+      return;
+    }
+    const zone = await em.findOne(DeliveryZone, {
+      where: { id: order.delivery_zone_id, tenant_id: tenantId, branch_id: order.branch_id, is_active: true },
+    });
+    order.delivery_fee = zone?.fee || '0.0000';
+  }
+
+  private async validateDeliveryContext(tenantId: string, order: OrderHeader, em: EntityManager, requireComplete: boolean) {
+    if (!order.customer_id) {
+      if (requireComplete) throw new BadRequestException('DELIVERY_CUSTOMER_REQUIRED');
+      return null;
+    }
+    if (!order.customer_address_id) {
+      if (requireComplete) throw new BadRequestException('DELIVERY_ADDRESS_REQUIRED');
+      return null;
+    }
+    if (!order.delivery_zone_id) {
+      if (requireComplete) throw new BadRequestException('DELIVERY_ZONE_REQUIRED');
+      return null;
+    }
+    const address = await em.findOne(CustomerAddress, {
+      where: { id: order.customer_address_id, tenant_id: tenantId },
+    });
+    if (!address) throw new BadRequestException('DELIVERY_ADDRESS_NOT_FOUND');
+    if (address.customer_id !== order.customer_id) throw new BadRequestException('DELIVERY_ADDRESS_CUSTOMER_MISMATCH');
+    const zone = await em.findOne(DeliveryZone, {
+      where: { id: order.delivery_zone_id, tenant_id: tenantId },
+    });
+    if (!zone) throw new BadRequestException('DELIVERY_ZONE_NOT_FOUND');
+    if (!zone.is_active) throw new BadRequestException('DELIVERY_ZONE_INACTIVE');
+    if (zone.branch_id !== order.branch_id) throw new BadRequestException('DELIVERY_ZONE_BRANCH_MISMATCH');
+    order.delivery_fee = zone.fee;
+    return { address, zone };
   }
 
   async transitionState(

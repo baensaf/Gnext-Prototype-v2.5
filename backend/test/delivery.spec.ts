@@ -16,6 +16,7 @@ import { CourierTerminalAssignment } from '../src/entities/CourierTerminalAssign
 import { Delivery } from '../src/entities/Delivery.entity';
 import { DeliveryEvent } from '../src/entities/DeliveryEvent.entity';
 import { Terminal } from '../src/entities/Terminal.entity';
+import { CustomerAddress } from '../src/entities/CustomerAddress.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 
 describe('DeliveryService (R19 Unit & Integration)', () => {
@@ -35,6 +36,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
   let deliveryRepo: any;
   let deliveryEventRepo: any;
   let terminalRepo: any;
+  let customerAddressRepo: any;
   let auditWriter: any;
 
   beforeEach(async () => {
@@ -52,6 +54,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
     deliveryRepo = { findOne: jest.fn(), find: jest.fn(), count: jest.fn().mockResolvedValue(0), create: jest.fn().mockImplementation((d) => d), save: jest.fn().mockImplementation((d) => Promise.resolve(d)) };
     deliveryEventRepo = { create: jest.fn().mockImplementation((e) => e), save: jest.fn().mockImplementation((e) => Promise.resolve(e)), find: jest.fn() };
     terminalRepo = { findOne: jest.fn() };
+    customerAddressRepo = { findOne: jest.fn() };
     auditWriter = { write: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -71,6 +74,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
         { provide: getRepositoryToken(Delivery), useValue: deliveryRepo },
         { provide: getRepositoryToken(DeliveryEvent), useValue: deliveryEventRepo },
         { provide: getRepositoryToken(Terminal), useValue: terminalRepo },
+        { provide: getRepositoryToken(CustomerAddress), useValue: customerAddressRepo },
         { provide: AuditWriter, useValue: auditWriter },
       ],
     }).compile();

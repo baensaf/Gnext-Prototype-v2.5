@@ -101,6 +101,10 @@ export class OrderCreateDto {
   delivery_address_id?: string;
 
   @IsOptional()
+  @IsUUID()
+  delivery_zone_id?: string;
+
+  @IsOptional()
   @IsString()
   coupon_code?: string;
 
@@ -160,6 +164,10 @@ export class OrderUpdateDto {
   @IsOptional()
   @IsUUID()
   delivery_address_id?: string;
+
+  @IsOptional()
+  @IsUUID()
+  delivery_zone_id?: string;
 
   @IsOptional()
   @IsString()

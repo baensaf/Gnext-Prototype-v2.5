@@ -810,13 +810,32 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
       correlationId,
     );
 
-    // Step 1: Create Delivery Order (Total: 400,000 IRR)
+    // Step 1: Create Delivery Order (Total: 400,000 IRR) with real owned delivery context.
+    const deliveryCustomer = await customerService.createCustomer(
+      tenantId,
+      {
+        code: `DEL-${tag}`,
+        first_name: 'Delivery',
+        last_name: 'Customer',
+        mobile: `0912${tag.slice(-7).padStart(7, '0')}`,
+      },
+      correlationId,
+    );
+    const deliveryAddress = await customerService.createAddress(tenantId, deliveryCustomer.id, {
+      title: 'Home',
+      address_text: '12 Central Avenue, Tehran',
+      postal_code: '1111111111',
+      is_default: true,
+    });
     const delOrder = await orderService.createDraft(
       tenantId,
       {
         branch_id: branchId,
         terminal_id: terminalId,
         order_type: 'DELIVERY',
+        customer_id: deliveryCustomer.id,
+        delivery_address_id: deliveryAddress.id,
+        delivery_zone_id: deliveryZoneId,
         items: [
           {
             product_id: productId,

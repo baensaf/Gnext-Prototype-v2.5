@@ -314,7 +314,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                 >
                   {terminalProcessing
                     ? 'ارسال به کارتخوان و ثبت تراکنش...'
-                    : `پرداخت با کارتخوان بانکی (PC-POS) [F9] — ${MoneyUtil.formatCurrency(order.due_amount)} IRR`}
+                    : `پرداخت با کارتخوان بانکی (PC-POS) — ${MoneyUtil.formatCurrency(order.due_amount)} IRR`}
                 </Button>
 
                 {/* Secondary Fast Cash */}
@@ -327,7 +327,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                     onClick={() => handleFastTender('CASH')}
                     sx={{ fontWeight: 700, py: 0.75 }}
                   >
-                    تسویه نقدی دقیق [F8]
+                    تسویه نقدی دقیق
                   </Button>
                   <Button
                     variant="outlined"

@@ -1,5 +1,6 @@
 import type { OrderHeader } from 'src/api/orderApi';
-import type { Customer } from 'src/api/customerApi';
+import type { Customer, CustomerAddress } from 'src/api/customerApi';
+import type { DeliveryZone } from 'src/api/deliveryApi';
 import type { DiningTable } from 'src/api/dineInApi';
 import type { ManualDiscount } from 'src/api/discountsApi';
 import type { Product, Category, OptionItem, OptionGroup, ProductVariant } from 'src/api/catalogApi';
@@ -75,6 +76,7 @@ import { paymentApi } from 'src/api/paymentApi';
 import { catalogApi } from 'src/api/catalogApi';
 import { settingsApi } from 'src/api/settingsApi';
 import { customerApi } from 'src/api/customerApi';
+import { deliveryApi } from 'src/api/deliveryApi';
 import { discountsApi } from 'src/api/discountsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 
@@ -130,6 +132,15 @@ export function PosOrderPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const [customerAddresses, setCustomerAddresses] = useState<CustomerAddress[]>([]);
+  const [selectedDeliveryAddressId, setSelectedDeliveryAddressId] = useState<string>('');
+  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
+  const [selectedDeliveryZoneId, setSelectedDeliveryZoneId] = useState<string>('');
+  const [deliveryOptionsLoading, setDeliveryOptionsLoading] = useState(false);
+  const [deliveryOptionsError, setDeliveryOptionsError] = useState<string | null>(null);
+  const [addAddressOpen, setAddAddressOpen] = useState(false);
+  const [addingAddress, setAddingAddress] = useState(false);
+  const [newAddress, setNewAddress] = useState({ title: '', address_text: '', postal_code: '', is_default: false });
   const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>('DINE_IN');
   const [tableNumber, setTableNumber] = useState('T-01');
   const [selectedTableId, setSelectedTableId] = useState<string>('');
@@ -222,6 +233,7 @@ export function PosOrderPage() {
   // Quote & Totals
   const [appliedDiscountAmount, setAppliedDiscountAmount] = useState<string>('0');
   const [quotedTaxAmount, setQuotedTaxAmount] = useState<string>('0');
+  const [quotedDeliveryFee, setQuotedDeliveryFee] = useState<string>('0');
   const [discountMessage, setDiscountMessage] = useState<string | null>(null);
   const [approvalRequired, setApprovalRequired] = useState(false);
   const [approvalReason, setApprovalReason] = useState<string | null>(null);
@@ -235,6 +247,8 @@ export function PosOrderPage() {
   const [error, setError] = useState<string | null>(null);
 
   const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+  const customerSelectRef = React.useRef<HTMLDivElement | null>(null);
+  const deliveryRestoreRef = React.useRef<{ customerId?: string; addressId?: string; zoneId?: string }>({});
 
   const fetchHeldOrders = useCallback(async (branchId?: string) => {
     try {
@@ -284,6 +298,67 @@ export function PosOrderPage() {
       fetchHeldOrders(selectedBranchId);
     }
   }, [selectedBranchId, fetchHeldOrders]);
+
+  useEffect(() => {
+    if (orderType !== 'DELIVERY' || !selectedCustomerId) {
+      setCustomerAddresses([]);
+      setSelectedDeliveryAddressId('');
+      return;
+    }
+    let cancelled = false;
+    setDeliveryOptionsLoading(true);
+    setDeliveryOptionsError(null);
+    const restoreAddressId = deliveryRestoreRef.current.customerId === selectedCustomerId
+      ? deliveryRestoreRef.current.addressId
+      : undefined;
+    if (!restoreAddressId) setSelectedDeliveryAddressId('');
+    customerApi.getAddresses(selectedCustomerId)
+      .then((addresses) => {
+        if (cancelled) return;
+        setCustomerAddresses(addresses);
+        const defaultAddress = addresses.find((address) => address.is_default);
+        if (restoreAddressId && addresses.some((address) => address.id === restoreAddressId)) {
+          setSelectedDeliveryAddressId(restoreAddressId);
+        } else if (defaultAddress) setSelectedDeliveryAddressId(defaultAddress.id);
+        else if (addresses.length === 1) setSelectedDeliveryAddressId(addresses[0].id);
+      })
+      .catch(() => !cancelled && setDeliveryOptionsError('Unable to load this customer’s delivery addresses.'))
+      .finally(() => !cancelled && setDeliveryOptionsLoading(false));
+    return () => { cancelled = true; };
+  }, [orderType, selectedCustomerId]);
+
+  useEffect(() => {
+    if (orderType !== 'DELIVERY' || !selectedBranchId) {
+      setDeliveryZones([]);
+      setSelectedDeliveryZoneId('');
+      return;
+    }
+    let cancelled = false;
+    setDeliveryOptionsLoading(true);
+    setDeliveryOptionsError(null);
+    const restoreZoneId = deliveryRestoreRef.current.zoneId;
+    if (!restoreZoneId) setSelectedDeliveryZoneId('');
+    deliveryApi.getZones(selectedBranchId)
+      .then((zones) => {
+        if (cancelled) return;
+        const activeZones = zones.filter((zone) => zone.is_active && zone.branch_id === selectedBranchId);
+        setDeliveryZones(activeZones);
+        if (restoreZoneId && activeZones.some((zone) => zone.id === restoreZoneId)) setSelectedDeliveryZoneId(restoreZoneId);
+      })
+      .catch(() => !cancelled && setDeliveryOptionsError('Unable to load delivery zones for this branch.'))
+      .finally(() => !cancelled && setDeliveryOptionsLoading(false));
+    return () => { cancelled = true; };
+  }, [orderType, selectedBranchId]);
+
+  useEffect(() => {
+    if (orderType !== 'DELIVERY' || !selectedDeliveryAddressId || deliveryZones.length === 0 || selectedDeliveryZoneId) return;
+    const postalCode = customerAddresses.find((address) => address.id === selectedDeliveryAddressId)?.postal_code?.trim();
+    if (!postalCode) return;
+    const matches = deliveryZones.filter((zone) => (zone.postal_prefixes || []).some((prefix) => postalCode.startsWith(prefix)));
+    const longestPrefix = Math.max(...matches.flatMap((zone) => (zone.postal_prefixes || []).filter((prefix) => postalCode.startsWith(prefix)).map((prefix) => prefix.length)));
+    const bestMatches = matches.filter((zone) => (zone.postal_prefixes || []).some((prefix) => prefix.length === longestPrefix && postalCode.startsWith(prefix)));
+    if (bestMatches.length === 1) setSelectedDeliveryZoneId(bestMatches[0].id);
+  }, [orderType, selectedDeliveryAddressId, customerAddresses, deliveryZones, selectedDeliveryZoneId]);
 
   const handleOpenProductOptions = async (p: Product) => {
     setSelectedProduct(p);
@@ -410,12 +485,66 @@ export function PosOrderPage() {
     setManualApprovalRequestId(undefined);
     setAppliedDiscountAmount('0');
     setQuotedTaxAmount('0');
+    setQuotedDeliveryFee('0');
     setDiscountMessage(null);
     setApprovalRequired(false);
     setApprovalReason(null);
     setOrderNotes('');
+    setSelectedCustomerId('');
+    setSelectedDeliveryAddressId('');
+    setSelectedDeliveryZoneId('');
+    setCustomerAddresses([]);
+    deliveryRestoreRef.current = {};
     setError(null);
   }, []);
+
+  const deliveryReady = useCallback(() => {
+    if (orderType !== 'DELIVERY') return true;
+    if (!selectedCustomerId) {
+      setError('Select a customer for delivery');
+      toast.warning('Select a customer for delivery');
+      customerSelectRef.current?.focus();
+      return false;
+    }
+    if (!selectedDeliveryAddressId) {
+      setError('Select a delivery address');
+      toast.warning('Select a delivery address');
+      return false;
+    }
+    if (!selectedDeliveryZoneId) {
+      setError('Select a delivery zone');
+      toast.warning('Select a delivery zone');
+      return false;
+    }
+    return true;
+  }, [orderType, selectedCustomerId, selectedDeliveryAddressId, selectedDeliveryZoneId]);
+
+  const handleCreateAddress = async () => {
+    if (!selectedCustomerId || !newAddress.title.trim() || !newAddress.address_text.trim()) {
+      setDeliveryOptionsError('Address title and full address are required.');
+      return;
+    }
+    try {
+      setAddingAddress(true);
+      const created = await customerApi.createAddress(selectedCustomerId, {
+        title: newAddress.title.trim(),
+        address_text: newAddress.address_text.trim(),
+        postal_code: newAddress.postal_code.trim() || undefined,
+        is_default: newAddress.is_default,
+      });
+      const addresses = await customerApi.getAddresses(selectedCustomerId);
+      setCustomerAddresses(addresses);
+      setSelectedDeliveryAddressId(created.id);
+      setSelectedDeliveryZoneId('');
+      setNewAddress({ title: '', address_text: '', postal_code: '', is_default: false });
+      setAddAddressOpen(false);
+      setDeliveryOptionsError(null);
+    } catch (err: any) {
+      setDeliveryOptionsError(err.detail || err.message || 'Unable to add the delivery address.');
+    } finally {
+      setAddingAddress(false);
+    }
+  };
 
   // Hold / Park Cart Order
   const handleHoldOrder = async () => {
@@ -427,6 +556,7 @@ export function PosOrderPage() {
       setError('Please select an active branch first');
       return;
     }
+    if (!deliveryReady()) return;
 
     try {
       setHoldingOrder(true);
@@ -434,6 +564,8 @@ export function PosOrderPage() {
         branch_id: selectedBranchId,
         order_type: orderType,
         customer_id: selectedCustomerId || undefined,
+        delivery_address_id: orderType === 'DELIVERY' ? selectedDeliveryAddressId : undefined,
+        delivery_zone_id: orderType === 'DELIVERY' ? selectedDeliveryZoneId : undefined,
         coupon_code: appliedCouponCode || undefined,
         table_id: orderType === 'DINE_IN' ? selectedTableId || undefined : undefined,
         table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
@@ -473,12 +605,19 @@ export function PosOrderPage() {
     try {
       setResumingOrderId(order.id);
       const fullOrder = await orderApi.getOrderById(order.id);
+      deliveryRestoreRef.current = {
+        customerId: fullOrder.customer_id,
+        addressId: fullOrder.customer_address_id,
+        zoneId: fullOrder.delivery_zone_id,
+      };
       setActiveDraftOrderId(fullOrder.id);
       setSelectedBranchId(fullOrder.branch_id);
       setOrderType((fullOrder.order_type as any) || 'DINE_IN');
       if (fullOrder.table_number) setTableNumber(fullOrder.table_number);
       setSelectedTableId(fullOrder.table_id || '');
       setSelectedCustomerId(fullOrder.customer_id || '');
+      setSelectedDeliveryAddressId(fullOrder.customer_address_id || '');
+      setSelectedDeliveryZoneId(fullOrder.delivery_zone_id || '');
       setCouponInput(fullOrder.coupon_code || '');
       setAppliedCouponCode(fullOrder.coupon_code || '');
       setOrderNotes(fullOrder.notes || '');
@@ -569,7 +708,7 @@ export function PosOrderPage() {
   // Cart financial math via decimal-safe MoneyUtil
   const cartSubtotal = cart.reduce((sum, item) => MoneyUtil.add(sum, item.lineSubtotal, 2), '0');
   const cartTax = quotedTaxAmount;
-  const subtotalPlusTax = MoneyUtil.add(cartSubtotal, cartTax, 2);
+  const subtotalPlusTax = MoneyUtil.add(MoneyUtil.add(cartSubtotal, cartTax, 2), quotedDeliveryFee, 2);
   const cartTotalDue = MoneyUtil.greaterThan(subtotalPlusTax, appliedDiscountAmount)
     ? MoneyUtil.subtract(subtotalPlusTax, appliedDiscountAmount, 2)
     : '0';
@@ -579,6 +718,7 @@ export function PosOrderPage() {
     if (cart.length === 0) {
       setAppliedDiscountAmount('0');
       setQuotedTaxAmount('0');
+      setQuotedDeliveryFee('0');
       setDiscountMessage(null);
       setApprovalRequired(false);
       setApprovalReason(null);
@@ -591,6 +731,9 @@ export function PosOrderPage() {
           branchId: selectedBranchId,
           customerId: selectedCustomerId || undefined,
           orderType,
+          deliveryFee: orderType === 'DELIVERY'
+            ? (deliveryZones.find((zone) => zone.id === selectedDeliveryZoneId)?.fee || '0')
+            : '0',
           items: cart.map((ci) => ({
             productId: ci.product.id,
             variantId: ci.selectedVariant?.id || undefined,
@@ -618,6 +761,7 @@ export function PosOrderPage() {
       const discAmount = MoneyUtil.format(quoteRes.discountTotal || '0', 2);
       setAppliedDiscountAmount(discAmount);
       setQuotedTaxAmount(MoneyUtil.format(quoteRes.taxTotal || '0', 2));
+      setQuotedDeliveryFee(MoneyUtil.format(quoteRes.deliveryFee || (orderType === 'DELIVERY' ? deliveryZones.find((zone) => zone.id === selectedDeliveryZoneId)?.fee || '0' : '0'), 2));
 
       setApprovalRequired(!!quoteRes.approvalRequired);
       setApprovalReason(quoteRes.approvalReason || null);
@@ -649,7 +793,7 @@ export function PosOrderPage() {
         setAppliedCouponCode('');
       }
     }
-  }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType]);
+  }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType, selectedDeliveryZoneId, deliveryZones]);
 
   useEffect(() => {
     evaluateQuote();
@@ -773,6 +917,7 @@ export function PosOrderPage() {
       setError('Please select a branch');
       return;
     }
+    if (!deliveryReady()) return;
     if (approvalRequired) {
       setError('Cannot place order: Manager approval is required for this discount.');
       setApprovalModalOpen(true);
@@ -785,6 +930,8 @@ export function PosOrderPage() {
         branch_id: selectedBranchId,
         order_type: orderType,
         customer_id: selectedCustomerId || undefined,
+        delivery_address_id: orderType === 'DELIVERY' ? selectedDeliveryAddressId : undefined,
+        delivery_zone_id: orderType === 'DELIVERY' ? selectedDeliveryZoneId : undefined,
         coupon_code: appliedCouponCode || undefined,
         table_id: orderType === 'DINE_IN' ? selectedTableId || undefined : undefined,
         table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
@@ -857,6 +1004,9 @@ export function PosOrderPage() {
     tableNumber,
     selectedTableId,
     orderNotes,
+    selectedDeliveryAddressId,
+    selectedDeliveryZoneId,
+    deliveryReady,
     activeDraftOrderId,
     manualApprovalRequestId,
     fetchHeldOrders,
@@ -874,6 +1024,7 @@ export function PosOrderPage() {
       setError('Please select a branch');
       return;
     }
+    if (!deliveryReady()) return;
     if (approvalRequired) {
       setError('Cannot place order: Manager approval is required for this discount.');
       setApprovalModalOpen(true);
@@ -885,6 +1036,8 @@ export function PosOrderPage() {
         branch_id: selectedBranchId,
         order_type: orderType,
         customer_id: selectedCustomerId || undefined,
+        delivery_address_id: orderType === 'DELIVERY' ? selectedDeliveryAddressId : undefined,
+        delivery_zone_id: orderType === 'DELIVERY' ? selectedDeliveryZoneId : undefined,
         coupon_code: appliedCouponCode || undefined,
         table_id: orderType === 'DINE_IN' ? selectedTableId || undefined : undefined,
         table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
@@ -931,6 +1084,9 @@ export function PosOrderPage() {
     tableNumber,
     selectedTableId,
     orderNotes,
+    selectedDeliveryAddressId,
+    selectedDeliveryZoneId,
+    deliveryReady,
     activeDraftOrderId,
     manualApprovalRequestId,
     fetchHeldOrders,
@@ -939,6 +1095,20 @@ export function PosOrderPage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (notesModalOpen) setNotesModalOpen(false);
+        else if (optionDialogOpen) setOptionDialogOpen(false);
+        else if (heldOrdersDrawerOpen) setHeldOrdersDrawerOpen(false);
+        else if (manualDiscountModalOpen) setManualDiscountModalOpen(false);
+        else if (checkoutModalOpen) setCheckoutModalOpen(false);
+        else if (quickAddCustomerOpen) setQuickAddCustomerOpen(false);
+        else if (approvalModalOpen) setApprovalModalOpen(false);
+        else if (addAddressOpen) setAddAddressOpen(false);
+        else if (searchQuery) setSearchQuery('');
+        return;
+      }
+      // Let an open dialog own non-Escape keys so forms retain normal typing behavior.
+      if (notesModalOpen || optionDialogOpen || manualDiscountModalOpen || checkoutModalOpen || quickAddCustomerOpen || approvalModalOpen || addAddressOpen) return;
       // F2 or Ctrl+F / Ctrl+K: Focus search input
       if (e.key === 'F2' || ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'k'))) {
         e.preventDefault();
@@ -987,17 +1157,6 @@ export function PosOrderPage() {
         return;
       }
 
-      // Esc: Close any modal or clear search
-      if (e.key === 'Escape') {
-        if (notesModalOpen) setNotesModalOpen(false);
-        else if (optionDialogOpen) setOptionDialogOpen(false);
-        else if (heldOrdersDrawerOpen) setHeldOrdersDrawerOpen(false);
-        else if (manualDiscountModalOpen) setManualDiscountModalOpen(false);
-        else if (checkoutModalOpen) setCheckoutModalOpen(false);
-        else if (quickAddCustomerOpen) setQuickAddCustomerOpen(false);
-        else if (approvalModalOpen) setApprovalModalOpen(false);
-        else if (searchQuery) setSearchQuery('');
-      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -1016,6 +1175,7 @@ export function PosOrderPage() {
     checkoutModalOpen,
     quickAddCustomerOpen,
     approvalModalOpen,
+    addAddressOpen,
     searchQuery,
   ]);
 
@@ -1085,45 +1245,6 @@ export function PosOrderPage() {
         </Alert>
       )}
 
-      {/* Keyboard Shortcuts Fast-Action Bar */}
-      <Paper
-        variant="outlined"
-        sx={{
-          px: 2,
-          py: 1,
-          mb: 2,
-          borderRadius: 2,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 1,
-          bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100'),
-          border: '1px dashed',
-          borderColor: 'divider',
-        }}
-      >
-        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <Chip size="small" label="F2 / ⌘F" color="primary" variant="filled" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
-          <Typography variant="caption" sx={{ fontWeight: 600, mr: 1.5 }}>Search Catalog</Typography>
-
-          <Chip size="small" label="F4" color="info" variant="filled" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
-          <Typography variant="caption" sx={{ fontWeight: 600, mr: 1.5 }}>Held Orders ({heldOrders.length})</Typography>
-
-          <Chip size="small" label="F6" color="warning" variant="filled" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
-          <Typography variant="caption" sx={{ fontWeight: 600, mr: 1.5 }}>Manual Discount</Typography>
-
-          <Chip size="small" label="F8" color="success" variant="filled" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
-          <Typography variant="caption" sx={{ fontWeight: 600, mr: 1.5 }}>Cash Pay / Submit</Typography>
-
-          <Chip size="small" label="F9" color="secondary" variant="filled" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
-          <Typography variant="caption" sx={{ fontWeight: 600, mr: 1.5 }}>EFT POS Pay</Typography>
-
-          <Chip size="small" label="Esc" color="default" variant="filled" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
-          <Typography variant="caption" sx={{ fontWeight: 600 }}>Clear / Close</Typography>
-        </Stack>
-      </Paper>
-
       <Grid container spacing={2.5}>
         {/* Left Column: High-Density Product Catalog with Categories Rail */}
         <Grid size={{ xs: 12, md: 7, lg: 8 }}>
@@ -1153,10 +1274,11 @@ export function PosOrderPage() {
                 inputRef={searchInputRef}
                 fullWidth
                 size="small"
-                placeholder="[F2] Search products by English/Persian name, SKU or code (e.g. Cheese, همبرگر, PROD-01)..."
+                placeholder="Search products by English/Persian name, SKU or code (e.g. Cheese, همبرگر, PROD-01)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 slotProps={{
+                  htmlInput: { 'aria-keyshortcuts': 'F2 Control+F Meta+F Control+K Meta+K' },
                   input: {
                     startAdornment: (
                       <InputAdornment position="start">
@@ -1361,6 +1483,7 @@ export function PosOrderPage() {
                         fetchHeldOrders();
                         setHeldOrdersDrawerOpen(true);
                       }}
+                      aria-keyshortcuts="F4"
                       sx={{ textTransform: 'none', fontWeight: 600, py: 0.25, px: 1 }}
                     >
                       Held
@@ -1441,11 +1564,23 @@ export function PosOrderPage() {
                   <FormControl fullWidth size="small">
                     <InputLabel>Customer</InputLabel>
                     <Select
+                      inputRef={customerSelectRef}
                       value={selectedCustomerId}
                       label="Customer"
-                      onChange={(e) => setSelectedCustomerId(e.target.value)}
+                      displayEmpty
+                      renderValue={(value) => {
+                        if (!value) return orderType === 'DELIVERY' ? 'Select a customer for delivery' : 'Walk-In Customer';
+                        const customer = customers.find((item) => item.id === value);
+                        return customer ? `${customer.first_name} ${customer.last_name} (${customer.mobile})` : 'Select customer';
+                      }}
+                      onChange={(e) => {
+                        deliveryRestoreRef.current = {};
+                        setSelectedCustomerId(e.target.value);
+                        setSelectedDeliveryAddressId('');
+                        setSelectedDeliveryZoneId('');
+                      }}
                     >
-                      <MenuItem value="">Walk-In Guest</MenuItem>
+                      {orderType !== 'DELIVERY' && <MenuItem value="">Walk-In Customer</MenuItem>}
                       {customers.map((c) => (
                         <MenuItem key={c.id} value={c.id}>
                           {c.first_name} {c.last_name} ({c.mobile})
@@ -1677,6 +1812,39 @@ export function PosOrderPage() {
                   )}
                 </Stack>
 
+                {orderType === 'DELIVERY' && (
+                  <Stack spacing={1} sx={{ p: 1.25, border: 1, borderColor: 'primary.light', borderRadius: 1.5, bgcolor: 'background.neutral' }}>
+                    {!selectedCustomerId ? (
+                      <Alert severity="warning" sx={{ py: 0.25 }}>Select a customer for delivery.</Alert>
+                    ) : (
+                      <>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                          <FormControl fullWidth size="small" disabled={deliveryOptionsLoading} error={Boolean(selectedCustomerId && !selectedDeliveryAddressId)}>
+                            <InputLabel>Delivery Address</InputLabel>
+                            <Select value={selectedDeliveryAddressId} label="Delivery Address" onChange={(e) => { setSelectedDeliveryAddressId(e.target.value); setSelectedDeliveryZoneId(''); }}>
+                              {customerAddresses.map((address) => (
+                                <MenuItem key={address.id} value={address.id}>
+                                  {address.title}{address.is_default ? ' (Default)' : ''} — {address.address_text.length > 45 ? `${address.address_text.slice(0, 45)}…` : address.address_text}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          <Button size="small" variant="outlined" onClick={() => setAddAddressOpen(true)} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>Add address</Button>
+                        </Stack>
+                        {customerAddresses.length === 0 && !deliveryOptionsLoading && <Alert severity="info" sx={{ py: 0.25 }}>No delivery addresses yet. Add an address to continue.</Alert>}
+                        <FormControl fullWidth size="small" disabled={deliveryOptionsLoading} error={Boolean(selectedCustomerId && !selectedDeliveryZoneId)}>
+                          <InputLabel>Delivery Zone</InputLabel>
+                          <Select value={selectedDeliveryZoneId} label="Delivery Zone" onChange={(e) => setSelectedDeliveryZoneId(e.target.value)}>
+                            {deliveryZones.map((zone) => <MenuItem key={zone.id} value={zone.id}>{zone.name} — {MoneyUtil.formatCurrency(zone.fee)} IRR · {zone.estimated_minutes} min</MenuItem>)}
+                          </Select>
+                        </FormControl>
+                        {deliveryOptionsLoading && <LinearProgress />}
+                        {deliveryOptionsError && <Alert severity="error" sx={{ py: 0.25 }}>{deliveryOptionsError}</Alert>}
+                      </>
+                    )}
+                  </Stack>
+                )}
+
                 {/* Active Note Preview Card */}
                 {orderNotes && (
                   <Paper
@@ -1818,10 +1986,11 @@ export function PosOrderPage() {
                     color={appliedManualDiscount ? 'warning' : 'inherit'}
                     size="small"
                     startIcon={<LocalOfferIcon fontSize="small" />}
-                    onClick={() => setManualDiscountModalOpen(true)}
+                  onClick={() => setManualDiscountModalOpen(true)}
+                  aria-keyshortcuts="F6"
                     sx={{ fontWeight: 600, flexShrink: 0, whiteSpace: 'nowrap' }}
                   >
-                    {appliedManualDiscount ? 'Discount [F6] (Active)' : 'Discount [F6]'}
+                    {appliedManualDiscount ? 'Discount (Active)' : 'Discount'}
                   </Button>
                 </Tooltip>
               </Stack>
@@ -1873,6 +2042,12 @@ export function PosOrderPage() {
                   <Typography variant="body2" color="text.secondary">Tax / VAT:</Typography>
                   <Typography variant="body2">{MoneyUtil.formatCurrency(cartTax)} IRR</Typography>
                 </Stack>
+                {orderType === 'DELIVERY' && (
+                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Delivery:</Typography>
+                    <Typography variant="body2">{MoneyUtil.formatCurrency(quotedDeliveryFee)} IRR</Typography>
+                  </Stack>
+                )}
                 {MoneyUtil.greaterThan(appliedDiscountAmount, '0') && (
                   <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
@@ -1902,6 +2077,7 @@ export function PosOrderPage() {
                   fullWidth
                   disabled={cart.length === 0 || terminalPayLoading}
                   onClick={handleDirectTerminalPay}
+                  aria-keyshortcuts="F9"
                   startIcon={terminalPayLoading ? <CircularProgress size={22} color="inherit" /> : <PointOfSaleIcon sx={{ fontSize: 24 }} />}
                   sx={{
                     fontWeight: 800,
@@ -1913,7 +2089,7 @@ export function PosOrderPage() {
                 >
                   {terminalPayLoading
                     ? 'در حال ارسال به کارتخوان و تسویه...'
-                    : 'پرداخت سریع کارتخوان (PC-POS) [F9]'}
+                    : 'پرداخت سریع کارتخوان (PC-POS)'}
                 </Button>
 
                 <Stack direction="row" spacing={1.5}>
@@ -1925,7 +2101,7 @@ export function PosOrderPage() {
                     startIcon={holdingOrder ? <CircularProgress size={18} color="inherit" /> : <PauseIcon />}
                     sx={{ fontWeight: 'bold', py: 1, flexShrink: 0 }}
                   >
-                    {holdingOrder ? 'Holding…' : 'Hold [F4]'}
+                    {holdingOrder ? 'Holding…' : 'Hold'}
                   </Button>
                   <Button
                     variant="outlined"
@@ -1934,9 +2110,10 @@ export function PosOrderPage() {
                     fullWidth
                     disabled={cart.length === 0}
                     onClick={handlePlaceOrder}
+                    aria-keyshortcuts="F8"
                     sx={{ fontWeight: 'bold', py: 1, fontSize: '0.92rem' }}
                   >
-                    {activeDraftOrderId ? 'Update & Place [F8]' : 'Place Order [F8]'}
+                    {activeDraftOrderId ? 'Update & Place' : 'Place Order'}
                   </Button>
                 </Stack>
               </Stack>
@@ -1951,6 +2128,7 @@ export function PosOrderPage() {
         onClose={() => setManualDiscountModalOpen(false)}
         maxWidth="xs"
         fullWidth
+        aria-keyshortcuts="Escape"
       >
         <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
           <LocalOfferIcon color="primary" />
@@ -2221,7 +2399,7 @@ export function PosOrderPage() {
       </Drawer>
 
       {/* Option & Variant Customization Dialog */}
-      <Dialog open={optionDialogOpen} onClose={() => setOptionDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={optionDialogOpen} onClose={() => setOptionDialogOpen(false)} maxWidth="sm" fullWidth aria-keyshortcuts="Escape">
         <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span>Configure {selectedProduct?.name}</span>
           <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
@@ -2343,12 +2521,29 @@ export function PosOrderPage() {
         createRequest
       />
 
+      <Dialog open={addAddressOpen} onClose={() => !addingAddress && setAddAddressOpen(false)} maxWidth="xs" fullWidth aria-keyshortcuts="Escape">
+        <DialogTitle>Add delivery address</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField label="Address title" size="small" autoFocus required value={newAddress.title} onChange={(e) => setNewAddress((current) => ({ ...current, title: e.target.value }))} />
+            <TextField label="Full address" size="small" multiline rows={3} required value={newAddress.address_text} onChange={(e) => setNewAddress((current) => ({ ...current, address_text: e.target.value }))} />
+            <TextField label="Postal code" size="small" value={newAddress.postal_code} onChange={(e) => setNewAddress((current) => ({ ...current, postal_code: e.target.value }))} />
+            <FormControlLabel control={<Checkbox checked={newAddress.is_default} onChange={(e) => setNewAddress((current) => ({ ...current, is_default: e.target.checked }))} />} label="Set as default address" />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddAddressOpen(false)} disabled={addingAddress}>Cancel</Button>
+          <Button variant="contained" onClick={handleCreateAddress} disabled={addingAddress}>{addingAddress ? 'Saving…' : 'Save address'}</Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Quick Add Customer Dialog */}
       <Dialog
         open={quickAddCustomerOpen}
         onClose={() => !creatingCustomer && setQuickAddCustomerOpen(false)}
         maxWidth="xs"
         fullWidth
+        aria-keyshortcuts="Escape"
       >
         <form onSubmit={handleQuickAddCustomer}>
           <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -2423,6 +2618,7 @@ export function PosOrderPage() {
         onClose={() => setNotesModalOpen(false)}
         maxWidth="xs"
         fullWidth
+        aria-keyshortcuts="Escape"
       >
         <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
           <EditNoteIcon color="primary" />

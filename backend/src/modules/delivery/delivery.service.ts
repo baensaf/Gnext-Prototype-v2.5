@@ -15,6 +15,7 @@ import { CourierTerminalAssignment } from '../../entities/CourierTerminalAssignm
 import { Delivery, DeliveryState } from '../../entities/Delivery.entity';
 import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
 import { Terminal } from '../../entities/Terminal.entity';
+import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 
@@ -35,6 +36,7 @@ export class DeliveryService {
     @InjectRepository(Delivery) private readonly deliveryRepo: Repository<Delivery>,
     @InjectRepository(DeliveryEvent) private readonly deliveryEventRepo: Repository<DeliveryEvent>,
     @InjectRepository(Terminal) private readonly terminalRepo: Repository<Terminal>,
+    @InjectRepository(CustomerAddress) private readonly customerAddressRepo: Repository<CustomerAddress>,
     private readonly auditWriter: AuditWriter,
   ) {}
 
@@ -361,7 +363,7 @@ export class DeliveryService {
     return saved;
   }
 
-  async createDeliveryForOrder(tenantId: string, orderId: string, zoneId?: string, addressSnapshot?: any) {
+  async createDeliveryForOrder(tenantId: string, orderId: string, zoneId?: string, _addressSnapshot?: any) {
     const order = await this.orderRepo.findOne({ where: { id: orderId, tenant_id: tenantId } });
     if (!order) throw new NotFoundException(`Order ${orderId} not found`);
 
@@ -372,20 +374,36 @@ export class DeliveryService {
       throw new BadRequestException(`Cannot create a delivery for a ${String(order.state || order.status).toLowerCase()} order`);
     }
 
-    let zoneFee = '0.0000';
-    if (zoneId) {
-      const zone = await this.zoneRepo.findOne({ where: { id: zoneId, tenant_id: tenantId } });
-      if (zone) zoneFee = zone.fee;
-    }
+    if (order.order_type !== 'DELIVERY') throw new BadRequestException('DELIVERY_ORDER_TYPE_REQUIRED');
+    if (!order.customer_id) throw new BadRequestException('DELIVERY_CUSTOMER_REQUIRED');
+    if (!order.customer_address_id) throw new BadRequestException('DELIVERY_ADDRESS_REQUIRED');
+    if (!order.delivery_zone_id) throw new BadRequestException('DELIVERY_ZONE_REQUIRED');
+    if (zoneId && zoneId !== order.delivery_zone_id) throw new BadRequestException('DELIVERY_ZONE_MISMATCH');
+
+    const address = await this.customerAddressRepo.findOne({
+      where: { id: order.customer_address_id, tenant_id: tenantId },
+    });
+    if (!address) throw new BadRequestException('DELIVERY_ADDRESS_NOT_FOUND');
+    if (address.customer_id !== order.customer_id) throw new BadRequestException('DELIVERY_ADDRESS_CUSTOMER_MISMATCH');
+    const zone = await this.zoneRepo.findOne({
+      where: { id: order.delivery_zone_id, tenant_id: tenantId, branch_id: order.branch_id, is_active: true },
+    });
+    if (!zone) throw new BadRequestException('DELIVERY_ZONE_INVALID_OR_INACTIVE');
 
     const delivery = this.deliveryRepo.create({
       tenant_id: tenantId,
       order_id: orderId,
-      zone_id: zoneId || null,
+      zone_id: zone.id,
       state: 'UNASSIGNED',
-      fee: zoneFee || order.delivery_fee || '0.0000',
+      fee: zone.fee,
       currency_code: order.currency_code || 'IRR',
-      address_snapshot: addressSnapshot || { street: 'Main St', recipient_name: 'Customer' },
+      address_snapshot: {
+        address_id: address.id,
+        title: address.title,
+        address_text: address.address_text,
+        postal_code: address.postal_code || null,
+        customer_id: order.customer_id,
+      },
     });
     const saved = await this.deliveryRepo.save(delivery);
 

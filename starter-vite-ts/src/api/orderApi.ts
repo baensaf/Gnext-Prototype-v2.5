@@ -50,6 +50,8 @@ export interface OrderHeader {
   currency_code: string;
   quote_version: string;
   customer_id?: string;
+  customer_address_id?: string;
+  delivery_zone_id?: string;
   customer_name?: string;
   customer_mobile?: string;
   table_id?: string;
