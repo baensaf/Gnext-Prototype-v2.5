@@ -11,6 +11,7 @@ import { Refund, RefundStatus } from '../../entities/Refund.entity';
 import { RefundAllocation } from '../../entities/RefundAllocation.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
+import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
 import { Payment } from '../../entities/Payment.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
@@ -174,7 +175,7 @@ export class RefundService {
           throw new BadRequestException('Bank transfer refund requires a reference number');
         }
         if (targetMethod.kind === 'CASH') {
-          await this.shiftService.getCurrentShift(tenantId, order.terminal_id);
+          await this.shiftService.getCurrentShift(tenantId, order.terminal_id, order.branch_id);
         }
       }
 
@@ -278,7 +279,7 @@ export class RefundService {
       const methodKind = refund.method_kind;
 
       if (methodKind === 'CASH') {
-        const shift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id);
+        const shift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id, order.branch_id);
         refund.shift_id = shift.id;
         await this.shiftService.recordCashRefundMovement(tenantId, shift.id, refund.id, refund.amount, userId, em);
         refund.status = 'SUCCEEDED';
@@ -407,9 +408,30 @@ export class RefundService {
         }
       }
 
+      const fromState = order.state;
       order.state = 'CANCELLED';
+      order.status = 'CANCELLED';
       order.cancelled_at = new Date();
+      order.cancellation_reason_code_id = dto.reasonCodeId || null;
       const savedOrder = await em.save(OrderHeader, order);
+
+      // The order timeline is built from OrderStateEvent. Mutating state without one
+      // leaves the history screen showing a completed order that is somehow cancelled,
+      // with nothing recording who did it or why.
+      await em.save(
+        OrderStateEvent,
+        em.create(OrderStateEvent, {
+          tenant_id: tenantId,
+          order_id: order.id,
+          from_state: fromState,
+          to_state: 'CANCELLED',
+          action: 'CANCEL_PAID_ORDER',
+          reason_code_id: dto.reasonCodeId || null,
+          reason_text: dto.reason || null,
+          approval_request_id: dto.approvalRequestId || null,
+          occurred_by: userId || null,
+        }),
+      );
 
       await this.auditWriter.write({
         tenantId,

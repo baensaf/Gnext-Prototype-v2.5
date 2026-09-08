@@ -905,6 +905,20 @@ export function PosOrderPage() {
     setError(null);
   };
 
+  // Submit must carry the same manual discount that was priced into the on-screen quote.
+  // Sending only the approval id makes the server price the order differently from what
+  // the cashier saw and the manager approved.
+  const buildSubmitPayload = useCallback(() => {
+    if (!appliedManualDiscount || !MoneyUtil.greaterThan(appliedManualDiscount.value, '0')) {
+      return undefined;
+    }
+    const approvalRequestId = appliedManualDiscount.approvalRequestId || manualApprovalRequestId;
+    return {
+      manualDiscount: { ...appliedManualDiscount, approvalRequestId },
+      ...(approvalRequestId ? { approvalRequestIds: [approvalRequestId] } : {}),
+    };
+  }, [appliedManualDiscount, manualApprovalRequestId]);
+
   // 1-Click Direct Terminal POS Checkout (90% Iranian Standard)
   const [terminalPayLoading, setTerminalPayLoading] = useState(false);
 
@@ -954,7 +968,7 @@ export function PosOrderPage() {
         draftId = draft.id;
       }
 
-      const submitPayload = manualApprovalRequestId ? { approvalRequestIds: [manualApprovalRequestId] } : undefined;
+      const submitPayload = buildSubmitPayload();
       const submitted = await orderApi.submitOrder(draftId, submitPayload);
 
       // Instantly query active payment methods to find POS / CARD
@@ -1008,7 +1022,7 @@ export function PosOrderPage() {
     selectedDeliveryZoneId,
     deliveryReady,
     activeDraftOrderId,
-    manualApprovalRequestId,
+    buildSubmitPayload,
     fetchHeldOrders,
     handleClearCart,
     t,
@@ -1060,7 +1074,7 @@ export function PosOrderPage() {
         draftId = draft.id;
       }
 
-      const submitPayload = manualApprovalRequestId ? { approvalRequestIds: [manualApprovalRequestId] } : undefined;
+      const submitPayload = buildSubmitPayload();
       const submitted = await orderApi.submitOrder(draftId, submitPayload);
 
       setPlacedOrder(submitted);
@@ -1088,7 +1102,7 @@ export function PosOrderPage() {
     selectedDeliveryZoneId,
     deliveryReady,
     activeDraftOrderId,
-    manualApprovalRequestId,
+    buildSubmitPayload,
     fetchHeldOrders,
     handleClearCart,
   ]);

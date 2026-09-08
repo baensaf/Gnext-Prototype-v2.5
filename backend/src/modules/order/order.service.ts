@@ -7,7 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, EntityManager } from 'typeorm';
+import { Repository, DataSource, EntityManager, In } from 'typeorm';
 import { OrderHeader, OrderState } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { OrderItemOption } from '../../entities/OrderItemOption.entity';
@@ -29,6 +29,12 @@ import { CreditService } from '../customer/credit.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import Decimal from 'decimal.js';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { BusinessDateUtil } from '../../common/utils/business-date.util';
+import { CashierShift } from '../../entities/CashierShift.entity';
+import { Tenant } from '../../entities/Tenant.entity';
+import { Branch } from '../../entities/Branch.entity';
+import { Payment } from '../../entities/Payment.entity';
+import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { DiningTable } from '../../entities/DiningTable.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { DeliveryZone } from '../../entities/DeliveryZone.entity';
@@ -325,6 +331,24 @@ export class OrderService {
         });
       }
 
+      // Resolve the manual discount to price with. The client sends the discount the
+      // cashier actually entered; approvalRequestIds carries the manager escalation for
+      // it when one was needed. An approval id on its own is NOT a discount — it must
+      // never be turned into an assumed value, or the order prices differently from the
+      // quote the cashier saw and approved.
+      const submittedManualDiscount = dto.manualDiscount
+        ? {
+            ...dto.manualDiscount,
+            approvalRequestId: dto.manualDiscount.approvalRequestId || dto.approvalRequestIds?.[0],
+          }
+        : MoneyUtil.greaterThan(order.discount_total || order.discount_amount || '0.0000', '0.0000')
+          ? {
+              calculation_type: 'FIXED_AMOUNT' as const,
+              value: order.discount_total || order.discount_amount,
+              approvalRequestId: dto.approvalRequestIds?.[0],
+            }
+          : undefined;
+
       // Evaluate discounts & totals
       const quoteRes = await this.discountEngine.evaluateQuote(tenantId, {
         orderDraft: {
@@ -347,10 +371,7 @@ export class OrderService {
             };
           }),
         },
-        manualDiscount: dto.manualDiscount ||
-          (MoneyUtil.greaterThan(order.discount_total || order.discount_amount || '0.0000', '0.0000')
-            ? { calculation_type: 'FIXED_AMOUNT', value: order.discount_total || order.discount_amount }
-            : (dto.approvalRequestIds?.[0] ? { approvalRequestId: dto.approvalRequestIds[0], calculation_type: 'PERCENTAGE', value: '10' } : undefined)),
+        manualDiscount: submittedManualDiscount,
         couponCode: order.coupon_code || undefined,
       });
 
@@ -402,6 +423,17 @@ export class OrderService {
       order.total_amount = quoteRes.grandTotal;
       order.outstanding_total = quoteRes.grandTotal;
       order.due_amount = quoteRes.grandTotal;
+
+      // Stamp the operating day the order belongs to. Without this, business_date stays
+      // NULL on every POS order and closeBusinessDay — which aggregates on business_date —
+      // reports nothing. Prefer the open shift's date so the order, the shift and the day
+      // close agree by construction rather than by coincidence of clock.
+      if (!order.business_date) {
+        const shiftForOrder = order.shift_id
+          ? await em.findOne(CashierShift, { where: { id: order.shift_id, tenant_id: tenantId } })
+          : null;
+        order.business_date = shiftForOrder?.business_date || BusinessDateUtil.today();
+      }
 
       // Determine state transition: POS/KIOSK can move directly to CONFIRMED
       const targetState: OrderState = (order.channel === 'POS' || order.channel === 'KIOSK') ? 'CONFIRMED' : 'SUBMITTED';
@@ -1286,43 +1318,39 @@ export class OrderService {
   async getReceiptData(tenantId: string, id: string) {
     const order = await this.getOrderById(tenantId, id);
 
-    let branchName = 'Tehran Central';
-    let branchAddress = 'Tehran, Iran';
-    let branchPhone = '+98 21 88000000';
+    // A receipt is the artifact the customer walks away with. Inventing a business name,
+    // address or phone when the lookup misses prints a plausible but false identity, so
+    // these stay empty rather than falling back to a hardcoded Tehran branch.
+    const tenant = await this.dataSource.manager.findOne(Tenant, { where: { id: tenantId } });
+    const branch = order.branch_id
+      ? await this.dataSource.manager.findOne(Branch, {
+          where: { id: order.branch_id, tenant_id: tenantId },
+        })
+      : null;
 
-    if (order.branch_id) {
-      try {
-        const branchRes = await this.dataSource.query(
-          `SELECT name, address, phone FROM "branch" WHERE id = $1 LIMIT 1`,
-          [order.branch_id],
-        );
-        if (branchRes && branchRes[0]) {
-          branchName = branchRes[0].name || branchName;
-          branchAddress = branchRes[0].address || branchAddress;
-          branchPhone = branchRes[0].phone || branchPhone;
-        }
-      } catch {
-        // Fallback to default branch info
-      }
-    }
+    const branchName = branch?.name || '';
+    const branchAddress = branch?.address || '';
+    const branchPhone = branch?.phone || '';
 
-    let tenders: any[] = [];
-    try {
-      const pays = await this.dataSource.query(
-        `SELECT p.amount, p.reference_number, pm.name as method_name
-         FROM "payment" p
-         LEFT JOIN "payment_method" pm ON p.payment_method_id = pm.id
-         WHERE p.order_id = $1 AND p.status = 'SUCCEEDED'`,
-        [order.id],
-      );
-      tenders = pays.map((p: any) => ({
-        payment_method_name: p.method_name || 'Card / Cash',
-        amount: MoneyUtil.format(p.amount, 2),
-        reference_number: p.reference_number || undefined,
-      }));
-    } catch {
-      // Fallback
-    }
+    // Tenders drive the "paid by" lines. Swallowing a query failure here silently prints
+    // a receipt with no payment lines at all, so let it surface instead.
+    const payments = await this.dataSource.manager.find(Payment, {
+      where: { tenant_id: tenantId, order_id: order.id, status: 'SUCCEEDED' },
+      order: { initiated_at: 'ASC' },
+    });
+    const methodIds = [...new Set(payments.map((p) => p.method_id).filter(Boolean))];
+    const methods = methodIds.length
+      ? await this.dataSource.manager.find(PaymentMethod, {
+          where: { tenant_id: tenantId, id: In(methodIds) },
+        })
+      : [];
+    const methodNameById = new Map(methods.map((m) => [m.id, m.name]));
+
+    const tenders = payments.map((p) => ({
+      payment_method_name: methodNameById.get(p.method_id) || p.method_kind || '',
+      amount: MoneyUtil.format(p.amount, 2),
+      reference_number: p.reference || undefined,
+    }));
 
     const items = (order.items || []).map((it) => ({
       product_name: it.product_name,
@@ -1336,7 +1364,7 @@ export class OrderService {
 
     return {
       receipt_header: {
-        tenant_name: 'Gnext Retail System',
+        tenant_name: tenant?.name || '',
         branch_name: branchName,
         branch_address: branchAddress,
         branch_phone: branchPhone,

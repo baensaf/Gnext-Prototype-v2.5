@@ -10,6 +10,7 @@ import {
   IsNumberString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ManualDiscountDto } from '../../discounts/dtos/discounts.dto';
 
 export class OrderItemOptionDto {
   @IsUUID()
@@ -194,7 +195,9 @@ export class OrderQuoteRequestDto {
   couponCode?: string;
 
   @IsOptional()
-  manualDiscount?: any;
+  @ValidateNested()
+  @Type(() => ManualDiscountDto)
+  manualDiscount?: ManualDiscountDto;
 
   @IsOptional()
   @IsString()
@@ -215,7 +218,9 @@ export class OrderSubmitDto {
   approvalRequestIds?: string[];
 
   @IsOptional()
-  manualDiscount?: any;
+  @ValidateNested()
+  @Type(() => ManualDiscountDto)
+  manualDiscount?: ManualDiscountDto;
 
   @IsOptional()
   @IsInt()

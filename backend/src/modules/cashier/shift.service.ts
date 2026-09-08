@@ -63,7 +63,15 @@ export class ShiftService {
     return shift;
   }
 
-  async getCurrentShift(tenantId: string, terminalId?: string) {
+  /**
+   * Resolves the shift that cash for a given terminal/branch belongs to.
+   *
+   * branchId matters: orders can carry a null terminal_id, and without a branch filter
+   * this returns the most recently opened shift anywhere in the tenant. Cash then posts
+   * to another branch's drawer and that branch's day close is over by the amount while
+   * the real one is short.
+   */
+  async getCurrentShift(tenantId: string, terminalId?: string | null, branchId?: string | null) {
     const qb = this.shiftRepo
       .createQueryBuilder('s')
       .leftJoinAndSelect('s.movements', 'm')
@@ -72,6 +80,9 @@ export class ShiftService {
 
     if (terminalId) {
       qb.andWhere('s.terminal_id = :terminalId', { terminalId });
+    }
+    if (branchId) {
+      qb.andWhere('s.branch_id = :branchId', { branchId });
     }
 
     qb.orderBy('s.opened_at', 'DESC');

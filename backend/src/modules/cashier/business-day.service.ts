@@ -13,6 +13,11 @@ import { AuditWriter } from '../audit/audit-writer.service';
 import { BusinessDayCloseDto, BusinessDayReopenDto } from './dtos/shift.dto';
 
 import { MoneyUtil } from '../../common/utils/money.util';
+import {
+  ORDER_BUSINESS_DATE_EXPR,
+  NON_REVENUE_ORDER_STATES,
+  REVENUE_ORDER_PREDICATE,
+} from '../../common/utils/business-date.util';
 
 @Injectable()
 export class BusinessDayService {
@@ -76,21 +81,22 @@ export class BusinessDayService {
         throw new ConflictException(`Business day ${dto.businessDate} is already closed`);
       }
 
-      // Aggregate daily orders snapshot
-      const orders = await em.find(OrderHeader, {
-        where: {
-          tenant_id: tenantId,
-          branch_id: dto.branchId,
-          business_date: dto.businessDate,
-        },
-      });
+      // Aggregate daily orders snapshot. Uses the same date expression and state
+      // exclusions as the sales-summary report so the two cross-foot; matching on the
+      // raw business_date column alone silently drops any order stamped before submit
+      // began setting it.
+      const orders = await em
+        .createQueryBuilder(OrderHeader, 'o')
+        .where('o.tenant_id = :tenantId', { tenantId })
+        .andWhere('o.branch_id = :branchId', { branchId: dto.branchId })
+        .andWhere(`${ORDER_BUSINESS_DATE_EXPR('o')} = :businessDate`, { businessDate: dto.businessDate })
+        .andWhere(REVENUE_ORDER_PREDICATE('o'), { nonRevenueStates: NON_REVENUE_ORDER_STATES })
+        .getMany();
 
       let totalSales = '0.0000';
-      let orderCount = orders.length;
+      const orderCount = orders.length;
       for (const o of orders) {
-        if (o.state !== 'CANCELLED') {
-          totalSales = MoneyUtil.add(totalSales, o.grand_total || '0', 4);
-        }
+        totalSales = MoneyUtil.add(totalSales, o.grand_total || '0', 4);
       }
 
       const dayClose = em.create(BusinessDayClose, {

@@ -135,7 +135,7 @@ export class PaymentService {
       const paymentNumber = await this.generatePaymentNumber(tenantId, em);
       let currentShiftId: string | null = null;
       try {
-        const shift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id);
+        const shift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id, order.branch_id);
         currentShiftId = shift?.id || null;
       } catch (e) {
         // Shift not required for non-cash if not opened
@@ -202,7 +202,7 @@ export class PaymentService {
       const methodKind = payment.method_kind;
 
       if (methodKind === 'CASH') {
-        const shift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id);
+        const shift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id, order.branch_id);
         await this.shiftService.recordCashPaymentMovement(tenantId, shift.id, payment.id, payment.amount, userId || undefined, em);
         payment.status = 'SUCCEEDED';
       } else if (methodKind === 'CUSTOMER_CREDIT') {
@@ -381,7 +381,7 @@ export class PaymentService {
         // If payment was cash and shift is active, record a CASH_REFUND / movement
         if (payment.method_kind === 'CASH' && order.terminal_id) {
           try {
-            const shift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id);
+            const shift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id, order.branch_id);
             if (shift) {
               await this.shiftService.recordCashRefundMovement(
                 tenantId,

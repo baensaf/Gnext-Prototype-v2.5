@@ -1,3 +1,5 @@
+import type { ManualDiscount } from './discountsApi';
+
 import { httpClient } from './httpClient';
 
 export interface OrderItemOption {
@@ -116,7 +118,10 @@ export const orderApi = {
     return res.data;
   },
 
-  submitOrder: async (id: string, data?: { quoteVersion?: string; approvalRequestIds?: string[] }): Promise<OrderHeader> => {
+  submitOrder: async (
+    id: string,
+    data?: { quoteVersion?: string; approvalRequestIds?: string[]; manualDiscount?: ManualDiscount }
+  ): Promise<OrderHeader> => {
     const res = await httpClient.post(`/api/v1/orders/${id}/submit`, data || {});
     return res.data;
   },

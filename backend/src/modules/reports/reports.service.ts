@@ -30,6 +30,12 @@ import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { SavedReportView } from '../../entities/SavedReportView.entity';
 import { ReportExportJob } from '../../entities/ReportExportJob.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
+import {
+  BusinessDateUtil,
+  ORDER_BUSINESS_DATE_EXPR,
+  NON_REVENUE_ORDER_STATES,
+  REVENUE_ORDER_PREDICATE,
+} from '../../common/utils/business-date.util';
 
 @Injectable()
 export class ReportsService {
@@ -92,6 +98,18 @@ export class ReportsService {
     ];
   }
 
+  /**
+   * Filters orders on the operating day they belong to, matching how BusinessDayService
+   * aggregates. Falls back to the placement timestamp's local date for orders written
+   * before business_date was stamped at submit, so a report and a day close never
+   * disagree about which day an order landed in.
+   */
+  private applyBusinessDateFilter(query: any, alias: string, startDate?: string, endDate?: string) {
+    const expr = ORDER_BUSINESS_DATE_EXPR(alias);
+    if (startDate) query.andWhere(`${expr} >= :bdStart`, { bdStart: startDate });
+    if (endDate) query.andWhere(`${expr} <= :bdEnd`, { bdEnd: endDate });
+  }
+
   private applyDateFilter(query: any, dateColumn: string, startDate?: string, endDate?: string) {
     if (startDate && endDate) {
       const start = new Date(startDate);
@@ -119,7 +137,10 @@ export class ReportsService {
           .where('o.tenant_id = :tenantId', { tenantId });
         if (branchId) qb.andWhere('o.branch_id = :branchId', { branchId });
         if (channel) qb.andWhere('(o.channel = :channel OR o.order_type = :channel)', { channel });
-        this.applyDateFilter(qb, 'o.placed_at', startDate, endDate);
+        // Revenue basis must match closeBusinessDay: same date expression, same state
+        // exclusions. Cancelled orders are not revenue, and drafts were never placed.
+        this.applyBusinessDateFilter(qb, 'o', startDate, endDate);
+        qb.andWhere(REVENUE_ORDER_PREDICATE('o'), { nonRevenueStates: NON_REVENUE_ORDER_STATES });
 
         const orders = await qb.orderBy('o.placed_at', 'DESC').getMany();
 
@@ -144,7 +165,10 @@ export class ReportsService {
           const pack = MoneyUtil.format(o.packaging_total || '0', 2);
           const del = MoneyUtil.format(o.delivery_fee || '0', 2);
           const mod = MoneyUtil.format(o.modifier_total || '0', 2);
-          const net = MoneyUtil.subtract(tot, tax, 2);
+          // Net of tax AND of anything given back. paid/refunded stay gross alongside,
+          // so a refunded order still shows what was tendered — but net sales moves,
+          // which is what a refund is supposed to do to the day's revenue.
+          const net = MoneyUtil.subtract(MoneyUtil.subtract(tot, tax, 2), ref, 2);
           const rawOut = MoneyUtil.subtract(tot, paid, 2);
           const out = MoneyUtil.lessThan(rawOut, '0') ? '0.00' : rawOut;
 
@@ -160,7 +184,7 @@ export class ReportsService {
           outstandingTotal = MoneyUtil.add(outstandingTotal, out, 2);
 
           return {
-            business_date: o.placed_at ? new Date(o.placed_at).toISOString().split('T')[0] : '—',
+            business_date: o.business_date || BusinessDateUtil.fromDate(o.placed_at) || '—',
             branch_id: o.branch_id,
             channel: o.order_type || 'POS',
             type: o.order_type || 'PICKUP',
