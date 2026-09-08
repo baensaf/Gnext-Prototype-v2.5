@@ -194,9 +194,10 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
   describe('Seed Profiles & System Reset', () => {
     it('should return available seed profiles', () => {
       const profiles = service.getSeedProfiles();
-      expect(profiles).toHaveLength(2);
+      expect(profiles).toHaveLength(3);
       expect(profiles[0].id).toBe('MINIMAL');
       expect(profiles[1].id).toBe('DEMO_RESTAURANT');
+      expect(profiles[2].id).toBe('DEMO_TRADING_DAY');
     });
 
     it('prepares a clean demo by resetting before applying the demo seed', async () => {

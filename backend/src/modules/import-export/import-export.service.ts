@@ -10,6 +10,7 @@ import { Category } from '../../entities/Category.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { normalizePhone } from '../customer/customer.service';
+import { seedDemoTradingDay } from '../../seeds/demo-trading-day';
 
 export interface AutoMapResult {
   header: string;
@@ -670,6 +671,11 @@ export class ImportExportService {
    * Apply database seed profile
    */
   async applySeedProfile(tenantId: string, userId: string, profileId: string): Promise<{ success: boolean; profile: string }> {
+    if (profileId === 'DEMO_TRADING_DAY') {
+      await this.applyDemoTradingDay(tenantId, userId);
+      return { success: true, profile: profileId };
+    }
+
     if (profileId === 'DEMO_RESTAURANT') {
       let burgerCat = await this.categoryRepo.findOne({ where: { tenant_id: tenantId, code: 'CAT-BURGER' } });
       if (!burgerCat) {
@@ -710,6 +716,30 @@ export class ImportExportService {
   }
 
   /**
+   * Seeds one closed trading day dated yesterday, so the reports, shift and business-day
+   * screens open with reconcilable figures instead of empty state. Today is left clean,
+   * so orders rung up during the demo are the only thing on today's numbers.
+   */
+  async applyDemoTradingDay(tenantId: string, userId: string) {
+    const result = await this.dataSource.transaction((em) => seedDemoTradingDay(em, tenantId, userId));
+
+    if (result.seeded) {
+      await this.auditWriter.write({
+        tenantId,
+        actorType: 'ADMIN',
+        actorId: userId,
+        action: 'SYSTEM_SEED_APPLIED',
+        entityType: 'SYSTEM',
+        entityId: tenantId,
+        correlationId: `SEED-${Date.now()}`,
+        afterData: { profileId: 'DEMO_TRADING_DAY', ...result },
+      });
+    }
+
+    return result;
+  }
+
+  /**
    * Produce the same clean operational starting point for every prototype demo.
    * Master data is retained, while the required demo catalog baseline is
    * idempotently re-applied after all operational queues are cleared.
@@ -717,12 +747,14 @@ export class ImportExportService {
   async resetAndSeedDemo(tenantId: string, userId: string) {
     const reset = await this.systemReset(tenantId, userId);
     const seed = await this.applySeedProfile(tenantId, userId, 'DEMO_RESTAURANT');
+    const tradingDay = await this.applyDemoTradingDay(tenantId, userId);
 
     return {
       resetTables: reset.resetTables,
       seedProfile: seed.profile,
+      tradingDay,
       baseline: {
-        orders: 0,
+        orders: tradingDay.orderCount,
         kdsTickets: 0,
         deliveries: 0,
         activeShifts: 0,
@@ -744,6 +776,12 @@ export class ImportExportService {
         id: 'DEMO_RESTAURANT',
         name: 'Demo Restaurant & Quick Service',
         description: 'Populates sample categories (Burgers, Drinks, Combos), products, pricing, and initial stock.',
+      },
+      {
+        id: 'DEMO_TRADING_DAY',
+        name: 'Demo Closed Trading Day',
+        description:
+          'Adds one closed business day dated yesterday — five orders, cash and card tenders, one cancellation and one partial refund — so reports, shifts and day-close open with reconcilable figures.',
       },
     ];
   }
