@@ -108,6 +108,7 @@ export class DineInController {
   async releaseTable(@Param('id') tableId: string, @Body() body: { nextStatus?: 'AVAILABLE' | 'CLEANING' }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
-    return await this.dineInService.releaseTable(tenantId, tableId, body?.nextStatus, correlationId);
+    const userId = (req as any).user?.id || (req as any).userId;
+    return await this.dineInService.releaseTable(tenantId, tableId, body?.nextStatus, correlationId, userId);
   }
 }

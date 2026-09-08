@@ -553,30 +553,62 @@ export class DineInService {
     });
   }
 
-  async releaseTable(tenantId: string, tableId: string, nextStatus?: 'AVAILABLE' | 'CLEANING', correlationId?: string) {
-    const session = await this.sessionRepo.findOne({ where: { tenant_id: tenantId, table_id: tableId, closed_at: null as any } });
-    if (session) {
-      session.closed_at = new Date();
-      session.status = nextStatus || 'AVAILABLE';
-      await this.sessionRepo.save(session);
-    }
+  async releaseTable(tenantId: string, tableId: string, nextStatus?: 'AVAILABLE' | 'CLEANING', correlationId?: string, userId?: string) {
+    const result = await this.dataSource.transaction(async (em) => {
+      const table = await em.findOne(DiningTable, { where: { id: tableId, tenant_id: tenantId } });
+      if (!table) throw new NotFoundException('Table not found');
 
-    const occ = this.occupancyRepo.create({
-      tenant_id: tenantId,
-      table_id: tableId,
-      event_type: 'RELEASE',
-      details: { nextStatus: nextStatus || 'AVAILABLE' },
+      // getFloorPlan() treats a table as OCCUPIED whenever an order in one of these
+      // states is linked to it, regardless of the table_session row below. Releasing
+      // the table must therefore resolve that order, not just close the session.
+      const activeOrder = await em
+        .createQueryBuilder(OrderHeader, 'o')
+        .setLock('pessimistic_write')
+        .where('o.tenant_id = :tenantId', { tenantId })
+        .andWhere('o.table_id = :tableId', { tableId })
+        .andWhere('o.state IN (:...states)', { states: ['DRAFT', 'SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY'] })
+        .getOne();
+
+      if (activeOrder) {
+        const outstanding = activeOrder.outstanding_total || '0.0000';
+        if (MoneyUtil.greaterThan(outstanding, '0.0000')) {
+          throw new BadRequestException(
+            `Cannot release table: order ${activeOrder.order_number} still has an outstanding balance of ${outstanding}`,
+          );
+        }
+        activeOrder.state = 'COMPLETED';
+        activeOrder.status = 'COMPLETED';
+        activeOrder.completed_at = new Date();
+        await em.save(OrderHeader, activeOrder);
+      }
+
+      const session = await em.findOne(TableSession, { where: { tenant_id: tenantId, table_id: tableId, closed_at: null as any } });
+      if (session) {
+        session.closed_at = new Date();
+        session.status = nextStatus || 'AVAILABLE';
+        await em.save(TableSession, session);
+      }
+
+      const occ = em.create(TableOccupancyEvent, {
+        tenant_id: tenantId,
+        table_id: tableId,
+        event_type: 'RELEASE',
+        details: { nextStatus: nextStatus || 'AVAILABLE', releasedOrderId: activeOrder?.id || null },
+      });
+      await em.save(TableOccupancyEvent, occ);
+
+      return { releasedOrderId: activeOrder?.id || null };
     });
-    await this.occupancyRepo.save(occ);
 
     await this.auditWriter.write({
       tenantId,
-      actorType: 'ADMIN',
+      actorType: userId ? 'ADMIN' : 'SYSTEM',
+      actorId: userId,
       action: 'TABLE_RELEASED',
       correlationId: correlationId || 'corr-release',
-      details: { tableId, nextStatus: nextStatus || 'AVAILABLE' },
+      details: { tableId, nextStatus: nextStatus || 'AVAILABLE', completedOrderId: result.releasedOrderId },
     });
 
-    return { success: true, tableId };
+    return { success: true, tableId, ...result };
   }
 }
