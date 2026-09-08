@@ -183,6 +183,7 @@
     "delivery": "ارسال با پیک",
     "cartEmpty": "سبد خرید خالی است. ابتدا اقلام را انتخاب کنید.",
     "paymentSuccess": "پرداخت با موفقیت ثبت شد",
+    "paymentVoided": "تلاش پرداخت لغو شد",
     "directTerminalPay": "پرداخت سریع کارتخوان (PC-POS)"
   },
   "kiosk": {
@@ -250,6 +251,7 @@
       "details": "جزئیات",
       "receipt": "فاکتور",
       "reprint": "چاپ مجدد",
+      "pay": "پرداخت",
       "prep": "پخت",
       "ready": "آماده",
       "complete": "تکمیل",
@@ -392,6 +394,7 @@
     "mergeOrders": "ادغام سفارش‌ها",
     "splitOrder": "تفکیک اقلام سفارش",
     "guestBillPreview": "پیش‌نمایش صورت‌حساب",
+    "payBill": "پرداخت صورت‌حساب",
     "available": "خالی",
     "occupied": "مشغول",
     "reserved": "رزرو شده",
@@ -828,6 +831,7 @@
   },
   "payments": {
     "title": "تراکنش‌های پرداخت و پایانه‌ها",
+    "void": "لغو",
     "tabTransactions": "سوابق پرداخت‌ها",
     "tabDevices": "کارتخوان‌ها و پایانه‌ها",
     "tabAccounts": "حساب‌های تسویه‌حساب",

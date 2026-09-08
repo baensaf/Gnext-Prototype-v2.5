@@ -17,6 +17,7 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import HistoryIcon from '@mui/icons-material/History';
 import SecurityIcon from '@mui/icons-material/Security';
+import PaymentIcon from '@mui/icons-material/Payment';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
@@ -69,6 +70,8 @@ import { customerApi } from 'src/api/customerApi';
 import { settingsApi } from 'src/api/settingsApi';
 import { httpClient as axios } from 'src/api/httpClient';
 
+import { CheckoutModal } from 'src/components/CheckoutModal';
+
 
 export function OrdersWorkflowPage() {
   const { t } = useTranslation();
@@ -92,6 +95,10 @@ export function OrdersWorkflowPage() {
   // Receipt Modal State
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
+
+  // Pay Existing Order (Checkout) State
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [payOrderId, setPayOrderId] = useState<string | null>(null);
 
   // Prototype reprint workflow
   const [reprintDialogOpen, setReprintDialogOpen] = useState(false);
@@ -208,6 +215,11 @@ export function OrdersWorkflowPage() {
     } catch (err: any) {
       setError(err.detail || t('orders.errors.updateStatusFailed'));
     }
+  };
+
+  const handleOpenPayment = (order: OrderHeader) => {
+    setPayOrderId(order.id);
+    setPayModalOpen(true);
   };
 
   const handleOpenCancelDialog = (order: OrderHeader) => {
@@ -577,6 +589,21 @@ export function OrdersWorkflowPage() {
                               {t('orders.actions.reprint')}
                             </Button>
 
+                            {order.status !== 'CANCELLED' && MoneyUtil.greaterThan(order.due_amount, '0') && (
+                              <Button
+                                color="success"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenPayment(order);
+                                }}
+                                size="small"
+                                startIcon={<PaymentIcon />}
+                                variant="contained"
+                              >
+                                {t('orders.actions.pay')}
+                              </Button>
+                            )}
+
                             {order.status === 'SUBMITTED' && (
                               <Button
                                 color="warning"
@@ -754,6 +781,23 @@ export function OrdersWorkflowPage() {
                             >
                               {t('orders.actions.reprint')}
                             </Button>
+
+                            {order.status !== 'CANCELLED' && MoneyUtil.greaterThan(order.due_amount, '0') && (
+                              <Button
+                                color="success"
+                                fullWidth
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenPayment(order);
+                                }}
+                                size="small"
+                                startIcon={<PaymentIcon />}
+                                sx={{ fontWeight: 'bold' }}
+                                variant="contained"
+                              >
+                                {t('orders.actions.pay')}
+                              </Button>
+                            )}
 
                             {order.status === 'SUBMITTED' && (
                               <Button
@@ -1327,6 +1371,19 @@ export function OrdersWorkflowPage() {
                 >
                   {t('orders.actions.reprint')}
                 </Button>
+                {selectedDrawerOrder.status !== 'CANCELLED' && MoneyUtil.greaterThan(selectedDrawerOrder.due_amount, '0') && (
+                  <Button
+                    color="success"
+                    variant="contained"
+                    startIcon={<PaymentIcon />}
+                    onClick={() => {
+                      setDrawerOpen(false);
+                      handleOpenPayment(selectedDrawerOrder);
+                    }}
+                  >
+                    {t('orders.actions.pay')}
+                  </Button>
+                )}
                 {selectedDrawerOrder.status === 'SUBMITTED' && (
                   <Button
                     color="warning"
@@ -1430,6 +1487,16 @@ export function OrdersWorkflowPage() {
           <Button onClick={() => setInspectingJson(null)}>{t('orders.drawer.close')}</Button>
         </DialogActions>
       </Dialog>
+
+      <CheckoutModal
+        open={payModalOpen}
+        orderId={payOrderId}
+        onClose={() => setPayModalOpen(false)}
+        onPaymentComplete={() => {
+          setPayModalOpen(false);
+          loadData();
+        }}
+      />
     </Box>
   );
 }

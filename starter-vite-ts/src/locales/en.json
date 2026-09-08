@@ -183,6 +183,7 @@
     "delivery": "Delivery",
     "cartEmpty": "Cart is empty. Add items first.",
     "paymentSuccess": "Payment recorded successfully",
+    "paymentVoided": "Payment attempt voided",
     "directTerminalPay": "Direct Terminal Pay (PC-POS)"
   },
   "kiosk": {
@@ -250,6 +251,7 @@
       "details": "Details",
       "receipt": "Receipt",
       "reprint": "Reprint",
+      "pay": "Pay",
       "prep": "Prep",
       "ready": "Ready",
       "complete": "Complete",
@@ -392,6 +394,7 @@
     "mergeOrders": "Merge Orders",
     "splitOrder": "Split Order Items",
     "guestBillPreview": "Guest Bill Preview",
+    "payBill": "Pay Bill",
     "available": "Available",
     "occupied": "Occupied",
     "reserved": "Reserved",
@@ -828,6 +831,7 @@
   },
   "payments": {
     "title": "Payment Transactions & Devices",
+    "void": "Cancel",
     "tabTransactions": "Payment Records",
     "tabDevices": "POS Terminals & Devices",
     "tabAccounts": "Settlement Accounts",

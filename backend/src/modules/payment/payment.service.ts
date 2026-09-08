@@ -317,6 +317,39 @@ export class PaymentService {
     });
   }
 
+  // Voids an abandoned PENDING/FAILED payment intent so a new attempt can be made on the
+  // order. No money has moved for these statuses (that only happens on SUCCEEDED in
+  // processPayment above), so this is a plain status flip with no ledger reconciliation.
+  async voidPayment(tenantId: string, id: string, userId?: string, correlationId?: string) {
+    return await this.dataSource.transaction(async (em) => {
+      const payment = await em.findOne(Payment, {
+        where: { id, tenant_id: tenantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!payment) throw new NotFoundException(`Payment ${id} not found`);
+
+      if (payment.status !== 'PENDING' && payment.status !== 'FAILED') {
+        throw new BadRequestException(`Only PENDING or FAILED payments can be voided. Current status: ${payment.status}`);
+      }
+
+      payment.status = 'CANCELLED';
+      const saved = await em.save(Payment, payment);
+
+      await this.auditWriter.write({
+        tenantId,
+        actorType: userId ? 'ADMIN' : 'SYSTEM',
+        actorId: userId,
+        action: 'PAYMENT_VOIDED',
+        entityType: 'Payment',
+        entityId: saved.id,
+        correlationId: correlationId || 'system',
+        afterData: saved,
+      });
+
+      return saved;
+    });
+  }
+
   async reversePayment(tenantId: string, id: string, dto: { reason: string; approvalRequestId?: string }, userId?: string, correlationId?: string) {
     return await this.dataSource.transaction(async (em) => {
       const payment = await em.findOne(Payment, {

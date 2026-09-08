@@ -11,6 +11,7 @@ import TableBarIcon from '@mui/icons-material/TableBar';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import CallSplitIcon from '@mui/icons-material/CallSplit';
+import PaymentIcon from '@mui/icons-material/Payment';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -42,6 +43,7 @@ import { orderApi } from 'src/api/orderApi';
 import { dineInApi } from 'src/api/dineInApi';
 
 import { Label } from 'src/components/label';
+import { CheckoutModal } from 'src/components/CheckoutModal';
 
 export function DineInPage() {
   const { t } = useTranslation();
@@ -75,6 +77,10 @@ export function DineInPage() {
   // Guest Bill Dialog
   const [billDialogOpen, setBillDialogOpen] = useState(false);
   const [billHtml, setBillHtml] = useState<string>('');
+
+  // Pay Bill (Checkout) Dialog
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [payOrderId, setPayOrderId] = useState<string | null>(null);
 
   // New Table / Section Drawers
   const [tableDrawerOpen, setTableDrawerOpen] = useState(false);
@@ -197,6 +203,12 @@ export function DineInPage() {
     } catch (err: any) {
       setError(err.detail || err.message || 'Failed to generate guest bill preview');
     }
+  };
+
+  const handleOpenPayment = (tbl: DiningTable) => {
+    if (!tbl.active_order_id) return;
+    setPayOrderId(tbl.active_order_id);
+    setPayModalOpen(true);
   };
 
   const handleReleaseTable = async (tableId: string) => {
@@ -484,6 +496,11 @@ export function DineInPage() {
                               <ReceiptLongIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
+                          <Tooltip title={t('dineIn.payBill', 'Pay Bill')}>
+                            <IconButton size="small" color="success" onClick={() => handleOpenPayment(tbl)}>
+                              <PaymentIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                         </Stack>
                         <Button variant="outlined" size="small" color="success" fullWidth startIcon={<CheckCircleIcon />} onClick={() => handleReleaseTable(tbl.id)}>
                           {t('dineIn.releaseVacate', 'Release / Vacate')}
@@ -719,6 +736,16 @@ export function DineInPage() {
           </Box>
         </Box>
       </Drawer>
+
+      <CheckoutModal
+        open={payModalOpen}
+        orderId={payOrderId}
+        onClose={() => setPayModalOpen(false)}
+        onPaymentComplete={() => {
+          setPayModalOpen(false);
+          loadData();
+        }}
+      />
     </Box>
   );
 }

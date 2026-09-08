@@ -144,6 +144,24 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     }
   };
 
+  const handleVoidPayment = async (paymentId: string) => {
+    if (!orderId) return;
+    try {
+      setLoading(true);
+      await paymentApi.voidPayment(paymentId);
+      const updatedPays = await paymentApi.getOrderPayments(orderId);
+      setPayments(updatedPays);
+      setError(null);
+      toast.success(t('pos.paymentVoided', 'Payment attempt voided'));
+    } catch (err: any) {
+      const errorMsg = err.detail || 'Failed to void payment';
+      setError(errorMsg);
+      showErrorToast(err, errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleFastTender = useCallback(
     async (methodKind: 'CASH' | 'CARD' | 'POS') => {
       if (!order || !orderId || MoneyUtil.isZero(order.due_amount)) return;
@@ -527,21 +545,38 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                         <TableCell align="right">{t('payments.amount', 'Amount')}</TableCell>
                         <TableCell>{t('payments.reference', 'Ref / POS')}</TableCell>
                         <TableCell>{t('common.status', 'Status')}</TableCell>
+                        <TableCell />
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {payments.map((p) => (
-                        <TableRow key={p.id}>
-                          <TableCell>{new Date(p.recorded_at).toLocaleTimeString()}</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 'bold', color: 'success.main' }}>
-                            {MoneyUtil.formatCurrency(p.amount)} IRR
-                          </TableCell>
-                          <TableCell>{p.reference_number || p.reference || '—'}</TableCell>
-                          <TableCell>
-                            <Chip label={p.status} color="success" size="small" />
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {payments.map((p) => {
+                        const isVoidable = p.status === 'PENDING' || p.status === 'FAILED';
+                        const statusColor =
+                          p.status === 'SUCCEEDED'
+                            ? 'success'
+                            : p.status === 'FAILED' || p.status === 'CANCELLED'
+                              ? 'error'
+                              : 'warning';
+                        return (
+                          <TableRow key={p.id}>
+                            <TableCell>{new Date(p.recorded_at).toLocaleTimeString()}</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 'bold', color: statusColor === 'success' ? 'success.main' : 'text.secondary' }}>
+                              {MoneyUtil.formatCurrency(p.amount)} IRR
+                            </TableCell>
+                            <TableCell>{p.reference_number || p.reference || '—'}</TableCell>
+                            <TableCell>
+                              <Chip label={p.status} color={statusColor} size="small" />
+                            </TableCell>
+                            <TableCell align="right">
+                              {isVoidable && (
+                                <Button size="small" color="error" onClick={() => handleVoidPayment(p.id)} disabled={loading}>
+                                  {t('payments.void', 'Cancel')}
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </TableContainer>

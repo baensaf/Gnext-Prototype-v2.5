@@ -184,6 +184,15 @@ export const paymentApi = {
     };
   },
 
+  voidPayment: async (id: string): Promise<PaymentRecord> => {
+    const res = await httpClient.post(`/api/v1/payments/${id}/void`, {});
+    return {
+      ...res.data,
+      recorded_at: res.data.posted_at || res.data.initiated_at || new Date().toISOString(),
+      reference_number: res.data.reference,
+    };
+  },
+
   postPayment: async (data: {
     order_id: string;
     payment_method_id: string;

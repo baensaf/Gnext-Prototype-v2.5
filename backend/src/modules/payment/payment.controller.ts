@@ -45,6 +45,14 @@ export class PaymentController {
     return await this.paymentService.processPayment(tenantId, id, body, userId, correlationId);
   }
 
+  @Post('payments/:id/void')
+  async voidPayment(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    const correlationId = (req as any).correlationId;
+    return await this.paymentService.voidPayment(tenantId, id, userId, correlationId);
+  }
+
   @Post('payments/:id/reverse')
   async reversePayment(
     @Param('id') id: string,
