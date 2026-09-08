@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 
 import CodeIcon from '@mui/icons-material/Code';
 import CloseIcon from '@mui/icons-material/Close';
+import PrintIcon from '@mui/icons-material/Print';
 import CancelIcon from '@mui/icons-material/Cancel';
 import PersonIcon from '@mui/icons-material/Person';
 import SearchIcon from '@mui/icons-material/Search';
@@ -61,6 +62,7 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 
+import { kdsApi } from 'src/api/kdsApi';
 import { orderApi } from 'src/api/orderApi';
 import { paymentApi } from 'src/api/paymentApi';
 import { customerApi } from 'src/api/customerApi';
@@ -75,6 +77,7 @@ export function OrdersWorkflowPage() {
   const [reasonCodes, setReasonCodes] = useState<ReasonCode[]>([]);
   const [customersMap, setCustomersMap] = useState<Map<string, Customer>>(new Map());
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   // View state: 'table' vs 'kanban'
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('table');
@@ -89,6 +92,13 @@ export function OrdersWorkflowPage() {
   // Receipt Modal State
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
+
+  // Prototype reprint workflow
+  const [reprintDialogOpen, setReprintDialogOpen] = useState(false);
+  const [reprintDocumentType, setReprintDocumentType] = useState<'CUSTOMER_RECEIPT' | 'KITCHEN_TICKET'>('CUSTOMER_RECEIPT');
+  const [reprintReason, setReprintReason] = useState('');
+  const [reprintError, setReprintError] = useState<string | null>(null);
+  const [reprintSubmitting, setReprintSubmitting] = useState(false);
 
   // Order Details & Audit Drawer State
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -231,6 +241,51 @@ export function OrdersWorkflowPage() {
     }
   };
 
+  const handleOpenReprintDialog = (order: OrderHeader) => {
+    setSelectedOrder(order);
+    setReprintDocumentType('CUSTOMER_RECEIPT');
+    setReprintReason('');
+    setReprintError(null);
+    setReprintDialogOpen(true);
+  };
+
+  const handleCloseReprintDialog = () => {
+    if (reprintSubmitting) return;
+    setReprintDialogOpen(false);
+    setReprintError(null);
+  };
+
+  const handleConfirmReprint = async () => {
+    const reason = reprintReason.trim();
+    if (!selectedOrder || !reason) {
+      setReprintError(t('orders.reprintDialog.reasonRequired'));
+      return;
+    }
+
+    try {
+      setReprintSubmitting(true);
+      setReprintError(null);
+      const printJob = await kdsApi.reprintOrder(selectedOrder.id, reprintDocumentType, reason);
+      if (!printJob) {
+        throw new Error(t('orders.reprintDialog.failed'));
+      }
+
+      const documentLabel = reprintDocumentType === 'KITCHEN_TICKET'
+        ? t('orders.reprintDialog.kitchenTicket')
+        : t('orders.reprintDialog.customerReceipt');
+      setSuccess(t('orders.reprintDialog.success', {
+        document: documentLabel,
+        orderNumber: selectedOrder.order_number,
+      }));
+      setReprintDialogOpen(false);
+      setSelectedOrder(null);
+    } catch (err: any) {
+      setReprintError(err.detail || err.message || t('orders.reprintDialog.failed'));
+    } finally {
+      setReprintSubmitting(false);
+    }
+  };
+
   const getStatusChipColor = (status: string) => {
     switch (status) {
       case 'SUBMITTED': return 'info';
@@ -307,6 +362,12 @@ export function OrdersWorkflowPage() {
       {error && (
         <Alert onClose={() => setError(null)} severity="error" sx={{ mb: 3 }}>
           {error}
+        </Alert>
+      )}
+
+      {success && (
+        <Alert onClose={() => setSuccess(null)} severity="success" sx={{ mb: 3 }}>
+          {success}
         </Alert>
       )}
 
@@ -504,6 +565,18 @@ export function OrdersWorkflowPage() {
                               {t('orders.actions.receipt')}
                             </Button>
 
+                            <Button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenReprintDialog(order);
+                              }}
+                              size="small"
+                              startIcon={<PrintIcon />}
+                              variant="outlined"
+                            >
+                              {t('orders.actions.reprint')}
+                            </Button>
+
                             {order.status === 'SUBMITTED' && (
                               <Button
                                 color="warning"
@@ -668,6 +741,20 @@ export function OrdersWorkflowPage() {
                               {t('orders.actions.detailsAudit')}
                             </Button>
 
+                            <Button
+                              color="inherit"
+                              fullWidth
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenReprintDialog(order);
+                              }}
+                              size="small"
+                              startIcon={<PrintIcon />}
+                              variant="outlined"
+                            >
+                              {t('orders.actions.reprint')}
+                            </Button>
+
                             {order.status === 'SUBMITTED' && (
                               <Button
                                 color="warning"
@@ -776,6 +863,63 @@ export function OrdersWorkflowPage() {
           <Button onClick={() => setCancelDialogOpen(false)}>{t('orders.cancelDialog.keepOrder')}</Button>
           <Button color="error" onClick={handleConfirmCancel} sx={{ fontWeight: 'bold' }} variant="contained">
             {t('orders.cancelDialog.confirm')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Customer / kitchen reprint dialog */}
+      <Dialog fullWidth maxWidth="xs" onClose={handleCloseReprintDialog} open={reprintDialogOpen}>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 'bold' }}>
+          <PrintIcon color="primary" />
+          {t('orders.reprintDialog.title', { orderNumber: selectedOrder?.order_number })}
+        </DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary" sx={{ mb: 2 }} variant="body2">
+            {t('orders.reprintDialog.description')}
+          </Typography>
+
+          <Stack spacing={2}>
+            <FormControl fullWidth>
+              <InputLabel>{t('orders.reprintDialog.documentType')}</InputLabel>
+              <Select
+                label={t('orders.reprintDialog.documentType')}
+                onChange={(e) => setReprintDocumentType(e.target.value as 'CUSTOMER_RECEIPT' | 'KITCHEN_TICKET')}
+                value={reprintDocumentType}
+              >
+                <MenuItem value="CUSTOMER_RECEIPT">
+                  {t('orders.reprintDialog.customerReceipt')}
+                </MenuItem>
+                <MenuItem value="KITCHEN_TICKET">
+                  {t('orders.reprintDialog.kitchenTicket')}
+                </MenuItem>
+              </Select>
+            </FormControl>
+
+            <TextField
+              autoFocus
+              fullWidth
+              label={t('orders.reprintDialog.reason')}
+              minRows={2}
+              multiline
+              onChange={(e) => setReprintReason(e.target.value)}
+              placeholder={t('orders.reprintDialog.reasonPlaceholder')}
+              value={reprintReason}
+            />
+
+            {reprintError && <Alert severity="error">{reprintError}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={reprintSubmitting} onClick={handleCloseReprintDialog}>
+            {t('orders.reprintDialog.cancel')}
+          </Button>
+          <Button
+            disabled={reprintSubmitting || !reprintReason.trim()}
+            onClick={handleConfirmReprint}
+            startIcon={reprintSubmitting ? <CircularProgress size={16} /> : <PrintIcon />}
+            variant="contained"
+          >
+            {t('orders.reprintDialog.confirm')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1175,6 +1319,13 @@ export function OrdersWorkflowPage() {
                   }}
                 >
                   {t('orders.actions.receipt')}
+                </Button>
+                <Button
+                  startIcon={<PrintIcon />}
+                  variant="outlined"
+                  onClick={() => handleOpenReprintDialog(selectedDrawerOrder)}
+                >
+                  {t('orders.actions.reprint')}
                 </Button>
                 {selectedDrawerOrder.status === 'SUBMITTED' && (
                   <Button

@@ -249,6 +249,7 @@
     "actions": {
       "details": "جزئیات",
       "receipt": "فاکتور",
+      "reprint": "چاپ مجدد",
       "prep": "پخت",
       "ready": "آماده",
       "complete": "تکمیل",
@@ -275,6 +276,20 @@
       "keepOrder": "انصراف / حفظ سفارش",
       "confirm": "تایید و لغو سفارش",
       "reasonRequired": "لطفاً علت لغو سفارش را انتخاب کنید"
+    },
+    "reprintDialog": {
+      "title": "چاپ مجدد سفارش {{orderNumber}}",
+      "description": "مدرک موردنظر برای چاپ مجدد را انتخاب کنید. درخواست در صف چاپ شبیه‌سازی‌شده ثبت می‌شود.",
+      "documentType": "نوع مدرک",
+      "customerReceipt": "فاکتور مشتری",
+      "kitchenTicket": "فیش آشپزخانه",
+      "reason": "علت چاپ مجدد",
+      "reasonPlaceholder": "برای نمونه: نسخه مشتری آسیب دیده است",
+      "cancel": "انصراف",
+      "confirm": "ثبت در صف چاپ",
+      "reasonRequired": "علت چاپ مجدد را وارد کنید",
+      "success": "{{document}} سفارش {{orderNumber}} در صف چاپ قرار گرفت.",
+      "failed": "ثبت چاپ مجدد در صف چاپ ناموفق بود"
     },
     "receiptModal": {
       "title": "فاکتور فروش #{{orderNumber}}",

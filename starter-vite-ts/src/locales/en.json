@@ -249,6 +249,7 @@
     "actions": {
       "details": "Details",
       "receipt": "Receipt",
+      "reprint": "Reprint",
       "prep": "Prep",
       "ready": "Ready",
       "complete": "Complete",
@@ -275,6 +276,20 @@
       "keepOrder": "Keep Order",
       "confirm": "Confirm Cancellation",
       "reasonRequired": "Please select a cancellation reason code"
+    },
+    "reprintDialog": {
+      "title": "Reprint order {{orderNumber}}",
+      "description": "Choose the document to print again. The request will be recorded in the simulated print queue.",
+      "documentType": "Document type",
+      "customerReceipt": "Customer receipt",
+      "kitchenTicket": "Kitchen ticket",
+      "reason": "Reprint reason",
+      "reasonPlaceholder": "For example: customer copy was damaged",
+      "cancel": "Cancel",
+      "confirm": "Queue reprint",
+      "reasonRequired": "Enter a reason for this reprint",
+      "success": "{{document}} for order {{orderNumber}} was added to the print queue.",
+      "failed": "Failed to queue the reprint"
     },
     "receiptModal": {
       "title": "Receipt #{{orderNumber}}",
