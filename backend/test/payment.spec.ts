@@ -37,7 +37,7 @@ describe('Payments & Split Settlement Suite (R15)', () => {
     deviceRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), find: jest.fn().mockResolvedValue([]), createQueryBuilder: jest.fn() };
     accountRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), find: jest.fn().mockResolvedValue([]) };
     shiftService = { getCurrentShift: jest.fn(), recordCashPaymentMovement: jest.fn() };
-    creditService = { getAccountByCustomer: jest.fn(), postPurchase: jest.fn(), postReversal: jest.fn() };
+    creditService = { getAccountByCustomer: jest.fn(), postPurchase: jest.fn(), reversePurchase: jest.fn() };
     auditWriter = { write: jest.fn() };
 
     const mockQueryBuilder: any = {
@@ -159,6 +159,57 @@ describe('Payments & Split Settlement Suite (R15)', () => {
       // Order paid_total remains 50,000.0000 from earlier cash success!
       expect(order.paid_total).toBe('50000.0000');
       expect(order.outstanding_total).toBe('50000.0000');
+    });
+  });
+
+  describe('Customer Credit Reversal', () => {
+    it('should give the customer their credit back when a CUSTOMER_CREDIT payment is reversed', async () => {
+      const payment = {
+        id: 'pay-cred',
+        tenant_id: 't-1',
+        order_id: 'ord-1',
+        payment_number: 'PAY-9',
+        method_kind: 'CUSTOMER_CREDIT',
+        amount: '50000.0000',
+        status: 'SUCCEEDED',
+      };
+      const order = { id: 'ord-1', grand_total: '100000.0000', paid_total: '50000.0000', outstanding_total: '50000.0000' };
+
+      paymentRepo.findOne.mockResolvedValue(payment);
+      orderRepo.findOne.mockResolvedValue(order);
+
+      const result = await service.reversePayment('t-1', 'pay-cred', { reason: 'Cashier error' });
+
+      expect(result.status).toBe('REVERSED');
+      expect(order.paid_total).toBe('0.0000');
+      expect(creditService.reversePurchase).toHaveBeenCalledWith(
+        't-1',
+        'pay-cred',
+        expect.stringContaining('Cashier error'),
+        undefined,
+        undefined,
+        expect.anything(), // reversal shares the payment's transaction
+      );
+    });
+
+    it('should not touch the credit ledger when a non-credit payment is reversed', async () => {
+      const payment = {
+        id: 'pay-pos',
+        tenant_id: 't-1',
+        order_id: 'ord-1',
+        payment_number: 'PAY-10',
+        method_kind: 'POS',
+        amount: '50000.0000',
+        status: 'SUCCEEDED',
+      };
+      const order = { id: 'ord-1', grand_total: '100000.0000', paid_total: '50000.0000', outstanding_total: '50000.0000' };
+
+      paymentRepo.findOne.mockResolvedValue(payment);
+      orderRepo.findOne.mockResolvedValue(order);
+
+      await service.reversePayment('t-1', 'pay-pos', { reason: 'Duplicate tender' });
+
+      expect(creditService.reversePurchase).not.toHaveBeenCalled();
     });
   });
 

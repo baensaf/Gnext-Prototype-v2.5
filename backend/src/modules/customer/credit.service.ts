@@ -323,6 +323,78 @@ export class CreditService {
     return await this.dataSource.transaction(execute);
   }
 
+  // Unwinds the PURCHASE entry a CUSTOMER_CREDIT payment posted, so reversing the payment
+  // also gives the customer their credit back. Distinct from postRepayment: the customer
+  // paid nothing here, so this must not show up in the statement as a settlement.
+  async reversePurchase(
+    tenantId: string,
+    paymentId: string,
+    reason?: string,
+    userId?: string,
+    correlationId?: string,
+    entityManager?: EntityManager,
+  ) {
+    const execute = async (em: EntityManager) => {
+      const originalEntry = await em.findOne(CreditEntry, {
+        where: { tenant_id: tenantId, payment_id: paymentId, entry_type: 'PURCHASE' as any },
+      });
+      if (!originalEntry) return null;
+
+      // Idempotent: a payment can only be reversed once, but the caller may retry.
+      const existingReversal = await em.findOne(CreditEntry, {
+        where: { tenant_id: tenantId, payment_id: paymentId, entry_type: 'REVERSAL' as any },
+      });
+      if (existingReversal) return existingReversal;
+
+      const acc = await em.findOne(CustomerCreditAccount, {
+        where: { id: originalEntry.account_id, tenant_id: tenantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!acc) return null;
+
+      // The PURCHASE was stored negative, so the reversal is its positive counterpart.
+      const reversalAmount = MoneyUtil.abs(originalEntry.amount);
+      const newBalance = MoneyUtil.add(acc.current_balance, reversalAmount);
+
+      const entry = em.create(CreditEntry, {
+        tenant_id: tenantId,
+        account_id: acc.id,
+        entry_type: 'REVERSAL' as any,
+        amount: reversalAmount,
+        currency_code: originalEntry.currency_code,
+        order_id: originalEntry.order_id,
+        payment_id: paymentId,
+        related_entry_id: originalEntry.id,
+        reason_text: reason || 'Customer credit payment reversed',
+        reference: `REVERSAL_${paymentId}`,
+        business_date: new Date().toISOString().slice(0, 10),
+        posted_by: userId || null,
+        balance_after: newBalance,
+      });
+      const savedEntry = await em.save(CreditEntry, entry);
+
+      acc.current_balance = newBalance;
+      await em.save(CustomerCreditAccount, acc);
+
+      await this.auditWriter.write({
+        tenantId,
+        actorType: userId ? 'ADMIN' : 'SYSTEM',
+        actorId: userId,
+        action: 'CREDIT_PURCHASE_REVERSED',
+        entityType: 'CreditEntry',
+        entityId: savedEntry.id,
+        correlationId: correlationId || 'system',
+        afterData: savedEntry,
+        details: { paymentId, originalEntryId: originalEntry.id, reversalAmount },
+      });
+
+      return savedEntry;
+    };
+
+    if (entityManager) return await execute(entityManager);
+    return await this.dataSource.transaction(execute);
+  }
+
   async postRepayment(
     tenantId: string,
     accountId: string,

@@ -398,6 +398,19 @@ export class PaymentService {
         }
       }
 
+      // Credit was debited when the payment succeeded, so it has to be handed back here —
+      // otherwise the order un-pays but the customer stays in debt for it.
+      if (payment.method_kind === 'CUSTOMER_CREDIT') {
+        await this.creditService.reversePurchase(
+          tenantId,
+          payment.id,
+          `Reversal of payment #${payment.payment_number}: ${dto.reason}`,
+          userId,
+          correlationId,
+          em,
+        );
+      }
+
       await this.auditWriter.write({
         tenantId,
         actorType: userId ? 'ADMIN' : 'SYSTEM',
