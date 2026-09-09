@@ -63,6 +63,11 @@ export class RefundCreateDto {
   @IsOptional()
   @IsString()
   scenarioId?: string;
+
+  /** A manager pin, when the account asking is not itself allowed to approve. */
+  @IsOptional()
+  @IsString()
+  pin?: string;
 }
 
 export class RefundProcessDto {
@@ -73,6 +78,11 @@ export class RefundProcessDto {
   @IsOptional()
   @IsString()
   externalReference?: string;
+
+  /** A manager pin, when the account asking is not itself allowed to approve. */
+  @IsOptional()
+  @IsString()
+  pin?: string;
 }
 
 export class PaidOrderCancelDto {
@@ -94,6 +104,11 @@ export class PaidOrderCancelDto {
   @IsOptional()
   @IsString()
   reference?: string;
+
+  /** A manager pin, when the account asking is not itself allowed to approve. */
+  @IsOptional()
+  @IsString()
+  pin?: string;
 }
 
 export class RefundReversalDto {
@@ -106,4 +121,9 @@ export class RefundReversalDto {
 
   @IsUUID()
   approvalRequestId: string;
+
+  /** A manager pin, when the account asking is not itself allowed to approve. */
+  @IsOptional()
+  @IsString()
+  pin?: string;
 }

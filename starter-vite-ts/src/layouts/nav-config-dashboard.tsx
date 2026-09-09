@@ -214,6 +214,11 @@ export function useNavData(): NavSectionProps['data'] {
           path: '/app/settings',
           icon: ICONS.settings,
         },
+        {
+          title: t('nav.users', 'Users & Roles'),
+          path: '/app/settings/users',
+          icon: ICONS.customers,
+        },
       ],
     },
     {

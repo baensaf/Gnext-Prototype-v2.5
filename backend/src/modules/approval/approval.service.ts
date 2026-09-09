@@ -11,6 +11,7 @@ import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { TransactionUtil } from '../../common/utils/transaction.util';
 import { AppDataSource } from '../../data-source';
+import { APPROVER_ROLES, isApprover } from '../../common/utils/user-scope.util';
 
 @Injectable()
 export class ApprovalService {
@@ -137,6 +138,160 @@ export class ApprovalService {
     return { success: true, user_id: userId, role: user.role };
   }
 
+  /**
+   * Someone senior standing at the register, rather than the operator confirming it is
+   * really them. `verifyManagerPin` checks an account's own pin and falls back to a
+   * default when it has none — fine for confirming yourself, useless as an authorisation,
+   * because a cashier with no pin set would pass on the fallback and approve their own
+   * refund. This checks the pin against the accounts that may actually approve.
+   */
+  async verifyApproverPin(
+    tenantId: string,
+    pin: string,
+    actionName: string,
+    requesterId: string,
+    branchId?: string | null,
+  ) {
+    if (!pin) {
+      throw new ForbiddenException({
+        code: 'APPROVAL_REQUIRED',
+        title: 'Manager Approval Required',
+        detail: 'This action needs a manager PIN.',
+      });
+    }
+
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+    // Rate limit the person trying, not the person whose pin it might be: until a pin
+    // matches we do not know whose it is, and a locked-out approver would be a way to
+    // punish someone who did nothing.
+    const recentFailedCount = await this.pinLogRepo.count({
+      where: {
+        tenant_id: tenantId,
+        user_id: requesterId,
+        is_success: false,
+        attempted_at: MoreThan(fifteenMinutesAgo),
+      },
+    });
+    if (recentFailedCount >= 5) {
+      throw new ForbiddenException('PIN rate limit exceeded. 5 failed attempts in last 15 minutes.');
+    }
+
+    const candidates = (
+      await this.userRepo.find({ where: { tenant_id: tenantId, is_active: true } })
+    ).filter(
+      (u) =>
+        APPROVER_ROLES.includes((u.role || '').toUpperCase()) &&
+        !!u.pin_hash &&
+        // An approver at head office can release anything; a branch approver only their
+        // own site, which is also the only register they could be standing at.
+        (!u.branch_id || !branchId || u.branch_id === branchId),
+    );
+
+    let approver: AdminUser | undefined;
+    for (const candidate of candidates) {
+      try {
+        if (await argon2.verify(candidate.pin_hash, pin)) {
+          approver = candidate;
+          break;
+        }
+      } catch {
+        // A malformed hash is not a match.
+      }
+    }
+
+    // Nobody approves their own refund, however senior they are.
+    if (approver && approver.id === requesterId) {
+      approver = undefined;
+    }
+
+    await this.pinLogRepo.save(
+      this.pinLogRepo.create({
+        tenant_id: tenantId,
+        user_id: requesterId,
+        action: actionName,
+        is_success: !!approver,
+      }),
+    );
+
+    if (!approver) {
+      await this.auditWriter.write({
+        tenantId,
+        actorType: 'ADMIN',
+        action: 'PIN_FAILED_ATTEMPT',
+        correlationId: actionName,
+        details: { requesterId, recentFailedCount: recentFailedCount + 1 },
+      });
+      throw new UnauthorizedException(
+        `Invalid manager PIN. Remaining attempts: ${4 - recentFailedCount}`,
+      );
+    }
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'APPROVAL_PIN_ACCEPTED',
+      correlationId: actionName,
+      details: { requesterId, approverId: approver.id, approverRole: approver.role },
+    });
+
+    return { success: true, approver_user_id: approver.id, role: approver.role };
+  }
+
+  /**
+   * Releases an action for the caller: an approver needs nobody, anyone else needs a pin
+   * that belongs to one. Returns the approver's id when a pin was used, so the caller can
+   * record who released it.
+   */
+  async authorizeMoneyOut(
+    tenantId: string,
+    actionName: string,
+    requester: { id: string; role?: string; branchId?: string | null },
+    pin?: string,
+  ): Promise<string | null> {
+    if (isApprover(requester.role)) return null;
+    const result = await this.verifyApproverPin(
+      tenantId,
+      pin || '',
+      actionName,
+      requester.id,
+      requester.branchId ?? null,
+    );
+    return result.approver_user_id;
+  }
+
+  /**
+   * Who is actually releasing this, given a claimed identity and a pin.
+   *
+   * The claimed account is trusted only when it could approve on its own and has a pin of
+   * its own to prove it. Anyone else — a cashier approving their own escalation, most of
+   * all — has to produce a pin that belongs to a real approver, because `verifyManagerPin`
+   * accepts a default for accounts with no pin set and would otherwise wave them through.
+   */
+  private async resolveApprover(
+    tenantId: string,
+    claimedUserId: string,
+    pin: string,
+    action: string,
+  ): Promise<string> {
+    const claimed = await this.userRepo.findOne({
+      where: { id: claimedUserId, tenant_id: tenantId },
+    });
+
+    if (claimed?.is_active && isApprover(claimed.role) && claimed.pin_hash) {
+      await this.verifyManagerPin(tenantId, claimed.id, pin, action);
+      return claimed.id;
+    }
+
+    const result = await this.verifyApproverPin(
+      tenantId,
+      pin,
+      action,
+      claimedUserId,
+      claimed?.branch_id ?? null,
+    );
+    return result.approver_user_id;
+  }
+
   async evaluateAction(tenantId: string, action: string, requestedValue: number) {
     const rule = await this.ruleRepo.findOne({ where: { tenant_id: tenantId, action, is_active: true } });
     if (!rule) return { requires_approval: false };
@@ -242,8 +397,8 @@ export class ApprovalService {
   }
 
   async approveRequest(tenantId: string, requestId: string, approverUserId: string, pin: string, note?: string, correlationId?: string) {
-    // Verify Manager PIN first
-    await this.verifyManagerPin(tenantId, approverUserId, pin, `APPROVE_REQUEST`);
+    // The pin decides who is approving, not the id the client sent.
+    approverUserId = await this.resolveApprover(tenantId, approverUserId, pin, 'APPROVE_REQUEST');
 
     const ds = AppDataSource.isInitialized ? AppDataSource : this.dataSource;
 
@@ -310,7 +465,7 @@ export class ApprovalService {
   }
 
   async rejectRequest(tenantId: string, requestId: string, approverUserId: string, pin: string, note?: string, correlationId?: string) {
-    await this.verifyManagerPin(tenantId, approverUserId, pin, `REJECT_REQUEST`);
+    approverUserId = await this.resolveApprover(tenantId, approverUserId, pin, 'REJECT_REQUEST');
 
     const ds = AppDataSource.isInitialized ? AppDataSource : this.dataSource;
 

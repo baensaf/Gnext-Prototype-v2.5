@@ -107,7 +107,8 @@
     "outboxV5": "Outbox & Event Queue Monitor",
     "printQueueV5": "Thermal Print Queue Engine",
     "reportsSalesSummary": "Sales Summary",
-    "reportsBranchComparison": "Branch Comparison"
+    "reportsBranchComparison": "Branch Comparison",
+    "users": "Users & Roles"
   },
   "common": {
     "languages": "Languages",
@@ -2595,5 +2596,27 @@
     "deniedTitle": "Not available for your role",
     "deniedBody": "This page belongs to another part of the organization. Your account does not have access to it.",
     "backHome": "Go to my start page"
+  },
+  "users": {
+    "title": "Users & Roles",
+    "add": "Add account",
+    "edit": "Edit account",
+    "username": "Username",
+    "usernameLocked": "A username cannot be changed.",
+    "displayName": "Name",
+    "role": "Role",
+    "scope": "Scope",
+    "approves": "Approves",
+    "status": "Status",
+    "actions": "Actions",
+    "active": "Active",
+    "disabled": "Disabled",
+    "created": "Account created on the shared demo password.",
+    "updated": "Account updated.",
+    "scopeNotice": "An account with no branch acts for the whole organization. An account pinned to a branch only ever sees that branch, whatever its role is called.",
+    "passwordNotice": "The new account starts on the shared demo password, and gets the demo approver PIN if its role can approve.",
+    "roleApproves": "This role can approve with a PIN.",
+    "roleNeedsApproval": "This role needs a PIN from someone else to move money back out.",
+    "selfEditNotice": "This is the account you are signed in as. Its role, scope and status are locked so you cannot lock yourself out."
   }
 }

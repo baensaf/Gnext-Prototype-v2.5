@@ -90,6 +90,9 @@ export const refundApi = {
       reasonCodeId: data.reason_code_id,
       reason: data.reason || data.note || 'Customer return',
       approvalRequestId: data.approvalRequestId,
+      // The server asks for this whenever the account issuing the refund is not one that
+      // can approve on its own. It was collected here and then dropped on the floor.
+      pin: data.pin,
     };
     const res = await httpClient.post(`/api/v1/orders/${data.order_id}/refunds`, payload);
     const r = res.data;
@@ -103,7 +106,7 @@ export const refundApi = {
     };
   },
 
-  processRefund: async (id: string, data?: { scenarioId?: string; externalReference?: string }): Promise<RefundRecord> => {
+  processRefund: async (id: string, data?: { scenarioId?: string; externalReference?: string; pin?: string }): Promise<RefundRecord> => {
     const res = await httpClient.post(`/api/v1/refunds/${id}/process`, data || {});
     const r = res.data;
     return {
@@ -121,17 +124,19 @@ export const refundApi = {
     reason?: string,
     approvalRequestId?: string,
     targetMethodId?: string,
+    pin?: string,
   ): Promise<any> => {
     const res = await httpClient.post(`/api/v1/orders/${orderId}/cancel-paid`, {
       reason: reason || 'Paid order cancellation',
       approvalRequestId,
       targetMethodId,
+      pin,
     });
     return res.data;
   },
 
-  reverseRefund: async (id: string, reason: string, approvalRequestId: string): Promise<RefundRecord> => {
-    const res = await httpClient.post(`/api/v1/refunds/${id}/reverse`, { reason, approvalRequestId });
+  reverseRefund: async (id: string, reason: string, approvalRequestId: string, pin?: string): Promise<RefundRecord> => {
+    const res = await httpClient.post(`/api/v1/refunds/${id}/reverse`, { reason, approvalRequestId, pin });
     const r = res.data;
     return {
       ...r,

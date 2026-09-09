@@ -58,6 +58,7 @@ const MANAGER_PATHS = [
  * surrounding area is open.
  */
 const CHAIN_ONLY_PATHS = [
+  '/app/settings/users',
   '/app/operations/branches',
   '/app/reports/branch-comparison',
   '/app/catalog/import-export',

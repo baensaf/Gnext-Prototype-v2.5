@@ -4,6 +4,21 @@
  */
 export const HEAD_OFFICE_ROLES = ['SUPER_ADMIN', 'ADMIN', 'OWNER'];
 
+/**
+ * Roles whose pin releases something a register operator is not trusted to do alone —
+ * money going back out of the till, mainly. A cashier is who the pin is asked of, so a
+ * cashier is not on this list.
+ */
+export const APPROVER_ROLES = [...HEAD_OFFICE_ROLES, 'MANAGER', 'SUPERVISOR'];
+
+/** Every role the users screen may hand out. */
+export const ASSIGNABLE_ROLES = [...APPROVER_ROLES, 'CASHIER'];
+
+/** True when the account carries its own authority and needs nobody else's pin. */
+export function isApprover(role?: string | null): boolean {
+  return APPROVER_ROLES.includes((role || '').toUpperCase());
+}
+
 export type UserScope = {
   role: string;
   /** NULL means the account is not confined to a location. */

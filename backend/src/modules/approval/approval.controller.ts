@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Param, Query, Body, Req, UnauthorizedException } from '@nestjs/common';
 import { Request } from 'express';
 import { ApprovalService } from './approval.service';
+import { isApprover } from '../../common/utils/user-scope.util';
 
 @Controller('api/v1/approvals')
 export class ApprovalController {
@@ -33,6 +34,19 @@ export class ApprovalController {
     const tenantId = (req as any).tenantId;
     const userId = body.userId || (req as any).user?.id;
     if (!userId) throw new UnauthorizedException('User session required');
+
+    // An account that can approve confirms itself. Anyone else is asking someone senior to
+    // stand there, so the pin has to belong to that someone rather than to them.
+    if (!isApprover((req as any).userRole)) {
+      return await this.approvalService.verifyApproverPin(
+        tenantId,
+        body.pin,
+        body.actionName || 'VERIFY_PIN',
+        (req as any).userId,
+        (req as any).userBranchId ?? null,
+      );
+    }
+
     return await this.approvalService.verifyManagerPin(tenantId, userId, body.pin, body.actionName);
   }
 

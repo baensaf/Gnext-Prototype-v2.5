@@ -17,6 +17,7 @@ import { homePathForRole } from 'src/config/role-access';
 import { RefundsPage } from 'src/pages/orders/refunds';
 import { OptionsPage } from 'src/pages/catalog/options';
 import { PricingPage } from 'src/pages/catalog/pricing';
+import { UsersPage } from 'src/pages/settings/users';
 import { SettingsHubPage } from 'src/pages/settings/hub';
 import { ProductsPage } from 'src/pages/catalog/products';
 import { DineInPage } from 'src/pages/operations/dine-in';
@@ -161,6 +162,7 @@ export const routesSection: RouteObject[] = [
       { path: 'reports/:reportCode', element: <ReportViewerPage /> },
       { path: 'audit', element: <AuditExplorerPage /> },
       { path: 'settings', element: <SettingsHubPage /> },
+      { path: 'settings/users', element: <UsersPage /> },
       { path: 'settings/general', element: <GeneralSettingsPage /> },
       { path: 'settings/order-workflow', element: <OrderWorkflowSettingsPage /> },
       { path: 'settings/discount-authorizations', element: <DiscountsHubPage defaultTab={2} /> },
