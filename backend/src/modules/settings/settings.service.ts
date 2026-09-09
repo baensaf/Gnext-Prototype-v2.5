@@ -61,6 +61,19 @@ export class SettingsService {
           throw new BadRequestException('SYSTEM setting property auto_logout_minutes must be >= 0');
         }
       }
+    } else if (group === 'ORDER_ACTIONS') {
+      // Cashier authority windows, in whole minutes from `submitted_at`. Zero is
+      // a legitimate value meaning "always escalate to a manager"; there is no
+      // upper bound, since a tenant may reasonably leave edits open all shift.
+      for (const prop of ['editWindowMinutes', 'cancelWindowMinutes']) {
+        if (value[prop] === undefined) continue;
+        const minutes = Number(value[prop]);
+        if (!Number.isInteger(minutes) || minutes < 0) {
+          throw new BadRequestException(
+            `ORDER_ACTIONS setting property ${prop} must be an integer >= 0`,
+          );
+        }
+      }
     } else if (group === 'DISCOUNTS') {
       if (value.cashierMaxDiscountPercent !== undefined) {
         if (

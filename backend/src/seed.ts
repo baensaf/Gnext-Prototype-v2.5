@@ -1,5 +1,6 @@
 import * as argon2 from 'argon2';
 import { AppDataSource } from './data-source';
+import { ORDER_ACTION_DEFAULTS } from './modules/order/order-edit-policy';
 
 const DEFAULT_TENANT_ID = 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
 const DEFAULT_TENANT_CODE = 'GNEXT';
@@ -20,6 +21,7 @@ export async function runSeed() {
   const currencyRepo = AppDataSource.getRepository('Currency');
   const payMethodRepo = AppDataSource.getRepository('PaymentMethod');
   const reasonRepo = AppDataSource.getRepository('ReasonCode');
+  const settingRepo = AppDataSource.getRepository('TenantSetting');
   const catRepo = AppDataSource.getRepository('Category');
   const prodRepo = AppDataSource.getRepository('Product');
   const variantRepo = AppDataSource.getRepository('ProductVariant');
@@ -218,6 +220,23 @@ export async function runSeed() {
     if (!existing) {
       await reasonRepo.save(reasonRepo.create(r));
     }
+  }
+
+  // 7a. Idempotent order action windows. Seeded from the same constant the edit
+  // policy falls back to, so a tenant that has never saved the settings group
+  // behaves identically to one that saved the defaults explicitly.
+  const existingOrderActions = await settingRepo.findOne({
+    where: { tenant_id: tenant.id, key: 'ORDER_ACTIONS' },
+  });
+  if (!existingOrderActions) {
+    await settingRepo.save(
+      settingRepo.create({
+        tenant_id: tenant.id,
+        key: 'ORDER_ACTIONS',
+        value: { ...ORDER_ACTION_DEFAULTS },
+        schema_version: 1,
+      }),
+    );
   }
 
   // 7b. Demo customers make directory, address, and credit-account screens useful
