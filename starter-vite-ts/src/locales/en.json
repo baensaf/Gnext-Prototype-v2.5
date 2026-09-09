@@ -374,7 +374,6 @@
     "placedAt": "Placed At",
     "edit": {
       "title": "Edit order",
-      "subtitle": "Removed lines stay on the order as voided, so the history and any reprint remain accurate.",
       "line": "Line",
       "qty": "Qty",
       "lineTotal": "Total",
@@ -384,14 +383,12 @@
       "reason": "Void reason",
       "voidLine": "Void this line",
       "keepLine": "Keep this line",
-      "currentTotal": "Current line total",
       "newTotal": "New line total",
       "apply": "Apply changes",
       "saved": "Order updated",
       "failed": "Could not apply the edit",
       "approvalNeeded": "A manager must authorize this change.",
-      "approvalDetails": "Line changes outside the cashier edit window",
-      "taxNote": "Tax and the final total are recalculated when the change is applied."
+      "approvalDetails": "Line changes outside the cashier edit window"
     }
   },
   "dineIn": {

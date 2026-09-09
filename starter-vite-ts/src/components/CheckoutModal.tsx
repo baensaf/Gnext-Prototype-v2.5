@@ -68,7 +68,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [terminalProcessing, setTerminalProcessing] = useState(false);
-  const [showNumpad, setShowNumpad] = useState(true);
+  const [showNumpad, setShowNumpad] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!orderId) return;
@@ -361,41 +361,6 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                 <Divider sx={{ my: 1.5 }}>
                   <Chip label="پرداخت ترکیبی یا مبالغ دلخواه (Split / Custom)" size="small" />
                 </Divider>
-
-                {/* Iranian Quick Toman / Rial Presets */}
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75, fontWeight: 600 }}>
-                  مبالغ پرتکرار تومانی / ریالی:
-                </Typography>
-                <Stack direction="row" spacing={0.75} sx={{ mb: 2, flexWrap: 'wrap', gap: 0.75 }}>
-                  <Chip
-                    label="کل مانده (Exact)"
-                    clickable
-                    color="primary"
-                    variant={payAmount === order.due_amount ? 'filled' : 'outlined'}
-                    size="small"
-                    sx={{ fontWeight: 700 }}
-                    onClick={() => setPayAmount(order.due_amount || '0')}
-                  />
-                  {[
-                    { val: '500000', label: '۵۰ هزار ت' },
-                    { val: '1000000', label: '۱۰۰ هزار ت' },
-                    { val: '2000000', label: '۲۰۰ هزار ت' },
-                    { val: '5000000', label: '۵۰۰ هزار ت' },
-                    { val: '10000000', label: '۱ میلیون ت' },
-                    { val: '20000000', label: '۲ میلیون ت' },
-                  ].map((preset) => (
-                    <Chip
-                      key={preset.val}
-                      label={preset.label}
-                      clickable
-                      variant={payAmount === preset.val ? 'filled' : 'outlined'}
-                      color={payAmount === preset.val ? 'success' : 'default'}
-                      size="small"
-                      sx={{ fontWeight: 600 }}
-                      onClick={() => setPayAmount(preset.val)}
-                    />
-                  ))}
-                </Stack>
 
                 <Box component="form" onSubmit={handleAddPayment}>
                   <Grid container spacing={2} sx={{ mb: 1.5 }}>
