@@ -31,6 +31,9 @@ const CASHIER_PATHS = [
   '/app/dine-in',
   '/app/orders',
   '/app/cashier/shifts',
+  // A refund is handed over at the register, so this is the cashier's screen even though
+  // the money only moves once an approver has put their pin in.
+  '/app/refunds',
 ];
 
 /** A branch manager runs one site: its people, its money, its menu, its reports. */
@@ -39,7 +42,6 @@ const MANAGER_PATHS = [
   '/app/cashier',
   '/app/delivery',
   '/app/payments',
-  '/app/refunds',
   '/app/customers',
   '/app/credit',
   '/app/customer-club',

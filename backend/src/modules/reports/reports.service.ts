@@ -139,8 +139,6 @@ export class ReportsService {
   }
 
   async queryReport(tenantId: string, reportCode: string, filters: any = {}, actor?: UserScope) {
-    const { startDate, endDate, branchId, channel } = filters;
-
     // A report code cannot carry a decorator, so the rule lives with the report. Refusing
     // here also covers the export route, which runs every report through this method.
     if (actor && CHAIN_ONLY_REPORTS.includes(reportCode) && !isHeadOfficeUser(actor)) {
@@ -150,6 +148,15 @@ export class ReportsService {
         detail: 'This report compares the whole chain and is not available to a single branch.',
       });
     }
+
+    // Every other report answers about the caller's own site when they have one. Reading
+    // the chain's numbers is head office's job, and the filter has to be settled before
+    // the values below are read out of it.
+    if (actor?.branchId) {
+      filters = { ...filters, branchId: actor.branchId };
+    }
+
+    const { startDate, endDate, branchId, channel } = filters;
 
     switch (reportCode) {
       /**
@@ -1437,9 +1444,16 @@ export class ReportsService {
   }
 
   // Server-Derived Dashboard KPIs & Monitoring Summaries
-  async getDashboardSummary(tenantId: string) {
-    const orders = await this.orderRepo.find({ where: { tenant_id: tenantId } });
-    const shifts = await this.cashierShiftRepo.find({ where: { tenant_id: tenantId, state: 'OPEN' } });
+  /** `branchId` narrows the figures to one site; head office passes nothing and gets the chain. */
+  async getDashboardSummary(tenantId: string, branchId?: string) {
+    const orders = await this.orderRepo.find({
+      where: branchId ? { tenant_id: tenantId, branch_id: branchId } : { tenant_id: tenantId },
+    });
+    const shifts = await this.cashierShiftRepo.find({
+      where: branchId
+        ? { tenant_id: tenantId, state: 'OPEN', branch_id: branchId }
+        : { tenant_id: tenantId, state: 'OPEN' },
+    });
     const alerts = await this.getAlerts(tenantId);
 
     const todayStr = new Date().toISOString().split('T')[0];
@@ -1454,6 +1468,8 @@ export class ReportsService {
       active_shifts_count: shifts.length,
       open_alerts_count: openAlerts.length,
       branch_health_percentage: 100,
+      /** Null when the figures cover the whole chain, so the screen can say which it is. */
+      branch_id: branchId ?? null,
       timestamp: new Date().toISOString(),
     };
   }

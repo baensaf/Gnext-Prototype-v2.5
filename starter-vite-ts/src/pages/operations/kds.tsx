@@ -1,6 +1,7 @@
 import type { KitchenTicket, KitchenStation } from 'src/api/kdsApi';
 
 import { useTranslation } from 'react-i18next';
+import { useScopedBranchId } from 'src/contexts/branch-context';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import UndoIcon from '@mui/icons-material/Undo';
@@ -40,6 +41,7 @@ import { Label } from 'src/components/label';
 
 export function KdsPage() {
   const { t } = useTranslation();
+  const [branchId] = useScopedBranchId();
   const [stations, setStations] = useState<KitchenStation[]>([]);
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
   const [selectedStationId, setSelectedStationId] = useState<string>('ALL');
@@ -58,10 +60,12 @@ export function KdsPage() {
       // or ready/bumped. The board shows all three columns and the recall drawer
       // reads the bumped ones, so both sets have to be fetched.
       const station = selectedStationId === 'ALL' ? undefined : selectedStationId;
+      // A kitchen display showed every kitchen in the chain until this was passed.
+      const branch = branchId || undefined;
       const [stList, activeList, bumpedList] = await Promise.all([
-        kdsApi.getStations(),
-        kdsApi.getKdsTickets(station, false),
-        kdsApi.getKdsTickets(station, true),
+        kdsApi.getStations(branch),
+        kdsApi.getKdsTickets(station, false, branch),
+        kdsApi.getKdsTickets(station, true, branch),
       ]);
       setStations(stList);
       setTickets([...activeList, ...bumpedList]);
@@ -71,7 +75,7 @@ export function KdsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedStationId, t]);
+  }, [selectedStationId, branchId, t]);
 
   useEffect(() => {
     loadData();

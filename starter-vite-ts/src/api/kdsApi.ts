@@ -174,8 +174,8 @@ export const kdsApi = {
     });
     return res.data;
   },
-  getKdsTickets: async (stationId?: string, isBumped?: boolean): Promise<KitchenTicket[]> => {
-    const res = await httpClient.get('/api/v1/kds/tickets', { params: { stationId, isBumped } });
+  getKdsTickets: async (stationId?: string, isBumped?: boolean, branchId?: string): Promise<KitchenTicket[]> => {
+    const res = await httpClient.get('/api/v1/kds/tickets', { params: { stationId, isBumped, branchId } });
     return res.data;
   },
   startTicket: async (ticketId: string): Promise<KitchenTicket> => {

@@ -3,6 +3,7 @@ import { Request } from 'express';
 import { Observable, interval } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { KdsService, MessageEvent } from './kds.service';
+import { effectiveBranchId } from '../../common/utils/user-scope.util';
 
 @Controller('api/v1/kds')
 export class KdsController {
@@ -24,13 +25,29 @@ export class KdsController {
   ) {
     const tenantId = (req as any).tenantId;
     const stationIds = stationIdsStr ? stationIdsStr.split(',') : undefined;
-    return await this.kdsService.getKdsBoard(tenantId, branchId, stationIds, state);
+    return await this.kdsService.getKdsBoard(
+      tenantId,
+      effectiveBranchId((req as any).userBranchId, branchId),
+      stationIds,
+      state,
+    );
   }
 
   @Get('tickets')
-  async getKdsTickets(@Query('stationId') stationId: string, @Query('isBumped') isBumped: string, @Req() req: Request) {
+  async getKdsTickets(
+    @Query('stationId') stationId: string,
+    @Query('isBumped') isBumped: string,
+    @Query('branchId') branchId: string,
+    @Req() req: Request,
+  ) {
     const tenantId = (req as any).tenantId;
-    return await this.kdsService.getKdsTickets(tenantId, stationId, isBumped === 'true');
+    // A kitchen display belongs to a kitchen; it used to show every kitchen in the chain.
+    return await this.kdsService.getKdsTickets(
+      tenantId,
+      stationId,
+      isBumped === 'true',
+      effectiveBranchId((req as any).userBranchId, branchId),
+    );
   }
 
   // Ticket Actions
@@ -82,7 +99,10 @@ export class KdsController {
   @Get('stations')
   async getStations(@Query('branchId') branchId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.kdsService.getStations(tenantId, branchId);
+    return await this.kdsService.getStations(
+      tenantId,
+      effectiveBranchId((req as any).userBranchId, branchId),
+    );
   }
 
   @Post('stations')

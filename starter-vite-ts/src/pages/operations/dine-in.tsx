@@ -2,6 +2,7 @@ import type { OrderHeader } from 'src/api/orderApi';
 import type { DiningArea, DiningTable } from 'src/api/dineInApi';
 
 import { useTranslation } from 'react-i18next';
+import { useScopedBranchId } from 'src/contexts/branch-context';
 import React, { useState, useEffect } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
@@ -47,6 +48,7 @@ import { CheckoutModal } from 'src/components/CheckoutModal';
 
 export function DineInPage() {
   const { t } = useTranslation();
+  const [branchId] = useScopedBranchId();
 
   const [areas, setAreas] = useState<DiningArea[]>([]);
   const [tables, setTables] = useState<DiningTable[]>([]);
@@ -96,7 +98,7 @@ export function DineInPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await dineInApi.getFloorPlan();
+      const data = await dineInApi.getFloorPlan(branchId || undefined);
       setAreas(data.areas);
       setTables(data.tables);
       setError(null);
@@ -109,7 +111,8 @@ export function DineInPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId]);
 
   const handleSeatGuests = async (e: React.FormEvent) => {
     e.preventDefault();

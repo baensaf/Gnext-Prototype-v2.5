@@ -6,6 +6,8 @@ import type { ReasonCode } from 'src/api/settingsApi';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
+import { useBranchContext, useScopedBranchId } from 'src/contexts/branch-context';
+
 import CodeIcon from '@mui/icons-material/Code';
 import CloseIcon from '@mui/icons-material/Close';
 import PrintIcon from '@mui/icons-material/Print';
@@ -78,6 +80,11 @@ import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 
 export function OrdersWorkflowPage() {
   const { t } = useTranslation();
+  const [branchId] = useScopedBranchId();
+  const { branches } = useBranchContext();
+  const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
+  // Only head office ever sees more than one, and only there does the column mean anything.
+  const showBranchColumn = !branchId && branches.length > 1;
 
   const [orders, setOrders] = useState<OrderHeader[]>([]);
   const [reasonCodes, setReasonCodes] = useState<ReasonCode[]>([]);
@@ -178,7 +185,9 @@ export function OrdersWorkflowPage() {
   const loadData = async () => {
     try {
       const [oList, rList, cList] = await Promise.all([
-        orderApi.getOrders(),
+        // Unfiltered, this listed the whole chain: a cashier at one shop could open
+        // another shop's order and had nothing on screen to tell them whose it was.
+        orderApi.getOrders(branchId || undefined),
         settingsApi.getReasonCodes(),
         customerApi.getCustomers(),
       ]);
@@ -197,7 +206,8 @@ export function OrdersWorkflowPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId]);
 
   const getCustomerDisplayName = (order: OrderHeader) => {
     if (order.customer_name) return order.customer_name;
@@ -451,6 +461,9 @@ export function OrdersWorkflowPage() {
               <TableHead>
                 <TableRow sx={{ bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100') }}>
                   <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.orderNumber')}</TableCell>
+                  {showBranchColumn && (
+                    <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.branch', 'Branch')}</TableCell>
+                  )}
                   <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.customerName')}</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.type')}</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.tableNotes')}</TableCell>
@@ -465,7 +478,7 @@ export function OrdersWorkflowPage() {
               <TableBody>
                 {filteredOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell align="center" colSpan={10} sx={{ py: 6 }}>
+                    <TableCell align="center" colSpan={showBranchColumn ? 11 : 10} sx={{ py: 6 }}>
                       <Typography color="text.secondary" variant="body1">
                         {t('orders.table.empty')}
                       </Typography>
@@ -495,6 +508,13 @@ export function OrdersWorkflowPage() {
                             variant="outlined"
                           />
                         </TableCell>
+                        {showBranchColumn && (
+                          <TableCell>
+                            <Typography variant="body2">
+                              {branchNameById.get(order.branch_id) || order.branch_id}
+                            </Typography>
+                          </TableCell>
+                        )}
                         <TableCell>
                           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                             <PersonIcon color="action" fontSize="small" />

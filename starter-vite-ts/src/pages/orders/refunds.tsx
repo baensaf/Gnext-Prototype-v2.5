@@ -1,7 +1,10 @@
+import type { OrderHeader } from 'src/api/orderApi';
 import type { RefundRequest } from 'src/api/refundApi';
 
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
+import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
@@ -15,8 +18,10 @@ import {
   Dialog,
   TableRow,
   TableBody,
+  MenuItem,
   TableCell,
   TableHead,
+  TextField,
   Typography,
   IconButton,
   DialogTitle,
@@ -27,9 +32,29 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 
+import { orderApi } from 'src/api/orderApi';
 import { refundApi } from 'src/api/refundApi';
 
+import { useAuthStore } from 'src/store/useAuthStore';
+import { useScopedBranchId } from 'src/contexts/branch-context';
+
+import { ApprovalModal } from 'src/components/approval/ApprovalModal';
+
+/** Roles that release a refund on their own authority. Everyone else produces a PIN. */
+const APPROVER_ROLES = ['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER', 'SUPERVISOR'];
+
 export function RefundsPage() {
+  const { t } = useTranslation();
+  const [branchId] = useScopedBranchId();
+  const role = useAuthStore((state) => state.user?.role);
+  const canApprove = APPROVER_ROLES.includes((role || '').toUpperCase());
+
+  const [orders, setOrders] = useState<OrderHeader[]>([]);
+  const [newOpen, setNewOpen] = useState(false);
+  const [pinOpen, setPinOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState({ orderId: '', amount: '', reason: '' });
+
   const [refunds, setRefunds] = useState<RefundRequest[]>([]);
   const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +65,12 @@ export function RefundsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const list = await refundApi.getRefunds();
+      const [list, orderList] = await Promise.all([
+        refundApi.getRefunds(),
+        orderApi.getOrders(branchId || undefined),
+      ]);
       setRefunds(list);
+      setOrders(orderList);
       setError(null);
     } catch (err: any) {
       setError(err.detail || 'Failed to load refunds');
@@ -52,7 +81,46 @@ export function RefundsPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId]);
+
+  // Only an order that took money can give any back.
+  const refundableOrders = orders.filter(
+    (order) => Number(order.paid_total || order.paid_amount || 0) > 0
+  );
+
+  const submitRefund = async (pin?: string) => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await refundApi.createRefund({
+        order_id: form.orderId,
+        amount: form.amount || undefined,
+        full: !form.amount,
+        reason: form.reason,
+        pin,
+      });
+      setNewOpen(false);
+      setForm({ orderId: '', amount: '', reason: '' });
+      await loadData();
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.detail || err.detail || err.message || 'Failed to create the refund'
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // A cashier is asked for an approver's PIN before anything is created, so a refused
+  // authorization leaves no half-made refund behind.
+  const handleSubmitClick = () => {
+    if (canApprove) {
+      submitRefund();
+    } else {
+      setPinOpen(true);
+    }
+  };
 
   const handleViewDetail = async (id: string) => {
     try {
@@ -75,9 +143,19 @@ export function RefundsPage() {
             Slice 13 — Item-level, partial, full refunds, same-tender rules, and post-preparation cancellation approvals
           </Typography>
         </Box>
-        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
-          Refresh
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
+            Refresh
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            disabled={refundableOrders.length === 0}
+            onClick={() => setNewOpen(true)}
+          >
+            {t('refunds.new', 'New refund')}
+          </Button>
+        </Stack>
       </Stack>
 
       {error && (
@@ -183,6 +261,78 @@ export function RefundsPage() {
           <Button onClick={() => setDetailModalOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      <Dialog open={newOpen} onClose={() => !submitting && setNewOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t('refunds.new', 'New refund')}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2.5} sx={{ mt: 1 }}>
+            <TextField
+              select
+              label={t('refunds.order', 'Order')}
+              value={form.orderId}
+              onChange={(e) => setForm({ ...form, orderId: e.target.value })}
+              fullWidth
+            >
+              {refundableOrders.map((order) => (
+                <MenuItem key={order.id} value={order.id}>
+                  {order.order_number} — {MoneyUtil.formatCurrency(order.paid_total || order.paid_amount || '0')}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              label={t('refunds.amount', 'Amount')}
+              value={form.amount}
+              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+              helperText={t('refunds.amountHelp', 'Leave empty to refund the whole order.')}
+              fullWidth
+            />
+
+            <TextField
+              label={t('refunds.reason', 'Reason')}
+              value={form.reason}
+              onChange={(e) => setForm({ ...form, reason: e.target.value })}
+              multiline
+              rows={2}
+              fullWidth
+            />
+
+            {!canApprove && (
+              <Alert severity="info">
+                {t(
+                  'refunds.pinNotice',
+                  'Money going back out needs a manager PIN. You will be asked for one before the refund is created.'
+                )}
+              </Alert>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setNewOpen(false)} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSubmitClick}
+            disabled={submitting || !form.orderId || !form.reason.trim()}
+          >
+            {canApprove ? t('common.save', 'Save') : t('refunds.continue', 'Continue')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <ApprovalModal
+        open={pinOpen}
+        onClose={() => setPinOpen(false)}
+        onSuccess={(pin) => {
+          setPinOpen(false);
+          submitRefund(pin);
+        }}
+        actionName="REFUND_ORDER"
+        entityType="ORDER"
+        entityId={form.orderId}
+        detailsText={t('refunds.approvalDetails', 'Refund against a paid order')}
+      />
     </Box>
   );
 }

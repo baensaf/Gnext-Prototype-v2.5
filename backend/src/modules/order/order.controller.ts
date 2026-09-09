@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { OrderService } from './order.service';
+import { effectiveBranchId } from '../../common/utils/user-scope.util';
 import {
   OrderCreateDto,
   OrderUpdateDto,
@@ -21,7 +22,20 @@ export class OrdersController {
   @Get()
   async getOrders(@Query() query: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.orderService.getOrders(tenantId, query);
+    // The order book used to answer with the whole chain: a cashier at one shop could see
+    // and open another shop's orders, with nothing on screen to say whose they were.
+    const branchId = effectiveBranchId(
+      (req as any).userBranchId,
+      query.branch || query.branch_id || query.branchId,
+    );
+    // The service reads three spellings of the same filter; clearing the other two stops
+    // a client-supplied one from winning over the scope decided here.
+    return await this.orderService.getOrders(tenantId, {
+      ...query,
+      branch: undefined,
+      branch_id: undefined,
+      branchId,
+    });
   }
 
   @Post()

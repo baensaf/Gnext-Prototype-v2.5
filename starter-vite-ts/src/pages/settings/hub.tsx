@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAuthStore } from 'src/store/useAuthStore';
+
+import { canReachPath } from 'src/config/role-access';
+
 import TuneIcon from '@mui/icons-material/Tune';
 import GavelIcon from '@mui/icons-material/Gavel';
 import PrintIcon from '@mui/icons-material/Print';
@@ -63,6 +67,7 @@ interface SettingCategory {
 export function SettingsHubPage() {
   const theme = useTheme();
   const { t } = useTranslation();
+  const role = useAuthStore((state) => state.user?.role);
   const [searchQuery, setSearchQuery] = useState('');
   const [scopeFilter, setScopeFilter] = useState<SettingScope | 'ALL'>('ALL');
   const isRtl = theme.direction === 'rtl';
@@ -297,6 +302,9 @@ export function SettingsHubPage() {
   const filteredCategories = categories
     .map((category) => {
       const filteredItems = category.items.filter((item) => {
+        // The sidebar already hides what a role cannot open. Offering it here anyway made
+        // the hub the one place that promised a page and then refused to show it.
+        if (!canReachPath(role, item.path)) return false;
         if (scopeFilter !== 'ALL' && item.scope !== scopeFilter) return false;
         if (!searchQuery.trim()) return true;
         const q = searchQuery.toLowerCase();

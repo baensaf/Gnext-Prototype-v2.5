@@ -34,6 +34,21 @@ export function isHeadOfficeUser(scope: UserScope): boolean {
   return !scope.branchId && HEAD_OFFICE_ROLES.includes((scope.role || '').toUpperCase());
 }
 
+/**
+ * Which branch a request is really about.
+ *
+ * A branch account is answered about its own branch whatever the client asked for — the
+ * confinement has to hold at the query, not only in the switcher that normally sets it.
+ * Head office gets whatever it asked for, and everything when it asked for nothing.
+ */
+export function effectiveBranchId(
+  userBranchId: string | null | undefined,
+  requested?: string | null,
+): string | undefined {
+  if (userBranchId) return userBranchId;
+  return requested || undefined;
+}
+
 /** The branches a user may act on: one for branch staff, all of them for head office. */
 export function canActOnBranch(scope: UserScope, branchId: string): boolean {
   if (!scope.branchId) return true;

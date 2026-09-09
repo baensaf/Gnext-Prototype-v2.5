@@ -45,10 +45,17 @@ export class TenantService {
     return updated;
   }
 
-  async getBranches(tenantId: string, query?: PaginationQueryDto & { search?: string }): Promise<PagedResponse<Branch> | Branch[]> {
+  /** `onlyBranchId` confines the answer to one site, for an account that works at one. */
+  async getBranches(
+    tenantId: string,
+    query?: PaginationQueryDto & { search?: string },
+    onlyBranchId?: string | null,
+  ): Promise<PagedResponse<Branch> | Branch[]> {
     if (!query || (!query.page && !query.limit && !query.search)) {
       return await this.branchRepo.find({
-        where: { tenant_id: tenantId },
+        where: onlyBranchId
+          ? { tenant_id: tenantId, id: onlyBranchId }
+          : { tenant_id: tenantId },
         order: { code: 'ASC' },
       });
     }
@@ -57,6 +64,8 @@ export class TenantService {
     const limit = query.limit || 20;
     const qb = this.branchRepo.createQueryBuilder('b')
       .where('b.tenant_id = :tenantId', { tenantId });
+
+    if (onlyBranchId) qb.andWhere('b.id = :onlyBranchId', { onlyBranchId });
 
     if (query.search) {
       qb.andWhere('(LOWER(b.name) LIKE :search OR LOWER(b.code) LIKE :search)', { search: `%${query.search.toLowerCase()}%` });

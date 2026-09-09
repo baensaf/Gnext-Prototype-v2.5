@@ -4,8 +4,24 @@
     {
       "name": "gnext-web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "starter-vite-ts"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "starter-vite-ts"
+      ],
       "port": 8081
+    },
+    {
+      "name": "gnext-api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "start:dev",
+        "--prefix",
+        "backend"
+      ],
+      "port": 3100
     }
   ]
 }

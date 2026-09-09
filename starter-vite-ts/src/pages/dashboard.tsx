@@ -25,12 +25,15 @@ import {
 } from '@mui/material';
 
 import { tenantApi } from 'src/api/tenantApi';
+
+import { useBranchContextOptional } from 'src/contexts/branch-context';
 import { useAuthStore } from 'src/store/useAuthStore';
 import { httpClient as axios } from 'src/api/httpClient';
 
 export function DashboardPage() {
   const { t } = useTranslation();
   const { tenant, user } = useAuthStore();
+  const branchScope = useBranchContextOptional();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [kpis, setKpis] = useState<any>({
     sales_today: '0.00',
@@ -57,6 +60,19 @@ export function DashboardPage() {
         <Typography variant="body1" color="text.secondary">
           {t('dashboard.welcome')}, <strong>{user?.displayName}</strong> ({tenant?.name})
         </Typography>
+
+        {/* The same page serves a chain and a single shop; without this you cannot tell
+            whether the takings on screen are yours or everybody's. */}
+        <Chip
+          size="small"
+          color={user?.branchId ? 'default' : 'info'}
+          sx={{ mt: 1 }}
+          label={
+            user?.branchId
+              ? branchScope?.selectedBranch?.name || t('dashboard.scopeBranch', 'This branch')
+              : t('dashboard.scopeChain', 'All branches')
+          }
+        />
       </Box>
 
       {/* KPI Cards */}

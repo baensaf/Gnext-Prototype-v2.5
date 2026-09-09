@@ -51,8 +51,8 @@
     "courierSettlements": "تسویه‌حساب و مغایرت ناوگان",
     "cashier": "شیفت‌های صندوق‌دار",
     "businessDays": "روزهای کاری",
-    "payments": "تراکنش‌های پرداخت",
-    "refunds": "استرداد و مرجوعی",
+    "payments": "پرداخت‌ها",
+    "refunds": "بازپرداخت‌ها",
     "kdsConfig": "تنظیمات KDS",
     "printers": "چاپگرها و مسیریابی",
     "printQueue": "صف چاپ",
@@ -108,7 +108,8 @@
     "printQueueV5": "موتور صف چاپ حرارتی (نسخه ۵)",
     "reportsSalesSummary": "خلاصه فروش",
     "reportsBranchComparison": "مقایسه شعب",
-    "users": "کاربران و نقش‌ها"
+    "users": "کاربران و نقش‌ها",
+    "cashierShifts": "شیفت‌ها و صندوق"
   },
   "common": {
     "languages": "انتخاب زبان",
@@ -173,7 +174,9 @@
     "name": "نام شعبه",
     "timeZone": "منطقه زمانی",
     "phone": "تلفن",
-    "agentHealth": "سلامت عامل"
+    "agentHealth": "سلامت عامل",
+    "scopeBranch": "این شعبه",
+    "scopeChain": "همه شعب"
   },
   "pos": {
     "title": "صندوق فروش POS",
@@ -263,7 +266,8 @@
       "due": "مانده: {{amount}}",
       "refunded": "بازپرداخت شده: {{amount}}",
       "fullyPaid": "تسویه کامل",
-      "empty": "هیچ سفارشی مطابق با فیلترهای انتخابی یافت نشد."
+      "empty": "هیچ سفارشی مطابق با فیلترهای انتخابی یافت نشد.",
+      "branch": "شعبه"
     },
     "actions": {
       "details": "جزئیات",
@@ -894,8 +898,15 @@
     "title": "استرداد و مرجوعی",
     "originalTender": "استرداد به روش پرداخت اصلی",
     "cashAlternative": "استرداد نقدی جایگزین",
-    "reason": "علت مرجوعی",
-    "approveRefund": "تایید استرداد"
+    "reason": "دلیل",
+    "approveRefund": "تایید استرداد",
+    "new": "بازپرداخت جدید",
+    "order": "سفارش",
+    "amount": "مبلغ",
+    "amountHelp": "برای بازپرداخت کل سفارش خالی بگذارید.",
+    "continue": "ادامه",
+    "pinNotice": "خروج پول از صندوق به پین مدیر نیاز دارد. پیش از ساخت بازپرداخت از شما پرسیده می‌شود.",
+    "approvalDetails": "بازپرداخت روی سفارش پرداخت‌شده"
   },
   "customers": {
     "title": "دفترچه مشتریان",

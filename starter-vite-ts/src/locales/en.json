@@ -51,8 +51,8 @@
     "courierSettlements": "Courier Settlements",
     "cashier": "Cashier Shifts",
     "businessDays": "Business Days",
-    "payments": "Payment Transactions",
-    "refunds": "Refunds & Returns",
+    "payments": "Payments",
+    "refunds": "Refunds",
     "kdsConfig": "KDS Configuration",
     "printers": "Printers & Routes",
     "printQueue": "Print Queue",
@@ -108,7 +108,8 @@
     "printQueueV5": "Thermal Print Queue Engine",
     "reportsSalesSummary": "Sales Summary",
     "reportsBranchComparison": "Branch Comparison",
-    "users": "Users & Roles"
+    "users": "Users & Roles",
+    "cashierShifts": "Shifts & Drawer"
   },
   "common": {
     "languages": "Languages",
@@ -173,7 +174,9 @@
     "name": "Branch Name",
     "timeZone": "Timezone",
     "phone": "Phone",
-    "agentHealth": "Agent Health"
+    "agentHealth": "Agent Health",
+    "scopeBranch": "This branch",
+    "scopeChain": "All branches"
   },
   "pos": {
     "title": "POS Register",
@@ -263,7 +266,8 @@
       "due": "Due: {{amount}}",
       "refunded": "Refunded: {{amount}}",
       "fullyPaid": "FULLY PAID",
-      "empty": "No orders found matching your filter criteria."
+      "empty": "No orders found matching your filter criteria.",
+      "branch": "Branch"
     },
     "actions": {
       "details": "Details",
@@ -894,8 +898,15 @@
     "title": "Refunds & Returns",
     "originalTender": "Original Payment Method Refund",
     "cashAlternative": "Alternative Cash Refund",
-    "reason": "Refund Reason",
-    "approveRefund": "Approve Refund"
+    "reason": "Reason",
+    "approveRefund": "Approve Refund",
+    "new": "New refund",
+    "order": "Order",
+    "amount": "Amount",
+    "amountHelp": "Leave empty to refund the whole order.",
+    "continue": "Continue",
+    "pinNotice": "Money going back out needs a manager PIN. You will be asked for one before the refund is created.",
+    "approvalDetails": "Refund against a paid order"
   },
   "customers": {
     "title": "Customer Directory",

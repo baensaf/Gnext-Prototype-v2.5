@@ -2,6 +2,7 @@ import { Controller, Get, Patch, Post, Delete, Body, Param, Query, Req, UseGuard
 import { Request } from 'express';
 import { TenantService } from './tenant.service';
 import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
+import { effectiveBranchId } from '../../common/utils/user-scope.util';
 
 @Controller('api/v1')
 export class TenantController {
@@ -24,7 +25,9 @@ export class TenantController {
   @Get('branches')
   async getBranches(@Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.tenantService.getBranches(tenantId);
+    // The switcher already hid the other sites from a branch account. Hiding them here
+    // too means it is a rule rather than a courtesy the next screen could forget.
+    return await this.tenantService.getBranches(tenantId, undefined, (req as any).userBranchId ?? null);
   }
 
   @Get('branches/:id')

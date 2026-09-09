@@ -61,6 +61,12 @@ export function useNavData(): NavSectionProps['data'] {
     {
       subheader: t('nav.liveOperations', 'Live Operations'),
       items: [
+        // Two roles land here and there was no way back to it once you left.
+        {
+          title: t('nav.dashboard', 'Dashboard'),
+          path: '/app/dashboard',
+          icon: ICONS.dashboard,
+        },
         {
           title: t('nav.pos', 'POS Register'),
           path: '/app/pos',
@@ -86,6 +92,16 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.cashier', 'Cashier & Shifts'),
           path: '/app/cashier/shifts',
           icon: ICONS.drawer,
+          children: [
+            {
+              title: t('nav.cashierShifts', 'Shifts & Drawer'),
+              path: '/app/cashier/shifts',
+            },
+            {
+              title: t('nav.businessDays', 'Business Days'),
+              path: '/app/cashier/business-days',
+            },
+          ],
         },
         {
           title: t('nav.orders', 'Orders Directory'),
@@ -96,6 +112,17 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.kiosk', 'Self-Service Kiosk'),
           path: '/app/kiosk',
           icon: ICONS.terminal,
+        },
+        // Pages that existed with no way in but the address bar.
+        {
+          title: t('nav.payments', 'Payments'),
+          path: '/app/payments',
+          icon: ICONS.credit,
+        },
+        {
+          title: t('nav.refunds', 'Refunds'),
+          path: '/app/refunds',
+          icon: ICONS.coupons,
         },
       ],
     },
@@ -203,6 +230,11 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.monitoring', 'Operational Monitoring'),
           path: '/app/operations/monitoring',
           icon: ICONS.dashboard,
+        },
+        {
+          title: t('nav.printQueue', 'Print Queue'),
+          path: '/app/operations/print-queue',
+          icon: ICONS.media,
         },
       ],
     },

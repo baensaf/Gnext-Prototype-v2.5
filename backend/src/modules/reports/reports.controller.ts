@@ -20,7 +20,10 @@ export class ReportsController {
   @Get('dashboard-summary')
   async getDashboardSummary(@Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.reportsService.getDashboardSummary(tenantId);
+    return await this.reportsService.getDashboardSummary(
+      tenantId,
+      (req as any).userBranchId ?? undefined,
+    );
   }
 
   @Post('query')

@@ -304,7 +304,7 @@ export class KdsService {
     return result;
   }
 
-  async getKdsTickets(tenantId: string, stationId?: string, isBumped?: boolean) {
+  async getKdsTickets(tenantId: string, stationId?: string, isBumped?: boolean, branchId?: string) {
     // Auto-generate tickets for active orders without kitchen tickets
     const activeOrders = await this.orderRepo.find({
       where: { tenant_id: tenantId, status: In(['SUBMITTED', 'CONFIRMED', 'KITCHEN_PREPARING']) },
@@ -317,6 +317,8 @@ export class KdsService {
     }
 
     const where: any = { tenant_id: tenantId };
+    // Without this a kitchen display showed every kitchen in the chain.
+    if (branchId) where.branch_id = branchId;
     if (stationId && stationId !== 'ALL') where.station_id = stationId;
 
     if (isBumped) {
