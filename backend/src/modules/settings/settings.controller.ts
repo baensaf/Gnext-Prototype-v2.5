@@ -2,7 +2,7 @@ import { Controller, Delete, Get, Patch, Post, Body, Param, Query, Req } from '@
 import { Request } from 'express';
 import { SettingsService } from './settings.service';
 import { UserScope } from '../../common/utils/user-scope.util';
-import { MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
+import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 
 /** The signed-in account's scope, as the session guard recorded it. */
 function actorScope(req: Request): UserScope {
@@ -67,7 +67,10 @@ export class SettingsController {
     return await this.settingsService.getCurrencies(tenantId);
   }
 
+  // Currencies, tender types and reason codes have no branch dimension at all: there is
+  // one set for the chain, and one place it is decided.
   @Post('currencies')
+  @HeadOfficeOnly()
   async createCurrency(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
@@ -75,6 +78,7 @@ export class SettingsController {
   }
 
   @Patch('currencies/:id')
+  @HeadOfficeOnly()
   async updateCurrency(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
@@ -88,6 +92,7 @@ export class SettingsController {
   }
 
   @Post('payment-methods')
+  @HeadOfficeOnly()
   async createPaymentMethod(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
@@ -95,6 +100,7 @@ export class SettingsController {
   }
 
   @Patch('payment-methods/:id')
+  @HeadOfficeOnly()
   async updatePaymentMethod(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
@@ -108,6 +114,7 @@ export class SettingsController {
   }
 
   @Post('reason-codes')
+  @HeadOfficeOnly()
   async createReasonCode(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
@@ -115,6 +122,7 @@ export class SettingsController {
   }
 
   @Patch('reason-codes/:id')
+  @HeadOfficeOnly()
   async updateReasonCode(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;

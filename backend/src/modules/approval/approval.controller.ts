@@ -2,6 +2,7 @@ import { Controller, Get, Post, Param, Query, Body, Req, UnauthorizedException }
 import { Request } from 'express';
 import { ApprovalService } from './approval.service';
 import { isApprover } from '../../common/utils/user-scope.util';
+import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 
 @Controller('api/v1/approvals')
 export class ApprovalController {
@@ -14,6 +15,7 @@ export class ApprovalController {
   }
 
   @Post('rules')
+  @HeadOfficeOnly()
   async createOrUpdateRule(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;

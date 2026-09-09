@@ -61,6 +61,16 @@ const MANAGER_PATHS = [
  */
 const CHAIN_ONLY_PATHS = [
   '/app/settings/users',
+  // One set of currencies, tender types, reason codes, approval thresholds and languages
+  // for the whole chain, so one place decides them. What a branch may diverge on is the
+  // overridable settings groups, which keep their own screens.
+  '/app/settings/general',
+  '/app/settings/approvals',
+  '/app/settings/discount-authorizations',
+  '/app/settings/payments',
+  '/app/settings/payments-refunds',
+  '/app/settings/reasons',
+  '/app/settings/localization',
   '/app/operations/branches',
   '/app/reports/branch-comparison',
   '/app/catalog/import-export',

@@ -208,7 +208,7 @@ export function SettingsHubPage() {
       items: [
         {
           id: 'orderWorkflow',
-          scope: 'ORG',
+          scope: 'BRANCH',
           title: t('settings.hub.items.orderWorkflow.title', 'Order Workflow Settings'),
           description: t(
             'settings.hub.items.orderWorkflow.description',
