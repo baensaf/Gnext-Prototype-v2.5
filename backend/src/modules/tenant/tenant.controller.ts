@@ -1,6 +1,7 @@
 import { Controller, Get, Patch, Post, Delete, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { TenantService } from './tenant.service';
+import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 
 @Controller('api/v1')
 export class TenantController {
@@ -13,6 +14,7 @@ export class TenantController {
   }
 
   @Patch('tenant')
+  @HeadOfficeOnly()
   async updateTenantProfile(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
@@ -31,7 +33,10 @@ export class TenantController {
     return await this.tenantService.getBranchById(tenantId, id);
   }
 
+  // Opening, renaming and closing sites is what head office is for. A branch account
+  // reaching this would be editing the chain around itself.
   @Post('branches')
+  @HeadOfficeOnly()
   async createBranch(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
@@ -39,6 +44,7 @@ export class TenantController {
   }
 
   @Patch('branches/:id')
+  @HeadOfficeOnly()
   async updateBranch(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
@@ -46,6 +52,7 @@ export class TenantController {
   }
 
   @Delete('branches/:id')
+  @HeadOfficeOnly()
   async archiveBranch(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;

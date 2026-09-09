@@ -1,6 +1,12 @@
 import { Controller, Get, Post, Delete, Body, Param, Query, Req, Res } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ReportsService } from './reports.service';
+import { UserScope } from '../../common/utils/user-scope.util';
+
+/** The signed-in account's scope, as the session guard recorded it. */
+function actorScope(req: Request): UserScope {
+  return { role: (req as any).userRole, branchId: (req as any).userBranchId ?? null };
+}
 
 @Controller('api/v1/reports')
 export class ReportsController {
@@ -20,7 +26,7 @@ export class ReportsController {
   @Post('query')
   async queryReportPost(@Body('reportCode') reportCode: string, @Body('filters') filters: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.reportsService.queryReport(tenantId, reportCode, filters);
+    return await this.reportsService.queryReport(tenantId, reportCode, filters, actorScope(req));
   }
 
   @Post('export')
@@ -31,7 +37,7 @@ export class ReportsController {
     @Req() req: Request,
   ) {
     const tenantId = (req as any).tenantId;
-    return await this.reportsService.exportReport(tenantId, reportCode, filters, format || 'CSV');
+    return await this.reportsService.exportReport(tenantId, reportCode, filters, format || 'CSV', actorScope(req));
   }
 
   @Get('saved-views')

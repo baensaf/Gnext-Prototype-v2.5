@@ -4,6 +4,7 @@ import { Request } from 'express';
 import { ImportExportService, AutoMapResult } from './import-export.service';
 import { ApprovalService } from '../approval/approval.service';
 import { ImportEntityType } from '../../entities/ImportJob.entity';
+import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 
 @Controller('api/v1')
 export class ImportExportController {
@@ -12,7 +13,10 @@ export class ImportExportController {
     private readonly approvalService: ApprovalService,
   ) {}
 
+  // The master catalogue is the chain's, so loading one is head office's move even
+  // though the wizard that drives it is an ordinary screen.
   @Post('import/upload')
+  @HeadOfficeOnly()
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(
     @UploadedFile() file: any,
@@ -85,6 +89,7 @@ export class ImportExportController {
   }
 
   @Post('import/execute')
+  @HeadOfficeOnly()
   async executeJob(@Body() body: { jobId: string }, @Req() req: Request) {
     if (!body.jobId) {
       throw new BadRequestException('jobId is required');
@@ -97,7 +102,10 @@ export class ImportExportController {
     return { success: true, data: result };
   }
 
+  // Already behind a manager pin. The pin proves someone senior is standing there;
+  // this proves the account itself is entitled to wipe the whole chain.
   @Post('system/reset')
+  @HeadOfficeOnly()
   async resetSystemData(@Body() body: { pin?: string }, @Req() req: Request) {
     const tenantId = (req as any)?.tenantId;
     const userId = (req as any)?.user?.id;
@@ -120,6 +128,7 @@ export class ImportExportController {
   }
 
   @Post('system/demo-reset')
+  @HeadOfficeOnly()
   async resetAndSeedDemo(@Body() body: { pin?: string }, @Req() req: Request) {
     const tenantId = (req as any)?.tenantId;
     const userId = (req as any)?.user?.id;
@@ -136,6 +145,7 @@ export class ImportExportController {
   }
 
   @Post('system/apply-seed')
+  @HeadOfficeOnly()
   async applySeedProfile(@Body() body: { pin?: string; profileId?: string }, @Req() req: Request) {
     const tenantId = (req as any)?.tenantId;
     const userId = (req as any)?.user?.id;

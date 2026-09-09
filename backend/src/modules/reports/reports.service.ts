@@ -1,7 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as ExcelJS from 'exceljs';
+import { UserScope, isHeadOfficeUser } from '../../common/utils/user-scope.util';
+
+/**
+ * Reports that answer a question about the chain rather than about a location. A branch
+ * manager reading these would be reading their neighbours' numbers.
+ */
+const CHAIN_ONLY_REPORTS = ['branch-comparison'];
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { Payment } from '../../entities/Payment.entity';
@@ -131,8 +138,18 @@ export class ReportsService {
     }
   }
 
-  async queryReport(tenantId: string, reportCode: string, filters: any = {}) {
+  async queryReport(tenantId: string, reportCode: string, filters: any = {}, actor?: UserScope) {
     const { startDate, endDate, branchId, channel } = filters;
+
+    // A report code cannot carry a decorator, so the rule lives with the report. Refusing
+    // here also covers the export route, which runs every report through this method.
+    if (actor && CHAIN_ONLY_REPORTS.includes(reportCode) && !isHeadOfficeUser(actor)) {
+      throw new ForbiddenException({
+        code: 'HEAD_OFFICE_ONLY',
+        title: 'Head Office Only',
+        detail: 'This report compares the whole chain and is not available to a single branch.',
+      });
+    }
 
     switch (reportCode) {
       /**
@@ -1166,8 +1183,8 @@ export class ReportsService {
     }
   }
 
-  async exportReport(tenantId: string, reportCode: string, filters: any = {}, format: 'CSV' | 'XLSX' = 'CSV') {
-    const report = await this.queryReport(tenantId, reportCode, filters);
+  async exportReport(tenantId: string, reportCode: string, filters: any = {}, format: 'CSV' | 'XLSX' = 'CSV', actor?: UserScope) {
+    const report = await this.queryReport(tenantId, reportCode, filters, actor);
     const filename = `${reportCode}-${Date.now()}.${format.toLowerCase()}`;
 
     let contentBase64 = '';

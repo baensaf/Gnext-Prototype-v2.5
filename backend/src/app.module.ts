@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { HealthController } from './modules/health/health.controller';
 import { SessionGuard } from './common/guards/session.guard';
 import { CsrfGuard } from './common/guards/csrf.guard';
+import { RolesGuard } from './common/guards/roles.guard';
 import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
 import { IdempotencyService } from './common/services/idempotency.service';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
@@ -230,6 +231,11 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
     {
       provide: APP_GUARD,
       useClass: CsrfGuard,
+    },
+    // Third on purpose: it reads the role the session guard put on the request.
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
     },
     {
       provide: APP_INTERCEPTOR,

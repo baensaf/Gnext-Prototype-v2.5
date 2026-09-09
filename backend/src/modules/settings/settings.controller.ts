@@ -2,6 +2,7 @@ import { Controller, Delete, Get, Patch, Post, Body, Param, Query, Req } from '@
 import { Request } from 'express';
 import { SettingsService } from './settings.service';
 import { UserScope } from '../../common/utils/user-scope.util';
+import { MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 
 /** The signed-in account's scope, as the session guard recorded it. */
 function actorScope(req: Request): UserScope {
@@ -25,7 +26,10 @@ export class SettingsController {
     return await this.settingsService.getSettingsWithScope(tenantId, branchId || undefined);
   }
 
+  // Which scope a write lands in is the service's business; whether the account may
+  // write settings at all is this decorator's.
   @Patch('settings')
+  @Roles(...MANAGER_AND_ABOVE)
   async updateSetting(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
@@ -35,6 +39,7 @@ export class SettingsController {
   }
 
   @Patch('settings/:group')
+  @Roles(...MANAGER_AND_ABOVE)
   async updateSettingGroup(@Param('group') group: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
@@ -45,6 +50,7 @@ export class SettingsController {
 
   /** Drop a branch's override and go back to inheriting the organization value. */
   @Delete('settings/:group/override')
+  @Roles(...MANAGER_AND_ABOVE)
   async clearBranchOverride(
     @Param('group') group: string,
     @Query('branchId') branchId: string,
