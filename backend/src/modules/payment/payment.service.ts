@@ -123,6 +123,24 @@ export class PaymentService {
         );
       }
 
+      // Vet the credit tender before the intent exists. Capture re-checks under a row lock
+      // and remains the authority; without this, an over-limit or blocked account only
+      // surfaces at capture, leaving a PENDING intent that blocks every other tender on the
+      // order until someone voids it.
+      if (method.kind === 'CUSTOMER_CREDIT') {
+        if (!order.customer_id) {
+          throw new BadRequestException('Customer credit payment requires an assigned customer on the order');
+        }
+        await this.creditService.assertCustomerPurchaseAllowed(
+          tenantId,
+          order.customer_id,
+          order.currency_code || 'IRR',
+          amountFormatted,
+          undefined,
+          em,
+        );
+      }
+
       // Mobile POS device metadata validation
       if (method.kind === 'MOBILE_POS' || method.kind === 'MOBILE') {
         if (!dto.deviceId) {

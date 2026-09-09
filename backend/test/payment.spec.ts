@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { PaymentService } from '../src/modules/payment/payment.service';
 import { Payment } from '../src/entities/Payment.entity';
@@ -37,7 +37,12 @@ describe('Payments & Split Settlement Suite (R15)', () => {
     deviceRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), find: jest.fn().mockResolvedValue([]), createQueryBuilder: jest.fn() };
     accountRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), find: jest.fn().mockResolvedValue([]) };
     shiftService = { getCurrentShift: jest.fn(), recordCashPaymentMovement: jest.fn() };
-    creditService = { getAccountByCustomer: jest.fn(), postPurchase: jest.fn(), reversePurchase: jest.fn() };
+    creditService = {
+      getAccountByCustomer: jest.fn(),
+      assertCustomerPurchaseAllowed: jest.fn(),
+      postPurchase: jest.fn(),
+      reversePurchase: jest.fn(),
+    };
     auditWriter = { write: jest.fn() };
 
     const mockQueryBuilder: any = {
@@ -159,6 +164,76 @@ describe('Payments & Split Settlement Suite (R15)', () => {
       // Order paid_total remains 50,000.0000 from earlier cash success!
       expect(order.paid_total).toBe('50000.0000');
       expect(order.outstanding_total).toBe('50000.0000');
+    });
+  });
+
+  describe('Customer Credit Intent Precheck', () => {
+    const creditOrder = {
+      id: 'ord-1',
+      state: 'SUBMITTED',
+      customer_id: 'cust-1',
+      currency_code: 'IRR',
+      outstanding_total: '100000.0000',
+      business_date: '2026-09-09',
+    };
+
+    it('should reject an over-limit credit tender before creating the intent', async () => {
+      orderRepo.findOne.mockResolvedValue(creditOrder);
+      paymentRepo.findOne.mockResolvedValue(null);
+      methodRepo.findOne.mockResolvedValue({ id: 'pm-credit', kind: 'CUSTOMER_CREDIT', is_active: true });
+      creditService.assertCustomerPurchaseAllowed.mockRejectedValue(
+        new ForbiddenException({ statusCode: 403, error: 'CREDIT_LIMIT_EXCEEDED', message: 'over limit' }),
+      );
+
+      await expect(
+        service.createPaymentIntent('t-1', { orderId: 'ord-1', methodId: 'pm-credit', amount: '50000.0000' }),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(creditService.assertCustomerPurchaseAllowed).toHaveBeenCalledWith(
+        't-1',
+        'cust-1',
+        'IRR',
+        '50000.0000',
+        undefined,
+        expect.anything(),
+      );
+    });
+
+    it('should reject a credit tender on an order with no customer', async () => {
+      orderRepo.findOne.mockResolvedValue({ ...creditOrder, customer_id: null });
+      paymentRepo.findOne.mockResolvedValue(null);
+      methodRepo.findOne.mockResolvedValue({ id: 'pm-credit', kind: 'CUSTOMER_CREDIT', is_active: true });
+
+      await expect(
+        service.createPaymentIntent('t-1', { orderId: 'ord-1', methodId: 'pm-credit', amount: '50000.0000' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(creditService.assertCustomerPurchaseAllowed).not.toHaveBeenCalled();
+    });
+
+    it('should create the intent when the customer has enough credit', async () => {
+      orderRepo.findOne.mockResolvedValue(creditOrder);
+      paymentRepo.findOne.mockResolvedValue(null);
+      methodRepo.findOne.mockResolvedValue({ id: 'pm-credit', kind: 'CUSTOMER_CREDIT', is_active: true });
+      creditService.assertCustomerPurchaseAllowed.mockResolvedValue({ id: 'acc-1' });
+
+      const intent = await service.createPaymentIntent('t-1', {
+        orderId: 'ord-1',
+        methodId: 'pm-credit',
+        amount: '50000.0000',
+      });
+
+      expect(intent.status).toBe('PENDING');
+      expect(intent.method_kind).toBe('CUSTOMER_CREDIT');
+    });
+
+    it('should not run the credit precheck for other tenders', async () => {
+      orderRepo.findOne.mockResolvedValue(creditOrder);
+      paymentRepo.findOne.mockResolvedValue(null);
+      methodRepo.findOne.mockResolvedValue({ id: 'pm-cash', kind: 'CASH', is_active: true });
+
+      await service.createPaymentIntent('t-1', { orderId: 'ord-1', methodId: 'pm-cash', amount: '50000.0000' });
+
+      expect(creditService.assertCustomerPurchaseAllowed).not.toHaveBeenCalled();
     });
   });
 

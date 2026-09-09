@@ -255,6 +255,54 @@ export class CreditService {
     });
   }
 
+  // The rules a purchase has to satisfy, on an account the caller already loaded.
+  // Throws rather than returning a verdict so both callers fail the same way; it reads
+  // no state of its own, which is what lets the payment layer run it as a precheck.
+  assertPurchaseAllowed(acc: CustomerCreditAccount, amount: string, approvalRequestId?: string) {
+    if (acc.status !== 'ACTIVE' || acc.is_blocked) {
+      throw new ForbiddenException(`Credit account ${acc.id} is ${acc.status} and cannot process purchases`);
+    }
+
+    const purchaseAmount = MoneyUtil.format(amount);
+    if (MoneyUtil.lessThanOrEqual(purchaseAmount, '0.0000')) {
+      throw new BadRequestException('Purchase amount must be greater than zero');
+    }
+
+    const available = this.calculateAvailableCredit(acc);
+    if (acc.mode !== 'UNLIMITED' && MoneyUtil.greaterThan(purchaseAmount, available)) {
+      if (!approvalRequestId) {
+        throw new ForbiddenException({
+          statusCode: 403,
+          error: 'CREDIT_LIMIT_EXCEEDED',
+          message: `Purchase amount (${purchaseAmount}) exceeds available credit (${available}) and no approval override provided`,
+        });
+      }
+    }
+  }
+
+  // Same guards, resolved from the customer instead of a known account id. Used to vet a
+  // credit tender before anything is written; deliberately skips the entries relation and
+  // the row lock that getAccountByCustomer/postPurchase take, since nothing is mutated.
+  async assertCustomerPurchaseAllowed(
+    tenantId: string,
+    customerId: string,
+    currencyCode: string,
+    amount: string,
+    approvalRequestId?: string,
+    entityManager?: EntityManager,
+  ) {
+    const repo = entityManager
+      ? entityManager.getRepository(CustomerCreditAccount)
+      : this.accountRepo;
+    const acc = await repo.findOne({
+      where: { tenant_id: tenantId, customer_id: customerId, currency_code: currencyCode },
+    });
+    if (!acc) throw new NotFoundException(`No credit account found for customer ${customerId}`);
+
+    this.assertPurchaseAllowed(acc, amount, approvalRequestId);
+    return acc;
+  }
+
   async postPurchase(tenantId: string, accountId: string, dto: CreditPurchaseDto, userId?: string, entityManager?: EntityManager) {
     const execute = async (em: EntityManager) => {
       const acc = await em.findOne(CustomerCreditAccount, {
@@ -263,25 +311,10 @@ export class CreditService {
       });
       if (!acc) throw new NotFoundException(`Credit account ${accountId} not found`);
 
-      if (acc.status !== 'ACTIVE' || acc.is_blocked) {
-        throw new ForbiddenException(`Credit account ${accountId} is ${acc.status} and cannot process purchases`);
-      }
-
+      // Re-checked under the row lock: the precheck at intent time is advisory, and the
+      // balance can move between the two.
+      this.assertPurchaseAllowed(acc, dto.amount, dto.approvalRequestId);
       const purchaseAmount = MoneyUtil.format(dto.amount);
-      if (MoneyUtil.lessThanOrEqual(purchaseAmount, '0.0000')) {
-        throw new BadRequestException('Purchase amount must be greater than zero');
-      }
-
-      const available = this.calculateAvailableCredit(acc);
-      if (acc.mode !== 'UNLIMITED' && MoneyUtil.greaterThan(purchaseAmount, available)) {
-        if (!dto.approvalRequestId) {
-          throw new ForbiddenException({
-            statusCode: 403,
-            error: 'CREDIT_LIMIT_EXCEEDED',
-            message: `Purchase amount (${purchaseAmount}) exceeds available credit (${available}) and no approval override provided`,
-          });
-        }
-      }
 
       const signedAmount = `-${purchaseAmount}`;
       const newBalance = MoneyUtil.add(acc.current_balance, signedAmount);
