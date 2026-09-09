@@ -83,6 +83,13 @@ const CHAIN_ONLY_PATHS = [
   '/app/catalog/modifiers',
   '/app/catalog/menus',
   '/app/pricing',
+  // Promotions are the chain's for the same reason the menu is: a campaign, a coupon and a
+  // negotiated customer rate carry no branch column, so a branch editing one is editing
+  // everybody's. The register still validates coupons and quotes discounts — those are
+  // reads in all but HTTP verb. /app/discounts also covers the authorizations tab, which
+  // was a second, open door to the head-office-only screen at /app/settings/discount-authorizations.
+  '/app/discounts',
+  '/app/customer-club',
 ];
 
 const FULL_ACCESS: RoleAccess = { allow: ['*'], deny: [], home: '/app/dashboard' };

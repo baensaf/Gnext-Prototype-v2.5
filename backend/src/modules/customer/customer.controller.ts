@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Param, Body, Query, Req, NotFoundException } from '@nestjs/common';
 import { Request } from 'express';
 import { CustomerService } from './customer.service';
+import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 import { CreditService } from './credit.service';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
@@ -17,6 +18,7 @@ export class CustomerController {
     return await this.customerService.getCustomerGroups(tenantId);
   }
 
+  @HeadOfficeOnly()
   @Post('customer-groups')
   async createCustomerGroup(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

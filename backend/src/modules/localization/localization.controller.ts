@@ -1,6 +1,7 @@
 import { Controller, Get, Put, Post, Query, Body, Req, Res, Header } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { LocalizationService } from './localization.service';
+import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 
 @Controller('api/v1/localization')
 export class LocalizationController {
@@ -26,6 +27,7 @@ export class LocalizationController {
     return await this.localizationService.getBilingualMap(tenantId, entityType, entityId);
   }
 
+  @HeadOfficeOnly()
   @Put('strings')
   async upsertStrings(@Body() body: { strings: any[] }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -41,6 +43,7 @@ export class LocalizationController {
     return res.status(200).send(csvContent);
   }
 
+  @HeadOfficeOnly()
   @Post('translations/import')
   async importCsv(@Body() body: { csv: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

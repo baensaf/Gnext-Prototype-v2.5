@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Query, Body, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { PricingService, PriceContext } from './pricing.service';
+import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 
 @Controller('api/v1')
 export class PricingController {
@@ -34,6 +35,7 @@ export class PricingController {
     return await this.pricingService.resolvePrice(tenantId, context);
   }
 
+  @HeadOfficeOnly()
   @Post('prices')
   async createPriceEntry(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -47,6 +49,7 @@ export class PricingController {
     return await this.pricingService.bulkPreview(tenantId, body);
   }
 
+  @HeadOfficeOnly()
   @Post('prices/bulk-commit')
   async bulkCommit(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -54,6 +57,7 @@ export class PricingController {
     return await this.pricingService.bulkCommit(tenantId, body, correlationId);
   }
 
+  @HeadOfficeOnly()
   @Post('price-groups/branches')
   async assignBranchToPriceGroup(@Body() body: { branchId: string; priceGroupId: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

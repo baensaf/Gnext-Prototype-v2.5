@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { DiscountsService } from './discounts.service';
+import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 import {
   CreateDiscountCampaignDto,
   UpdateDiscountCampaignDto,
@@ -25,6 +26,7 @@ export class DiscountsController {
     return await this.discountsService.getDiscountById(tenantId, id);
   }
 
+  @HeadOfficeOnly()
   @Post('discounts')
   async createDiscount(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -48,6 +50,7 @@ export class DiscountsController {
     return await this.discountsService.createDiscountCampaign(tenantId, campaignDto, correlationId);
   }
 
+  @HeadOfficeOnly()
   @Patch('discounts/:id')
   async updateDiscount(@Param('id') id: string, @Body() body: UpdateDiscountCampaignDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -55,6 +58,7 @@ export class DiscountsController {
     return await this.discountsService.updateDiscountCampaign(tenantId, id, body, correlationId);
   }
 
+  @HeadOfficeOnly()
   @Delete('discounts/:id')
   async archiveDiscount(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -63,6 +67,7 @@ export class DiscountsController {
   }
 
   // Scopes
+  @HeadOfficeOnly()
   @Post('discounts/:id/scopes')
   async addScope(
     @Param('id') id: string,
@@ -74,6 +79,7 @@ export class DiscountsController {
     return await this.discountsService.addScope(tenantId, id, body, correlationId);
   }
 
+  @HeadOfficeOnly()
   @Delete('discounts/:id/scopes/:scopeId')
   async removeScope(
     @Param('scopeId') scopeId: string,
@@ -91,6 +97,7 @@ export class DiscountsController {
     return await this.discountsService.getCoupons(tenantId);
   }
 
+  @HeadOfficeOnly()
   @Post('coupons')
   async createCoupon(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -127,6 +134,7 @@ export class DiscountsController {
     return await this.discountsService.getCustomerDiscounts(tenantId, customerId);
   }
 
+  @HeadOfficeOnly()
   @Post('customer-discounts')
   async createCustomerDiscount(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -135,6 +143,7 @@ export class DiscountsController {
     return await this.discountsService.createCustomerDiscount(tenantId, body, userId, correlationId);
   }
 
+  @HeadOfficeOnly()
   @Patch('customer-discounts/:id')
   async updateCustomerDiscount(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -143,6 +152,7 @@ export class DiscountsController {
     return await this.discountsService.updateCustomerDiscount(tenantId, id, body, userId, correlationId);
   }
 
+  @HeadOfficeOnly()
   @Delete('customer-discounts/:id')
   async revokeCustomerDiscount(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -151,6 +161,7 @@ export class DiscountsController {
   }
 
   // One-Time Coupon (Workflow 4)
+  @HeadOfficeOnly()
   @Post('coupons/one-time')
   async createOneTimeCoupon(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
