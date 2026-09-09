@@ -26,6 +26,7 @@ import { Delivery } from '../../entities/Delivery.entity';
 import { OfflineQueueItem } from '../../entities/OfflineQueueItem.entity';
 import { Product } from '../../entities/Product.entity';
 import { Category } from '../../entities/Category.entity';
+import { Branch } from '../../entities/Branch.entity';
 import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { SavedReportView } from '../../entities/SavedReportView.entity';
 import { ReportExportJob } from '../../entities/ReportExportJob.entity';
@@ -64,6 +65,7 @@ export class ReportsService {
     @InjectRepository(OfflineQueueItem) private readonly offlineQueueRepo: Repository<OfflineQueueItem>,
     @InjectRepository(Product) private readonly productRepo: Repository<Product>,
     @InjectRepository(Category) private readonly categoryRepo: Repository<Category>,
+    @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
     @InjectRepository(OperationalAlert) private readonly alertRepo: Repository<OperationalAlert>,
     @InjectRepository(SavedReportView) private readonly savedViewRepo: Repository<SavedReportView>,
     @InjectRepository(ReportExportJob) private readonly exportJobRepo: Repository<ReportExportJob>,
@@ -72,6 +74,7 @@ export class ReportsService {
   async getCatalog() {
     return [
       { code: 'sales-summary', name: 'Sales Summary', category: 'FINANCIAL' },
+      { code: 'branch-comparison', name: 'Branch Performance Comparison', category: 'FINANCIAL' },
       { code: 'product-sales', name: 'Product & Category Velocity', category: 'CATALOG' },
       { code: 'payments-by-method', name: 'Payment Methods & Allocations', category: 'PAYMENT' },
       { code: 'mixed-payments', name: 'Mixed Payments Audit', category: 'PAYMENT' },
@@ -132,6 +135,118 @@ export class ReportsService {
     const { startDate, endDate, branchId, channel } = filters;
 
     switch (reportCode) {
+      /**
+       * The chain roll-up: one row per branch instead of one row per order, on the
+       * same revenue basis as sales-summary so the two reports agree when you drill
+       * down. Branches with no orders in the window are kept — a location that sold
+       * nothing is the row a chain operator most needs to see, and dropping it would
+       * silently turn a problem into an absence.
+       */
+      case 'branch-comparison': {
+        const branches = await this.branchRepo.find({ where: { tenant_id: tenantId } });
+
+        const qb = this.orderRepo.createQueryBuilder('o')
+          .where('o.tenant_id = :tenantId', { tenantId });
+        if (branchId) qb.andWhere('o.branch_id = :branchId', { branchId });
+        if (channel) qb.andWhere('(o.channel = :channel OR o.order_type = :channel)', { channel });
+        this.applyBusinessDateFilter(qb, 'o', startDate, endDate);
+        qb.andWhere(REVENUE_ORDER_PREDICATE('o'), { nonRevenueStates: NON_REVENUE_ORDER_STATES });
+
+        const orders = await qb.getMany();
+
+        type BranchBucket = {
+          orders: number;
+          gross: string;
+          discounts: string;
+          tax: string;
+          net: string;
+          paid: string;
+          refunded: string;
+        };
+        const emptyBucket = (): BranchBucket => ({
+          orders: 0,
+          gross: '0.00',
+          discounts: '0.00',
+          tax: '0.00',
+          net: '0.00',
+          paid: '0.00',
+          refunded: '0.00',
+        });
+
+        const buckets = new Map<string, BranchBucket>();
+        // Seeding from the branch list first is what keeps a zero-sales branch in the
+        // output; the order loop only ever adds to a bucket that already exists.
+        const scoped = branchId ? branches.filter((b) => b.id === branchId) : branches;
+        for (const b of scoped) buckets.set(b.id, emptyBucket());
+
+        for (const o of orders) {
+          if (!buckets.has(o.branch_id)) buckets.set(o.branch_id, emptyBucket());
+          const bucket = buckets.get(o.branch_id)!;
+          const tax = MoneyUtil.format(o.tax_amount || '0', 2);
+          const tot = MoneyUtil.format(o.total_amount || '0', 2);
+          const ref = MoneyUtil.format(o.refunded_total || '0', 2);
+
+          bucket.orders += 1;
+          bucket.gross = MoneyUtil.add(bucket.gross, MoneyUtil.format(o.subtotal_amount || '0', 2), 2);
+          bucket.discounts = MoneyUtil.add(bucket.discounts, MoneyUtil.format(o.discount_amount || '0', 2), 2);
+          bucket.tax = MoneyUtil.add(bucket.tax, tax, 2);
+          bucket.paid = MoneyUtil.add(bucket.paid, MoneyUtil.format(o.paid_amount || '0', 2), 2);
+          bucket.refunded = MoneyUtil.add(bucket.refunded, ref, 2);
+          // Same definition as sales-summary: total less tax less anything given back.
+          bucket.net = MoneyUtil.add(bucket.net, MoneyUtil.subtract(MoneyUtil.subtract(tot, tax, 2), ref, 2), 2);
+        }
+
+        const byId = new Map(branches.map((b) => [b.id, b]));
+        const chainNet = MoneyUtil.sum(Array.from(buckets.values()).map((b) => b.net), 2);
+
+        const rows = Array.from(buckets.entries())
+          .map(([id, b]) => {
+            const branch = byId.get(id);
+            return {
+              branch: branch ? branch.name : id,
+              branch_code: branch ? branch.code : '—',
+              status: branch && !branch.is_active ? 'ARCHIVED' : 'ACTIVE',
+              orders: b.orders,
+              gross_subtotal: b.gross,
+              discounts: b.discounts,
+              tax: b.tax,
+              net_sales: b.net,
+              // A chain is compared on ticket size as much as on volume, and the two
+              // move independently — a branch can lead on revenue and trail on ticket.
+              average_ticket: b.orders > 0 ? MoneyUtil.divide(b.net, String(b.orders), 2) : '0.00',
+              share_of_chain: MoneyUtil.isZero(chainNet)
+                ? '0.00'
+                : MoneyUtil.multiply(MoneyUtil.divide(b.net, chainNet, 6), '100', 2),
+              paid: b.paid,
+              refunded: b.refunded,
+            };
+          })
+          .sort((a, z) => (MoneyUtil.greaterThan(z.net_sales, a.net_sales) ? 1 : -1));
+
+        const totalOrders = rows.reduce((sum, r) => sum + r.orders, 0);
+
+        return {
+          report_code: reportCode,
+          filter_basis: 'business_date',
+          rows,
+          summary_totals: {
+            branch_count: rows.length,
+            order_count: totalOrders,
+            // The viewer matches a total to its column by name, so the totals row also
+            // needs the keys spelled the way this report's columns are spelled.
+            orders: totalOrders,
+            share_of_chain: rows.length > 0 ? '100.00' : '0.00',
+            gross_subtotal: MoneyUtil.sum(rows.map((r) => r.gross_subtotal), 2),
+            discounts: MoneyUtil.sum(rows.map((r) => r.discounts), 2),
+            tax: MoneyUtil.sum(rows.map((r) => r.tax), 2),
+            net_sales: chainNet,
+            average_ticket: totalOrders > 0 ? MoneyUtil.divide(chainNet, String(totalOrders), 2) : '0.00',
+            paid: MoneyUtil.sum(rows.map((r) => r.paid), 2),
+            refunded: MoneyUtil.sum(rows.map((r) => r.refunded), 2),
+          },
+        };
+      }
+
       case 'sales-summary': {
         const qb = this.orderRepo.createQueryBuilder('o')
           .where('o.tenant_id = :tenantId', { tenantId });

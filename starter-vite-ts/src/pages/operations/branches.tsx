@@ -5,9 +5,11 @@ import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import CorporateFareIcon from '@mui/icons-material/CorporateFare';
 import {
   Box,
   Card,
@@ -45,6 +47,7 @@ export function BranchesPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -74,19 +77,55 @@ export function BranchesPage() {
     loadBranches();
   }, [loadBranches]);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    setEditingId(null);
+    setCode('');
+    setName('');
+    setPhone('');
+    setAddress('');
+  };
+
+  const openCreate = () => {
+    setEditingId(null);
+    setCode('');
+    setName('');
+    setPhone('');
+    setAddress('');
+    setDrawerOpen(true);
+  };
+
+  const openEdit = (branch: Branch) => {
+    setEditingId(branch.id);
+    setCode(branch.code);
+    setName(branch.name);
+    setPhone(branch.phone || '');
+    setAddress(branch.address || '');
+    setDrawerOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await tenantApi.createBranch({ code, name, phone, address });
-      setDrawerOpen(false);
-      setCode('');
-      setName('');
-      setPhone('');
-      setAddress('');
-      setSuccess(t('operations.branches.saveSuccess', 'Branch created successfully'));
+      if (editingId) {
+        // Code is the stable key other records point at, so an edit changes the
+        // human-facing details only and leaves the identifier alone.
+        await tenantApi.updateBranch(editingId, { name, phone, address });
+        setSuccess(t('operations.branches.updateSuccess', 'Branch updated successfully'));
+      } else {
+        await tenantApi.createBranch({ code, name, phone, address });
+        setSuccess(t('operations.branches.saveSuccess', 'Branch created successfully'));
+      }
+      closeDrawer();
       loadBranches();
     } catch (err: any) {
-      setError(err.detail || err.message || t('operations.branches.createError', 'Failed to create branch'));
+      setError(
+        err.detail ||
+          err.message ||
+          (editingId
+            ? t('operations.branches.updateError', 'Failed to update branch')
+            : t('operations.branches.createError', 'Failed to create branch'))
+      );
     }
   };
 
@@ -118,7 +157,7 @@ export function BranchesPage() {
             <Button
               variant="contained"
               startIcon={<AddIcon />}
-              onClick={() => setDrawerOpen(true)}
+              onClick={openCreate}
               sx={{ fontWeight: 'bold' }}
             >
               {t('operations.branches.createBranch', 'Create Branch')}
@@ -126,6 +165,13 @@ export function BranchesPage() {
           </Stack>
         }
       />
+
+      <Alert icon={<CorporateFareIcon fontSize="inherit" />} severity="info" sx={{ mb: 3 }}>
+        {t(
+          'operations.branches.orgScopeNotice',
+          'Organization-level setting. Locations are defined here at head office and are available to the whole chain; each branch then runs its own operations against them.'
+        )}
+      </Alert>
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
@@ -186,6 +232,12 @@ export function BranchesPage() {
                       </TableCell>
                       <TableCell align="center">
                         <IconButton
+                          title={t('operations.branches.edit', 'Edit Branch')}
+                          onClick={() => openEdit(b)}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton
                           title={t('operations.branches.schedule', 'Hours Schedule')}
                           color="primary"
                           onClick={() => navigate(`/app/operations/branches/${b.id}`)}
@@ -213,19 +265,27 @@ export function BranchesPage() {
       <Drawer
         anchor="right"
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={closeDrawer}
       >
         <Box sx={{ width: { xs: 320, sm: 400 }, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            {t('operations.branches.newBranch', 'New Branch Location')}
+            {editingId
+              ? t('operations.branches.editBranch', 'Edit Branch Location')
+              : t('operations.branches.newBranch', 'New Branch Location')}
           </Typography>
-          <form onSubmit={handleCreate}>
+          <form onSubmit={handleSubmit}>
             <Stack spacing={2.5}>
               <TextField
                 label={t('operations.branches.branchCode', 'Branch Code')}
                 placeholder="e.g. TEH-WEST"
                 required
                 fullWidth
+                disabled={!!editingId}
+                helperText={
+                  editingId
+                    ? t('operations.branches.codeLocked', 'Branch code cannot be changed after creation.')
+                    : undefined
+                }
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
               />
@@ -253,7 +313,9 @@ export function BranchesPage() {
                 onChange={(e) => setAddress(e.target.value)}
               />
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>
-                {t('operations.branches.saveBranch', 'Save Branch')}
+                {editingId
+                  ? t('operations.branches.updateBranch', 'Update Branch')
+                  : t('operations.branches.saveBranch', 'Save Branch')}
               </Button>
             </Stack>
           </form>

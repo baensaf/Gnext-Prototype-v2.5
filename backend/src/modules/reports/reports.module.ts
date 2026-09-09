@@ -24,6 +24,7 @@ import { Delivery } from '../../entities/Delivery.entity';
 import { OfflineQueueItem } from '../../entities/OfflineQueueItem.entity';
 import { Product } from '../../entities/Product.entity';
 import { Category } from '../../entities/Category.entity';
+import { Branch } from '../../entities/Branch.entity';
 import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { SavedReportView } from '../../entities/SavedReportView.entity';
 import { ReportExportJob } from '../../entities/ReportExportJob.entity';
@@ -58,6 +59,7 @@ import { AuditAlertsAliasController } from './audit-alerts-alias.controller';
       OfflineQueueItem,
       Product,
       Category,
+      Branch,
       OperationalAlert,
       SavedReportView,
       ReportExportJob,

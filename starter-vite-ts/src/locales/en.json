@@ -96,7 +96,9 @@
     "approvalsV5": "Multi-Step Approvals & Policy",
     "offlineSyncV5": "Offline Sync & Conflict Engine",
     "outboxV5": "Outbox & Event Queue Monitor",
-    "printQueueV5": "Thermal Print Queue Engine"
+    "printQueueV5": "Thermal Print Queue Engine",
+    "reportsSalesSummary": "Sales Summary",
+    "reportsBranchComparison": "Branch Comparison"
   },
   "common": {
     "languages": "Languages",
@@ -2202,6 +2204,12 @@
           "description": "Background worker queue logs, transactional outbox monitor, and API event logs.",
           "badge": "Outbox Logs"
         }
+      },
+      "scopeLegend": "Organization settings are defined once at head office and apply to every branch. Per-branch settings are configured separately at each location.",
+      "scope": {
+        "all": "All",
+        "org": "Organization",
+        "branch": "Per Branch"
       }
     }
   },
@@ -2289,7 +2297,18 @@
       "saveSuccess": "Branch created successfully",
       "archiveSuccess": "Branch archived successfully",
       "archiveConfirmTitle": "Archive Branch Location",
-      "archiveConfirmContent": "Are you sure you want to archive branch \"{{name}}\"? This will hide the location from active POS routing."
+      "archiveConfirmContent": "Are you sure you want to archive branch \"{{name}}\"? This will hide the location from active POS routing.",
+      "orgScopeNotice": "Organization-level setting. Locations are defined here at head office and are available to the whole chain; each branch then runs its own operations against them.",
+      "edit": "Edit Branch",
+      "editBranch": "Edit Branch Location",
+      "updateBranch": "Update Branch",
+      "updateSuccess": "Branch updated successfully",
+      "updateError": "Failed to update branch",
+      "codeLocked": "Branch code cannot be changed after creation.",
+      "loadError": "Failed to load branches",
+      "createError": "Failed to create branch",
+      "archiveError": "Failed to archive branch",
+      "noBranches": "No branches found. Click \"Create Branch\" to add one."
     },
     "branchDetail": {
       "title": "Branch Operating Hours Schedule",

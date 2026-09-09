@@ -35,6 +35,8 @@ export async function runSeed() {
   const customerAddressRepo = AppDataSource.getRepository('CustomerAddress');
   const creditAccountRepo = AppDataSource.getRepository('CustomerCreditAccount');
   const creditEntryRepo = AppDataSource.getRepository('CreditEntry');
+  const orderRepo = AppDataSource.getRepository('OrderHeader');
+  const orderItemRepo = AppDataSource.getRepository('OrderItem');
 
   // 1. Idempotent Tenant Seed
   let tenant = await tenantRepo.findOne({ where: { id: DEFAULT_TENANT_ID } });
@@ -114,10 +116,26 @@ export async function runSeed() {
     console.log('Seeded Branch: Downtown Express');
   }
 
+  let branchNorth = await branchRepo.findOne({ where: { tenant_id: tenant.id, code: 'TEH-NORTH' } });
+  if (!branchNorth) {
+    branchNorth = branchRepo.create({
+      tenant_id: tenant.id,
+      code: 'TEH-NORTH',
+      name: 'Northside Grill',
+      phone: '+98-21-66666666',
+      address: 'Tehran, Northside Boulevard',
+      time_zone: 'Asia/Tehran',
+      is_active: true,
+    });
+    await branchRepo.save(branchNorth);
+    console.log('Seeded Branch: Northside Grill');
+  }
+
   // 4b. Idempotent Delivery Zones
   const defaultZones = [
     { tenant_id: tenant.id, branch_id: branchTeh.id, code: 'ZONE-CENTRAL-01', name: 'Central District Zone 1', fee: '25000.0000', currency_code: 'IRR', estimated_minutes: 30, is_active: true },
     { tenant_id: tenant.id, branch_id: branchExpress.id, code: 'ZONE-DOWNTOWN-01', name: 'Downtown Express Zone 1', fee: '20000.0000', currency_code: 'IRR', estimated_minutes: 20, is_active: true },
+    { tenant_id: tenant.id, branch_id: branchNorth.id, code: 'ZONE-NORTH-01', name: 'Northside Zone 1', fee: '30000.0000', currency_code: 'IRR', estimated_minutes: 35, is_active: true },
   ];
   for (const z of defaultZones) {
     const existing = await zoneRepo.findOne({ where: { tenant_id: tenant.id, code: z.code } });
@@ -187,6 +205,7 @@ export async function runSeed() {
   const terminals = [
     { tenant_id: tenant.id, branch_id: branchTeh.id, code: 'TERM-01', name: 'Main POS Register T-01', device_type: 'POS_STATION' },
     { tenant_id: tenant.id, branch_id: branchExpress.id, code: 'TERM-02', name: 'Express Kiosk T-02', device_type: 'KIOSK' },
+    { tenant_id: tenant.id, branch_id: branchNorth.id, code: 'TERM-03', name: 'Northside POS Register T-03', device_type: 'POS_STATION' },
   ];
   for (const t of terminals) {
     const existing = await terminalRepo.findOne({ where: { tenant_id: tenant.id, code: t.code } });
@@ -372,6 +391,181 @@ export async function runSeed() {
       }
     }
   }
+
+  // 9. Idempotent chain sales history.
+  //
+  // Nothing else in the seed writes orders, so every branch report opened on a fresh
+  // database was empty and the chain roll-up had nothing to roll up. This lays down a
+  // fortnight of completed orders per branch with deliberately different shapes —
+  // Downtown sells often and small, Northside rarely and large, Central sits between —
+  // so a comparison report shows a spread instead of three near-identical rows.
+  const HISTORY_DAYS = 14;
+  const TAX_RATE = 0.09;
+
+  const seedProducts = await prodRepo.find({
+    where: [
+      { tenant_id: tenant.id, code: 'PROD-CHEESEBURGER' },
+      { tenant_id: tenant.id, code: 'PROD-FRIES' },
+      { tenant_id: tenant.id, code: 'PROD-COLA' },
+    ],
+  });
+  const productByCode = new Map(seedProducts.map((p: any) => [p.code, p]));
+
+  const branchProfiles = [
+    {
+      branch: branchTeh,
+      ordersPerDay: 8,
+      // Weights are draw counts, not prices: a burger-led kitchen still lands a mid
+      // ticket because most orders pair one burger with a side.
+      basket: [
+        { code: 'PROD-CHEESEBURGER', weight: 5, maxQty: 2 },
+        { code: 'PROD-FRIES', weight: 3, maxQty: 2 },
+        { code: 'PROD-COLA', weight: 2, maxQty: 2 },
+      ],
+      types: ['DINE_IN', 'DINE_IN', 'TAKEAWAY', 'DELIVERY'],
+    },
+    {
+      branch: branchExpress,
+      ordersPerDay: 12,
+      basket: [
+        { code: 'PROD-FRIES', weight: 4, maxQty: 2 },
+        { code: 'PROD-COLA', weight: 4, maxQty: 2 },
+        { code: 'PROD-CHEESEBURGER', weight: 2, maxQty: 1 },
+      ],
+      types: ['TAKEAWAY', 'TAKEAWAY', 'DELIVERY'],
+    },
+    {
+      branch: branchNorth,
+      ordersPerDay: 4,
+      basket: [
+        { code: 'PROD-CHEESEBURGER', weight: 6, maxQty: 3 },
+        { code: 'PROD-FRIES', weight: 3, maxQty: 3 },
+        { code: 'PROD-COLA', weight: 2, maxQty: 3 },
+      ],
+      types: ['DINE_IN', 'DINE_IN', 'DELIVERY'],
+    },
+  ];
+
+  // A fixed-seed generator, so wiping and re-seeding reproduces the same demo numbers
+  // and a screenshot taken last week still matches the app today.
+  let rngState = 20260909;
+  const rand = () => {
+    rngState = (rngState * 1103515245 + 12345) % 2147483648;
+    return rngState / 2147483648;
+  };
+  const pick = <T,>(list: T[]): T => list[Math.floor(rand() * list.length)];
+
+  for (const profile of branchProfiles) {
+    const branch = profile.branch as any;
+    const firstNumber = `SEED-${branch.code}-0001`;
+    const already = await orderRepo.findOne({ where: { tenant_id: tenant.id, order_number: firstNumber } });
+    if (already) continue;
+
+    const drawPool: string[] = [];
+    for (const entry of profile.basket) {
+      for (let i = 0; i < entry.weight; i += 1) drawPool.push(entry.code);
+    }
+    const maxQtyByCode = new Map(profile.basket.map((b) => [b.code, b.maxQty]));
+
+    let sequence = 0;
+    for (let dayOffset = HISTORY_DAYS - 1; dayOffset >= 0; dayOffset -= 1) {
+      const day = new Date();
+      day.setDate(day.getDate() - dayOffset);
+      const businessDate = day.toISOString().slice(0, 10);
+
+      for (let n = 0; n < profile.ordersPerDay; n += 1) {
+        sequence += 1;
+        const orderType = pick(profile.types);
+        // Spread across a trading day so hourly views and "recent orders" lists read
+        // like a real service rather than a burst at midnight.
+        const placedAt = new Date(day);
+        placedAt.setHours(11 + Math.floor(rand() * 11), Math.floor(rand() * 60), 0, 0);
+
+        const lineCount = 1 + Math.floor(rand() * 3);
+        const chosen = new Map<string, number>();
+        for (let i = 0; i < lineCount; i += 1) {
+          const code = pick(drawPool);
+          if (chosen.has(code)) continue;
+          chosen.set(code, 1 + Math.floor(rand() * (maxQtyByCode.get(code) || 1)));
+        }
+        if (chosen.size === 0) chosen.set('PROD-COLA', 1);
+
+        let subtotal = 0;
+        const lines: any[] = [];
+        let lineNumber = 0;
+        for (const [code, qty] of chosen) {
+          const product = productByCode.get(code) as any;
+          if (!product) continue;
+          lineNumber += 1;
+          const unitPrice = Number(product.base_price);
+          const baseTotal = unitPrice * qty;
+          const lineTax = baseTotal * TAX_RATE;
+          subtotal += baseTotal;
+          lines.push({
+            tenant_id: tenant.id,
+            line_number: lineNumber,
+            product_id: product.id,
+            product_code: product.code,
+            product_name: product.name,
+            quantity: qty.toFixed(3),
+            unit_price: unitPrice.toFixed(4),
+            base_total: baseTotal.toFixed(4),
+            subtotal: baseTotal.toFixed(4),
+            tax_total: lineTax.toFixed(4),
+            tax_amount: lineTax.toFixed(4),
+            line_total: (baseTotal + lineTax).toFixed(4),
+            total_amount: (baseTotal + lineTax).toFixed(4),
+            state: 'ACTIVE',
+          });
+        }
+        if (lines.length === 0) continue;
+
+        const deliveryFee = orderType === 'DELIVERY' ? 25000 : 0;
+        // Tax follows the line items only: a delivery fee is a service charge here, not
+        // a taxable good, which is also how the POS quotes it.
+        const tax = subtotal * TAX_RATE;
+        const grandTotal = subtotal + tax + deliveryFee;
+
+        const savedOrder: any = await orderRepo.save(orderRepo.create({
+          tenant_id: tenant.id,
+          branch_id: branch.id,
+          order_number: `SEED-${branch.code}-${String(sequence).padStart(4, '0')}`,
+          order_type: orderType,
+          channel: orderType === 'DELIVERY' ? 'ONLINE' : 'POS',
+          state: 'COMPLETED',
+          status: 'COMPLETED',
+          currency_code: 'IRR',
+          business_date: businessDate,
+          subtotal: subtotal.toFixed(4),
+          subtotal_amount: subtotal.toFixed(4),
+          delivery_fee: deliveryFee.toFixed(4),
+          tax_total: tax.toFixed(4),
+          tax_amount: tax.toFixed(4),
+          grand_total: grandTotal.toFixed(4),
+          total_amount: grandTotal.toFixed(4),
+          paid_total: grandTotal.toFixed(4),
+          paid_amount: grandTotal.toFixed(4),
+          fulfillment_status: 'COMPLETED',
+          submitted_at: placedAt,
+          completed_at: placedAt,
+        }));
+
+        await orderItemRepo.save(lines.map((l) => orderItemRepo.create({ ...l, order_id: savedOrder.id })));
+      }
+    }
+    console.log(`Seeded ${sequence} historical orders for branch ${branch.name}`);
+  }
+
+  // placed_at is a CreateDateColumn, so TypeORM stamps it with now() on insert and
+  // ignores the backdated value. Reports filter on business_date and are unaffected,
+  // but order lists sort by placed_at — without this the whole fortnight would appear
+  // to have been rung up in the same second.
+  await AppDataSource.query(
+    `UPDATE order_header SET placed_at = submitted_at, updated_at = submitted_at
+     WHERE tenant_id = $1 AND order_number LIKE 'SEED-%' AND submitted_at IS NOT NULL
+       AND placed_at <> submitted_at`,
+    [tenant.id],
+  );
 
   console.log('Database seed execution completed successfully.');
 }

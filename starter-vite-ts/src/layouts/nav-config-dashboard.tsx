@@ -160,6 +160,18 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.reports', 'Reports & Analytics'),
           path: '/app/reports/sales-summary',
           icon: ICONS.dashboard,
+          // The report picker inside the page can reach every report, but the chain
+          // roll-up is the one an area manager opens by name, so it gets its own entry.
+          children: [
+            {
+              title: t('nav.reportsSalesSummary', 'Sales Summary'),
+              path: '/app/reports/sales-summary',
+            },
+            {
+              title: t('nav.reportsBranchComparison', 'Branch Comparison'),
+              path: '/app/reports/branch-comparison',
+            },
+          ],
         },
         {
           title: t('nav.audit', 'Audit Explorer'),

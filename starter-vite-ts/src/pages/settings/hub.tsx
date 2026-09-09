@@ -15,6 +15,7 @@ import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import CountertopsIcon from '@mui/icons-material/Countertops';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import CorporateFareIcon from '@mui/icons-material/CorporateFare';
 import {
   Box,
   Card,
@@ -26,11 +27,15 @@ import {
   TextField,
   ButtonBase,
   Typography,
+  ToggleButton,
+  ToggleButtonGroup,
   CardContent,
   InputAdornment,
 } from '@mui/material';
 
 import { RouterLink } from 'src/routes/components';
+
+type SettingScope = 'BRANCH' | 'ORG';
 
 interface SettingItem {
   badge?: {
@@ -41,6 +46,8 @@ interface SettingItem {
   icon: React.ReactNode;
   id: string;
   path: string;
+  /** ORG is defined once at head office and inherited; BRANCH is set per location. */
+  scope: SettingScope;
   tags: string[];
   title: string;
 }
@@ -57,6 +64,7 @@ export function SettingsHubPage() {
   const theme = useTheme();
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
+  const [scopeFilter, setScopeFilter] = useState<SettingScope | 'ALL'>('ALL');
   const isRtl = theme.direction === 'rtl';
 
   const categories: SettingCategory[] = [
@@ -71,6 +79,7 @@ export function SettingsHubPage() {
       items: [
         {
           id: 'general',
+          scope: 'ORG',
           title: t('settings.hub.items.general.title', 'General Settings & Currencies'),
           description: t(
             'settings.hub.items.general.description',
@@ -83,6 +92,7 @@ export function SettingsHubPage() {
         },
         {
           id: 'branches',
+          scope: 'ORG',
           title: t('settings.hub.items.branches.title', 'Branches & Operating Hours'),
           description: t(
             'settings.hub.items.branches.description',
@@ -106,6 +116,7 @@ export function SettingsHubPage() {
       items: [
         {
           id: 'terminals',
+          scope: 'BRANCH',
           title: t('settings.hub.items.terminals.title', 'Terminals Registry'),
           description: t(
             'settings.hub.items.terminals.description',
@@ -118,6 +129,7 @@ export function SettingsHubPage() {
         },
         {
           id: 'printers',
+          scope: 'BRANCH',
           title: t('settings.hub.items.printers.title', 'Printers & Print Routing'),
           description: t(
             'settings.hub.items.printers.description',
@@ -130,6 +142,7 @@ export function SettingsHubPage() {
         },
         {
           id: 'kds',
+          scope: 'BRANCH',
           title: t('settings.hub.items.kds.title', 'KDS Configuration'),
           description: t(
             'settings.hub.items.kds.description',
@@ -153,6 +166,7 @@ export function SettingsHubPage() {
       items: [
         {
           id: 'approvals',
+          scope: 'ORG',
           title: t('settings.hub.items.approvals.title', 'Approval Policies & PIN Escalation'),
           description: t(
             'settings.hub.items.approvals.description',
@@ -165,6 +179,7 @@ export function SettingsHubPage() {
         },
         {
           id: 'discountAuthorizations',
+          scope: 'ORG',
           title: t('settings.hub.items.discountAuthorizations.title', 'Manual Discount Authorizations'),
           description: t(
             'settings.hub.items.discountAuthorizations.description',
@@ -188,6 +203,7 @@ export function SettingsHubPage() {
       items: [
         {
           id: 'orderWorkflow',
+          scope: 'ORG',
           title: t('settings.hub.items.orderWorkflow.title', 'Order Workflow Settings'),
           description: t(
             'settings.hub.items.orderWorkflow.description',
@@ -200,6 +216,7 @@ export function SettingsHubPage() {
         },
         {
           id: 'payments',
+          scope: 'ORG',
           title: t('settings.hub.items.payments.title', 'Payments & Refund Methods'),
           description: t(
             'settings.hub.items.payments.description',
@@ -212,6 +229,7 @@ export function SettingsHubPage() {
         },
         {
           id: 'reasons',
+          scope: 'ORG',
           title: t('settings.hub.items.reasons.title', 'Reason Codes & Compliance'),
           description: t(
             'settings.hub.items.reasons.description',
@@ -235,6 +253,7 @@ export function SettingsHubPage() {
       items: [
         {
           id: 'localization',
+          scope: 'ORG',
           title: t('settings.hub.items.localization.title', 'Language & Media Localization'),
           description: t(
             'settings.hub.items.localization.description',
@@ -247,6 +266,7 @@ export function SettingsHubPage() {
         },
         {
           id: 'importExport',
+          scope: 'ORG',
           title: t('settings.hub.items.importExport.title', 'Data Import & Export Wizard'),
           description: t(
             'settings.hub.items.importExport.description',
@@ -259,6 +279,7 @@ export function SettingsHubPage() {
         },
         {
           id: 'dataReset',
+          scope: 'ORG',
           title: t('settings.hub.items.dataReset.title', 'Data Reset & System Seeds'),
           description: t(
             'settings.hub.items.dataReset.description',
@@ -276,6 +297,7 @@ export function SettingsHubPage() {
   const filteredCategories = categories
     .map((category) => {
       const filteredItems = category.items.filter((item) => {
+        if (scopeFilter !== 'ALL' && item.scope !== scopeFilter) return false;
         if (!searchQuery.trim()) return true;
         const q = searchQuery.toLowerCase();
         return (
@@ -324,9 +346,39 @@ export function SettingsHubPage() {
                 'Centralized configuration portal. Manage business profiles, store branches, hardware registers, security governance, and system tools in one place.'
               )}
             </Typography>
+            <Typography variant="body2" sx={{ maxWidth: 640, mt: 1.5, opacity: 0.75 }}>
+              {t(
+                'settings.hub.scopeLegend',
+                'Organization settings are defined once at head office and apply to every branch. Per-branch settings are configured separately at each location.'
+              )}
+            </Typography>
           </Box>
 
-          <TextField
+          <Stack spacing={1.5} sx={{ width: { md: 'auto', xs: '100%' } }}>
+            <ToggleButtonGroup
+              exclusive
+              onChange={(_, next) => next && setScopeFilter(next)}
+              size="small"
+              sx={{
+                bgcolor: 'background.paper',
+                borderRadius: 2,
+                boxShadow: 2,
+                '& .MuiToggleButton-root': { fontWeight: 700, px: 2, textTransform: 'none' },
+              }}
+              value={scopeFilter}
+            >
+              <ToggleButton value="ALL">{t('settings.hub.scope.all', 'All')}</ToggleButton>
+              <ToggleButton value="ORG">
+                <CorporateFareIcon sx={{ fontSize: 16, mr: 0.75 }} />
+                {t('settings.hub.scope.org', 'Organization')}
+              </ToggleButton>
+              <ToggleButton value="BRANCH">
+                <StorefrontIcon sx={{ fontSize: 16, mr: 0.75 }} />
+                {t('settings.hub.scope.branch', 'Per Branch')}
+              </ToggleButton>
+            </ToggleButtonGroup>
+
+            <TextField
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('settings.hub.searchPlaceholder', 'Search settings...')}
             size="medium"
@@ -349,7 +401,8 @@ export function SettingsHubPage() {
               width: { md: 320, xs: '100%' },
             }}
             value={searchQuery}
-          />
+            />
+          </Stack>
         </Stack>
       </Box>
 
@@ -362,7 +415,7 @@ export function SettingsHubPage() {
           <Typography color="text.secondary" sx={{ mt: 1 }} variant="body2">
             {t(
               'settings.hub.noResultsHelp',
-              'Try searching for keywords like "currency", "branches", "hardware", "approvals", or "reset".'
+              'Try searching for keywords like "currency", "branches", "hardware", "approvals", or "reset", or clear the scope filter.'
             )}
           </Typography>
         </Card>
@@ -469,6 +522,24 @@ export function SettingsHubPage() {
                               <Typography color="text.primary" sx={{ fontWeight: 700 }} variant="subtitle1">
                                 {item.title}
                               </Typography>
+                              <Chip
+                                color={item.scope === 'ORG' ? 'primary' : 'default'}
+                                icon={
+                                  item.scope === 'ORG' ? (
+                                    <CorporateFareIcon sx={{ fontSize: 13 }} />
+                                  ) : (
+                                    <StorefrontIcon sx={{ fontSize: 13 }} />
+                                  )
+                                }
+                                label={
+                                  item.scope === 'ORG'
+                                    ? t('settings.hub.scope.org', 'Organization')
+                                    : t('settings.hub.scope.branch', 'Per Branch')
+                                }
+                                size="small"
+                                sx={{ fontSize: '0.65rem', fontWeight: 700, height: 20 }}
+                                variant={item.scope === 'ORG' ? 'filled' : 'outlined'}
+                              />
                               {item.badge && (
                                 <Chip
                                   color={item.badge.color}
