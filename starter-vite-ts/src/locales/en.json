@@ -2308,7 +2308,14 @@
       "loadError": "Failed to load branches",
       "createError": "Failed to create branch",
       "archiveError": "Failed to archive branch",
-      "noBranches": "No branches found. Click \"Create Branch\" to add one."
+      "noBranches": "No branches found. Click \"Create Branch\" to add one.",
+      "type": "Type",
+      "typeHint": "Only a restaurant takes customer orders. Production kitchens and offices get no POS, kiosk or kitchen display, and are left out of sales comparisons.",
+      "types": {
+        "restaurant": "Restaurant",
+        "commissary": "Production Kitchen",
+        "office": "Office"
+      }
     },
     "branchDetail": {
       "title": "Branch Operating Hours Schedule",
@@ -2554,5 +2561,17 @@
   "errorBoundary": {
     "unexpected": "Unexpected Application Error!",
     "unknown": "Unknown Error"
+  },
+  "branchScope": {
+    "title": "Active Scope",
+    "headOffice": "All Branches (HQ)",
+    "headOfficeCode": "ORG",
+    "headOfficeHint": "Chain-wide view, no single store",
+    "manage": "Manage Branches",
+    "type": {
+      "restaurant": "Restaurant",
+      "commissary": "Production kitchen — no sales",
+      "office": "Office — no sales"
+    }
   }
 }

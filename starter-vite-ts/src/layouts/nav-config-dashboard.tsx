@@ -2,6 +2,8 @@ import type { NavSectionProps } from 'src/components/nav-section';
 
 import { useTranslation } from 'react-i18next';
 
+import { useBranchContextOptional } from 'src/contexts/branch-context';
+
 import { CONFIG } from 'src/global-config';
 
 import { Label } from 'src/components/label';
@@ -33,10 +35,24 @@ const ICONS = {
   media: icon('ic-file'),
 };
 
+/**
+ * Tools that only make sense standing in a shop: a register, a kiosk, a kitchen display,
+ * a dining floor. A production kitchen and an office have no customers, and head office
+ * is not a building you can serve from, so these are hidden rather than offered broken.
+ */
+const SHOP_FLOOR_PATHS = ['/app/pos', '/app/kiosk', '/app/kds', '/app/dine-in/floor'];
+
 export function useNavData(): NavSectionProps['data'] {
   const { t } = useTranslation();
+  const branchScope = useBranchContextOptional();
 
-  return [
+  // No scope yet — still loading, or the provider is gone because an error boundary
+  // replaced it. Showing the full menu is the pre-existing behaviour and the safe one:
+  // hiding tools because the scope is briefly unknown would be worse than showing them.
+  const isShopFloor =
+    !branchScope?.isHeadOffice && (branchScope?.selectedBranchType ?? 'RESTAURANT') === 'RESTAURANT';
+
+  const sections: NavSectionProps['data'] = [
     {
       subheader: t('nav.liveOperations', 'Live Operations'),
       items: [
@@ -228,5 +244,14 @@ export function useNavData(): NavSectionProps['data'] {
       ],
     },
   ];
+
+  if (isShopFloor) return sections;
+
+  return sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !SHOP_FLOOR_PATHS.includes(item.path)),
+    }))
+    .filter((section) => section.items.length > 0);
 }
 

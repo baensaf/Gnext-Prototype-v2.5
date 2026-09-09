@@ -1,10 +1,14 @@
 import { httpClient } from './httpClient';
 
+/** Mirrors the backend BranchType: only a RESTAURANT sells to customers. */
+export type BranchType = 'COMMISSARY' | 'OFFICE' | 'RESTAURANT';
+
 export interface Branch {
   id: string;
   tenant_id: string;
   code: string;
   name: string;
+  branch_type?: BranchType;
   phone?: string;
   address?: string;
   time_zone?: string;

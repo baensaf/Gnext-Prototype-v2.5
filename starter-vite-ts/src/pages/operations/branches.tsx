@@ -1,4 +1,4 @@
-import type { Branch } from 'src/api/tenantApi';
+import type { Branch, BranchType } from 'src/api/tenantApi';
 
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -24,6 +24,7 @@ import {
   TableBody,
   TableCell,
   TableHead,
+  MenuItem,
   TextField,
   Typography,
   IconButton,
@@ -49,6 +50,7 @@ export function BranchesPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [code, setCode] = useState('');
+  const [branchType, setBranchType] = useState<BranchType>('RESTAURANT');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -59,6 +61,12 @@ export function BranchesPage() {
     id: '',
     name: '',
   });
+
+  const branchTypeLabels: Record<BranchType, string> = {
+    RESTAURANT: t('operations.branches.types.restaurant', 'Restaurant'),
+    COMMISSARY: t('operations.branches.types.commissary', 'Production Kitchen'),
+    OFFICE: t('operations.branches.types.office', 'Office'),
+  };
 
   const loadBranches = useCallback(async () => {
     setLoading(true);
@@ -84,6 +92,7 @@ export function BranchesPage() {
     setName('');
     setPhone('');
     setAddress('');
+    setBranchType('RESTAURANT');
   };
 
   const openCreate = () => {
@@ -92,6 +101,7 @@ export function BranchesPage() {
     setName('');
     setPhone('');
     setAddress('');
+    setBranchType('RESTAURANT');
     setDrawerOpen(true);
   };
 
@@ -101,6 +111,7 @@ export function BranchesPage() {
     setName(branch.name);
     setPhone(branch.phone || '');
     setAddress(branch.address || '');
+    setBranchType(branch.branch_type || 'RESTAURANT');
     setDrawerOpen(true);
   };
 
@@ -110,10 +121,10 @@ export function BranchesPage() {
       if (editingId) {
         // Code is the stable key other records point at, so an edit changes the
         // human-facing details only and leaves the identifier alone.
-        await tenantApi.updateBranch(editingId, { name, phone, address });
+        await tenantApi.updateBranch(editingId, { name, phone, address, branch_type: branchType });
         setSuccess(t('operations.branches.updateSuccess', 'Branch updated successfully'));
       } else {
-        await tenantApi.createBranch({ code, name, phone, address });
+        await tenantApi.createBranch({ code, name, phone, address, branch_type: branchType });
         setSuccess(t('operations.branches.saveSuccess', 'Branch created successfully'));
       }
       closeDrawer();
@@ -193,6 +204,7 @@ export function BranchesPage() {
                 <TableRow>
                   <TableCell>{t('operations.branches.code', 'Code')}</TableCell>
                   <TableCell>{t('operations.branches.name', 'Name')}</TableCell>
+                  <TableCell>{t('operations.branches.type', 'Type')}</TableCell>
                   <TableCell>{t('operations.branches.phone', 'Phone')}</TableCell>
                   <TableCell>{t('operations.branches.address', 'Address')}</TableCell>
                   <TableCell>{t('operations.branches.timeZone', 'Time Zone')}</TableCell>
@@ -203,13 +215,13 @@ export function BranchesPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                    <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
                       <CircularProgress size={32} />
                     </TableCell>
                   </TableRow>
                 ) : branches.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                       <Typography color="text.secondary">
                         {t('operations.branches.noBranches', 'No branches found. Click "Create Branch" to add one.')}
                       </Typography>
@@ -220,6 +232,14 @@ export function BranchesPage() {
                     <TableRow key={b.id} hover>
                       <TableCell><code>{b.code}</code></TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>{b.name}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={branchTypeLabels[b.branch_type || 'RESTAURANT']}
+                          color={(b.branch_type || 'RESTAURANT') === 'RESTAURANT' ? 'primary' : 'default'}
+                          size="small"
+                          variant={(b.branch_type || 'RESTAURANT') === 'RESTAURANT' ? 'filled' : 'outlined'}
+                        />
+                      </TableCell>
                       <TableCell>{b.phone || '—'}</TableCell>
                       <TableCell>{b.address || '—'}</TableCell>
                       <TableCell>{b.time_zone || 'Asia/Tehran'}</TableCell>
@@ -297,6 +317,23 @@ export function BranchesPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
+              <TextField
+                select
+                label={t('operations.branches.type', 'Type')}
+                helperText={t(
+                  'operations.branches.typeHint',
+                  'Only a restaurant takes customer orders. Production kitchens and offices get no POS, kiosk or kitchen display, and are left out of sales comparisons.'
+                )}
+                fullWidth
+                value={branchType}
+                onChange={(e) => setBranchType(e.target.value as BranchType)}
+              >
+                {(['RESTAURANT', 'COMMISSARY', 'OFFICE'] as BranchType[]).map((value) => (
+                  <MenuItem key={value} value={value}>
+                    {branchTypeLabels[value]}
+                  </MenuItem>
+                ))}
+              </TextField>
               <TextField
                 label={t('operations.branches.phoneNumber', 'Phone Number')}
                 placeholder="e.g. +982188000003"

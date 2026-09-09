@@ -26,7 +26,7 @@ import { Delivery } from '../../entities/Delivery.entity';
 import { OfflineQueueItem } from '../../entities/OfflineQueueItem.entity';
 import { Product } from '../../entities/Product.entity';
 import { Category } from '../../entities/Category.entity';
-import { Branch } from '../../entities/Branch.entity';
+import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
 import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { SavedReportView } from '../../entities/SavedReportView.entity';
 import { ReportExportJob } from '../../entities/ReportExportJob.entity';
@@ -176,7 +176,11 @@ export class ReportsService {
         const buckets = new Map<string, BranchBucket>();
         // Seeding from the branch list first is what keeps a zero-sales branch in the
         // output; the order loop only ever adds to a bucket that already exists.
-        const scoped = branchId ? branches.filter((b) => b.id === branchId) : branches;
+        // Zero-filling exists so a shop that sold nothing still shows up. A commissary
+        // or an office selling nothing is normal, not a problem, so they are left out
+        // unless they somehow carry orders — the loop below still adds those back.
+        const sellingBranches = branches.filter((b) => SELLING_BRANCH_TYPES.includes(b.branch_type));
+        const scoped = branchId ? sellingBranches.filter((b) => b.id === branchId) : sellingBranches;
         for (const b of scoped) buckets.set(b.id, emptyBucket());
 
         for (const o of orders) {

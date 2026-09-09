@@ -15,7 +15,9 @@ import Button, { buttonClasses } from '@mui/material/Button';
 import { paths } from 'src/routes/paths';
 import { useRouter } from 'src/routes/hooks';
 
-import { useBranchContext } from 'src/contexts/branch-context';
+import { useTranslation } from 'react-i18next';
+
+import { HEAD_OFFICE_SCOPE, useBranchContextOptional } from 'src/contexts/branch-context';
 
 import { Label } from 'src/components/label';
 import { Iconify } from 'src/components/iconify';
@@ -37,10 +39,22 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
   const mediaQuery = 'sm';
   const router = useRouter();
   const { open, anchorEl, onClose, onOpen } = usePopover();
-  const { branches, selectedBranch, selectedBranchId, setSelectedBranchId } = useBranchContext();
+  const { t } = useTranslation();
+  const branchScope = useBranchContextOptional();
+  const branches = branchScope?.branches ?? [];
+  const selectedBranch = branchScope?.selectedBranch ?? null;
+  const selectedBranchId = branchScope?.selectedBranchId ?? '';
+  const isHeadOffice = branchScope?.isHeadOffice ?? false;
+  const setSelectedBranchId = branchScope?.setSelectedBranchId;
 
-  const activeName = selectedBranch?.name || data?.[0]?.name || 'Active Branch';
-  const activeCode = selectedBranch?.code || data?.[0]?.plan || 'BRANCH';
+  const headOfficeName = t('branchScope.headOffice', 'All Branches (HQ)');
+
+  const activeName = isHeadOffice
+    ? headOfficeName
+    : selectedBranch?.name || data?.[0]?.name || 'Active Branch';
+  const activeCode = isHeadOffice
+    ? t('branchScope.headOfficeCode', 'ORG')
+    : selectedBranch?.code || data?.[0]?.plan || 'BRANCH';
 
   const buttonBg: SxProps<Theme> = {
     height: 1,
@@ -131,7 +145,7 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
     >
       <Box sx={{ p: 1.5, pb: 1 }}>
         <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>
-          Active Branch / Store
+          {t('branchScope.title', 'Active Scope')}
         </Typography>
       </Box>
 
@@ -139,12 +153,52 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
 
       <Scrollbar sx={{ maxHeight: 260 }}>
         <MenuList sx={{ p: 0.5 }}>
+          {/*
+            Head office is a scope, not a location. Without it the app silently drops an
+            org-level user inside whichever branch happens to sort first, which is the
+            one place a chain operator is least likely to mean.
+          */}
+          <MenuItem
+            selected={isHeadOffice}
+            onClick={() => {
+              setSelectedBranchId?.(HEAD_OFFICE_SCOPE);
+              onClose();
+            }}
+            sx={{ height: 48, borderRadius: 1, gap: 1.5 }}
+          >
+            <Avatar
+              sx={{
+                width: 28,
+                height: 28,
+                bgcolor: isHeadOffice ? 'primary.main' : 'action.selected',
+                color: isHeadOffice ? 'primary.contrastText' : 'text.primary',
+              }}
+            >
+              <Iconify width={16} icon="solar:home-2-outline" />
+            </Avatar>
+
+            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+              <Typography noWrap variant="body2" sx={{ fontWeight: isHeadOffice ? 700 : 500 }}>
+                {headOfficeName}
+              </Typography>
+              <Typography noWrap variant="caption" color="text.secondary">
+                {t('branchScope.headOfficeHint', 'Chain-wide view, no single store')}
+              </Typography>
+            </Box>
+
+            <Label color={isHeadOffice ? 'primary' : 'default'} sx={{ height: 20, fontSize: '0.65rem' }}>
+              {t('branchScope.headOfficeCode', 'ORG')}
+            </Label>
+          </MenuItem>
+
+          <Divider sx={{ my: 0.5, borderStyle: 'dashed' }} />
+
           {branches.map((branch) => (
             <MenuItem
               key={branch.id}
               selected={branch.id === selectedBranchId}
               onClick={() => {
-                setSelectedBranchId(branch.id);
+                setSelectedBranchId?.(branch.id);
                 onClose();
               }}
               sx={{ height: 48, borderRadius: 1, gap: 1.5 }}
@@ -167,7 +221,11 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
                   {branch.name}
                 </Typography>
                 <Typography noWrap variant="caption" color="text.secondary">
-                  Code: {branch.code}
+                  {branch.branch_type === 'COMMISSARY'
+                    ? t('branchScope.type.commissary', 'Production kitchen — no sales')
+                    : branch.branch_type === 'OFFICE'
+                      ? t('branchScope.type.office', 'Office — no sales')
+                      : t('branchScope.type.restaurant', 'Restaurant')}
                 </Typography>
               </Box>
 
@@ -202,7 +260,7 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
           },
         }}
       >
-        Manage Branches
+        {t('branchScope.manage', 'Manage Branches')}
       </Button>
     </CustomPopover>
   );

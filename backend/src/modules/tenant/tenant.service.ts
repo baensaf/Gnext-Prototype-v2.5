@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException }
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tenant } from '../../entities/Tenant.entity';
-import { Branch } from '../../entities/Branch.entity';
+import { Branch, BranchType } from '../../entities/Branch.entity';
 import { BranchOperatingHour } from '../../entities/BranchOperatingHour.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { BranchStatusSnapshot } from '../../entities/BranchStatusSnapshot.entity';
@@ -76,7 +76,7 @@ export class TenantService {
     return branch;
   }
 
-  async createBranch(tenantId: string, data: { code: string; name: string; phone?: string; address?: string; time_zone?: string }, correlationId: string) {
+  async createBranch(tenantId: string, data: { code: string; name: string; branch_type?: BranchType; phone?: string; address?: string; time_zone?: string }, correlationId: string) {
     const existing = await this.branchRepo.findOne({ where: { tenant_id: tenantId, code: data.code } });
     if (existing) throw new ConflictException(`Branch code ${data.code} already exists`);
 
@@ -84,6 +84,9 @@ export class TenantService {
       tenant_id: tenantId,
       code: data.code.toUpperCase(),
       name: data.name,
+      // Defaults to a storefront, which is what a branch created without a stated
+      // type has always meant here.
+      branch_type: data.branch_type || 'RESTAURANT',
       phone: data.phone || null,
       address: data.address || null,
       time_zone: data.time_zone || 'Asia/Tehran',

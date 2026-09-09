@@ -91,14 +91,22 @@ export async function runSeed() {
     branchTeh = branchRepo.create({
       tenant_id: tenant.id,
       code: 'TEH-CENTRAL',
-      name: 'Central Kitchen',
+      name: 'Central Plaza',
+      branch_type: 'RESTAURANT',
       phone: '+98-21-88888888',
       address: 'Tehran, Central District',
       time_zone: 'Asia/Tehran',
       is_active: true,
     });
     await branchRepo.save(branchTeh);
-    console.log('Seeded Branch: Central Kitchen');
+    console.log('Seeded Branch: Central Plaza');
+  } else if (branchTeh.name === 'Central Kitchen') {
+    // This site is an ordinary storefront — it has a dining floor, tables and a POS.
+    // The old name read as head office, which is a different thing entirely and made
+    // the busiest shop in the chain look like the org that owns it.
+    branchTeh.name = 'Central Plaza';
+    await branchRepo.save(branchTeh);
+    console.log('Renamed Branch: Central Kitchen -> Central Plaza');
   }
 
   let branchExpress = await branchRepo.findOne({ where: { tenant_id: tenant.id, code: 'TEH-DOWNTOWN' } });
@@ -107,6 +115,7 @@ export async function runSeed() {
       tenant_id: tenant.id,
       code: 'TEH-DOWNTOWN',
       name: 'Downtown Express',
+      branch_type: 'RESTAURANT',
       phone: '+98-21-77777777',
       address: 'Tehran, Downtown Square',
       time_zone: 'Asia/Tehran',
@@ -122,6 +131,7 @@ export async function runSeed() {
       tenant_id: tenant.id,
       code: 'TEH-NORTH',
       name: 'Northside Grill',
+      branch_type: 'RESTAURANT',
       phone: '+98-21-66666666',
       address: 'Tehran, Northside Boulevard',
       time_zone: 'Asia/Tehran',
@@ -129,6 +139,25 @@ export async function runSeed() {
     });
     await branchRepo.save(branchNorth);
     console.log('Seeded Branch: Northside Grill');
+  }
+
+  // A real central kitchen: it prepares for the storefronts and never serves a
+  // customer, so it carries no POS, no kiosk and no sales history. It exists to prove
+  // a location can belong to the chain without being a shop.
+  let branchCommissary = await branchRepo.findOne({ where: { tenant_id: tenant.id, code: 'TEH-COMMISSARY' } });
+  if (!branchCommissary) {
+    branchCommissary = branchRepo.create({
+      tenant_id: tenant.id,
+      code: 'TEH-COMMISSARY',
+      name: 'Central Production Kitchen',
+      branch_type: 'COMMISSARY',
+      phone: '+98-21-55555555',
+      address: 'Tehran, Industrial Zone',
+      time_zone: 'Asia/Tehran',
+      is_active: true,
+    });
+    await branchRepo.save(branchCommissary);
+    console.log('Seeded Branch: Central Production Kitchen (commissary)');
   }
 
   // 4b. Idempotent Delivery Zones
@@ -411,6 +440,12 @@ export async function runSeed() {
   });
   const productByCode = new Map(seedProducts.map((p: any) => [p.code, p]));
 
+  await AppDataSource.query(
+    `UPDATE branch SET branch_type = 'RESTAURANT' WHERE tenant_id = $1 AND (branch_type IS NULL OR branch_type = '')`,
+    [tenant.id],
+  );
+
+  // Only selling sites get a sales history. The commissary is deliberately absent.
   const branchProfiles = [
     {
       branch: branchTeh,

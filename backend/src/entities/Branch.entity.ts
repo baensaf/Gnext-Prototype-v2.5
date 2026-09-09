@@ -1,5 +1,15 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, VersionColumn, DeleteDateColumn } from 'typeorm';
 
+/**
+ * What kind of site this is. Only a RESTAURANT sells to customers; a COMMISSARY
+ * produces for other sites and an OFFICE is administrative, so neither should be
+ * offered a POS, a kiosk or a kitchen display, nor appear in a sales comparison.
+ */
+export type BranchType = 'COMMISSARY' | 'OFFICE' | 'RESTAURANT';
+
+/** Sites that take customer orders. Everything else is a supporting location. */
+export const SELLING_BRANCH_TYPES: BranchType[] = ['RESTAURANT'];
+
 @Entity('branch')
 export class Branch {
   @PrimaryGeneratedColumn('uuid')
@@ -13,6 +23,9 @@ export class Branch {
 
   @Column({ type: 'varchar', length: 160 })
   name: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'RESTAURANT' })
+  branch_type: BranchType;
 
   @Column({ type: 'varchar', length: 32, nullable: true })
   phone: string;
