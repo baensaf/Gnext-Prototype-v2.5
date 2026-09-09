@@ -10,6 +10,7 @@ import CodeIcon from '@mui/icons-material/Code';
 import CloseIcon from '@mui/icons-material/Close';
 import PrintIcon from '@mui/icons-material/Print';
 import CancelIcon from '@mui/icons-material/Cancel';
+import EditIcon from '@mui/icons-material/Edit';
 import PersonIcon from '@mui/icons-material/Person';
 import SearchIcon from '@mui/icons-material/Search';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
@@ -71,6 +72,8 @@ import { settingsApi } from 'src/api/settingsApi';
 import { httpClient as axios } from 'src/api/httpClient';
 
 import { CheckoutModal } from 'src/components/CheckoutModal';
+import { OrderEditDialog } from 'src/components/orders/OrderEditDialog';
+import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 
 
 export function OrdersWorkflowPage() {
@@ -109,6 +112,8 @@ export function OrdersWorkflowPage() {
 
   // Order Details & Audit Drawer State
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [cancelApprovalOpen, setCancelApprovalOpen] = useState(false);
   const [selectedDrawerOrder, setSelectedDrawerOrder] = useState<any | null>(null);
   const [orderAuditLogs, setOrderAuditLogs] = useState<any[]>([]);
   const [loadingDrawerDetails, setLoadingDrawerDetails] = useState(false);
@@ -228,17 +233,23 @@ export function OrdersWorkflowPage() {
     setCancelDialogOpen(true);
   };
 
-  const handleConfirmCancel = async () => {
+  const handleConfirmCancel = async (approvalRequestId?: string) => {
     if (!selectedOrder || !reasonCodeId) {
       setError(t('orders.cancelDialog.reasonRequired'));
       return;
     }
     try {
-      await orderApi.updateOrderStatus(selectedOrder.id, 'CANCELLED', reasonCodeId);
+      await orderApi.cancelOrder(selectedOrder.id, reasonCodeId, undefined, approvalRequestId);
       setCancelDialogOpen(false);
       setSelectedOrder(null);
       loadData();
     } catch (err: any) {
+      // Past the cancel window, or once preparation has started, the server
+      // demands a manager. Collect one and retry the same cancellation.
+      if (err?.code === 'APPROVAL_REQUIRED') {
+        setCancelApprovalOpen(true);
+        return;
+      }
       setError(err.detail || t('orders.errors.cancelFailed'));
     }
   };
@@ -905,7 +916,7 @@ export function OrdersWorkflowPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCancelDialogOpen(false)}>{t('orders.cancelDialog.keepOrder')}</Button>
-          <Button color="error" onClick={handleConfirmCancel} sx={{ fontWeight: 'bold' }} variant="contained">
+          <Button color="error" onClick={() => handleConfirmCancel()} sx={{ fontWeight: 'bold' }} variant="contained">
             {t('orders.cancelDialog.confirm')}
           </Button>
         </DialogActions>
@@ -1423,6 +1434,16 @@ export function OrdersWorkflowPage() {
                     {t('orders.actions.completeOrder')}
                   </Button>
                 )}
+                {!['COMPLETED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(selectedDrawerOrder.status) && (
+                  <Button
+                    color="inherit"
+                    variant="outlined"
+                    startIcon={<EditIcon />}
+                    onClick={() => setEditDialogOpen(true)}
+                  >
+                    {t('orders.actions.editOrder', 'Edit lines')}
+                  </Button>
+                )}
                 {selectedDrawerOrder.status !== 'COMPLETED' && selectedDrawerOrder.status !== 'CANCELLED' && (
                   <Button
                     color="error"
@@ -1441,6 +1462,31 @@ export function OrdersWorkflowPage() {
           </Box>
         )}
       </Drawer>
+
+      <OrderEditDialog
+        open={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        order={selectedDrawerOrder}
+        reasonCodes={reasonCodes}
+        onSaved={async () => {
+          await loadData();
+          if (selectedDrawerOrder) await handleOpenOrderDrawer(selectedDrawerOrder);
+        }}
+      />
+
+      <ApprovalModal
+        open={cancelApprovalOpen}
+        onClose={() => setCancelApprovalOpen(false)}
+        onSuccess={(_pin, requestId) => {
+          setCancelApprovalOpen(false);
+          handleConfirmCancel(requestId);
+        }}
+        actionName="CANCEL_ORDER"
+        entityType="ORDER"
+        entityId={selectedOrder?.id}
+        detailsText={t('orders.cancelDialog.approvalDetails', 'Cancellation outside the cashier window')}
+        createRequest
+      />
 
       {/* JSON Snapshot Inspection Modal */}
       <Dialog

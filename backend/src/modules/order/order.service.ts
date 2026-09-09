@@ -345,7 +345,7 @@ export class OrderService {
         const freshQuote = await this.evaluateOrderQuote(tenantId, order, { couponCode: order.coupon_code });
         throw new ConflictException({
           statusCode: 409,
-          error: 'QUOTE_STALE',
+          code: 'QUOTE_STALE',
           message: 'Prices, discounts, or order totals have changed since the last quote',
           freshQuote,
         });
@@ -716,7 +716,7 @@ export class OrderService {
       throw new BadRequestException('An edit must add or void at least one line');
     }
 
-    return await this.dataSource.transaction(async (em) => {
+    const result = await this.dataSource.transaction(async (em) => {
       const order = await em.findOne(OrderHeader, {
         where: { id, tenant_id: tenantId },
         lock: { mode: 'pessimistic_write' },
@@ -730,7 +730,7 @@ export class OrderService {
       if (dto.quoteVersion && dto.quoteVersion !== order.quote_version) {
         throw new ConflictException({
           statusCode: 409,
-          error: 'QUOTE_STALE',
+          code: 'QUOTE_STALE',
           message: 'Order totals have changed since this edit was composed',
           currentQuoteVersion: order.quote_version,
         });
@@ -772,7 +772,7 @@ export class OrderService {
         if (!dto.approvalRequestId) {
           throw new ForbiddenException({
             statusCode: 403,
-            error: 'APPROVAL_REQUIRED',
+            code: 'APPROVAL_REQUIRED',
             message: `This edit is outside cashier authority and needs an approved request (${escalations.join(', ')})`,
             escalations,
           });
@@ -808,7 +808,7 @@ export class OrderService {
       if (MoneyUtil.greaterThan(netPaid, recalculated.grand_total) && !dto.refundPlan) {
         throw new ConflictException({
           statusCode: 409,
-          error: 'REFUND_PLAN_REQUIRED',
+          code: 'REFUND_PLAN_REQUIRED',
           message:
             `This edit lowers the order total to ${recalculated.grand_total}, below the ` +
             `${netPaid} already collected. Attach a refund plan for the difference.`,
@@ -841,10 +841,6 @@ export class OrderService {
         }),
       );
 
-      // The kitchen has to learn about both halves of the edit: struck lines
-      // stop being cooked, appended lines get fired.
-      await this.syncKitchenAfterEdit(tenantId, order, linesToVoid, additions.length > 0, userId);
-
       await this.outboxWriter.enqueueInTransaction(em, {
         tenantId,
         eventType: 'ORDER_UPDATED',
@@ -872,11 +868,27 @@ export class OrderService {
         afterData: after,
       });
 
-      return await em.findOne(OrderHeader, {
-        where: { id },
-        relations: ['items', 'items.options', 'adjustments', 'stateEvents'],
-      });
+      return {
+        order: await em.findOne(OrderHeader, {
+          where: { id },
+          relations: ['items', 'items.options', 'adjustments', 'stateEvents'],
+        }),
+        voidedItemIds: linesToVoid.map((l) => l.id),
+      };
     });
+
+    // The kitchen has to learn about both halves of the edit: struck lines stop
+    // being cooked, appended lines get fired. Deliberately outside the
+    // transaction - see syncKitchenAfterEdit.
+    await this.syncKitchenAfterEdit(
+      tenantId,
+      id,
+      result.voidedItemIds,
+      additions.length > 0,
+      userId,
+    );
+
+    return result.order;
   }
 
   /** Money actually collected: succeeded payments less succeeded refunds. */
@@ -926,26 +938,31 @@ export class OrderService {
 
   /**
    * Retract voided lines from the kitchen and fire any newly appended ones.
-   * Best effort: a KDS hiccup must not roll back an otherwise valid edit, since
-   * the order and its money are already consistent by this point.
+   *
+   * MUST be called after the edit transaction commits, never inside it. KdsService
+   * works through its own repositories on a separate connection, so a line added
+   * in an open transaction is invisible to it and would never reach a station.
+   *
+   * Best effort: a KDS hiccup must not fail an otherwise valid edit, since the
+   * order and its money are already consistent by this point.
    */
   private async syncKitchenAfterEdit(
     tenantId: string,
-    order: OrderHeader,
-    voidedLines: OrderItem[],
+    orderId: string,
+    voidedItemIds: string[],
     hasAdditions: boolean,
     userId?: string,
   ) {
     if (!this.kdsService) return;
     try {
-      for (const line of voidedLines) {
-        await this.kdsService.cancelTicketItemsForOrderItem(tenantId, line.id, userId);
+      for (const itemId of voidedItemIds) {
+        await this.kdsService.cancelTicketItemsForOrderItem(tenantId, itemId, userId);
       }
       if (hasAdditions) {
-        await this.kdsService.generateTicketsForOrder(tenantId, order.id);
+        await this.kdsService.generateTicketsForOrder(tenantId, orderId);
       }
     } catch (err) {
-      console.error(`KDS sync after edit of order ${order.id} failed`, err);
+      console.error(`KDS sync after edit of order ${orderId} failed`, err);
     }
   }
 
@@ -962,7 +979,7 @@ export class OrderService {
       throw new BadRequestException('A replacement line is required; use the edit command to void without replacing');
     }
 
-    return await this.dataSource.transaction(async (em) => {
+    const replacedItemId = await this.dataSource.transaction(async (em) => {
       const order = await em.findOne(OrderHeader, {
         where: { id, tenant_id: tenantId },
         lock: { mode: 'pessimistic_write' },
@@ -977,7 +994,7 @@ export class OrderService {
       if (dto.quoteVersion && dto.quoteVersion !== order.quote_version) {
         throw new ConflictException({
           statusCode: 409,
-          error: 'QUOTE_STALE',
+          code: 'QUOTE_STALE',
           message: 'Order totals have changed since this replacement was composed',
           currentQuoteVersion: order.quote_version,
         });
@@ -1002,7 +1019,7 @@ export class OrderService {
         if (!dto.approvalRequestId) {
           throw new ForbiddenException({
             statusCode: 403,
-            error: 'APPROVAL_REQUIRED',
+            code: 'APPROVAL_REQUIRED',
             message: `Replacing this line is outside cashier authority (${decision.reason})`,
             escalations: [`REPLACE_ITEM:${decision.reason}`],
           });
@@ -1053,7 +1070,7 @@ export class OrderService {
       if (MoneyUtil.greaterThan(netPaid, recalculated.grand_total) && !dto.refundPlan) {
         throw new ConflictException({
           statusCode: 409,
-          error: 'REFUND_PLAN_REQUIRED',
+          code: 'REFUND_PLAN_REQUIRED',
           message:
             `This replacement lowers the order total to ${recalculated.grand_total}, below the ` +
             `${netPaid} already collected. Attach a refund plan for the difference.`,
@@ -1086,8 +1103,6 @@ export class OrderService {
         }),
       );
 
-      await this.syncKitchenAfterEdit(tenantId, order, [item], true, userId);
-
       await this.auditWriter.write({
         tenantId,
         actorType: userId ? 'ADMIN' : 'SYSTEM',
@@ -1100,8 +1115,13 @@ export class OrderService {
         afterData: after,
       });
 
-      return await this.getOrderById(tenantId, id);
+      return item.id;
     });
+
+    // Outside the transaction so the replacement line is visible to KDS.
+    await this.syncKitchenAfterEdit(tenantId, id, [replacedItemId], true, userId);
+
+    return await this.getOrderById(tenantId, id);
   }
 
   async cancelOrder(tenantId: string, id: string, dto: OrderCancelDto, userId?: string, correlationId?: string) {
@@ -1124,7 +1144,7 @@ export class OrderService {
       if (!dto.approvalRequestId) {
         throw new ForbiddenException({
           statusCode: 403,
-          error: 'APPROVAL_REQUIRED',
+          code: 'APPROVAL_REQUIRED',
           message: `Cancelling this order is outside cashier authority (${decision.reason})`,
           escalations: [`CANCEL_ORDER:${decision.reason}`],
         });
@@ -1164,7 +1184,7 @@ export class OrderService {
     if (!dto.approvalRequestId) {
       throw new ForbiddenException({
         statusCode: 403,
-        error: 'APPROVAL_REQUIRED',
+        code: 'APPROVAL_REQUIRED',
         message: 'Reopening a cancelled order requires an approved request',
       });
     }

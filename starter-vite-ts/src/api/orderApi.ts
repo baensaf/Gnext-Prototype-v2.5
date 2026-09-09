@@ -151,13 +151,71 @@ export const orderApi = {
     return res.data;
   },
 
-  cancelOrder: async (id: string, reasonCodeId?: string, reason?: string): Promise<OrderHeader> => {
-    const res = await httpClient.post(`/api/v1/orders/${id}/cancel`, { reasonCodeId, reason });
+  /**
+   * Cancel an order. Throws 403 APPROVAL_REQUIRED once the cancel window has
+   * elapsed or preparation has started; retry with the approval request id.
+   */
+  cancelOrder: async (
+    id: string,
+    reasonCodeId?: string,
+    reason?: string,
+    approvalRequestId?: string,
+  ): Promise<OrderHeader> => {
+    const res = await httpClient.post(`/api/v1/orders/${id}/cancel`, {
+      reasonCodeId,
+      reason,
+      approvalRequestId,
+    });
     return res.data;
   },
 
-  reopenOrder: async (id: string, reasonCodeId?: string, reason?: string): Promise<OrderHeader> => {
-    const res = await httpClient.post(`/api/v1/orders/${id}/reopen`, { reasonCodeId, reason });
+  /** Reopen a cancelled order. Always requires an approved request. */
+  reopenOrder: async (
+    id: string,
+    reasonCodeId?: string,
+    reason?: string,
+    approvalRequestId?: string,
+  ): Promise<OrderHeader> => {
+    const res = await httpClient.post(`/api/v1/orders/${id}/reopen`, {
+      reasonCodeId,
+      reason,
+      approvalRequestId,
+    });
+    return res.data;
+  },
+
+  /**
+   * Apply line changes to an order past DRAFT. Lines are never deleted: a void
+   * marks the original struck and leaves it on the order, an add appends.
+   *
+   * Throws 403 APPROVAL_REQUIRED when the change is outside the cashier window,
+   * and 409 REFUND_PLAN_REQUIRED when it would drop the total below money
+   * already collected. Both carry the detail needed to retry.
+   */
+  editOrder: async (
+    id: string,
+    changes: {
+      add?: any[];
+      void?: { orderItemId: string; reasonCodeId?: string; reason?: string }[];
+    },
+    options?: { approvalRequestId?: string; reasonCodeId?: string; reason?: string; quoteVersion?: string; refundPlan?: any },
+  ): Promise<OrderHeader> => {
+    const res = await httpClient.post(`/api/v1/orders/${id}/edit`, { changes, ...options });
+    return res.data;
+  },
+
+  /** Supersede a line. The replacement is priced from the catalog, not the client. */
+  replaceItem: async (
+    id: string,
+    orderItemId: string,
+    replacement: { productId?: string; variantId?: string; quantity?: string; options?: any[]; notes?: string },
+    options?: { reasonCodeId?: string; reason?: string; approvalRequestId?: string; quoteVersion?: string; refundPlan?: any },
+  ): Promise<OrderHeader> => {
+    const res = await httpClient.post(`/api/v1/orders/${id}/replace-item`, {
+      orderItemId,
+      replacement,
+      ...options,
+    });
     return res.data;
   },
 

@@ -260,7 +260,8 @@
       "markReady": "Mark Ready",
       "completeOrder": "Complete Order",
       "cancelOrder": "Cancel Order",
-      "detailsAudit": "Details & Audit Log"
+      "detailsAudit": "Details & Audit Log",
+      "editOrder": "Edit lines"
     },
     "kanban": {
       "submitted": "Submitted Orders",
@@ -277,7 +278,8 @@
       "reasonLabel": "Cancellation Reason Code",
       "keepOrder": "Keep Order",
       "confirm": "Confirm Cancellation",
-      "reasonRequired": "Please select a cancellation reason code"
+      "reasonRequired": "Please select a cancellation reason code",
+      "approvalDetails": "Cancellation outside the cashier window"
     },
     "reprintDialog": {
       "title": "Reprint order {{orderNumber}}",
@@ -369,7 +371,27 @@
     "orderNumber": "Order Number",
     "type": "Order Type",
     "status": "Status",
-    "placedAt": "Placed At"
+    "placedAt": "Placed At",
+    "edit": {
+      "title": "Edit order",
+      "subtitle": "Removed lines stay on the order as voided, so the history and any reprint remain accurate.",
+      "line": "Line",
+      "qty": "Qty",
+      "lineTotal": "Total",
+      "addItem": "Add an item",
+      "add": "Add",
+      "new": "New",
+      "reason": "Void reason",
+      "voidLine": "Void this line",
+      "keepLine": "Keep this line",
+      "currentTotal": "Current total",
+      "newTotal": "New total",
+      "apply": "Apply changes",
+      "saved": "Order updated",
+      "failed": "Could not apply the edit",
+      "approvalNeeded": "A manager must authorize this change.",
+      "approvalDetails": "Line changes outside the cashier edit window"
+    }
   },
   "dineIn": {
     "title": "Dine-In Floor Plan & Operations",
