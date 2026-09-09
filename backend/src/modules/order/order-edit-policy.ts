@@ -164,6 +164,14 @@ export function resolveOrderEditDecision(
         return APPROVE('REMOVAL_AGAINST_PAID_ORDER');
       }
 
+      // A cancel is the total removal: it takes the order to zero and hands the
+      // whole collected amount back. The cashier window governs how long an
+      // unpaid mistake may be undone unsupervised; it never covers giving money
+      // out of the drawer, so money on the order outranks it.
+      if (action === 'CANCEL_ORDER' && hasMoneyOnOrder(ctx)) {
+        return APPROVE('CANCEL_AGAINST_PAID_ORDER');
+      }
+
       const windowMinutes =
         action === 'CANCEL_ORDER' ? config.cancelWindowMinutes : config.editWindowMinutes;
 

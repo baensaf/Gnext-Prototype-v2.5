@@ -186,7 +186,9 @@
     "cartEmpty": "سبد خرید خالی است. ابتدا اقلام را انتخاب کنید.",
     "paymentSuccess": "پرداخت با موفقیت ثبت شد",
     "paymentVoided": "تلاش پرداخت لغو شد",
-    "directTerminalPay": "پرداخت سریع کارتخوان (PC-POS)"
+    "directTerminalPay": "پرداخت سریع کارتخوان (PC-POS)",
+    "itemSuspended": "توقف فروش",
+    "itemSuspendedNotice": "فروش {{name}} متوقف شده است و قابل سفارش نیست."
   },
   "kiosk": {
     "title": "کیوسک خودسفارش‌دهی",
@@ -212,6 +214,7 @@
     "tabs": {
       "all": "همه ({{count}})",
       "submitted": "ثبت شده ({{count}})",
+      "confirmed": "تایید شده ({{count}})",
       "preparing": "در حال پخت ({{count}})",
       "ready": "آماده تحویل ({{count}})",
       "completed": "تکمیل شده ({{count}})",
@@ -246,6 +249,7 @@
       "counterTakeaway": "پیشخوان / بیرون‌بر",
       "paid": "پرداخت: {{amount}}",
       "due": "مانده: {{amount}}",
+      "refunded": "بازپرداخت شده: {{amount}}",
       "fullyPaid": "تسویه کامل",
       "empty": "هیچ سفارشی مطابق با فیلترهای انتخابی یافت نشد."
     },
@@ -281,7 +285,8 @@
       "keepOrder": "انصراف / حفظ سفارش",
       "confirm": "تایید و لغو سفارش",
       "reasonRequired": "لطفاً علت لغو سفارش را انتخاب کنید",
-      "approvalDetails": "لغو خارج از بازه مجاز صندوق‌دار"
+      "approvalDetails": "لغو خارج از بازه مجاز صندوق‌دار",
+      "approvalDetailsPaid": "لغو سفارش پرداخت‌شده — مبلغ دریافتی به همان روش پرداخت بازگردانده می‌شود"
     },
     "reprintDialog": {
       "title": "چاپ مجدد سفارش {{orderNumber}}",

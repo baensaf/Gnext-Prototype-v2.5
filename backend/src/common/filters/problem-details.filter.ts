@@ -17,6 +17,8 @@ export interface ProblemDetailsResponse {
   instance: string;
   correlationId: string;
   fieldErrors?: FieldError[];
+  /** Machine codes naming why an action was escalated, e.g. `CANCEL_ORDER:CANCEL_AGAINST_PAID_ORDER`. */
+  escalations?: string[];
 }
 
 @Catch()
@@ -33,6 +35,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     let detail = 'An internal server error occurred while processing the request.';
     let type = 'https://gnext.local/problems/internal';
     let fieldErrors: FieldError[] | undefined = undefined;
+    let escalations: string[] | undefined = undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -45,6 +48,10 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         title = resObj.title || exception.message || title;
         detail = resObj.detail || (typeof resObj.message === 'string' ? resObj.message : detail);
         type = resObj.type || type;
+        // An approval gate names why it fired. The client shows that reason to
+        // the approver, so it has to survive the trip rather than being dropped
+        // into a generic problem body.
+        if (Array.isArray(resObj.escalations)) escalations = resObj.escalations;
 
         if (Array.isArray(resObj.message)) {
           fieldErrors = resObj.message.map((msg: any) => {
@@ -77,6 +84,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       instance: request.url,
       correlationId,
       ...(fieldErrors && { fieldErrors }),
+      ...(escalations && { escalations }),
     };
 
     response.status(status).json(problemDetails);

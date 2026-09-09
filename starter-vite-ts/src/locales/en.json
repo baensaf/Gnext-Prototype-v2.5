@@ -186,7 +186,9 @@
     "cartEmpty": "Cart is empty. Add items first.",
     "paymentSuccess": "Payment recorded successfully",
     "paymentVoided": "Payment attempt voided",
-    "directTerminalPay": "Direct Terminal Pay (PC-POS)"
+    "directTerminalPay": "Direct Terminal Pay (PC-POS)",
+    "itemSuspended": "86'd",
+    "itemSuspendedNotice": "{{name}} is 86'd and cannot be ordered."
   },
   "kiosk": {
     "title": "SELF-SERVICE KIOSK",
@@ -212,6 +214,7 @@
     "tabs": {
       "all": "All ({{count}})",
       "submitted": "Submitted ({{count}})",
+      "confirmed": "Confirmed ({{count}})",
       "preparing": "Preparing ({{count}})",
       "ready": "Ready ({{count}})",
       "completed": "Completed ({{count}})",
@@ -246,6 +249,7 @@
       "counterTakeaway": "Counter / Takeaway",
       "paid": "Paid: {{amount}}",
       "due": "Due: {{amount}}",
+      "refunded": "Refunded: {{amount}}",
       "fullyPaid": "FULLY PAID",
       "empty": "No orders found matching your filter criteria."
     },
@@ -281,7 +285,8 @@
       "keepOrder": "Keep Order",
       "confirm": "Confirm Cancellation",
       "reasonRequired": "Please select a cancellation reason code",
-      "approvalDetails": "Cancellation outside the cashier window"
+      "approvalDetails": "Cancellation outside the cashier window",
+      "approvalDetailsPaid": "Cancelling a paid order — the collected amount will be refunded to the original tender"
     },
     "reprintDialog": {
       "title": "Reprint order {{orderNumber}}",

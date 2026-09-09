@@ -54,12 +54,17 @@ export function KdsPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [stList, tkList] = await Promise.all([
+      // `isBumped` selects between two disjoint sets server-side: queued/cooking
+      // or ready/bumped. The board shows all three columns and the recall drawer
+      // reads the bumped ones, so both sets have to be fetched.
+      const station = selectedStationId === 'ALL' ? undefined : selectedStationId;
+      const [stList, activeList, bumpedList] = await Promise.all([
         kdsApi.getStations(),
-        kdsApi.getKdsTickets(selectedStationId === 'ALL' ? undefined : selectedStationId, false),
+        kdsApi.getKdsTickets(station, false),
+        kdsApi.getKdsTickets(station, true),
       ]);
       setStations(stList);
-      setTickets(tkList);
+      setTickets([...activeList, ...bumpedList]);
       setError(null);
     } catch (err: any) {
       setError(err.detail || err.message || t('kds.errors.loadFailed'));

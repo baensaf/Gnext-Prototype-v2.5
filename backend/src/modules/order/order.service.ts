@@ -25,6 +25,7 @@ import { AuditWriter } from '../audit/audit-writer.service';
 import { OutboxWriter } from '../outbox/outbox-writer.service';
 import { KdsService } from '../kds/kds.service';
 import { PrintQueueService } from '../printing/print-queue.service';
+import { CatalogService } from '../catalog/catalog.service';
 import { CreditService } from '../customer/credit.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import Decimal from 'decimal.js';
@@ -43,6 +44,7 @@ import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
 import { TableOccupancyEvent } from '../../entities/TableOccupancyEvent.entity';
 import { Refund } from '../../entities/Refund.entity';
 import { ApprovalService } from '../approval/approval.service';
+import { RefundService } from '../refund/refund.service';
 import {
   OrderActionConfig,
   OrderEditAction,
@@ -98,12 +100,14 @@ export class OrderService {
     @InjectRepository(Product) private readonly productRepo: Repository<Product>,
     @InjectRepository(ProductVariant) private readonly variantRepo: Repository<ProductVariant>,
     @InjectRepository(OptionItem) private readonly optionItemRepo: Repository<OptionItem>,
+    private readonly catalogService: CatalogService,
     private readonly priceService: PricingService,
     private readonly discountEngine: DiscountEvaluationService,
     private readonly sequenceService: OrderSequenceService,
     private readonly auditWriter: AuditWriter,
     private readonly outboxWriter: OutboxWriter,
     private readonly approvalService: ApprovalService,
+    private readonly refundService: RefundService,
     private readonly dataSource: DataSource,
     @Optional() private readonly kdsService?: KdsService,
     @Optional() private readonly printQueueService?: PrintQueueService,
@@ -1160,6 +1164,25 @@ export class OrderService {
       throw new BadRequestException('Cancelling an order with items requires a reason code');
     }
 
+    // Cancelling an order the customer has already paid for is not a state flip:
+    // the tender has to go back the way it came, or the drawer keeps money
+    // against a cancelled sale. That reversal is the refund module's
+    // orchestration, which refunds same-tender and then cancels in one
+    // transaction. The approval above is the gate for it.
+    if (MoneyUtil.greaterThan(netPaid, '0.0000')) {
+      return await this.refundService.cancelPaidOrder(
+        tenantId,
+        id,
+        {
+          reason: dto.reason || 'Paid order cancellation',
+          reasonCodeId: dto.reasonCodeId,
+          approvalRequestId: dto.approvalRequestId,
+        },
+        userId,
+        correlationId,
+      );
+    }
+
     return await this.transitionState(
       tenantId,
       id,
@@ -1247,6 +1270,18 @@ export class OrderService {
     for (const itemDto of itemsDto) {
       const product = await this.productRepo.findOne({ where: { id: itemDto.product_id, tenant_id: tenantId } });
       if (!product) throw new NotFoundException(`Product ${itemDto.product_id} not found`);
+
+      // Spec 4.7: an 86'd item is off sale everywhere it can be ordered. The POS,
+      // the kiosk and the aggregator webhook all land here, so the stop is
+      // enforced on the line rather than trusted to each caller's catalog view.
+      const suspension = await this.catalogService.getSuspension(tenantId, product.id, order.branch_id);
+      if (suspension.isSuspended) {
+        throw new BadRequestException({
+          statusCode: 400,
+          code: 'PRODUCT_SUSPENDED',
+          message: `${product.name} is suspended from sale${suspension.reason ? ` (${suspension.reason})` : ''}`,
+        });
+      }
 
       const qty = itemDto.quantity || '1.0000';
       let variant: ProductVariant | null = null;

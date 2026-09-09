@@ -408,12 +408,17 @@ export class RefundService {
         }
       }
 
-      const fromState = order.state;
-      order.state = 'CANCELLED';
-      order.status = 'CANCELLED';
-      order.cancelled_at = new Date();
-      order.cancellation_reason_code_id = dto.reasonCodeId || null;
-      const savedOrder = await em.save(OrderHeader, order);
+      // processRefund raised refunded_total on its own instance of this row.
+      // Saving the copy loaded before that call would write the pre-refund value
+      // back over it, leaving a refunded order still reading as fully paid.
+      const current = (await em.findOne(OrderHeader, { where: { id: orderId, tenant_id: tenantId } })) || order;
+
+      const fromState = current.state;
+      current.state = 'CANCELLED';
+      current.status = 'CANCELLED';
+      current.cancelled_at = new Date();
+      current.cancellation_reason_code_id = dto.reasonCodeId || null;
+      const savedOrder = await em.save(OrderHeader, current);
 
       // The order timeline is built from OrderStateEvent. Mutating state without one
       // leaves the history screen showing a completed order that is somehow cancelled,

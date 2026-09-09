@@ -3,7 +3,14 @@ import type { Customer, CustomerAddress } from 'src/api/customerApi';
 import type { DeliveryZone } from 'src/api/deliveryApi';
 import type { DiningTable } from 'src/api/dineInApi';
 import type { ManualDiscount } from 'src/api/discountsApi';
-import type { Product, Category, OptionItem, OptionGroup, ProductVariant } from 'src/api/catalogApi';
+import type {
+  Product,
+  Category,
+  OptionItem,
+  OptionGroup,
+  ProductVariant,
+  ProductAvailability,
+} from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -130,6 +137,7 @@ export function PosOrderPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeTab, setActiveTab] = useState<string>('');
   const [products, setProducts] = useState<Product[]>([]);
+  const [availabilities, setAvailabilities] = useState<ProductAvailability[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [customerAddresses, setCustomerAddresses] = useState<CustomerAddress[]>([]);
@@ -266,17 +274,19 @@ export function PosOrderPage() {
   const loadInitialData = async () => {
     try {
       setLoadingInitialData(true);
-      const [cList, pList, custs, tList] = await Promise.all([
+      const [cList, pList, custs, tList, availList] = await Promise.all([
         catalogApi.getCategories(),
         catalogApi.getProducts(),
         customerApi.getCustomers(),
         dineInApi.getTables(undefined, selectedBranchId).catch(() => [] as DiningTable[]),
+        catalogApi.getAvailabilities().catch(() => [] as ProductAvailability[]),
       ]);
       setCategories(cList);
       if (cList.length > 0) setActiveTab(cList[0].id);
       setProducts(pList);
       setCustomers(custs);
       setDiningTables(tList);
+      setAvailabilities(availList);
       if (tList.length > 0 && (!tableNumber || tableNumber === 'T-01')) {
         setTableNumber(tList[0].code || tList[0].table_number || 'T-01');
         setSelectedTableId(tList[0].id);
@@ -1204,6 +1214,15 @@ export function PosOrderPage() {
     return matchesCategory && (matchesName || matchesCode);
   });
 
+  // An 86'd product stays on the grid rather than vanishing: the cashier needs
+  // to see that the item exists and is off today, so they can tell the guest.
+  // A suspension row whose timer has run out is history, not a stop.
+  const suspendedProductIds = new Set(
+    availabilities
+      .filter((a) => a.is_suspended && (!a.suspended_until || new Date(a.suspended_until) > new Date()))
+      .map((a) => a.product_id),
+  );
+
   return (
     <Box aria-busy={loadingInitialData || holdingOrder || Boolean(resumingOrderId)}>
       {loadingInitialData && <LinearProgress sx={{ mb: 2 }} />}
@@ -1404,29 +1423,50 @@ export function PosOrderPage() {
                   </Box>
                 ) : (
                   <Grid container spacing={1.5}>
-                    {filteredProducts.map((p) => (
+                    {filteredProducts.map((p) => {
+                      const isSuspended = suspendedProductIds.has(p.id);
+                      return (
                       <Grid size={{ xs: 6, sm: 6, md: 4, lg: 3 }} key={p.id}>
                         <Paper
                           variant="outlined"
+                          aria-disabled={isSuspended}
                           sx={{
                             p: 1.5,
                             borderRadius: 2.5,
-                            cursor: 'pointer',
+                            cursor: isSuspended ? 'not-allowed' : 'pointer',
                             height: '100%',
                             display: 'flex',
                             flexDirection: 'column',
                             justifyContent: 'space-between',
                             transition: 'all 0.2s ease-in-out',
                             bgcolor: 'background.paper',
-                            '&:hover': {
-                              transform: 'translateY(-2px)',
-                              boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}25`,
-                              borderColor: 'primary.main',
-                            },
+                            ...(isSuspended
+                              ? { opacity: 0.55, borderColor: 'error.light' }
+                              : {
+                                  '&:hover': {
+                                    transform: 'translateY(-2px)',
+                                    boxShadow: (theme) => `0 4px 12px ${theme.palette.primary.main}25`,
+                                    borderColor: 'primary.main',
+                                  },
+                                }),
                           }}
-                          onClick={() => handleOpenProductOptions(p)}
+                          onClick={() => {
+                            if (isSuspended) {
+                              setError(t('pos.itemSuspendedNotice', { name: p.name }));
+                              return;
+                            }
+                            handleOpenProductOptions(p);
+                          }}
                         >
                           <Box>
+                            {isSuspended && (
+                              <Chip
+                                label={t('pos.itemSuspended')}
+                                size="small"
+                                color="error"
+                                sx={{ fontSize: '0.625rem', height: 18, mb: 0.75, fontWeight: 700 }}
+                              />
+                            )}
                             <Chip
                               label={p.code}
                               size="small"
@@ -1460,7 +1500,8 @@ export function PosOrderPage() {
                           </Typography>
                         </Paper>
                       </Grid>
-                    ))}
+                      );
+                    })}
                   </Grid>
                 )}
               </CardContent>

@@ -25,6 +25,7 @@ import { KdsModule } from '../kds/kds.module';
 import { PrintingModule } from '../printing/printing.module';
 import { DeliveryModule } from '../delivery/delivery.module';
 import { ApprovalModule } from '../approval/approval.module';
+import { RefundModule } from '../refund/refund.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { ApprovalModule } from '../approval/approval.module';
     PrintingModule,
     DeliveryModule,
     ApprovalModule,
+    RefundModule,
   ],
   providers: [OrderService, OrderSequenceService],
   controllers: [OrdersController],

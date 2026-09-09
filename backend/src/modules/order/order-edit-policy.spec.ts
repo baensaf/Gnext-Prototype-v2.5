@@ -105,6 +105,24 @@ describe('order edit policy: money on the order', () => {
     );
   });
 
+  it('escalates cancelling a paid order, even inside the cancel window', () => {
+    expect(decide('CANCEL_ORDER', { submittedAt: minutesAgo(1), paidTotal: '50000.0000' })).toBe(
+      'REQUIRE_APPROVAL',
+    );
+    expect(
+      resolveOrderEditDecision(
+        'CANCEL_ORDER',
+        ctx({ submittedAt: minutesAgo(1), paidTotal: '50000.0000' }),
+        ORDER_ACTION_DEFAULTS,
+        NOW,
+      ).reason,
+    ).toBe('CANCEL_AGAINST_PAID_ORDER');
+  });
+
+  it('leaves an unpaid cancel inside the window to the cashier', () => {
+    expect(decide('CANCEL_ORDER', { submittedAt: minutesAgo(1), paidTotal: '0.0000' })).toBe('ALLOW');
+  });
+
   it('still allows appending to a paid order, which only raises the outstanding balance', () => {
     expect(decide('ADD_ITEM', { paidTotal: '50000.0000' })).toBe('ALLOW');
   });

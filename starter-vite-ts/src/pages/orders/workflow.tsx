@@ -114,6 +114,9 @@ export function OrdersWorkflowPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [cancelApprovalOpen, setCancelApprovalOpen] = useState(false);
+  // Why the server escalated, so the approver reads the actual reason rather
+  // than the one that used to be the only possibility.
+  const [cancelEscalation, setCancelEscalation] = useState<string>('');
   const [selectedDrawerOrder, setSelectedDrawerOrder] = useState<any | null>(null);
   const [orderAuditLogs, setOrderAuditLogs] = useState<any[]>([]);
   const [loadingDrawerDetails, setLoadingDrawerDetails] = useState(false);
@@ -244,9 +247,12 @@ export function OrdersWorkflowPage() {
       setSelectedOrder(null);
       loadData();
     } catch (err: any) {
-      // Past the cancel window, or once preparation has started, the server
-      // demands a manager. Collect one and retry the same cancellation.
+      // Past the cancel window, once preparation has started, or against money
+      // already collected, the server demands a manager. Collect one and retry
+      // the same cancellation.
       if (err?.code === 'APPROVAL_REQUIRED') {
+        const escalation: string = err?.escalations?.[0] || '';
+        setCancelEscalation(escalation.split(':')[1] || '');
         setCancelApprovalOpen(true);
         return;
       }
@@ -410,6 +416,7 @@ export function OrdersWorkflowPage() {
             >
               <Tab label={t('orders.tabs.all', { count: orders.length })} value="ALL" />
               <Tab label={t('orders.tabs.submitted', { count: getOrdersByStatus('SUBMITTED').length })} value="SUBMITTED" />
+              <Tab label={t('orders.tabs.confirmed', { count: getOrdersByStatus('CONFIRMED').length })} value="CONFIRMED" />
               <Tab label={t('orders.tabs.preparing', { count: getOrdersByStatus('KITCHEN_PREPARING').length })} value="KITCHEN_PREPARING" />
               <Tab label={t('orders.tabs.ready', { count: getOrdersByStatus('READY').length })} value="READY" />
               <Tab label={t('orders.tabs.completed', { count: getOrdersByStatus('COMPLETED').length })} value="COMPLETED" />
@@ -540,7 +547,18 @@ export function OrdersWorkflowPage() {
                           <Typography color="success.main" sx={{ display: 'block', fontWeight: 600 }} variant="caption">
                             <span dir="ltr">{t('orders.table.paid', { amount: MoneyUtil.formatCurrency(order.paid_amount) })} IRR</span>
                           </Typography>
-                          {MoneyUtil.greaterThan(order.due_amount, '0') ? (
+                          {/* Money given back outranks money taken: an order whose
+                              tender was reversed must not keep reading as settled. */}
+                          {MoneyUtil.greaterThan(order.refunded_total || '0', '0') ? (
+                            <Typography color="warning.main" sx={{ fontWeight: 700 }} variant="caption">
+                              <span dir="ltr">
+                                {t('orders.table.refunded', {
+                                  amount: MoneyUtil.formatCurrency(order.refunded_total || '0'),
+                                })}{' '}
+                                IRR
+                              </span>
+                            </Typography>
+                          ) : MoneyUtil.greaterThan(order.due_amount, '0') ? (
                             <Typography color="error.main" sx={{ fontWeight: 700 }} variant="caption">
                               <span dir="ltr">{t('orders.table.due', { amount: MoneyUtil.formatCurrency(order.due_amount) })} IRR</span>
                             </Typography>
@@ -1484,7 +1502,11 @@ export function OrdersWorkflowPage() {
         actionName="CANCEL_ORDER"
         entityType="ORDER"
         entityId={selectedOrder?.id}
-        detailsText={t('orders.cancelDialog.approvalDetails', 'Cancellation outside the cashier window')}
+        detailsText={
+          cancelEscalation === 'CANCEL_AGAINST_PAID_ORDER'
+            ? t('orders.cancelDialog.approvalDetailsPaid')
+            : t('orders.cancelDialog.approvalDetails', 'Cancellation outside the cashier window')
+        }
         createRequest
       />
 

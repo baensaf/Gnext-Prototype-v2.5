@@ -722,6 +722,36 @@ export class CatalogService {
   }
 
   // Product Availability & Temporary Suspension
+
+  /**
+   * Whether a product is 86'd right now, honouring the auto-reactivation timer.
+   *
+   * A suspension row outlives its window: a `suspended_until` in the past means
+   * the item came back on sale by itself and the row is only history. A row with
+   * no branch is a tenant-wide stop and applies to every branch. Every caller
+   * that gates selling on availability needs those two rules, so they live here
+   * rather than being re-derived at each call site.
+   */
+  async getSuspension(
+    tenantId: string,
+    productId: string,
+    branchId?: string,
+  ): Promise<{ isSuspended: boolean; reason: string | null; suspendedUntil: Date | null }> {
+    const rows = await this.availRepo.find({ where: { tenant_id: tenantId, product_id: productId } });
+    const now = new Date();
+    const active = rows.find(
+      (row) =>
+        (!row.branch_id || !branchId || row.branch_id === branchId) &&
+        row.is_suspended &&
+        (!row.suspended_until || new Date(row.suspended_until) > now),
+    );
+    return {
+      isSuspended: !!active,
+      reason: active?.reason || null,
+      suspendedUntil: active?.suspended_until || null,
+    };
+  }
+
   async getAvailabilities(tenantId: string, branchId?: string) {
     const where: any = { tenant_id: tenantId };
     if (branchId) where.branch_id = branchId;
@@ -790,13 +820,7 @@ export class CatalogService {
     });
 
     const product = await this.getProductById(tenantId, productId);
-    const avail = await this.availRepo.findOne({ where: { tenant_id: tenantId, product_id: productId } });
-    let isSuspended = false;
-    if (avail && avail.is_suspended) {
-      if (!avail.suspended_until || new Date(avail.suspended_until) > new Date()) {
-        isSuspended = true;
-      }
-    }
+    const suspension = await this.getSuspension(tenantId, productId, branchId);
 
     return {
       product_id: productId,
@@ -807,8 +831,8 @@ export class CatalogService {
       price_group_id: priceGroupId || null,
       branch_id: branchId || null,
       channel: channel || null,
-      is_suspended: isSuspended,
-      suspension_reason: isSuspended ? avail?.reason : null,
+      is_suspended: suspension.isSuspended,
+      suspension_reason: suspension.reason,
     };
   }
 }
