@@ -253,7 +253,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
           </Typography>
         </Stack>
         <Chip
-          label="PC-POS Ready (90% Domestic Standard)"
+          label={t('pos.posReady', 'PC-POS ready')}
           color="success"
           size="small"
           variant="outlined"
@@ -308,9 +308,9 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
               </Alert>
             ) : (
               <Box sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}>
-                {/* 1-CLICK PC-POS TERMINAL HERO ACTION */}
+                {/* Hero action: the card terminal is the default tender here. */}
                 <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main', display: 'block', mb: 1, letterSpacing: 0.5 }}>
-                  🇮🇷 1-CLICK PC-POS TERMINAL SETTLEMENT (PRIMARY)
+                  {t('pos.posSettlementLabel', 'One-click POS terminal settlement')}
                 </Typography>
 
                 <Button

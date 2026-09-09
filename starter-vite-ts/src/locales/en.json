@@ -176,6 +176,8 @@
     "card": "POS Card",
     "customerCredit": "Customer Credit",
     "orderSettled": "Order Fully Settled!",
+    "posReady": "PC-POS ready",
+    "posSettlementLabel": "One-click POS terminal settlement",
     "printReceipt": "Print Thermal Receipt",
     "orderType": "Order Type",
     "dineIn": "Dine-In",

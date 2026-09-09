@@ -176,6 +176,8 @@
     "card": "کارتخوان",
     "customerCredit": "اعتبار مشتری",
     "orderSettled": "سفارش به طور کامل تسویه شد!",
+    "posReady": "کارتخوان آماده است",
+    "posSettlementLabel": "تسویه یک‌مرحله‌ای با کارتخوان",
     "printReceipt": "چاپ فاکتور حرارتی",
     "orderType": "نوع سفارش",
     "dineIn": "سالن",
