@@ -83,7 +83,7 @@ export function ApprovalModal({
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <LockIcon color="primary" />
-        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+        <Typography component="span" variant="h6" sx={{ fontWeight: 'bold' }}>
           {t('approval.title', 'Manager PIN Authorization')}
         </Typography>
       </DialogTitle>

@@ -116,7 +116,7 @@ export function DataResetPage() {
         ),
       );
     } catch (err: any) {
-      setErrorMsg(err?.response?.data?.message || err.detail || err.message || 'Failed to prepare a clean demo.');
+      setErrorMsg(err?.response?.data?.message || err.detail || err.message || t('settings.dataResetPage.demoResetError'));
     } finally {
       setIsLoading(false);
     }
@@ -165,10 +165,10 @@ export function DataResetPage() {
               <Box>
                 <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 1 }}>
                   <Iconify icon={"solar:restart-bold" as any} width={32} height={32} sx={{ color: 'primary.main' }} />
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>Prepare a Clean Demo</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700 }}>{t('settings.dataResetPage.demoCardTitle')}</Typography>
                 </Stack>
                 <Typography variant="body2" color="text.secondary">
-                  Clears orders, payments, KDS tickets, deliveries, shifts, and other operational queues, then re-applies the demo catalog baseline in one repeatable action.
+                  {t('settings.dataResetPage.demoCardDesc')}
                 </Typography>
               </Box>
               <Button
@@ -178,7 +178,7 @@ export function DataResetPage() {
                 onClick={() => { setPin(''); setOpenDemoResetDialog(true); }}
                 sx={{ minWidth: 220 }}
               >
-                Prepare Clean Demo
+                {t('settings.dataResetPage.demoCardAction')}
               </Button>
             </Stack>
           </Card>
@@ -262,10 +262,10 @@ export function DataResetPage() {
       </Grid>
 
       <Dialog open={openDemoResetDialog} onClose={() => !isLoading && setOpenDemoResetDialog(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Prepare a Clean Demo?</DialogTitle>
+        <DialogTitle>{t('settings.dataResetPage.dialogDemoTitle')}</DialogTitle>
         <DialogContent>
           <Alert severity="warning" sx={{ mb: 2 }}>
-            All current operational activity will be permanently cleared. Master configuration is retained and the demo catalog baseline is re-applied.
+            {t('settings.dataResetPage.dialogDemoWarning')}
           </Alert>
           <TextField
             fullWidth
@@ -278,14 +278,14 @@ export function DataResetPage() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenDemoResetDialog(false)} disabled={isLoading}>Cancel</Button>
+          <Button onClick={() => setOpenDemoResetDialog(false)} disabled={isLoading}>{t('settings.dataResetPage.cancel')}</Button>
           <Button
             variant="contained"
             onClick={handlePrepareCleanDemo}
             disabled={isLoading}
             startIcon={isLoading ? <CircularProgress size={18} color="inherit" /> : undefined}
           >
-            {isLoading ? 'Preparing…' : 'Reset & Prepare'}
+            {isLoading ? t('settings.dataResetPage.demoPreparing') : t('settings.dataResetPage.confirmDemoReset')}
           </Button>
         </DialogActions>
       </Dialog>

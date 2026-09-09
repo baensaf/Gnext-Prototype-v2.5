@@ -43,6 +43,11 @@ import { catalogApi } from 'src/api/catalogApi';
 
 import { ImageUploader } from 'src/components/ImageUploader';
 
+// The whole catalog is rated at the standard 9% VAT, so a product added through
+// this form starts there too. The old 10% default meant every hand-added product
+// was silently off-rate against everything the seed produces.
+const DEFAULT_TAX_RATE = '0.0900';
+
 export function ProductsPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -60,7 +65,7 @@ export function ProductsPage() {
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [basePrice, setBasePrice] = useState('1500000');
-  const [taxRate, setTaxRate] = useState('0.1000');
+  const [taxRate, setTaxRate] = useState(DEFAULT_TAX_RATE);
   const [sku, setSku] = useState('');
   const [barcode, setBarcode] = useState('');
   const [description, setDescription] = useState('');
@@ -123,7 +128,7 @@ export function ProductsPage() {
     setName('');
     setCategoryId('');
     setBasePrice('1500000');
-    setTaxRate('0.1000');
+    setTaxRate(DEFAULT_TAX_RATE);
     setSku('');
     setBarcode('');
     setDescription('');
@@ -298,7 +303,7 @@ export function ProductsPage() {
 
               <TextField
                 label={t('catalog.productsPage.code')}
-                placeholder="e.g. PROD-DOUBLEBURGER"
+                placeholder={t('catalog.productsPage.codeHint')}
                 required
                 fullWidth
                 value={code}
@@ -307,7 +312,7 @@ export function ProductsPage() {
 
               <TextField
                 label={t('catalog.productsPage.name')}
-                placeholder="e.g. Double Beef Burger"
+                placeholder={t('catalog.productsPage.nameHint')}
                 required
                 fullWidth
                 value={name}
@@ -325,7 +330,7 @@ export function ProductsPage() {
 
               <TextField
                 label={t('catalog.productsPage.taxRate')}
-                placeholder="e.g. 0.1000 for 10%"
+                placeholder={t('catalog.productsPage.taxRateHint')}
                 fullWidth
                 value={taxRate}
                 onChange={(e) => setTaxRate(e.target.value)}

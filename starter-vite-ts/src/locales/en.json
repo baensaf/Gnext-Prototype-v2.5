@@ -1177,7 +1177,10 @@
         "createFailed": "Failed to create product",
         "archiveFailed": "Failed to archive product",
         "attachFailed": "Failed to attach option group"
-      }
+      },
+      "taxRateHint": "e.g. 0.0900 for 9%",
+      "codeHint": "e.g. PROD-DOUBLEBURGER",
+      "nameHint": "e.g. Double Beef Burger"
     },
     "categoriesPage": {
       "title": "Catalog Categories",
@@ -2036,7 +2039,16 @@
       "pinRequired": "Security Manager PIN is required",
       "resetSuccess": "System data reset completed successfully! Tables purged: {{tables}}",
       "seedSuccess": "Database seed profile \"{{profile}}\" applied successfully!",
-      "executeError": "Server PIN verification or data reset failed."
+      "executeError": "Server PIN verification or data reset failed.",
+      "demoCardTitle": "Prepare a Clean Demo",
+      "demoCardDesc": "Clears orders, payments, KDS tickets, deliveries, shifts, and other operational queues, then re-applies the demo catalog baseline in one repeatable action.",
+      "demoCardAction": "Prepare Clean Demo",
+      "dialogDemoTitle": "Prepare a Clean Demo?",
+      "dialogDemoWarning": "All current operational activity will be permanently cleared. Master configuration is retained and the demo catalog baseline is re-applied.",
+      "demoPreparing": "Preparing…",
+      "confirmDemoReset": "Reset & Prepare",
+      "demoResetSuccess": "Clean demo is ready. Orders, KDS tickets, deliveries, and active shifts are reset to zero; {{profile}} master data is available.",
+      "demoResetError": "Failed to prepare a clean demo."
     },
     "payments": {
       "title": "Payment & Refund Methods",
@@ -2519,5 +2531,9 @@
         "is_active": "Active Status"
       }
     }
+  },
+  "errorBoundary": {
+    "unexpected": "Unexpected Application Error!",
+    "unknown": "Unknown Error"
   }
 }

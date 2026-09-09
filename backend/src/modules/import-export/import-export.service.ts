@@ -688,6 +688,11 @@ export class ImportExportService {
         }));
       }
 
+      // Every product in the catalog is taxed at the standard 9% VAT. Leaving the
+      // rate off here fell through to the column default of zero, so the demo's
+      // headline burger was the one item on the menu ringing up VAT-free.
+      const demoBurgerTaxRate = '0.0900';
+
       let p1 = await this.productRepo.findOne({ where: { tenant_id: tenantId, code: 'PROD-BURGER-01' } });
       if (!p1) {
         await this.productRepo.save(this.productRepo.create({
@@ -696,8 +701,14 @@ export class ImportExportService {
           name: 'Special House Burger',
           category_id: burgerCat.id,
           base_price: '250000.0000',
+          tax_rate: demoBurgerTaxRate,
           is_active: true,
         }));
+      } else if (p1.tax_rate !== demoBurgerTaxRate) {
+        // The reset doubles as the demo's repair tool, so it corrects a burger
+        // seeded by an earlier run at the wrong rate instead of leaving it untaxed.
+        p1.tax_rate = demoBurgerTaxRate;
+        await this.productRepo.save(p1);
       }
     }
 

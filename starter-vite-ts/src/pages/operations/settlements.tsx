@@ -497,7 +497,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
           <>
             <DialogTitle>
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6">
+                <Typography component="span" variant="h6">
                   {t('settlements.detailModal.title', { number: activeSettlementDetail.settlement_number, name: activeSettlementDetail.courier_name })}
                 </Typography>
                 {getStatusChip(activeSettlementDetail.status)}

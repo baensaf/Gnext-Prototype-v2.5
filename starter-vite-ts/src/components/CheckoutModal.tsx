@@ -248,7 +248,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <PaymentIcon color="primary" />
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+          <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>
             {t('pos.checkout', 'Checkout & Settlement')} — #{order?.order_number || ''}
           </Typography>
         </Stack>

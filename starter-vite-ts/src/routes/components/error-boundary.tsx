@@ -2,6 +2,8 @@ import type { Theme, CSSObject } from '@mui/material/styles';
 
 import { useRouteError, isRouteErrorResponse } from 'react-router';
 
+import i18n from 'src/locales/i18n';
+
 import GlobalStyles from '@mui/material/GlobalStyles';
 
 // ----------------------------------------------------------------------
@@ -34,6 +36,9 @@ function parseStackTrace(stack?: string) {
   };
 }
 
+// Rendered above <App/> as the router's errorElement, so there is no I18nextProvider
+// in scope: translate through the i18n singleton, with the English text as the default
+// so a crash before i18n loads still shows a readable screen.
 function renderErrorMessage(error: any) {
   if (isRouteErrorResponse(error)) {
     return (
@@ -51,7 +56,9 @@ function renderErrorMessage(error: any) {
 
     return (
       <>
-        <h1 className={errorBoundaryClasses.title}>Unexpected Application Error!</h1>
+        <h1 className={errorBoundaryClasses.title}>
+          {i18n.t('errorBoundary.unexpected', 'Unexpected Application Error!')}
+        </h1>
         <p className={errorBoundaryClasses.message}>
           {error.name}: {error.message}
         </p>
@@ -65,7 +72,11 @@ function renderErrorMessage(error: any) {
     );
   }
 
-  return <h1 className={errorBoundaryClasses.title}>Unknown Error</h1>;
+  return (
+    <h1 className={errorBoundaryClasses.title}>
+      {i18n.t('errorBoundary.unknown', 'Unknown Error')}
+    </h1>
+  );
 }
 
 // ----------------------------------------------------------------------

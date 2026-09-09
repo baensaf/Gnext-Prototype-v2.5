@@ -99,8 +99,12 @@ export const inputBaseStyles = {
     ...(context === 'standard' && {
       ...getInputTypography(theme, ['fontSize', 'height', 'lineHeight']),
       '&:focus': { borderRadius: 'inherit' },
-      '&::placeholder, &::-webkit-input-placeholder, &::-moz-placeholder, &:-ms-input-placeholder, &::-ms-input-placeholder':
-        { color: theme.vars.palette.text.disabled },
+      // One unrecognised selector invalidates an entire selector list, so grouping
+      // the standard pseudo-element with the IE-only `:-ms-input-placeholder` had
+      // browsers drop this rule wholesale. Placeholders then fell back to MUI's
+      // `currentColor` and rendered at full body-text strength. `::placeholder` is
+      // supported everywhere this app runs, so it stands alone.
+      '&::placeholder': { color: theme.vars.palette.text.disabled },
     }),
     ...(context === 'picker' && {
       ...getInputTypography(theme, ['fontSize', 'lineHeight']),
