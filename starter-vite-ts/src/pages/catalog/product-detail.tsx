@@ -11,6 +11,7 @@ import StarIcon from '@mui/icons-material/Star';
 import TuneIcon from '@mui/icons-material/Tune';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
 import {
   Box,
@@ -48,6 +49,7 @@ import {
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { catalogApi } from 'src/api/catalogApi';
+import { useAuthStore } from 'src/store/useAuthStore';
 
 import { ImageUploader } from 'src/components/ImageUploader';
 
@@ -55,6 +57,10 @@ export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
+
+  // A branch can open this to see what it is selling; head office is who changes it.
+  // See the same flag on the products list.
+  const canAuthor = useAuthStore((state) => state.user?.isHeadOffice) !== false;
 
   const [currentTab, setCurrentTab] = useState(0);
   const [product, setProduct] = useState<Product | null>(null);
@@ -292,6 +298,28 @@ export function ProductDetailPage() {
         </Alert>
       )}
 
+      {!canAuthor && (
+        <Alert
+          severity="info"
+          icon={<StorefrontIcon />}
+          sx={{ mb: 3 }}
+          action={
+            <Button
+              size="small"
+              color="inherit"
+              onClick={() => navigate('/app/catalog/availability')}
+            >
+              {t('catalog.productsPage.manageAvailability', 'Manage availability')}
+            </Button>
+          }
+        >
+          {t(
+            'catalog.productDetailPage.readOnlyNotice',
+            'This product is set by head office for the whole chain. Your branch decides whether it can serve it today.'
+          )}
+        </Alert>
+      )}
+
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={currentTab} onChange={(_, val) => setCurrentTab(val)}>
@@ -411,7 +439,7 @@ export function ProductDetailPage() {
                     type="submit"
                     variant="contained"
                     startIcon={<SaveIcon />}
-                    disabled={savingGeneral}
+                    disabled={savingGeneral || !canAuthor}
                     sx={{ fontWeight: 'bold', px: 4 }}
                   >
                     {savingGeneral ? t('catalog.productDetailPage.general.saving') : t('catalog.productDetailPage.general.save')}

@@ -1,10 +1,10 @@
-import type { Branch } from 'src/api/tenantApi';
 import type { Product, ProductAvailability } from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import RefreshIcon from '@mui/icons-material/Refresh';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import PlayCircleIcon from '@mui/icons-material/PlayCircle';
 import PauseCircleIcon from '@mui/icons-material/PauseCircle';
 import {
@@ -31,15 +31,24 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 
-import { tenantApi } from 'src/api/tenantApi';
 import { catalogApi } from 'src/api/catalogApi';
-import { useScopedBranchId } from 'src/contexts/branch-context';
+import { useBranchContext } from 'src/contexts/branch-context';
 
+/**
+ * The one catalogue screen a branch owns.
+ *
+ * Head office decides what the item is; this decides whether this shop can serve it.
+ * There are two ways for an item to be off, and they are different things: a duration
+ * is today's 86 and expires on its own, while "until I put it back" means this branch
+ * does not carry the item at all. The scope is the header switcher's, not a field in
+ * the dialog — the server takes the branch from the session anyway, so offering a
+ * picker a branch user cannot use would only invite a 403.
+ */
 export function AvailabilityPage() {
   const { t } = useTranslation();
+  const { selectedBranchId, selectedBranch, isHeadOffice } = useBranchContext();
 
   const [products, setProducts] = useState<Product[]>([]);
-  const [branches, setBranches] = useState<Branch[]>([]);
   const [availabilities, setAvailabilities] = useState<ProductAvailability[]>([]);
   const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,20 +56,24 @@ export function AvailabilityPage() {
   // Suspend Dialog
   const [suspendModalOpen, setSuspendModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [suspendBranchId, setSuspendBranchId] = useScopedBranchId();
   const [suspendHours, setSuspendHours] = useState('2');
-  const [suspendReason, setSuspendReason] = useState('86d / Out of stock');
+  const [suspendReason, setSuspendReason] = useState('');
 
-  const loadData = async () => {
+  const branchParam = selectedBranchId || undefined;
+
+  /** The name of the shelf being edited, for every sentence that has to say it. */
+  const scopeName = isHeadOffice
+    ? t('catalog.availabilityPage.globalScope')
+    : selectedBranch?.name || t('catalog.availabilityPage.branchScope');
+
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [pList, bList, aList] = await Promise.all([
+      const [pList, aList] = await Promise.all([
         catalogApi.getProducts(),
-        tenantApi.getBranches(),
-        catalogApi.getAvailabilities(),
+        catalogApi.getAvailabilities(branchParam),
       ]);
       setProducts(pList);
-      setBranches(bList);
       setAvailabilities(aList);
       setError(null);
     } catch (err: any) {
@@ -68,14 +81,15 @@ export function AvailabilityPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [branchParam, t]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const handleOpenSuspendModal = (prod: Product) => {
     setSelectedProduct(prod);
+    setSuspendHours('2');
     setSuspendReason(t('catalog.availabilityPage.reasons.outOfStock'));
     setSuspendModalOpen(true);
   };
@@ -83,7 +97,13 @@ export function AvailabilityPage() {
   const handleSuspendSubmit = async () => {
     if (!selectedProduct) return;
     try {
-      await catalogApi.suspendProduct(selectedProduct.id, suspendBranchId || undefined, parseFloat(suspendHours), suspendReason);
+      // 0 hours is not "no suspension" — it is a suspension with no end date.
+      await catalogApi.suspendProduct(
+        selectedProduct.id,
+        branchParam,
+        parseFloat(suspendHours),
+        suspendReason
+      );
       setSuspendModalOpen(false);
       loadData();
     } catch (err: any) {
@@ -91,9 +111,9 @@ export function AvailabilityPage() {
     }
   };
 
-  const handleResumeProduct = async (productId: string, branchId?: string) => {
+  const handleResumeProduct = async (productId: string) => {
     try {
-      await catalogApi.resumeProduct(productId, branchId);
+      await catalogApi.resumeProduct(productId, branchParam);
       loadData();
     } catch (err: any) {
       setError(err.detail || t('catalog.availabilityPage.errors.resumeFailed'));
@@ -115,6 +135,14 @@ export function AvailabilityPage() {
           {t('catalog.availabilityPage.refresh')}
         </Button>
       </Stack>
+
+      <Alert severity="info" icon={<StorefrontIcon />} sx={{ mb: 3 }}>
+        {t('catalog.availabilityPage.ownershipNotice', {
+          defaultValue:
+            'Head office owns the menu — names, recipes and prices are set once for the whole chain. What you decide here is what {{scope}} can actually serve.',
+          scope: scopeName,
+        })}
+      </Alert>
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
@@ -138,7 +166,15 @@ export function AvailabilityPage() {
           <TableBody>
             {products.map((p) => {
               const avail = availabilities.find((a) => a.product_id === p.id);
-              const isSuspended = avail?.is_suspended && (!avail.suspended_until || new Date(avail.suspended_until) > new Date());
+              const isSuspended =
+                avail?.is_suspended &&
+                (!avail.suspended_until || new Date(avail.suspended_until) > new Date());
+              // A stop with no end date is an assortment decision, not a stock-out.
+              const isDelisted = isSuspended && !avail?.suspended_until;
+
+              let statusLabel = t('catalog.availabilityPage.statusAvailable');
+              if (isDelisted) statusLabel = t('catalog.availabilityPage.statusNotCarried', 'Not carried here');
+              else if (isSuspended) statusLabel = t('catalog.availabilityPage.statusSuspended');
 
               return (
                 <TableRow key={p.id}>
@@ -153,13 +189,21 @@ export function AvailabilityPage() {
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={isSuspended ? t('catalog.availabilityPage.statusSuspended') : t('catalog.availabilityPage.statusAvailable')}
-                      color={isSuspended ? 'error' : 'success'}
+                      label={statusLabel}
+                      color={(isDelisted && 'default') || (isSuspended && 'error') || 'success'}
                       size="small"
                     />
                   </TableCell>
-                  <TableCell>{isSuspended ? avail?.reason || t('catalog.availabilityPage.statusSuspended') : '-'}</TableCell>
-                  <TableCell>{isSuspended && avail?.suspended_until ? new Date(avail.suspended_until).toLocaleString() : '-'}</TableCell>
+                  <TableCell>
+                    {isSuspended ? avail?.reason || t('catalog.availabilityPage.statusSuspended') : '-'}
+                  </TableCell>
+                  <TableCell>
+                    {(isSuspended &&
+                      (avail?.suspended_until
+                        ? new Date(avail.suspended_until).toLocaleString()
+                        : t('catalog.availabilityPage.indefinite'))) ||
+                      '-'}
+                  </TableCell>
                   <TableCell align="right">
                     {isSuspended ? (
                       <Button
@@ -167,7 +211,7 @@ export function AvailabilityPage() {
                         color="success"
                         variant="contained"
                         startIcon={<PlayCircleIcon />}
-                        onClick={() => handleResumeProduct(p.id, avail?.branch_id)}
+                        onClick={() => handleResumeProduct(p.id)}
                       >
                         {t('catalog.availabilityPage.resumeButton')}
                       </Button>
@@ -191,20 +235,42 @@ export function AvailabilityPage() {
       </TableContainer>
 
       {/* Suspend Product Dialog */}
-      <Dialog open={suspendModalOpen} onClose={() => setSuspendModalOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{t('catalog.availabilityPage.suspendModalTitle', { name: selectedProduct?.name })}</DialogTitle>
+      <Dialog
+        open={suspendModalOpen}
+        onClose={() => setSuspendModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {t('catalog.availabilityPage.suspendModalTitle', { name: selectedProduct?.name })}
+        </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField select label={t('catalog.availabilityPage.branchScope')} value={suspendBranchId} onChange={(e) => setSuspendBranchId(e.target.value)} fullWidth>
-              <MenuItem value="">{t('catalog.availabilityPage.globalScope')}</MenuItem>
-              {branches.map((b) => (
-                <MenuItem key={b.id} value={b.id}>
-                  {b.name}
-                </MenuItem>
-              ))}
-            </TextField>
+            <Alert severity="info">
+              {t('catalog.availabilityPage.scopeNotice', {
+                defaultValue: 'This applies to {{scope}}. Change the scope in the header to work elsewhere.',
+                scope: scopeName,
+              })}
+            </Alert>
 
-            <TextField select label={t('catalog.availabilityPage.durationHours')} value={suspendHours} onChange={(e) => setSuspendHours(e.target.value)} fullWidth>
+            <TextField
+              select
+              label={t('catalog.availabilityPage.durationHours')}
+              value={suspendHours}
+              onChange={(e) => setSuspendHours(e.target.value)}
+              helperText={
+                suspendHours === '0'
+                  ? t(
+                      'catalog.availabilityPage.delistHelp',
+                      'The item stays off the menu here until somebody puts it back.'
+                    )
+                  : t(
+                      'catalog.availabilityPage.suspendHelp',
+                      'The item comes back on sale by itself when the time is up.'
+                    )
+              }
+              fullWidth
+            >
               <MenuItem value="1">{t('catalog.availabilityPage.hours1')}</MenuItem>
               <MenuItem value="2">{t('catalog.availabilityPage.hours2')}</MenuItem>
               <MenuItem value="4">{t('catalog.availabilityPage.hours4')}</MenuItem>
@@ -212,6 +278,9 @@ export function AvailabilityPage() {
               <MenuItem value="24">{t('catalog.availabilityPage.hours24')}</MenuItem>
               <MenuItem value="72">{t('catalog.availabilityPage.hours72')}</MenuItem>
               <MenuItem value="168">{t('catalog.availabilityPage.hours168')}</MenuItem>
+              <MenuItem value="0">
+                {t('catalog.availabilityPage.notCarried', 'Not carried here (until resumed)')}
+              </MenuItem>
             </TextField>
 
             <TextField
@@ -223,7 +292,9 @@ export function AvailabilityPage() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSuspendModalOpen(false)}>{t('catalog.availabilityPage.cancel')}</Button>
+          <Button onClick={() => setSuspendModalOpen(false)}>
+            {t('catalog.availabilityPage.cancel')}
+          </Button>
           <Button color="warning" variant="contained" onClick={handleSuspendSubmit}>
             {t('catalog.availabilityPage.confirmSuspend')}
           </Button>

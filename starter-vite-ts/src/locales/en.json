@@ -1123,7 +1123,8 @@
         "deleteVariantFailed": "Failed to delete variant",
         "setDefaultFailed": "Failed to set default variant",
         "attachGroupFailed": "Failed to attach modifier group"
-      }
+      },
+      "readOnlyNotice": "This product is set by head office for the whole chain. Your branch decides whether it can serve it today."
     },
     "menusPage": {
       "title": "Menus Composer",
@@ -1203,7 +1204,10 @@
       },
       "taxRateHint": "e.g. 0.0900 for 9%",
       "codeHint": "e.g. PROD-DOUBLEBURGER",
-      "nameHint": "e.g. Double Beef Burger"
+      "nameHint": "e.g. Double Beef Burger",
+      "viewDetails": "View details",
+      "manageAvailability": "Manage availability",
+      "readOnlyNotice": "Head office sets the menu for the whole chain, so these products are read-only here. What your branch decides is whether it can serve them today — that lives on Availability."
     },
     "categoriesPage": {
       "title": "Catalog Categories",
@@ -1255,7 +1259,7 @@
     },
     "availabilityPage": {
       "title": "Product Availability & Suspensions (86'd)",
-      "subtitle": "Temporarily 86 or suspend items per-branch or globally with automated resume timers",
+      "subtitle": "Head office sets the menu; you decide what this branch can actually serve today",
       "refresh": "Refresh",
       "productName": "Product Name",
       "code": "Code",
@@ -1294,7 +1298,13 @@
         "loadFailed": "Failed to load availability data",
         "suspendFailed": "Failed to suspend product",
         "resumeFailed": "Failed to resume product"
-      }
+      },
+      "ownershipNotice": "Head office owns the menu — names, recipes and prices are set once for the whole chain. What you decide here is what {{scope}} can actually serve.",
+      "scopeNotice": "This applies to {{scope}}. Change the scope in the header to work elsewhere.",
+      "statusNotCarried": "Not carried here",
+      "notCarried": "Not carried here (until resumed)",
+      "delistHelp": "The item stays off the menu here until somebody puts it back.",
+      "suspendHelp": "The item comes back on sale by itself when the time is up."
     }
   },
   "pricing": {

@@ -75,6 +75,14 @@ const CHAIN_ONLY_PATHS = [
   '/app/reports/branch-comparison',
   '/app/catalog/import-export',
   '/app/settings/data-reset',
+  // The menu is the chain's. A branch does not invent products, rename categories,
+  // rewrite modifiers or reprice anything — it decides which of head office's items
+  // it can actually serve today, on /app/catalog/availability, which stays open.
+  // Products stays open too, read-only, because you cannot 86 what you cannot see.
+  '/app/catalog/categories',
+  '/app/catalog/modifiers',
+  '/app/catalog/menus',
+  '/app/pricing',
 ];
 
 const FULL_ACCESS: RoleAccess = { allow: ['*'], deny: [], home: '/app/dashboard' };

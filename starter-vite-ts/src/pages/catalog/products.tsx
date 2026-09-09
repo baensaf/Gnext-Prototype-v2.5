@@ -8,6 +8,8 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import TuneIcon from '@mui/icons-material/Tune';
 import DeleteIcon from '@mui/icons-material/Delete';
+import StorefrontIcon from '@mui/icons-material/Storefront';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
   Box,
   Card,
@@ -40,6 +42,7 @@ import {
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { catalogApi } from 'src/api/catalogApi';
+import { useAuthStore } from 'src/store/useAuthStore';
 
 import { ImageUploader } from 'src/components/ImageUploader';
 
@@ -51,6 +54,13 @@ const DEFAULT_TAX_RATE = '0.0900';
 export function ProductsPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
+
+  // Products belong to the chain. A branch reads this screen to know what it may serve,
+  // and goes to Availability to say whether it can serve it today. The API refuses these
+  // writes anyway, so offering buttons that 403 would be a worse way to say the same thing.
+  // Undefined means the account has not loaded yet: assume the wider case and let the
+  // server decide, rather than flashing a read-only screen at head office.
+  const canAuthor = useAuthStore((state) => state.user?.isHeadOffice) !== false;
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -175,15 +185,35 @@ export function ProductsPage() {
             {t('catalog.productsPage.subtitle')}
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setDrawerOpen(true)}
-          sx={{ fontWeight: 'bold' }}
-        >
-          {t('catalog.productsPage.newProduct')}
-        </Button>
+        {canAuthor ? (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setDrawerOpen(true)}
+            sx={{ fontWeight: 'bold' }}
+          >
+            {t('catalog.productsPage.newProduct')}
+          </Button>
+        ) : (
+          <Button
+            variant="contained"
+            startIcon={<StorefrontIcon />}
+            onClick={() => navigate('/app/catalog/availability')}
+            sx={{ fontWeight: 'bold' }}
+          >
+            {t('catalog.productsPage.manageAvailability', 'Manage availability')}
+          </Button>
+        )}
       </Stack>
+
+      {!canAuthor && (
+        <Alert severity="info" icon={<StorefrontIcon />} sx={{ mb: 3 }}>
+          {t(
+            'catalog.productsPage.readOnlyNotice',
+            'Head office sets the menu for the whole chain, so these products are read-only here. What your branch decides is whether it can serve them today — that lives on Availability.'
+          )}
+        </Alert>
+      )}
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
@@ -248,26 +278,34 @@ export function ProductsPage() {
                       </TableCell>
                       <TableCell align="center">
                         <IconButton
-                          title={t('catalog.productsPage.editDetails')}
+                          title={
+                            canAuthor
+                              ? t('catalog.productsPage.editDetails')
+                              : t('catalog.productsPage.viewDetails', 'View details')
+                          }
                           color="primary"
                           onClick={() => navigate(`/app/catalog/products/${p.id}`)}
                         >
-                          <EditIcon />
+                          {canAuthor ? <EditIcon /> : <VisibilityIcon />}
                         </IconButton>
-                        <IconButton
-                          title={t('catalog.productsPage.attachModifier')}
-                          color="info"
-                          onClick={() => handleOpenAttachDialog(p)}
-                        >
-                          <TuneIcon />
-                        </IconButton>
-                        <IconButton
-                          title={t('catalog.productsPage.archive')}
-                          color="error"
-                          onClick={() => handleArchive(p.id, p.name)}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
+                        {canAuthor && (
+                          <>
+                            <IconButton
+                              title={t('catalog.productsPage.attachModifier')}
+                              color="info"
+                              onClick={() => handleOpenAttachDialog(p)}
+                            >
+                              <TuneIcon />
+                            </IconButton>
+                            <IconButton
+                              title={t('catalog.productsPage.archive')}
+                              color="error"
+                              onClick={() => handleArchive(p.id, p.name)}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

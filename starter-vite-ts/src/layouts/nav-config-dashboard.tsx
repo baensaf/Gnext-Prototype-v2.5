@@ -2,13 +2,10 @@ import type { NavSectionProps } from 'src/components/nav-section';
 
 import { useTranslation } from 'react-i18next';
 
-import { useBranchContextOptional } from 'src/contexts/branch-context';
-
-import { useAuthStore } from 'src/store/useAuthStore';
-
-import { canReachPath } from 'src/config/role-access';
-
 import { CONFIG } from 'src/global-config';
+import { useAuthStore } from 'src/store/useAuthStore';
+import { canReachPath } from 'src/config/role-access';
+import { useBranchContextOptional } from 'src/contexts/branch-context';
 
 import { Label } from 'src/components/label';
 import { SvgColor } from 'src/components/svg-color';
@@ -292,14 +289,25 @@ export function useNavData(): NavSectionProps['data'] {
       ...section,
       items: section.items
         .filter((item) => isShopFloor || !SHOP_FLOOR_PATHS.includes(item.path))
-        .filter((item) => canReachPath(role, item.path))
         .map((item) => {
-          if (!item.children) return item;
           // An open parent can still have a child the role may not open — chain reports
           // sit under the same menu as the branch's own.
+          if (!item.children) return canReachPath(role, item.path) ? item : null;
+
           const children = item.children.filter((child) => canReachPath(role, child.path));
-          return children.length ? { ...item, children } : { ...item, children: undefined };
-        }),
+          if (!children.length) {
+            return canReachPath(role, item.path) ? { ...item, children: undefined } : null;
+          }
+          // A group survives on its children. Catalog is headed by Menus, which is head
+          // office's, but a branch manager still needs the Availability entry underneath
+          // it — judging the group by its heading alone would take the whole menu away.
+          return {
+            ...item,
+            children,
+            path: canReachPath(role, item.path) ? item.path : children[0].path,
+          };
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null),
     }))
     .filter((section) => section.items.length > 0);
 }

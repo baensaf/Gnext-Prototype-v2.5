@@ -758,9 +758,15 @@ export class CatalogService {
     return await this.availRepo.find({ where });
   }
 
-  async suspendProduct(tenantId: string, productId: string, branchId?: string, hours: number = 2, reason?: string, correlationId?: string) {
+  /**
+   * Take an item off sale. `hours` is how long for: omit it (or pass 0) and the
+   * item stays off until somebody puts it back, which is how a branch says it
+   * does not carry the item at all. Anything else is today's 86 and expires on
+   * its own, because nobody remembers to un-86 the fish at closing time.
+   */
+  async suspendProduct(tenantId: string, productId: string, branchId?: string, hours?: number, reason?: string, correlationId?: string) {
     let avail = await this.availRepo.findOne({ where: { tenant_id: tenantId, product_id: productId, branch_id: branchId || null } });
-    const suspendedUntil = new Date(Date.now() + hours * 3600 * 1000);
+    const suspendedUntil = hours && hours > 0 ? new Date(Date.now() + hours * 3600 * 1000) : null;
 
     if (!avail) {
       avail = this.availRepo.create({
