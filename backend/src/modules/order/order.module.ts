@@ -24,6 +24,7 @@ import { OutboxModule } from '../outbox/outbox.module';
 import { KdsModule } from '../kds/kds.module';
 import { PrintingModule } from '../printing/printing.module';
 import { DeliveryModule } from '../delivery/delivery.module';
+import { ApprovalModule } from '../approval/approval.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { DeliveryModule } from '../delivery/delivery.module';
     KdsModule,
     PrintingModule,
     DeliveryModule,
+    ApprovalModule,
   ],
   providers: [OrderService, OrderSequenceService],
   controllers: [OrdersController],

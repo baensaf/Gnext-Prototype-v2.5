@@ -245,13 +245,61 @@ export class OrderTransitionDto {
   approvalRequestId?: string;
 }
 
+export class OrderEditVoidLineDto {
+  @IsUUID()
+  orderItemId: string;
+
+  @IsOptional()
+  @IsUUID()
+  reasonCodeId?: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+/**
+ * Line changes for an order past DRAFT. Lines are never mutated in place: a
+ * removal marks the original VOID and leaves it queryable, and an addition
+ * appends. Changing a quantity or a product is a supersession, which is what
+ * `POST /orders/:id/replace-item` is for.
+ */
+export class OrderEditChangesDto {
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OrderItemCreateDto)
+  add?: OrderItemCreateDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OrderEditVoidLineDto)
+  void?: OrderEditVoidLineDto[];
+}
+
 export class OrderEditDto {
   @IsOptional()
-  changes?: any;
+  @ValidateNested()
+  @Type(() => OrderEditChangesDto)
+  changes?: OrderEditChangesDto;
 
   @IsOptional()
   @IsString()
   quoteVersion?: string;
+
+  /** Required when the edit policy escalates any requested change. */
+  @IsOptional()
+  @IsUUID()
+  approvalRequestId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  reasonCodeId?: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
 
   @IsOptional()
   refundPlan?: any;
@@ -261,8 +309,19 @@ export class OrderItemReplaceDto {
   @IsUUID()
   orderItemId: string;
 
+  /**
+   * Replacement line. Note there is deliberately no unit price here: spec 7.9
+   * requires the replacement to be priced at the current effective catalog
+   * price, so a caller cannot name its own figure.
+   */
   @IsOptional()
-  replacement?: any;
+  replacement?: {
+    productId?: string;
+    variantId?: string;
+    quantity?: string;
+    options?: any[];
+    notes?: string;
+  };
 
   @IsOptional()
   @IsUUID()
@@ -275,6 +334,14 @@ export class OrderItemReplaceDto {
   @IsOptional()
   @IsString()
   quoteVersion?: string;
+
+  /** Required when the edit policy escalates the replacement. */
+  @IsOptional()
+  @IsUUID()
+  approvalRequestId?: string;
+
+  @IsOptional()
+  refundPlan?: any;
 }
 
 export class OrderCancelDto {
@@ -285,6 +352,11 @@ export class OrderCancelDto {
   @IsOptional()
   @IsString()
   reason?: string;
+
+  /** Required once the cancel window has elapsed or preparation has started. */
+  @IsOptional()
+  @IsUUID()
+  approvalRequestId?: string;
 
   @IsOptional()
   refundPlan?: any;

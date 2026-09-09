@@ -41,6 +41,14 @@ import { DeliveryZone } from '../../entities/DeliveryZone.entity';
 import { Delivery } from '../../entities/Delivery.entity';
 import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
 import { TableOccupancyEvent } from '../../entities/TableOccupancyEvent.entity';
+import { Refund } from '../../entities/Refund.entity';
+import { ApprovalService } from '../approval/approval.service';
+import {
+  OrderActionConfig,
+  OrderEditAction,
+  resolveOrderActionConfig,
+  resolveOrderEditDecision,
+} from './order-edit-policy';
 import { SplitOrderDto, TransferItemsDto } from '../dine-in/dtos/dine-in.dto';
 import {
   OrderCreateDto,
@@ -53,6 +61,17 @@ import {
   OrderCancelDto,
   OrderReopenDto,
 } from './dtos/order.dto';
+
+/**
+ * OrderItem.state for a line that still counts. VOID lines were struck off by
+ * an edit; REPLACED lines were superseded by a replacement. Both stay on the
+ * order so history and reprints remain truthful, and both are excluded from
+ * every total, quote, bill and receipt.
+ */
+const ACTIVE_LINE_STATE = 'ACTIVE';
+
+const isActiveLine = (item: { state?: string }): boolean =>
+  (item.state || ACTIVE_LINE_STATE) === ACTIVE_LINE_STATE;
 
 // State Transition Matrix per Section 6.1
 const ALLOWED_TRANSITIONS: Record<OrderState, OrderState[]> = {
@@ -84,6 +103,7 @@ export class OrderService {
     private readonly sequenceService: OrderSequenceService,
     private readonly auditWriter: AuditWriter,
     private readonly outboxWriter: OutboxWriter,
+    private readonly approvalService: ApprovalService,
     private readonly dataSource: DataSource,
     @Optional() private readonly kdsService?: KdsService,
     @Optional() private readonly printQueueService?: PrintQueueService,
@@ -264,7 +284,7 @@ export class OrderService {
   private async evaluateOrderQuote(tenantId: string, order: OrderHeader, request?: OrderQuoteRequestDto) {
     const couponCode = request?.couponCode || order.coupon_code;
 
-    const draftItems = (order.items || []).map((i) => {
+    const draftItems = (order.items || []).filter(isActiveLine).map((i) => {
       const modPerUnit = (i.quantity && Number(i.quantity) > 0 && i.modifier_total)
         ? MoneyUtil.divide(i.modifier_total, i.quantity)
         : '0.0000';
@@ -358,7 +378,7 @@ export class OrderService {
           orderType: order.order_type,
           currencyCode: order.currency_code,
           deliveryFee: order.delivery_fee,
-          items: order.items.map((i) => {
+          items: order.items.filter(isActiveLine).map((i) => {
             const modPerUnit = (i.quantity && Number(i.quantity) > 0 && i.modifier_total)
               ? MoneyUtil.divide(i.modifier_total, i.quantity)
               : '0.0000';
@@ -680,31 +700,165 @@ export class OrderService {
     });
   }
 
+  /**
+   * Apply line changes to an order past DRAFT, per spec 7.9.
+   *
+   * Lines are never mutated or deleted: a removal flips the original to VOID
+   * and leaves it queryable, an addition appends. Every requested change is put
+   * to the edit policy first, and the most restrictive answer governs the whole
+   * command - a single forbidden change refuses the batch rather than applying
+   * a partial edit the caller did not ask for.
+   */
   async editOrder(tenantId: string, id: string, dto: OrderEditDto, userId?: string, correlationId?: string) {
+    const additions = dto.changes?.add || [];
+    const removals = dto.changes?.void || [];
+    if (additions.length === 0 && removals.length === 0) {
+      throw new BadRequestException('An edit must add or void at least one line');
+    }
+
     return await this.dataSource.transaction(async (em) => {
       const order = await em.findOne(OrderHeader, {
         where: { id, tenant_id: tenantId },
-        relations: ['items'],
+        lock: { mode: 'pessimistic_write' },
       });
       if (!order) throw new NotFoundException(`Order ${id} not found`);
-      if (['COMPLETED', 'CANCELLED'].includes(order.state)) {
-        throw new BadRequestException(`Cannot edit order in state ${order.state}`);
+
+      const items = await em.find(OrderItem, { where: { order_id: id, tenant_id: tenantId } });
+
+      // Spec 7.9: a stale quote must not be edited against, or the cashier is
+      // committing changes priced from figures they never saw.
+      if (dto.quoteVersion && dto.quoteVersion !== order.quote_version) {
+        throw new ConflictException({
+          statusCode: 409,
+          error: 'QUOTE_STALE',
+          message: 'Order totals have changed since this edit was composed',
+          currentQuoteVersion: order.quote_version,
+        });
       }
 
-      order.version += 1;
-      order.quote_version = String(Date.now());
-      await em.save(OrderHeader, order);
+      const netPaid = await this.calculateNetPaid(tenantId, id, em);
+      const config = await this.getOrderActionConfig(tenantId, em);
+      const policyContext = { state: order.state, submittedAt: order.submitted_at || null, paidTotal: netPaid };
+      const now = new Date();
 
-      const stateEvt = em.create(OrderStateEvent, {
-        tenant_id: tenantId,
-        order_id: order.id,
-        from_state: order.state,
-        to_state: order.state,
-        action: 'EDIT_ORDER',
-        occurred_by: userId || null,
-        snapshot: dto.changes,
+      // Resolve every requested change before applying any of them.
+      let requiresApproval = false;
+      const escalations: string[] = [];
+      const decide = (action: OrderEditAction, line?: { state: string }) => {
+        const result = resolveOrderEditDecision(action, policyContext, config, now, line);
+        if (result.decision === 'FORBID') {
+          throw new BadRequestException(
+            `Cannot ${action} on order ${order.order_number} in state ${order.state} (${result.reason})`,
+          );
+        }
+        if (result.decision === 'REQUIRE_APPROVAL') {
+          requiresApproval = true;
+          escalations.push(`${action}:${result.reason}`);
+        }
+      };
+
+      const linesToVoid: OrderItem[] = [];
+      for (const removal of removals) {
+        const line = items.find((i) => i.id === removal.orderItemId);
+        if (!line) {
+          throw new NotFoundException(`Order item ${removal.orderItemId} not found on order ${id}`);
+        }
+        decide('VOID_ITEM', line);
+        linesToVoid.push(line);
+      }
+      if (additions.length > 0) decide('ADD_ITEM');
+
+      if (requiresApproval) {
+        if (!dto.approvalRequestId) {
+          throw new ForbiddenException({
+            statusCode: 403,
+            error: 'APPROVAL_REQUIRED',
+            message: `This edit is outside cashier authority and needs an approved request (${escalations.join(', ')})`,
+            escalations,
+          });
+        }
+        await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'EDIT_ORDER');
+      }
+
+      // Spec 6.1: removals must carry a reason so void reporting can attribute
+      // shrinkage. Additions raise the balance and need no justification.
+      for (const removal of removals) {
+        if (!removal.reasonCodeId && !dto.reasonCodeId) {
+          throw new BadRequestException(`Voiding line ${removal.orderItemId} requires a reason code`);
+        }
+      }
+
+      const before = this.snapshotLines(items);
+
+      for (const line of linesToVoid) {
+        line.state = 'VOID';
+        await em.save(OrderItem, line);
+      }
+
+      if (additions.length > 0) {
+        const nextLineNumber = items.reduce((max, i) => Math.max(max, i.line_number || 0), 0) + 1;
+        await this.addItemsToDraft(tenantId, order, additions, em, nextLineNumber);
+      }
+
+      const recalculated = await this.recalculateOrderTotals(tenantId, order, em);
+
+      // Spec 7.9: never leave the grand total below money already collected
+      // without a linked refund. The refund orchestration is the caller's, so
+      // the edit is refused rather than silently creating an unbacked credit.
+      if (MoneyUtil.greaterThan(netPaid, recalculated.grand_total) && !dto.refundPlan) {
+        throw new ConflictException({
+          statusCode: 409,
+          error: 'REFUND_PLAN_REQUIRED',
+          message:
+            `This edit lowers the order total to ${recalculated.grand_total}, below the ` +
+            `${netPaid} already collected. Attach a refund plan for the difference.`,
+          netPaid,
+          newGrandTotal: recalculated.grand_total,
+          refundDue: MoneyUtil.subtract(netPaid, recalculated.grand_total),
+        });
+      }
+
+      recalculated.version += 1;
+      await em.save(OrderHeader, recalculated);
+
+      const after = this.snapshotLines(
+        await em.find(OrderItem, { where: { order_id: id, tenant_id: tenantId } }),
+      );
+
+      await em.save(
+        OrderStateEvent,
+        em.create(OrderStateEvent, {
+          tenant_id: tenantId,
+          order_id: order.id,
+          from_state: order.state,
+          to_state: order.state,
+          action: 'EDIT_ORDER',
+          reason_code_id: dto.reasonCodeId || removals[0]?.reasonCodeId || null,
+          reason_text: dto.reason || removals[0]?.reason || null,
+          approval_request_id: dto.approvalRequestId || null,
+          occurred_by: userId || null,
+          snapshot: { before, after, escalations },
+        }),
+      );
+
+      // The kitchen has to learn about both halves of the edit: struck lines
+      // stop being cooked, appended lines get fired.
+      await this.syncKitchenAfterEdit(tenantId, order, linesToVoid, additions.length > 0, userId);
+
+      await this.outboxWriter.enqueueInTransaction(em, {
+        tenantId,
+        eventType: 'ORDER_UPDATED',
+        aggregateType: 'Order',
+        aggregateId: order.id,
+        payload: {
+          orderId: order.id,
+          orderNumber: order.order_number,
+          action: 'EDIT_ORDER',
+          voidedItemIds: linesToVoid.map((l) => l.id),
+          addedLineCount: additions.length,
+          grandTotal: recalculated.grand_total,
+        },
       });
-      await em.save(OrderStateEvent, stateEvt);
 
       await this.auditWriter.write({
         tenantId,
@@ -714,6 +868,8 @@ export class OrderService {
         entityType: 'Order',
         entityId: id,
         correlationId,
+        beforeData: before,
+        afterData: after,
       });
 
       return await em.findOne(OrderHeader, {
@@ -723,30 +879,214 @@ export class OrderService {
     });
   }
 
+  /** Money actually collected: succeeded payments less succeeded refunds. */
+  private async calculateNetPaid(tenantId: string, orderId: string, em: EntityManager): Promise<string> {
+    const payments = await em.find(Payment, { where: { tenant_id: tenantId, order_id: orderId } });
+    let collected = '0.0000';
+    for (const p of payments) {
+      if (p.status === 'SUCCEEDED' || (p.status as any) === 'COMPLETED') {
+        collected = MoneyUtil.add(collected, p.amount);
+      }
+    }
+
+    const refunds = await em.find(Refund, {
+      where: { tenant_id: tenantId, order_id: orderId, status: 'SUCCEEDED' as any },
+    });
+    for (const r of refunds) {
+      collected = MoneyUtil.subtract(collected, r.amount);
+    }
+
+    return MoneyUtil.greaterThan(collected, '0.0000') ? collected : '0.0000';
+  }
+
+  /** Read the tenant's cashier authority windows, falling back to the spec defaults. */
+  private async getOrderActionConfig(tenantId: string, em: EntityManager): Promise<OrderActionConfig> {
+    const setting = await em.findOne(TenantSetting, {
+      where: { tenant_id: tenantId, key: 'ORDER_ACTIONS' },
+    });
+    return resolveOrderActionConfig(setting?.value as Record<string, any> | undefined);
+  }
+
+  /** Compact line snapshot for the edit history diff required by spec 7.9. */
+  private snapshotLines(items: OrderItem[]) {
+    return items
+      .slice()
+      .sort((a, b) => (a.line_number || 0) - (b.line_number || 0))
+      .map((i) => ({
+        id: i.id,
+        lineNumber: i.line_number,
+        productName: i.product_name,
+        quantity: i.quantity,
+        unitPrice: i.unit_price,
+        lineTotal: i.line_total,
+        state: i.state,
+        replacesItemId: i.replaces_item_id || null,
+      }));
+  }
+
+  /**
+   * Retract voided lines from the kitchen and fire any newly appended ones.
+   * Best effort: a KDS hiccup must not roll back an otherwise valid edit, since
+   * the order and its money are already consistent by this point.
+   */
+  private async syncKitchenAfterEdit(
+    tenantId: string,
+    order: OrderHeader,
+    voidedLines: OrderItem[],
+    hasAdditions: boolean,
+    userId?: string,
+  ) {
+    if (!this.kdsService) return;
+    try {
+      for (const line of voidedLines) {
+        await this.kdsService.cancelTicketItemsForOrderItem(tenantId, line.id, userId);
+      }
+      if (hasAdditions) {
+        await this.kdsService.generateTicketsForOrder(tenantId, order.id);
+      }
+    } catch (err) {
+      console.error(`KDS sync after edit of order ${order.id} failed`, err);
+    }
+  }
+
+  /**
+   * Supersede a line with a different product, variant or quantity, per spec 7.9.
+   *
+   * The original is marked REPLACED and the replacement links back to it, so the
+   * supersession chain stays queryable. Price comes from the catalog at current
+   * effective price, never from the request body: letting a caller name its own
+   * unit price turns a correction into an unaudited discount.
+   */
   async replaceItem(tenantId: string, id: string, dto: OrderItemReplaceDto, userId?: string, correlationId?: string) {
+    if (!dto.replacement) {
+      throw new BadRequestException('A replacement line is required; use the edit command to void without replacing');
+    }
+
     return await this.dataSource.transaction(async (em) => {
-      const item = await em.findOne(OrderItem, { where: { id: dto.orderItemId, tenant_id: tenantId } });
-      if (!item) throw new NotFoundException(`Order item ${dto.orderItemId} not found`);
+      const order = await em.findOne(OrderHeader, {
+        where: { id, tenant_id: tenantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!order) throw new NotFoundException(`Order ${id} not found`);
+
+      const item = await em.findOne(OrderItem, {
+        where: { id: dto.orderItemId, tenant_id: tenantId, order_id: id },
+      });
+      if (!item) throw new NotFoundException(`Order item ${dto.orderItemId} not found on order ${id}`);
+
+      if (dto.quoteVersion && dto.quoteVersion !== order.quote_version) {
+        throw new ConflictException({
+          statusCode: 409,
+          error: 'QUOTE_STALE',
+          message: 'Order totals have changed since this replacement was composed',
+          currentQuoteVersion: order.quote_version,
+        });
+      }
+
+      const netPaid = await this.calculateNetPaid(tenantId, id, em);
+      const config = await this.getOrderActionConfig(tenantId, em);
+      const decision = resolveOrderEditDecision(
+        'REPLACE_ITEM',
+        { state: order.state, submittedAt: order.submitted_at || null, paidTotal: netPaid },
+        config,
+        new Date(),
+        item,
+      );
+
+      if (decision.decision === 'FORBID') {
+        throw new BadRequestException(
+          `Cannot replace a line on order ${order.order_number} in state ${order.state} (${decision.reason})`,
+        );
+      }
+      if (decision.decision === 'REQUIRE_APPROVAL') {
+        if (!dto.approvalRequestId) {
+          throw new ForbiddenException({
+            statusCode: 403,
+            error: 'APPROVAL_REQUIRED',
+            message: `Replacing this line is outside cashier authority (${decision.reason})`,
+            escalations: [`REPLACE_ITEM:${decision.reason}`],
+          });
+        }
+        await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'REPLACE_ITEM');
+      }
+
+      if (!dto.reasonCodeId) {
+        throw new BadRequestException('Replacing a line requires a reason code');
+      }
+
+      const before = this.snapshotLines(
+        await em.find(OrderItem, { where: { order_id: id, tenant_id: tenantId } }),
+      );
 
       item.state = 'REPLACED';
       await em.save(OrderItem, item);
 
-      // Create replacement line item
-      if (dto.replacement) {
-        const newItem = em.create(OrderItem, {
-          tenant_id: tenantId,
-          order_id: id,
-          product_id: dto.replacement.productId || item.product_id,
-          product_name: dto.replacement.productName || item.product_name,
-          quantity: dto.replacement.quantity || item.quantity,
-          unit_price: dto.replacement.unitPrice || item.unit_price,
-          subtotal: MoneyUtil.multiply(dto.replacement.unitPrice || item.unit_price, dto.replacement.quantity || item.quantity),
-          line_total: MoneyUtil.multiply(dto.replacement.unitPrice || item.unit_price, dto.replacement.quantity || item.quantity),
-          state: 'ACTIVE',
-          replaces_item_id: item.id,
-        });
-        await em.save(OrderItem, newItem);
+      // Reuse the draft line builder so the replacement is priced, costed and
+      // has its modifiers resolved exactly like any other line on the order.
+      const nextLineNumber = before.reduce((max, l) => Math.max(max, l.lineNumber || 0), 0) + 1;
+      await this.addItemsToDraft(
+        tenantId,
+        order,
+        [
+          {
+            product_id: dto.replacement.productId || item.product_id,
+            variant_id: dto.replacement.variantId || null,
+            quantity: dto.replacement.quantity || item.quantity,
+            options: dto.replacement.options || [],
+            notes: dto.replacement.notes || item.notes || null,
+          },
+        ],
+        em,
+        nextLineNumber,
+      );
+
+      const replacement = await em.findOne(OrderItem, {
+        where: { order_id: id, tenant_id: tenantId, line_number: nextLineNumber },
+      });
+      if (replacement) {
+        replacement.replaces_item_id = item.id;
+        await em.save(OrderItem, replacement);
       }
+
+      const recalculated = await this.recalculateOrderTotals(tenantId, order, em);
+
+      if (MoneyUtil.greaterThan(netPaid, recalculated.grand_total) && !dto.refundPlan) {
+        throw new ConflictException({
+          statusCode: 409,
+          error: 'REFUND_PLAN_REQUIRED',
+          message:
+            `This replacement lowers the order total to ${recalculated.grand_total}, below the ` +
+            `${netPaid} already collected. Attach a refund plan for the difference.`,
+          netPaid,
+          newGrandTotal: recalculated.grand_total,
+          refundDue: MoneyUtil.subtract(netPaid, recalculated.grand_total),
+        });
+      }
+
+      recalculated.version += 1;
+      await em.save(OrderHeader, recalculated);
+
+      const after = this.snapshotLines(
+        await em.find(OrderItem, { where: { order_id: id, tenant_id: tenantId } }),
+      );
+
+      await em.save(
+        OrderStateEvent,
+        em.create(OrderStateEvent, {
+          tenant_id: tenantId,
+          order_id: order.id,
+          from_state: order.state,
+          to_state: order.state,
+          action: 'REPLACE_ITEM',
+          reason_code_id: dto.reasonCodeId,
+          reason_text: dto.reason || null,
+          approval_request_id: dto.approvalRequestId || null,
+          occurred_by: userId || null,
+          snapshot: { before, after, replacedItemId: item.id },
+        }),
+      );
+
+      await this.syncKitchenAfterEdit(tenantId, order, [item], true, userId);
 
       await this.auditWriter.write({
         tenantId,
@@ -756,6 +1096,8 @@ export class OrderService {
         entityType: 'OrderItem',
         entityId: dto.orderItemId,
         correlationId,
+        beforeData: before,
+        afterData: after,
       });
 
       return await this.getOrderById(tenantId, id);
@@ -763,17 +1105,90 @@ export class OrderService {
   }
 
   async cancelOrder(tenantId: string, id: string, dto: OrderCancelDto, userId?: string, correlationId?: string) {
+    const order = await this.orderRepo.findOne({
+      where: { id, tenant_id: tenantId },
+      relations: ['items'],
+    });
+    if (!order) throw new NotFoundException(`Order ${id} not found`);
+
+    const netPaid = await this.calculateNetPaid(tenantId, id, this.dataSource.manager);
+    const config = await this.getOrderActionConfig(tenantId, this.dataSource.manager);
+    const decision = resolveOrderEditDecision(
+      'CANCEL_ORDER',
+      { state: order.state, submittedAt: order.submitted_at || null, paidTotal: netPaid },
+      config,
+      new Date(),
+    );
+
+    if (decision.decision === 'REQUIRE_APPROVAL') {
+      if (!dto.approvalRequestId) {
+        throw new ForbiddenException({
+          statusCode: 403,
+          error: 'APPROVAL_REQUIRED',
+          message: `Cancelling this order is outside cashier authority (${decision.reason})`,
+          escalations: [`CANCEL_ORDER:${decision.reason}`],
+        });
+      }
+      await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'CANCEL_ORDER');
+    }
+    // A FORBID here is left to transitionState, whose message names the states.
+
+    // Spec 6.1: a DRAFT cancel needs a reason only once it has items on it, so
+    // discarding an empty held draft stays a one-click action.
+    const hasLines = (order.items || []).filter(isActiveLine).length > 0;
+    if (hasLines && !dto.reasonCodeId) {
+      throw new BadRequestException('Cancelling an order with items requires a reason code');
+    }
+
     return await this.transitionState(
       tenantId,
       id,
       'CANCEL',
-      { reasonCodeId: dto.reasonCodeId, reasonText: dto.reason },
+      { reasonCodeId: dto.reasonCodeId, reasonText: dto.reason, approvalRequestId: dto.approvalRequestId },
       userId,
       correlationId,
     );
   }
 
+  /**
+   * Reopen a cancelled order back to SUBMITTED, per spec 6.1.
+   *
+   * Always an approved action, never available once money moved, and confined
+   * to the business day it was cancelled on so a reopen cannot reach back into
+   * a closed and reconciled day.
+   */
   async reopenOrder(tenantId: string, id: string, dto: OrderReopenDto, userId?: string, correlationId?: string) {
+    const order = await this.orderRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!order) throw new NotFoundException(`Order ${id} not found`);
+
+    if (!dto.approvalRequestId) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'APPROVAL_REQUIRED',
+        message: 'Reopening a cancelled order requires an approved request',
+      });
+    }
+    await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'REOPEN_ORDER');
+
+    const everPaid = await this.dataSource.manager.count(Payment, {
+      where: [
+        { tenant_id: tenantId, order_id: id, status: 'SUCCEEDED' as any },
+        { tenant_id: tenantId, order_id: id, status: 'COMPLETED' as any },
+      ],
+    });
+    if (everPaid > 0) {
+      throw new BadRequestException(
+        `Order ${order.order_number} took payment before it was cancelled and cannot be reopened. Raise a new order instead.`,
+      );
+    }
+
+    const today = BusinessDateUtil.today();
+    if (order.business_date && String(order.business_date) !== String(today)) {
+      throw new BadRequestException(
+        `Order ${order.order_number} belongs to business day ${order.business_date} and cannot be reopened on ${today}.`,
+      );
+    }
+
     return await this.transitionState(
       tenantId,
       id,
@@ -803,8 +1218,12 @@ export class OrderService {
     order: OrderHeader,
     itemsDto: any[],
     em: EntityManager,
+    startLineNumber = 1,
   ) {
-    let lineNo = 1;
+    // Appending to an existing order must continue the numbering rather than
+    // restart it. Line numbers are never reused, including by voided lines, so
+    // a reprint of an old ticket still refers to the same line.
+    let lineNo = startLineNumber;
     for (const itemDto of itemsDto) {
       const product = await this.productRepo.findOne({ where: { id: itemDto.product_id, tenant_id: tenantId } });
       if (!product) throw new NotFoundException(`Product ${itemDto.product_id} not found`);
@@ -914,7 +1333,12 @@ export class OrderService {
   }
 
   public async recalculateOrderTotals(tenantId: string, order: OrderHeader, em: EntityManager): Promise<OrderHeader> {
-    const items = await em.find(OrderItem, { where: { order_id: order.id, tenant_id: tenantId } });
+    // Voided and superseded lines stay on the order for audit and reprints, but
+    // they must never reach the money. Summing every row would bill the guest
+    // for food that was struck off and for lines a replacement already covers.
+    const items = await em.find(OrderItem, {
+      where: { order_id: order.id, tenant_id: tenantId, state: ACTIVE_LINE_STATE },
+    });
     let subtotal = '0.0000';
     let modifierTotal = '0.0000';
 
@@ -1240,7 +1664,7 @@ export class OrderService {
     const order = await this.getOrderById(tenantId, id);
     const isFa = locale === 'fa';
 
-    const formattedItems = (order.items || [])
+    const formattedItems = (order.items || []).filter(isActiveLine)
       .map((i) => {
         return `
           <tr>
@@ -1352,7 +1776,7 @@ export class OrderService {
       reference_number: p.reference || undefined,
     }));
 
-    const items = (order.items || []).map((it) => ({
+    const items = (order.items || []).filter(isActiveLine).map((it) => ({
       product_name: it.product_name,
       quantity: MoneyUtil.format(it.quantity, 4),
       subtotal: MoneyUtil.format(it.line_total, 2),

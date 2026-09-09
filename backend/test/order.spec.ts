@@ -19,6 +19,7 @@ import { ProductVariant } from '../src/entities/ProductVariant.entity';
 import { OptionItem } from '../src/entities/OptionItem.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { OutboxWriter } from '../src/modules/outbox/outbox-writer.service';
+import { ApprovalService } from '../src/modules/approval/approval.service';
 
 describe('Order Aggregate & State Machine Suite (R12)', () => {
   let service: OrderService;
@@ -39,6 +40,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
   let discountEngine: any;
   let auditWriter: any;
   let outboxWriter: any;
+  let approvalService: any;
   let dataSource: any;
   let mockEntityManager: any;
 
@@ -69,6 +71,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
     };
     auditWriter = { write: jest.fn() };
     outboxWriter = { enqueueInTransaction: jest.fn(), enqueue: jest.fn() };
+    approvalService = { validateApprovedRequest: jest.fn().mockResolvedValue({ status: 'APPROVED' }) };
 
     mockEntityManager = {
       create: jest.fn((entityClass, data) => ({ ...data })),
@@ -102,6 +105,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
         { provide: DiscountEvaluationService, useValue: discountEngine },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: OutboxWriter, useValue: outboxWriter },
+        { provide: ApprovalService, useValue: approvalService },
         { provide: DataSource, useValue: dataSource },
       ],
     }).compile();

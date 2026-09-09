@@ -173,7 +173,12 @@ export class KdsService {
     // Group items by routed station ID
     const itemsByStation = new Map<string, typeof order.items>();
 
-    for (const item of order.items || []) {
+    // Voided and superseded lines must never reach a station. This routine is
+    // re-run after an edit to fire newly appended lines, so without the filter
+    // a line struck off before it was ever fired would be sent to the kitchen.
+    const routableItems = (order.items || []).filter((i) => (i.state || 'ACTIVE') === 'ACTIVE');
+
+    for (const item of routableItems) {
       let targetStationId = defaultStation.id;
 
       // Check product rule match first
@@ -441,6 +446,54 @@ export class KdsService {
     }
 
     return saved;
+  }
+
+  /**
+   * Retract a line the cashier voided. Without this the kitchen keeps cooking
+   * food that is no longer on the order and no longer being paid for.
+   *
+   * The ticket item is cancelled rather than deleted so the station still shows
+   * what was pulled and the ticket history stays intact. Cancelling the last
+   * outstanding item on a ticket bumps it, which the existing readiness rollup
+   * already treats as done.
+   */
+  async cancelTicketItemsForOrderItem(tenantId: string, orderItemId: string, userId?: string) {
+    const ticketItems = await this.itemRepo.find({
+      where: { tenant_id: tenantId, order_item_id: orderItemId },
+    });
+
+    for (const ticketItem of ticketItems) {
+      if (ticketItem.state === 'CANCELLED') continue;
+
+      const fromState = ticketItem.state;
+      ticketItem.state = 'CANCELLED';
+      ticketItem.status = 'CANCELLED';
+      await this.itemRepo.save(ticketItem);
+
+      await this.recordKdsEvent(
+        tenantId,
+        ticketItem.ticket_id,
+        fromState,
+        'CANCELLED',
+        'ITEM_VOIDED',
+        userId,
+        { orderItemId },
+      );
+
+      const siblings = await this.itemRepo.find({
+        where: { tenant_id: tenantId, ticket_id: ticketItem.ticket_id },
+      });
+      const nothingLeftToCook = siblings.every(
+        (i) => i.state === 'READY' || i.state === 'CANCELLED',
+      );
+      if (nothingLeftToCook) {
+        await this.bumpTicket(tenantId, ticketItem.ticket_id, 'auto-void-bump', userId);
+      }
+
+      this.eventSubject.next({ type: 'TICKET_UPDATED', payload: { ticketId: ticketItem.ticket_id } });
+    }
+
+    return { cancelled: ticketItems.length };
   }
 
   private async recordKdsEvent(tenantId: string, ticketId: string, fromState: string | null, toState: string, action: string, userId?: string, details?: any) {
