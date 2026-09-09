@@ -1,5 +1,6 @@
 import type { IconButtonProps } from '@mui/material/IconButton';
 
+import { useTranslation } from 'react-i18next';
 import { useBoolean } from 'minimal-shared/hooks';
 
 import Box from '@mui/material/Box';
@@ -16,6 +17,8 @@ import { usePathname } from 'src/routes/hooks';
 import { RouterLink } from 'src/routes/components';
 
 import { useAuthStore } from 'src/store/useAuthStore';
+
+import { ROLE_LABELS } from 'src/config/role-access';
 
 import { Label } from 'src/components/label';
 import { Iconify } from 'src/components/iconify';
@@ -37,6 +40,7 @@ export type AccountDrawerProps = IconButtonProps & {
 };
 
 export function AccountDrawer({ data = [], sx, ...other }: AccountDrawerProps) {
+  const { t } = useTranslation();
   const pathname = usePathname();
 
   const user = useAuthStore((state) => state.user);
@@ -160,6 +164,18 @@ export function AccountDrawer({ data = [], sx, ...other }: AccountDrawerProps) {
             <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }} noWrap>
               {user?.username}
             </Typography>
+
+            {/* Three demo accounts look alike until you can see which one you are in. */}
+            {user?.role && (
+              <Box sx={{ mt: 1, display: 'flex', gap: 0.75, justifyContent: 'center' }}>
+                <Label color={user.isHeadOffice ? 'info' : 'default'}>
+                  {t(`auth.roles.${user.role}`, ROLE_LABELS[user.role] || user.role)}
+                </Label>
+                {user.isHeadOffice && (
+                  <Label color="default">{t('auth.headOffice', 'Head office')}</Label>
+                )}
+              </Box>
+            )}
           </Box>
 
           {renderList()}

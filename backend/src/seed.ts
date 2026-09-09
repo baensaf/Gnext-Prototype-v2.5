@@ -9,6 +9,7 @@ const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin@gnext.local';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'GnextDemo!2026';
 const APPROVER_PIN = process.env.APPROVER_PIN || '2468';
 const BRANCH_MANAGER_USERNAME = process.env.BRANCH_MANAGER_USERNAME || 'manager.downtown@gnext.local';
+const CASHIER_USERNAME = process.env.CASHIER_USERNAME || 'cashier.downtown@gnext.local';
 
 export async function runSeed() {
   console.log('Connecting to database via AppDataSource (synchronize: false)...');
@@ -181,6 +182,26 @@ export async function runSeed() {
     });
     await adminRepo.save(branchManager);
     console.log(`Seeded Branch Manager User: ${BRANCH_MANAGER_USERNAME} (Downtown Express)`);
+  }
+
+  let cashier = await adminRepo.findOne({
+    where: { tenant_id: tenant.id, username: CASHIER_USERNAME },
+  });
+  if (!cashier) {
+    cashier = adminRepo.create({
+      tenant_id: tenant.id,
+      username: CASHIER_USERNAME,
+      display_name: 'Downtown Cashier',
+      password_hash: await argon2.hash(ADMIN_PASSWORD),
+      // No approver pin on purpose: a register operator is who the pin is asked *of*,
+      // so giving them one would let the demo approve its own escalations.
+      role: 'CASHIER',
+      branch_id: branchExpress.id,
+      is_active: true,
+      preferred_locale: 'fa',
+    });
+    await adminRepo.save(cashier);
+    console.log(`Seeded Cashier User: ${CASHIER_USERNAME} (Downtown Express)`);
   }
 
   // 4b. Idempotent Delivery Zones
@@ -646,6 +667,12 @@ export async function runSeed() {
   );
 
   console.log('Database seed execution completed successfully.');
+  console.log('');
+  console.log('Demo sign-ins (all share the same password):');
+  console.log(`  head office   ${ADMIN_USERNAME}`);
+  console.log(`  branch manager ${BRANCH_MANAGER_USERNAME}  (Downtown Express)`);
+  console.log(`  cashier        ${CASHIER_USERNAME}  (Downtown Express)`);
+  console.log(`  password       ${ADMIN_PASSWORD}   approver pin ${APPROVER_PIN}`);
 }
 
 if (require.main === module) {

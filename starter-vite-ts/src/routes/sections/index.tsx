@@ -13,6 +13,7 @@ import { MenusPage } from 'src/pages/catalog/menus';
 import { DashboardPage } from 'src/pages/dashboard';
 import { ReceiptPage } from 'src/pages/pos/receipt';
 import { useAuthStore } from 'src/store/useAuthStore';
+import { homePathForRole } from 'src/config/role-access';
 import { RefundsPage } from 'src/pages/orders/refunds';
 import { OptionsPage } from 'src/pages/catalog/options';
 import { PricingPage } from 'src/pages/catalog/pricing';
@@ -80,10 +81,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/** A cashier's day starts at the register, not at a management dashboard. */
+function RoleHomeRedirect() {
+  const role = useAuthStore((state) => state.user?.role);
+  return <Navigate to={homePathForRole(role)} replace />;
+}
+
 export const routesSection: RouteObject[] = [
   {
     path: '/',
-    element: <Navigate to="/app/dashboard" replace />,
+    element: <RoleHomeRedirect />,
   },
   {
     path: '/login',

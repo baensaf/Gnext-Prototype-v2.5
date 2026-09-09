@@ -16,7 +16,16 @@
     "signingIn": "Signing in...",
     "logout": "Sign Out",
     "invalidCredentials": "Invalid username or password.",
-    "sessionExpired": "Your session has expired. Please sign in again."
+    "sessionExpired": "Your session has expired. Please sign in again.",
+    "demoAccounts": "Demo accounts — the same password signs in all three",
+    "headOffice": "Head office",
+    "roles": {
+      "SUPER_ADMIN": "System Administrator",
+      "ADMIN": "Administrator",
+      "OWNER": "Owner",
+      "MANAGER": "Branch Manager",
+      "CASHIER": "Cashier"
+    }
   },
   "nav": {
     "home": "Home",
@@ -2581,5 +2590,10 @@
       "commissary": "Production kitchen — no sales",
       "office": "Office — no sales"
     }
+  },
+  "access": {
+    "deniedTitle": "Not available for your role",
+    "deniedBody": "This page belongs to another part of the organization. Your account does not have access to it.",
+    "backHome": "Go to my start page"
   }
 }

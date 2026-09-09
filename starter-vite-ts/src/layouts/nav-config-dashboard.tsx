@@ -4,6 +4,10 @@ import { useTranslation } from 'react-i18next';
 
 import { useBranchContextOptional } from 'src/contexts/branch-context';
 
+import { useAuthStore } from 'src/store/useAuthStore';
+
+import { canReachPath } from 'src/config/role-access';
+
 import { CONFIG } from 'src/global-config';
 
 import { Label } from 'src/components/label';
@@ -45,6 +49,7 @@ const SHOP_FLOOR_PATHS = ['/app/pos', '/app/kiosk', '/app/kds', '/app/dine-in/fl
 export function useNavData(): NavSectionProps['data'] {
   const { t } = useTranslation();
   const branchScope = useBranchContextOptional();
+  const role = useAuthStore((state) => state.user?.role);
 
   // No scope yet — still loading, or the provider is gone because an error boundary
   // replaced it. Showing the full menu is the pre-existing behaviour and the safe one:
@@ -245,12 +250,19 @@ export function useNavData(): NavSectionProps['data'] {
     },
   ];
 
-  if (isShopFloor) return sections;
-
   return sections
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => !SHOP_FLOOR_PATHS.includes(item.path)),
+      items: section.items
+        .filter((item) => isShopFloor || !SHOP_FLOOR_PATHS.includes(item.path))
+        .filter((item) => canReachPath(role, item.path))
+        .map((item) => {
+          if (!item.children) return item;
+          // An open parent can still have a child the role may not open — chain reports
+          // sit under the same menu as the branch's own.
+          const children = item.children.filter((child) => canReachPath(role, child.path));
+          return children.length ? { ...item, children } : { ...item, children: undefined };
+        }),
     }))
     .filter((section) => section.items.length > 0);
 }

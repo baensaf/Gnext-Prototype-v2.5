@@ -17,12 +17,25 @@ import {
 import { useAuthStore } from 'src/store/useAuthStore';
 import { AuthSplitLayout } from 'src/layouts/auth-split';
 
+import { homePathForRole } from 'src/config/role-access';
+
 import { useSettingsContext } from 'src/components/settings';
+
+/**
+ * The three accounts the seed creates. They share one password, so the picker only fills
+ * the username and leaves the operator to type the rest.
+ */
+const DEMO_ACCOUNTS = [
+  { username: 'admin@gnext.local', labelKey: 'auth.roles.SUPER_ADMIN', label: 'System Administrator' },
+  { username: 'manager.downtown@gnext.local', labelKey: 'auth.roles.MANAGER', label: 'Branch Manager' },
+  { username: 'cashier.downtown@gnext.local', labelKey: 'auth.roles.CASHIER', label: 'Cashier' },
+];
 
 export function LoginPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { login, isLoading, error, locale, setLocale, clearError, isAuthenticated, fetchMe } = useAuthStore();
+  const user = useAuthStore((state) => state.user);
   const settings = useSettingsContext();
 
   const [username, setUsername] = useState('admin@gnext.local');
@@ -34,16 +47,18 @@ export function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/app/dashboard', { replace: true });
+      navigate(homePathForRole(user?.role), { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, user?.role, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
     const success = await login(username, password);
     if (success) {
-      navigate('/app/dashboard');
+      // Read the role back off the store rather than the closure: it only exists once
+      // the login response has landed.
+      navigate(homePathForRole(useAuthStore.getState().user?.role));
     }
   };
 
@@ -83,9 +98,22 @@ export function LoginPage() {
         </Box>
 
         <Alert severity="info" sx={{ mb: 3, fontSize: '0.85rem' }}>
-          <strong>{t('app.sharedAdminNotice')}</strong>
-          <br />
-          {t('auth.username', 'Username')}: <code>admin@gnext.local</code> | {t('auth.password', 'Password')}: <code>GnextDemo!2026</code>
+          <strong>{t('auth.demoAccounts', 'Demo accounts — the same password signs in all three')}</strong>
+
+          <Stack direction="row" sx={{ mt: 1, mb: 1, flexWrap: 'wrap', gap: 1 }}>
+            {DEMO_ACCOUNTS.map((account) => (
+              <Chip
+                key={account.username}
+                label={t(account.labelKey, account.label)}
+                size="small"
+                color={username === account.username ? 'primary' : 'default'}
+                variant={username === account.username ? 'filled' : 'outlined'}
+                onClick={() => setUsername(account.username)}
+              />
+            ))}
+          </Stack>
+
+          {t('auth.username', 'Username')}: <code>{username}</code> | {t('auth.password', 'Password')}: <code>GnextDemo!2026</code>
         </Alert>
 
         {error && (

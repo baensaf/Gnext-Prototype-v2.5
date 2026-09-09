@@ -1,6 +1,8 @@
 import React from 'react';
 import { Outlet } from 'react-router';
 
+import { RoleGuard } from 'src/routes/components/role-guard';
+
 import { DashboardLayout } from './dashboard';
 import { useNavData } from './nav-config-dashboard';
 
@@ -15,7 +17,9 @@ export function AppShell() {
         },
       }}
     >
-      <Outlet />
+      <RoleGuard>
+        <Outlet />
+      </RoleGuard>
     </DashboardLayout>
   );
 }
