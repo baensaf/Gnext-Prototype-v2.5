@@ -1375,11 +1375,32 @@ export class OrderService {
     order.subtotal_amount = subtotal;
     order.modifier_total = modifierTotal;
 
+    // Tax has to move with the lines. Carrying order.tax_total forward would bill
+    // the guest VAT on food that was voided off the order, which is the kind of
+    // figure that stops a day reconciling. Per-product rate on the line total,
+    // matching DiscountEvaluationService; order-level discounts are not
+    // re-allocated per line here, so a discounted order's tax stays approximate
+    // until the next full quote.
+    const productIds = [...new Set(items.map((i) => i.product_id).filter(Boolean))];
+    const taxRateById = new Map<string, string>();
+    if (productIds.length > 0) {
+      const products = await em.find(Product, { where: { id: In(productIds) } });
+      products.forEach((p) => taxRateById.set(p.id, p.tax_rate || '0.0000'));
+    }
+
+    let taxTotal = '0.0000';
+    for (const item of items) {
+      const rate = taxRateById.get(item.product_id) || '0.0000';
+      taxTotal = MoneyUtil.add(taxTotal, MoneyUtil.multiply(item.line_total, rate));
+    }
+    order.tax_total = taxTotal;
+    order.tax_amount = taxTotal;
+
     const netBeforeTax = MoneyUtil.subtract(
       MoneyUtil.add(MoneyUtil.add(order.subtotal, order.packaging_total || '0.0000'), order.delivery_fee || '0.0000'),
       order.discount_total || '0.0000',
     );
-    const grandTotal = MoneyUtil.add(netBeforeTax, order.tax_total || '0.0000');
+    const grandTotal = MoneyUtil.add(netBeforeTax, taxTotal);
     order.grand_total = MoneyUtil.greaterThan(grandTotal, '0.0000') ? grandTotal : '0.0000';
     order.total_amount = order.grand_total;
 

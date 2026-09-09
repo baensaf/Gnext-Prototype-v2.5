@@ -310,15 +310,21 @@ export function OrderEditDialog({ open, onClose, order, reasonCodes, onSaved }: 
               </FormControl>
             )}
 
+            {/* Line totals, not grand totals: tax, discounts and fees are the
+                server's to recompute, and showing a pre-tax projection next to a
+                post-tax current figure reads as a change that was never staged. */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <Typography variant="body2" color="text.secondary">
-                {t('orders.edit.currentTotal', 'Current total')}:{' '}
-                {MoneyUtil.formatCurrency(order.grand_total || '0', 0)}
+                {t('orders.edit.currentTotal', 'Current line total')}:{' '}
+                {MoneyUtil.formatCurrency(order.subtotal || order.subtotal_amount || '0', 0)}
               </Typography>
               <Typography variant="h6">
-                {t('orders.edit.newTotal', 'New total')}: {MoneyUtil.formatCurrency(projectedTotal, 0)}
+                {t('orders.edit.newTotal', 'New line total')}: {MoneyUtil.formatCurrency(projectedTotal, 0)}
               </Typography>
             </Box>
+            <Typography variant="caption" color="text.secondary">
+              {t('orders.edit.taxNote', 'Tax and the final total are recalculated when the change is applied.')}
+            </Typography>
           </Stack>
         </DialogContent>
 
