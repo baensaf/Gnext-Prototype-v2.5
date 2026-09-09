@@ -33,13 +33,38 @@ export interface ReasonCode {
   is_active: boolean;
 }
 
+/** One setting group as it applies somewhere, and where the value came from. */
+export interface ScopedSettingGroup {
+  value: Record<string, any>;
+  /** ORG when inherited from head office, BRANCH when this location overrides it. */
+  source: 'BRANCH' | 'ORG';
+  /** Whether a branch is allowed to diverge from head office on this group at all. */
+  overridable: boolean;
+}
+
+export interface ScopedSettings {
+  branch_id: string | null;
+  groups: Record<string, ScopedSettingGroup>;
+}
+
 export const settingsApi = {
-  getSettings: async (): Promise<Record<string, any>> => {
-    const res = await httpClient.get('/api/v1/settings');
+  /** Values in force at `branchId` — the branch's overrides over the organization's. */
+  getSettings: async (branchId?: string): Promise<Record<string, any>> => {
+    const res = await httpClient.get('/api/v1/settings', { params: { branchId } });
     return res.data;
   },
-  updateSetting: async (key: string, value: any): Promise<any> => {
-    const res = await httpClient.patch('/api/v1/settings', { key, value });
+  /** The same values, annotated with the level that supplied each one. */
+  getScopedSettings: async (branchId?: string): Promise<ScopedSettings> => {
+    const res = await httpClient.get('/api/v1/settings/scoped', { params: { branchId } });
+    return res.data;
+  },
+  updateSetting: async (key: string, value: any, branchId?: string): Promise<any> => {
+    const res = await httpClient.patch('/api/v1/settings', { key, value, branchId });
+    return res.data;
+  },
+  /** Drop this branch's override so it inherits from head office again. */
+  clearBranchOverride: async (key: string, branchId: string): Promise<any> => {
+    const res = await httpClient.delete(`/api/v1/settings/${key}/override`, { params: { branchId } });
     return res.data;
   },
   getCurrencies: async (): Promise<Currency[]> => {

@@ -6,6 +6,7 @@ import { AdminUser } from '../../entities/AdminUser.entity';
 import { Tenant } from '../../entities/Tenant.entity';
 import { SessionService } from './session.service';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { isHeadOfficeUser } from '../../common/utils/user-scope.util';
 
 @Injectable()
 export class AuthService {
@@ -86,6 +87,9 @@ export class AuthService {
         preferredLocale: user.preferred_locale,
         tenantId: user.tenant_id,
         role: user.role,
+        // NULL means the account works across the whole chain.
+        branchId: user.branch_id ?? null,
+        isHeadOffice: isHeadOfficeUser({ role: user.role, branchId: user.branch_id ?? null }),
       },
       tenant: tenant
         ? {
@@ -129,6 +133,8 @@ export class AuthService {
         preferredLocale: user.preferred_locale,
         tenantId: user.tenant_id,
         role: user.role,
+        branchId: user.branch_id ?? null,
+        isHeadOffice: isHeadOfficeUser({ role: user.role, branchId: user.branch_id ?? null }),
       },
       tenant: tenant
         ? {

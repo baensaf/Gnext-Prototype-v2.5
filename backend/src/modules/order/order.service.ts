@@ -30,6 +30,7 @@ import { CreditService } from '../customer/credit.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import Decimal from 'decimal.js';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import { CashierShift } from '../../entities/CashierShift.entity';
 import { Tenant } from '../../entities/Tenant.entity';
@@ -641,8 +642,10 @@ export class OrderService {
           const eligiblePaidSubtotal = MoneyUtil.subtract(order.subtotal, order.discount_total);
           if (MoneyUtil.greaterThan(eligiblePaidSubtotal, '0.0000')) {
             const settingRepo = em.getRepository(TenantSetting);
-            const setting = await settingRepo.findOne({ where: { tenant_id: tenantId, key: 'CUSTOMER_CLUB' } });
-            const cashbackPct = (setting?.value as any)?.cashback_percentage ?? '5.00';
+            // Loyalty economics stay chain-wide: CUSTOMER_CLUB is not branch-overridable,
+            // so this deliberately reads the organization row.
+            const settingRows = await settingRepo.find({ where: { tenant_id: tenantId, key: 'CUSTOMER_CLUB' } });
+            const cashbackPct = (pickSettingValue(settingRows) as any)?.cashback_percentage ?? '5.00';
             await this.creditService.awardLoyaltyCashback(
               tenantId,
               order.customer_id,
@@ -741,7 +744,7 @@ export class OrderService {
       }
 
       const netPaid = await this.calculateNetPaid(tenantId, id, em);
-      const config = await this.getOrderActionConfig(tenantId, em);
+      const config = await this.getOrderActionConfig(tenantId, em, order.branch_id);
       const policyContext = { state: order.state, submittedAt: order.submitted_at || null, paidTotal: netPaid };
       const now = new Date();
 
@@ -915,12 +918,21 @@ export class OrderService {
     return MoneyUtil.greaterThan(collected, '0.0000') ? collected : '0.0000';
   }
 
-  /** Read the tenant's cashier authority windows, falling back to the spec defaults. */
-  private async getOrderActionConfig(tenantId: string, em: EntityManager): Promise<OrderActionConfig> {
-    const setting = await em.findOne(TenantSetting, {
+  /**
+   * Read the cashier authority windows in force at `branchId`, falling back to the
+   * organization's own value and then to the spec defaults. A branch that has been given
+   * a longer edit window must get it here, or the override would be visible in settings
+   * and have no effect on the till.
+   */
+  private async getOrderActionConfig(
+    tenantId: string,
+    em: EntityManager,
+    branchId?: string,
+  ): Promise<OrderActionConfig> {
+    const rows = await em.find(TenantSetting, {
       where: { tenant_id: tenantId, key: 'ORDER_ACTIONS' },
     });
-    return resolveOrderActionConfig(setting?.value as Record<string, any> | undefined);
+    return resolveOrderActionConfig(pickSettingValue(rows, branchId));
   }
 
   /** Compact line snapshot for the edit history diff required by spec 7.9. */
@@ -1005,7 +1017,7 @@ export class OrderService {
       }
 
       const netPaid = await this.calculateNetPaid(tenantId, id, em);
-      const config = await this.getOrderActionConfig(tenantId, em);
+      const config = await this.getOrderActionConfig(tenantId, em, order.branch_id);
       const decision = resolveOrderEditDecision(
         'REPLACE_ITEM',
         { state: order.state, submittedAt: order.submitted_at || null, paidTotal: netPaid },
@@ -1136,7 +1148,7 @@ export class OrderService {
     if (!order) throw new NotFoundException(`Order ${id} not found`);
 
     const netPaid = await this.calculateNetPaid(tenantId, id, this.dataSource.manager);
-    const config = await this.getOrderActionConfig(tenantId, this.dataSource.manager);
+    const config = await this.getOrderActionConfig(tenantId, this.dataSource.manager, order.branch_id);
     const decision = resolveOrderEditDecision(
       'CANCEL_ORDER',
       { state: order.state, submittedAt: order.submitted_at || null, paidTotal: netPaid },

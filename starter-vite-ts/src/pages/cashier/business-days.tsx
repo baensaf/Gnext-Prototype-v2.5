@@ -19,6 +19,7 @@ import {
   Alert,
   Button,
   Dialog,
+  MenuItem,
   TextField,
   Typography,
   IconButton,
@@ -31,6 +32,7 @@ import {
 
 import { shiftApi } from '../../api/shiftApi';
 import { ServerDataGrid } from '../../components/server-data-grid';
+import { useBranchContext, useScopedBranchId } from 'src/contexts/branch-context';
 
 export function BusinessDaysPage() {
   const { t } = useTranslation();
@@ -43,7 +45,11 @@ export function BusinessDaysPage() {
 
   // Close Dialog State
   const [openCloseDialog, setOpenCloseDialog] = useState<boolean>(false);
-  const [branchId, setBranchId] = useState<string>('b-tehran-central');
+  // Was a hardcoded id that matched no branch in the database, so closing a day meant
+  // pasting a uuid by hand. It now starts at the branch you are working in.
+  const [branchId, setBranchId] = useScopedBranchId();
+  const { branches } = useBranchContext();
+  const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
   const [businessDate, setBusinessDate] = useState<string>(new Date().toISOString().slice(0, 10));
 
   // Reopen Dialog State
@@ -117,7 +123,11 @@ export function BusinessDaysPage() {
     {
       field: 'branch_id',
       headerName: t('cashier.branch', 'Branch'),
-      width: 160,
+      width: 180,
+      // The raw uuid told an operator nothing about which of their shops this row was.
+      renderCell: (params) => (
+        <Typography variant="body2">{branchNameById.get(params.value) || params.value}</Typography>
+      ),
     },
     {
       field: 'status',
@@ -294,11 +304,18 @@ export function BusinessDaysPage() {
           </Typography>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
-              label={t('cashier.branch', 'Branch ID')}
+              select
+              label={t('cashier.branch', 'Branch')}
               value={branchId}
               onChange={(e) => setBranchId(e.target.value)}
               fullWidth
-            />
+            >
+              {branches.map((branch) => (
+                <MenuItem key={branch.id} value={branch.id}>
+                  {branch.name}
+                </MenuItem>
+              ))}
+            </TextField>
             <TextField
               label={t('cashier.businessDate', 'Business Date (YYYY-MM-DD)')}
               value={businessDate}

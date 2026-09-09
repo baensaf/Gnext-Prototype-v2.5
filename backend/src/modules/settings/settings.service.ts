@@ -1,12 +1,17 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { Currency } from '../../entities/Currency.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { ReasonCode } from '../../entities/ReasonCode.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
+import {
+  isBranchOverridable,
+  resolveSettingsForBranch,
+} from '../../common/utils/setting-scope.util';
+import { canActOnBranch, isHeadOfficeUser, UserScope } from '../../common/utils/user-scope.util';
 
 @Injectable()
 export class SettingsService {
@@ -95,23 +100,119 @@ export class SettingsService {
     }
   }
 
-  async getSettings(tenantId: string) {
+  /**
+   * The settings in force at `branchId` — the branch's own overrides layered over what
+   * head office defines, which is what any caller reading a setting actually wants.
+   * Called without a branch it returns the organization's own values.
+   */
+  async getSettings(tenantId: string, branchId?: string) {
     const settings = await this.settingRepo.find({ where: { tenant_id: tenantId } });
+    const resolved = resolveSettingsForBranch(settings, branchId);
+
     const result: Record<string, any> = {};
-    for (const s of settings) {
-      result[s.key] = s.value;
+    for (const [key, entry] of Object.entries(resolved)) {
+      result[key] = entry.value;
     }
     return result;
   }
 
-  async updateSetting(tenantId: string, key: string, value: Record<string, any>, correlationId: string) {
+  /**
+   * The same values, but each tagged with the level that supplied it and whether this
+   * branch is allowed to diverge. The settings screens need all three to say "inherited
+   * from head office" rather than presenting an inherited value as a local one.
+   */
+  async getSettingsWithScope(tenantId: string, branchId?: string) {
+    const settings = await this.settingRepo.find({ where: { tenant_id: tenantId } });
+    const resolved = resolveSettingsForBranch(settings, branchId);
+
+    const groups: Record<string, any> = {};
+    for (const [key, entry] of Object.entries(resolved)) {
+      groups[key] = {
+        value: entry.value,
+        source: entry.source,
+        overridable: isBranchOverridable(key),
+      };
+    }
+    return { branch_id: branchId || null, groups };
+  }
+
+  /** Removes a branch's override so the location goes back to inheriting from head office. */
+  async clearBranchOverride(
+    tenantId: string,
+    key: string,
+    branchId: string,
+    correlationId: string,
+    actor?: UserScope,
+  ) {
+    if (actor && !canActOnBranch(actor, branchId)) {
+      throw new ForbiddenException('You may only change settings for your own branch');
+    }
+
+    const override = await this.settingRepo.findOne({
+      where: { tenant_id: tenantId, key, branch_id: branchId },
+    });
+    if (!override) {
+      throw new NotFoundException(`No branch override for setting ${key}`);
+    }
+
+    await this.settingRepo.remove(override);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'TENANT_SETTING_OVERRIDE_CLEARED',
+      correlationId,
+      beforeData: override,
+      details: { key, branch_id: branchId },
+    });
+
+    return { success: true, key, branch_id: branchId };
+  }
+
+  async updateSetting(
+    tenantId: string,
+    key: string,
+    value: Record<string, any>,
+    correlationId: string,
+    branchId?: string,
+    actor?: UserScope,
+  ) {
     this.validateGroupSettingValue(key, value);
 
-    let setting = await this.settingRepo.findOne({ where: { tenant_id: tenantId, key } });
+    // Writing a branch row for a group head office keeps to itself would create a
+    // divergence the resolver would then honour, quietly breaking a chain-wide rule.
+    if (branchId && !isBranchOverridable(key)) {
+      throw new BadRequestException(
+        `Setting group ${key} is organization-wide and cannot be overridden per branch`,
+      );
+    }
+
+    if (actor) {
+      if (!branchId && !isHeadOfficeUser(actor)) {
+        // The organization row is the value every branch inherits, so letting one
+        // location's manager write it would let them change the whole chain.
+        throw new ForbiddenException(
+          'Only head office may change organization-wide settings',
+        );
+      }
+      if (branchId && !canActOnBranch(actor, branchId)) {
+        throw new ForbiddenException('You may only change settings for your own branch');
+      }
+    }
+
+    let setting = await this.settingRepo.findOne({
+      where: { tenant_id: tenantId, key, branch_id: branchId ?? IsNull() },
+    });
     const before = setting ? { ...setting } : null;
 
     if (!setting) {
-      setting = this.settingRepo.create({ tenant_id: tenantId, key, value, schema_version: 1 });
+      setting = this.settingRepo.create({
+        tenant_id: tenantId,
+        branch_id: branchId ?? null,
+        key,
+        value,
+        schema_version: 1,
+      });
     } else {
       setting.value = value;
     }
@@ -125,7 +226,7 @@ export class SettingsService {
       correlationId,
       beforeData: before,
       afterData: saved,
-      details: { key },
+      details: { key, branch_id: branchId ?? null },
     });
 
     return saved;

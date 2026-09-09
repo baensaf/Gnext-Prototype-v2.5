@@ -9,6 +9,8 @@ import { useAuthStore } from 'src/store/useAuthStore';
 
 export type BranchContextValue = {
   branches: Branch[];
+  /** True when the signed-in account may choose a scope at all. */
+  canChangeScope: boolean;
   selectedBranchId: string;
   selectedBranch: Branch | null;
   /** True when the user is working at chain level rather than inside one location. */
@@ -46,6 +48,30 @@ export function useBranchContextOptional(): BranchContextValue | undefined {
   return useContext(BranchContext);
 }
 
+/**
+ * Keeps a page's branch field in step with the switcher in the header.
+ *
+ * Pages held their own branch state, seeded to an empty string or - in one case - a
+ * hardcoded id matching no real branch, so the header could say one thing while the grid
+ * below showed another and the switcher looked decorative.
+ *
+ * A page may still change the value locally to drill into another site; choosing a new
+ * scope in the header resets it, because that is the broader intent of the two. At head
+ * office the value is empty, which every caller already reads as "no branch filter".
+ */
+export function useScopedBranchId(): [string, (id: string) => void] {
+  const branchScope = useBranchContextOptional();
+  const scopedId = branchScope?.selectedBranchId ?? '';
+
+  const [branchId, setBranchId] = useState(scopedId);
+
+  useEffect(() => {
+    setBranchId(scopedId);
+  }, [scopedId]);
+
+  return [branchId, setBranchId];
+}
+
 const STORAGE_KEY = 'active_branch_id';
 
 /**
@@ -57,6 +83,10 @@ export const HEAD_OFFICE_SCOPE = 'HQ';
 
 export function BranchProvider({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const user = useAuthStore((state) => state.user);
+  // An account pinned to a branch has exactly one scope. Confining it here rather than
+  // in each screen means there is one place the rule can be got wrong.
+  const userBranchId = user?.branchId ?? null;
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchIdState] = useState<string>(() => {
     try {
@@ -72,6 +102,18 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       const list = await tenantApi.getBranches();
       setBranches(list);
+
+      if (userBranchId) {
+        // Not a preference: a branch account cannot be at head office, and a stale
+        // localStorage entry from a previous sign-in must not survive into this one.
+        setSelectedBranchIdState(userBranchId);
+        try {
+          localStorage.setItem(STORAGE_KEY, userBranchId);
+        } catch {
+          // ignore
+        }
+        return;
+      }
 
       const savedId = localStorage.getItem(STORAGE_KEY);
       if (savedId === HEAD_OFFICE_SCOPE) {
@@ -95,7 +137,7 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userBranchId]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -108,22 +150,29 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
   }, [fetchBranches, isAuthenticated]);
 
   const setSelectedBranchId = useCallback((id: string) => {
+    // A branch account has one scope; ignoring the request is better than appearing to
+    // honour it and then showing another location's data.
+    if (userBranchId && id !== userBranchId) return;
+
     setSelectedBranchIdState(id);
     try {
       localStorage.setItem(STORAGE_KEY, id);
     } catch {
       // ignore
     }
-  }, []);
+  }, [userBranchId]);
 
-  const isHeadOffice = selectedBranchId === HEAD_OFFICE_SCOPE;
+  const isHeadOffice = !userBranchId && selectedBranchId === HEAD_OFFICE_SCOPE;
 
   const selectedBranch = isHeadOffice
     ? null
     : branches.find((b) => b.id === selectedBranchId) || (branches.length > 0 ? branches[0] : null);
 
   const value: BranchContextValue = {
-    branches,
+    // A branch account is only ever shown its own location, so a switcher it cannot use
+    // does not list places it cannot reach.
+    branches: userBranchId ? branches.filter((b) => b.id === userBranchId) : branches,
+    canChangeScope: !userBranchId,
     // Head office scopes to the whole chain, and every caller already treats an empty
     // branch id as "no branch filter", so the sentinel never leaks into a request.
     selectedBranchId: isHeadOffice ? '' : selectedBranch?.id || selectedBranchId,

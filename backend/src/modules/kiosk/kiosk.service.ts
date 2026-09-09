@@ -8,6 +8,7 @@ import { OptionItem } from '../../entities/OptionItem.entity';
 import { ProductOptionGroup } from '../../entities/ProductOptionGroup.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
+import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
@@ -71,11 +72,15 @@ export class KioskService {
       order: { sort_order: 'ASC' },
     });
 
-    const identityPolicySetting = await this.settingRepo.findOne({
+    const identityPolicyRows = await this.settingRepo.find({
       where: { tenant_id: tenantId, key: 'KIOSK_CUSTOMER_IDENTITY_POLICY' },
     });
+    // Resolved against the branch this kiosk is standing in, so a site that asks for a
+    // phone number can differ from one that does not.
+    const identityPolicyValue = pickSettingValue(identityPolicyRows, branch?.id);
 
-    const customerIdentityPolicy = identityPolicySetting ? String(identityPolicySetting.value) : 'OPTIONAL';
+    const customerIdentityPolicy =
+      identityPolicyValue !== undefined ? String(identityPolicyValue) : 'OPTIONAL';
 
     const catalogProducts = products.map((p) => {
       const pLinks = productOptionGroups.filter((pog) => pog.product_id === p.id);

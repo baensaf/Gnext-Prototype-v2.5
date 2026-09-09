@@ -1,5 +1,6 @@
 import * as argon2 from 'argon2';
 import { AppDataSource } from './data-source';
+import { IsNull } from 'typeorm';
 import { ORDER_ACTION_DEFAULTS } from './modules/order/order-edit-policy';
 
 const DEFAULT_TENANT_ID = 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
@@ -7,6 +8,7 @@ const DEFAULT_TENANT_CODE = 'GNEXT';
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin@gnext.local';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'GnextDemo!2026';
 const APPROVER_PIN = process.env.APPROVER_PIN || '2468';
+const BRANCH_MANAGER_USERNAME = process.env.BRANCH_MANAGER_USERNAME || 'manager.downtown@gnext.local';
 
 export async function runSeed() {
   console.log('Connecting to database via AppDataSource (synchronize: false)...');
@@ -160,6 +162,27 @@ export async function runSeed() {
     console.log('Seeded Branch: Central Production Kitchen (commissary)');
   }
 
+  let branchManager = await adminRepo.findOne({
+    where: { tenant_id: tenant.id, username: BRANCH_MANAGER_USERNAME },
+  });
+  if (!branchManager) {
+    branchManager = adminRepo.create({
+      tenant_id: tenant.id,
+      username: BRANCH_MANAGER_USERNAME,
+      display_name: 'Downtown Branch Manager',
+      password_hash: await argon2.hash(ADMIN_PASSWORD),
+      pin_hash: await argon2.hash(APPROVER_PIN),
+      role: 'MANAGER',
+      // Pinned to one location: this is what stops the account reaching the rest of
+      // the chain, not the role name.
+      branch_id: branchExpress.id,
+      is_active: true,
+      preferred_locale: 'fa',
+    });
+    await adminRepo.save(branchManager);
+    console.log(`Seeded Branch Manager User: ${BRANCH_MANAGER_USERNAME} (Downtown Express)`);
+  }
+
   // 4b. Idempotent Delivery Zones
   const defaultZones = [
     { tenant_id: tenant.id, branch_id: branchTeh.id, code: 'ZONE-CENTRAL-01', name: 'Central District Zone 1', fee: '25000.0000', currency_code: 'IRR', estimated_minutes: 30, is_active: true },
@@ -274,17 +297,37 @@ export async function runSeed() {
   // policy falls back to, so a tenant that has never saved the settings group
   // behaves identically to one that saved the defaults explicitly.
   const existingOrderActions = await settingRepo.findOne({
-    where: { tenant_id: tenant.id, key: 'ORDER_ACTIONS' },
+    where: { tenant_id: tenant.id, key: 'ORDER_ACTIONS', branch_id: IsNull() },
   });
   if (!existingOrderActions) {
     await settingRepo.save(
       settingRepo.create({
         tenant_id: tenant.id,
+        branch_id: null,
         key: 'ORDER_ACTIONS',
         value: { ...ORDER_ACTION_DEFAULTS },
         schema_version: 1,
       }),
     );
+  }
+
+  // 7a-ii. One live override, so the inheritance is visible without configuring it
+  // first. Downtown is the express site: it turns orders over quickly, so a cashier
+  // there keeps authority for a shorter window than the chain default.
+  const existingDowntownOrderActions = await settingRepo.findOne({
+    where: { tenant_id: tenant.id, key: 'ORDER_ACTIONS', branch_id: branchExpress.id },
+  });
+  if (!existingDowntownOrderActions) {
+    await settingRepo.save(
+      settingRepo.create({
+        tenant_id: tenant.id,
+        branch_id: branchExpress.id,
+        key: 'ORDER_ACTIONS',
+        value: { ...ORDER_ACTION_DEFAULTS, editWindowMinutes: 5, cancelWindowMinutes: 5 },
+        schema_version: 1,
+      }),
+    );
+    console.log('Seeded branch override: ORDER_ACTIONS for Downtown Express (5 min windows)');
   }
 
   // 7b. Demo customers make directory, address, and credit-account screens useful

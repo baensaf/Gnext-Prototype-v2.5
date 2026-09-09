@@ -36,13 +36,14 @@ import { tenantApi } from 'src/api/tenantApi';
 
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
+import { useScopedBranchId } from 'src/contexts/branch-context';
 
 export function TerminalsPage() {
   const { t } = useTranslation();
 
   const [terminals, setTerminals] = useState<Terminal[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  const [selectedBranchId, setSelectedBranchId] = useScopedBranchId();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -51,7 +52,9 @@ export function TerminalsPage() {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [terminalType, setTerminalType] = useState<'CASHIER' | 'KIOSK' | 'KDS'>('CASHIER');
-  const [branchId, setBranchId] = useState('');
+  // The create form starts at the branch you are working in, which is nearly always
+  // the one you are registering a terminal for.
+  const [branchId, setBranchId] = useScopedBranchId();
 
   // Confirm dialog state for archive
   const [archiveConfirm, setArchiveConfirm] = useState<{ id: string; name: string; code: string; open: boolean }>({

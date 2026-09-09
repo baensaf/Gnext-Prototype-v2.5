@@ -35,6 +35,7 @@ import { MoneyUtil } from 'src/utils/money.util';
 import { tenantApi } from 'src/api/tenantApi';
 import { paymentApi } from 'src/api/paymentApi';
 import { httpClient } from 'src/api/httpClient';
+import { useScopedBranchId } from 'src/contexts/branch-context';
 
 export function PaymentsPage() {
   const { t } = useTranslation();
@@ -53,7 +54,7 @@ export function PaymentsPage() {
   const [devName, setDevName] = useState('');
   const [devSerial, setDevSerial] = useState('');
   const [devType, setDevType] = useState('POS_TERMINAL');
-  const [devBranchId, setDevBranchId] = useState('');
+  const [devBranchId, setDevBranchId] = useScopedBranchId();
   const [devAccountId, setDevAccountId] = useState('');
 
   // Account Form Drawer

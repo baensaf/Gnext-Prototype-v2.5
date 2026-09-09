@@ -23,6 +23,10 @@ export class AdminUser {
   @Column({ type: 'varchar', length: 32, default: 'CASHIER' })
   role: string;
 
+  /** NULL means head office: the account is not confined to one location. */
+  @Column({ type: 'uuid', nullable: true })
+  branch_id: string | null;
+
   @Column({ type: 'text', nullable: true })
   pin_hash: string;
 

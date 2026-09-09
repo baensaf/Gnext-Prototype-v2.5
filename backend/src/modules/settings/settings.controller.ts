@@ -1,15 +1,28 @@
-import { Controller, Get, Patch, Post, Body, Param, Req } from '@nestjs/common';
+import { Controller, Delete, Get, Patch, Post, Body, Param, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { SettingsService } from './settings.service';
+import { UserScope } from '../../common/utils/user-scope.util';
+
+/** The signed-in account's scope, as the session guard recorded it. */
+function actorScope(req: Request): UserScope {
+  return { role: (req as any).userRole, branchId: (req as any).userBranchId ?? null };
+}
 
 @Controller('api/v1')
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
   @Get('settings')
-  async getSettings(@Req() req: Request) {
+  async getSettings(@Query('branchId') branchId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.settingsService.getSettings(tenantId);
+    return await this.settingsService.getSettings(tenantId, branchId || undefined);
+  }
+
+  /** Same values, annotated with which level each came from. */
+  @Get('settings/scoped')
+  async getScopedSettings(@Query('branchId') branchId: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.settingsService.getSettingsWithScope(tenantId, branchId || undefined);
   }
 
   @Patch('settings')
@@ -18,7 +31,7 @@ export class SettingsController {
     const correlationId = (req as any).correlationId;
     const key = body.key || 'GENERAL';
     const value = body.value !== undefined ? body.value : body;
-    return await this.settingsService.updateSetting(tenantId, key, value, correlationId);
+    return await this.settingsService.updateSetting(tenantId, key, value, correlationId, body.branchId, actorScope(req));
   }
 
   @Patch('settings/:group')
@@ -27,7 +40,19 @@ export class SettingsController {
     const correlationId = (req as any).correlationId;
     const keyToSave = body.key || group;
     const valueToSave = body.value !== undefined ? body.value : body;
-    return await this.settingsService.updateSetting(tenantId, keyToSave, valueToSave, correlationId);
+    return await this.settingsService.updateSetting(tenantId, keyToSave, valueToSave, correlationId, body.branchId, actorScope(req));
+  }
+
+  /** Drop a branch's override and go back to inheriting the organization value. */
+  @Delete('settings/:group/override')
+  async clearBranchOverride(
+    @Param('group') group: string,
+    @Query('branchId') branchId: string,
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.settingsService.clearBranchOverride(tenantId, group, branchId, correlationId, actorScope(req));
   }
 
   @Get('currencies')

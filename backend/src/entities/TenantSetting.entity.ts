@@ -8,6 +8,13 @@ export class TenantSetting {
   @Column({ type: 'uuid' })
   tenant_id: string;
 
+  /**
+   * NULL is the organization's value, inherited by every branch. A branch id makes the
+   * row an override that applies at that location only.
+   */
+  @Column({ type: 'uuid', nullable: true })
+  branch_id: string | null;
+
   @Column({ type: 'varchar', length: 100 })
   key: string;
 

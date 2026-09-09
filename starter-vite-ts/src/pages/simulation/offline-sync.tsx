@@ -37,6 +37,7 @@ import SyncIcon from '@mui/icons-material/Sync';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 import { tenantApi } from 'src/api/tenantApi';
 import { httpClient as axios } from 'src/api/httpClient';
+import { useScopedBranchId } from 'src/contexts/branch-context';
 
 export function OfflineSyncPage() {
   const { t } = useTranslation();
@@ -44,7 +45,7 @@ export function OfflineSyncPage() {
   const [queueItems, setQueueItems] = useState<any[]>([]);
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  const [selectedBranchId, setSelectedBranchId] = useScopedBranchId();
   const [loading, setLoading] = useState(false);
   const [workerResult, setWorkerResult] = useState<any>(null);
 

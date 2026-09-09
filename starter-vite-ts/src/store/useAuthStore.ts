@@ -11,6 +11,11 @@ export interface UserState {
   displayName: string;
   preferredLocale: string;
   tenantId: string;
+  role?: string;
+  /** null means the account is not confined to one location. */
+  branchId?: string | null;
+  /** True when the account may act for the organization rather than a single site. */
+  isHeadOffice?: boolean;
 }
 
 export interface TenantState {

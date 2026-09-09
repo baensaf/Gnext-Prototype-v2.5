@@ -33,6 +33,7 @@ import { MoneyUtil } from 'src/utils/money.util';
 
 import { tenantApi } from 'src/api/tenantApi';
 import { catalogApi } from 'src/api/catalogApi';
+import { useScopedBranchId } from 'src/contexts/branch-context';
 
 export function AvailabilityPage() {
   const { t } = useTranslation();
@@ -46,7 +47,7 @@ export function AvailabilityPage() {
   // Suspend Dialog
   const [suspendModalOpen, setSuspendModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [suspendBranchId, setSuspendBranchId] = useState('');
+  const [suspendBranchId, setSuspendBranchId] = useScopedBranchId();
   const [suspendHours, setSuspendHours] = useState('2');
   const [suspendReason, setSuspendReason] = useState('86d / Out of stock');
 

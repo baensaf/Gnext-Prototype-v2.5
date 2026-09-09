@@ -6,6 +6,7 @@ import { DiscountScope } from '../../entities/DiscountScope.entity';
 import { Coupon } from '../../entities/Coupon.entity';
 import { DiscountUsage } from '../../entities/DiscountUsage.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
+import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { CustomerDiscount } from '../../entities/CustomerDiscount.entity';
 import { ApprovalRequest } from '../../entities/ApprovalRequest.entity';
 import { Product } from '../../entities/Product.entity';
@@ -132,7 +133,12 @@ export class DiscountEvaluationService {
 
     // Load discount authorization policy settings
     const settings = await this.settingRepo.find({ where: { tenant_id: tenantId } });
-    const authSettings = settings.find((s) => s.key === 'DISCOUNT_AUTHORIZATIONS' || s.key === 'DISCOUNTS')?.value || {};
+    // Who may authorise a discount is chain-wide policy, so this reads the organization
+    // row explicitly rather than whichever row happens to come back first.
+    const authSettings =
+      pickSettingValue(settings.filter((s) => s.key === 'DISCOUNT_AUTHORIZATIONS')) ||
+      pickSettingValue(settings.filter((s) => s.key === 'DISCOUNTS')) ||
+      {};
     const userRole = (request as any).userRole || 'CASHIER';
 
     const defaultRoleLimits: Record<string, { pct: string; maxFixed: string }> = {

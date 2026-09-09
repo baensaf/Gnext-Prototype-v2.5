@@ -66,6 +66,10 @@ export class SessionGuard implements CanActivate {
     req.user = user;
     req.userId = user.id;
     req.tenantId = user.tenant_id;
+    req.userRole = user.role;
+    // NULL here means head office. Handlers use it to decide what a request may reach,
+    // so it has to come from the stored account rather than anything the client sends.
+    req.userBranchId = user.branch_id ?? null;
 
     return true;
   }

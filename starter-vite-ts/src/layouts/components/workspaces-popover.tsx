@@ -45,6 +45,7 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
   const selectedBranch = branchScope?.selectedBranch ?? null;
   const selectedBranchId = branchScope?.selectedBranchId ?? '';
   const isHeadOffice = branchScope?.isHeadOffice ?? false;
+  const canChangeScope = branchScope?.canChangeScope ?? true;
   const setSelectedBranchId = branchScope?.setSelectedBranchId;
 
   const headOfficeName = t('branchScope.headOffice', 'All Branches (HQ)');
@@ -159,12 +160,13 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
             one place a chain operator is least likely to mean.
           */}
           <MenuItem
+            disabled={!canChangeScope}
             selected={isHeadOffice}
             onClick={() => {
               setSelectedBranchId?.(HEAD_OFFICE_SCOPE);
               onClose();
             }}
-            sx={{ height: 48, borderRadius: 1, gap: 1.5 }}
+            sx={{ height: 48, borderRadius: 1, gap: 1.5, display: canChangeScope ? 'flex' : 'none' }}
           >
             <Avatar
               sx={{
@@ -191,7 +193,7 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
             </Label>
           </MenuItem>
 
-          <Divider sx={{ my: 0.5, borderStyle: 'dashed' }} />
+          {canChangeScope && <Divider sx={{ my: 0.5, borderStyle: 'dashed' }} />}
 
           {branches.map((branch) => (
             <MenuItem

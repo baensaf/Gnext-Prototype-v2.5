@@ -24,6 +24,7 @@ import {
 } from '@mui/material';
 
 import { settingsApi } from 'src/api/settingsApi';
+import { useBranchContext } from 'src/contexts/branch-context';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function OrderWorkflowSettingsPage() {
@@ -46,12 +47,18 @@ export function OrderWorkflowSettingsPage() {
   const [enableAggregators, setEnableAggregators] = useState(true);
   const [requireTableSelection, setRequireTableSelection] = useState(true);
 
+  const { selectedBranchId, selectedBranch, isHeadOffice } = useBranchContext();
+  // ORG while these values are still head office's, BRANCH once this location has its own.
+  const [source, setSource] = useState<'BRANCH' | 'ORG'>('ORG');
+
   const loadSettings = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await settingsApi.getSettings();
-      const workflow = data?.ORDER_WORKFLOW || data?.POS || {};
+      const scoped = await settingsApi.getScopedSettings(selectedBranchId || undefined);
+      const group = scoped.groups?.ORDER_WORKFLOW || scoped.groups?.POS;
+      const workflow = group?.value || {};
+      setSource(group?.source || 'ORG');
 
       if (workflow.autoAcceptOrders !== undefined) setAutoAcceptOrders(Boolean(workflow.autoAcceptOrders));
       if (workflow.cashierEditWindowMinutes !== undefined) setCashierEditWindowMinutes(Number(workflow.cashierEditWindowMinutes));
@@ -68,7 +75,7 @@ export function OrderWorkflowSettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedBranchId]);
 
   useEffect(() => {
     loadSettings();
@@ -94,13 +101,71 @@ export function OrderWorkflowSettingsPage() {
     };
 
     try {
-      await settingsApi.updateSetting('ORDER_WORKFLOW', payload);
-      setSuccess(t('settings.orderWorkflow.saveSuccess', 'Order workflow settings saved successfully.'));
+      // At head office this writes the value every branch inherits; inside a branch it
+      // writes that branch's override and leaves the rest of the chain alone.
+      await settingsApi.updateSetting('ORDER_WORKFLOW', payload, selectedBranchId || undefined);
+      setSuccess(
+        selectedBranchId
+          ? t('settings.orderWorkflow.saveBranchSuccess', 'Saved as an override for this branch.')
+          : t('settings.orderWorkflow.saveSuccess', 'Order workflow settings saved successfully.')
+      );
+      await loadSettings();
     } catch (err: any) {
       setError(err?.response?.data?.message || err.detail || err.message || 'Failed to save order workflow settings');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleResetToOrg = async () => {
+    if (!selectedBranchId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await settingsApi.clearBranchOverride('ORDER_WORKFLOW', selectedBranchId);
+      setSuccess(t('settings.orderWorkflow.resetSuccess', 'Override removed. This branch follows head office again.'));
+      await loadSettings();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || err.message || 'Failed to remove the branch override');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Says which level owns what is on screen, so an inherited value is never mistaken for a local one. */
+  const renderScopeNotice = () => {
+    if (isHeadOffice || !selectedBranchId) {
+      return (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          {t(
+            'settings.scope.editingOrg',
+            'Editing the organization value. Every branch without its own override follows this.'
+          )}
+        </Alert>
+      );
+    }
+
+    return (
+      <Alert
+        severity={source === 'BRANCH' ? 'warning' : 'info'}
+        sx={{ mb: 3 }}
+        action={
+          source === 'BRANCH' ? (
+            <Button color="inherit" size="small" disabled={saving} onClick={handleResetToOrg}>
+              {t('settings.scope.resetToOrg', 'Follow head office')}
+            </Button>
+          ) : undefined
+        }
+      >
+        {source === 'BRANCH'
+          ? t('settings.scope.branchOverride', '{{branch}} overrides head office for this group.', {
+              branch: selectedBranch?.name || '',
+            })
+          : t('settings.scope.inherited', 'Inherited from head office. Saving creates an override for {{branch}}.', {
+              branch: selectedBranch?.name || '',
+            })}
+      </Alert>
+    );
   };
 
   if (loading) {
@@ -126,6 +191,8 @@ export function OrderWorkflowSettingsPage() {
           </Button>
         }
       />
+
+      {renderScopeNotice()}
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>

@@ -31,6 +31,7 @@ import { useParams } from 'src/routes/hooks';
 
 import { tenantApi } from 'src/api/tenantApi';
 import { catalogApi } from 'src/api/catalogApi';
+import { useScopedBranchId } from 'src/contexts/branch-context';
 
 export function MenusPage() {
   const { t } = useTranslation();
@@ -46,7 +47,7 @@ export function MenusPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
-  const [branchId, setBranchId] = useState('');
+  const [branchId, setBranchId] = useScopedBranchId();
   const [channel, setChannel] = useState('ALL');
 
   // Attach Item Modal / Drawer

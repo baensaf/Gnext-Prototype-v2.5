@@ -53,6 +53,7 @@ import { catalogApi } from 'src/api/catalogApi';
 
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
+import { useScopedBranchId } from 'src/contexts/branch-context';
 
 export function PrintersPage() {
   const { t } = useTranslation();
@@ -69,7 +70,7 @@ export function PrintersPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [stations, setStations] = useState<KitchenStation[]>([]);
 
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  const [selectedBranchId, setSelectedBranchId] = useScopedBranchId();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [testSuccessMsg, setTestSuccessMsg] = useState<string | null>(null);

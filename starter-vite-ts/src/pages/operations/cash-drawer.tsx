@@ -43,6 +43,7 @@ import { MoneyUtil } from 'src/utils/money.util';
 import { tenantApi } from 'src/api/tenantApi';
 import { settingsApi } from 'src/api/settingsApi';
 import { cashDrawerApi } from 'src/api/cashDrawerApi';
+import { useScopedBranchId } from 'src/contexts/branch-context';
 
 export function CashDrawerPage() {
   const [activeShiftData, setActiveShiftData] = useState<ActiveShiftResponse | null>(null);
@@ -54,7 +55,7 @@ export function CashDrawerPage() {
 
   // Open Shift Dialog
   const [openDialogOpen, setOpenDialogOpen] = useState(false);
-  const [openBranchId, setOpenBranchId] = useState('');
+  const [openBranchId, setOpenBranchId] = useScopedBranchId();
   const [openTerminalId, setOpenTerminalId] = useState('');
   const [openingFloat, setOpeningFloat] = useState('5000000');
 
