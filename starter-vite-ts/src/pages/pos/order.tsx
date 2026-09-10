@@ -511,27 +511,27 @@ export function PosOrderPage() {
   const deliveryReady = useCallback(() => {
     if (orderType !== 'DELIVERY') return true;
     if (!selectedCustomerId) {
-      setError('Select a customer for delivery');
-      toast.warning('Select a customer for delivery');
+      setError(t('pos.deliveryContext.customerRequired'));
+      toast.warning(t('pos.deliveryContext.customerRequired'));
       customerSelectRef.current?.focus();
       return false;
     }
     if (!selectedDeliveryAddressId) {
-      setError('Select a delivery address');
-      toast.warning('Select a delivery address');
+      setError(t('pos.deliveryContext.addressRequired'));
+      toast.warning(t('pos.deliveryContext.addressRequired'));
       return false;
     }
     if (!selectedDeliveryZoneId) {
-      setError('Select a delivery zone');
-      toast.warning('Select a delivery zone');
+      setError(t('pos.deliveryContext.zoneRequired'));
+      toast.warning(t('pos.deliveryContext.zoneRequired'));
       return false;
     }
     return true;
-  }, [orderType, selectedCustomerId, selectedDeliveryAddressId, selectedDeliveryZoneId]);
+  }, [orderType, selectedCustomerId, selectedDeliveryAddressId, selectedDeliveryZoneId, t]);
 
   const handleCreateAddress = async () => {
     if (!selectedCustomerId || !newAddress.title.trim() || !newAddress.address_text.trim()) {
-      setDeliveryOptionsError('Address title and full address are required.');
+      setDeliveryOptionsError(t('pos.deliveryContext.fieldsRequired'));
       return;
     }
     try {
@@ -550,7 +550,7 @@ export function PosOrderPage() {
       setAddAddressOpen(false);
       setDeliveryOptionsError(null);
     } catch (err: any) {
-      setDeliveryOptionsError(err.detail || err.message || 'Unable to add the delivery address.');
+      setDeliveryOptionsError(err.detail || err.message || t('pos.deliveryContext.addFailed'));
     } finally {
       setAddingAddress(false);
     }
@@ -1603,30 +1603,33 @@ export function PosOrderPage() {
                 >
                   <ToggleButton value="DINE_IN">
                     <RestaurantIcon sx={{ fontSize: 18 }} />
-                    Dine-In
+                    {t('pos.dineIn')}
                   </ToggleButton>
                   <ToggleButton value="TAKEAWAY">
                     <TakeoutDiningIcon sx={{ fontSize: 18 }} />
-                    Takeaway
+                    {t('pos.takeaway')}
                   </ToggleButton>
                   <ToggleButton value="DELIVERY">
                     <DeliveryDiningIcon sx={{ fontSize: 18 }} />
-                    Delivery
+                    {t('pos.delivery')}
                   </ToggleButton>
                 </ToggleButtonGroup>
 
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <FormControl fullWidth size="small">
-                    <InputLabel>Customer</InputLabel>
+                    <InputLabel>{t('pos.customer')}</InputLabel>
                     <Select
                       inputRef={customerSelectRef}
                       value={selectedCustomerId}
-                      label="Customer"
+                      label={t('pos.customer')}
                       displayEmpty
                       renderValue={(value) => {
-                        if (!value) return orderType === 'DELIVERY' ? 'Select a customer for delivery' : 'Walk-In Customer';
+                        if (!value)
+                          return orderType === 'DELIVERY'
+                            ? t('pos.deliveryContext.customerRequired')
+                            : t('pos.walkInCustomer');
                         const customer = customers.find((item) => item.id === value);
-                        return customer ? `${customer.first_name} ${customer.last_name} (${customer.mobile})` : 'Select customer';
+                        return customer ? `${customer.first_name} ${customer.last_name} (${customer.mobile})` : t('pos.selectCustomer');
                       }}
                       onChange={(e) => {
                         deliveryRestoreRef.current = {};
@@ -1635,7 +1638,7 @@ export function PosOrderPage() {
                         setSelectedDeliveryZoneId('');
                       }}
                     >
-                      {orderType !== 'DELIVERY' && <MenuItem value="">Walk-In Customer</MenuItem>}
+                      {orderType !== 'DELIVERY' && <MenuItem value="">{t('pos.walkInCustomer')}</MenuItem>}
                       {customers.map((c) => (
                         <MenuItem key={c.id} value={c.id}>
                           {c.first_name} {c.last_name} ({c.mobile})
@@ -1644,7 +1647,7 @@ export function PosOrderPage() {
                     </Select>
                   </FormControl>
 
-                  <Tooltip title="Quick Register Customer">
+                  <Tooltip title={t('pos.quickRegisterCustomer')}>
                     <IconButton
                       color="primary"
                       onClick={() => {
@@ -1870,27 +1873,35 @@ export function PosOrderPage() {
                 {orderType === 'DELIVERY' && (
                   <Stack spacing={1} sx={{ p: 1.25, border: 1, borderColor: 'primary.light', borderRadius: 1.5, bgcolor: 'background.neutral' }}>
                     {!selectedCustomerId ? (
-                      <Alert severity="warning" sx={{ py: 0.25 }}>Select a customer for delivery.</Alert>
+                      <Alert severity="warning" sx={{ py: 0.25 }}>{t('pos.deliveryContext.customerRequired')}</Alert>
                     ) : (
                       <>
                         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                           <FormControl fullWidth size="small" disabled={deliveryOptionsLoading} error={Boolean(selectedCustomerId && !selectedDeliveryAddressId)}>
-                            <InputLabel>Delivery Address</InputLabel>
-                            <Select value={selectedDeliveryAddressId} label="Delivery Address" onChange={(e) => { setSelectedDeliveryAddressId(e.target.value); setSelectedDeliveryZoneId(''); }}>
+                            <InputLabel>{t('pos.deliveryContext.addressLabel')}</InputLabel>
+                            <Select value={selectedDeliveryAddressId} label={t('pos.deliveryContext.addressLabel')} onChange={(e) => { setSelectedDeliveryAddressId(e.target.value); setSelectedDeliveryZoneId(''); }}>
                               {customerAddresses.map((address) => (
                                 <MenuItem key={address.id} value={address.id}>
-                                  {address.title}{address.is_default ? ' (Default)' : ''} — {address.address_text.length > 45 ? `${address.address_text.slice(0, 45)}…` : address.address_text}
+                                  {address.title}{address.is_default ? ` (${t('pos.deliveryContext.addressDefault')})` : ''} — {address.address_text.length > 45 ? `${address.address_text.slice(0, 45)}…` : address.address_text}
                                 </MenuItem>
                               ))}
                             </Select>
                           </FormControl>
-                          <Button size="small" variant="outlined" onClick={() => setAddAddressOpen(true)} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>Add address</Button>
+                          <Button size="small" variant="outlined" onClick={() => setAddAddressOpen(true)} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>{t('pos.deliveryContext.addAddress')}</Button>
                         </Stack>
-                        {customerAddresses.length === 0 && !deliveryOptionsLoading && <Alert severity="info" sx={{ py: 0.25 }}>No delivery addresses yet. Add an address to continue.</Alert>}
+                        {customerAddresses.length === 0 && !deliveryOptionsLoading && <Alert severity="info" sx={{ py: 0.25 }}>{t('pos.deliveryContext.noAddresses')}</Alert>}
                         <FormControl fullWidth size="small" disabled={deliveryOptionsLoading} error={Boolean(selectedCustomerId && !selectedDeliveryZoneId)}>
-                          <InputLabel>Delivery Zone</InputLabel>
-                          <Select value={selectedDeliveryZoneId} label="Delivery Zone" onChange={(e) => setSelectedDeliveryZoneId(e.target.value)}>
-                            {deliveryZones.map((zone) => <MenuItem key={zone.id} value={zone.id}>{zone.name} — {MoneyUtil.formatCurrency(zone.fee)} IRR · {zone.estimated_minutes} min</MenuItem>)}
+                          <InputLabel>{t('pos.deliveryContext.zoneLabel')}</InputLabel>
+                          <Select value={selectedDeliveryZoneId} label={t('pos.deliveryContext.zoneLabel')} onChange={(e) => setSelectedDeliveryZoneId(e.target.value)}>
+                            {deliveryZones.map((zone) => (
+                              <MenuItem key={zone.id} value={zone.id}>
+                                {t('pos.deliveryContext.zoneOption', {
+                                  name: zone.name,
+                                  fee: MoneyUtil.formatCurrency(zone.fee),
+                                  minutes: zone.estimated_minutes,
+                                })}
+                              </MenuItem>
+                            ))}
                           </Select>
                         </FormControl>
                         {deliveryOptionsLoading && <LinearProgress />}
@@ -2090,34 +2101,34 @@ export function PosOrderPage() {
               {/* Financial Totals Summary */}
               <Stack spacing={0.75} sx={{ mb: 2, mt: 'auto' }}>
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">Subtotal:</Typography>
-                  <Typography variant="body2">{MoneyUtil.formatCurrency(cartSubtotal)} IRR</Typography>
+                  <Typography variant="body2" color="text.secondary">{t('pos.totals.subtotal')}</Typography>
+                  <Typography variant="body2">{t('pos.amountIrr', { amount: MoneyUtil.formatCurrency(cartSubtotal) })}</Typography>
                 </Stack>
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">Tax / VAT:</Typography>
-                  <Typography variant="body2">{MoneyUtil.formatCurrency(cartTax)} IRR</Typography>
+                  <Typography variant="body2" color="text.secondary">{t('pos.totals.tax')}</Typography>
+                  <Typography variant="body2">{t('pos.amountIrr', { amount: MoneyUtil.formatCurrency(cartTax) })}</Typography>
                 </Stack>
                 {orderType === 'DELIVERY' && (
                   <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                    <Typography variant="body2" color="text.secondary">Delivery:</Typography>
-                    <Typography variant="body2">{MoneyUtil.formatCurrency(quotedDeliveryFee)} IRR</Typography>
+                    <Typography variant="body2" color="text.secondary">{t('pos.totals.delivery')}</Typography>
+                    <Typography variant="body2">{t('pos.amountIrr', { amount: MoneyUtil.formatCurrency(quotedDeliveryFee) })}</Typography>
                   </Stack>
                 )}
                 {MoneyUtil.greaterThan(appliedDiscountAmount, '0') && (
                   <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
-                      Discount:
+                      {t('pos.totals.discount')}
                     </Typography>
                     <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold' }}>
-                      -{MoneyUtil.formatCurrency(appliedDiscountAmount)} IRR
+                      -{t('pos.amountIrr', { amount: MoneyUtil.formatCurrency(appliedDiscountAmount) })}
                     </Typography>
                   </Stack>
                 )}
                 <Divider />
                 <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', pt: 0.5 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Total Due:</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t('pos.totals.totalDue')}</Typography>
                   <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                    {MoneyUtil.formatCurrency(cartTotalDue)} IRR
+                    {t('pos.amountIrr', { amount: MoneyUtil.formatCurrency(cartTotalDue) })}
                   </Typography>
                 </Stack>
               </Stack>
@@ -2577,18 +2588,20 @@ export function PosOrderPage() {
       />
 
       <Dialog open={addAddressOpen} onClose={() => !addingAddress && setAddAddressOpen(false)} maxWidth="xs" fullWidth aria-keyshortcuts="Escape">
-        <DialogTitle>Add delivery address</DialogTitle>
+        <DialogTitle>{t('pos.deliveryContext.dialogTitle')}</DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField label="Address title" size="small" autoFocus required value={newAddress.title} onChange={(e) => setNewAddress((current) => ({ ...current, title: e.target.value }))} />
-            <TextField label="Full address" size="small" multiline rows={3} required value={newAddress.address_text} onChange={(e) => setNewAddress((current) => ({ ...current, address_text: e.target.value }))} />
-            <TextField label="Postal code" size="small" value={newAddress.postal_code} onChange={(e) => setNewAddress((current) => ({ ...current, postal_code: e.target.value }))} />
-            <FormControlLabel control={<Checkbox checked={newAddress.is_default} onChange={(e) => setNewAddress((current) => ({ ...current, is_default: e.target.checked }))} />} label="Set as default address" />
+            <TextField label={t('pos.deliveryContext.titleField')} size="small" autoFocus required value={newAddress.title} onChange={(e) => setNewAddress((current) => ({ ...current, title: e.target.value }))} />
+            <TextField label={t('pos.deliveryContext.addressField')} size="small" multiline rows={3} required value={newAddress.address_text} onChange={(e) => setNewAddress((current) => ({ ...current, address_text: e.target.value }))} />
+            <TextField label={t('pos.deliveryContext.postalField')} size="small" value={newAddress.postal_code} onChange={(e) => setNewAddress((current) => ({ ...current, postal_code: e.target.value }))} />
+            <FormControlLabel control={<Checkbox checked={newAddress.is_default} onChange={(e) => setNewAddress((current) => ({ ...current, is_default: e.target.checked }))} />} label={t('pos.deliveryContext.setDefault')} />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAddAddressOpen(false)} disabled={addingAddress}>Cancel</Button>
-          <Button variant="contained" onClick={handleCreateAddress} disabled={addingAddress}>{addingAddress ? 'Saving…' : 'Save address'}</Button>
+          <Button onClick={() => setAddAddressOpen(false)} disabled={addingAddress}>{t('common.cancel')}</Button>
+          <Button variant="contained" onClick={handleCreateAddress} disabled={addingAddress}>
+            {addingAddress ? t('pos.deliveryContext.savingAddress') : t('pos.deliveryContext.saveAddress')}
+          </Button>
         </DialogActions>
       </Dialog>
 
