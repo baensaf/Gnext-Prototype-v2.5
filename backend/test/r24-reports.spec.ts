@@ -12,6 +12,7 @@ import { CashierShift } from '../src/entities/CashierShift.entity';
 import { CourierSettlement } from '../src/entities/CourierSettlement.entity';
 import { CustomerCreditAccount } from '../src/entities/CustomerCreditAccount.entity';
 import { CreditEntry } from '../src/entities/CreditEntry.entity';
+import { deleteTenantData } from './utils/tenant-teardown';
 
 describe('R24 Reports, Alerts, Exports & Audit Verification Suite', () => {
   let app: INestApplication;
@@ -188,8 +189,10 @@ describe('R24 Reports, Alerts, Exports & Audit Verification Suite', () => {
   }, 30000);
 
   afterAll(async () => {
+    // The fixture tenant is created fresh per run, so nothing here is worth keeping.
+    if (dataSource?.isInitialized) await deleteTenantData(dataSource, testTenantId);
     if (app) await app.close();
-  });
+  }, 30000);
 
   it('should list all report catalog entries defined in Section 13 (23 core reports)', async () => {
     const catalog = await reportsService.getCatalog();

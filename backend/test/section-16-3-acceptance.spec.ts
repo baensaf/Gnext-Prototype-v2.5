@@ -50,6 +50,7 @@ import { TenantSetting } from '../src/entities/TenantSetting.entity';
 
 // Utility
 import { MoneyUtil } from '../src/common/utils/money.util';
+import { deleteTenantData } from './utils/tenant-teardown';
 
 describe('Specification §16.3 Acceptance Workflows Suite', () => {
   let app: INestApplication;
@@ -369,8 +370,10 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
   }, 40000);
 
   afterAll(async () => {
+    // The fixture tenant is created fresh per run, so nothing here is worth keeping.
+    if (dataSource?.isInitialized) await deleteTenantData(dataSource, tenantId);
     if (app) await app.close();
-  });
+  }, 30000);
 
   // =========================================================================
   // WORKFLOW 1: POS COMPLETE LIFECYCLE (§16.3.1)

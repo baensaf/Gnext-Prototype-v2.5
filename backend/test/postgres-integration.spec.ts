@@ -11,6 +11,7 @@ import { IdempotencyRecord } from '../src/entities/IdempotencyRecord.entity';
 import { OfflineQueueItem } from '../src/entities/OfflineQueueItem.entity';
 import { SyncConflictRecord } from '../src/entities/SyncConflictRecord.entity';
 import { BranchStatusSnapshot } from '../src/entities/BranchStatusSnapshot.entity';
+import { deleteTenantData } from './utils/tenant-teardown';
 
 describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
   let dataSource: DataSource;
@@ -66,9 +67,13 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
 
   afterAll(async () => {
     if (AppDataSource.isInitialized) {
+      // This suite reuses one tenant by code rather than making a fresh one, so it grew an
+      // order per run instead of a tenant per run. Every fixture here is find-or-create,
+      // so clearing the tenant is safe — the next run builds it again.
+      await deleteTenantData(AppDataSource, testTenantId);
       await AppDataSource.destroy();
     }
-  });
+  }, 30000);
 
   it('1. Real PostgreSQL Transaction Rollback: rolls back all queries on transaction failure', async () => {
     const orderRepo = dataSource.getRepository(OrderHeader);

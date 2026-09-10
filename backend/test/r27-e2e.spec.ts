@@ -28,6 +28,7 @@ import { TenantSetting } from '../src/entities/TenantSetting.entity';
 import { Product } from '../src/entities/Product.entity';
 import { Category } from '../src/entities/Category.entity';
 import { checkTranslations } from '../src/scripts/translation-check';
+import { deleteTenantData } from './utils/tenant-teardown';
 
 describe('R27 Final Integration, Regression & Customer-Validation Certification Suite', () => {
   let app: INestApplication;
@@ -149,8 +150,10 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
   }, 30000);
 
   afterAll(async () => {
+    // The fixture tenant is created fresh per run, so nothing here is worth keeping.
+    if (dataSource?.isInitialized) await deleteTenantData(dataSource, testTenantId);
     if (app) await app.close();
-  });
+  }, 30000);
 
   it('Journey 1: Dine-in Order & EOD Shift Reconciliation', async () => {
     const orderRepo = dataSource.getRepository(OrderHeader);
