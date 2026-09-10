@@ -4,7 +4,6 @@ import { ROLES_KEY, HEAD_OFFICE_ONLY_KEY } from '../decorators/roles.decorator';
 import { effectiveBranchId } from '../utils/user-scope.util';
 import { CatalogController } from '../../modules/catalog/catalog.controller';
 import { DiscountsController } from '../../modules/discounts/discounts.controller';
-import { PricingController } from '../../modules/pricing/pricing.controller';
 import { LocalizationController } from '../../modules/localization/localization.controller';
 import { CustomerController } from '../../modules/customer/customer.controller';
 import { CreditController } from '../../modules/customer/credit.controller';
@@ -67,8 +66,6 @@ const OPEN_BY_DESIGN: Array<[string, any, string[]]> = [
   ['catalog', CatalogController, []],
   // Reads in all but HTTP verb — the register calls both in the middle of an order.
   ['discounts', DiscountsController, ['coupons/validate', 'discount-quotes']],
-  // Computes a preview and writes nothing.
-  ['pricing', PricingController, ['prices/bulk-preview']],
   ['localization', LocalizationController, []],
   // Everything a counter does with a customer: sign one up, add a phone, take a payment
   // against their account. Only the group taxonomy is chain-wide.
