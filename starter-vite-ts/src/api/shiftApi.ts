@@ -80,9 +80,10 @@ export const shiftApi = {
     return res.data;
   },
 
-  getCurrentShift: async (terminalId?: string): Promise<CashierShift> => {
+  /** Null when no drawer is open at this terminal, which is most of the day. */
+  getCurrentShift: async (terminalId?: string): Promise<CashierShift | null> => {
     const res = await httpClient.get('/api/v1/shifts/current', { params: { terminalId } });
-    return res.data;
+    return res.data || null;
   },
 
   getShiftById: async (shiftId: string): Promise<CashierShift> => {

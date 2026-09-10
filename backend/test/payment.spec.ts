@@ -36,7 +36,11 @@ describe('Payments & Split Settlement Suite (R15)', () => {
     attemptRepo = { create: jest.fn(), save: jest.fn() };
     deviceRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), find: jest.fn().mockResolvedValue([]), createQueryBuilder: jest.fn() };
     accountRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), find: jest.fn().mockResolvedValue([]) };
-    shiftService = { getCurrentShift: jest.fn(), recordCashPaymentMovement: jest.fn() };
+    shiftService = {
+      getCurrentShift: jest.fn().mockResolvedValue(null),
+      requireCurrentShift: jest.fn(),
+      recordCashPaymentMovement: jest.fn(),
+    };
     creditService = {
       getAccountByCustomer: jest.fn(),
       assertCustomerPurchaseAllowed: jest.fn(),
@@ -143,7 +147,7 @@ describe('Payments & Split Settlement Suite (R15)', () => {
 
       paymentRepo.findOne.mockResolvedValue(payment);
       orderRepo.findOne.mockResolvedValue(order);
-      shiftService.getCurrentShift.mockResolvedValue({ id: 'shf-1' });
+      shiftService.requireCurrentShift.mockResolvedValue({ id: 'shf-1' });
 
       const result = await service.processPayment('t-1', 'pay-1', {});
       expect(result.status).toBe('SUCCEEDED');
@@ -301,6 +305,7 @@ describe('Payments & Split Settlement Suite (R15)', () => {
       orderRepo.findOne.mockResolvedValue(order);
       methodRepo.findOne.mockResolvedValue(method);
       shiftService.getCurrentShift.mockResolvedValue({ id: 'shf-1' });
+      shiftService.requireCurrentShift.mockResolvedValue({ id: 'shf-1' });
 
       const correction = await service.correctPayment('t-1', 'pay-orig', {
         reason: 'Wrong payment method select',

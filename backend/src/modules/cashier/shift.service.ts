@@ -86,12 +86,26 @@ export class ShiftService {
     }
 
     qb.orderBy('s.opened_at', 'DESC');
-    const shift = await qb.getOne();
+    // No open shift is a normal state, not a missing resource: most of the day a terminal
+    // has no drawer open, and the screen that asks says so and offers to open one. This
+    // used to throw a 404, which put a red line in the console on every visit and made the
+    // ordinary case look like a fault. Callers that genuinely need a drawer - anything
+    // moving cash - use requireCurrentShift below.
+    return await qb.getOne();
+  }
+
+  /**
+   * The open shift, or a refusal naming the actual problem. Cash cannot move with the till
+   * shut, and a caller taking a payment should not be handed a 404 about a shift it never
+   * asked for.
+   */
+  async requireCurrentShift(tenantId: string, terminalId?: string | null, branchId?: string | null) {
+    const shift = await this.getCurrentShift(tenantId, terminalId, branchId);
     if (!shift) {
-      throw new NotFoundException({
-        statusCode: 404,
-        error: 'NO_OPEN_SHIFT',
-        message: 'No active open shift found for the specified terminal',
+      throw new ConflictException({
+        code: 'NO_OPEN_SHIFT',
+        title: 'No Cash Drawer Open',
+        detail: 'Cash cannot be taken or returned while no shift is open at this terminal. Open a shift first.',
       });
     }
     return shift;

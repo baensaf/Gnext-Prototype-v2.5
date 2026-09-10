@@ -175,7 +175,9 @@ export class RefundService {
           throw new BadRequestException('Bank transfer refund requires a reference number');
         }
         if (targetMethod.kind === 'CASH') {
-          await this.shiftService.getCurrentShift(tenantId, order.terminal_id, order.branch_id);
+          // Checked before the refund row exists, so the till is known to be open by the
+          // time there is anything to settle.
+          await this.shiftService.requireCurrentShift(tenantId, order.terminal_id, order.branch_id);
         }
       }
 
@@ -279,7 +281,7 @@ export class RefundService {
       const methodKind = refund.method_kind;
 
       if (methodKind === 'CASH') {
-        const shift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id, order.branch_id);
+        const shift = await this.shiftService.requireCurrentShift(tenantId, order.terminal_id, order.branch_id);
         refund.shift_id = shift.id;
         await this.shiftService.recordCashRefundMovement(tenantId, shift.id, refund.id, refund.amount, userId, em);
         refund.status = 'SUCCEEDED';
