@@ -33,7 +33,7 @@ import {
   TableContainer,
 } from '@mui/material';
 
-import { usePathname } from 'src/routes/hooks';
+import { useRouter, usePathname } from 'src/routes/hooks';
 
 import { MoneyUtil } from 'src/utils/money.util';
 
@@ -42,6 +42,7 @@ import { catalogApi } from 'src/api/catalogApi';
 export function PricingPage() {
   const { t: _t } = useTranslation();
   const pathname = usePathname();
+  const router = useRouter();
 
   const [priceGroups, setPriceGroups] = useState<PriceGroup[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -87,19 +88,29 @@ export function PricingPage() {
     loadData();
   }, [loadData]);
 
+  // The two sub-paths are deep links into a dialog on this one page. They open it on the
+  // way in; closing it has to put the address bar back, or the URL keeps claiming a drawer
+  // that is no longer there and the back button has nothing to undo.
   useEffect(() => {
-    if (pathname.includes('bulk-update')) {
-      setBulkModalOpen(true);
-    } else if (pathname.includes('price-groups')) {
-      setDrawerOpen(true);
-    }
+    setBulkModalOpen(pathname.includes('bulk-update'));
+    setDrawerOpen(pathname.includes('price-groups'));
   }, [pathname]);
+
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    if (pathname.includes('price-groups')) router.push('/app/pricing/price-book');
+  };
+
+  const closeBulkModal = () => {
+    setBulkModalOpen(false);
+    if (pathname.includes('bulk-update')) router.push('/app/pricing/price-book');
+  };
 
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await catalogApi.createPriceGroup({ code, name, currency_code: 'IRR' });
-      setDrawerOpen(false);
+      closeDrawer();
       setCode('');
       setName('');
       loadData();
@@ -132,7 +143,7 @@ export function PricingPage() {
         amount: bulkAmount,
       });
       setSuccess(`Bulk price update completed! ${res.updated_count} prices updated.`);
-      setBulkModalOpen(false);
+      closeBulkModal();
       loadData();
     } catch (err: any) {
       setError(err.detail || 'Failed to perform bulk price update');
@@ -151,10 +162,10 @@ export function PricingPage() {
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
-          <Button variant="outlined" color="primary" startIcon={<TrendingUpIcon />} onClick={() => setBulkModalOpen(true)}>
+          <Button variant="outlined" color="primary" startIcon={<TrendingUpIcon />} onClick={() => router.push('/app/pricing/bulk-update')}>
             Bulk Price Update
           </Button>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)} sx={{ fontWeight: 'bold' }}>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => router.push('/app/pricing/price-groups')} sx={{ fontWeight: 'bold' }}>
             Create Price Group
           </Button>
         </Stack>
@@ -235,7 +246,7 @@ export function PricingPage() {
       </Card>
 
       {/* Create Price Group Drawer */}
-      <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+      <Drawer anchor="right" open={drawerOpen} onClose={closeDrawer}>
         <Box sx={{ width: 400, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
             Create Price Group
@@ -267,7 +278,7 @@ export function PricingPage() {
       </Drawer>
 
       {/* Bulk Price Update Modal */}
-      <Dialog open={bulkModalOpen} onClose={() => setBulkModalOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={bulkModalOpen} onClose={closeBulkModal} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontWeight: 'bold' }}>Bulk Price Adjustment</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ mt: 1 }}>
@@ -306,7 +317,7 @@ export function PricingPage() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setBulkModalOpen(false)}>Cancel</Button>
+          <Button onClick={closeBulkModal}>Cancel</Button>
           <Button variant="contained" color="primary" onClick={handleBulkUpdate}>
             Apply Bulk Adjustment
           </Button>

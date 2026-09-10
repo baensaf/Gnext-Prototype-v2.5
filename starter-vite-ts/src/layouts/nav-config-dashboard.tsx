@@ -127,7 +127,7 @@ export function useNavData(): NavSectionProps['data'] {
       subheader: t('nav.businessManagement', 'Business Management'),
       items: [
         {
-          title: t('nav.catalogSubmenu', 'Catalog & Menus'),
+          title: t('nav.catalogSubmenu', 'Catalog'),
           path: '/app/catalog/menus',
           icon: ICONS.catalog,
           children: [
@@ -203,11 +203,16 @@ export function useNavData(): NavSectionProps['data'] {
       items: [
         {
           title: t('nav.reports', 'Reports & Analytics'),
-          path: '/app/reports/sales-summary',
+          path: '/app/reports',
           icon: ICONS.dashboard,
-          // The report picker inside the page can reach every report, but the chain
-          // roll-up is the one an area manager opens by name, so it gets its own entry.
+          // Twenty-five reports live behind the picker inside the viewer, so the index is
+          // the entry that makes them findable. The two named below are the ones people
+          // open by name — sales summary daily, the chain roll-up by an area manager.
           children: [
+            {
+              title: t('nav.reportsAll', 'All Reports'),
+              path: '/app/reports',
+            },
             {
               title: t('nav.reportsSalesSummary', 'Sales Summary'),
               path: '/app/reports/sales-summary',
@@ -297,6 +302,12 @@ export function useNavData(): NavSectionProps['data'] {
           const children = item.children.filter((child) => canReachPath(role, child.path));
           if (!children.length) {
             return canReachPath(role, item.path) ? { ...item, children: undefined } : null;
+          }
+          // One survivor is not a menu. A cashier's shifts group is left holding a single
+          // entry once Business Days goes, and a disclosure triangle that reveals one link
+          // costs a click and buys nothing — so it becomes that link, under its own name.
+          if (children.length === 1) {
+            return { ...item, children: undefined, title: children[0].title, path: children[0].path };
           }
           // A group survives on its children. Catalog is headed by Menus, which is head
           // office's, but a branch manager still needs the Availability entry underneath

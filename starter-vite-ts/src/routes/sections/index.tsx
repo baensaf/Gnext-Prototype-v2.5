@@ -12,12 +12,12 @@ import { PosOrderPage } from 'src/pages/pos/order';
 import { MenusPage } from 'src/pages/catalog/menus';
 import { DashboardPage } from 'src/pages/dashboard';
 import { ReceiptPage } from 'src/pages/pos/receipt';
+import { UsersPage } from 'src/pages/settings/users';
 import { useAuthStore } from 'src/store/useAuthStore';
-import { homePathForRole } from 'src/config/role-access';
 import { RefundsPage } from 'src/pages/orders/refunds';
 import { OptionsPage } from 'src/pages/catalog/options';
 import { PricingPage } from 'src/pages/catalog/pricing';
-import { UsersPage } from 'src/pages/settings/users';
+import { homePathForRole } from 'src/config/role-access';
 import { SettingsHubPage } from 'src/pages/settings/hub';
 import { ProductsPage } from 'src/pages/catalog/products';
 import { DineInPage } from 'src/pages/operations/dine-in';
@@ -33,6 +33,7 @@ import { CustomersPage } from 'src/pages/customers/directory';
 import { TerminalsPage } from 'src/pages/operations/terminals';
 import { OrdersWorkflowPage } from 'src/pages/orders/workflow';
 import { CustomerCreditPage } from 'src/pages/customers/credit';
+import { ReportsIndexPage } from 'src/pages/reports/index-page';
 import { GeneralSettingsPage } from 'src/pages/settings/general';
 import { ImportWizardPage } from 'src/pages/tools/import-wizard';
 import { ShiftDetailPage } from 'src/pages/cashier/shift-detail';
@@ -51,8 +52,6 @@ import { ProductDetailPage } from 'src/pages/catalog/product-detail';
 import { BranchDetailPage } from 'src/pages/operations/branch-detail';
 import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
 import { CourierDetailPage } from 'src/pages/operations/courier-detail';
-import { CampaignDetailPage } from 'src/pages/discounts/campaign-detail';
-import { CourierSettlementsPage } from 'src/pages/operations/settlements';
 import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
 import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
 import { KdsConfigurationPage } from 'src/pages/operations/kds-configuration';
@@ -118,13 +117,15 @@ export const routesSection: RouteObject[] = [
       { path: 'delivery/couriers/:courierId', element: <CourierDetailPage /> },
       { path: 'delivery/settlements', element: <DeliveryPage /> },
       { path: 'delivery/settlements/:settlementId', element: <SettlementDetailPage /> },
+      { path: 'delivery/zones', element: <DeliveryPage /> },
+      { path: 'delivery/audit', element: <DeliveryPage /> },
       { path: 'cashier/shifts', element: <CashDrawerPage /> },
       { path: 'cashier/shifts/:shiftId', element: <ShiftDetailPage /> },
       { path: 'cashier/business-days', element: <BusinessDaysPage /> },
       { path: 'payments', element: <PaymentsPage /> },
       { path: 'refunds', element: <RefundsPage /> },
-      { path: 'customer-club/discounts', element: <DiscountsHubPage defaultTab={0} /> },
-      { path: 'customer-club/wallet', element: <DiscountsHubPage defaultTab={3} /> },
+      { path: 'customer-club/discounts', element: <Navigate to="/app/discounts/customer-rates" replace /> },
+      { path: 'customer-club/wallet', element: <Navigate to="/app/discounts/wallet" replace /> },
       { path: 'customers', element: <CustomersPage /> },
       { path: 'customers/:id', element: <CustomersPage /> },
       { path: 'credit/accounts', element: <CustomerCreditPage /> },
@@ -140,7 +141,7 @@ export const routesSection: RouteObject[] = [
       { path: 'pricing/price-book', element: <PricingPage /> },
       { path: 'pricing/price-groups', element: <PricingPage /> },
       { path: 'pricing/bulk-update', element: <PricingPage /> },
-      { path: 'discounts', element: <DiscountsHubPage defaultTab={0} /> },
+      { path: 'discounts', element: <Navigate to="/app/discounts/customer-rates" replace /> },
       { path: 'discounts/campaigns', element: <Navigate to="/app/discounts/customer-rates" replace /> },
       { path: 'discounts/campaigns/:id', element: <Navigate to="/app/discounts/customer-rates" replace /> },
       { path: 'discounts/customer-rates', element: <DiscountsHubPage defaultTab={0} /> },
@@ -159,6 +160,7 @@ export const routesSection: RouteObject[] = [
       { path: 'simulation/payments-printers', element: <SimulationPaymentsPrintersPage /> },
       { path: 'simulation/offline-sync', element: <OfflineSyncPage /> },
       { path: 'simulation/logs', element: <SimulationLogsPage /> },
+      { path: 'reports', element: <ReportsIndexPage /> },
       { path: 'reports/:reportCode', element: <ReportViewerPage /> },
       { path: 'audit', element: <AuditExplorerPage /> },
       { path: 'settings', element: <SettingsHubPage /> },
@@ -167,7 +169,7 @@ export const routesSection: RouteObject[] = [
       { path: 'settings/order-workflow', element: <OrderWorkflowSettingsPage /> },
       { path: 'settings/discount-authorizations', element: <DiscountsHubPage defaultTab={2} /> },
       { path: 'settings/payments-refunds', element: <PaymentSettingsPage /> },
-      { path: 'settings/payments', element: <PaymentSettingsPage /> },
+      { path: 'settings/payments', element: <Navigate to="/app/settings/payments-refunds" replace /> },
       { path: 'settings/approvals', element: <ApprovalsSettingsPage /> },
       { path: 'settings/reasons', element: <ReasonCodesPage /> },
       { path: 'settings/localization', element: <MediaLocalizationDemoPage /> },

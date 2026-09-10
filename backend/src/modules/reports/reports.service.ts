@@ -78,8 +78,13 @@ export class ReportsService {
     @InjectRepository(ReportExportJob) private readonly exportJobRepo: Repository<ReportExportJob>,
   ) {}
 
-  async getCatalog() {
-    return [
+  /**
+   * The picker on the reports screen is built from this, so it has to answer the same way
+   * queryReport does. Offering a branch manager a report the run then refuses is a dead end
+   * dressed up as a menu item.
+   */
+  async getCatalog(actor?: UserScope) {
+    const catalog = [
       { code: 'sales-summary', name: 'Sales Summary', category: 'FINANCIAL' },
       { code: 'branch-comparison', name: 'Branch Performance Comparison', category: 'FINANCIAL' },
       { code: 'product-sales', name: 'Product & Category Velocity', category: 'CATALOG' },
@@ -106,6 +111,10 @@ export class ReportsService {
       { code: 'integration-operations', name: 'Integration & Webhook Operations', category: 'SIMULATION' },
       { code: 'v5-preview-inventory', name: 'V5 Preview: Inventory Stock & Movement', category: 'V5_PREVIEW' },
     ];
+    if (actor && !isHeadOfficeUser(actor)) {
+      return catalog.filter((report) => !CHAIN_ONLY_REPORTS.includes(report.code));
+    }
+    return catalog;
   }
 
   /**

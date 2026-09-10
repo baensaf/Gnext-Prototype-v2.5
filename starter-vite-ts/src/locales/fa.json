@@ -34,7 +34,7 @@
     "businessManagement": "مدیریت کسب‌وکار",
     "reportsAudit": "گزارش‌ها و ممیزی",
     "demoSandbox": "جعبه‌ابزار شبیه‌سازی (دمو)",
-    "catalogSubmenu": "کاتالوگ و منوها",
+    "catalogSubmenu": "کاتالوگ",
     "customersCredit": "مشتریان و اعتبارات",
     "discountsLoyalty": "تخفیف‌ها و وفاداری",
     "sell": "فروش",
@@ -109,7 +109,8 @@
     "reportsSalesSummary": "خلاصه فروش",
     "reportsBranchComparison": "مقایسه شعب",
     "users": "کاربران و نقش‌ها",
-    "cashierShifts": "شیفت‌ها و صندوق"
+    "cashierShifts": "شیفت‌ها و صندوق",
+    "reportsAll": "همه گزارش‌ها"
   },
   "common": {
     "languages": "انتخاب زبان",
@@ -1514,7 +1515,28 @@
     "title": "گزارش‌ها و تحلیل‌ها",
     "salesSummary": "گزارش خلاصه فروش",
     "exportCsv": "خروجی UTF-8 CSV",
-    "exportXlsx": "خروجی Typed XLSX"
+    "exportXlsx": "خروجی Typed XLSX",
+    "index": {
+      "heading": "گزارش‌ها و تحلیل‌ها",
+      "subtitle": "همه گزارش‌هایی که حساب شما به آن‌ها دسترسی دارد. برای تنظیم بازه زمانی، ذخیره نما یا خروجی گرفتن، یکی را باز کنید.",
+      "searchPlaceholder": "جستجوی گزارش",
+      "noMatches": "گزارشی با «{{term}}» پیدا نشد.",
+      "loadFailed": "فهرست گزارش‌ها بارگذاری نشد. دوباره تلاش کنید.",
+      "categories": {
+        "FINANCIAL": "فروش و عملکرد",
+        "CATALOG": "منو و محصول",
+        "PAYMENT": "پرداخت‌ها",
+        "PROMOTION": "تخفیف‌ها و کمپین‌ها",
+        "CASH": "صندوق و شیفت‌ها",
+        "CREDIT": "اعتبار مشتری",
+        "CUSTOMER": "مشتریان",
+        "DELIVERY": "ارسال و پیک‌ها",
+        "TAX": "مالیات و انطباق",
+        "INTEGRATION": "یکپارچه‌سازی‌ها",
+        "SIMULATION": "شبیه‌سازی و سخت‌افزار",
+        "V5_PREVIEW": "پیش‌نمایش"
+      }
+    }
   },
   "simulation": {
     "title": "مرکز شبیه‌سازی",

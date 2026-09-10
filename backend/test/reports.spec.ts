@@ -157,6 +157,18 @@ describe('ReportsService (Unit)', () => {
     expect(catalog.some((r) => r.code === 'sales-summary')).toBe(true);
   });
 
+  it('should hide chain-only reports from a branch account', async () => {
+    // The picker on the reports screen is built from this list, so anything it offers has
+    // to be something queryReport will actually run. Offering branch-comparison to a
+    // branch manager put a 403 behind a menu item.
+    const branchCatalog = await service.getCatalog({ role: 'MANAGER', branchId: 'branch-1' });
+    expect(branchCatalog.some((r) => r.code === 'branch-comparison')).toBe(false);
+    expect(branchCatalog.some((r) => r.code === 'sales-summary')).toBe(true);
+
+    const headOfficeCatalog = await service.getCatalog({ role: 'SUPER_ADMIN', branchId: null });
+    expect(headOfficeCatalog.some((r) => r.code === 'branch-comparison')).toBe(true);
+  });
+
   it('should query sales-summary report and compute exact summary totals', async () => {
     orderRepo.createQueryBuilder().getMany.mockResolvedValue([
       { order_number: 'ORD-1', subtotal_amount: '100.00', tax_amount: '9.00', total_amount: '109.00', paid_amount: '109.00', placed_at: new Date() },
