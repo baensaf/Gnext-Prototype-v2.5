@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Param, Body, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { ShiftService } from './shift.service';
+import { effectiveBranchId } from '../../common/utils/user-scope.util';
 import {
   ShiftOpenDto,
   CashMovementDto,
@@ -16,7 +17,9 @@ export class ShiftsController {
   @Get()
   async getShifts(@Query() query: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.shiftService.getShifts(tenantId, query);
+    // Same rule for the list behind it: a branch account sees its own shifts.
+    const branch = effectiveBranchId((req as any).userBranchId, query.branch || query.branchId);
+    return await this.shiftService.getShifts(tenantId, { ...query, branch });
   }
 
   @Post('open')
@@ -30,7 +33,15 @@ export class ShiftsController {
   @Get('current')
   async getCurrentShift(@Query('terminalId') terminalId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.shiftService.getCurrentShift(tenantId, terminalId);
+    // The branch never appeared in the query, so nothing was there to confine: a Downtown
+    // cashier asking whether their drawer was open was answered about Central Plaza's, and
+    // the screen would have offered to close somebody else's till. The service has always
+    // taken a branch — the route just never passed one.
+    return await this.shiftService.getCurrentShift(
+      tenantId,
+      terminalId,
+      effectiveBranchId((req as any).userBranchId, undefined),
+    );
   }
 
   @Get(':id')
