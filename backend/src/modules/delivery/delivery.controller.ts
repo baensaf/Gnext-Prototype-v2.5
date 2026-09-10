@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Req, UnauthorizedException } from '@nestjs/common';
 import { Request } from 'express';
 import { DeliveryService } from './delivery.service';
+import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 
 @Controller('api/v1/delivery')
 export class DeliveryController {
@@ -13,12 +14,14 @@ export class DeliveryController {
     return await this.deliveryService.getZones(tenantId, branchId);
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Post('zones')
   async createZone(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.deliveryService.createZone(tenantId, body);
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Delete('zones/:id')
   async deleteZone(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -38,6 +41,7 @@ export class DeliveryController {
     return await this.deliveryService.getCourierById(tenantId, id);
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Post('couriers')
   async createCourier(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

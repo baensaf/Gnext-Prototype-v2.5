@@ -9,6 +9,7 @@ import { PrintRoute } from '../../entities/PrintRoute.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { PrintQueueService } from './print-queue.service';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 
 @Controller('api/v1')
 export class PrintersController {
@@ -31,6 +32,7 @@ export class PrintersController {
     return await this.printerRepo.find({ where, order: { name: 'ASC' } });
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Post('printers')
   async createPrinter(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -77,6 +79,7 @@ export class PrintersController {
     return saved;
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Patch('printers/:id')
   async updatePrinter(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -92,6 +95,7 @@ export class PrintersController {
     return saved;
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Delete('printers/:id')
   async deletePrinter(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -118,6 +122,7 @@ export class PrintersController {
     return result;
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Post('printer-groups')
   async createGroup(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -143,6 +148,7 @@ export class PrintersController {
     return savedGroup;
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Patch('printer-groups/:id')
   async updateGroup(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -174,6 +180,7 @@ export class PrintersController {
     return { ...savedGroup, members };
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Delete('printer-groups/:id')
   async deleteGroup(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -190,6 +197,7 @@ export class PrintersController {
     return await this.routeRepo.find({ where, order: { priority: 'DESC' } });
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Post('print-routes')
   async createRoute(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -207,6 +215,7 @@ export class PrintersController {
     return await this.routeRepo.save(route);
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Patch('print-routes/:id')
   async updateRoute(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -229,6 +238,7 @@ export class PrintersController {
     return await this.routeRepo.save(route);
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Delete('print-routes/:id')
   async deleteRoute(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

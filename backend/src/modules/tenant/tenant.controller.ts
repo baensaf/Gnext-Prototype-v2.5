@@ -1,7 +1,7 @@
 import { Controller, Get, Patch, Post, Delete, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { TenantService } from './tenant.service';
-import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
+import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
 
 @Controller('api/v1')
@@ -68,6 +68,7 @@ export class TenantController {
     return await this.tenantService.getBranchHours(tenantId, id);
   }
 
+  @HeadOfficeOnly()
   @Patch('branches/:id/operating-hours')
   async updateBranchHours(@Param('id') id: string, @Body() body: { hours: any[] }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -87,6 +88,7 @@ export class TenantController {
     return await this.tenantService.getTerminals(tenantId, branchId);
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Post('terminals')
   async createTerminal(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -94,6 +96,7 @@ export class TenantController {
     return await this.tenantService.createTerminal(tenantId, body, correlationId);
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Patch('terminals/:id')
   async updateTerminal(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -101,6 +104,7 @@ export class TenantController {
     return await this.tenantService.updateTerminal(tenantId, id, body, correlationId);
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Delete('terminals/:id')
   async archiveTerminal(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

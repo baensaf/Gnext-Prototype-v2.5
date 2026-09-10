@@ -8,6 +8,7 @@ import {
   PaymentDeviceCreateDto,
   SettlementAccountCreateDto,
 } from './dtos/payment.dto';
+import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 
 @Controller('api/v1')
 export class PaymentController {
@@ -83,6 +84,7 @@ export class PaymentController {
     return await this.paymentService.getDevices(tenantId, branchId);
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Post('payment-devices')
   async createDevice(@Body() body: PaymentDeviceCreateDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -95,6 +97,7 @@ export class PaymentController {
     return await this.paymentService.getSettlementAccounts(tenantId);
   }
 
+  @HeadOfficeOnly()
   @Post('settlement-accounts')
   async createSettlementAccount(@Body() body: SettlementAccountCreateDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
