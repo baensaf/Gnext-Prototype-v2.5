@@ -7,6 +7,8 @@
  * rather than a security boundary.
  */
 
+import type { BranchType } from 'src/api/tenantApi';
+
 /** Roles the prototype seeds or recognises. Anything else is treated as a register account. */
 export type AppRole = 'SUPER_ADMIN' | 'ADMIN' | 'OWNER' | 'MANAGER' | 'CASHIER';
 
@@ -61,6 +63,8 @@ const MANAGER_PATHS = [
  */
 const CHAIN_ONLY_PATHS = [
   '/app/settings/users',
+  // Who may see what across the chain is head office's document, not a branch's setting.
+  '/app/settings/roles',
   // One set of currencies, tender types, reason codes, approval thresholds and languages
   // for the whole chain, so one place decides them. What a branch may diverge on is the
   // overridable settings groups, which keep their own screens.
@@ -96,6 +100,26 @@ const CHAIN_ONLY_PATHS = [
   '/app/discounts',
   '/app/customer-club',
 ];
+
+/**
+ * Screens that run one site: its live service, its tills, its couriers, its equipment. At
+ * head office there is no site to run, and the chain reads these through the roll-ups
+ * instead — so they are hidden there rather than offered with nobody's data in them.
+ */
+const SITE_ONLY_PATHS = [
+  '/app/delivery',
+  '/app/cashier',
+  '/app/operations/terminals',
+  '/app/operations/printers',
+  '/app/operations/kds-configuration',
+  '/app/operations/print-queue',
+];
+
+/**
+ * Tools that only make sense standing in a shop: a register, a kiosk, a kitchen display,
+ * a dining floor. A production kitchen and an office have no customers either.
+ */
+const SHOP_FLOOR_PATHS = ['/app/pos', '/app/kiosk', '/app/kds', '/app/dine-in'];
 
 const FULL_ACCESS: RoleAccess = { allow: ['*'], deny: [], home: '/app/dashboard' };
 
@@ -148,6 +172,32 @@ export function canReachPath(
   if (!isHeadOffice && isChainOnlyPath(pathname)) return false;
   if (access.deny.some((prefix) => matches(pathname, prefix))) return false;
   return access.allow.some((prefix) => matches(pathname, prefix));
+}
+
+/** The scope chosen in the header switcher, as opposed to the account's own reach. */
+export interface WorkspaceScope {
+  isHeadOffice: boolean;
+  /** Null at head office, which is not a site. */
+  branchType: BranchType | null;
+}
+
+/**
+ * Whether a screen belongs in the scope the header is set to — a separate question from
+ * `canReachPath`. An unconfined admin may open everything, but at head office the menu is
+ * the chain's work and inside a branch it is that branch's, so each side hides the other's.
+ * This shapes what is offered, not what may be opened: a link from an order to its receipt
+ * still works at head office.
+ *
+ * Null scope — still loading, or the provider was lost to an error boundary — hides nothing.
+ */
+export function fitsWorkspace(pathname: string, scope?: WorkspaceScope | null): boolean {
+  if (!scope) return true;
+  const listed = (prefixes: string[]) => prefixes.some((prefix) => matches(pathname, prefix));
+  // Checked first: the chain's roll-ups sit under the same prefixes as the live screens
+  // they summarise, /app/delivery/rollup under /app/delivery.
+  if (isChainOnlyPath(pathname)) return scope.isHeadOffice;
+  if (scope.isHeadOffice) return !listed(SITE_ONLY_PATHS) && !listed(SHOP_FLOOR_PATHS);
+  return scope.branchType === 'RESTAURANT' || !listed(SHOP_FLOOR_PATHS);
 }
 
 export function homePathForRole(role?: string | null): string {

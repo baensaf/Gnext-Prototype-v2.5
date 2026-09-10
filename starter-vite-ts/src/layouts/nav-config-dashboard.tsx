@@ -3,9 +3,9 @@ import type { NavSectionProps } from 'src/components/nav-section';
 import { useTranslation } from 'react-i18next';
 
 import { CONFIG } from 'src/global-config';
-import { canReachPath } from 'src/config/role-access';
+import { useWorkspaceScope } from 'src/contexts/branch-context';
+import { canReachPath, fitsWorkspace } from 'src/config/role-access';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
-import { useBranchContextOptional } from 'src/contexts/branch-context';
 
 import { Label } from 'src/components/label';
 import { SvgColor } from 'src/components/svg-color';
@@ -36,27 +36,17 @@ const ICONS = {
   media: icon('ic-file'),
 };
 
-/**
- * Tools that only make sense standing in a shop: a register, a kiosk, a kitchen display,
- * a dining floor. A production kitchen and an office have no customers, and head office
- * is not a building you can serve from, so these are hidden rather than offered broken.
- */
-const SHOP_FLOOR_PATHS = ['/app/pos', '/app/kiosk', '/app/kds', '/app/dine-in/floor'];
-
 export function useNavData(): NavSectionProps['data'] {
   const { t } = useTranslation();
-  const branchScope = useBranchContextOptional();
   const role = useAuthStore((state) => state.user?.role);
-  // The account's own reach, which is not the scope chosen in the header: an unconfined
-  // admin looking at one branch may still open the chain's screens, and an admin pinned
-  // to a branch may not, whatever the switcher says.
+  // Two separate filters. The account's reach decides what it may open at all — an admin
+  // pinned to a branch never gets the chain's screens, whatever the switcher says. The
+  // header's scope then decides what belongs on the menu right now: at head office the
+  // chain's work, inside a branch that branch's.
   const isHeadOffice = useIsHeadOffice();
-
-  // No scope yet — still loading, or the provider is gone because an error boundary
-  // replaced it. Showing the full menu is the pre-existing behaviour and the safe one:
-  // hiding tools because the scope is briefly unknown would be worse than showing them.
-  const isShopFloor =
-    !branchScope?.isHeadOffice && (branchScope?.selectedBranchType ?? 'RESTAURANT') === 'RESTAURANT';
+  const workspace = useWorkspaceScope();
+  const visible = (path: string) =>
+    canReachPath(role, path, isHeadOffice) && fitsWorkspace(path, workspace);
 
   const sections: NavSectionProps['data'] = [
     {
@@ -310,15 +300,14 @@ export function useNavData(): NavSectionProps['data'] {
     .map((section) => ({
       ...section,
       items: section.items
-        .filter((item) => isShopFloor || !SHOP_FLOOR_PATHS.includes(item.path))
         .map((item) => {
           // An open parent can still have a child the role may not open — chain reports
           // sit under the same menu as the branch's own.
-          if (!item.children) return canReachPath(role, item.path, isHeadOffice) ? item : null;
+          if (!item.children) return visible(item.path) ? item : null;
 
-          const children = item.children.filter((child) => canReachPath(role, child.path, isHeadOffice));
+          const children = item.children.filter((child) => visible(child.path));
           if (!children.length) {
-            return canReachPath(role, item.path, isHeadOffice) ? { ...item, children: undefined } : null;
+            return visible(item.path) ? { ...item, children: undefined } : null;
           }
           // One survivor is not a menu. A cashier's shifts group is left holding a single
           // entry once Business Days goes, and a disclosure triangle that reveals one link
@@ -332,7 +321,7 @@ export function useNavData(): NavSectionProps['data'] {
           return {
             ...item,
             children,
-            path: canReachPath(role, item.path, isHeadOffice) ? item.path : children[0].path,
+            path: visible(item.path) ? item.path : children[0].path,
           };
         })
         .filter((item): item is NonNullable<typeof item> => item !== null),

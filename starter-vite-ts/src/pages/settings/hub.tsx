@@ -35,7 +35,8 @@ import {
 
 import { RouterLink } from 'src/routes/components';
 
-import { canReachPath } from 'src/config/role-access';
+import { useWorkspaceScope } from 'src/contexts/branch-context';
+import { canReachPath, fitsWorkspace } from 'src/config/role-access';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
 type SettingScope = 'BRANCH' | 'ORG';
@@ -68,6 +69,7 @@ export function SettingsHubPage() {
   const { t } = useTranslation();
   const role = useAuthStore((state) => state.user?.role);
   const isHeadOffice = useIsHeadOffice();
+  const workspace = useWorkspaceScope();
   const [searchQuery, setSearchQuery] = useState('');
   const [scopeFilter, setScopeFilter] = useState<SettingScope | 'ALL'>('ALL');
   const isRtl = theme.direction === 'rtl';
@@ -323,13 +325,20 @@ export function SettingsHubPage() {
     },
   ];
 
+  // The sidebar already hides what a role cannot open, and what does not belong in the scope
+  // the header is set to. Offering it here anyway made the hub the one place that promised
+  // a page the menu had taken away.
+  const onOffer = (item: SettingItem) =>
+    canReachPath(role, item.path, isHeadOffice) && fitsWorkspace(item.path, workspace);
+  // Inside a branch everything left is per-branch, so a filter with one live option is noise.
+  const offeredScopes = new Set(categories.flatMap((c) => c.items.filter(onOffer).map((i) => i.scope)));
+  const showScopeFilter = offeredScopes.size > 1;
+
   const filteredCategories = categories
     .map((category) => {
       const filteredItems = category.items.filter((item) => {
-        // The sidebar already hides what a role cannot open. Offering it here anyway made
-        // the hub the one place that promised a page and then refused to show it.
-        if (!canReachPath(role, item.path, isHeadOffice)) return false;
-        if (scopeFilter !== 'ALL' && item.scope !== scopeFilter) return false;
+        if (!onOffer(item)) return false;
+        if (showScopeFilter && scopeFilter !== 'ALL' && item.scope !== scopeFilter) return false;
         if (!searchQuery.trim()) return true;
         const q = searchQuery.toLowerCase();
         return (
@@ -387,28 +396,30 @@ export function SettingsHubPage() {
           </Box>
 
           <Stack spacing={1.5} sx={{ width: { md: 'auto', xs: '100%' } }}>
-            <ToggleButtonGroup
-              exclusive
-              onChange={(_, next) => next && setScopeFilter(next)}
-              size="small"
-              sx={{
-                bgcolor: 'background.paper',
-                borderRadius: 2,
-                boxShadow: 2,
-                '& .MuiToggleButton-root': { fontWeight: 700, px: 2, textTransform: 'none' },
-              }}
-              value={scopeFilter}
-            >
-              <ToggleButton value="ALL">{t('settings.hub.scope.all', 'All')}</ToggleButton>
-              <ToggleButton value="ORG">
-                <CorporateFareIcon sx={{ fontSize: 16, mr: 0.75 }} />
-                {t('settings.hub.scope.org', 'Organization')}
-              </ToggleButton>
-              <ToggleButton value="BRANCH">
-                <StorefrontIcon sx={{ fontSize: 16, mr: 0.75 }} />
-                {t('settings.hub.scope.branch', 'Per Branch')}
-              </ToggleButton>
-            </ToggleButtonGroup>
+            {showScopeFilter && (
+              <ToggleButtonGroup
+                exclusive
+                onChange={(_, next) => next && setScopeFilter(next)}
+                size="small"
+                sx={{
+                  bgcolor: 'background.paper',
+                  borderRadius: 2,
+                  boxShadow: 2,
+                  '& .MuiToggleButton-root': { fontWeight: 700, px: 2, textTransform: 'none' },
+                }}
+                value={scopeFilter}
+              >
+                <ToggleButton value="ALL">{t('settings.hub.scope.all', 'All')}</ToggleButton>
+                <ToggleButton value="ORG">
+                  <CorporateFareIcon sx={{ fontSize: 16, mr: 0.75 }} />
+                  {t('settings.hub.scope.org', 'Organization')}
+                </ToggleButton>
+                <ToggleButton value="BRANCH">
+                  <StorefrontIcon sx={{ fontSize: 16, mr: 0.75 }} />
+                  {t('settings.hub.scope.branch', 'Per Branch')}
+                </ToggleButton>
+              </ToggleButtonGroup>
+            )}
 
             <TextField
             onChange={(e) => setSearchQuery(e.target.value)}

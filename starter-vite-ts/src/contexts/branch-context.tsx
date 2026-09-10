@@ -1,4 +1,5 @@
 import type { Branch, BranchType } from 'src/api/tenantApi';
+import type { WorkspaceScope } from 'src/config/role-access';
 
 import { useState, useEffect, useContext, useCallback, createContext } from 'react';
 
@@ -46,6 +47,13 @@ export function useBranchContext(): BranchContextValue {
  */
 export function useBranchContextOptional(): BranchContextValue | undefined {
   return useContext(BranchContext);
+}
+
+/** The header's scope in the shape `fitsWorkspace` reads; null while there is none. */
+export function useWorkspaceScope(): WorkspaceScope | null {
+  const branchScope = useBranchContextOptional();
+  if (!branchScope) return null;
+  return { isHeadOffice: branchScope.isHeadOffice, branchType: branchScope.selectedBranchType };
 }
 
 /**

@@ -1,6 +1,8 @@
 import type { Theme, SxProps } from '@mui/material/styles';
 import type { ButtonBaseProps } from '@mui/material/ButtonBase';
+import type { WorkspaceScope } from 'src/config/role-access';
 
+import { useTranslation } from 'react-i18next';
 import { usePopover } from 'minimal-shared/hooks';
 
 import Box from '@mui/material/Box';
@@ -13,10 +15,10 @@ import ButtonBase from '@mui/material/ButtonBase';
 import Button, { buttonClasses } from '@mui/material/Button';
 
 import { paths } from 'src/routes/paths';
-import { useRouter } from 'src/routes/hooks';
+import { useRouter, usePathname } from 'src/routes/hooks';
 
-import { useTranslation } from 'react-i18next';
-
+import { canReachPath, fitsWorkspace } from 'src/config/role-access';
+import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 import { HEAD_OFFICE_SCOPE, useBranchContextOptional } from 'src/contexts/branch-context';
 
 import { Label } from 'src/components/label';
@@ -47,6 +49,24 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
   const isHeadOffice = branchScope?.isHeadOffice ?? false;
   const canChangeScope = branchScope?.canChangeScope ?? true;
   const setSelectedBranchId = branchScope?.setSelectedBranchId;
+
+  const pathname = usePathname();
+  const role = useAuthStore((state) => state.user?.role);
+  const accountIsHeadOffice = useIsHeadOffice();
+
+  /**
+   * Each scope has its own menu, so switching can leave you on a page the new one does not
+   * offer — the POS at head office, the menu composer inside a shop. Staying there would
+   * show a screen the sidebar has just taken away; the dashboard exists in both.
+   */
+  const switchScope = (id: string, scope: WorkspaceScope) => {
+    setSelectedBranchId?.(id);
+    onClose();
+    if (!fitsWorkspace(pathname, scope)) router.push(paths.app.dashboard);
+  };
+
+  // Branches are the chain's to manage, so the way there goes through head office.
+  const canManageBranches = canReachPath(role, paths.app.operations.branches, accountIsHeadOffice);
 
   const headOfficeName = t('branchScope.headOffice', 'All Branches (HQ)');
 
@@ -162,10 +182,7 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
           <MenuItem
             disabled={!canChangeScope}
             selected={isHeadOffice}
-            onClick={() => {
-              setSelectedBranchId?.(HEAD_OFFICE_SCOPE);
-              onClose();
-            }}
+            onClick={() => switchScope(HEAD_OFFICE_SCOPE, { isHeadOffice: true, branchType: null })}
             sx={{ height: 48, borderRadius: 1, gap: 1.5, display: canChangeScope ? 'flex' : 'none' }}
           >
             <Avatar
@@ -199,10 +216,12 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
             <MenuItem
               key={branch.id}
               selected={branch.id === selectedBranchId}
-              onClick={() => {
-                setSelectedBranchId?.(branch.id);
-                onClose();
-              }}
+              onClick={() =>
+                switchScope(branch.id, {
+                  isHeadOffice: false,
+                  branchType: branch.branch_type ?? 'RESTAURANT',
+                })
+              }
               sx={{ height: 48, borderRadius: 1, gap: 1.5 }}
             >
               <Avatar
@@ -239,31 +258,36 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
         </MenuList>
       </Scrollbar>
 
-      <Divider sx={{ my: 0.5, borderStyle: 'dashed' }} />
+      {canManageBranches && (
+        <>
+          <Divider sx={{ my: 0.5, borderStyle: 'dashed' }} />
 
-      <Button
-        fullWidth
-        startIcon={<Iconify width={18} icon="mingcute:location-fill" />}
-        onClick={() => {
-          onClose();
-          router.push(paths.app.operations.branches);
-        }}
-        sx={{
-          gap: 1.5,
-          justifyContent: 'flex-start',
-          fontWeight: 'fontWeightMedium',
-          [`& .${buttonClasses.startIcon}`]: {
-            m: 0,
-            width: 24,
-            height: 24,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          },
-        }}
-      >
-        {t('branchScope.manage', 'Manage Branches')}
-      </Button>
+          <Button
+            fullWidth
+            startIcon={<Iconify width={18} icon="mingcute:location-fill" />}
+            onClick={() => {
+              if (!isHeadOffice) setSelectedBranchId?.(HEAD_OFFICE_SCOPE);
+              onClose();
+              router.push(paths.app.operations.branches);
+            }}
+            sx={{
+              gap: 1.5,
+              justifyContent: 'flex-start',
+              fontWeight: 'fontWeightMedium',
+              [`& .${buttonClasses.startIcon}`]: {
+                m: 0,
+                width: 24,
+                height: 24,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              },
+            }}
+          >
+            {t('branchScope.manage', 'Manage Branches')}
+          </Button>
+        </>
+      )}
     </CustomPopover>
   );
 
