@@ -26,6 +26,7 @@ import { DiscountsHubPage } from 'src/pages/discounts/hub';
 import { RolesMatrixPage } from 'src/pages/settings/roles';
 import { BranchesPage } from 'src/pages/operations/branches';
 import { DeliveryPage } from 'src/pages/operations/delivery';
+import { FleetRollupPage } from 'src/pages/operations/fleet-rollup';
 import { PaymentsPage } from 'src/pages/operations/payments';
 import { ReasonCodesPage } from 'src/pages/settings/reasons';
 import { PrintersPage } from 'src/pages/operations/printers';
@@ -41,6 +42,7 @@ import { ShiftDetailPage } from 'src/pages/cashier/shift-detail';
 import { MonitoringPage } from 'src/pages/operations/monitoring';
 import { AvailabilityPage } from 'src/pages/catalog/availability';
 import { CashDrawerPage } from 'src/pages/operations/cash-drawer';
+import { ShiftRollupPage } from 'src/pages/cashier/shift-rollup';
 import { PrintQueuePage } from 'src/pages/operations/print-queue';
 /* Detail & Simulation Sub-Pages */
 import { OrdersDetailPage } from 'src/pages/orders/orders-detail';
@@ -121,9 +123,11 @@ export const routesSection: RouteObject[] = [
       { path: 'delivery/settlements/:settlementId', element: <SettlementDetailPage /> },
       { path: 'delivery/zones', element: <DeliveryPage /> },
       { path: 'delivery/audit', element: <DeliveryPage /> },
+      { path: 'delivery/rollup', element: <FleetRollupPage /> },
       { path: 'cashier/shifts', element: <CashDrawerPage /> },
       { path: 'cashier/shifts/:shiftId', element: <ShiftDetailPage /> },
       { path: 'cashier/business-days', element: <BusinessDaysPage /> },
+      { path: 'cashier/rollup', element: <ShiftRollupPage /> },
       { path: 'payments', element: <PaymentsPage /> },
       { path: 'refunds', element: <RefundsPage /> },
       { path: 'customer-club/discounts', element: <Navigate to="/app/discounts/customer-rates" replace /> },

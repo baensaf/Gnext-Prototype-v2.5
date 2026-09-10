@@ -2,6 +2,7 @@ import { Controller, Get, Post, Param, Body, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { ShiftService } from './shift.service';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
+import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 import {
   ShiftOpenDto,
   CashMovementDto,
@@ -42,6 +43,21 @@ export class ShiftsController {
       terminalId,
       effectiveBranchId((req as any).userBranchId, undefined),
     );
+  }
+
+  /**
+   * Head office only. A branch has its own drawer screen; this one answers about the tills
+   * in everybody else's shops, and it reads without touching anything.
+   *
+   * Declared above `@Get(':id')` because Nest matches routes in declaration order, and a
+   * shift id is a path segment like any other — put below, `rollup` would be looked up as
+   * a shift and 404.
+   */
+  @HeadOfficeOnly()
+  @Get('rollup')
+  async getShiftRollup(@Query('businessDate') businessDate: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.shiftService.getShiftRollup(tenantId, businessDate);
   }
 
   @Get(':id')

@@ -278,4 +278,18 @@ export class DeliveryController {
     const tenantId = (req as any).tenantId;
     return await this.deliveryService.getSettlementStatement(tenantId, id);
   }
+
+  // --- CHAIN ROLL-UP ---
+
+  /**
+   * Head office only, and on purpose: a branch manager already has the board, and this
+   * answers about everybody else's shops. Nothing here writes, so there is no @Roles —
+   * reach is the whole question, not seniority.
+   */
+  @HeadOfficeOnly()
+  @Get('rollup')
+  async getFleetRollup(@Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.deliveryService.getFleetRollup(tenantId);
+  }
 }

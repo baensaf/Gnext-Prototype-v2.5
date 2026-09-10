@@ -16,8 +16,10 @@ import { Delivery, DeliveryState } from '../../entities/Delivery.entity';
 import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
+import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { BusinessDateUtil } from '../../common/utils/business-date.util';
 
 @Injectable()
 export class DeliveryService {
@@ -37,6 +39,7 @@ export class DeliveryService {
     @InjectRepository(DeliveryEvent) private readonly deliveryEventRepo: Repository<DeliveryEvent>,
     @InjectRepository(Terminal) private readonly terminalRepo: Repository<Terminal>,
     @InjectRepository(CustomerAddress) private readonly customerAddressRepo: Repository<CustomerAddress>,
+    @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
     private readonly auditWriter: AuditWriter,
   ) {}
 
@@ -1209,5 +1212,177 @@ export class DeliveryService {
       lines: detail.lines,
       generated_at: new Date().toISOString(),
     };
+  }
+
+  // --- 8. CHAIN ROLL-UP (READ ONLY) ---
+
+  /**
+   * A delivery is late once it has been with a courier this long without arriving. There is
+   * no promised-time column on a delivery, so elapsed time since assignment is the only
+   * honest signal available; the number is a demo threshold, not a contractual SLA.
+   */
+  private static readonly LATE_AFTER_MINUTES = 25;
+
+
+  /**
+   * What head office can see of the fleet without standing in any one shop: one row per
+   * branch, and nothing to click.
+   *
+   * Deliberately read-only, and deliberately not calling reconcileDeliveryWithOrder — that
+   * method writes, and a chain-wide overview that quietly rewrote every branch's delivery
+   * states as a side effect of being looked at would be a much worse thing than a row that
+   * is a few seconds stale. The order state is folded in below the same way reconcile folds
+   * it, so the numbers agree with the branch screen without persisting anything.
+   */
+  async getFleetRollup(tenantId: string) {
+    const branches = await this.branchRepo.find({ where: { tenant_id: tenantId } });
+    const sellingBranches = branches
+      .filter((b) => SELLING_BRANCH_TYPES.includes(b.branch_type))
+      .filter((b) => b.is_active);
+
+    const today = BusinessDateUtil.today();
+    const lateBefore = new Date(Date.now() - DeliveryService.LATE_AFTER_MINUTES * 60_000);
+
+    // One join instead of a query per delivery: getDeliveries() reads the order row by row
+    // because it returns a board, and a chain of a dozen branches would make that hundreds
+    // of round trips for a page that only ever shows counts.
+    const rows: Array<{
+      branch_id: string;
+      state: DeliveryState;
+      order_state: string;
+      order_status: string;
+      cash_expected: string;
+      assigned_at: Date | null;
+      delivered_at: Date | null;
+    }> = await this.deliveryRepo
+      .createQueryBuilder('d')
+      .innerJoin(OrderHeader, 'o', 'o.id = d.order_id AND o.tenant_id = d.tenant_id')
+      .where('d.tenant_id = :tenantId', { tenantId })
+      .select([
+        'o.branch_id AS branch_id',
+        'd.state AS state',
+        'o.state AS order_state',
+        'o.status AS order_status',
+        'd.cash_expected AS cash_expected',
+        'd.assigned_at AS assigned_at',
+        'd.delivered_at AS delivered_at',
+      ])
+      .getRawMany();
+
+    const couriers = await this.courierRepo.find({ where: { tenant_id: tenantId, is_active: true } });
+    const attendance = await this.attendanceRepo.find({
+      where: { tenant_id: tenantId, date: today, status: 'CHECKED_IN' },
+    });
+
+    type Bucket = {
+      in_flight: number;
+      unassigned: number;
+      late: number;
+      delivered_today: number;
+      failed_today: number;
+      couriers_active: number;
+      couriers_on_shift: number;
+      cash_with_couriers: string;
+    };
+    const emptyBucket = (): Bucket => ({
+      in_flight: 0,
+      unassigned: 0,
+      late: 0,
+      delivered_today: 0,
+      failed_today: 0,
+      couriers_active: 0,
+      couriers_on_shift: 0,
+      cash_with_couriers: '0.00',
+    });
+
+    // Seeded from the branch list, so a branch running no deliveries tonight still appears
+    // as a row of zeroes rather than vanishing. An absent branch reads as "nothing to see";
+    // a zero reads as "nothing is moving", and those are different things at head office.
+    const buckets = new Map<string, Bucket>();
+    for (const b of sellingBranches) buckets.set(b.id, emptyBucket());
+
+    for (const row of rows) {
+      if (!buckets.has(row.branch_id)) buckets.set(row.branch_id, emptyBucket());
+      const bucket = buckets.get(row.branch_id)!;
+      const state = DeliveryService.effectiveDeliveryState(row.state, row.order_state, row.order_status);
+
+      if (state === 'DELIVERED') {
+        if (BusinessDateUtil.fromDate(row.delivered_at) === today) bucket.delivered_today += 1;
+        continue;
+      }
+      if (state === 'FAILED') {
+        bucket.failed_today += 1;
+        continue;
+      }
+      if (state === 'CANCELLED') continue;
+
+      bucket.in_flight += 1;
+      if (state === 'UNASSIGNED') bucket.unassigned += 1;
+      if (row.assigned_at && new Date(row.assigned_at) < lateBefore) bucket.late += 1;
+      bucket.cash_with_couriers = MoneyUtil.add(
+        bucket.cash_with_couriers,
+        MoneyUtil.format(row.cash_expected || '0', 2),
+        2,
+      );
+    }
+
+    for (const c of couriers) {
+      if (!c.branch_id || !buckets.has(c.branch_id)) continue;
+      buckets.get(c.branch_id)!.couriers_active += 1;
+    }
+    for (const a of attendance) {
+      if (!buckets.has(a.branch_id)) continue;
+      buckets.get(a.branch_id)!.couriers_on_shift += 1;
+    }
+
+    const byId = new Map(branches.map((b) => [b.id, b]));
+    const branchRows = Array.from(buckets.entries())
+      .map(([id, b]) => {
+        const branch = byId.get(id);
+        return {
+          branch_id: id,
+          branch: branch ? branch.name : id,
+          branch_code: branch ? branch.code : '—',
+          ...b,
+        };
+      })
+      // Worst first: a chain operator opens this to find where to phone, not to read an
+      // alphabetical list. Late orders outrank everything, then sheer volume in flight.
+      .sort((a, z) => z.late - a.late || z.in_flight - a.in_flight || a.branch.localeCompare(z.branch));
+
+    return {
+      business_date: today,
+      late_after_minutes: DeliveryService.LATE_AFTER_MINUTES,
+      generated_at: new Date().toISOString(),
+      rows: branchRows,
+      totals: {
+        branch_count: branchRows.length,
+        branches_with_late: branchRows.filter((r) => r.late > 0).length,
+        in_flight: branchRows.reduce((sum, r) => sum + r.in_flight, 0),
+        unassigned: branchRows.reduce((sum, r) => sum + r.unassigned, 0),
+        late: branchRows.reduce((sum, r) => sum + r.late, 0),
+        delivered_today: branchRows.reduce((sum, r) => sum + r.delivered_today, 0),
+        failed_today: branchRows.reduce((sum, r) => sum + r.failed_today, 0),
+        couriers_active: branchRows.reduce((sum, r) => sum + r.couriers_active, 0),
+        couriers_on_shift: branchRows.reduce((sum, r) => sum + r.couriers_on_shift, 0),
+        cash_with_couriers: MoneyUtil.sum(branchRows.map((r) => r.cash_with_couriers), 2),
+      },
+    };
+  }
+
+  /**
+   * The state reconcileDeliveryWithOrder would settle on, worked out without writing it.
+   * Kept beside the rollup so the two readings of "what state is this in" cannot drift.
+   */
+  private static effectiveDeliveryState(
+    state: DeliveryState,
+    orderState: string,
+    orderStatus: string,
+  ): DeliveryState {
+    const order = String(orderState || orderStatus || '').toUpperCase();
+    if (order === 'COMPLETED') return 'DELIVERED';
+    if (order === 'CANCELLED') return 'CANCELLED';
+    if (order === 'OUT_FOR_DELIVERY' && !['DELIVERED', 'CANCELLED'].includes(state)) return 'EN_ROUTE';
+    return state;
   }
 }

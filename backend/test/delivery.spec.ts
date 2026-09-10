@@ -17,6 +17,7 @@ import { Delivery } from '../src/entities/Delivery.entity';
 import { DeliveryEvent } from '../src/entities/DeliveryEvent.entity';
 import { Terminal } from '../src/entities/Terminal.entity';
 import { CustomerAddress } from '../src/entities/CustomerAddress.entity';
+import { Branch } from '../src/entities/Branch.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 
 describe('DeliveryService (R19 Unit & Integration)', () => {
@@ -75,6 +76,8 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
         { provide: getRepositoryToken(DeliveryEvent), useValue: deliveryEventRepo },
         { provide: getRepositoryToken(Terminal), useValue: terminalRepo },
         { provide: getRepositoryToken(CustomerAddress), useValue: customerAddressRepo },
+        // Only the chain roll-up reads branches; nothing under test here does.
+        { provide: getRepositoryToken(Branch), useValue: { find: jest.fn().mockResolvedValue([]) } },
         { provide: AuditWriter, useValue: auditWriter },
       ],
     }).compile();

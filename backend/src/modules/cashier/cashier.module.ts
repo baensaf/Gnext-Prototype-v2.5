@@ -6,6 +6,7 @@ import { BusinessDayClose } from '../../entities/BusinessDayClose.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { Payment } from '../../entities/Payment.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
+import { Branch } from '../../entities/Branch.entity';
 import { ShiftService } from './shift.service';
 import { BusinessDayService } from './business-day.service';
 import { ShiftsController } from './shifts.controller';
@@ -21,6 +22,7 @@ import { AuditModule } from '../audit/audit.module';
       Terminal,
       Payment,
       OrderHeader,
+      Branch,
     ]),
     AuditModule,
   ],

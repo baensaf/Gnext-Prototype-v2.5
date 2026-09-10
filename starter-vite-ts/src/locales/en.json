@@ -57,6 +57,8 @@
     "printers": "Printers & Routes",
     "printQueue": "Print Queue",
     "monitoring": "Operational Monitoring",
+    "fleetRollup": "Fleet Across Branches",
+    "shiftRollup": "Shifts Across Branches",
     "customerClubGroup": "Customer Club & Loyalty",
     "customerDiscounts": "Customer Discounts",
     "customerWallet": "Wallet & Cashback",
@@ -2371,6 +2373,41 @@
     "authorize": "Authorize",
     "verifying": "Verifying...",
     "reasonPlaceholder": "Reason for supervisor authorization"
+  },
+  "rollup": {
+    "branch": "Branch",
+    "fleet": {
+      "title": "Fleet Across Branches",
+      "readOnlyNotice": "Read-only. A delivery is dispatched, re-assigned and closed out at the branch it left from. This page is here so head office can see where to phone, not to act on another shop floor.",
+      "inFlight": "In flight",
+      "late": "Running late",
+      "unassigned": "Waiting for a driver",
+      "deliveredToday": "Delivered today",
+      "failedToday": "Failed",
+      "couriersOnShift": "Drivers on shift",
+      "cashWithCouriers": "Cash out with drivers",
+      "empty": "No selling branches to report on.",
+      "loadError": "Failed to load the fleet roll-up",
+      "footnote": "Late means more than {{minutes}} minutes with a driver without arriving. Business date {{date}}."
+    },
+    "shifts": {
+      "title": "Shifts Across Branches",
+      "readOnlyNotice": "Read-only. A drawer is opened, paid into and counted down at the register it belongs to. This page is here so head office can see which branch to ask about, not to close another shop till.",
+      "businessDate": "Business date",
+      "open": "Drawers open",
+      "closingReview": "In closing review",
+      "closed": "Closed and counted",
+      "staleOpen": "Left open from an earlier day",
+      "staleWarning": "{{count}} drawer(s) are still open on a business date that has already ended. Those tills keep accumulating against a closed day until somebody at the branch counts them down.",
+      "notTrading": "Branches with no till open",
+      "expectedCash": "Expected cash",
+      "countedCash": "Counted cash",
+      "variance": "Net over / short",
+      "worstVariance": "Worst drawer",
+      "empty": "No selling branches to report on.",
+      "loadError": "Failed to load the shift roll-up",
+      "footnote": "Over / short counts only drawers that have actually been counted, so a branch still trading reads as zero rather than as clean. \"Left open from an earlier day\" is not filtered by the date above."
+    }
   },
   "printQueue": {
     "title": "Print Queue & Spooler",

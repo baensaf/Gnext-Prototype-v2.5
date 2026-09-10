@@ -73,6 +73,11 @@ const CHAIN_ONLY_PATHS = [
   '/app/settings/localization',
   '/app/operations/branches',
   '/app/reports/branch-comparison',
+  // Reading every branch at once is head office's job by definition. A branch manager has
+  // the live screens for their own site and no business reading the shop next door's
+  // drawer variance, so the roll-ups are chain-only even though they only ever read.
+  '/app/delivery/rollup',
+  '/app/cashier/rollup',
   '/app/catalog/import-export',
   '/app/settings/data-reset',
   // The menu is the chain's. A branch does not invent products, rename categories,

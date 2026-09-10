@@ -15,6 +15,7 @@ import { Delivery } from '../../entities/Delivery.entity';
 import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { Terminal } from '../../entities/Terminal.entity';
+import { Branch } from '../../entities/Branch.entity';
 import { DeliveryService } from './delivery.service';
 import { DeliveryController } from './delivery.controller';
 import { CourierSettlementsController } from './courier-settlements.controller';
@@ -38,6 +39,7 @@ import { AuditModule } from '../audit/audit.module';
       DeliveryEvent,
       CustomerAddress,
       Terminal,
+      Branch,
     ]),
     AuditModule,
   ],

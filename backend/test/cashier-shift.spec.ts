@@ -10,6 +10,7 @@ import { BusinessDayClose } from '../src/entities/BusinessDayClose.entity';
 import { Terminal } from '../src/entities/Terminal.entity';
 import { Payment } from '../src/entities/Payment.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
+import { Branch } from '../src/entities/Branch.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 
 describe('Cashier Shift & Business Day Suite (R13)', () => {
@@ -21,6 +22,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
   let terminalRepo: any;
   let paymentRepo: any;
   let orderRepo: any;
+  let branchRepo: any;
   let dayCloseRepo: any;
   let auditWriter: any;
   let dataSource: any;
@@ -31,6 +33,8 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
     terminalRepo = { findOne: jest.fn() };
     paymentRepo = { find: jest.fn().mockResolvedValue([]) };
     orderRepo = { find: jest.fn().mockResolvedValue([]) };
+    // Only the chain roll-up reads this; the shift paths under test never touch it.
+    branchRepo = { find: jest.fn().mockResolvedValue([]) };
     dayCloseRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() };
     auditWriter = { write: jest.fn() };
 
@@ -65,6 +69,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
         { provide: getRepositoryToken(Terminal), useValue: terminalRepo },
         { provide: getRepositoryToken(Payment), useValue: paymentRepo },
         { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
+        { provide: getRepositoryToken(Branch), useValue: branchRepo },
         { provide: getRepositoryToken(BusinessDayClose), useValue: dayCloseRepo },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: DataSource, useValue: dataSource },

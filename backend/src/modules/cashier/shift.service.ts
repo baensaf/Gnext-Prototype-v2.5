@@ -12,8 +12,10 @@ import { CashMovement, CashMovementType } from '../../entities/CashMovement.enti
 import { Terminal } from '../../entities/Terminal.entity';
 import { Payment } from '../../entities/Payment.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
+import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import {
   ShiftOpenDto,
   CashMovementDto,
@@ -30,6 +32,7 @@ export class ShiftService {
     @InjectRepository(Terminal) private readonly terminalRepo: Repository<Terminal>,
     @InjectRepository(Payment) private readonly paymentRepo: Repository<Payment>,
     @InjectRepository(OrderHeader) private readonly orderRepo: Repository<OrderHeader>,
+    @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
     private readonly auditWriter: AuditWriter,
     private readonly dataSource: DataSource,
   ) {}
@@ -483,5 +486,140 @@ export class ShiftService {
 
     if (entityManager) return await execute(entityManager);
     return await this.dataSource.transaction(execute);
+  }
+
+  // --- CHAIN ROLL-UP (READ ONLY) ---
+
+  /**
+   * What head office can see of the tills without standing at any one of them: one row per
+   * branch for a single operating day, and nothing to click.
+   *
+   * Counting, paying in and closing all stay on the branch's own screen — this only reads.
+   * The number that earns the page is `stale_open`: a drawer still open on a day that has
+   * already ended is invisible from inside the branch that left it open, and is exactly
+   * what a chain operator is scanning for.
+   */
+  async getShiftRollup(tenantId: string, businessDate?: string) {
+    const date = businessDate || BusinessDateUtil.today();
+    const today = BusinessDateUtil.today();
+
+    const branches = await this.branchRepo.find({ where: { tenant_id: tenantId } });
+    const sellingBranches = branches
+      .filter((b) => SELLING_BRANCH_TYPES.includes(b.branch_type))
+      .filter((b) => b.is_active);
+
+    const shifts = await this.shiftRepo.find({ where: { tenant_id: tenantId, business_date: date } });
+    // Asked separately because these are by definition NOT on the day being reported: a
+    // till opened on Tuesday and never closed does not appear in Wednesday's rows, which
+    // is the whole reason nobody notices it.
+    const stale = await this.shiftRepo
+      .createQueryBuilder('s')
+      .where('s.tenant_id = :tenantId', { tenantId })
+      .andWhere('s.business_date < :today', { today })
+      .andWhere("(s.state <> 'CLOSED' AND s.status <> 'CLOSED')")
+      .getMany();
+
+    type Bucket = {
+      open: number;
+      closing_review: number;
+      closed: number;
+      stale_open: number;
+      expected_cash: string;
+      counted_cash: string;
+      variance: string;
+      /** The single worst drawer, not the net: two tills 100 apart net to nothing. */
+      worst_variance: string;
+      last_closed_at: string | null;
+    };
+    const emptyBucket = (): Bucket => ({
+      open: 0,
+      closing_review: 0,
+      closed: 0,
+      stale_open: 0,
+      expected_cash: '0.00',
+      counted_cash: '0.00',
+      variance: '0.00',
+      worst_variance: '0.00',
+      last_closed_at: null,
+    });
+
+    // Seeded from the branch list so a shop that never opened a till today is a row of
+    // zeroes rather than an absence. "No shift opened all day" is a finding, not a blank.
+    const buckets = new Map<string, Bucket>();
+    for (const b of sellingBranches) buckets.set(b.id, emptyBucket());
+
+    for (const s of shifts) {
+      if (!buckets.has(s.branch_id)) buckets.set(s.branch_id, emptyBucket());
+      const bucket = buckets.get(s.branch_id)!;
+      const state = String(s.state || s.status || '').toUpperCase();
+
+      if (state === 'CLOSED') {
+        bucket.closed += 1;
+        const closedAt = s.closed_at ? new Date(s.closed_at).toISOString() : null;
+        if (closedAt && (!bucket.last_closed_at || closedAt > bucket.last_closed_at)) {
+          bucket.last_closed_at = closedAt;
+        }
+      } else if (state === 'CLOSING_REVIEW') {
+        bucket.closing_review += 1;
+      } else {
+        bucket.open += 1;
+      }
+
+      bucket.expected_cash = MoneyUtil.add(bucket.expected_cash, MoneyUtil.format(s.expected_cash || '0', 2), 2);
+      bucket.counted_cash = MoneyUtil.add(bucket.counted_cash, MoneyUtil.format(s.actual_cash || '0', 2), 2);
+
+      // short_over is only meaningful once a drawer has been counted; an open till has a
+      // null there, and treating that as a zero variance would report every branch clean
+      // until close of business.
+      if (s.actual_cash !== null && s.actual_cash !== undefined) {
+        const shortOver = MoneyUtil.format(s.short_over ?? s.over_short_amount ?? '0', 2);
+        bucket.variance = MoneyUtil.add(bucket.variance, shortOver, 2);
+        if (MoneyUtil.greaterThan(MoneyUtil.abs(shortOver, 2), MoneyUtil.abs(bucket.worst_variance, 2))) {
+          bucket.worst_variance = shortOver;
+        }
+      }
+    }
+
+    for (const s of stale) {
+      if (!buckets.has(s.branch_id)) buckets.set(s.branch_id, emptyBucket());
+      buckets.get(s.branch_id)!.stale_open += 1;
+    }
+
+    const byId = new Map(branches.map((b) => [b.id, b]));
+    const rows = Array.from(buckets.entries())
+      .map(([id, b]) => {
+        const branch = byId.get(id);
+        return {
+          branch_id: id,
+          branch: branch ? branch.name : id,
+          branch_code: branch ? branch.code : '—',
+          ...b,
+        };
+      })
+      // Worst first, same reasoning as the fleet roll-up: a till left open from a previous
+      // day beats a large variance, because it is still counting up.
+      .sort(
+        (a, z) =>
+          z.stale_open - a.stale_open ||
+          (MoneyUtil.greaterThan(MoneyUtil.abs(z.worst_variance, 2), MoneyUtil.abs(a.worst_variance, 2)) ? 1 : -1) ||
+          a.branch.localeCompare(z.branch),
+      );
+
+    return {
+      business_date: date,
+      generated_at: new Date().toISOString(),
+      rows,
+      totals: {
+        branch_count: rows.length,
+        branches_not_trading: rows.filter((r) => r.open + r.closing_review + r.closed === 0).length,
+        open: rows.reduce((sum, r) => sum + r.open, 0),
+        closing_review: rows.reduce((sum, r) => sum + r.closing_review, 0),
+        closed: rows.reduce((sum, r) => sum + r.closed, 0),
+        stale_open: rows.reduce((sum, r) => sum + r.stale_open, 0),
+        expected_cash: MoneyUtil.sum(rows.map((r) => r.expected_cash), 2),
+        counted_cash: MoneyUtil.sum(rows.map((r) => r.counted_cash), 2),
+        variance: MoneyUtil.sum(rows.map((r) => r.variance), 2),
+      },
+    };
   }
 }
