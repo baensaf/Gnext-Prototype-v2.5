@@ -44,12 +44,27 @@ describe('BranchScopeInterceptor', () => {
     expect(req.body.branch_id).toBe(CENTRAL);
   });
 
-  it('overwrites a named branch but never adds one', () => {
-    // "No branch given" means something to a handler — usually the whole tenant — and that
-    // is the handler's decision to make, not this interceptor's.
-    const req = run({ userBranchId: DOWNTOWN, query: {}, body: { branchId: '' } });
+  it('supplies the branch a read left out', () => {
+    // Every leaking list endpoint the audit found already threaded branchId through to its
+    // service; they answered about the whole chain because the client sent none and "no
+    // branch given" means "no filter". For an account pinned to one shop there is no
+    // reading of that which should include another shop.
+    const req = run({ userBranchId: DOWNTOWN, query: {}, body: {} });
+    expect(req.query.branchId).toBe(DOWNTOWN);
+  });
+
+  it('does not stamp a branch onto a body that named none', () => {
+    // What a create with no branch is making is the handler's decision; inventing ownership
+    // for a record that may legitimately have none is not this interceptor's business.
+    const req = run({ userBranchId: DOWNTOWN, query: {}, body: { name: 'Chain-wide thing' } });
+    expect(req.body.branchId).toBeUndefined();
+    expect(req.body.name).toBe('Chain-wide thing');
+  });
+
+  it('leaves head office unfiltered when it names no branch', () => {
+    // Head office asking for everything is how one account looks at four shops.
+    const req = run({ userBranchId: null, query: {}, body: {} });
     expect(req.query.branchId).toBeUndefined();
-    expect(req.body.branchId).toBe('');
   });
 
   it('survives a request with no session, no query and an array body', () => {
