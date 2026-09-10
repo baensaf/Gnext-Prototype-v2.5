@@ -5,6 +5,17 @@ import { map } from 'rxjs/operators';
 import { KdsService, MessageEvent } from './kds.service';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
+import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
+import { KdsRoutingRule } from '../../entities/KdsRoutingRule.entity';
+import { KdsScreen } from '../../entities/KdsScreen.entity';
+import { KitchenStation } from '../../entities/KitchenStation.entity';
+import {
+  CreateRoutingRuleDto,
+  CreateScreenDto,
+  CreateStationDto,
+  UpdateScreenDto,
+  UpdateStationDto,
+} from './dtos/kds-config.dto';
 
 @Controller('api/v1/kds')
 export class KdsController {
@@ -108,19 +119,21 @@ export class KdsController {
 
   @Roles(...MANAGER_AND_ABOVE)
   @Post('stations')
-  async createStation(@Body() body: any, @Req() req: Request) {
+  async createStation(@Body() body: CreateStationDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.kdsService.createStation(tenantId, body, correlationId);
   }
 
+  @BranchOwned(KitchenStation)
   @Roles(...MANAGER_AND_ABOVE)
   @Patch('stations/:id')
-  async updateStation(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+  async updateStation(@Param('id') id: string, @Body() body: UpdateStationDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.kdsService.updateStation(tenantId, id, body);
   }
 
+  @BranchOwned(KitchenStation)
   @Roles(...MANAGER_AND_ABOVE)
   @Delete('stations/:id')
   async deleteStation(@Param('id') id: string, @Req() req: Request) {
@@ -137,18 +150,20 @@ export class KdsController {
 
   @Roles(...MANAGER_AND_ABOVE)
   @Post('screens')
-  async createScreen(@Body() body: any, @Req() req: Request) {
+  async createScreen(@Body() body: CreateScreenDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.kdsService.createScreen(tenantId, body);
   }
 
+  @BranchOwned(KdsScreen)
   @Roles(...MANAGER_AND_ABOVE)
   @Patch('screens/:id')
-  async updateScreen(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+  async updateScreen(@Param('id') id: string, @Body() body: UpdateScreenDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.kdsService.updateScreen(tenantId, id, body);
   }
 
+  @BranchOwned(KdsScreen)
   @Roles(...MANAGER_AND_ABOVE)
   @Delete('screens/:id')
   async deleteScreen(@Param('id') id: string, @Req() req: Request) {
@@ -165,11 +180,12 @@ export class KdsController {
 
   @Roles(...MANAGER_AND_ABOVE)
   @Post('routing-rules')
-  async createRoutingRule(@Body() body: any, @Req() req: Request) {
+  async createRoutingRule(@Body() body: CreateRoutingRuleDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.kdsService.createRoutingRule(tenantId, body);
   }
 
+  @BranchOwned(KdsRoutingRule)
   @Roles(...MANAGER_AND_ABOVE)
   @Delete('routing-rules/:id')
   async deleteRoutingRule(@Param('id') id: string, @Req() req: Request) {

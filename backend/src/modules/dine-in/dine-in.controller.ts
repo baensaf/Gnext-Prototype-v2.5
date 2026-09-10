@@ -3,6 +3,9 @@ import { Request } from 'express';
 import { DineInService } from './dine-in.service';
 import { CreateSectionDto, UpdateSectionDto, CreateTableDto, UpdateTableDto, MoveTableDto, MergeOrdersDto } from './dtos/dine-in.dto';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
+import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
+import { DiningArea } from '../../entities/DiningArea.entity';
+import { DiningTable } from '../../entities/DiningTable.entity';
 
 // One base, one name per thing. Mounted at two bases with per-handler aliases underneath,
 // a single handler answered at four addresses, and every rule about who may call it had to
@@ -26,6 +29,7 @@ export class DineInController {
     return await this.dineInService.createSection(tenantId, body, correlationId);
   }
 
+  @BranchOwned(DiningArea)
   @Roles(...MANAGER_AND_ABOVE)
   @Patch('sections/:id')
   async updateSection(@Param('id') id: string, @Body() body: UpdateSectionDto, @Req() req: Request) {
@@ -34,6 +38,7 @@ export class DineInController {
     return await this.dineInService.updateSection(tenantId, id, body, correlationId);
   }
 
+  @BranchOwned(DiningArea)
   @Roles(...MANAGER_AND_ABOVE)
   @Delete('sections/:id')
   async archiveSection(@Param('id') id: string, @Req() req: Request) {
@@ -58,6 +63,7 @@ export class DineInController {
     return await this.dineInService.createTable(tenantId, body, correlationId);
   }
 
+  @BranchOwned(DiningTable, { through: { entity: DiningArea, foreignKey: 'dining_area_id' } })
   @Roles(...MANAGER_AND_ABOVE)
   @Patch('tables/:id')
   async updateTable(@Param('id') id: string, @Body() body: UpdateTableDto, @Req() req: Request) {
@@ -66,6 +72,7 @@ export class DineInController {
     return await this.dineInService.updateTable(tenantId, id, body, correlationId);
   }
 
+  @BranchOwned(DiningTable, { through: { entity: DiningArea, foreignKey: 'dining_area_id' } })
   @Roles(...MANAGER_AND_ABOVE)
   @Delete('tables/:id')
   async archiveTable(@Param('id') id: string, @Req() req: Request) {
@@ -107,6 +114,7 @@ export class DineInController {
   }
 
   // Legacy table session helpers for backward compatibility
+  @BranchOwned(DiningTable, { through: { entity: DiningArea, foreignKey: 'dining_area_id' } })
   @Post('tables/:id/seat')
   async seatGuests(@Param('id') tableId: string, @Body() body: { guestCount: number; orderId?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -114,6 +122,7 @@ export class DineInController {
     return await this.dineInService.seatGuests(tenantId, tableId, body.guestCount, body.orderId, correlationId);
   }
 
+  @BranchOwned(DiningTable, { through: { entity: DiningArea, foreignKey: 'dining_area_id' } })
   @Post('tables/:id/release')
   async releaseTable(@Param('id') tableId: string, @Body() body: { nextStatus?: 'AVAILABLE' | 'CLEANING' }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

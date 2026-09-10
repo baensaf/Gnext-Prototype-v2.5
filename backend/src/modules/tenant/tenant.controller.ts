@@ -3,6 +3,9 @@ import { Request } from 'express';
 import { TenantService } from './tenant.service';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
+import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
+import { Terminal } from '../../entities/Terminal.entity';
+import { CreateTerminalDto, UpdateTerminalDto } from './dtos/terminal.dto';
 
 @Controller('api/v1')
 export class TenantController {
@@ -90,20 +93,22 @@ export class TenantController {
 
   @Roles(...MANAGER_AND_ABOVE)
   @Post('terminals')
-  async createTerminal(@Body() body: any, @Req() req: Request) {
+  async createTerminal(@Body() body: CreateTerminalDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.tenantService.createTerminal(tenantId, body, correlationId);
   }
 
+  @BranchOwned(Terminal)
   @Roles(...MANAGER_AND_ABOVE)
   @Patch('terminals/:id')
-  async updateTerminal(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+  async updateTerminal(@Param('id') id: string, @Body() body: UpdateTerminalDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.tenantService.updateTerminal(tenantId, id, body, correlationId);
   }
 
+  @BranchOwned(Terminal)
   @Roles(...MANAGER_AND_ABOVE)
   @Delete('terminals/:id')
   async archiveTerminal(@Param('id') id: string, @Req() req: Request) {

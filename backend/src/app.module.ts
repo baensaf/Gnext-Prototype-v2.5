@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { HealthController } from './modules/health/health.controller';
 import { SessionGuard } from './common/guards/session.guard';
 import { CsrfGuard } from './common/guards/csrf.guard';
+import { BranchOwnershipGuard } from './common/guards/branch-ownership.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { BranchScopeInterceptor } from './common/interceptors/branch-scope.interceptor';
 import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
@@ -239,6 +240,12 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    // Last, and only for routes that name a record: an id is not a permission, so a route
+    // that takes one checks which branch that record belongs to before the handler runs.
+    {
+      provide: APP_GUARD,
+      useClass: BranchOwnershipGuard,
     },
     // Before anything reads the request: a branch account only ever asks about its own
     // branch, whatever the query string says.

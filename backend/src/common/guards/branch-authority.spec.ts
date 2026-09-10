@@ -1,6 +1,8 @@
 import 'reflect-metadata';
 
 import { HEAD_OFFICE_ONLY_KEY, ROLES_KEY, MANAGER_AND_ABOVE } from '../decorators/roles.decorator';
+import { BRANCH_OWNED_KEY } from '../decorators/branch-owned.decorator';
+import { OrdersController } from '../../modules/order/order.controller';
 import { DeliveryController } from '../../modules/delivery/delivery.controller';
 import { DineInController } from '../../modules/dine-in/dine-in.controller';
 import { KdsController } from '../../modules/kds/kds.controller';
@@ -20,7 +22,7 @@ import { CatalogController } from '../../modules/catalog/catalog.controller';
  * which is why these read the metadata off the controllers rather than restating the list.
  */
 
-type Handler = { name: string; roles?: string[]; headOfficeOnly?: boolean };
+type Handler = { name: string; roles?: string[]; headOfficeOnly?: boolean; branchOwned?: any };
 
 function authorityOf(controller: any, method: string): Handler {
   const fn = controller.prototype[method];
@@ -29,6 +31,7 @@ function authorityOf(controller: any, method: string): Handler {
     name: `${controller.name}.${method}`,
     roles: Reflect.getMetadata(ROLES_KEY, fn),
     headOfficeOnly: Reflect.getMetadata(HEAD_OFFICE_ONLY_KEY, fn),
+    branchOwned: Reflect.getMetadata(BRANCH_OWNED_KEY, fn),
   };
 }
 
@@ -83,5 +86,45 @@ describe('authority declared on the routes', () => {
     );
     expect(source).toMatch(/isHeadOfficeUser/);
     expect(source).toMatch(/Only head office may set another account/);
+  });
+});
+
+/**
+ * Which routes check the branch of the record their id names.
+ *
+ * Authority answers "may you configure a shop"; this answers "which shop". Without it a
+ * branch manager who is entitled to rename a terminal is entitled to rename every
+ * terminal in the chain, because the id in the path was never checked against their
+ * branch and the interceptor only ever confined the query string and the body.
+ */
+const BY_ID: [any, string[]][] = [
+  [DeliveryController, ['deleteZone', 'getCourierById', 'updateCourierStatus', 'setCourierAvailability', 'assignMobileTerminal', 'unassignMobileTerminal']],
+  [DineInController, ['updateSection', 'archiveSection', 'updateTable', 'archiveTable', 'seatGuests', 'releaseTable']],
+  [KdsController, ['updateStation', 'deleteStation', 'updateScreen', 'deleteScreen', 'deleteRoutingRule']],
+  [PrintersController, ['updatePrinter', 'deletePrinter', 'updateGroup', 'deleteGroup', 'updateRoute', 'deleteRoute']],
+  [TenantController, ['updateTerminal', 'archiveTerminal']],
+];
+
+describe('records name the branch they belong to', () => {
+  for (const [controller, methods] of BY_ID) {
+    for (const method of methods) {
+      it(`${controller.name}.${method} checks which branch the record belongs to`, () => {
+        const handler = authorityOf(controller, method);
+        expect(handler.branchOwned?.entity).toBeDefined();
+      });
+    }
+  }
+
+  // Every :id on the orders controller is an order id, so the mark sits on the class and
+  // covers the transitions — confirming, cancelling and reopening included.
+  it('every order route is covered at the class', () => {
+    expect(Reflect.getMetadata(BRANCH_OWNED_KEY, OrdersController)?.entity).toBeDefined();
+  });
+
+  // A table has no branch column of its own: it belongs to a floor, and the floor belongs
+  // to a shop. Getting this wrong would read undefined and refuse everyone.
+  it('a table is judged by the floor it stands on', () => {
+    const handler = authorityOf(DineInController, 'updateTable');
+    expect(handler.branchOwned.through?.foreignKey).toBe('dining_area_id');
   });
 });

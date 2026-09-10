@@ -96,7 +96,7 @@ export class KdsService {
     return await this.screenRepo.find({ where, order: { name: 'ASC' } });
   }
 
-  async createScreen(tenantId: string, data: { branch_id: string; terminal_id?: string; code: string; name: string; station_ids: string[] }) {
+  async createScreen(tenantId: string, data: { branch_id: string; terminal_id?: string; code: string; name: string; station_ids?: string[] }) {
     const screen = this.screenRepo.create({
       tenant_id: tenantId,
       branch_id: data.branch_id,

@@ -2,6 +2,7 @@ import { httpClient } from './httpClient';
 
 export interface KitchenStation {
   id: string;
+  branch_id?: string;
   code: string;
   name: string;
   station_type: string;

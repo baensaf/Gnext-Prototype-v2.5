@@ -14,7 +14,14 @@ import {
   OrderReopenDto,
 } from './dtos/order.dto';
 import { SplitOrderDto, TransferItemsDto } from '../dine-in/dtos/dine-in.dto';
+import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
+import { OrderHeader } from '../../entities/OrderHeader.entity';
 
+// Every :id on this controller is an order id, and an order belongs to the shop that
+// took it. Marking the class covers the transitions too — a branch may not confirm,
+// cancel or reopen another shop's order by quoting its id. Routes that name no order
+// (the list, the draft create) are unaffected.
+@BranchOwned(OrderHeader)
 @Controller('api/v1/orders')
 export class OrdersController {
   constructor(private readonly orderService: OrderService) {}
