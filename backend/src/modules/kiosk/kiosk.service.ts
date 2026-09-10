@@ -163,10 +163,15 @@ export class KioskService {
       if (existing) return existing;
     }
 
-    const identityPolicySetting = await this.settingRepo.findOne({
+    // Resolved against the branch this kiosk is standing in, exactly as the config
+    // endpoint above does. Asking for one row and taking whichever came back meant the
+    // screen could promise an optional phone number and the submit then refuse the order,
+    // or the reverse — the two paths were reading different branches' rules.
+    const identityPolicyRows = await this.settingRepo.find({
       where: { tenant_id: tenantId, key: 'KIOSK_CUSTOMER_IDENTITY_POLICY' },
     });
-    const policy = identityPolicySetting ? String(identityPolicySetting.value) : 'OPTIONAL';
+    const identityPolicyValue = pickSettingValue(identityPolicyRows, data.branch_id);
+    const policy = identityPolicyValue !== undefined ? String(identityPolicyValue) : 'OPTIONAL';
 
     if (policy === 'REQUIRED' && (!data.customer_phone || data.customer_phone.trim() === '')) {
       throw new ForbiddenException('Customer phone number is required by kiosk policy');

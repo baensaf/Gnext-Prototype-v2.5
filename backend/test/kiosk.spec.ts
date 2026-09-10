@@ -96,7 +96,9 @@ describe('KioskService (Unit)', () => {
   });
 
   it('should enforce required customer phone when identity policy is REQUIRED', async () => {
-    settingRepo.findOne.mockResolvedValue({ key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'REQUIRED' });
+    settingRepo.find.mockResolvedValue([
+      { key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'REQUIRED', branch_id: null },
+    ]);
 
     await expect(
       service.createKioskOrder('t-1', {
@@ -107,8 +109,41 @@ describe('KioskService (Unit)', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
+
+  // The submit path used to ask for one row and take whichever came back, so a branch
+  // that had overridden the policy could be judged by another site's rule — or by the
+  // organization's — while the screen in front of the customer showed its own.
+  it('should enforce the branch own identity policy, not the organization one', async () => {
+    settingRepo.find.mockResolvedValue([
+      { key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'OPTIONAL', branch_id: null },
+      { key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'REQUIRED', branch_id: 'br-strict' },
+    ]);
+    productRepo.findOne.mockResolvedValue({ id: 'prod-1', name: 'Burger', base_price: '10.00' });
+    orderRepo.create.mockImplementation((dto: any) => dto);
+    orderRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'ord-kiosk-3' }));
+    orderItemRepo.create.mockImplementation((dto: any) => dto);
+    orderItemRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'item-3' }));
+
+    await expect(
+      service.createKioskOrder('t-1', {
+        branch_id: 'br-strict',
+        order_type: 'TAKEAWAY',
+        items: [{ product_id: 'prod-1', quantity: 1 }],
+      }),
+    ).rejects.toThrow(ForbiddenException);
+
+    // The same order at a branch that inherits the organization's OPTIONAL goes through.
+    const order = await service.createKioskOrder('t-1', {
+      branch_id: 'br-relaxed',
+      order_type: 'TAKEAWAY',
+      items: [{ product_id: 'prod-1', quantity: 1 }],
+    });
+    expect(order.id).toBe('ord-kiosk-3');
+  });
   it('should create a valid kiosk order with tax calculation', async () => {
-    settingRepo.findOne.mockResolvedValue({ key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'OPTIONAL' });
+    settingRepo.find.mockResolvedValue([
+      { key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'OPTIONAL', branch_id: null },
+    ]);
     productRepo.findOne.mockResolvedValue({ id: 'prod-1', name: 'Burger', base_price: '10.00' });
 
     orderRepo.create.mockImplementation((dto: any) => dto);
@@ -153,7 +188,9 @@ describe('KioskService (Unit)', () => {
   });
 
   it('should ignore client-supplied unit price and use authoritative database price', async () => {
-    settingRepo.findOne.mockResolvedValue({ key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'OPTIONAL' });
+    settingRepo.find.mockResolvedValue([
+      { key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'OPTIONAL', branch_id: null },
+    ]);
     productRepo.findOne.mockResolvedValue({ id: 'prod-1', name: 'Burger', base_price: '15.00' });
 
     orderRepo.create.mockImplementation((dto: any) => dto);
