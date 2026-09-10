@@ -33,8 +33,8 @@ export function DiscountsHubPage({ defaultTab = 0 }: DiscountsHubPageProps) {
     const p = location.pathname;
     if (p.includes('/coupons')) return 1;
     if (p.includes('/authorizations') || p.includes('/discount-authorizations')) return 2;
-    if (p.includes('/wallet') || p.includes('/customer-club/wallet')) return 3;
-    if (p.includes('/customer-rates') || p.includes('/customer-club/discounts') || p.includes('/discounts')) return 0;
+    if (p.includes('/wallet')) return 3;
+    if (p.includes('/customer-rates') || p.includes('/discounts')) return 0;
     return defaultTab < 4 ? defaultTab : 0;
   }, [location.pathname, defaultTab]);
 

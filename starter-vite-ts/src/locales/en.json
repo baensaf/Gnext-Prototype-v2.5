@@ -34,7 +34,7 @@
     "businessManagement": "Business Management",
     "reportsAudit": "Reports & Compliance",
     "demoSandbox": "Simulation Sandbox",
-    "catalogSubmenu": "Catalog & Menus",
+    "catalogSubmenu": "Catalog",
     "customersCredit": "Customers & Credit",
     "discountsLoyalty": "Discounts & Loyalty",
     "sell": "Sell",
@@ -109,7 +109,8 @@
     "reportsSalesSummary": "Sales Summary",
     "reportsBranchComparison": "Branch Comparison",
     "users": "Users & Roles",
-    "cashierShifts": "Shifts & Drawer"
+    "cashierShifts": "Shifts & Drawer",
+    "reportsAll": "All Reports"
   },
   "common": {
     "languages": "Languages",
@@ -1514,7 +1515,28 @@
     "title": "Reports & Analytics",
     "salesSummary": "Sales Summary Report",
     "exportCsv": "Export UTF-8 CSV",
-    "exportXlsx": "Export Typed XLSX"
+    "exportXlsx": "Export Typed XLSX",
+    "index": {
+      "heading": "Reports & Analytics",
+      "subtitle": "Every report available to your account. Open one to set its date range, save a view, or export it.",
+      "searchPlaceholder": "Search reports",
+      "noMatches": "No report matches “{{term}}”.",
+      "loadFailed": "Could not load the report catalog. Try again.",
+      "categories": {
+        "FINANCIAL": "Sales & Performance",
+        "CATALOG": "Menu & Product",
+        "PAYMENT": "Payments",
+        "PROMOTION": "Discounts & Promotions",
+        "CASH": "Cash & Shifts",
+        "CREDIT": "Customer Credit",
+        "CUSTOMER": "Customers",
+        "DELIVERY": "Delivery & Couriers",
+        "TAX": "Tax & Compliance",
+        "INTEGRATION": "Integrations",
+        "SIMULATION": "Simulation & Hardware",
+        "V5_PREVIEW": "Preview"
+      }
+    }
   },
   "simulation": {
     "title": "Simulation Center",

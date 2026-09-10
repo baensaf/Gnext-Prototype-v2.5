@@ -94,8 +94,8 @@ export const paths = {
     },
     audit: `${ROOTS.APP}/audit`,
     customerClub: {
-      discounts: `${ROOTS.APP}/customer-club/discounts`,
-      wallet: `${ROOTS.APP}/customer-club/wallet`,
+      discounts: `${ROOTS.APP}/discounts/customer-rates`,
+      wallet: `${ROOTS.APP}/discounts/wallet`,
     },
     settings: {
       root: `${ROOTS.APP}/settings`,

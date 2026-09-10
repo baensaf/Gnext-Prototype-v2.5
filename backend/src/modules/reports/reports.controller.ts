@@ -13,8 +13,8 @@ export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
   @Get('catalog')
-  async getCatalog() {
-    return await this.reportsService.getCatalog();
+  async getCatalog(@Req() req: Request) {
+    return await this.reportsService.getCatalog(actorScope(req));
   }
 
   @Get('dashboard-summary')

@@ -1,7 +1,7 @@
 import type { Courier, Delivery, DeliveryZone, DeliveryEvent } from 'src/api/deliveryApi';
 
-import { useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { useLocation, useNavigate } from 'react-router';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
@@ -54,26 +54,42 @@ import { useBranchContext } from 'src/contexts/branch-context';
 
 import { CourierSettlementsPage } from './settlements';
 
+type DeliveryTab = 'BOARD' | 'COURIERS' | 'SETTLEMENTS' | 'ZONES' | 'AUDIT';
+
+/**
+ * Each tab is a place you can be sent to, bookmark, or come back to with the browser's back
+ * button, so the address bar has to follow the tabs rather than only seed them.
+ */
+const TAB_PATHS: Record<DeliveryTab, string> = {
+  BOARD: '/app/delivery/orders',
+  COURIERS: '/app/delivery/couriers',
+  SETTLEMENTS: '/app/delivery/settlements',
+  ZONES: '/app/delivery/zones',
+  AUDIT: '/app/delivery/audit',
+};
+
+function tabFromPathname(pathname: string): DeliveryTab {
+  const found = (Object.keys(TAB_PATHS) as DeliveryTab[]).find(
+    (key) => key !== 'BOARD' && pathname.startsWith(TAB_PATHS[key]),
+  );
+  return found ?? 'BOARD';
+}
+
 export function DeliveryPage() {
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
 
-  const getInitialTab = (): 'BOARD' | 'COURIERS' | 'SETTLEMENTS' | 'ZONES' | 'AUDIT' => {
-    if (location.pathname.includes('/settlements')) return 'SETTLEMENTS';
-    if (location.pathname.includes('/couriers')) return 'COURIERS';
-    if (location.pathname.includes('/zones')) return 'ZONES';
-    if (location.pathname.includes('/audit')) return 'AUDIT';
-    return 'BOARD';
-  };
-
-  const [tab, setTab] = useState<'BOARD' | 'COURIERS' | 'SETTLEMENTS' | 'ZONES' | 'AUDIT'>(getInitialTab);
+  const [tab, setTab] = useState<DeliveryTab>(() => tabFromPathname(location.pathname));
 
   useEffect(() => {
-    if (location.pathname.includes('/settlements')) setTab('SETTLEMENTS');
-    else if (location.pathname.includes('/couriers')) setTab('COURIERS');
-    else if (location.pathname.includes('/zones')) setTab('ZONES');
-    else if (location.pathname.includes('/audit')) setTab('AUDIT');
+    setTab(tabFromPathname(location.pathname));
   }, [location.pathname]);
+
+  const goToTab = (next: DeliveryTab) => {
+    setTab(next);
+    if (!location.pathname.startsWith(TAB_PATHS[next])) navigate(TAB_PATHS[next]);
+  };
 
   const { selectedBranchId, branches } = useBranchContext();
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
@@ -315,7 +331,7 @@ export function DeliveryPage() {
       const events = await deliveryApi.getEvents(delId);
       setSelectedEvents(events);
       setEventDeliveryId(delId);
-      setTab('AUDIT');
+      goToTab('AUDIT');
     } catch (err: any) {
       setError(err.detail || t('delivery.errors.timelineFailed'));
     }
@@ -412,7 +428,7 @@ export function DeliveryPage() {
       {(loading || pendingAction) && <LinearProgress sx={{ mb: 2 }} />}
 
       <Paper sx={{ mb: 3, borderRadius: 2 }}>
-        <Tabs value={tab} onChange={(_, val) => setTab(val)}>
+        <Tabs value={tab} onChange={(_, val) => goToTab(val)}>
           <Tab label={`${t('delivery.tabs.board')} (${deliveries.length})`} value="BOARD" icon={<LocalShippingIcon />} iconPosition="start" />
           <Tab label={`${t('delivery.tabs.couriers')} (${couriers.length})`} value="COURIERS" icon={<PersonIcon />} iconPosition="start" />
           <Tab label={t('delivery.tabs.settlements')} value="SETTLEMENTS" icon={<ReceiptLongIcon />} iconPosition="start" />
