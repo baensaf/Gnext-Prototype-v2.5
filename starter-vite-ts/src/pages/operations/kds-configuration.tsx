@@ -39,6 +39,7 @@ import {
 
 import { kdsApi } from 'src/api/kdsApi';
 import { catalogApi } from 'src/api/catalogApi';
+import { useScopedBranchId } from 'src/contexts/branch-context';
 
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
@@ -48,6 +49,12 @@ export function KdsConfigurationPage() {
   const theme = useTheme();
 
   const [tab, setTab] = useState<'STATIONS' | 'SCREENS' | 'RULES'>('STATIONS');
+
+  // Which shop this configuration belongs to. The page used to take the branch from the
+  // first station in the list and fall back to that station's own id when there were none,
+  // so "add station" on an empty branch sent no branch at all and the request died on a
+  // not-null constraint. The header switcher is the answer, as it is everywhere else.
+  const [selectedBranchId] = useScopedBranchId();
 
   const [stations, setStations] = useState<KitchenStation[]>([]);
   const [screens, setScreens] = useState<KdsScreen[]>([]);
@@ -84,9 +91,9 @@ export function KdsConfigurationPage() {
     setLoading(true);
     try {
       const [stList, scList, rlList, prodList, catList] = await Promise.all([
-        kdsApi.getStations(),
-        kdsApi.getScreens(),
-        kdsApi.getRoutingRules(),
+        kdsApi.getStations(selectedBranchId || undefined),
+        kdsApi.getScreens(selectedBranchId || undefined),
+        kdsApi.getRoutingRules(selectedBranchId || undefined),
         catalogApi.getProducts().catch(() => []),
         catalogApi.getCategories().catch(() => []),
       ]);
@@ -101,7 +108,7 @@ export function KdsConfigurationPage() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [selectedBranchId, t]);
 
   useEffect(() => {
     loadData();
@@ -109,7 +116,11 @@ export function KdsConfigurationPage() {
 
   const handleCreateStation = async () => {
     try {
-      await kdsApi.createStation(stationForm);
+      if (!selectedBranchId) {
+        setError(t('operations.kds.noBranchError', 'Choose a branch before adding kitchen configuration'));
+        return;
+      }
+      await kdsApi.createStation({ branch_id: selectedBranchId, ...stationForm });
       setStationModalOpen(false);
       setStationForm({ code: '', name: '', target_minutes: 10 });
       loadData();
@@ -136,13 +147,12 @@ export function KdsConfigurationPage() {
 
   const handleCreateScreen = async () => {
     try {
-      const targetBranchId = (stations[0] as any)?.branch_id || stations[0]?.id;
-      if (!targetBranchId) {
-        setError(t('operations.kds.noContextError', 'No active station/branch context'));
+      if (!selectedBranchId) {
+        setError(t('operations.kds.noBranchError', 'Choose a branch before adding kitchen configuration'));
         return;
       }
       await kdsApi.createScreen({
-        branch_id: targetBranchId,
+        branch_id: selectedBranchId,
         ...screenForm,
       });
       setScreenModalOpen(false);
@@ -155,13 +165,12 @@ export function KdsConfigurationPage() {
 
   const handleCreateRule = async () => {
     try {
-      const targetBranchId = (stations[0] as any)?.branch_id || stations[0]?.id;
-      if (!targetBranchId) {
-        setError(t('operations.kds.noContextError', 'No active station/branch context'));
+      if (!selectedBranchId) {
+        setError(t('operations.kds.noBranchError', 'Choose a branch before adding kitchen configuration'));
         return;
       }
       await kdsApi.createRoutingRule({
-        branch_id: targetBranchId,
+        branch_id: selectedBranchId,
         station_id: ruleForm.station_id,
         product_id: ruleForm.selector_type === 'PRODUCT' ? ruleForm.product_id : undefined,
         category_id: ruleForm.selector_type === 'CATEGORY' ? ruleForm.category_id : undefined,
