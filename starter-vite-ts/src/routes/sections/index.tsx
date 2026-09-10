@@ -23,6 +23,7 @@ import { ProductsPage } from 'src/pages/catalog/products';
 import { DineInPage } from 'src/pages/operations/dine-in';
 import { DataResetPage } from 'src/pages/tools/data-reset';
 import { DiscountsHubPage } from 'src/pages/discounts/hub';
+import { RolesMatrixPage } from 'src/pages/settings/roles';
 import { BranchesPage } from 'src/pages/operations/branches';
 import { DeliveryPage } from 'src/pages/operations/delivery';
 import { PaymentsPage } from 'src/pages/operations/payments';
@@ -169,6 +170,7 @@ export const routesSection: RouteObject[] = [
       { path: 'settings/general', element: <GeneralSettingsPage /> },
       { path: 'settings/order-workflow', element: <OrderWorkflowSettingsPage /> },
       { path: 'settings/branch-overrides', element: <BranchOverridesPage /> },
+      { path: 'settings/roles', element: <RolesMatrixPage /> },
       { path: 'settings/discount-authorizations', element: <DiscountsHubPage defaultTab={2} /> },
       { path: 'settings/payments-refunds', element: <PaymentSettingsPage /> },
       { path: 'settings/payments', element: <Navigate to="/app/settings/payments-refunds" replace /> },

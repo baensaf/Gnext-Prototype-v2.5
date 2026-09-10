@@ -120,6 +120,18 @@ export function SettingsHubPage() {
           icon: <StorefrontIcon sx={{ color: 'info.main' }} />,
           tags: ['override', 'inherit', 'branch', 'head office', 'scope', 'chain', 'اختصاصی', 'شعبه', 'دفتر مرکزی', 'وراثت'],
         },
+        {
+          id: 'roles',
+          scope: 'ORG',
+          title: t('settings.hub.items.roles.title', 'Roles & Permissions'),
+          description: t(
+            'settings.hub.items.roles.description',
+            'What each role may see and do in a branch, and what stays with head office.'
+          ),
+          path: '/app/settings/roles',
+          icon: <ShieldIcon sx={{ color: 'primary.main' }} />,
+          tags: ['roles', 'permissions', 'access', 'cashier', 'manager', 'head office', 'نقش', 'دسترسی', 'مجوز', 'صندوق‌دار'],
+        },
       ],
     },
     {
