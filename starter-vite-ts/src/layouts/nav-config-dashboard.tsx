@@ -3,8 +3,8 @@ import type { NavSectionProps } from 'src/components/nav-section';
 import { useTranslation } from 'react-i18next';
 
 import { CONFIG } from 'src/global-config';
-import { useAuthStore } from 'src/store/useAuthStore';
 import { canReachPath } from 'src/config/role-access';
+import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 import { useBranchContextOptional } from 'src/contexts/branch-context';
 
 import { Label } from 'src/components/label';
@@ -47,6 +47,10 @@ export function useNavData(): NavSectionProps['data'] {
   const { t } = useTranslation();
   const branchScope = useBranchContextOptional();
   const role = useAuthStore((state) => state.user?.role);
+  // The account's own reach, which is not the scope chosen in the header: an unconfined
+  // admin looking at one branch may still open the chain's screens, and an admin pinned
+  // to a branch may not, whatever the switcher says.
+  const isHeadOffice = useIsHeadOffice();
 
   // No scope yet — still loading, or the provider is gone because an error boundary
   // replaced it. Showing the full menu is the pre-existing behaviour and the safe one:
@@ -297,11 +301,11 @@ export function useNavData(): NavSectionProps['data'] {
         .map((item) => {
           // An open parent can still have a child the role may not open — chain reports
           // sit under the same menu as the branch's own.
-          if (!item.children) return canReachPath(role, item.path) ? item : null;
+          if (!item.children) return canReachPath(role, item.path, isHeadOffice) ? item : null;
 
-          const children = item.children.filter((child) => canReachPath(role, child.path));
+          const children = item.children.filter((child) => canReachPath(role, child.path, isHeadOffice));
           if (!children.length) {
-            return canReachPath(role, item.path) ? { ...item, children: undefined } : null;
+            return canReachPath(role, item.path, isHeadOffice) ? { ...item, children: undefined } : null;
           }
           // One survivor is not a menu. A cashier's shifts group is left holding a single
           // entry once Business Days goes, and a disclosure triangle that reveals one link
@@ -315,7 +319,7 @@ export function useNavData(): NavSectionProps['data'] {
           return {
             ...item,
             children,
-            path: canReachPath(role, item.path) ? item.path : children[0].path,
+            path: canReachPath(role, item.path, isHeadOffice) ? item.path : children[0].path,
           };
         })
         .filter((item): item is NonNullable<typeof item> => item !== null),

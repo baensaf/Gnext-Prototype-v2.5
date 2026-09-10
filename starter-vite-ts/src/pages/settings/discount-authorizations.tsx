@@ -15,8 +15,11 @@ import {
 
 import { httpClient as axios } from 'src/api/httpClient';
 import { DashboardContent } from 'src/layouts/dashboard';
+import { useIsHeadOffice } from 'src/store/useAuthStore';
+import { useBranchContext } from 'src/contexts/branch-context';
 
 import { Iconify } from 'src/components/iconify';
+import { SettingScopeNotice } from 'src/components/setting-scope';
 
 interface RolePolicy {
   cashierMaxPct: number;
@@ -35,6 +38,10 @@ interface DiscountAuthorizationsPageProps {
 
 export default function DiscountAuthorizationsPage({ isEmbedded = false }: DiscountAuthorizationsPageProps) {
   const { t } = useTranslation();
+  // DISCOUNT_AUTHORIZATIONS is not on the overridable list, so this is the chain's single
+  // policy and the server refuses a branch account writing it.
+  const isHeadOffice = useIsHeadOffice();
+  const { selectedBranch } = useBranchContext();
 
   const [policy, setPolicy] = useState<RolePolicy>({
     cashierMaxPct: 10,
@@ -110,11 +117,13 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
           variant="contained"
           startIcon={<Iconify icon={'solar:copy-bold' as any} />}
           onClick={handleSave}
-          disabled={saving || loading}
+          disabled={saving || loading || !isHeadOffice}
         >
           {saving ? <CircularProgress size={24} /> : t('common.savePolicy', 'Save Policy')}
         </Button>
       </Stack>
+
+      <SettingScopeNotice kind="CHAIN" isHeadOffice={isHeadOffice} branchName={selectedBranch?.name} />
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
@@ -150,6 +159,7 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                   label={t('authPolicy.maxPct', 'Max Percentage Discount (%)')}
                   value={policy.cashierMaxPct}
                   onChange={(e) => setPolicy({ ...policy, cashierMaxPct: Number(e.target.value) })}
+                  disabled={!isHeadOffice}
                   helperText={t('authPolicy.defaultPct', 'Default: {{pct}}%', { pct: 10 })}
                 />
                 <TextField
@@ -157,6 +167,7 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                   label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction (IRR)')}
                   value={policy.cashierMaxFixed}
                   onChange={(e) => setPolicy({ ...policy, cashierMaxFixed: Number(e.target.value) })}
+                  disabled={!isHeadOffice}
                   helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} IRR', { amount: '50,000' })}
                 />
               </Stack>
@@ -179,6 +190,7 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                   label={t('authPolicy.maxPct', 'Max Percentage Discount (%)')}
                   value={policy.supervisorMaxPct}
                   onChange={(e) => setPolicy({ ...policy, supervisorMaxPct: Number(e.target.value) })}
+                  disabled={!isHeadOffice}
                   helperText={t('authPolicy.defaultPct', 'Default: {{pct}}%', { pct: 20 })}
                 />
                 <TextField
@@ -186,6 +198,7 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                   label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction (IRR)')}
                   value={policy.supervisorMaxFixed}
                   onChange={(e) => setPolicy({ ...policy, supervisorMaxFixed: Number(e.target.value) })}
+                  disabled={!isHeadOffice}
                   helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} IRR', { amount: '150,000' })}
                 />
               </Stack>
@@ -208,6 +221,7 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                   label={t('authPolicy.maxPct', 'Max Percentage Discount (%)')}
                   value={policy.managerMaxPct}
                   onChange={(e) => setPolicy({ ...policy, managerMaxPct: Number(e.target.value) })}
+                  disabled={!isHeadOffice}
                   helperText={t('authPolicy.defaultPct', 'Default: {{pct}}%', { pct: 30 })}
                 />
                 <TextField
@@ -215,6 +229,7 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                   label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction (IRR)')}
                   value={policy.managerMaxFixed}
                   onChange={(e) => setPolicy({ ...policy, managerMaxFixed: Number(e.target.value) })}
+                  disabled={!isHeadOffice}
                   helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} IRR', { amount: '300,000' })}
                 />
               </Stack>

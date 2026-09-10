@@ -27,10 +27,16 @@ import {
 } from '@mui/material';
 
 import { approvalApi } from 'src/api/approvalApi';
+import { useIsHeadOffice } from 'src/store/useAuthStore';
+import { useBranchContext } from 'src/contexts/branch-context';
+import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function ApprovalsSettingsPage() {
   const { t, i18n } = useTranslation();
+  // Approval thresholds carry no branch column: one policy for the chain, set at head office.
+  const isHeadOffice = useIsHeadOffice();
+  const { selectedBranch } = useBranchContext();
 
   const DEFAULT_ACTIONS = [
     { code: 'DISCOUNT', label: t('settings.approvalsPage.actions.DISCOUNT', 'Manual Cashier Discount (%)') },
@@ -140,12 +146,14 @@ export function ApprovalsSettingsPage() {
             <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
               {t('common.refresh', 'Refresh')}
             </Button>
-            <Button variant="contained" startIcon={<ShieldIcon />} onClick={() => setDrawerOpen(true)}>
+            <Button variant="contained" startIcon={<ShieldIcon />} onClick={() => setDrawerOpen(true)} disabled={!isHeadOffice}>
               {t('settings.approvalsPage.configureRule', 'Configure Policy Rule')}
             </Button>
           </Stack>
         }
       />
+
+      <SettingScopeNotice kind="CHAIN" isHeadOffice={isHeadOffice} branchName={selectedBranch?.name} />
 
       <Alert severity="info" variant="outlined" sx={{ mb: 3, borderRadius: 2, fontWeight: 500 }}>
         {t(
@@ -243,6 +251,7 @@ export function ApprovalsSettingsPage() {
                   <TableCell align="right">
                     <IconButton
                       color="primary"
+                      disabled={!isHeadOffice}
                       onClick={() => {
                         setAction(def.code);
                         if (rule) {

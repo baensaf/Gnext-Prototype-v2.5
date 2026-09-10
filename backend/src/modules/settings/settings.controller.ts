@@ -1,12 +1,23 @@
 import { Controller, Delete, Get, Patch, Post, Body, Param, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { SettingsService } from './settings.service';
-import { UserScope } from '../../common/utils/user-scope.util';
+import { effectiveBranchId, UserScope } from '../../common/utils/user-scope.util';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 
 /** The signed-in account's scope, as the session guard recorded it. */
 function actorScope(req: Request): UserScope {
   return { role: (req as any).userRole, branchId: (req as any).userBranchId ?? null };
+}
+
+/**
+ * Which branch's settings a read is really about.
+ *
+ * The write paths have always confined a branch account to its own site; the reads took
+ * the query string's word for it, so passing another branch's id answered with that
+ * branch's rules. Confinement has to hold on the way out as well as the way in.
+ */
+function scopedBranchId(req: Request, requested?: string): string | undefined {
+  return effectiveBranchId((req as any).userBranchId ?? null, requested);
 }
 
 @Controller('api/v1')
@@ -16,14 +27,14 @@ export class SettingsController {
   @Get('settings')
   async getSettings(@Query('branchId') branchId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.settingsService.getSettings(tenantId, branchId || undefined);
+    return await this.settingsService.getSettings(tenantId, scopedBranchId(req, branchId));
   }
 
   /** Same values, annotated with which level each came from. */
   @Get('settings/scoped')
   async getScopedSettings(@Query('branchId') branchId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.settingsService.getSettingsWithScope(tenantId, branchId || undefined);
+    return await this.settingsService.getSettingsWithScope(tenantId, scopedBranchId(req, branchId));
   }
 
   // Which scope a write lands in is the service's business; whether the account may

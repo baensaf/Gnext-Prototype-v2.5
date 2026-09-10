@@ -2258,6 +2258,10 @@
           "title": "Integration & System Logs",
           "description": "Background worker queue logs, transactional outbox monitor, and API event logs.",
           "badge": "Outbox Logs"
+        },
+        "branchOverrides": {
+          "title": "Branch Overrides",
+          "description": "What one location does differently from head office, and what it is not allowed to change."
         }
       },
       "scopeLegend": "Organization settings are defined once at head office and apply to every branch. Per-branch settings are configured separately at each location.",
@@ -2271,7 +2275,45 @@
       "editingOrg": "Editing the organization value. Every branch without its own override follows this.",
       "inherited": "Inherited from head office. Saving creates an override for {{branch}}.",
       "branchOverride": "{{branch}} overrides head office for this group.",
-      "resetToOrg": "Follow head office"
+      "resetToOrg": "Follow head office",
+      "chainWide": "Decided once for the whole chain at head office. There is no per-branch version of this.",
+      "chainWideReadOnly": "This is decided for the whole chain at head office. Your account works at {{branch}}, so this screen is read-only."
+    },
+    "branchOverrides": {
+      "title": "Branch Overrides",
+      "branch": "Branch",
+      "loadError": "Failed to load this branch’s settings",
+      "pickBranch": "Choose a branch to see what it does differently from head office.",
+      "pickBranchFirst": "Choose a branch first",
+      "intro": "Every value here comes from head office unless {{branch}} has its own. Saving a group creates an override for this branch alone; the rest of the chain keeps following head office.",
+      "canDiverge": "What this branch may decide for itself",
+      "chainWide": "What head office decides for everyone",
+      "chainWideHelp": "These groups have no per-branch version. Changing one changes the whole chain, from head office.",
+      "group": "Setting group",
+      "source": "Comes from",
+      "value": "Value in force here",
+      "inherited": "Inherited from head office",
+      "overridden": "Overridden here",
+      "notSet": "Not set anywhere",
+      "notSetHelp": "Head office has not set this yet, so there is nothing to inherit.",
+      "edit": "Set for this branch",
+      "editTitle": "{{group}} at {{branch}}",
+      "editHelp": "Saving writes these values for this branch only. Head office keeps its own.",
+      "singleValue": "Value",
+      "saved": "{{group}} now overrides head office at this branch.",
+      "saveError": "Failed to save the override",
+      "cleared": "{{group}} follows head office again.",
+      "clearError": "Failed to remove the override"
+    },
+    "groupNames": {
+      "TAX": "Tax",
+      "POS": "Register Behaviour",
+      "ORDER_ACTIONS": "Cashier Order Authority",
+      "ORDER_WORKFLOW": "Order Workflow",
+      "KIOSK_CUSTOMER_IDENTITY_POLICY": "Kiosk Customer Identity",
+      "SYSTEM": "System",
+      "DISCOUNTS": "Cashier Discount Caps",
+      "DISCOUNT_AUTHORIZATIONS": "Discount Authorizations"
     }
   },
   "inventory": {

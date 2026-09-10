@@ -53,6 +53,7 @@ import { BranchDetailPage } from 'src/pages/operations/branch-detail';
 import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
 import { CourierDetailPage } from 'src/pages/operations/courier-detail';
 import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
+import { BranchOverridesPage } from 'src/pages/settings/branch-overrides';
 import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
 import { KdsConfigurationPage } from 'src/pages/operations/kds-configuration';
 import { SettlementDetailPage } from 'src/pages/operations/settlement-detail';
@@ -167,6 +168,7 @@ export const routesSection: RouteObject[] = [
       { path: 'settings/users', element: <UsersPage /> },
       { path: 'settings/general', element: <GeneralSettingsPage /> },
       { path: 'settings/order-workflow', element: <OrderWorkflowSettingsPage /> },
+      { path: 'settings/branch-overrides', element: <BranchOverridesPage /> },
       { path: 'settings/discount-authorizations', element: <DiscountsHubPage defaultTab={2} /> },
       { path: 'settings/payments-refunds', element: <PaymentSettingsPage /> },
       { path: 'settings/payments', element: <Navigate to="/app/settings/payments-refunds" replace /> },

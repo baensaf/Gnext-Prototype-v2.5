@@ -5,7 +5,7 @@ import {
   pickSettingValue,
   resolveSettingsForBranch,
 } from '../../common/utils/setting-scope.util';
-import { canActOnBranch, isHeadOfficeUser } from '../../common/utils/user-scope.util';
+import { canActOnBranch, effectiveBranchId, isHeadOfficeUser } from '../../common/utils/user-scope.util';
 import { SettingsService } from './settings.service';
 
 const ORG = null;
@@ -108,5 +108,52 @@ describe('updateSetting authority', () => {
     await expect(
       service.clearBranchOverride('t1', 'ORDER_ACTIONS', BRANCH_B, 'c1', downtownManager),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
+describe('reading settings for a branch', () => {
+  // Confinement has to hold on the way out too. The write paths always checked the actor,
+  // but the reads took the query string's word for which branch was meant, so a branch
+  // account could ask about another site and be told that site's rules.
+  const settings = [
+    row('ORDER_ACTIONS', ORG, { editWindowMinutes: 10 }),
+    row('ORDER_ACTIONS', BRANCH_A, { editWindowMinutes: 5 }),
+  ];
+  const service = new SettingsService(
+    { find: async () => settings } as any,
+    null as any,
+    null as any,
+    null as any,
+    null as any,
+  );
+
+  it('answers a branch account about its own branch, whatever it asked for', async () => {
+    const asked = effectiveBranchId(BRANCH_A, BRANCH_B);
+    const scoped = await service.getSettingsWithScope('t1', asked);
+
+    expect(scoped.branch_id).toBe(BRANCH_A);
+    expect(scoped.groups.ORDER_ACTIONS).toEqual({
+      value: { editWindowMinutes: 5 },
+      source: 'BRANCH',
+      overridable: true,
+    });
+  });
+
+  it('lets head office ask about any branch', async () => {
+    const asked = effectiveBranchId(null, BRANCH_A);
+    const scoped = await service.getSettingsWithScope('t1', asked);
+
+    expect(scoped.branch_id).toBe(BRANCH_A);
+    expect(scoped.groups.ORDER_ACTIONS.source).toBe('BRANCH');
+  });
+
+  // A group with no row anywhere still has to appear as something a branch may set, or a
+  // screen listing the override layer would silently omit most of it.
+  it('names every group a branch may diverge on, configured or not', async () => {
+    const scoped = await service.getSettingsWithScope('t1', BRANCH_A);
+
+    expect(scoped.overridable_groups).toContain('TAX');
+    expect(scoped.overridable_groups).toContain('KIOSK_CUSTOMER_IDENTITY_POLICY');
+    expect(scoped.groups.TAX).toBeUndefined();
   });
 });

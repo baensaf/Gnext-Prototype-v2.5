@@ -45,6 +45,12 @@ export interface ScopedSettingGroup {
 export interface ScopedSettings {
   branch_id: string | null;
   groups: Record<string, ScopedSettingGroup>;
+  /**
+   * Every group a branch is allowed to diverge on, including ones nobody has written yet.
+   * Those have no row to resolve, so they never appear in `groups` — and a screen listing
+   * only what exists cannot show what a branch is permitted to change.
+   */
+  overridable_groups?: string[];
 }
 
 export const settingsApi = {

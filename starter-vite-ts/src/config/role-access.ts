@@ -119,9 +119,28 @@ export function accessForRole(role?: string | null): RoleAccess | null {
   return ROLE_ACCESS[role.toUpperCase()] ?? UNCLASSIFIED;
 }
 
-export function canReachPath(role: string | null | undefined, pathname: string): boolean {
+/** True for a screen that decides something for the whole chain rather than for one site. */
+export function isChainOnlyPath(pathname: string): boolean {
+  return CHAIN_ONLY_PATHS.some((prefix) => matches(pathname, prefix));
+}
+
+/**
+ * `isHeadOffice` is reach, and it is a separate question from seniority.
+ *
+ * The server refuses a chain-wide write on `isHeadOfficeUser` — a head-office role AND no
+ * branch confinement — so an ADMIN pinned to one site is that site's administrator and is
+ * turned away from the chain's screens. The role table alone said otherwise and offered
+ * that account links whose every write then came back 403. Defaults to unconfined, which
+ * is what an unknown account gets while `/auth/me` is still in flight.
+ */
+export function canReachPath(
+  role: string | null | undefined,
+  pathname: string,
+  isHeadOffice: boolean = true
+): boolean {
   const access = accessForRole(role);
   if (!access) return true;
+  if (!isHeadOffice && isChainOnlyPath(pathname)) return false;
   if (access.deny.some((prefix) => matches(pathname, prefix))) return false;
   return access.allow.some((prefix) => matches(pathname, prefix));
 }

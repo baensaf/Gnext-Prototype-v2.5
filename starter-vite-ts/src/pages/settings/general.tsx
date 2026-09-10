@@ -28,12 +28,19 @@ import {
 
 import { tenantApi } from 'src/api/tenantApi';
 import { settingsApi } from 'src/api/settingsApi';
-import { useAuthStore } from 'src/store/useAuthStore';
+import { useBranchContext } from 'src/contexts/branch-context';
+import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
+
+import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function GeneralSettingsPage() {
   const { t } = useTranslation();
   const { tenant, fetchMe } = useAuthStore();
+  // The tenant profile and the currency list have no branch dimension: one set for the
+  // chain, and only an account with chain reach may write them.
+  const isHeadOffice = useIsHeadOffice();
+  const { selectedBranch } = useBranchContext();
 
   const [tenantName, setTenantName] = useState(tenant?.name || 'Gnext Prototype');
   const [defaultLocale, setDefaultLocale] = useState(tenant?.defaultLocale || 'fa');
@@ -102,6 +109,8 @@ export function GeneralSettingsPage() {
         ]}
       />
 
+      <SettingScopeNotice kind="CHAIN" isHeadOffice={isHeadOffice} branchName={selectedBranch?.name} />
+
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
           {error}
@@ -137,12 +146,14 @@ export function GeneralSettingsPage() {
                     onChange={(e) => setTenantName(e.target.value)}
                     required
                     fullWidth
+                    disabled={!isHeadOffice}
                   />
                   <TextField
                     select
                     label={t('settings.generalPage.defaultLocale', 'Default Locale')}
                     value={defaultLocale}
                     onChange={(e) => setDefaultLocale(e.target.value)}
+                    disabled={!isHeadOffice}
                     required
                     fullWidth
                   >
@@ -154,6 +165,7 @@ export function GeneralSettingsPage() {
                     label={t('settings.generalPage.timeZone', 'Time Zone')}
                     value={timeZone}
                     onChange={(e) => setTimeZone(e.target.value)}
+                    disabled={!isHeadOffice}
                     required
                     fullWidth
                   >
@@ -168,6 +180,7 @@ export function GeneralSettingsPage() {
                     type="submit"
                     variant="contained"
                     startIcon={<SaveIcon />}
+                    disabled={!isHeadOffice}
                     sx={{ fontWeight: 'bold' }}
                   >
                     {t('settings.generalPage.saveTenant', 'Save Tenant Settings')}
@@ -218,7 +231,7 @@ export function GeneralSettingsPage() {
                         <TableCell align="center">
                           <Switch
                             checked={c.is_enabled}
-                            disabled={c.is_base}
+                            disabled={c.is_base || !isHeadOffice}
                             onChange={(e) => handleToggleCurrency(c, e.target.checked)}
                           />
                         </TableCell>

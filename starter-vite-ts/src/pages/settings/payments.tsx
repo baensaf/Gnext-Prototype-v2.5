@@ -36,10 +36,17 @@ import {
 } from '@mui/material';
 
 import { settingsApi } from 'src/api/settingsApi';
+import { useIsHeadOffice } from 'src/store/useAuthStore';
+import { useBranchContext } from 'src/contexts/branch-context';
+
+import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function PaymentSettingsPage() {
   const { t } = useTranslation();
+  // Tender types have no branch dimension: one set for the chain, written at head office.
+  const isHeadOffice = useIsHeadOffice();
+  const { selectedBranch } = useBranchContext();
 
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
@@ -170,12 +177,14 @@ export function PaymentSettingsPage() {
             <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
               {t('common.refresh', 'Refresh')}
             </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate} disabled={!isHeadOffice}>
               {t('settings.paymentsPage.addMethod', 'Add Payment Method')}
             </Button>
           </Stack>
         }
       />
+
+      <SettingScopeNotice kind="CHAIN" isHeadOffice={isHeadOffice} branchName={selectedBranch?.name} />
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
@@ -260,12 +269,13 @@ export function PaymentSettingsPage() {
                     <Switch
                       checked={m.is_active}
                       onChange={(e) => handleToggleActive(m, e.target.checked)}
+                      disabled={!isHeadOffice}
                       size="small"
                       color="primary"
                     />
                   </TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" onClick={() => handleOpenEdit(m)}>
+                    <IconButton size="small" onClick={() => handleOpenEdit(m)} disabled={!isHeadOffice}>
                       <EditIcon fontSize="small" />
                     </IconButton>
                   </TableCell>
