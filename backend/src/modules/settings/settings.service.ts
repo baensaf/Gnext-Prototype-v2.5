@@ -8,6 +8,7 @@ import { ReasonCode } from '../../entities/ReasonCode.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import {
+  BRANCH_OVERRIDABLE_SETTING_GROUPS,
   isBranchOverridable,
   resolveSettingsForBranch,
 } from '../../common/utils/setting-scope.util';
@@ -133,7 +134,14 @@ export class SettingsService {
         overridable: isBranchOverridable(key),
       };
     }
-    return { branch_id: branchId || null, groups };
+    // A group nobody has written yet has no row and so no entry above, and a screen that
+    // lists only what exists cannot show what a branch is *allowed* to diverge on. Sending
+    // the list keeps that answer where it is decided rather than copying it into the client.
+    return {
+      branch_id: branchId || null,
+      groups,
+      overridable_groups: [...BRANCH_OVERRIDABLE_SETTING_GROUPS],
+    };
   }
 
   /** Removes a branch's override so the location goes back to inheriting from head office. */

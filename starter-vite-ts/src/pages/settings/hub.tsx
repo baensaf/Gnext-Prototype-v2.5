@@ -108,6 +108,18 @@ export function SettingsHubPage() {
           badge: { color: 'success', label: t('settings.hub.items.branches.badge', '3 Locations') },
           tags: ['branches', 'stores', 'hours', 'locations', 'tables', 'tax', 'schedules', 'شعب', 'فروشگاه', 'میزها', 'مالیات', 'ساعات کاری'],
         },
+        {
+          id: 'branchOverrides',
+          scope: 'BRANCH',
+          title: t('settings.hub.items.branchOverrides.title', 'Branch Overrides'),
+          description: t(
+            'settings.hub.items.branchOverrides.description',
+            'What one location does differently from head office, and what it is not allowed to change.'
+          ),
+          path: '/app/settings/branch-overrides',
+          icon: <StorefrontIcon sx={{ color: 'info.main' }} />,
+          tags: ['override', 'inherit', 'branch', 'head office', 'scope', 'chain', 'اختصاصی', 'شعبه', 'دفتر مرکزی', 'وراثت'],
+        },
       ],
     },
     {
