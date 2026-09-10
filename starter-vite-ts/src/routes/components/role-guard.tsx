@@ -8,8 +8,7 @@ import AlertTitle from '@mui/material/AlertTitle';
 import { usePathname } from 'src/routes/hooks';
 import { RouterLink } from 'src/routes/components/router-link';
 
-import { useAuthStore } from 'src/store/useAuthStore';
-
+import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 import { canReachPath, homePathForRole } from 'src/config/role-access';
 
 /**
@@ -21,8 +20,9 @@ export function RoleGuard({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
   const pathname = usePathname();
   const role = useAuthStore((state) => state.user?.role);
+  const isHeadOffice = useIsHeadOffice();
 
-  if (canReachPath(role, pathname)) {
+  if (canReachPath(role, pathname, isHeadOffice)) {
     return <>{children}</>;
   }
 

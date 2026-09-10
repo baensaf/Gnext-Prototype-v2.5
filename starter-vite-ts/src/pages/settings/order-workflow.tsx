@@ -25,6 +25,8 @@ import {
 
 import { settingsApi } from 'src/api/settingsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
+
+import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function OrderWorkflowSettingsPage() {
@@ -47,7 +49,7 @@ export function OrderWorkflowSettingsPage() {
   const [enableAggregators, setEnableAggregators] = useState(true);
   const [requireTableSelection, setRequireTableSelection] = useState(true);
 
-  const { selectedBranchId, selectedBranch, isHeadOffice } = useBranchContext();
+  const { selectedBranchId, selectedBranch } = useBranchContext();
   // ORG while these values are still head office's, BRANCH once this location has its own.
   const [source, setSource] = useState<'BRANCH' | 'ORG'>('ORG');
 
@@ -132,42 +134,6 @@ export function OrderWorkflowSettingsPage() {
     }
   };
 
-  /** Says which level owns what is on screen, so an inherited value is never mistaken for a local one. */
-  const renderScopeNotice = () => {
-    if (isHeadOffice || !selectedBranchId) {
-      return (
-        <Alert severity="info" sx={{ mb: 3 }}>
-          {t(
-            'settings.scope.editingOrg',
-            'Editing the organization value. Every branch without its own override follows this.'
-          )}
-        </Alert>
-      );
-    }
-
-    return (
-      <Alert
-        severity={source === 'BRANCH' ? 'warning' : 'info'}
-        sx={{ mb: 3 }}
-        action={
-          source === 'BRANCH' ? (
-            <Button color="inherit" size="small" disabled={saving} onClick={handleResetToOrg}>
-              {t('settings.scope.resetToOrg', 'Follow head office')}
-            </Button>
-          ) : undefined
-        }
-      >
-        {source === 'BRANCH'
-          ? t('settings.scope.branchOverride', '{{branch}} overrides head office for this group.', {
-              branch: selectedBranch?.name || '',
-            })
-          : t('settings.scope.inherited', 'Inherited from head office. Saving creates an override for {{branch}}.', {
-              branch: selectedBranch?.name || '',
-            })}
-      </Alert>
-    );
-  };
-
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 8 }}>
@@ -192,7 +158,14 @@ export function OrderWorkflowSettingsPage() {
         }
       />
 
-      {renderScopeNotice()}
+      <SettingScopeNotice
+        kind="BRANCH"
+        branchId={selectedBranchId}
+        branchName={selectedBranch?.name}
+        source={source}
+        busy={saving}
+        onFollowHeadOffice={handleResetToOrg}
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>

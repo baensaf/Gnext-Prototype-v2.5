@@ -200,3 +200,15 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
   clearError: () => set({ error: null }),
 }));
+
+/**
+ * Whether the signed-in account acts for the chain rather than for one site.
+ *
+ * The server decides this — a head-office role AND no branch confinement — and sends it
+ * on `/auth/me`. Unknown reads as head office on purpose: the flag is briefly absent while
+ * that call is in flight, and blanking the chain's screens for a moment on every page load
+ * would be a worse lie than showing them.
+ */
+export function useIsHeadOffice(): boolean {
+  return useAuthStore((state) => state.user?.isHeadOffice) !== false;
+}

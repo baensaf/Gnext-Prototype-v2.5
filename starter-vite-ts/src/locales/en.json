@@ -2271,7 +2271,9 @@
       "editingOrg": "Editing the organization value. Every branch without its own override follows this.",
       "inherited": "Inherited from head office. Saving creates an override for {{branch}}.",
       "branchOverride": "{{branch}} overrides head office for this group.",
-      "resetToOrg": "Follow head office"
+      "resetToOrg": "Follow head office",
+      "chainWide": "Decided once for the whole chain at head office. There is no per-branch version of this.",
+      "chainWideReadOnly": "This is decided for the whole chain at head office. Your account works at {{branch}}, so this screen is read-only."
     }
   },
   "inventory": {

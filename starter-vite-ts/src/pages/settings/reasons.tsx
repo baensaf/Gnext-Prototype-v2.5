@@ -30,6 +30,10 @@ import {
 } from '@mui/material';
 
 import { settingsApi } from 'src/api/settingsApi';
+import { useIsHeadOffice } from 'src/store/useAuthStore';
+import { useBranchContext } from 'src/contexts/branch-context';
+
+import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 const DOMAIN_OPTIONS = [
@@ -46,6 +50,9 @@ const DOMAIN_OPTIONS = [
 
 export function ReasonCodesPage() {
   const { t } = useTranslation();
+  // Reason codes have no branch dimension: one set for the chain, written at head office.
+  const isHeadOffice = useIsHeadOffice();
+  const { selectedBranch } = useBranchContext();
 
   const [reasons, setReasons] = useState<ReasonCode[]>([]);
   const [_loading, setLoading] = useState(true);
@@ -143,12 +150,15 @@ export function ReasonCodesPage() {
             variant="contained"
             startIcon={<AddIcon />}
             onClick={handleOpenCreate}
+            disabled={!isHeadOffice}
             sx={{ fontWeight: 'bold' }}
           >
             {t('settings.reasonsPage.createReason', 'Create Reason Code')}
           </Button>
         }
       />
+
+      <SettingScopeNotice kind="CHAIN" isHeadOffice={isHeadOffice} branchName={selectedBranch?.name} />
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
@@ -206,10 +216,11 @@ export function ReasonCodesPage() {
                       <Switch
                         checked={r.is_active}
                         onChange={(e) => handleToggleActive(r, e.target.checked)}
+                        disabled={!isHeadOffice}
                       />
                     </TableCell>
                     <TableCell align="right">
-                      <IconButton size="small" onClick={() => handleOpenEdit(r)}>
+                      <IconButton size="small" onClick={() => handleOpenEdit(r)} disabled={!isHeadOffice}>
                         <EditIcon fontSize="small" />
                       </IconButton>
                     </TableCell>
