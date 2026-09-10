@@ -204,7 +204,39 @@
     "paymentVoided": "Payment attempt voided",
     "directTerminalPay": "Direct Terminal Pay (PC-POS)",
     "itemSuspended": "86'd",
-    "itemSuspendedNotice": "{{name}} is 86'd and cannot be ordered."
+    "itemSuspendedNotice": "{{name}} is 86'd and cannot be ordered.",
+    "customer": "Customer",
+    "walkInCustomer": "Walk-In Customer",
+    "selectCustomer": "Select customer",
+    "quickRegisterCustomer": "Quick Register Customer",
+    "amountIrr": "{{amount}} IRR",
+    "totals": {
+      "subtotal": "Subtotal:",
+      "tax": "Tax / VAT:",
+      "delivery": "Delivery:",
+      "discount": "Discount:",
+      "totalDue": "Total Due:"
+    },
+    "deliveryContext": {
+      "customerRequired": "Select a customer for delivery",
+      "addressRequired": "Select a delivery address",
+      "zoneRequired": "Select a delivery zone",
+      "addressLabel": "Delivery Address",
+      "zoneLabel": "Delivery Zone",
+      "addressDefault": "Default",
+      "addAddress": "Add address",
+      "noAddresses": "No delivery addresses yet. Add an address to continue.",
+      "zoneOption": "{{name}} — {{fee}} IRR · {{minutes}} min",
+      "fieldsRequired": "Address title and full address are required.",
+      "addFailed": "Unable to add the delivery address.",
+      "dialogTitle": "Add delivery address",
+      "titleField": "Address title",
+      "addressField": "Full address",
+      "postalField": "Postal code",
+      "setDefault": "Set as default address",
+      "saveAddress": "Save address",
+      "savingAddress": "Saving…"
+    }
   },
   "kiosk": {
     "title": "SELF-SERVICE KIOSK",

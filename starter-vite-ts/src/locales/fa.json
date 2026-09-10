@@ -204,7 +204,39 @@
     "paymentVoided": "تلاش پرداخت لغو شد",
     "directTerminalPay": "پرداخت سریع کارتخوان (PC-POS)",
     "itemSuspended": "توقف فروش",
-    "itemSuspendedNotice": "فروش {{name}} متوقف شده است و قابل سفارش نیست."
+    "itemSuspendedNotice": "فروش {{name}} متوقف شده است و قابل سفارش نیست.",
+    "customer": "مشتری",
+    "walkInCustomer": "مشتری حضوری",
+    "selectCustomer": "انتخاب مشتری",
+    "quickRegisterCustomer": "ثبت سریع مشتری",
+    "amountIrr": "{{amount}} ریال",
+    "totals": {
+      "subtotal": "جمع جزء:",
+      "tax": "مالیات بر ارزش افزوده:",
+      "delivery": "هزینه ارسال:",
+      "discount": "تخفیف:",
+      "totalDue": "مبلغ قابل پرداخت:"
+    },
+    "deliveryContext": {
+      "customerRequired": "برای ارسال، یک مشتری انتخاب کنید",
+      "addressRequired": "یک نشانی ارسال انتخاب کنید",
+      "zoneRequired": "یک منطقه ارسال انتخاب کنید",
+      "addressLabel": "نشانی ارسال",
+      "zoneLabel": "منطقه ارسال",
+      "addressDefault": "پیش‌فرض",
+      "addAddress": "افزودن نشانی",
+      "noAddresses": "هنوز نشانی ارسالی ثبت نشده است. برای ادامه یک نشانی اضافه کنید.",
+      "zoneOption": "{{name}} — {{fee}} ریال · {{minutes}} دقیقه",
+      "fieldsRequired": "عنوان نشانی و نشانی کامل الزامی است.",
+      "addFailed": "افزودن نشانی ارسال انجام نشد.",
+      "dialogTitle": "افزودن نشانی ارسال",
+      "titleField": "عنوان نشانی",
+      "addressField": "نشانی کامل",
+      "postalField": "کد پستی",
+      "setDefault": "به عنوان نشانی پیش‌فرض ثبت شود",
+      "saveAddress": "ذخیره نشانی",
+      "savingAddress": "در حال ذخیره…"
+    }
   },
   "kiosk": {
     "title": "کیوسک خودسفارش‌دهی",
