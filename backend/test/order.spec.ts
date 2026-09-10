@@ -20,6 +20,8 @@ import { OptionItem } from '../src/entities/OptionItem.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { OutboxWriter } from '../src/modules/outbox/outbox-writer.service';
 import { ApprovalService } from '../src/modules/approval/approval.service';
+import { CatalogService } from '../src/modules/catalog/catalog.service';
+import { RefundService } from '../src/modules/refund/refund.service';
 
 describe('Order Aggregate & State Machine Suite (R12)', () => {
   let service: OrderService;
@@ -90,6 +92,21 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       providers: [
         OrderService,
         OrderSequenceService,
+        // Only reached by cancel-paid, which these suites do not exercise.
+        {
+          provide: RefundService,
+          useValue: { cancelPaidOrder: jest.fn() },
+        },
+        // Nothing on sale is suspended in these fixtures; the suspension path has its own
+        // tests in catalog.spec.ts.
+        {
+          provide: CatalogService,
+          useValue: {
+            getSuspension: jest
+              .fn()
+              .mockResolvedValue({ isSuspended: false, reason: null, suspendedUntil: null }),
+          },
+        },
         { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
         { provide: getRepositoryToken(OrderItem), useValue: itemRepo },
         { provide: getRepositoryToken(OrderItemOption), useValue: optionRepo },

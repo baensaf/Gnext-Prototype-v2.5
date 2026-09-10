@@ -9,6 +9,7 @@ import { BranchStatusSnapshot } from '../src/entities/BranchStatusSnapshot.entit
 import { SyncCategoryLog } from '../src/entities/SyncCategoryLog.entity';
 import { Tenant } from '../src/entities/Tenant.entity';
 import { Branch } from '../src/entities/Branch.entity';
+import { deleteTenantData } from './utils/tenant-teardown';
 
 const generateUuid = () =>
   '00000000-0000-4000-8000-' + Math.random().toString(16).substring(2, 14).padStart(12, '0');
@@ -70,10 +71,14 @@ describe('R23 Real PostgreSQL Integration Suite (Port 5433)', () => {
   }, 30000);
 
   afterAll(async () => {
+    // Reuses one tenant by code rather than making a fresh one, so it grew an order per
+    // run instead of a tenant per run. Its fixtures are find-or-create, so clearing the
+    // tenant is safe — the next run rebuilds it.
+    if (dataSource?.isInitialized) await deleteTenantData(dataSource, testTenantId);
     if (app) {
       await app.close();
     }
-  });
+  }, 30000);
 
   it('1. Atomic Dedupe Race in PostgreSQL: unique scoped index catches concurrent enqueues', async () => {
     const dedupeKey = `RACE-KEY-${Date.now()}`;

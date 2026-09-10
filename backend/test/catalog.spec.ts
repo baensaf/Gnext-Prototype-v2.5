@@ -45,7 +45,12 @@ describe('CatalogService (Unit)', () => {
     menuRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), softRemove: jest.fn() };
     menuCatRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
     menuProdRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
-    availRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
+    availRepo = {
+      findOne: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
+      create: jest.fn(),
+      save: jest.fn(),
+    };
     auditWriter = { write: jest.fn() };
     pricingService = {
       resolvePrice: jest.fn().mockResolvedValue({ amount: '1500000.0000', resolutionSource: 'BASE_PRICE', isOverridden: false }),
@@ -108,7 +113,14 @@ describe('CatalogService (Unit)', () => {
   it('should indicate item suspension when ProductAvailability is suspended', async () => {
     prodRepo.findOne.mockResolvedValue({ id: 'p-1', base_price: '1500000.0000' });
     pricingService.resolvePrice.mockResolvedValue({ amount: '1500000.0000', resolutionSource: 'BASE_PRICE', isOverridden: false });
-    availRepo.findOne.mockResolvedValue({ is_suspended: true, suspended_until: new Date(Date.now() + 3600000), reason: 'Out of stock' });
+    availRepo.find.mockResolvedValue([
+      {
+        branch_id: null,
+        is_suspended: true,
+        suspended_until: new Date(Date.now() + 3600000),
+        reason: 'Out of stock',
+      },
+    ]);
 
     const result = await service.getEffectivePrice('t-1', 'p-1');
     expect(result.is_suspended).toBe(true);

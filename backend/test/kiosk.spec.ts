@@ -41,7 +41,7 @@ describe('KioskService (Unit)', () => {
     optionItemRepo = { find: jest.fn(), findOne: jest.fn() };
     productOptionGroupRepo = { find: jest.fn() };
     branchRepo = { find: jest.fn(), findOne: jest.fn() };
-    settingRepo = { findOne: jest.fn() };
+    settingRepo = { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]) };
     paymentMethodRepo = { find: jest.fn(), findOne: jest.fn() };
     orderRepo = { create: jest.fn(), save: jest.fn(), findOne: jest.fn() };
     orderItemRepo = { create: jest.fn(), save: jest.fn() };
@@ -81,7 +81,10 @@ describe('KioskService (Unit)', () => {
     optionItemRepo.find.mockResolvedValue([]);
     productOptionGroupRepo.find.mockResolvedValue([]);
     paymentMethodRepo.find.mockResolvedValue([{ id: 'pm-1', code: 'CARD', name: 'Card Terminal', kind: 'NETWORK_POS' }]);
-    settingRepo.findOne.mockResolvedValue({ key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'OPTIONAL' });
+    // branch_id null is the organization-wide row, which is what this kiosk inherits.
+    settingRepo.find.mockResolvedValue([
+      { key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'OPTIONAL', branch_id: null },
+    ]);
 
     const result = await service.getBootstrapContext('t-1');
 

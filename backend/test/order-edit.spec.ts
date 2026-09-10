@@ -24,6 +24,8 @@ import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { OutboxWriter } from '../src/modules/outbox/outbox-writer.service';
 import { ApprovalService } from '../src/modules/approval/approval.service';
 import { KdsService } from '../src/modules/kds/kds.service';
+import { CatalogService } from '../src/modules/catalog/catalog.service';
+import { RefundService } from '../src/modules/refund/refund.service';
 
 const TENANT = 't-1';
 const ORDER_ID = 'ord-1';
@@ -135,6 +137,19 @@ describe('Order edit command (spec 7.9)', () => {
       providers: [
         OrderService,
         OrderSequenceService,
+        // Only reached by cancel-paid, which these suites do not exercise.
+        {
+          provide: RefundService,
+          useValue: { cancelPaidOrder: jest.fn() },
+        },
+        {
+          provide: CatalogService,
+          useValue: {
+            getSuspension: jest
+              .fn()
+              .mockResolvedValue({ isSuspended: false, reason: null, suspendedUntil: null }),
+          },
+        },
         { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
         { provide: getRepositoryToken(OrderItem), useValue: { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), delete: jest.fn() } },
         { provide: getRepositoryToken(OrderItemOption), useValue: { create: jest.fn(), save: jest.fn() } },

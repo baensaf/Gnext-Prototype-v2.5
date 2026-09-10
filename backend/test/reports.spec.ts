@@ -25,6 +25,7 @@ import { Delivery } from '../src/entities/Delivery.entity';
 import { OfflineQueueItem } from '../src/entities/OfflineQueueItem.entity';
 import { Product } from '../src/entities/Product.entity';
 import { Category } from '../src/entities/Category.entity';
+import { Branch } from '../src/entities/Branch.entity';
 import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
 import { SavedReportView } from '../src/entities/SavedReportView.entity';
 import { ReportExportJob } from '../src/entities/ReportExportJob.entity';
@@ -140,6 +141,7 @@ describe('ReportsService (Unit)', () => {
         { provide: getRepositoryToken(OfflineQueueItem), useValue: mockRepo },
         { provide: getRepositoryToken(Product), useValue: mockRepo },
         { provide: getRepositoryToken(Category), useValue: mockRepo },
+        { provide: getRepositoryToken(Branch), useValue: mockRepo },
         { provide: getRepositoryToken(OperationalAlert), useValue: alertRepo },
         { provide: getRepositoryToken(SavedReportView), useValue: mockRepo },
         { provide: getRepositoryToken(ReportExportJob), useValue: exportJobRepo },

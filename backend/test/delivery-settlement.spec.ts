@@ -18,6 +18,7 @@ import { CourierTerminalAssignment } from '../src/entities/CourierTerminalAssign
 import { Delivery } from '../src/entities/Delivery.entity';
 import { DeliveryEvent } from '../src/entities/DeliveryEvent.entity';
 import { Terminal } from '../src/entities/Terminal.entity';
+import { CustomerAddress } from '../src/entities/CustomerAddress.entity';
 
 describe('DeliveryService (Courier Settlement)', () => {
   let service: DeliveryService;
@@ -71,6 +72,10 @@ describe('DeliveryService (Courier Settlement)', () => {
         { provide: getRepositoryToken(Delivery), useValue: deliveryRepo },
         { provide: getRepositoryToken(DeliveryEvent), useValue: deliveryEventRepo },
         { provide: getRepositoryToken(Terminal), useValue: terminalRepo },
+        {
+          provide: getRepositoryToken(CustomerAddress),
+          useValue: { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]) },
+        },
         { provide: AuditWriter, useValue: auditWriter },
       ],
     }).compile();

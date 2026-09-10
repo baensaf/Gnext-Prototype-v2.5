@@ -2,6 +2,7 @@ import * as argon2 from 'argon2';
 import { AppDataSource } from './data-source';
 import { IsNull } from 'typeorm';
 import { ORDER_ACTION_DEFAULTS } from './modules/order/order-edit-policy';
+import { MoneyUtil } from './common/utils/money.util';
 
 const DEFAULT_TENANT_ID = 'e8ae80c5-b667-4d58-899a-ce6ef7c3847e';
 const DEFAULT_TENANT_CODE = 'GNEXT';
@@ -493,7 +494,10 @@ export async function runSeed() {
   // Downtown sells often and small, Northside rarely and large, Central sits between —
   // so a comparison report shows a spread instead of three near-identical rows.
   const HISTORY_DAYS = 14;
-  const TAX_RATE = 0.09;
+  // A string, so every figure below stays in decimal arithmetic. The seeded orders are
+  // what the dashboards, reports and branch comparison are computed from, so drift here
+  // shows up as demo figures that do not reconcile.
+  const TAX_RATE = '0.09';
 
   const seedProducts = await prodRepo.find({
     where: [
@@ -589,17 +593,18 @@ export async function runSeed() {
         }
         if (chosen.size === 0) chosen.set('PROD-COLA', 1);
 
-        let subtotal = 0;
+        let subtotal = '0.0000';
         const lines: any[] = [];
         let lineNumber = 0;
         for (const [code, qty] of chosen) {
           const product = productByCode.get(code) as any;
           if (!product) continue;
           lineNumber += 1;
-          const unitPrice = Number(product.base_price);
-          const baseTotal = unitPrice * qty;
-          const lineTax = baseTotal * TAX_RATE;
-          subtotal += baseTotal;
+          const unitPrice = MoneyUtil.format(product.base_price);
+          const baseTotal = MoneyUtil.multiply(unitPrice, qty);
+          const lineTax = MoneyUtil.multiply(baseTotal, TAX_RATE);
+          const lineTotal = MoneyUtil.add(baseTotal, lineTax);
+          subtotal = MoneyUtil.add(subtotal, baseTotal);
           lines.push({
             tenant_id: tenant.id,
             line_number: lineNumber,
@@ -607,23 +612,23 @@ export async function runSeed() {
             product_code: product.code,
             product_name: product.name,
             quantity: qty.toFixed(3),
-            unit_price: unitPrice.toFixed(4),
-            base_total: baseTotal.toFixed(4),
-            subtotal: baseTotal.toFixed(4),
-            tax_total: lineTax.toFixed(4),
-            tax_amount: lineTax.toFixed(4),
-            line_total: (baseTotal + lineTax).toFixed(4),
-            total_amount: (baseTotal + lineTax).toFixed(4),
+            unit_price: unitPrice,
+            base_total: baseTotal,
+            subtotal: baseTotal,
+            tax_total: lineTax,
+            tax_amount: lineTax,
+            line_total: lineTotal,
+            total_amount: lineTotal,
             state: 'ACTIVE',
           });
         }
         if (lines.length === 0) continue;
 
-        const deliveryFee = orderType === 'DELIVERY' ? 25000 : 0;
+        const deliveryFee = MoneyUtil.format(orderType === 'DELIVERY' ? 25000 : 0);
         // Tax follows the line items only: a delivery fee is a service charge here, not
         // a taxable good, which is also how the POS quotes it.
-        const tax = subtotal * TAX_RATE;
-        const grandTotal = subtotal + tax + deliveryFee;
+        const tax = MoneyUtil.multiply(subtotal, TAX_RATE);
+        const grandTotal = MoneyUtil.add(MoneyUtil.add(subtotal, tax), deliveryFee);
 
         const savedOrder: any = await orderRepo.save(orderRepo.create({
           tenant_id: tenant.id,
@@ -635,15 +640,15 @@ export async function runSeed() {
           status: 'COMPLETED',
           currency_code: 'IRR',
           business_date: businessDate,
-          subtotal: subtotal.toFixed(4),
-          subtotal_amount: subtotal.toFixed(4),
-          delivery_fee: deliveryFee.toFixed(4),
-          tax_total: tax.toFixed(4),
-          tax_amount: tax.toFixed(4),
-          grand_total: grandTotal.toFixed(4),
-          total_amount: grandTotal.toFixed(4),
-          paid_total: grandTotal.toFixed(4),
-          paid_amount: grandTotal.toFixed(4),
+          subtotal,
+          subtotal_amount: subtotal,
+          delivery_fee: deliveryFee,
+          tax_total: tax,
+          tax_amount: tax,
+          grand_total: grandTotal,
+          total_amount: grandTotal,
+          paid_total: grandTotal,
+          paid_amount: grandTotal,
           fulfillment_status: 'COMPLETED',
           submitted_at: placedAt,
           completed_at: placedAt,

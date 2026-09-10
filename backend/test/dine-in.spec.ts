@@ -69,14 +69,36 @@ describe('DineInService & Operations (Unit)', () => {
   });
 
   it('should release table and set closed_at timestamp', async () => {
-    sessionRepo.findOne.mockResolvedValue({ id: 'sess-1', table_id: 'tbl-1', status: 'OCCUPIED' });
-    sessionRepo.save.mockImplementation((s) => Promise.resolve(s));
-    occupancyRepo.create.mockImplementation((dto) => dto);
+    // releaseTable now does its work inside a transaction, because freeing a table has to
+    // settle the order holding it as well as close the session. That means it reads and
+    // writes through the EntityManager, not through the repositories this suite stubs.
+    const session: any = { id: 'sess-1', table_id: 'tbl-1', status: 'OCCUPIED', closed_at: null };
+    const mockEm = {
+      findOne: jest.fn().mockImplementation((entity: any) => {
+        if (entity === DiningTable) return Promise.resolve({ id: 'tbl-1', table_number: '1' });
+        if (entity === TableSession) return Promise.resolve(session);
+        return Promise.resolve(null);
+      }),
+      // No order is holding the table, so the release is just the session close.
+      createQueryBuilder: jest.fn().mockReturnValue({
+        setLock: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(null),
+      }),
+      save: jest.fn().mockImplementation((entity: any, obj: any) => Promise.resolve(obj || entity)),
+      create: jest.fn().mockImplementation((entity: any, obj: any) => obj),
+    };
+    dataSource.transaction.mockImplementation((cb: any) => cb(mockEm));
 
     const result = await service.releaseTable('t-1', 'tbl-1', 'AVAILABLE', 'corr-release');
 
     expect(result.success).toBe(true);
-    expect(sessionRepo.save).toHaveBeenCalledWith(expect.objectContaining({ status: 'AVAILABLE' }));
+    expect(mockEm.save).toHaveBeenCalledWith(
+      TableSession,
+      expect.objectContaining({ status: 'AVAILABLE' }),
+    );
+    expect(session.closed_at).toBeInstanceOf(Date);
   });
 
   it('should sort lock IDs alphabetically to prevent deadlocks in moveTable', async () => {
