@@ -3,18 +3,21 @@ import { Request } from 'express';
 import { DineInService } from './dine-in.service';
 import { CreateSectionDto, UpdateSectionDto, CreateTableDto, UpdateTableDto, MoveTableDto, MergeOrdersDto } from './dtos/dine-in.dto';
 
-@Controller(['api/v1/dining', 'api/v1/dine-in'])
+// One base, one name per thing. Mounted at two bases with per-handler aliases underneath,
+// a single handler answered at four addresses, and every rule about who may call it had to
+// be written four times. The frontend only ever used the 'dining' family.
+@Controller('api/v1/dining')
 export class DineInController {
   constructor(private readonly dineInService: DineInService) {}
 
   // Sections / Areas
-  @Get(['sections', 'areas'])
+  @Get('sections')
   async getSections(@Query('branchId') branchId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.dineInService.getSections(tenantId, branchId);
   }
 
-  @Post(['sections', 'areas'])
+  @Post('sections')
   async createSection(@Body() body: CreateSectionDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
@@ -65,7 +68,7 @@ export class DineInController {
   }
 
   // Floor Plan
-  @Get(['floor', 'floor-plan'])
+  @Get('floor')
   async getFloorPlan(@Query() query: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const branchId = query.branchId;
@@ -75,7 +78,7 @@ export class DineInController {
   }
 
   // Move table
-  @Post(['orders/:orderId/move-table', 'tables/:orderId/move'])
+  @Post('orders/:orderId/move-table')
   async moveTable(
     @Param('orderId') orderId: string,
     @Body() body: MoveTableDto,
@@ -88,7 +91,7 @@ export class DineInController {
   }
 
   // Merge orders
-  @Post(['orders/merge', 'tables/merge-orders'])
+  @Post('orders/merge')
   async mergeOrders(@Body() body: MergeOrdersDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).user?.id || (req as any).userId;

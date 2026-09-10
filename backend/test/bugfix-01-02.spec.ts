@@ -167,22 +167,6 @@ describe('BUG-01 & BUG-02 Verification Suite', () => {
       expect(res.transaction.amount).toBe('50000');
     });
 
-    it('CreditController: should handle postCustomerCreditTransactionAlias and return account & transaction', async () => {
-      const mockReq: any = { tenantId: 't-test', user: { id: 'u-1' }, correlationId: 'c-1' };
-      const body = { transaction_type: 'DEBIT', amount: '20000', note: 'Manual debit' };
-
-      const res = await creditController.postCustomerCreditTransactionAlias('cust-1', body, mockReq);
-      expect(creditService.postCreditTransaction).toHaveBeenCalledWith(
-        't-test',
-        'cust-1',
-        body,
-        'u-1',
-        'c-1',
-      );
-      expect(res.account).toBeDefined();
-      expect(res.transaction).toBeDefined();
-    });
-
     it('CustomerController.getCustomerCreditAccount: should return mapped transactions with transaction_type, recorded_at, note', async () => {
       const mockReq: any = { tenantId: 't-test' };
       const res = await customerController.getCustomerCreditAccount('cust-1', mockReq);

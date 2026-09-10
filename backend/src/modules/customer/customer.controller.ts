@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Patch, Param, Body, Query, Req, NotFoundException } from '@nestjs/common';
 import { Request } from 'express';
 import { CustomerService } from './customer.service';
-import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
+import { HeadOfficeOnly, Roles, MANAGER_AND_ABOVE } from '../../common/decorators/roles.decorator';
 import { CreditService } from './credit.service';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
@@ -98,6 +98,7 @@ export class CustomerController {
     return await this.customerService.createAddress(tenantId, id, body);
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Get(['customers/:id/credit-account', 'customers/:id/credit'])
   async getCustomerCreditAccount(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -120,6 +121,7 @@ export class CustomerController {
     };
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Post(['customers/:id/credit-account/transactions', 'customers/:id/credit/transactions'])
   async postCustomerCreditTransaction(
     @Param('id') id: string,
@@ -139,6 +141,7 @@ export class CustomerController {
     );
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Get(['customers/:id/credit-account/statement', 'customers/:id/credit/statement'])
   async getCustomerStatement(@Param('id') id: string, @Query() query: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -152,6 +155,7 @@ export class CustomerController {
     return await this.creditService.getAccountStatement(tenantId, acc.id, query);
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Post(['customers/:id/credit-account/repayments', 'customers/:id/credit/repayments'])
   async postCustomerRepayment(
     @Param('id') id: string,
@@ -193,6 +197,7 @@ export class CustomerController {
     };
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
   @Post(['customers/:id/credit-account/adjustments', 'customers/:id/credit/adjustments'])
   async postCustomerAdjustment(
     @Param('id') id: string,

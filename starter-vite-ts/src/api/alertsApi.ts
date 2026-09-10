@@ -15,30 +15,22 @@ export interface OperationalAlertItem {
   updated_at?: string;
 }
 
+// Alerts belong to the reports module and answer at one address. This file used to try
+// /api/v1/alerts first and fall back to /api/v1/reports/alerts, because a second controller
+// forwarded one to the other and nobody could say which was the real one.
 export const alertsApi = {
   getAlerts: async (): Promise<OperationalAlertItem[]> => {
     try {
-      const res = await httpClient.get<OperationalAlertItem[]>('/api/v1/alerts');
+      const res = await httpClient.get<OperationalAlertItem[]>('/api/v1/reports/alerts');
       return Array.isArray(res.data) ? res.data : [];
     } catch {
-      // Fallback endpoint if alias controller differs
-      try {
-        const fallbackRes = await httpClient.get<OperationalAlertItem[]>('/api/v1/reports/alerts');
-        return Array.isArray(fallbackRes.data) ? fallbackRes.data : [];
-      } catch {
-        return [];
-      }
+      return [];
     }
   },
 
   acknowledgeAlert: async (id: string): Promise<OperationalAlertItem> => {
-    try {
-      const res = await httpClient.post<OperationalAlertItem>(`/api/v1/alerts/${id}/acknowledge`);
-      return res.data;
-    } catch {
-      const res = await httpClient.post<OperationalAlertItem>(`/api/v1/reports/alerts/${id}/acknowledge`);
-      return res.data;
-    }
+    const res = await httpClient.post<OperationalAlertItem>(`/api/v1/reports/alerts/${id}/acknowledge`);
+    return res.data;
   },
 
   acknowledgeAll: async (alerts: OperationalAlertItem[]): Promise<void> => {

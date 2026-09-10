@@ -30,7 +30,6 @@ import { SavedReportView } from '../../entities/SavedReportView.entity';
 import { ReportExportJob } from '../../entities/ReportExportJob.entity';
 import { ReportsService } from './reports.service';
 import { ReportsController } from './reports.controller';
-import { AuditAlertsAliasController } from './audit-alerts-alias.controller';
 
 @Module({
   imports: [
@@ -66,7 +65,7 @@ import { AuditAlertsAliasController } from './audit-alerts-alias.controller';
     ]),
   ],
   providers: [ReportsService],
-  controllers: [ReportsController, AuditAlertsAliasController],
+  controllers: [ReportsController],
   exports: [ReportsService],
 })
 export class ReportsModule {}

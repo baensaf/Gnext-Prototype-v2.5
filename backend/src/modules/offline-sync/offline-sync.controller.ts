@@ -1,8 +1,14 @@
 import { Controller, Get, Post, Body, Query, Param, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { OfflineSyncService } from './offline-sync.service';
+import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 
+/**
+ * Part of the same sandbox: pulling the network out from under the demo and putting it back.
+ * Only the Offline Sync Engine screen calls it, and that screen is head office's.
+ */
 @Controller('api/v1/sync')
+@HeadOfficeOnly()
 export class OfflineSyncController {
   constructor(private readonly syncService: OfflineSyncService) {}
 
