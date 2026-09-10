@@ -2,6 +2,10 @@ import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Req, Unauthor
 import { Request } from 'express';
 import { DeliveryService } from './delivery.service';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
+import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
+import { Courier } from '../../entities/Courier.entity';
+import { DeliveryZone } from '../../entities/DeliveryZone.entity';
+import { CreateCourierDto, CreateZoneDto } from './dtos/delivery-config.dto';
 
 @Controller('api/v1/delivery')
 export class DeliveryController {
@@ -16,11 +20,12 @@ export class DeliveryController {
 
   @Roles(...MANAGER_AND_ABOVE)
   @Post('zones')
-  async createZone(@Body() body: any, @Req() req: Request) {
+  async createZone(@Body() body: CreateZoneDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.deliveryService.createZone(tenantId, body);
   }
 
+  @BranchOwned(DeliveryZone)
   @Roles(...MANAGER_AND_ABOVE)
   @Delete('zones/:id')
   async deleteZone(@Param('id') id: string, @Req() req: Request) {
@@ -35,6 +40,7 @@ export class DeliveryController {
     return await this.deliveryService.getCouriers(tenantId, branchId);
   }
 
+  @BranchOwned(Courier)
   @Get('couriers/:id')
   async getCourierById(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -43,12 +49,13 @@ export class DeliveryController {
 
   @Roles(...MANAGER_AND_ABOVE)
   @Post('couriers')
-  async createCourier(@Body() body: any, @Req() req: Request) {
+  async createCourier(@Body() body: CreateCourierDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.deliveryService.createCourier(tenantId, body, correlationId);
   }
 
+  @BranchOwned(Courier)
   @Post('couriers/:id/status')
   async updateCourierStatus(@Param('id') id: string, @Body() body: { status: 'AVAILABLE' | 'ON_DELIVERY' | 'INACTIVE' }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -62,6 +69,7 @@ export class DeliveryController {
     return await this.deliveryService.recordAttendance(tenantId, body);
   }
 
+  @BranchOwned(Courier)
   @Post('couriers/:id/availability')
   async setCourierAvailability(@Param('id') courierId: string, @Body() body: { availability_status: 'AVAILABLE' | 'BUSY' | 'OFF_LINE' }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -69,12 +77,14 @@ export class DeliveryController {
   }
 
   // --- 3. TERMINAL ASSIGNMENTS ---
+  @BranchOwned(Courier)
   @Post('couriers/:id/terminal-assignment')
   async assignMobileTerminal(@Param('id') courierId: string, @Body() body: { terminalId: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.deliveryService.assignMobileTerminal(tenantId, courierId, body.terminalId);
   }
 
+  @BranchOwned(Courier)
   @Delete('couriers/:id/terminal-assignment')
   async unassignMobileTerminal(@Param('id') courierId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
