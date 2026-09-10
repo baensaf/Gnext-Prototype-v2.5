@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository, SelectQueryBuilder } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { UserScope, isHeadOfficeUser } from '../../common/utils/user-scope.util';
 
@@ -8,7 +8,7 @@ import { UserScope, isHeadOfficeUser } from '../../common/utils/user-scope.util'
  * Reports that answer a question about the chain rather than about a location. A branch
  * manager reading these would be reading their neighbours' numbers.
  */
-const CHAIN_ONLY_REPORTS = ['branch-comparison'];
+const CHAIN_ONLY_REPORTS = ['branch-comparison', 'snappfood-reconciliation', 'integration-operations'];
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { Payment } from '../../entities/Payment.entity';
@@ -127,6 +127,42 @@ export class ReportsService {
     const expr = ORDER_BUSINESS_DATE_EXPR(alias);
     if (startDate) query.andWhere(`${expr} >= :bdStart`, { bdStart: startDate });
     if (endDate) query.andWhere(`${expr} <= :bdEnd`, { bdEnd: endDate });
+  }
+
+  /**
+   * Confines a query to one branch's orders.
+   *
+   * Payments, refunds, discounts and line items carry no branch column — they belong to an
+   * order, and the order belongs to a branch. A subquery keeps that one hop in SQL rather
+   * than reading every order into memory to find out which ids to allow.
+   *
+   * No branch means head office, which reads the chain.
+   */
+  private applyBranchViaOrder(qb: SelectQueryBuilder<any>, alias: string, branchId?: string) {
+    if (!branchId) return;
+    qb.andWhere(
+      `${alias}.order_id IN (SELECT scoped_o.id FROM order_header scoped_o WHERE scoped_o.branch_id = :scopedBranchId)`,
+      { scopedBranchId: branchId },
+    );
+  }
+
+  /**
+   * The same hop for the reports that read with `find` rather than a query builder.
+   * Returns undefined for head office, which the callers pass straight through as "no
+   * restriction" — an empty array would mean the opposite and hide everything.
+   */
+  private async branchOrderIds(tenantId: string, branchId?: string): Promise<string[] | undefined> {
+    if (!branchId) return undefined;
+    const orders = await this.orderRepo.find({
+      where: { tenant_id: tenantId, branch_id: branchId },
+      select: ['id'],
+    });
+    return orders.map((o) => o.id);
+  }
+
+  /** `{ branch_id }` when the caller has a branch, nothing when they are head office. */
+  private branchWhere(branchId?: string) {
+    return branchId ? { branch_id: branchId } : {};
   }
 
   private applyDateFilter(query: any, dateColumn: string, startDate?: string, endDate?: string) {
@@ -381,6 +417,7 @@ export class ReportsService {
         const qb = this.orderItemRepo.createQueryBuilder('i')
           .where('i.tenant_id = :tenantId', { tenantId });
         this.applyDateFilter(qb, 'i.created_at', startDate, endDate);
+        this.applyBranchViaOrder(qb, 'i', branchId);
 
         const items = await qb.getMany();        let totalQty = '0.0000';
         let totalGross = '0.0000';
@@ -438,6 +475,7 @@ export class ReportsService {
         const qb = this.paymentRepo.createQueryBuilder('p')
           .where('p.tenant_id = :tenantId', { tenantId });
         this.applyDateFilter(qb, 'p.initiated_at', startDate, endDate);
+        this.applyBranchViaOrder(qb, 'p', branchId);
 
         const payments = await qb.getMany();
 
@@ -503,7 +541,10 @@ export class ReportsService {
       }
 
       case 'mixed-payments': {
-        const payments = await this.paymentRepo.find({ where: { tenant_id: tenantId } });
+        const scopedOrderIds = await this.branchOrderIds(tenantId, branchId);
+        const payments = await this.paymentRepo.find({
+          where: { tenant_id: tenantId, ...(scopedOrderIds ? { order_id: In(scopedOrderIds) } : {}) },
+        });
         const orderPaymentMap = new Map<string, Payment[]>();
         payments.forEach((p) => {
           if (p.order_id) {
@@ -561,6 +602,7 @@ export class ReportsService {
           .where('p.tenant_id = :tenantId', { tenantId })
           .andWhere('(p.method_kind = :mk OR p.device_id IS NOT NULL)', { mk: 'MOBILE_POS' });
         this.applyDateFilter(qb, 'p.initiated_at', startDate, endDate);
+        this.applyBranchViaOrder(qb, 'p', branchId);
 
         const payments = await qb.getMany();
         let totalAmt = '0.00';
@@ -599,6 +641,7 @@ export class ReportsService {
         const qb = this.refundRepo.createQueryBuilder('r')
           .where('r.tenant_id = :tenantId', { tenantId });
         this.applyDateFilter(qb, 'r.initiated_at', startDate, endDate);
+        this.applyBranchViaOrder(qb, 'r', branchId);
 
         const refunds = await qb.getMany();
         let totalAmt = '0.00';
@@ -633,7 +676,10 @@ export class ReportsService {
       }
 
       case 'discounts': {
-        const adjustments = await this.adjustmentRepo.find({ where: { tenant_id: tenantId } });
+        const discountOrderIds = await this.branchOrderIds(tenantId, branchId);
+        const adjustments = await this.adjustmentRepo.find({
+          where: { tenant_id: tenantId, ...(discountOrderIds ? { order_id: In(discountOrderIds) } : {}) },
+        });
         let totalDisc = '0.00';
 
         const rows = adjustments.map((a) => {
@@ -661,7 +707,10 @@ export class ReportsService {
       }
 
       case 'manual-discounts': {
-        const adjustments = await this.adjustmentRepo.find({ where: { tenant_id: tenantId } });
+        const manualOrderIds = await this.branchOrderIds(tenantId, branchId);
+        const adjustments = await this.adjustmentRepo.find({
+          where: { tenant_id: tenantId, ...(manualOrderIds ? { order_id: In(manualOrderIds) } : {}) },
+        });
         let totalManual = '0.00';
 
         const rows = adjustments
@@ -691,7 +740,10 @@ export class ReportsService {
       }
 
       case 'discount-stacking': {
-        const adjustments = await this.adjustmentRepo.find({ where: { tenant_id: tenantId } });
+        const stackingOrderIds = await this.branchOrderIds(tenantId, branchId);
+        const adjustments = await this.adjustmentRepo.find({
+          where: { tenant_id: tenantId, ...(stackingOrderIds ? { order_id: In(stackingOrderIds) } : {}) },
+        });
         const rows = adjustments.map((a) => ({
           adjustment_id: a.id,
           order_id: a.order_id,
@@ -713,7 +765,9 @@ export class ReportsService {
       }
 
       case 'cashier-shifts': {
-        const shifts = await this.cashierShiftRepo.find({ where: { tenant_id: tenantId } });
+        const shifts = await this.cashierShiftRepo.find({
+          where: { tenant_id: tenantId, ...this.branchWhere(branchId) },
+        });
         let totalExpected = '0.00';
         let totalActual = '0.00';
         let totalVariance = '0.00';
@@ -754,7 +808,9 @@ export class ReportsService {
       }
 
       case 'cash-discrepancies': {
-        const shifts = await this.cashierShiftRepo.find({ where: { tenant_id: tenantId } });
+        const shifts = await this.cashierShiftRepo.find({
+          where: { tenant_id: tenantId, ...this.branchWhere(branchId) },
+        });
         let totalAbsVariance = '0.00';
 
         const rows = shifts
@@ -787,6 +843,11 @@ export class ReportsService {
       }
 
       case 'customer-credit': {
+        // Deliberately chain-wide. A credit account carries no branch — the customer owes the
+        // chain, not a shop — so there is no branch answer to give, and attributing only the
+        // entries that happen to hang off an order would show a manager purchases without the
+        // repayments that settle them. Credit is a manager's area by design; see the
+        // @Roles(...MANAGER_AND_ABOVE) on CreditController.
         const entries = await this.creditEntryRepo.find({ where: { tenant_id: tenantId } });
         let totalDebit = '0.00';
         let totalCredit = '0.00';
@@ -826,6 +887,11 @@ export class ReportsService {
       }
 
       case 'credit-eod-usage': {
+        // Deliberately chain-wide. A credit account carries no branch — the customer owes the
+        // chain, not a shop — so there is no branch answer to give, and attributing only the
+        // entries that happen to hang off an order would show a manager purchases without the
+        // repayments that settle them. Credit is a manager's area by design; see the
+        // @Roles(...MANAGER_AND_ABOVE) on CreditController.
         const entries = await this.creditEntryRepo.find({ where: { tenant_id: tenantId, entry_type: 'PURCHASE' } });
         let totalUsage = '0.00';
 
@@ -853,6 +919,11 @@ export class ReportsService {
       }
 
       case 'credit-aging': {
+        // Deliberately chain-wide. A credit account carries no branch — the customer owes the
+        // chain, not a shop — so there is no branch answer to give, and attributing only the
+        // entries that happen to hang off an order would show a manager purchases without the
+        // repayments that settle them. Credit is a manager's area by design; see the
+        // @Roles(...MANAGER_AND_ABOVE) on CreditController.
         const accounts = await this.creditAccountRepo.find({ where: { tenant_id: tenantId } });
         let totalBalance = '0.00';
 
@@ -887,8 +958,12 @@ export class ReportsService {
       }
 
       case 'customer-activity': {
+        // Customers belong to the chain and carry no branch. What a branch may see is its
+        // own trade with them, so the activity is counted from its own orders.
         const customers = await this.customerRepo.find({ where: { tenant_id: tenantId } });
-        const orders = await this.orderRepo.find({ where: { tenant_id: tenantId } });
+        const orders = await this.orderRepo.find({
+          where: { tenant_id: tenantId, ...this.branchWhere(branchId) },
+        });
 
         const custOrderMap = new Map<string, OrderHeader[]>();
         orders.forEach((o) => {
@@ -928,7 +1003,9 @@ export class ReportsService {
       }
 
       case 'aggregator-orders': {
-        const orders = await this.orderRepo.find({ where: { tenant_id: tenantId } });
+        const orders = await this.orderRepo.find({
+          where: { tenant_id: tenantId, ...this.branchWhere(branchId) },
+        });
         const aggOrders = orders.filter((o) => o.order_type === 'SNAPPFOOD' || (o as any).external_id);
 
         let totalAmt = '0.00';
@@ -989,7 +1066,9 @@ export class ReportsService {
       }
 
       case 'courier-attendance': {
-        const attendances = await this.attendanceRepo.find({ where: { tenant_id: tenantId } });
+        const attendances = await this.attendanceRepo.find({
+          where: { tenant_id: tenantId, ...this.branchWhere(branchId) },
+        });
         let totalHours = 0;
 
         const rows = attendances.map((a) => {
@@ -1020,7 +1099,9 @@ export class ReportsService {
       }
 
       case 'courier-settlements': {
-        const settlements = await this.settlementRepo.find({ where: { tenant_id: tenantId } });
+        const settlements = await this.settlementRepo.find({
+          where: { tenant_id: tenantId, ...this.branchWhere(branchId) },
+        });
         let totalNetDue = '0.00';
         let totalDiscrepancy = '0.00';
 
@@ -1055,7 +1136,15 @@ export class ReportsService {
       }
 
       case 'courier-reconciliation': {
-        const lines = await this.settlementLineRepo.find();
+        const scopedSettlements = await this.settlementRepo.find({
+          where: { tenant_id: tenantId, ...this.branchWhere(branchId) },
+          select: ['id'],
+        });
+        const lines = scopedSettlements.length
+          ? await this.settlementLineRepo.find({
+              where: { settlement_id: In(scopedSettlements.map((s) => s.id)) },
+            })
+          : [];
         let totalCash = '0.00';
         let totalPos = '0.00';
 
@@ -1088,7 +1177,9 @@ export class ReportsService {
       }
 
       case 'tax-packaging': {
-        const orders = await this.orderRepo.find({ where: { tenant_id: tenantId } });
+        const orders = await this.orderRepo.find({
+          where: { tenant_id: tenantId, ...this.branchWhere(branchId) },
+        });
         let totalTaxable = '0.00';
         let totalTax = '0.00';
         let totalPackaging = '0.00';
@@ -1125,7 +1216,9 @@ export class ReportsService {
       }
 
       case 'print-operations': {
-        const jobs = await this.printJobRepo.find({ where: { tenant_id: tenantId } });
+        const jobs = await this.printJobRepo.find({
+          where: { tenant_id: tenantId, ...this.branchWhere(branchId) },
+        });
         let totalAttempts = 0;
 
         const rows = jobs.map((j) => {
