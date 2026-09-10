@@ -1,8 +1,16 @@
 import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Headers, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { SimulationService } from './simulation.service';
+import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 
+/**
+ * The demo sandbox: aggregator orders, hardware outcomes, scenario switches. Nothing here
+ * is part of running a shop, and the Simulation section of the sidebar is head office's, so
+ * the API says the same thing the menu does. It is not read-only either — the snappfood
+ * simulator writes real orders.
+ */
 @Controller('api/v1/simulation')
+@HeadOfficeOnly()
 export class SimulationController {
   constructor(private readonly simulationService: SimulationService) {}
 

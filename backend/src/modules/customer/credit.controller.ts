@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Patch, Param, Body, Query, Req, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { CreditService } from './credit.service';
+import { Roles, MANAGER_AND_ABOVE } from '../../common/decorators/roles.decorator';
 import {
   CreditAccountCreateDto,
   CreditAccountUpdateDto,
@@ -9,7 +10,16 @@ import {
   CreditAdjustmentDto,
 } from './dtos/credit.dto';
 
+/**
+ * Customer credit: limits, repayments, adjustments and the ledger they move.
+ *
+ * Seniority rather than reach — this is a manager's call at their own counter, not head
+ * office's, which is why it is `@Roles` and not `@HeadOfficeOnly`. It sits on the class
+ * because there is no read here a register operator needs: the POS takes a credit payment
+ * through the payment module, which does its own credit work server-side.
+ */
 @Controller('api/v1')
+@Roles(...MANAGER_AND_ABOVE)
 export class CreditController {
   constructor(private readonly creditService: CreditService) {}
 
@@ -107,156 +117,5 @@ export class CreditController {
   async getCreditAging(@Query() query: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.creditService.getCreditAging(tenantId, query);
-  }
-
-  // --- Backward compatibility / customer sub-resource aliases ---
-
-  @Get('customers/credit/aging')
-  async getCustomerCreditAgingAlias(@Query() query: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const aging = await this.creditService.getCreditAging(tenantId, query);
-    // If client expects flat array of customer aging items
-    return aging.customers.map((c: any) => ({
-      customer_id: c.customerId,
-      customer_code: c.customer?.code || '',
-      customer_name: c.customer?.name || '',
-      credit_limit: c.totalExposure,
-      current_balance: `-${c.totalExposure}`,
-      available_credit: '0.0000',
-      aging: {
-        current_0_30: c.current,
-        days_31_60: c.days31_60,
-        days_61_90: c.days61_90,
-        days_90_plus: c.days90Plus,
-      },
-    }));
-  }
-
-  @Get(['customers/:customerId/credit-account', 'customers/:customerId/credit'])
-  async getCreditAccountByCustomer(@Param('customerId') customerId: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const acc = await this.creditService.getAccountByCustomer(tenantId, customerId);
-    if (!acc) return null;
-    const statement = await this.creditService.getAccountStatement(tenantId, acc.id, {});
-    return {
-      account: acc,
-      transactions: statement.entries.map((e: any) => ({
-        ...e,
-        transaction_type: e.entry_type,
-        recorded_at: e.posted_at,
-        note: e.reason_text || e.reference,
-      })),
-    };
-  }
-
-  @Post([
-    'customers/:customerId/credit-account/transactions',
-    'customers/:customerId/credit/transactions',
-  ])
-  async postCustomerCreditTransactionAlias(
-    @Param('customerId') customerId: string,
-    @Body() body: any,
-    @Req() req: Request,
-  ) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || (req as any).userId;
-    const correlationId = (req as any).correlationId;
-
-    return await this.creditService.postCreditTransaction(
-      tenantId,
-      customerId,
-      body,
-      userId,
-      correlationId,
-    );
-  }
-
-  @Get(['customers/:customerId/credit-account/statement', 'customers/:customerId/credit/statement'])
-  async getCustomerStatementAlias(@Param('customerId') customerId: string, @Query() query: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    let acc = await this.creditService.getAccountByCustomer(tenantId, customerId);
-    if (!acc) {
-      acc = await this.creditService.getAccountById(tenantId, customerId).catch(() => null);
-    }
-    if (!acc) {
-      throw new NotFoundException(`Credit account not found for customer ${customerId}`);
-    }
-    return await this.creditService.getAccountStatement(tenantId, acc.id, query);
-  }
-
-  @Post(['customers/:customerId/credit-account/repayments', 'customers/:customerId/credit/repayments'])
-  async postCustomerRepaymentAlias(
-    @Param('customerId') customerId: string,
-    @Body() body: any,
-    @Req() req: Request,
-  ) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || (req as any).userId;
-    const correlationId = (req as any).correlationId;
-
-    let acc = await this.creditService.getAccountByCustomer(tenantId, customerId);
-    if (!acc) {
-      acc = await this.creditService.getAccountById(tenantId, customerId).catch(() => null);
-    }
-    if (!acc) {
-      throw new NotFoundException(`Credit account not found for customer ${customerId}`);
-    }
-
-    const res = await this.creditService.postRepayment(
-      tenantId,
-      acc.id,
-      {
-        amount: String(body.amount),
-        reference: body.reference || body.reference_id || undefined,
-        reason: body.note || body.reason || undefined,
-        approvalRequestId: body.approvalRequestId || undefined,
-      },
-      userId,
-      correlationId,
-    );
-
-    return {
-      account: { ...acc, current_balance: res.newBalance },
-      transaction: res.entry,
-      ...res,
-    };
-  }
-
-  @Post(['customers/:customerId/credit-account/adjustments', 'customers/:customerId/credit/adjustments'])
-  async postCustomerAdjustmentAlias(
-    @Param('customerId') customerId: string,
-    @Body() body: any,
-    @Req() req: Request,
-  ) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || (req as any).userId;
-    const correlationId = (req as any).correlationId;
-
-    let acc = await this.creditService.getAccountByCustomer(tenantId, customerId);
-    if (!acc) {
-      acc = await this.creditService.getAccountById(tenantId, customerId).catch(() => null);
-    }
-    if (!acc) {
-      throw new NotFoundException(`Credit account not found for customer ${customerId}`);
-    }
-
-    const res = await this.creditService.postAdjustment(
-      tenantId,
-      acc.id,
-      {
-        amountSigned: String(body.amountSigned || body.amount),
-        reason: body.reason || body.note || 'Adjustment',
-        reference: body.reference || body.reference_id || undefined,
-        approvalRequestId: body.approvalRequestId || 'system-approved',
-      },
-      userId,
-      correlationId,
-    );
-
-    return {
-      account: { ...acc, current_balance: res.newBalance },
-      transaction: res.entry,
-      ...res,
-    };
   }
 }

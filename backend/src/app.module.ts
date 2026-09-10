@@ -6,6 +6,7 @@ import { HealthController } from './modules/health/health.controller';
 import { SessionGuard } from './common/guards/session.guard';
 import { CsrfGuard } from './common/guards/csrf.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { BranchScopeInterceptor } from './common/interceptors/branch-scope.interceptor';
 import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
 import { IdempotencyService } from './common/services/idempotency.service';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
@@ -238,6 +239,12 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    // Before anything reads the request: a branch account only ever asks about its own
+    // branch, whatever the query string says.
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: BranchScopeInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,

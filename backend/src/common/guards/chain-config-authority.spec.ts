@@ -7,6 +7,9 @@ import { DiscountsController } from '../../modules/discounts/discounts.controlle
 import { PricingController } from '../../modules/pricing/pricing.controller';
 import { LocalizationController } from '../../modules/localization/localization.controller';
 import { CustomerController } from '../../modules/customer/customer.controller';
+import { CreditController } from '../../modules/customer/credit.controller';
+import { SimulationController } from '../../modules/simulation/simulation.controller';
+import { OfflineSyncController } from '../../modules/offline-sync/offline-sync.controller';
 
 /**
  * What the chain decides once, and what a branch decides for itself.
@@ -31,6 +34,11 @@ type Route = { name: string; path: string; headOfficeOnly: boolean; roles?: stri
 
 function writeRoutes(controller: any): Route[] {
   const proto = controller.prototype;
+  // A decorator on the class covers every route in it, and reading only the handler makes a
+  // guarded controller look wide open — which is exactly how an audit of this codebase
+  // first mis-reported UsersController.
+  const classHeadOffice = !!Reflect.getMetadata(HEAD_OFFICE_ONLY_KEY, controller);
+  const classRoles = Reflect.getMetadata(ROLES_KEY, controller);
   return Object.getOwnPropertyNames(proto)
     .filter((name) => name !== 'constructor')
     .map((name) => {
@@ -39,8 +47,8 @@ function writeRoutes(controller: any): Route[] {
         name,
         path: Reflect.getMetadata(PATH_METADATA, handler),
         method: Reflect.getMetadata(METHOD_METADATA, handler),
-        headOfficeOnly: !!Reflect.getMetadata(HEAD_OFFICE_ONLY_KEY, handler),
-        roles: Reflect.getMetadata(ROLES_KEY, handler),
+        headOfficeOnly: !!Reflect.getMetadata(HEAD_OFFICE_ONLY_KEY, handler) || classHeadOffice,
+        roles: Reflect.getMetadata(ROLES_KEY, handler) ?? classRoles,
       };
     })
     .filter((route) => route.path !== undefined)
@@ -48,13 +56,15 @@ function writeRoutes(controller: any): Route[] {
 }
 
 /**
- * Writes each controller deliberately leaves open, and why. Anything not named here must
- * carry `@HeadOfficeOnly()`, so a new route is refused by this test until somebody decides
- * which side of the line it belongs on.
+ * Writes each controller deliberately leaves open to anybody signed in, and why. Anything
+ * not named here must carry `@HeadOfficeOnly()` for reach or `@Roles()` for seniority, so
+ * a new route is refused by this test until somebody decides which side of the line it
+ * belongs on.
  */
 const OPEN_BY_DESIGN: Array<[string, any, string[]]> = [
-  // The shelf, not the menu: taking an item off sale today is the branch's call.
-  ['catalog', CatalogController, ['availability/suspend', 'availability/resume']],
+  // The shelf, not the menu: taking an item off sale today is the branch's call — but a
+  // manager's, so availability carries @Roles and is not open in the sense meant here.
+  ['catalog', CatalogController, []],
   // Reads in all but HTTP verb — the register calls both in the middle of an order.
   ['discounts', DiscountsController, ['coupons/validate', 'discount-quotes']],
   // Computes a preview and writes nothing.
@@ -71,11 +81,16 @@ const OPEN_BY_DESIGN: Array<[string, any, string[]]> = [
       'customers/:id/phones',
       'customers/:id/consents',
       'customers/:id/addresses',
-      ['customers/:id/credit-account/transactions', 'customers/:id/credit/transactions'].join(),
-      ['customers/:id/credit-account/repayments', 'customers/:id/credit/repayments'].join(),
-      ['customers/:id/credit-account/adjustments', 'customers/:id/credit/adjustments'].join(),
     ],
   ],
+  // Money on a customer's account — limits, repayments, adjustments — is a manager's call at
+  // their own counter. Nothing here checked anything at all until an audit found a register
+  // account could read the whole chain's ledger and move balances on it.
+  ['credit', CreditController, []],
+  // The demo sandbox writes real orders and flips connectivity the whole demo reads. Its
+  // screens are head office's; so is the API.
+  ['simulation', SimulationController, []],
+  ['offline sync', OfflineSyncController, []],
 ];
 
 describe.each(OPEN_BY_DESIGN)('%s: what the chain decides once', (label, controller, open) => {
@@ -87,11 +102,25 @@ describe.each(OPEN_BY_DESIGN)('%s: what the chain decides once', (label, control
 
   it('leaves no chain-wide write open to a branch', () => {
     const unguarded = writeRoutes(controller)
-      .filter((route) => !route.headOfficeOnly)
+      .filter((route) => !route.headOfficeOnly && !route.roles)
       .map((route) => String(route.path))
       .filter((path) => !open.includes(path));
 
     expect(unguarded).toEqual([]);
+  });
+});
+
+describe('money on a customer account', () => {
+  // Seniority, not reach: a branch manager settles their own customer's balance, so this is
+  // @Roles rather than @HeadOfficeOnly — and a register operator is not on the list.
+  it('keeps credit limits, repayments and adjustments with a manager', () => {
+    const routes = writeRoutes(CreditController);
+    expect(routes.length).toBeGreaterThan(0);
+    for (const route of routes) {
+      expect(route.roles).toBeDefined();
+      expect(route.roles).toContain('MANAGER');
+      expect(route.roles).not.toContain('CASHIER');
+    }
   });
 });
 
