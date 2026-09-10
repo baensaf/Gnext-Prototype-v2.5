@@ -165,6 +165,52 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
     });
   });
 
+  describe('Asking whether a drawer is open (R13)', () => {
+    /** The query builder chain getCurrentShift walks, ending in whatever getOne returns. */
+    const withOpenShift = (shift: any) => {
+      shiftRepo.createQueryBuilder.mockReturnValue({
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(shift),
+      });
+    };
+
+    it('answers null when no drawer is open rather than raising a 404', async () => {
+      // Most of the day a terminal has no shift open. The screen that asks renders its own
+      // empty state, so treating the ordinary case as a missing resource only ever put a
+      // failed request in the console.
+      withOpenShift(null);
+
+      await expect(shiftService.getCurrentShift('t-1', 'term-1')).resolves.toBeNull();
+    });
+
+    it('returns the open shift when there is one', async () => {
+      withOpenShift({ id: 'shf-1', state: 'OPEN' });
+
+      await expect(shiftService.getCurrentShift('t-1', 'term-1')).resolves.toMatchObject({ id: 'shf-1' });
+    });
+
+    it('refuses cash movement with the till shut, and says so in its own words', async () => {
+      // The callers that move money ask through requireCurrentShift. A payment capture
+      // being handed a 404 about a shift it never asked for is the wrong shape of answer;
+      // a conflict naming the drawer is the right one.
+      withOpenShift(null);
+
+      await expect(shiftService.requireCurrentShift('t-1', 'term-1')).rejects.toThrow(ConflictException);
+      await expect(shiftService.requireCurrentShift('t-1', 'term-1')).rejects.toMatchObject({
+        response: { code: 'NO_OPEN_SHIFT' },
+      });
+    });
+
+    it('hands back the shift when one is open', async () => {
+      withOpenShift({ id: 'shf-1', state: 'OPEN' });
+
+      await expect(shiftService.requireCurrentShift('t-1', 'term-1')).resolves.toMatchObject({ id: 'shf-1' });
+    });
+  });
+
   describe('Business Day Close & Reopen Rules (R13)', () => {
     it('should throw BadRequestException if active cashier shifts exist on business day close', async () => {
       shiftRepo.find = jest.fn().mockResolvedValue([{ id: 'shf-open', state: 'OPEN' }]);

@@ -151,13 +151,10 @@ export class PaymentService {
       }
 
       const paymentNumber = await this.generatePaymentNumber(tenantId, em);
-      let currentShiftId: string | null = null;
-      try {
-        const shift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id, order.branch_id);
-        currentShiftId = shift?.id || null;
-      } catch (e) {
-        // Shift not required for non-cash if not opened
-      }
+      // Recorded when there is a drawer open and left null when there is not: an intent can
+      // be raised before the till is.
+      const openShift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id, order.branch_id);
+      const currentShiftId: string | null = openShift?.id ?? null;
 
       const payment = em.create(Payment, {
         tenant_id: tenantId,
@@ -220,7 +217,7 @@ export class PaymentService {
       const methodKind = payment.method_kind;
 
       if (methodKind === 'CASH') {
-        const shift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id, order.branch_id);
+        const shift = await this.shiftService.requireCurrentShift(tenantId, order.terminal_id, order.branch_id);
         await this.shiftService.recordCashPaymentMovement(tenantId, shift.id, payment.id, payment.amount, userId || undefined, em);
         payment.status = 'SUCCEEDED';
       } else if (methodKind === 'CUSTOMER_CREDIT') {
@@ -396,22 +393,19 @@ export class PaymentService {
         order.due_amount = order.outstanding_total;
         await em.save(OrderHeader, order);
 
-        // If payment was cash and shift is active, record a CASH_REFUND / movement
+        // Cash going back out is recorded against the drawer it comes from. If none is
+        // open the reversal still stands — the money simply was not counted in a shift.
         if (payment.method_kind === 'CASH' && order.terminal_id) {
-          try {
-            const shift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id, order.branch_id);
-            if (shift) {
-              await this.shiftService.recordCashRefundMovement(
-                tenantId,
-                shift.id,
-                payment.id,
-                payment.amount,
-                userId,
-                em,
-              );
-            }
-          } catch {
-            // If no active shift, continue without blocking reversal
+          const shift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id, order.branch_id);
+          if (shift) {
+            await this.shiftService.recordCashRefundMovement(
+              tenantId,
+              shift.id,
+              payment.id,
+              payment.amount,
+              userId,
+              em,
+            );
           }
         }
       }
