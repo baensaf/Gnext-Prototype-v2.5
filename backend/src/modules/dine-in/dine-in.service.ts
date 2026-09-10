@@ -98,6 +98,15 @@ export class DineInService {
     const qb = this.tableRepo.createQueryBuilder('t').where('t.tenant_id = :tenantId', { tenantId });
 
     if (query.areaId) qb.andWhere('t.dining_area_id = :areaId', { areaId: query.areaId });
+    // A table carries no branch of its own; it belongs to one through its area. The
+    // parameter was on this signature and never used, so a branch manager asking for
+    // tables without naming an area was handed the whole chain's floor.
+    if (query.branchId) {
+      qb.andWhere(
+        't.dining_area_id IN (SELECT a.id FROM dining_area a WHERE a.tenant_id = :tenantId AND a.branch_id = :branchId)',
+        { tenantId, branchId: query.branchId },
+      );
+    }
     if (query.status) qb.andWhere('t.status = :status', { status: query.status });
     if (query.q) {
       qb.andWhere('(t.code ILIKE :q OR t.table_number ILIKE :q)', { q: `%${query.q}%` });

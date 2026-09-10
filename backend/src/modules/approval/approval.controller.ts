@@ -1,7 +1,7 @@
-import { Controller, Get, Post, Param, Query, Body, Req, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Body, Req, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Request } from 'express';
 import { ApprovalService } from './approval.service';
-import { isApprover } from '../../common/utils/user-scope.util';
+import { isApprover, isHeadOfficeUser, UserScope } from '../../common/utils/user-scope.util';
 import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 
 @Controller('api/v1/approvals')
@@ -22,13 +22,34 @@ export class ApprovalController {
     return await this.approvalService.createOrUpdateRule(tenantId, body, correlationId);
   }
 
+  /**
+   * A pin is the thing that releases money the person holding it was not trusted to
+   * release alone, so who may set one is the whole point of having one.
+   *
+   * The route took `userId` from the request body and set that account's pin, with no
+   * check of any kind: a cashier could overwrite an approver's pin and then approve their
+   * own refunds with it. Setting your own is self-service; setting somebody else's is
+   * administering the chain's staff, which is where the users screen already lives.
+   */
   @Post('user-pin')
   async setUserPin(@Body() body: { userId?: string; pin: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const userId = body.userId || (req as any).user?.id;
-    if (!userId) throw new UnauthorizedException('User session required');
+    const selfId = (req as any).user?.id || (req as any).userId;
+    if (!selfId) throw new UnauthorizedException('User session required');
+
+    const targetId = body.userId || selfId;
+    if (targetId !== selfId) {
+      const actor: UserScope = {
+        role: (req as any).userRole,
+        branchId: (req as any).userBranchId ?? null,
+      };
+      if (!isHeadOfficeUser(actor)) {
+        throw new ForbiddenException('Only head office may set another account’s pin');
+      }
+    }
+
     const correlationId = (req as any).correlationId;
-    return await this.approvalService.setUserPin(tenantId, userId, body.pin, correlationId);
+    return await this.approvalService.setUserPin(tenantId, targetId, body.pin, correlationId);
   }
 
   @Post('verify-pin')

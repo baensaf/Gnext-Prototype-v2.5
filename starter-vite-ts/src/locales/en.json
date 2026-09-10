@@ -2294,6 +2294,10 @@
         "branchOverrides": {
           "title": "Branch Overrides",
           "description": "What one location does differently from head office, and what it is not allowed to change."
+        },
+        "roles": {
+          "title": "Roles & Permissions",
+          "description": "What each role may see and do in a branch, and what stays with head office."
         }
       },
       "scopeLegend": "Organization settings are defined once at head office and apply to every branch. Per-branch settings are configured separately at each location.",
@@ -2735,5 +2739,53 @@
     "roleApproves": "This role can approve with a PIN.",
     "roleNeedsApproval": "This role needs a PIN from someone else to move money back out.",
     "selfEditNotice": "This is the account you are signed in as. Its role, scope and status are locked so you cannot lock yourself out."
+  },
+  "rolesPage": {
+    "title": "Roles & Permissions",
+    "capability": "Capability",
+    "intro": "Head office is a role and the absence of a branch, both at once. An administrator pinned to a branch is that branch’s administrator — they read as the middle column here, not the right-hand one.",
+    "footer": "A branch account is answered about its own branch whatever it asks for — the confinement holds at the API, not only in the branch switcher. Head office asking for nothing in particular gets every site.",
+    "columns": {
+      "cashier": "Cashier",
+      "manager": "Branch Manager",
+      "headOffice": "Head Office"
+    },
+    "legend": {
+      "full": "Can do",
+      "read": "Can see only",
+      "none": "No access"
+    },
+    "groups": {
+      "floor": "Working the shop",
+      "site": "Running one site",
+      "chain": "Deciding for the chain"
+    },
+    "caps": {
+      "pos": "Take orders at the register",
+      "floor": "Seat and release tables",
+      "kds": "Work the kitchen display",
+      "shift": "Open, count and close a till",
+      "refund": "Hand back money",
+      "refundNote": "A cashier raises the refund; it only moves once an approver puts a pin in.",
+      "availability": "Suspend an item that ran out today",
+      "overrides": "Diverge from a head-office setting",
+      "overridesNote": "Only for the groups head office has opened up; the rest are inherited and read-only.",
+      "terminals": "Register a till or card terminal",
+      "printers": "Set up printers and ticket routing",
+      "sections": "Lay out the dining floor",
+      "zones": "Define delivery zones and couriers",
+      "reports": "Read reports",
+      "reportsNote": "A branch manager’s reports cover their own site. Head office sees every site.",
+      "catalog": "Write the menu — products, categories, modifiers",
+      "catalogNote": "A branch sees the catalogue and decides what it can serve today. It does not author it.",
+      "pricing": "Set prices",
+      "discounts": "Run campaigns, coupons and customer rates",
+      "chainSettings": "Currencies, tender types, reason codes",
+      "authority": "Set discount caps and approval thresholds",
+      "users": "Hire, move and deactivate staff — and set their pin",
+      "usersNote": "Anyone may change their own pin. Setting somebody else’s is head office’s.",
+      "branches": "Open a branch, set its trading hours",
+      "compare": "Compare one branch against another"
+    }
   }
 }

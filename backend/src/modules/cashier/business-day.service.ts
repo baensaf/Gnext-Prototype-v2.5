@@ -34,7 +34,11 @@ export class BusinessDayService {
       .createQueryBuilder('d')
       .where('d.tenant_id = :tenantId', { tenantId });
 
-    if (query.branch) qb.andWhere('d.branch_id = :branch', { branch: query.branch });
+    // The screen sends `branch`; the branch-scope interceptor fills in `branchId` for an
+    // account pinned to one shop. Reading only the first meant a branch manager asking for
+    // nothing in particular was answered about the whole chain.
+    const branch = query.branch || query.branchId;
+    if (branch) qb.andWhere('d.branch_id = :branch', { branch });
     if (query.businessDate) qb.andWhere('d.business_date = :businessDate', { businessDate: query.businessDate });
     if (query.currency) qb.andWhere('d.currency_code = :currency', { currency: query.currency });
     if (query.status) qb.andWhere('d.status = :status', { status: query.status });
