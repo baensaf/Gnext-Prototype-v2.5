@@ -3,7 +3,7 @@ import { httpClient } from './httpClient';
 export interface CashMovement {
   id: string;
   shift_id: string;
-  type: 'OPENING_FLOAT' | 'CASH_PAYMENT' | 'CASH_REFUND' | 'PAID_IN' | 'PAID_OUT' | 'CLOSE_ADJUSTMENT';
+  type: 'OPENING_FLOAT' | 'CASH_PAYMENT' | 'CASH_REFUND' | 'PAID_IN' | 'PAID_OUT' | 'SAFE_DROP' | 'CLOSE_ADJUSTMENT';
   amount: string;
   currency_code: string;
   payment_id?: string;
@@ -51,6 +51,7 @@ export interface ShiftStatement {
   cashRefunds: string;
   paidIn: string;
   paidOut: string;
+  safeDrops: string;
   /** Null while the shift is open and the viewer is counting blind. */
   expectedCash: string | null;
   actualCash?: string;
@@ -128,7 +129,7 @@ export const shiftApi = {
   recordMovement: async (
     shiftId: string,
     data: {
-      type: 'PAID_IN' | 'PAID_OUT';
+      type: 'PAID_IN' | 'PAID_OUT' | 'SAFE_DROP';
       amount: string;
       reasonCodeId?: string;
       reason?: string;

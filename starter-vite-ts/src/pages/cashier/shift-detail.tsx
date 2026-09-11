@@ -1,4 +1,5 @@
-import type { CashierShift } from '../../api/shiftApi';
+import type { Terminal } from 'src/api/tenantApi';
+import type { CashMovement, ShiftStatement } from 'src/api/shiftApi';
 
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
@@ -28,41 +29,81 @@ import {
   IconButton,
   CardHeader,
   CardContent,
+  TableContainer,
   CircularProgress,
 } from '@mui/material';
 
-import { shiftApi } from '../../api/shiftApi';
+import { MoneyUtil } from 'src/utils/money.util';
 
+import { shiftApi } from 'src/api/shiftApi';
+import { tenantApi } from 'src/api/tenantApi';
+import { useBranchContext } from 'src/contexts/branch-context';
+
+// ----------------------------------------------------------------------
+
+function Line({ label, value, color, strong }: { label: string; value: string; color?: string; strong?: boolean }) {
+  return (
+    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+      <Typography variant={strong ? 'subtitle2' : 'body2'} color={strong ? 'text.primary' : 'text.secondary'}>
+        {label}
+      </Typography>
+      <Typography variant={strong ? 'subtitle2' : 'body2'} sx={{ fontWeight: 600, color }} dir="ltr">
+        {value}
+      </Typography>
+    </Stack>
+  );
+}
+
+/**
+ * One shift's statement: where the drawer's cash came from and went, what it should have
+ * held and what was counted. Read-only — a shift is worked on the Shifts page or at its
+ * register. While the shift is open a cashier sees it blind, as the count will be.
+ */
 export function ShiftDetailPage() {
   const params = useParams<{ id?: string; shiftId?: string }>();
   const id = params.id || params.shiftId;
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const { branches } = useBranchContext();
   // Head office arrives from the chain roll-up, and has no branch Shifts page to go back to.
   const [searchParams] = useSearchParams();
   const backPath = searchParams.get('from') === 'rollup' ? '/app/cashier/rollup' : '/app/cashier/shifts';
-  const { t } = useTranslation();
 
-  const [shift, setShift] = useState<CashierShift | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [statement, setStatement] = useState<ShiftStatement | null>(null);
+  const [terminal, setTerminal] = useState<Terminal | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchShift = useCallback(async () => {
+  const fetchStatement = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await shiftApi.getShiftById(id);
-      setShift(data);
+      const stmt = await shiftApi.getShiftStatement(id);
+      setStatement(stmt);
+      const terms = await tenantApi.getTerminals(stmt.branchId).catch(() => [] as Terminal[]);
+      setTerminal(terms.find((x) => x.id === stmt.terminalId) || null);
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || 'Failed to load shift');
+      setError(err.detail || err.message || t('shift.detail.loadError', 'Failed to load the shift'));
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => {
-    fetchShift();
-  }, [fetchShift]);
+    fetchStatement();
+  }, [fetchStatement]);
+
+  const movementLabel = (type: CashMovement['type']) =>
+    ({
+      OPENING_FLOAT: t('shift.movementTypes.OPENING_FLOAT', 'Opening float'),
+      CASH_PAYMENT: t('shift.movementTypes.CASH_PAYMENT', 'Cash sale'),
+      CASH_REFUND: t('shift.movementTypes.CASH_REFUND', 'Cash refund'),
+      PAID_IN: t('shift.movementTypes.PAID_IN', 'Pay in'),
+      PAID_OUT: t('shift.movementTypes.PAID_OUT', 'Pay out'),
+      SAFE_DROP: t('shift.movementTypes.SAFE_DROP', 'Safe drop'),
+      CLOSE_ADJUSTMENT: t('shift.movementTypes.CLOSE_ADJUSTMENT', 'Difference at count'),
+    })[type] || type;
 
   if (loading) {
     return (
@@ -72,212 +113,163 @@ export function ShiftDetailPage() {
     );
   }
 
-  if (error || !shift) {
+  if (error || !statement) {
     return (
       <Container maxWidth="xl" sx={{ py: 4 }}>
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(backPath)} sx={{ mb: 2 }}>
-          {t('common.back', 'Back to Shifts')}
+          {t('common.back', 'Back')}
         </Button>
         <Alert severity="error" sx={{ mb: 2 }}>
           {error || t('cashier.shiftNotFound', 'Shift not found')}
         </Alert>
-        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchShift}>
+        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchStatement}>
           {t('common.retry', 'Retry')}
         </Button>
       </Container>
     );
   }
 
-  const getShiftColor = (state?: string) => {
-    switch (state) {
-      case 'OPEN':
-        return 'success';
-      case 'CLOSING_REVIEW':
-        return 'warning';
-      case 'CLOSED':
-        return 'default';
-      default:
-        return 'default';
-    }
-  };
-
-  const getMovementColor = (type?: string) => {
-    switch (type) {
-      case 'OPENING_FLOAT':
-      case 'CASH_PAYMENT':
-      case 'PAID_IN':
-        return 'success';
-      case 'CASH_REFUND':
-      case 'PAID_OUT':
-        return 'error';
-      default:
-        return 'default';
-    }
-  };
-
-  const shortOver = Number(shift.short_over || shift.over_short_amount || 0);
+  const closed = statement.state === 'CLOSED';
+  const blind = !!statement.blind;
+  const variance = statement.shortOver || '0';
+  const branchName = branches.find((b) => b.id === statement.branchId)?.name || '';
+  const registerLabel = terminal ? `${terminal.name} (${terminal.code})` : statement.terminalId.slice(0, 8);
+  const stamp = (value?: string | null) => (value ? new Date(value).toLocaleString() : '—');
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
-      {/* Header */}
-      <Stack sx={{ flexDirection: { xs: 'column', sm: 'row' }, alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 2, mb: 3 }}>
+      <Stack
+        sx={{ flexDirection: { xs: 'column', sm: 'row' }, alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 2, mb: 3 }}
+      >
         <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
           <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(backPath)}>
             {t('common.back', 'Back')}
           </Button>
           <Box>
-            <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              {t('cashier.shiftDetail', 'Cashier Shift')} <span dir="ltr">#{shift.shift_number || shift.id?.slice(0, 8)}</span>
+            <Typography variant="h4">
+              {t('shift.detail.title', 'Shift statement')} <span dir="ltr">#{statement.shiftNumber}</span>
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {t('cashier.businessDate', 'Business Date')}: <strong>{shift.business_date}</strong> | {t('cashier.terminal', 'Terminal')}: <strong>{shift.terminal_id}</strong>
+              {registerLabel} · {branchName} · <span dir="ltr">{statement.businessDate}</span>
             </Typography>
           </Box>
         </Stack>
         <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1 }}>
           <Chip
-            label={shift.state || shift.status || 'OPEN'}
-            color={getShiftColor(shift.state || shift.status)}
-            variant="filled"
+            label={
+              closed
+                ? t('shift.state.closed', 'Closed')
+                : statement.state === 'CLOSING_REVIEW'
+                  ? t('shift.state.closingReview', 'In review')
+                  : t('shift.state.open', 'Open')
+            }
+            color={closed ? 'default' : 'success'}
           />
-          <IconButton onClick={fetchShift} title={t('common.refresh', 'Refresh')}>
+          <IconButton onClick={fetchStatement} title={t('common.refresh', 'Refresh')}>
             <RefreshIcon />
           </IconButton>
         </Stack>
       </Stack>
 
+      {blind && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          {t('shift.detail.blind', 'Sales, refunds and what the drawer should hold are shown once the shift has been counted down.')}
+        </Alert>
+      )}
+
       <Grid container spacing={3}>
-        {/* Cash Balances */}
         <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ height: '100%' }}>
-            <CardHeader
-              avatar={<PointOfSaleIcon color="primary" />}
-              title={t('cashier.shiftSummary', 'Drawer Cash Reconciliation')}
-            />
+            <CardHeader avatar={<PointOfSaleIcon color="primary" />} title={t('shift.detail.cash', 'Drawer cash')} />
             <Divider />
             <CardContent>
-              <Stack spacing={2}>
-                <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Typography color="text.secondary">{t('cashier.openingFloat', 'Opening Float / Cash')}:</Typography>
-                  <Typography sx={{ fontWeight: 600 }} dir="ltr">
-                    {Number(shift.opening_cash || shift.opening_float || 0).toLocaleString()} {shift.currency_code || 'IRR'}
-                  </Typography>
-                </Stack>
-                <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Typography color="text.secondary">{t('cashier.expectedCash', 'Expected Cash Drawer Balance')}:</Typography>
-                  <Typography sx={{ fontWeight: 600 }} dir="ltr">
-                    {Number(shift.expected_cash || 0).toLocaleString()} {shift.currency_code || 'IRR'}
-                  </Typography>
-                </Stack>
-                <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Typography color="text.secondary">{t('cashier.actualCash', 'Actual Counted Cash')}:</Typography>
-                  <Typography sx={{ fontWeight: 600 }} dir="ltr">
-                    {shift.actual_cash !== undefined && shift.actual_cash !== null
-                      ? `${Number(shift.actual_cash).toLocaleString()} ${shift.currency_code || 'IRR'}`
-                      : t('cashier.uncounted', 'Pending Count (Open)')}
-                  </Typography>
-                </Stack>
-                <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Typography color="text.secondary">{t('cashier.shortOver', 'Cash Variance (Short/Over)')}:</Typography>
-                  <Typography
-                    sx={{
-                      fontWeight: 600,
-                      color: shortOver === 0 ? 'text.primary' : shortOver > 0 ? 'info.main' : 'error.main',
-                    }}
-                    dir="ltr"
-                  >
-                    {shortOver > 0 ? `+${shortOver.toLocaleString()}` : shortOver.toLocaleString()} {shift.currency_code || 'IRR'}
-                  </Typography>
-                </Stack>
+              <Stack spacing={1.5}>
+                <Line label={t('cashier.openingFloat', 'Opening Float')} value={MoneyUtil.formatCurrency(statement.openingFloat)} />
+                <Line label={t('shift.close.cashSales', 'Cash sales')} value={blind ? '—' : `+${MoneyUtil.formatCurrency(statement.cashSales)}`} />
+                <Line label={t('shift.close.cashRefunds', 'Cash refunds')} value={blind ? '—' : `-${MoneyUtil.formatCurrency(statement.cashRefunds)}`} />
+                <Line label={t('shift.movement.paidIn', 'Pay in')} value={`+${MoneyUtil.formatCurrency(statement.paidIn)}`} />
+                <Line label={t('shift.movement.paidOut', 'Pay out')} value={`-${MoneyUtil.formatCurrency(statement.paidOut)}`} />
+                <Line label={t('shift.movement.safeDrop', 'Safe drop')} value={`-${MoneyUtil.formatCurrency(statement.safeDrops)}`} />
+                <Divider />
+                <Line
+                  strong
+                  label={t('cashier.expectedCash', 'Expected Cash')}
+                  value={blind ? '—' : MoneyUtil.formatCurrency(statement.expectedCash)}
+                />
+                <Line
+                  label={t('shift.close.countedLabel', 'Counted')}
+                  value={closed ? MoneyUtil.formatCurrency(statement.actualCash) : t('shift.detail.notCounted', 'Not counted yet')}
+                />
+                {closed && (
+                  <Line
+                    strong
+                    label={t('shift.close.variance', 'Over / short')}
+                    value={MoneyUtil.formatCurrency(variance)}
+                    color={MoneyUtil.isZero(variance) ? undefined : MoneyUtil.greaterThan(variance, '0') ? 'info.main' : 'error.main'}
+                  />
+                )}
               </Stack>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Shift Details & Timing */}
         <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ height: '100%' }}>
-            <CardHeader
-              avatar={<ReceiptLongIcon color="info" />}
-              title={t('cashier.shiftInfo', 'Shift Timestamps & Status')}
-            />
+            <CardHeader avatar={<ReceiptLongIcon color="info" />} title={t('shift.detail.shift', 'Shift')} />
             <Divider />
             <CardContent>
-              <Stack spacing={2}>
-                <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Typography color="text.secondary">{t('cashier.openedAt', 'Opened At')}:</Typography>
-                  <Typography dir="ltr">{new Date(shift.opened_at).toLocaleString()}</Typography>
-                </Stack>
-                <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Typography color="text.secondary">{t('cashier.closedAt', 'Closed At')}:</Typography>
-                  <Typography dir="ltr">{shift.closed_at ? new Date(shift.closed_at).toLocaleString() : t('cashier.currentlyActive', 'Currently Active')}</Typography>
-                </Stack>
-                <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Typography color="text.secondary">{t('cashier.branch', 'Branch')}:</Typography>
-                  <Typography>{shift.branch_id}</Typography>
-                </Stack>
-                <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Typography color="text.secondary">{t('cashier.closingNote', 'Closing Notes')}:</Typography>
-                  <Typography>{shift.closing_note || t('common.none', 'None')}</Typography>
-                </Stack>
+              <Stack spacing={1.5}>
+                <Line label={t('shift.register', 'Register')} value={registerLabel} />
+                <Line label={t('cashier.branch', 'Branch')} value={branchName || '—'} />
+                <Line label={t('shift.detail.openedAt', 'Opened')} value={stamp(statement.openedAt)} />
+                <Line label={t('shift.detail.closedAt', 'Closed')} value={closed ? stamp(statement.closedAt) : '—'} />
+                <Line label={t('shift.detail.orders', 'Orders rung up')} value={String(statement.orderCount)} />
               </Stack>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Cash Movements Ledger */}
         <Grid size={{ xs: 12 }}>
           <Card>
-            <CardHeader
-              avatar={<HistoryIcon color="action" />}
-              title={t('cashier.movements', 'Cash Drawer Movements & Audit Trail')}
-            />
+            <CardHeader avatar={<HistoryIcon color="action" />} title={t('shift.detail.movements', 'Cash movements')} />
             <Divider />
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>{t('cashier.movementType', 'Movement Type')}</TableCell>
-                  <TableCell>{t('cashier.amount', 'Amount')}</TableCell>
-                  <TableCell>{t('cashier.postedAt', 'Timestamp')}</TableCell>
-                  <TableCell>{t('cashier.reason', 'Reason / Ref')}</TableCell>
-                  <TableCell>{t('cashier.link', 'Related Payment/Refund')}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {shift.movements && shift.movements.length > 0 ? (
-                  shift.movements.map((m) => (
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t('shift.detail.time', 'Time')}</TableCell>
+                    <TableCell>{t('shift.detail.movement', 'Movement')}</TableCell>
+                    <TableCell align="right">{t('shift.movement.amount', 'Amount (IRR)')}</TableCell>
+                    <TableCell>{t('shift.detail.reason', 'Reason / reference')}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {statement.movements.map((m) => (
                     <TableRow key={m.id}>
+                      <TableCell dir="ltr">{new Date(m.posted_at).toLocaleTimeString()}</TableCell>
                       <TableCell>
-                        <Chip
-                          size="small"
-                          label={m.type}
-                          color={getMovementColor(m.type)}
-                          variant="outlined"
-                        />
+                        <Chip size="small" variant="outlined" label={movementLabel(m.type)} />
                       </TableCell>
-                      <TableCell dir="ltr" sx={{ fontWeight: 600 }}>
-                        {Number(m.amount).toLocaleString()} {m.currency_code || shift.currency_code || 'IRR'}
+                      <TableCell
+                        align="right"
+                        dir="ltr"
+                        sx={{ fontWeight: 600, color: MoneyUtil.lessThan(m.amount, '0') ? 'error.main' : 'success.main' }}
+                      >
+                        {MoneyUtil.formatCurrency(m.amount)}
                       </TableCell>
-                      <TableCell dir="ltr">
-                        {new Date(m.posted_at).toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        {m.reason_text || m.reference || '-'}
-                      </TableCell>
-                      <TableCell dir="ltr">
-                        {m.payment_id ? `Payment: ${m.payment_id.slice(0, 8)}` : m.refund_id ? `Refund: ${m.refund_id.slice(0, 8)}` : '-'}
+                      <TableCell>{m.reason_text || m.reference || '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                  {statement.movements.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                        {t('cashier.noMovements', 'No cash movements recorded in this shift yet.')}
                       </TableCell>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 3, color: 'text.secondary' }}>
-                      {t('cashier.noMovements', 'No individual cash movements recorded in this shift yet.')}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </Card>
         </Grid>
       </Grid>

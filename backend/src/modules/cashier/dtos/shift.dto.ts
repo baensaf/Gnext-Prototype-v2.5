@@ -31,8 +31,8 @@ export class ShiftOpenDto {
 
 export class CashMovementDto {
   @IsString()
-  @IsIn(['PAID_IN', 'PAID_OUT'])
-  type: 'PAID_IN' | 'PAID_OUT';
+  @IsIn(['PAID_IN', 'PAID_OUT', 'SAFE_DROP'])
+  type: 'PAID_IN' | 'PAID_OUT' | 'SAFE_DROP';
 
   @IsNumberString()
   amount: string;

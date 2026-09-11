@@ -903,7 +903,34 @@
     "shiftSummary": "Shift Balances",
     "openingFloat": "Opening Float",
     "expectedCash": "Expected Cash",
-    "actualCash": "Actual Cash"
+    "actualCash": "Actual Cash",
+    "branch": "Branch",
+    "businessDate": "Business Date",
+    "businessDays": "Business Days",
+    "businessDaysSubtitle": "Closing a branch’s day once every drawer is counted, and reopening one with a reason.",
+    "closeBusinessDayTitle": "Close business day",
+    "closedAt": "Closed at",
+    "closeDay": "Close business day",
+    "closeDayWarning": "Every drawer at the branch must be counted down first. Closing the day fixes the branch’s sales for that date.",
+    "closedDays": "Closed days",
+    "confirmClose": "Close day",
+    "confirmReopen": "Reopen day",
+    "noBusinessDays": "No business day has been closed yet",
+    "noMovements": "No cash movements recorded in this shift yet.",
+    "reason": "Reason",
+    "reopen": "Reopen",
+    "reopenBusinessDayTitle": "Reopen business day",
+    "reopened": "Reopened",
+    "reopenedAt": "Reopened at",
+    "reopenedDays": "Reopened days",
+    "reopenWarningManager": "Only a manager can reopen a closed day, and the reason is kept in the audit log.",
+    "shiftNotFound": "Shift not found",
+    "totalDays": "Days recorded",
+    "totals": "Day summary",
+    "ordersCount": "Orders",
+    "sales": "Sales",
+    "dayClosed": "Business day {{date}} closed",
+    "dayReopened": "Business day {{date}} reopened"
   },
   "shift": {
     "register": "Register",
@@ -957,6 +984,68 @@
       "title": "No shift is open on this register",
       "help": "{{register}}: count the float into the drawer and open a shift to start selling.",
       "headOffice": "Choose a branch to sell in"
+    },
+    "page": {
+      "title": "Shifts & drawers",
+      "help": "Every register at {{branch}}. A shift belongs to one register and is counted down when it closes. The branch’s day is closed on Business Days once every drawer is counted.",
+      "registers": "Registers",
+      "loadError": "Failed to load the drawers"
+    },
+    "state": {
+      "open": "Open",
+      "closingReview": "In review",
+      "closed": "Closed"
+    },
+    "card": {
+      "thisDevice": "This device",
+      "noShift": "No shift open.",
+      "openAtRegister": "A shift is opened at the register itself, where the float goes into the drawer.",
+      "stale": "Left open since {{date}}. Count it down before closing the day.",
+      "statement": "Statement",
+      "hiddenUntilCount": "Shown after the count"
+    },
+    "history": {
+      "title": "Closed shifts",
+      "shift": "Shift",
+      "hours": "Open – closed",
+      "empty": "No shift has been closed at this branch yet."
+    },
+    "movement": {
+      "paidIn": "Pay in",
+      "paidOut": "Pay out",
+      "safeDrop": "Safe drop",
+      "paidInHelp": "Cash put into the drawer that is not a sale, such as extra change.",
+      "paidOutHelp": "Cash taken from the drawer and spent. Say what on.",
+      "safeDropHelp": "Cash lifted from the drawer into the safe to keep the drawer light.",
+      "amount": "Amount (IRR)",
+      "reasonCode": "Reason code",
+      "note": "Note",
+      "post": "Record",
+      "error": "Could not record the movement"
+    },
+    "movementTypes": {
+      "OPENING_FLOAT": "Opening float",
+      "CASH_PAYMENT": "Cash sale",
+      "CASH_REFUND": "Cash refund",
+      "PAID_IN": "Pay in",
+      "PAID_OUT": "Pay out",
+      "SAFE_DROP": "Safe drop",
+      "CLOSE_ADJUSTMENT": "Difference at count"
+    },
+    "detail": {
+      "title": "Shift statement",
+      "loadError": "Failed to load the shift",
+      "blind": "Sales, refunds and what the drawer should hold are shown once the shift has been counted down.",
+      "cash": "Drawer cash",
+      "shift": "Shift",
+      "notCounted": "Not counted yet",
+      "openedAt": "Opened",
+      "closedAt": "Closed",
+      "orders": "Orders rung up",
+      "movements": "Cash movements",
+      "time": "Time",
+      "movement": "Movement",
+      "reason": "Reason / reference"
     }
   },
   "payments": {

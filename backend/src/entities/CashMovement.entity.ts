@@ -15,6 +15,8 @@ export type CashMovementType =
   | 'CASH_REFUND'
   | 'PAID_IN'
   | 'PAID_OUT'
+  /** Cash lifted from the drawer into the safe. Not an expense, so not a pay-out. */
+  | 'SAFE_DROP'
   | 'CLOSE_ADJUSTMENT';
 
 @Entity('cash_movement')

@@ -75,7 +75,7 @@ export class ShiftService {
     const branchId = payload.branch_id || payload.branchId;
     if (!(await this.policyFor(tenantId, branchId)).blindClose) return payload;
 
-    const visible = new Set(['OPENING_FLOAT', 'PAID_IN', 'PAID_OUT']);
+    const visible = new Set(['OPENING_FLOAT', 'PAID_IN', 'PAID_OUT', 'SAFE_DROP']);
     const copy: Record<string, any> = { ...payload, blind: true };
     if (Array.isArray(copy.movements)) copy.movements = copy.movements.filter((m: any) => visible.has(m.type));
     for (const key of ['expectedCash', 'cashSales', 'cashRefunds', 'shortOver', 'expected_cash', 'short_over', 'over_short_amount']) {
@@ -365,8 +365,16 @@ export class ShiftService {
       if (MoneyUtil.lessThanOrEqual(dto.amount, '0.0000')) {
         throw new BadRequestException('Cash movement amount must be positive');
       }
+      // Money paid out of a drawer is spent; the count needs to know on what. A safe drop
+      // only moves cash to the safe, so it needs no reason.
+      if (dto.type === 'PAID_OUT' && !dto.reasonCodeId && !(dto.reason || dto.reasonText)?.trim()) {
+        throw new BadRequestException('A pay-out needs a reason');
+      }
 
-      const signedAmount = dto.type === 'PAID_OUT' ? `-${MoneyUtil.format(dto.amount)}` : MoneyUtil.format(dto.amount);
+      // A safe drop leaves the drawer like a pay-out does. It used to be posted as one, and
+      // the screen's safe-drop total was hardcoded to zero.
+      const leavesDrawer = dto.type === 'PAID_OUT' || dto.type === 'SAFE_DROP';
+      const signedAmount = leavesDrawer ? `-${MoneyUtil.format(dto.amount)}` : MoneyUtil.format(dto.amount);
 
       const move = em.create(CashMovement, {
         tenant_id: tenantId,
@@ -663,6 +671,7 @@ export class ShiftService {
       let cashRefunds = '0.0000';
       let paidIn = '0.0000';
       let paidOut = '0.0000';
+      let safeDrops = '0.0000';
       let expectedCash = '0.0000';
 
       for (const m of movements) {
@@ -685,6 +694,9 @@ export class ShiftService {
           case 'PAID_OUT':
             paidOut = MoneyUtil.add(paidOut, MoneyUtil.abs(m.amount));
             break;
+          case 'SAFE_DROP':
+            safeDrops = MoneyUtil.add(safeDrops, MoneyUtil.abs(m.amount));
+            break;
         }
       }
 
@@ -705,6 +717,7 @@ export class ShiftService {
         cashRefunds,
         paidIn,
         paidOut,
+        safeDrops,
         expectedCash,
         actualCash: shift.actual_cash || null,
         shortOver: shift.short_over || '0.0000',

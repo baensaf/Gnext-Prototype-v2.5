@@ -81,7 +81,7 @@ export function BusinessDaysPage() {
         businessDate,
         currencyCode: 'IRR',
       });
-      setSuccess(`Business Day ${businessDate} closed successfully`);
+      setSuccess(t('cashier.dayClosed', 'Business day {{date}} closed', { date: businessDate }));
       setOpenCloseDialog(false);
       fetchBusinessDays();
     } catch (err: any) {
@@ -93,7 +93,7 @@ export function BusinessDaysPage() {
     if (!selectedDay) return;
     try {
       await shiftApi.reopenBusinessDay(selectedDay.id, { reason: reopenReason.trim() });
-      setSuccess(`Business Day ${selectedDay.business_date} reopened successfully`);
+      setSuccess(t('cashier.dayReopened', 'Business day {{date}} reopened', { date: selectedDay.business_date }));
       setSelectedDay(null);
       setReopenReason('');
       fetchBusinessDays();
@@ -166,9 +166,12 @@ export function BusinessDaysPage() {
       renderCell: (params) => {
         const totals = params.value;
         if (!totals) return <Typography variant="caption" color="text.secondary">-</Typography>;
+        // The close stores the day's order count and sales; "Shifts" was read from a field
+        // it never writes, so every row said zero.
         return (
-          <Typography variant="caption" dir="ltr">
-            Shifts: {totals.shiftCount || totals.totalShifts || 0} | Sales: {Number(totals.grossSales || totals.totalSales || 0).toLocaleString()} IRR
+          <Typography variant="caption">
+            {t('cashier.ordersCount', 'Orders')}: {totals.orderCount ?? 0} · {t('cashier.sales', 'Sales')}:{' '}
+            <span dir="ltr">{Number(totals.grossSales || totals.totalSales || 0).toLocaleString()} IRR</span>
           </Typography>
         );
       },
@@ -296,7 +299,10 @@ export function BusinessDaysPage() {
         <DialogTitle>{t('cashier.closeBusinessDayTitle', 'Close Business Day (EOD)')}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {t('cashier.closeDayWarning', 'Closing the business day locks all cashier shifts and finalizes daily branch financial totals.')}
+            {t(
+              'cashier.closeDayWarning',
+              'Every drawer at the branch must be counted down first. Closing the day fixes the branch’s sales for that date.'
+            )}
           </Typography>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Box>

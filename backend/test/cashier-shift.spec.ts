@@ -195,6 +195,32 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       expect(statement.expectedCash).toBe('70000.0000');
     });
 
+    it('posts a safe drop as cash leaving the drawer, and totals it apart from pay-outs', async () => {
+      shiftRepo.findOne.mockResolvedValue({ id: 'shf-1', tenant_id: 't-1', state: 'OPEN', currency_code: 'IRR' });
+      const saved = await shiftService.recordMovement('t-1', 'shf-1', { type: 'SAFE_DROP', amount: '2000000' });
+      expect(saved.amount).toBe('-2000000.0000');
+
+      movementRepo.find.mockResolvedValue([
+        { type: 'OPENING_FLOAT', amount: '5000000.0000' },
+        { type: 'SAFE_DROP', amount: '-2000000.0000' },
+        { type: 'PAID_OUT', amount: '-100000.0000' },
+      ]);
+      const statement = await shiftService.getShiftStatement('t-1', 'shf-1');
+      expect(statement.safeDrops).toBe('2000000.0000');
+      expect(statement.paidOut).toBe('100000.0000');
+      expect(statement.expectedCash).toBe('2900000.0000');
+    });
+
+    it('refuses a pay-out with no reason', async () => {
+      shiftRepo.findOne.mockResolvedValue({ id: 'shf-1', tenant_id: 't-1', state: 'OPEN', currency_code: 'IRR' });
+      await expect(shiftService.recordMovement('t-1', 'shf-1', { type: 'PAID_OUT', amount: '50000' })).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(
+        shiftService.recordMovement('t-1', 'shf-1', { type: 'PAID_OUT', amount: '50000', reason: 'Milk for the kitchen' }),
+      ).resolves.toMatchObject({ amount: '-50000.0000' });
+    });
+
     it('keeps a closed drawer expected cash apart from the difference booked at the count', async () => {
       shiftRepo.findOne.mockResolvedValue({ id: 'shf-1', tenant_id: 't-1', state: 'CLOSED', actual_cash: '45000.0000', short_over: '-5000.0000' });
       movementRepo.find.mockResolvedValue([
