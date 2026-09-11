@@ -85,6 +85,13 @@ export interface OrderHeader {
   items: OrderItem[];
 }
 
+/** One of Snappfood's reasons a store may give for turning an order down. */
+export interface DeclineReason {
+  id: number;
+  title: string;
+  level: number;
+}
+
 export const orderApi = {
   getOrders: async (branchId?: string | Record<string, any>, status?: string): Promise<OrderHeader[]> => {
     const params = typeof branchId === 'object' ? branchId : { branchId, status };
@@ -100,6 +107,36 @@ export const orderApi = {
 
   getOrderById: async (id: string): Promise<OrderHeader> => {
     const res = await httpClient.get(`/api/v1/orders/${id}`);
+    return res.data;
+  },
+
+  /** Aggregator and website orders waiting for this branch to accept or reject them, oldest first. */
+  getIncomingOrders: async (branchId: string): Promise<OrderHeader[]> => {
+    const res = await httpClient.get('/api/v1/orders', {
+      params: { branchId, state: 'PENDING_ACCEPTANCE', limit: 100 },
+    });
+    const list: OrderHeader[] = Array.isArray(res.data?.data) ? res.data.data : [];
+    return [...list].sort((a, b) => String(a.placed_at).localeCompare(String(b.placed_at)));
+  },
+
+  /** Snappfood's decline reasons. A reject must name one. */
+  getDeclineReasons: async (): Promise<DeclineReason[]> => {
+    const res = await httpClient.get('/api/v1/orders/decline-reasons');
+    return Array.isArray(res.data) ? res.data : [];
+  },
+
+  /**
+   * Take an incoming order: it is confirmed, sent to the kitchen and printer, and the
+   * aggregator is told. 409 when another till answered it first.
+   */
+  acceptIncomingOrder: async (id: string, prepMinutes: number): Promise<OrderHeader> => {
+    const res = await httpClient.post(`/api/v1/orders/${id}/accept`, { prepMinutes });
+    return res.data;
+  },
+
+  /** Turn an incoming order down. Nothing reaches the kitchen; the aggregator is told why. */
+  rejectIncomingOrder: async (id: string, reasonId: number, comment?: string): Promise<OrderHeader> => {
+    const res = await httpClient.post(`/api/v1/orders/${id}/reject`, { reasonId, comment: comment || undefined });
     return res.data;
   },
 

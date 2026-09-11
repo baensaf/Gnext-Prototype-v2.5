@@ -6,6 +6,7 @@ import { CONFIG } from 'src/global-config';
 import { useWorkspaceScope } from 'src/contexts/branch-context';
 import { canReachPath, fitsWorkspace } from 'src/config/role-access';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
+import { useIncomingOrders } from 'src/contexts/incoming-orders-context';
 
 import { Label } from 'src/components/label';
 import { SvgColor } from 'src/components/svg-color';
@@ -46,6 +47,7 @@ export function useNavData(): NavSectionProps['data'] {
   const workspace = useWorkspaceScope();
   const visible = (path: string) =>
     canReachPath(role, path, isHeadOffice) && fitsWorkspace(path, workspace);
+  const incomingCount = useIncomingOrders()?.orders.length ?? 0;
 
   const sections: NavSectionProps['data'] = [
     {
@@ -72,6 +74,12 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.kds', 'Kitchen KDS'),
           path: '/app/kds',
           icon: ICONS.kds,
+        },
+        {
+          title: t('nav.incomingOrders', 'Incoming Orders'),
+          path: '/app/orders/incoming',
+          icon: ICONS.coupons,
+          info: incomingCount ? <Label color="error">{incomingCount}</Label> : undefined,
         },
         {
           title: t('nav.deliveryHub', 'Delivery & Fleet Hub'),

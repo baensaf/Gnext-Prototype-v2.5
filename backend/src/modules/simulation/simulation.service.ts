@@ -7,6 +7,7 @@ import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { Product } from '../../entities/Product.entity';
 import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
+import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 
@@ -18,6 +19,7 @@ export class SimulationService {
     @InjectRepository(OrderItem) private readonly orderItemRepo: Repository<OrderItem>,
     @InjectRepository(Product) private readonly productRepo: Repository<Product>,
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
+    @InjectRepository(OperationalAlert) private readonly alertRepo: Repository<OperationalAlert>,
     private readonly auditWriter: AuditWriter,
   ) {}
 
@@ -124,9 +126,13 @@ export class SimulationService {
     const branchId = await this.resolveWebhookBranch(tenantId, payload);
 
     const orderNum = `SNP-${payload.order_code || payload.event_id || '1001'}`;
-    const itemsInput = payload.items || [
-      { product_name: 'Snappfood Combo Meal', quantity: 1, price: 15.0 },
-    ];
+    // Snappfood sends `products`, each with a title; older payloads send `items` with a
+    // product_name. Either way the lines keep the customer's dishes, quantities and prices.
+    const itemsInput =
+      payload.items ||
+      (Array.isArray(payload.products) && payload.products.length
+        ? payload.products.map((p: any) => ({ product_name: p.title, quantity: p.quantity, price: p.price }))
+        : [{ product_name: 'Snappfood Combo Meal', quantity: 1, price: 15.0 }]);
 
     let subtotalStr = '0.0000';
     for (const item of itemsInput) {
@@ -149,7 +155,7 @@ export class SimulationService {
       state: 'PENDING_ACCEPTANCE',
       status: 'PENDING_ACCEPTANCE',
       fulfillment_status: 'PENDING',
-      notes: `Snappfood Order [Code: ${payload.order_code || 'SNP-001'}]. Vendor Notes: ${payload.vendor_notes || payload.comment || 'None'}`,
+      notes: this.describeSnappfoodOrder(payload),
       subtotal: subtotalStr,
       subtotal_amount: subtotalStr,
       tax_total: taxAmountStr,
@@ -174,7 +180,7 @@ export class SimulationService {
       const orderItem = this.orderItemRepo.create({
         tenant_id: tenantId,
         order_id: savedHeader.id,
-        line_number: 1,
+        line_number: itemsInput.indexOf(item) + 1,
         product_id: item.product_id || '00000000-0000-0000-0000-000000000001',
         product_name: item.product_name || 'Snappfood Item',
         unit_price: priceStr,
@@ -209,6 +215,20 @@ export class SimulationService {
       }),
     );
 
+    // History only. The Notification Center mirrors the arrival; the Incoming Orders queue
+    // is where the order is answered.
+    await this.alertRepo.save(
+      this.alertRepo.create({
+        tenant_id: tenantId,
+        branch_id: branchId,
+        type: 'INCOMING_ORDER',
+        severity: 'INFO',
+        title: `New Snappfood order ${savedHeader.order_number}`,
+        message: `${payload.fullName || 'A customer'}: ${MoneyUtil.format(totalAmountStr, 0)} waiting for acceptance`,
+        acknowledged: false,
+      }),
+    );
+
     await this.auditWriter.write({
       tenantId,
       actorType: 'SYSTEM',
@@ -225,6 +245,26 @@ export class SimulationService {
       order: savedHeader,
       log_id: logEntry.id,
     };
+  }
+
+  /**
+   * The order's notes, as the cashier reads them before accepting: who, where, how it
+   * travels and how it was paid. An aggregator order has no customer or address columns
+   * yet, so this is where Snappfood's details live.
+   */
+  private describeSnappfoodOrder(payload: any): string {
+    const note = payload.comment || payload.vendor_notes;
+    return [
+      `Snappfood order ${payload.order_code || payload.code || ''}`.trim(),
+      payload.fullName && `Customer: ${payload.fullName}`,
+      payload.phone && `Phone: ${payload.phone}`,
+      payload.deliverAddress && `Address: ${payload.deliverAddress}`,
+      payload.expeditionType && `Delivery: ${payload.expeditionType}`,
+      payload.orderPaymentTypeCode && `Payment: ${payload.orderPaymentTypeCode}`,
+      note && `Note: ${note}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
 
   /**
@@ -266,6 +306,9 @@ export class SimulationService {
       code: orderCode,
       event_id: eventId,
       order_code: orderCode,
+      // The branch whose webhook the simulator is calling. Unset means the first restaurant.
+      branch_id: data?.branch_id || undefined,
+      branch_code: data?.branch_code || undefined,
       userCode: data?.userCode || 'usr-668v86',
       userAddressCode: data?.userAddressCode || 'addr-45oonn',
       fullName: data?.fullName || data?.customer_name || 'حمید بیانک',

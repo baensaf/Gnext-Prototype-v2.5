@@ -1,9 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
+import RefreshIcon from '@mui/icons-material/Refresh';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import {
   Box,
   Tab,
@@ -37,8 +37,11 @@ import {
 } from '@mui/material';
 
 import { RouterLink } from 'src/routes/components';
-import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
+
 import { httpClient as axios } from 'src/api/httpClient';
+import { tenantApi, type Branch } from 'src/api/tenantApi';
+
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function SimulationSnappfoodPage() {
   const { t } = useTranslation();
@@ -68,6 +71,9 @@ export function SimulationSnappfoodPage() {
   const [bikerStatusV2, setBikerStatusV2] = useState<string>('REQUESTED');
   const [couponType, setCouponType] = useState<string>('none');
   const [generatedResult, setGeneratedResult] = useState<any>(null);
+  // Empty means the backend picks the first restaurant, as it did before there was a choice.
+  const [webhookBranchId, setWebhookBranchId] = useState<string>('');
+  const [restaurants, setRestaurants] = useState<Branch[]>([]);
 
   // --- 3. Order Action Stepper State ---
   const [orderCode, setOrderCode] = useState<string>('SF-1001');
@@ -98,6 +104,16 @@ export function SimulationSnappfoodPage() {
 
   useEffect(() => {
     fetchLogs();
+  }, []);
+
+  // Snappfood registers one webhook per branch; the simulator picks which one it calls.
+  useEffect(() => {
+    tenantApi
+      .getBranches()
+      .then((list) =>
+        setRestaurants(list.filter((b) => b.is_active && (b.branch_type ?? 'RESTAURANT') === 'RESTAURANT'))
+      )
+      .catch(() => setRestaurants([]));
   }, []);
 
   // Handler: Request OAuth Token
@@ -168,6 +184,7 @@ export function SimulationSnappfoodPage() {
         bikerName,
         bikerStatusV2,
         orderCoupon,
+        branch_id: webhookBranchId || undefined,
       });
       setGeneratedResult(res.data);
       if (res.data?.order?.order_number) {
@@ -427,6 +444,25 @@ export function SimulationSnappfoodPage() {
                       {t('simulation.snappfood.webhook.cardTitle', 'Generate v4.3.0 Order Webhook (HMAC Signed)')}
                     </Typography>
                     <Grid container spacing={2}>
+                      <Grid size={{ xs: 12 }}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel shrink>{t('simulation.snappfood.webhook.branch', 'Receiving branch')}</InputLabel>
+                          <Select
+                            displayEmpty
+                            notched
+                            value={webhookBranchId}
+                            label={t('simulation.snappfood.webhook.branch', 'Receiving branch')}
+                            onChange={(e) => setWebhookBranchId(e.target.value)}
+                          >
+                            <MenuItem value="">{t('simulation.snappfood.webhook.branchAuto', 'Automatic (first restaurant)')}</MenuItem>
+                            {restaurants.map((branch) => (
+                              <MenuItem key={branch.id} value={branch.id}>
+                                {branch.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField label={t('simulation.snappfood.webhook.customerName', 'Customer Name')} size="small" value={customerName} onChange={(e) => setCustomerName(e.target.value)} fullWidth />
                       </Grid>

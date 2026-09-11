@@ -126,6 +126,8 @@ const SITE_ONLY_PATHS = [
   '/app/operations/printers',
   '/app/operations/kds-configuration',
   '/app/operations/print-queue',
+  // Orders from Snappfood and the website are answered at the shop they were sent to.
+  '/app/orders/incoming',
 ];
 
 /**

@@ -25,6 +25,7 @@ import { LanguagePopover } from '../components/language-popover';
 import { WorkspacesPopover } from '../components/workspaces-popover';
 import { dashboardLayoutVars, dashboardNavColorVars } from './css-vars';
 import { NotificationsDrawer } from '../components/notifications-drawer';
+import { IncomingOrdersButton } from '../components/incoming-orders-button';
 import { MainSection, layoutClasses, HeaderSection, LayoutSection } from '../core';
 
 // ----------------------------------------------------------------------
@@ -137,6 +138,9 @@ export function DashboardLayout({
               { value: 'en', label: 'English', countryCode: 'GB' },
             ]}
           />
+
+          {/** @slot Orders waiting for the store to accept them */}
+          <IncomingOrdersButton />
 
           {/** @slot Notifications popover */}
           <NotificationsDrawer />

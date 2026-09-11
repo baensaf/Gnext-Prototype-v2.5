@@ -6,6 +6,7 @@ import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { OrderItem } from '../src/entities/OrderItem.entity';
 import { Product } from '../src/entities/Product.entity';
 import { Branch } from '../src/entities/Branch.entity';
+import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import * as crypto from 'crypto';
@@ -38,6 +39,7 @@ describe('SimulationService (Unit)', () => {
         { provide: getRepositoryToken(OrderItem), useValue: orderItemRepo },
         { provide: getRepositoryToken(Product), useValue: productRepo },
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
+        { provide: getRepositoryToken(OperationalAlert), useValue: { create: jest.fn((dto: any) => dto), save: jest.fn() } },
         { provide: AuditWriter, useValue: auditWriter },
       ],
     }).compile();

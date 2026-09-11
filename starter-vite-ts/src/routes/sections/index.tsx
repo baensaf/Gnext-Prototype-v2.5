@@ -33,6 +33,7 @@ import { CategoriesPage } from 'src/pages/catalog/categories';
 import { CustomersPage } from 'src/pages/customers/directory';
 import { TerminalsPage } from 'src/pages/operations/terminals';
 import { OrdersWorkflowPage } from 'src/pages/orders/workflow';
+import { IncomingOrdersPage } from 'src/pages/orders/incoming';
 import { CustomerCreditPage } from 'src/pages/customers/credit';
 import { ReportsIndexPage } from 'src/pages/reports/index-page';
 import { GeneralSettingsPage } from 'src/pages/settings/general';
@@ -58,6 +59,7 @@ import { CourierDetailPage } from 'src/pages/operations/courier-detail';
 import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
 import { BranchOverridesPage } from 'src/pages/settings/branch-overrides';
 import { ShiftPolicySettingsPage } from 'src/pages/settings/shift-policy';
+import { IncomingOrdersProvider } from 'src/contexts/incoming-orders-context';
 import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
 import { KdsConfigurationPage } from 'src/pages/operations/kds-configuration';
 import { SettlementDetailPage } from 'src/pages/operations/settlement-detail';
@@ -106,7 +108,10 @@ export const routesSection: RouteObject[] = [
     path: '/app',
     element: (
       <ProtectedRoute>
-        <AppShell />
+        {/* Above the shell, so the sidebar's count and the header badge read the same queue. */}
+        <IncomingOrdersProvider>
+          <AppShell />
+        </IncomingOrdersProvider>
       </ProtectedRoute>
     ),
     children: [
@@ -115,6 +120,7 @@ export const routesSection: RouteObject[] = [
       { path: 'pos', element: <PosOrderPage /> },
       { path: 'kiosk', element: <KioskPage /> },
       { path: 'orders', element: <OrdersWorkflowPage /> },
+      { path: 'orders/incoming', element: <IncomingOrdersPage /> },
       { path: 'orders/:id', element: <OrdersDetailPage /> },
       { path: 'dine-in/floor', element: <DineInPage /> },
       { path: 'kds', element: <KdsPage /> },

@@ -23,6 +23,7 @@ export const paths = {
     kiosk: `${ROOTS.APP}/kiosk`,
     orders: {
       root: `${ROOTS.APP}/orders`,
+      incoming: `${ROOTS.APP}/orders/incoming`,
       detail: (id: string) => `${ROOTS.APP}/orders/${id}`,
     },
     dineIn: {
