@@ -178,7 +178,7 @@ export function AccountDrawer({ data = [], sx, ...other }: AccountDrawerProps) {
             )}
           </Box>
 
-          {renderList()}
+          {data.length > 0 && renderList()}
         </Scrollbar>
 
         <Box sx={{ p: 2.5 }}>

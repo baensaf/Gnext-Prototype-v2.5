@@ -15,7 +15,6 @@ import { useSettingsContext } from 'src/components/settings';
 import { NavMobile } from './nav-mobile';
 import { VerticalDivider } from './content';
 import { NavVertical } from './nav-vertical';
-import { _account } from '../nav-config-account';
 import { NavHorizontal } from './nav-horizontal';
 import { Searchbar } from '../components/searchbar';
 import { useNavData } from '../nav-config-dashboard';
@@ -146,7 +145,9 @@ export function DashboardLayout({
           <SettingsButton />
 
           {/** @slot Account drawer */}
-          <AccountDrawer data={_account} />
+          {/* No links: the template's Profile / Projects / Subscription entries all went to
+              "#" and the real menu is the sidebar. */}
+          <AccountDrawer />
         </Box>
       ),
     };

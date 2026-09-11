@@ -1,5 +1,5 @@
 import type { Branch } from 'src/api/tenantApi';
-import type { Category, Product } from 'src/api/catalogApi';
+import type { Product, Category } from 'src/api/catalogApi';
 import type { PrintRoute, PrinterGroup, PrinterDevice, KitchenStation } from 'src/api/kdsApi';
 
 import { useTranslation } from 'react-i18next';
@@ -50,14 +50,21 @@ import { RouterLink } from 'src/routes/components';
 import { kdsApi } from 'src/api/kdsApi';
 import { tenantApi } from 'src/api/tenantApi';
 import { catalogApi } from 'src/api/catalogApi';
+import { canReachPath } from 'src/config/role-access';
+import { useScopedBranchId } from 'src/contexts/branch-context';
+import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
-import { useScopedBranchId } from 'src/contexts/branch-context';
 
 export function PrintersPage() {
   const { t } = useTranslation();
   const theme = useTheme();
+  const role = useAuthStore((state) => state.user?.role);
+  const isHeadOffice = useIsHeadOffice();
+  // The simulator is head office's sandbox; a branch manager's copy of this button opened
+  // a page the router then refused.
+  const canOpenSimulator = canReachPath(role, '/app/simulation/payments-printers', isHeadOffice);
 
   const [tab, setTab] = useState<'PRINTERS' | 'GROUPS' | 'ROUTES'>('PRINTERS');
 
@@ -423,15 +430,17 @@ export function PrintersPage() {
             >
               {t('operations.printers.quickLinks.queue', 'Print Queue & Jobs')}
             </Button>
-            <Button
-              component={RouterLink}
-              href="/app/simulation/payments-printers"
-              variant="outlined"
-              color="warning"
-              startIcon={<SensorsIcon />}
-            >
-              {t('operations.printers.quickLinks.simulator', 'Hardware Sensor Simulator')}
-            </Button>
+            {canOpenSimulator && (
+              <Button
+                component={RouterLink}
+                href="/app/simulation/payments-printers"
+                variant="outlined"
+                color="warning"
+                startIcon={<SensorsIcon />}
+              >
+                {t('operations.printers.quickLinks.simulator', 'Hardware Sensor Simulator')}
+              </Button>
+            )}
             <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
               {t('common.refresh', 'Refresh')}
             </Button>

@@ -105,6 +105,10 @@ const CHAIN_ONLY_PATHS = [
   // goes through these screens.
   '/app/customers',
   '/app/credit',
+  // The sandbox drives the chain's integrations — Snappfood, the payment and printer mocks,
+  // the offline queue — and its API has been head office's only all along, so a branch
+  // copy of the menu was a set of screens whose every call came back refused.
+  '/app/simulation',
 ];
 
 /**
@@ -130,6 +134,25 @@ const SITE_ONLY_PATHS = [
  * a dining floor. A production kitchen and an office have no customers either.
  */
 const SHOP_FLOOR_PATHS = ['/app/pos', '/app/kiosk', '/app/kds', '/app/dine-in'];
+
+/**
+ * What stands behind the shop floor: the orders, the tills and shifts, the money in and
+ * out, the couriers, the payment terminals and the rules for editing an order. A
+ * production kitchen and an office take no orders, so none of it applies inside one —
+ * but unlike the shop floor, head office keeps what it reads or sets for the chain here,
+ * the order lookup and the order-editing defaults. Printers and the print queue are not
+ * listed: a commissary prints labels and production sheets.
+ */
+const SELLING_SITE_PATHS = [
+  '/app/orders',
+  '/app/delivery',
+  '/app/cashier',
+  '/app/payments',
+  '/app/refunds',
+  '/app/operations/terminals',
+  '/app/operations/kds-configuration',
+  '/app/settings/order-workflow',
+];
 
 const FULL_ACCESS: RoleAccess = { allow: ['*'], deny: [], home: '/app/dashboard' };
 
@@ -207,7 +230,7 @@ export function fitsWorkspace(pathname: string, scope?: WorkspaceScope | null): 
   // they summarise, /app/delivery/rollup under /app/delivery.
   if (isChainOnlyPath(pathname)) return scope.isHeadOffice;
   if (scope.isHeadOffice) return !listed(SITE_ONLY_PATHS) && !listed(SHOP_FLOOR_PATHS);
-  return scope.branchType === 'RESTAURANT' || !listed(SHOP_FLOOR_PATHS);
+  return scope.branchType === 'RESTAURANT' || (!listed(SHOP_FLOOR_PATHS) && !listed(SELLING_SITE_PATHS));
 }
 
 export function homePathForRole(role?: string | null): string {

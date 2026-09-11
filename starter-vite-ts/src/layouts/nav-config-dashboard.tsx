@@ -115,6 +115,12 @@ export function useNavData(): NavSectionProps['data'] {
           path: '/app/refunds',
           icon: ICONS.coupons,
         },
+        // The shop's own printers jamming mid-service — live work, not a report.
+        {
+          title: t('nav.printQueue', 'Print Queue'),
+          path: '/app/operations/print-queue',
+          icon: ICONS.media,
+        },
       ],
     },
     {
@@ -239,11 +245,6 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.shiftRollup', 'Shifts Across Branches'),
           path: '/app/cashier/rollup',
           icon: ICONS.drawer,
-        },
-        {
-          title: t('nav.printQueue', 'Print Queue'),
-          path: '/app/operations/print-queue',
-          icon: ICONS.media,
         },
       ],
     },
