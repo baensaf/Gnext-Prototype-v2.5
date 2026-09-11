@@ -2,17 +2,16 @@ import type { OrderHeader } from 'src/api/orderApi';
 import type { DiningArea, DiningTable } from 'src/api/dineInApi';
 
 import { useTranslation } from 'react-i18next';
-import { useScopedBranchId } from 'src/contexts/branch-context';
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import PeopleIcon from '@mui/icons-material/People';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import PaymentIcon from '@mui/icons-material/Payment';
 import TableBarIcon from '@mui/icons-material/TableBar';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import CallSplitIcon from '@mui/icons-material/CallSplit';
-import PaymentIcon from '@mui/icons-material/Payment';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -42,6 +41,7 @@ import {
 
 import { orderApi } from 'src/api/orderApi';
 import { dineInApi } from 'src/api/dineInApi';
+import { useScopedBranchId } from 'src/contexts/branch-context';
 
 import { Label } from 'src/components/label';
 import { CheckoutModal } from 'src/components/CheckoutModal';
@@ -79,6 +79,7 @@ export function DineInPage() {
   // Guest Bill Dialog
   const [billDialogOpen, setBillDialogOpen] = useState(false);
   const [billHtml, setBillHtml] = useState<string>('');
+  const billFrameRef = useRef<HTMLIFrameElement>(null);
 
   // Pay Bill (Checkout) Dialog
   const [payModalOpen, setPayModalOpen] = useState(false);
@@ -682,14 +683,31 @@ export function DineInPage() {
       <Dialog open={billDialogOpen} onClose={() => setBillDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontWeight: 'bold' }}>{t('dineIn.guestBillTitle', 'Guest Bill Preview')}</DialogTitle>
         <DialogContent>
+          {/*
+            The bill is a whole document with its own body and table styles; in a frame
+            they cannot restyle the app. Same-origin (with scripts still off) so Print can
+            reach the frame and print the bill rather than the whole screen.
+          */}
           <Box
-            sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden', p: 1, minHeight: 300 }}
-            dangerouslySetInnerHTML={{ __html: billHtml }}
+            component="iframe"
+            ref={billFrameRef}
+            title={t('dineIn.guestBillTitle', 'Guest Bill Preview')}
+            srcDoc={billHtml}
+            sandbox="allow-same-origin allow-modals"
+            sx={{
+              display: 'block',
+              width: '100%',
+              height: 520,
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              bgcolor: '#fff',
+            }}
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setBillDialogOpen(false)}>{t('common.close', 'Close')}</Button>
-          <Button variant="contained" onClick={() => window.print()}>
+          <Button variant="contained" onClick={() => billFrameRef.current?.contentWindow?.print()}>
             {t('dineIn.printPreview', 'Print Preview')}
           </Button>
         </DialogActions>
