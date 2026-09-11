@@ -300,7 +300,9 @@ export class ShiftService {
       }
 
       const now = new Date();
-      const dateStr = dto.businessDate || now.toISOString().slice(0, 10);
+      // The operating day where the till stands, not the UTC one: in Tehran a drawer opened
+      // between midnight and 03:30 was stamped to the day before, and counted in its close.
+      const dateStr = dto.businessDate || BusinessDateUtil.today(now);
       const shiftNum = `SHF-${dateStr.replace(/-/g, '')}-${Math.floor(Math.random() * 9000) + 1000}`;
       const openingCash = MoneyUtil.format(dto.openingCash || dto.openingFloat || '0.0000');
 

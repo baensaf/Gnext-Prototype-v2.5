@@ -140,14 +140,20 @@ export class BusinessDayService {
       });
       if (!dayClose) throw new NotFoundException(`Business day close ${id} not found`);
 
-      if (!dto.approvalRequestId) {
-        throw new BadRequestException('Reopening a closed business day requires an approvalRequestId');
+      if (dayClose.status !== 'CLOSED') {
+        throw new BadRequestException(`Business day ${dayClose.business_date} is not closed`);
+      }
+      // The authority is the manager making the call (the route is manager-and-above); what
+      // the record needs from them is why. It used to demand an approval id, which the
+      // screen filled with a made-up string.
+      if (!dto.reason || !dto.reason.trim()) {
+        throw new BadRequestException('Reopening a closed business day requires a reason');
       }
 
       dayClose.status = 'REOPENED';
       dayClose.reopened_at = new Date();
       dayClose.reopened_by = userId || null;
-      dayClose.approval_request_id = dto.approvalRequestId;
+      dayClose.approval_request_id = dto.approvalRequestId || null;
 
       const savedClose = await em.save(BusinessDayClose, dayClose);
 
@@ -159,6 +165,7 @@ export class BusinessDayService {
         entityType: 'BusinessDayClose',
         entityId: id,
         correlationId,
+        details: { reason: dto.reason.trim(), businessDate: dayClose.business_date },
       });
 
       return savedClose;

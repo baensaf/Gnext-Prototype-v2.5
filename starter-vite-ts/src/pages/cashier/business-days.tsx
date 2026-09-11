@@ -49,12 +49,12 @@ export function BusinessDaysPage() {
   // a manager standing in one shop close another's day; the header already says which.
   const { branches, selectedBranchId: branchId, selectedBranch } = useBranchContext();
   const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
-  const [businessDate, setBusinessDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  // The local operating day: the UTC one is yesterday in Tehran until 03:30.
+  const [businessDate, setBusinessDate] = useState<string>(new Date().toLocaleDateString('en-CA'));
 
   // Reopen Dialog State
   const [selectedDay, setSelectedDay] = useState<BusinessDayClose | null>(null);
   const [reopenReason, setReopenReason] = useState<string>('');
-  const [approvalRequestId, setApprovalRequestId] = useState<string>('appr-auto');
 
   const fetchBusinessDays = useCallback(async () => {
     setLoading(true);
@@ -92,10 +92,7 @@ export function BusinessDaysPage() {
   const handleReopenDay = async () => {
     if (!selectedDay) return;
     try {
-      await shiftApi.reopenBusinessDay(selectedDay.id, {
-        reason: reopenReason,
-        approvalRequestId,
-      });
+      await shiftApi.reopenBusinessDay(selectedDay.id, { reason: reopenReason.trim() });
       setSuccess(`Business Day ${selectedDay.business_date} reopened successfully`);
       setSelectedDay(null);
       setReopenReason('');
@@ -311,10 +308,12 @@ export function BusinessDaysPage() {
               </Typography>
             </Box>
             <TextField
-              label={t('cashier.businessDate', 'Business Date (YYYY-MM-DD)')}
+              type="date"
+              label={t('cashier.businessDate', 'Business Date')}
               value={businessDate}
               onChange={(e) => setBusinessDate(e.target.value)}
               fullWidth
+              slotProps={{ inputLabel: { shrink: true } }}
             />
           </Stack>
         </DialogContent>
@@ -331,7 +330,7 @@ export function BusinessDaysPage() {
         <DialogTitle>{t('cashier.reopenBusinessDayTitle', 'Reopen Business Day')}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {t('cashier.reopenWarning', 'Reopening a closed business day requires supervisor authorization and a recorded reason.')}
+            {t('cashier.reopenWarningManager', 'Only a manager can reopen a closed day, and the reason is kept in the audit log.')}
           </Typography>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
@@ -343,12 +342,6 @@ export function BusinessDaysPage() {
               rows={2}
               fullWidth
               required
-            />
-            <TextField
-              label={t('cashier.approvalId', 'Approval Request ID')}
-              value={approvalRequestId}
-              onChange={(e) => setApprovalRequestId(e.target.value)}
-              fullWidth
             />
           </Stack>
         </DialogContent>

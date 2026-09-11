@@ -195,7 +195,7 @@ export const shiftApi = {
 
   reopenBusinessDay: async (
     id: string,
-    data: { reason: string; approvalRequestId: string },
+    data: { reason: string },
   ): Promise<BusinessDayClose> => {
     const res = await httpClient.post(`/api/v1/business-days/${id}/reopen`, data);
     return res.data;

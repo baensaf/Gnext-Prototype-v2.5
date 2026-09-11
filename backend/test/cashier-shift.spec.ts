@@ -465,12 +465,35 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should throw BadRequestException if business day reopen lacks approvalRequestId', async () => {
+    it('should throw BadRequestException if business day reopen gives no reason', async () => {
       dayCloseRepo.findOne.mockResolvedValue({ id: 'day-1', tenant_id: 't-1', status: 'CLOSED' });
 
-      await expect(
-        dayService.reopenBusinessDay('t-1', 'day-1', { reason: 'Audit correction', approvalRequestId: '' }),
-      ).rejects.toThrow(BadRequestException);
+      await expect(dayService.reopenBusinessDay('t-1', 'day-1', { reason: '   ' })).rejects.toThrow(BadRequestException);
+    });
+
+    it('reopens a closed day on a reason alone and records it', async () => {
+      const day = { id: 'day-1', tenant_id: 't-1', status: 'CLOSED', business_date: '2026-09-10' };
+      dayCloseRepo.findOne.mockResolvedValue(day);
+
+      await dayService.reopenBusinessDay('t-1', 'day-1', { reason: 'Late cash drop' }, 'manager-1');
+      expect(day.status).toBe('REOPENED');
+      expect(auditWriter.write).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'BUSINESS_DAY_REOPENED', details: expect.objectContaining({ reason: 'Late cash drop' }) }),
+      );
+    });
+
+    it('refuses to reopen a day that is not closed', async () => {
+      dayCloseRepo.findOne.mockResolvedValue({ id: 'day-1', tenant_id: 't-1', status: 'REOPENED' });
+      await expect(dayService.reopenBusinessDay('t-1', 'day-1', { reason: 'Again' })).rejects.toThrow(BadRequestException);
+    });
+
+    it("stamps a shift with the till's local operating day, not the UTC one", async () => {
+      terminalRepo.findOne.mockResolvedValue({ id: 'term-1', branch_id: 'b-1', terminal_type: 'CASHIER' });
+      shiftRepo.findOne.mockResolvedValue(null);
+
+      await shiftService.openShift('t-1', { terminalId: 'term-1' });
+      const created = auditWriter.write.mock.calls[0][0].afterData;
+      expect(created.business_date).toBe(new Date().toLocaleDateString('en-CA'));
     });
   });
 });

@@ -118,10 +118,17 @@ export class BusinessDayCloseDto {
 
 export class BusinessDayReopenDto {
   @IsString()
+  @IsNotEmpty()
   reason: string;
 
+  /**
+   * Was required, and the screen sent the literal `appr-auto` in it. Reopening is a
+   * manager's act now (the route says so), recorded with their reason; kept optional so an
+   * older client naming a real request still gets it stored.
+   */
+  @IsOptional()
   @IsUUID()
-  approvalRequestId: string;
+  approvalRequestId?: string;
 
   @IsOptional()
   @IsInt()
