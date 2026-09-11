@@ -19,7 +19,9 @@ import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import { currentTillTerminalId } from '../../common/utils/till-context';
 import { isApprover } from '../../common/utils/user-scope.util';
 import { ApprovalService } from '../approval/approval.service';
-import { ShiftPolicy, SHIFT_POLICY_DEFAULTS } from './shift-policy';
+import { ShiftPolicy, resolveShiftPolicy } from './shift-policy';
+import { TenantSetting } from '../../entities/TenantSetting.entity';
+import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import {
   ShiftOpenDto,
   CashMovementDto,
@@ -42,9 +44,16 @@ export class ShiftService {
     private readonly approvalService: ApprovalService,
   ) {}
 
-  /** The drawer rules in force at a branch. */
-  async policyFor(_tenantId: string, _branchId?: string | null): Promise<ShiftPolicy> {
-    return SHIFT_POLICY_DEFAULTS;
+  /**
+   * The drawer rules in force at a branch: its own override when it has one, else head
+   * office's, else the defaults. Read at the till and at the count, not only by the
+   * settings screen, or an override would show there and change nothing.
+   */
+  async policyFor(tenantId: string, branchId?: string | null): Promise<ShiftPolicy> {
+    const rows = await this.dataSource
+      .getRepository(TenantSetting)
+      .find({ where: { tenant_id: tenantId, key: 'SHIFT_POLICY' } });
+    return resolveShiftPolicy(pickSettingValue(rows, branchId));
   }
 
   /**

@@ -9,7 +9,8 @@ export class ApprovalRule {
   tenant_id: string;
 
   @Column({ type: 'varchar', length: 64 })
-  action: string; // DISCOUNT, PRICE_OVERRIDE, REFUND, CANCEL, CREDIT_OVERRIDE, REOPEN_ORDER, REPRINT, SHIFT_CLOSE, PAYMENT_CORRECTION
+  // Drawer variance is not a rule here: SHIFT_POLICY.varianceTolerance decides it.
+  action: string; // DISCOUNT, PRICE_OVERRIDE, REFUND, CANCEL, CREDIT_OVERRIDE, REOPEN_ORDER, REPRINT, PAYMENT_CORRECTION
 
   @Column({ type: 'varchar', length: 32, default: 'PERCENTAGE' }) // PERCENTAGE, AMOUNT
   threshold_type: string;

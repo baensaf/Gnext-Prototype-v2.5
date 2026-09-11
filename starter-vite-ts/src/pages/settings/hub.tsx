@@ -246,6 +246,18 @@ export function SettingsHubPage() {
           tags: ['order', 'workflow', 'lifecycle', 'auto accept', 'dining', 'kitchen routing', 'سفارش', 'گردش کار', 'پذیرش خودکار'],
         },
         {
+          id: 'shiftPolicy',
+          scope: 'BRANCH',
+          title: t('settings.hub.items.shiftPolicy.title', 'Shift & Drawer Policy'),
+          description: t(
+            'settings.hub.items.shiftPolicy.description',
+            'Default opening float, how far a drawer may be out before a manager signs off, and blind counting at close.'
+          ),
+          path: '/app/settings/shift-policy',
+          icon: <PointOfSaleIcon sx={{ color: 'success.main' }} />,
+          tags: ['shift', 'drawer', 'float', 'variance', 'blind count', 'cash', 'شیفت', 'صندوق', 'کشو', 'مغایرت'],
+        },
+        {
           id: 'payments',
           scope: 'ORG',
           title: t('settings.hub.items.payments.title', 'Payments & Refund Methods'),

@@ -47,7 +47,6 @@ import { CloseShiftDialog } from 'src/components/shift/close-shift-dialog';
 import { useRegisterShift } from 'src/components/shift/use-register-shift';
 import { DeviceTerminalDialog } from 'src/components/shift/device-terminal-dialog';
 
-const DEFAULT_OPENING_FLOAT = '5000000';
 
 export function CashDrawerPage() {
   const [activeShiftData, setActiveShiftData] = useState<ActiveShiftResponse | null>(null);
@@ -347,7 +346,7 @@ export function CashDrawerPage() {
           onClose={() => setOpenDialogOpen(false)}
           terminal={terminal}
           branchName={register.terminalBranchName}
-          defaultFloat={DEFAULT_OPENING_FLOAT}
+          defaultFloat={register.defaultFloat}
           onOpened={() => loadData()}
         />
       )}

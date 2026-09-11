@@ -1,4 +1,4 @@
-import type { CashierShift } from 'src/api/shiftApi';
+import type { ShiftPolicy, CashierShift } from 'src/api/shiftApi';
 
 import { useState, useEffect, useCallback } from 'react';
 
@@ -24,6 +24,8 @@ export function useRegisterShift() {
   const { selectedBranchId, selectedBranch, branches, isHeadOffice } = useBranchContext();
   const [terminal, setTerminal] = useDeviceTerminal();
   const [shift, setShift] = useState<CashierShift | null>(null);
+  // The drawer rules in the register's branch — the float the open dialog offers.
+  const [policy, setPolicy] = useState<ShiftPolicy | null>(null);
   const [loading, setLoading] = useState(false);
   const [checked, setChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +42,12 @@ export function useRegisterShift() {
     }
     setLoading(true);
     try {
-      setShift(await shiftApi.getCurrentShift(terminal.id, terminal.branch_id));
+      const [current, rules] = await Promise.all([
+        shiftApi.getCurrentShift(terminal.id, terminal.branch_id),
+        shiftApi.getPolicy(terminal.branch_id).catch(() => null),
+      ]);
+      setShift(current);
+      setPolicy(rules);
       setError(null);
     } catch (err: any) {
       setError(err.detail || err.message || 'Failed to load the shift');
@@ -64,6 +71,9 @@ export function useRegisterShift() {
     branchId: selectedBranchId,
     branchName: selectedBranch?.name,
     shift,
+    policy,
+    /** What the open dialog offers; the server's default until the policy has loaded. */
+    defaultFloat: policy?.defaultOpeningFloat ?? '5000000',
     loading,
     checked,
     error,

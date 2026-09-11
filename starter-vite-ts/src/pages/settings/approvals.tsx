@@ -1,7 +1,7 @@
 import type { ApprovalRule, ApprovalRequest } from 'src/api/approvalApi';
 
-import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from 'react';
 
 import EditIcon from '@mui/icons-material/Edit';
 import ShieldIcon from '@mui/icons-material/Shield';
@@ -29,6 +29,7 @@ import {
 import { approvalApi } from 'src/api/approvalApi';
 import { useIsHeadOffice } from 'src/store/useAuthStore';
 import { useBranchContext } from 'src/contexts/branch-context';
+
 import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
@@ -45,7 +46,8 @@ export function ApprovalsSettingsPage() {
     { code: 'CANCEL', label: t('settings.approvalsPage.actions.CANCEL', 'Paid Order Cancellation') },
     { code: 'CREDIT_OVERRIDE', label: t('settings.approvalsPage.actions.CREDIT_OVERRIDE', 'Customer Credit Limit Override') },
     { code: 'REOPEN_ORDER', label: t('settings.approvalsPage.actions.REOPEN_ORDER', 'Reopen Closed Order') },
-    { code: 'SHIFT_CLOSE', label: t('settings.approvalsPage.actions.SHIFT_CLOSE', 'Shift Close Overage/Shortage') },
+    // Drawer differences are not here: the tolerance lives in Shift & Drawer Policy, which
+    // a branch may override and the count actually enforces. A rule here was never read.
   ];
 
   const [rules, setRules] = useState<ApprovalRule[]>([]);

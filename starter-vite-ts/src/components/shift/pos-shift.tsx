@@ -15,7 +15,6 @@ import { DeviceTerminalDialog } from './device-terminal-dialog';
 
 // ----------------------------------------------------------------------
 
-const DEFAULT_OPENING_FLOAT = '5000000';
 
 /**
  * The shift controls a cashier needs without leaving the register: which register this
@@ -133,7 +132,7 @@ export function PosShiftGate({ register }: { register: RegisterShiftState }) {
           onClose={() => setOpenOpen(false)}
           terminal={terminal}
           branchName={register.terminalBranchName}
-          defaultFloat={DEFAULT_OPENING_FLOAT}
+          defaultFloat={register.defaultFloat}
           onOpened={register.refresh}
         />
       )}

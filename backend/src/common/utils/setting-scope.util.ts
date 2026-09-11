@@ -7,7 +7,7 @@ import { TenantSetting } from '../../entities/TenantSetting.entity';
  *
  * The groups here are the ones that legitimately differ between sites — local tax
  * treatment, how the register behaves, how long a cashier keeps authority over an order,
- * what a kiosk asks a customer for.
+ * what a kiosk asks a customer for, and how its drawers are floated and counted.
  */
 export const BRANCH_OVERRIDABLE_SETTING_GROUPS = [
   'TAX',
@@ -15,6 +15,7 @@ export const BRANCH_OVERRIDABLE_SETTING_GROUPS = [
   'ORDER_ACTIONS',
   'ORDER_WORKFLOW',
   'KIOSK_CUSTOMER_IDENTITY_POLICY',
+  'SHIFT_POLICY',
 ];
 
 export function isBranchOverridable(key: string): boolean {

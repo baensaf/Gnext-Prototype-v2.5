@@ -2,9 +2,9 @@ import type { Theme, CSSObject } from '@mui/material/styles';
 
 import { useRouteError, isRouteErrorResponse } from 'react-router';
 
-import i18n from 'src/locales/i18n';
-
 import GlobalStyles from '@mui/material/GlobalStyles';
+
+import i18n from 'src/locales/i18n';
 
 // ----------------------------------------------------------------------
 

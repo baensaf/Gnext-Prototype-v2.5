@@ -34,6 +34,8 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
   let auditWriter: any;
   let approvalService: any;
   let dataSource: any;
+  /** SHIFT_POLICY rows the policy lookup finds; none means the defaults. */
+  let settingRows: any[];
 
   beforeEach(async () => {
     shiftRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() };
@@ -67,8 +69,10 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       delete: jest.fn(),
     };
 
+    settingRows = [];
     dataSource = {
       transaction: jest.fn(async (cb) => await cb(mockEntityManager)),
+      getRepository: jest.fn(() => ({ find: jest.fn(async () => settingRows) })),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -362,6 +366,27 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       await shiftService.closeShift('t-1', 'shf-1', { actualCash: '200000.0000', reason: 'Over' }, 'manager-1', undefined, { role: 'MANAGER' });
       expect(approvalService.verifyApproverPin).not.toHaveBeenCalled();
       expect(shift.state).toBe('CLOSED');
+    });
+
+    it("takes the tolerance from the branch's override over head office's", async () => {
+      settingRows = [
+        { key: 'SHIFT_POLICY', branch_id: null, value: { varianceTolerance: '100000' } },
+        { key: 'SHIFT_POLICY', branch_id: 'b-1', value: { varianceTolerance: '0' } },
+      ];
+      shiftRepo.findOne.mockResolvedValue(openShift());
+
+      // 10,000 short is inside the chain's tolerance but not this branch's zero.
+      await expect(
+        shiftService.closeShift('t-1', 'shf-1', { actualCash: '40000.0000', reason: 'Short' }, 'cashier-1', undefined, { role: 'CASHIER' }),
+      ).rejects.toMatchObject({ response: { context: { needsApproval: true, varianceTolerance: '0.0000' } } });
+
+      await expect(shiftService.policyFor('t-1', 'b-2')).resolves.toMatchObject({ varianceTolerance: '100000' });
+    });
+
+    it('shows a cashier the expected cash when the branch does not count blind', async () => {
+      settingRows = [{ key: 'SHIFT_POLICY', branch_id: null, value: { blindClose: false } }];
+      const statement = { state: 'OPEN', branchId: 'b-1', expectedCash: '80000.0000' };
+      await expect(shiftService.redactForBlindCount('t-1', statement, { role: 'CASHIER' })).resolves.toBe(statement);
     });
 
     it('hides what the drawer should hold from a cashier until the shift is closed', async () => {

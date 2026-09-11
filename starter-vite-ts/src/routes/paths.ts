@@ -100,6 +100,7 @@ export const paths = {
       root: `${ROOTS.APP}/settings`,
       general: `${ROOTS.APP}/settings/general`,
       orderWorkflow: `${ROOTS.APP}/settings/order-workflow`,
+      shiftPolicy: `${ROOTS.APP}/settings/shift-policy`,
       discountsCredit: `${ROOTS.APP}/settings/discounts-credit`,
       discountAuthorizations: `${ROOTS.APP}/settings/discount-authorizations`,
       paymentsRefunds: `${ROOTS.APP}/settings/payments-refunds`,

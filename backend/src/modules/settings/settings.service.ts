@@ -80,6 +80,18 @@ export class SettingsService {
           );
         }
       }
+    } else if (group === 'SHIFT_POLICY') {
+      // Amounts in the base currency. A zero tolerance is legitimate: every difference,
+      // however small, then needs a manager.
+      for (const prop of ['defaultOpeningFloat', 'varianceTolerance']) {
+        if (value[prop] === undefined) continue;
+        if (!MoneyUtil.isValid(value[prop]) || MoneyUtil.lessThan(value[prop], '0')) {
+          throw new BadRequestException(`SHIFT_POLICY setting property ${prop} must be an amount >= 0`);
+        }
+      }
+      if (value.blindClose !== undefined && typeof value.blindClose !== 'boolean') {
+        throw new BadRequestException('SHIFT_POLICY setting property blindClose must be a boolean');
+      }
     } else if (group === 'DISCOUNTS') {
       if (value.cashierMaxDiscountPercent !== undefined) {
         if (
