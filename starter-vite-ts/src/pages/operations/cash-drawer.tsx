@@ -20,7 +20,6 @@ import {
   Button,
   Dialog,
   Select,
-  Divider,
   MenuItem,
   TableRow,
   TextField,
@@ -44,6 +43,7 @@ import { cashDrawerApi } from 'src/api/cashDrawerApi';
 
 import { RegisterNotice } from 'src/components/shift/register-notice';
 import { OpenShiftDialog } from 'src/components/shift/open-shift-dialog';
+import { CloseShiftDialog } from 'src/components/shift/close-shift-dialog';
 import { useRegisterShift } from 'src/components/shift/use-register-shift';
 import { DeviceTerminalDialog } from 'src/components/shift/device-terminal-dialog';
 
@@ -68,10 +68,7 @@ export function CashDrawerPage() {
   const [txReasonId, setTxReasonId] = useState('');
   const [txNote, setTxNote] = useState('');
 
-  // Close Shift Dialog
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
-  const [actualCashInput, setActualCashInput] = useState('');
-  const [closeNotes, setCloseNotes] = useState('');
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -115,21 +112,6 @@ export function CashDrawerPage() {
     }
   };
 
-  const handleCloseShift = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeShiftData) return;
-    try {
-      await cashDrawerApi.closeShift(activeShiftData.shift.id, {
-        actual_cash: actualCashInput,
-        notes: closeNotes || undefined,
-      });
-      setCloseDialogOpen(false);
-      loadData();
-    } catch (err: any) {
-      setError(err.detail || 'Failed to close shift');
-    }
-  };
-
   const summary = activeShiftData?.summary;
   const shift = activeShiftData?.shift;
   const transactions = activeShiftData?.transactions || [];
@@ -150,13 +132,10 @@ export function CashDrawerPage() {
             variant="contained"
             color="error"
             startIcon={<LockIcon />}
-            onClick={() => {
-              setActualCashInput(summary?.expected_cash || '0');
-              setCloseDialogOpen(true);
-            }}
+            onClick={() => setCloseDialogOpen(true)}
             sx={{ fontWeight: 'bold' }}
           >
-            End-of-Day Shift Close
+            Close Shift
           </Button>
         ) : ready ? (
           <Button
@@ -436,75 +415,15 @@ export function CashDrawerPage() {
         </Box>
       </Dialog>
 
-      {/* EOD Shift Close & Cash Reconciliation Modal */}
-      <Dialog open={closeDialogOpen} onClose={() => setCloseDialogOpen(false)}>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>
-          End-of-Day Shift Close & Cash Reconciliation
-        </DialogTitle>
-        <Box component="form" onSubmit={handleCloseShift}>
-          <DialogContent sx={{ minWidth: 400, pt: 2 }}>
-            {summary && (
-              <Paper variant="outlined" sx={{ p: 2, mb: 3, borderRadius: 2, bgcolor: 'background.neutral' }}>
-                <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary">Expected Cash in Drawer:</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                    {MoneyUtil.formatCurrency(summary.expected_cash)} IRR
-                  </Typography>
-                </Stack>
-
-                <Divider sx={{ my: 1 }} />
-
-                {(() => {
-                  const variance = MoneyUtil.subtract(actualCashInput || '0', summary.expected_cash || '0', 2);
-                  const isPositive = MoneyUtil.greaterThanOrEqual(variance, '0');
-                  return (
-                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Variance (Over/Short):</Typography>
-                      <Typography
-                        variant="subtitle2"
-                        sx={{
-                          fontWeight: 'bold',
-                          color: isPositive ? 'success.main' : 'error.main',
-                        }}
-                      >
-                        {MoneyUtil.formatCurrency(variance)} IRR
-                      </Typography>
-                    </Stack>
-                  );
-                })()}
-              </Paper>
-            )}
-
-            <Stack spacing={2}>
-              <TextField
-                size="small"
-                label="Actual Counted Cash in Drawer (IRR)"
-                type="number"
-                required
-                fullWidth
-                value={actualCashInput}
-                onChange={(e) => setActualCashInput(e.target.value)}
-              />
-
-              <TextField
-                size="small"
-                label="Closing Notes / Discrepancy Reason"
-                fullWidth
-                multiline
-                rows={2}
-                value={closeNotes}
-                onChange={(e) => setCloseNotes(e.target.value)}
-              />
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setCloseDialogOpen(false)}>Cancel</Button>
-            <Button type="submit" variant="contained" color="error" sx={{ fontWeight: 'bold' }}>
-              Confirm EOD Close & Reconcile
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
+      {shift && (
+        <CloseShiftDialog
+          open={closeDialogOpen}
+          onClose={() => setCloseDialogOpen(false)}
+          shiftId={shift.id}
+          shiftNumber={shift.shift_number}
+          onClosed={() => loadData()}
+        />
+      )}
     </Box>
   );
 }

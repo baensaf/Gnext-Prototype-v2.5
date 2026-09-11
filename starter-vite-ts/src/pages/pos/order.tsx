@@ -90,6 +90,8 @@ import { useBranchContext } from 'src/contexts/branch-context';
 import { CheckoutModal } from 'src/components/CheckoutModal';
 import { toast, showErrorToast } from 'src/components/snackbar';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
+import { useRegisterShift } from 'src/components/shift/use-register-shift';
+import { PosShiftBar, PosShiftGate } from 'src/components/shift/pos-shift';
 
 interface CartItem {
   product: Product;
@@ -131,6 +133,9 @@ export function PosOrderPage() {
   const { t } = useTranslation();
 
   const { selectedBranchId, setSelectedBranchId } = useBranchContext();
+  // The register this device is and the shift open on it; the till stays shut without one.
+  const register = useRegisterShift();
+  const shiftBlocked = !register.shift;
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeTab, setActiveTab] = useState<string>('');
   const [products, setProducts] = useState<Product[]>([]);
@@ -1130,6 +1135,8 @@ export function PosOrderPage() {
       }
       // Let an open dialog own non-Escape keys so forms retain normal typing behavior.
       if (notesModalOpen || optionDialogOpen || manualDiscountModalOpen || checkoutModalOpen || quickAddCustomerOpen || approvalModalOpen || addAddressOpen) return;
+      // No shift, no till: the shortcuts would ring up and take payment behind the gate.
+      if (shiftBlocked) return;
       // F2 or Ctrl+F / Ctrl+K: Focus search input
       if (e.key === 'F2' || ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'k'))) {
         e.preventDefault();
@@ -1198,6 +1205,7 @@ export function PosOrderPage() {
     approvalModalOpen,
     addAddressOpen,
     searchQuery,
+    shiftBlocked,
   ]);
 
   // Product Filtering (Search + Category)
@@ -1275,7 +1283,11 @@ export function PosOrderPage() {
         </Alert>
       )}
 
-      <Grid container spacing={2.5}>
+      {shiftBlocked ? <PosShiftGate register={register} /> : <PosShiftBar register={register} />}
+
+      {/* Hidden rather than unmounted while no shift is open, so a half-built cart survives
+          a shift being opened in the middle of it. */}
+      <Grid container spacing={2.5} sx={{ display: shiftBlocked ? 'none' : undefined }}>
         {/* Left Column: High-Density Product Catalog with Categories Rail */}
         <Grid size={{ xs: 12, md: 7, lg: 8 }}>
           <Card

@@ -929,6 +929,23 @@
       "floatHelp": "The cash counted into the drawer before the first sale.",
       "confirm": "Open shift",
       "error": "Could not open the shift"
+    },
+    "close": {
+      "title": "Close shift",
+      "variance": "Over / short",
+      "counted": "Counted cash (IRR)",
+      "notes": "Notes / reason for a difference",
+      "confirm": "Close shift",
+      "error": "Could not close the shift"
+    },
+    "bar": {
+      "shift": "Shift",
+      "since": "Open since {{time}}"
+    },
+    "gate": {
+      "title": "No shift is open on this register",
+      "help": "{{register}}: count the float into the drawer and open a shift to start selling.",
+      "headOffice": "Choose a branch to sell in"
     }
   },
   "payments": {
