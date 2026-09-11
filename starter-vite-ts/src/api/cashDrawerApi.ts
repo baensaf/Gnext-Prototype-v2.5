@@ -93,29 +93,6 @@ export const cashDrawerApi = {
     }
   },
 
-  openShift: async (data: {
-    branch_id: string;
-    terminal_id: string;
-    user_id?: string;
-    opening_float: string;
-    notes?: string;
-  }): Promise<CashDrawerShift> => {
-    const shift = await shiftApi.openShift({
-      terminalId: data.terminal_id,
-      openingCash: data.opening_float,
-    });
-    return {
-      id: shift.id,
-      branch_id: shift.branch_id,
-      terminal_id: shift.terminal_id,
-      shift_number: shift.shift_number,
-      opened_at: shift.opened_at,
-      opening_float: shift.opening_cash || data.opening_float,
-      expected_cash: shift.opening_cash || data.opening_float,
-      status: shift.state,
-    };
-  },
-
   postTransaction: async (
     shiftId: string,
     data: {

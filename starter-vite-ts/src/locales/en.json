@@ -905,6 +905,32 @@
     "expectedCash": "Expected Cash",
     "actualCash": "Actual Cash"
   },
+  "shift": {
+    "register": "Register",
+    "device": {
+      "title": "Set up this register",
+      "help": "Choose which register this device is. It is remembered on this device, so shifts open against the right drawer without asking again.",
+      "branch": "Branch",
+      "none": "This branch has no active cash registers. A manager can add one under Terminals.",
+      "loadError": "Could not load registers",
+      "pinNotice": "A manager PIN is needed to set up a register.",
+      "assign": "Use this register",
+      "approvalDetails": "Set up this device as a cash register",
+      "notSetUp": "This device is not set up as a register",
+      "notSetUpHelp": "Choose which of the {{branch}} registers this is, once. Shifts then open on it without asking.",
+      "mismatch": "This device is {{register}} at {{branch}}",
+      "mismatchHelp": "You are working in {{current}}. A drawer can only be opened in the branch it stands in.",
+      "switchTo": "Work in {{branch}}",
+      "change": "Set up as a {{branch}} register"
+    },
+    "open": {
+      "title": "Open shift",
+      "float": "Opening float (IRR)",
+      "floatHelp": "The cash counted into the drawer before the first sale.",
+      "confirm": "Open shift",
+      "error": "Could not open the shift"
+    }
+  },
   "payments": {
     "title": "Payment Transactions & Devices",
     "void": "Cancel",

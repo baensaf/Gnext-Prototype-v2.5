@@ -1,5 +1,4 @@
 import type { ReasonCode } from 'src/api/settingsApi';
-import type { Branch, Terminal } from 'src/api/tenantApi';
 import type { ActiveShiftResponse } from 'src/api/cashDrawerApi';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -40,24 +39,27 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 
-import { tenantApi } from 'src/api/tenantApi';
 import { settingsApi } from 'src/api/settingsApi';
 import { cashDrawerApi } from 'src/api/cashDrawerApi';
-import { useScopedBranchId } from 'src/contexts/branch-context';
+
+import { RegisterNotice } from 'src/components/shift/register-notice';
+import { OpenShiftDialog } from 'src/components/shift/open-shift-dialog';
+import { useRegisterShift } from 'src/components/shift/use-register-shift';
+import { DeviceTerminalDialog } from 'src/components/shift/device-terminal-dialog';
+
+const DEFAULT_OPENING_FLOAT = '5000000';
 
 export function CashDrawerPage() {
   const [activeShiftData, setActiveShiftData] = useState<ActiveShiftResponse | null>(null);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [terminals, setTerminals] = useState<Terminal[]>([]);
   const [reasonCodes, setReasonCodes] = useState<ReasonCode[]>([]);
   const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Open Shift Dialog
+  // The drawer is this device's register; its branch is the register's. Nobody picks either.
+  const register = useRegisterShift();
+  const { terminal, mismatch } = register;
+  const [setupOpen, setSetupOpen] = useState(false);
   const [openDialogOpen, setOpenDialogOpen] = useState(false);
-  const [openBranchId, setOpenBranchId] = useScopedBranchId();
-  const [openTerminalId, setOpenTerminalId] = useState('');
-  const [openingFloat, setOpeningFloat] = useState('5000000');
 
   // Transaction Dialog (Pay In / Pay Out / Safe Drop)
   const [txDialogOpen, setTxDialogOpen] = useState(false);
@@ -74,16 +76,9 @@ export function CashDrawerPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const active = await cashDrawerApi.getActiveShift(openBranchId || undefined);
+      const active =
+        terminal && !mismatch ? await cashDrawerApi.getActiveShift(terminal.branch_id, terminal.id) : null;
       setActiveShiftData(active);
-
-      const bList = await tenantApi.getBranches();
-      setBranches(bList);
-      if (bList.length > 0 && !openBranchId) setOpenBranchId(bList[0].id);
-
-      const tList = await tenantApi.getTerminals();
-      setTerminals(tList);
-      if (tList.length > 0 && !openTerminalId) setOpenTerminalId(tList[0].id);
 
       const rList = await settingsApi.getReasonCodes();
       setReasonCodes(rList);
@@ -93,27 +88,13 @@ export function CashDrawerPage() {
     } finally {
       setLoading(false);
     }
-  }, [openBranchId, openTerminalId]);
+  }, [terminal, mismatch]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  const handleOpenShift = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await cashDrawerApi.openShift({
-        branch_id: openBranchId,
-        terminal_id: openTerminalId,
-        user_id: '5b66e29d-8bf9-432c-b0df-aeb72547a9b5', // Admin user
-        opening_float: openingFloat,
-      });
-      setOpenDialogOpen(false);
-      loadData();
-    } catch (err: any) {
-      setError(err.detail || 'Failed to open shift');
-    }
-  };
+  const ready = !!terminal && !mismatch;
 
   const handlePostTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,7 +158,7 @@ export function CashDrawerPage() {
           >
             End-of-Day Shift Close
           </Button>
-        ) : (
+        ) : ready ? (
           <Button
             variant="contained"
             color="success"
@@ -187,7 +168,7 @@ export function CashDrawerPage() {
           >
             Open New Shift
           </Button>
-        )}
+        ) : null}
       </Stack>
 
       {error && (
@@ -355,6 +336,14 @@ export function CashDrawerPage() {
             </CardContent>
           </Card>
         </Stack>
+      ) : !ready ? (
+        <RegisterNotice
+          terminal={terminal}
+          mismatch={mismatch}
+          terminalBranchName={register.terminalBranchName}
+          branchName={register.branchName}
+          onSetup={() => setSetupOpen(true)}
+        />
       ) : (
         <Card sx={{ borderRadius: 3, p: 4, textAlign: 'center' }}>
           <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
@@ -372,57 +361,25 @@ export function CashDrawerPage() {
         </Card>
       )}
 
-      {/* Open Shift Modal */}
-      <Dialog open={openDialogOpen} onClose={() => setOpenDialogOpen(false)}>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>Open Cash Drawer Shift</DialogTitle>
-        <Box component="form" onSubmit={handleOpenShift}>
-          <DialogContent sx={{ minWidth: 360, pt: 2 }}>
-            <Stack spacing={2}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Branch</InputLabel>
-                <Select
-                  value={openBranchId}
-                  label="Branch"
-                  onChange={(e) => setOpenBranchId(e.target.value)}
-                >
-                  {branches.map((b) => (
-                    <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+      {terminal && ready && (
+        <OpenShiftDialog
+          open={openDialogOpen}
+          onClose={() => setOpenDialogOpen(false)}
+          terminal={terminal}
+          branchName={register.terminalBranchName}
+          defaultFloat={DEFAULT_OPENING_FLOAT}
+          onOpened={() => loadData()}
+        />
+      )}
 
-              <FormControl fullWidth size="small">
-                <InputLabel>Terminal</InputLabel>
-                <Select
-                  value={openTerminalId}
-                  label="Terminal"
-                  onChange={(e) => setOpenTerminalId(e.target.value)}
-                >
-                  {terminals.map((t) => (
-                    <MenuItem key={t.id} value={t.id}>{t.name} ({t.code})</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <TextField
-                size="small"
-                label="Opening Float Amount (IRR)"
-                type="number"
-                required
-                fullWidth
-                value={openingFloat}
-                onChange={(e) => setOpeningFloat(e.target.value)}
-              />
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpenDialogOpen(false)}>Cancel</Button>
-            <Button type="submit" variant="contained" color="success" sx={{ fontWeight: 'bold' }}>
-              Confirm Open Shift
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
+      <DeviceTerminalDialog
+        open={setupOpen}
+        onClose={() => setSetupOpen(false)}
+        branchId={register.branchId}
+        branchName={register.branchName}
+        current={terminal}
+        onAssigned={register.setTerminal}
+      />
 
       {/* Post Transaction Modal */}
       <Dialog open={txDialogOpen} onClose={() => setTxDialogOpen(false)}>

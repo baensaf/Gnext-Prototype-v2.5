@@ -19,7 +19,6 @@ import {
   Alert,
   Button,
   Dialog,
-  MenuItem,
   TextField,
   Typography,
   IconButton,
@@ -30,9 +29,10 @@ import {
   DialogActions,
 } from '@mui/material';
 
+import { useBranchContext } from 'src/contexts/branch-context';
+
 import { shiftApi } from '../../api/shiftApi';
 import { ServerDataGrid } from '../../components/server-data-grid';
-import { useBranchContext, useScopedBranchId } from 'src/contexts/branch-context';
 
 export function BusinessDaysPage() {
   const { t } = useTranslation();
@@ -45,10 +45,9 @@ export function BusinessDaysPage() {
 
   // Close Dialog State
   const [openCloseDialog, setOpenCloseDialog] = useState<boolean>(false);
-  // Was a hardcoded id that matched no branch in the database, so closing a day meant
-  // pasting a uuid by hand. It now starts at the branch you are working in.
-  const [branchId, setBranchId] = useScopedBranchId();
-  const { branches } = useBranchContext();
+  // The day closed is the day of the branch you are working in. It was a picker, which let
+  // a manager standing in one shop close another's day; the header already says which.
+  const { branches, selectedBranchId: branchId, selectedBranch } = useBranchContext();
   const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
   const [businessDate, setBusinessDate] = useState<string>(new Date().toISOString().slice(0, 10));
 
@@ -61,7 +60,7 @@ export function BusinessDaysPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await shiftApi.getBusinessDays();
+      const res = await shiftApi.getBusinessDays({ branch: branchId || undefined });
       setBusinessDays(res.data);
       setTotalCount(res.total);
     } catch (err: any) {
@@ -69,7 +68,7 @@ export function BusinessDaysPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [branchId]);
 
   useEffect(() => {
     fetchBusinessDays();
@@ -303,19 +302,14 @@ export function BusinessDaysPage() {
             {t('cashier.closeDayWarning', 'Closing the business day locks all cashier shifts and finalizes daily branch financial totals.')}
           </Typography>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              select
-              label={t('cashier.branch', 'Branch')}
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-              fullWidth
-            >
-              {branches.map((branch) => (
-                <MenuItem key={branch.id} value={branch.id}>
-                  {branch.name}
-                </MenuItem>
-              ))}
-            </TextField>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                {t('cashier.branch', 'Branch')}
+              </Typography>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                {selectedBranch?.name || '-'}
+              </Typography>
+            </Box>
             <TextField
               label={t('cashier.businessDate', 'Business Date (YYYY-MM-DD)')}
               value={businessDate}

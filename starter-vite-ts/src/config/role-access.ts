@@ -232,6 +232,16 @@ export function fitsWorkspace(pathname: string, scope?: WorkspaceScope | null): 
   return scope.branchType === 'RESTAURANT' || (!listed(SHOP_FLOOR_PATHS) && !listed(SELLING_SITE_PATHS));
 }
 
+/**
+ * Roles whose pin releases what a register operator may not do alone. Mirrors the server's
+ * APPROVER_ROLES; the server still checks, this only decides whether to ask for a pin.
+ */
+export const APPROVER_ROLES = ['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER', 'SUPERVISOR'];
+
+export function isApproverRole(role?: string | null): boolean {
+  return APPROVER_ROLES.includes((role || '').toUpperCase());
+}
+
 export function homePathForRole(role?: string | null): string {
   return accessForRole(role)?.home ?? '/app/dashboard';
 }
