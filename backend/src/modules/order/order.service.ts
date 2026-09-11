@@ -87,9 +87,11 @@ const isActiveLine = (item: { state?: string }): boolean =>
 const ALLOWED_TRANSITIONS: Record<OrderState, OrderState[]> = {
   DRAFT: ['SUBMITTED', 'CONFIRMED', 'CANCELLED'],
   PENDING_ACCEPTANCE: ['CONFIRMED', 'REJECTED', 'CANCELLED'],
-  SUBMITTED: ['CONFIRMED', 'CANCELLED'],
-  CONFIRMED: ['PREPARING', 'CANCELLED'],
-  PREPARING: ['READY', 'CANCELLED'],
+  // A paid order may complete from any open state: a branch that prints kitchen tickets has
+  // nothing that would ever move an order through PREPARING or READY first.
+  SUBMITTED: ['CONFIRMED', 'COMPLETED', 'CANCELLED'],
+  CONFIRMED: ['PREPARING', 'COMPLETED', 'CANCELLED'],
+  PREPARING: ['READY', 'COMPLETED', 'CANCELLED'],
   READY: ['OUT_FOR_DELIVERY', 'COMPLETED', 'CANCELLED'],
   OUT_FOR_DELIVERY: ['COMPLETED', 'READY', 'CANCELLED'],
   COMPLETED: [],
@@ -99,6 +101,9 @@ const ALLOWED_TRANSITIONS: Record<OrderState, OrderState[]> = {
 
 /** Actions that answer an order waiting in PENDING_ACCEPTANCE, and only such an order. */
 const INCOMING_DECISIONS = ['ACCEPT', 'REJECT'];
+
+/** Open states a takeaway order leaves by itself once it is paid in full. */
+const PAID_TAKEAWAY_COMPLETES_FROM: OrderState[] = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY'];
 
 /** States in which the kitchen has the order and has not yet handed it over. */
 const KITCHEN_HOLDS_ORDER_STATES: OrderState[] = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY'];
@@ -698,6 +703,15 @@ export class OrderService {
         throw new BadRequestException(`Cannot transition order ${order.order_number} from state ${order.state} to ${targetState} via action ${action}`);
       }
 
+      // Completed means nothing is owed. Money still due is collected first, or the order
+      // is cancelled; completing it would close the check with the balance unpaid.
+      if (targetState === 'COMPLETED' && MoneyUtil.greaterThan(order.outstanding_total || '0.0000', '0.0000')) {
+        throw new ConflictException({
+          code: 'ORDER_HAS_BALANCE',
+          message: `Order ${order.order_number} still has ${order.outstanding_total} to pay; take the payment before completing it`,
+        });
+      }
+
       const fromState = order.state;
       order.state = targetState;
       order.status = targetState;
@@ -772,6 +786,33 @@ export class OrderService {
 
       return order;
     });
+  }
+
+  /**
+   * A takeaway order is done once it is paid for: nobody taps "handed over" at a busy
+   * counter, and an order left open never pays out its loyalty cashback. Dine-in waits for
+   * the table to close and delivery for the courier, so both are left alone. Returns the
+   * order when this completed it, otherwise null.
+   */
+  async completeWhenPaidInFull(
+    tenantId: string,
+    orderId: string,
+    userId?: string,
+    correlationId?: string,
+  ): Promise<OrderHeader | null> {
+    const order = await this.orderRepo.findOne({ where: { id: orderId, tenant_id: tenantId } });
+    if (!order || order.order_type !== 'TAKEAWAY') return null;
+    if (!PAID_TAKEAWAY_COMPLETES_FROM.includes(order.state)) return null;
+    if (MoneyUtil.greaterThan(order.outstanding_total || '0.0000', '0.0000')) return null;
+
+    return await this.transitionState(
+      tenantId,
+      orderId,
+      'COMPLETE',
+      { reasonText: 'Paid in full' },
+      userId,
+      correlationId,
+    );
   }
 
   /**

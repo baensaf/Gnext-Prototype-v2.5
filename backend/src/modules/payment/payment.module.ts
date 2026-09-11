@@ -14,6 +14,7 @@ import { PaymentController } from './payment.controller';
 import { CustomerModule } from '../customer/customer.module';
 import { CashierModule } from '../cashier/cashier.module';
 import { AuditModule } from '../audit/audit.module';
+import { OrderModule } from '../order/order.module';
 
 @Module({
   imports: [
@@ -31,6 +32,8 @@ import { AuditModule } from '../audit/audit.module';
     CustomerModule,
     CashierModule,
     AuditModule,
+    // A paid takeaway order completes once its payment lands.
+    OrderModule,
   ],
   providers: [PaymentService],
   controllers: [PaymentController],

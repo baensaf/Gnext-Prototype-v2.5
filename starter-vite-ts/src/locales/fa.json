@@ -262,10 +262,8 @@
     "searchPlaceholder": "جستجو بر اساس شماره سفارش، نام مشتری، میز...",
     "tabs": {
       "all": "همه ({{count}})",
-      "submitted": "ثبت شده ({{count}})",
-      "confirmed": "تایید شده ({{count}})",
-      "preparing": "در حال پخت ({{count}})",
-      "ready": "آماده تحویل ({{count}})",
+      "waiting": "در انتظار تأیید ({{count}})",
+      "open": "باز ({{count}})",
       "completed": "تکمیل شده ({{count}})",
       "cancelled": "لغو شده ({{count}})"
     },
@@ -310,13 +308,18 @@
     },
     "statuses": {
       "pendingAcceptance": "در انتظار تأیید",
-      "submitted": "ثبت شده",
-      "kitchenPreparing": "در حال آماده‌سازی",
-      "ready": "آماده تحویل",
+      "draft": "پیش‌نویس",
+      "open": "باز",
       "completed": "تکمیل شده",
       "cancelled": "لغو شده",
       "rejected": "رد شده",
       "refunded": "مرجوع شده"
+    },
+    "progress": {
+      "sentToKitchen": "ارسال به آشپزخانه",
+      "preparing": "در حال آماده‌سازی",
+      "ready": "آماده تحویل",
+      "outForDelivery": "در مسیر ارسال"
     },
     "table": {
       "orderNumber": "شماره سفارش",
@@ -344,21 +347,16 @@
       "receipt": "فاکتور",
       "reprint": "چاپ مجدد",
       "pay": "پرداخت",
-      "prep": "پخت",
-      "ready": "آماده",
       "complete": "تکمیل",
       "cancel": "لغو",
-      "startPrep": "شروع آماده‌سازی",
-      "markReady": "اعلام آماده",
       "completeOrder": "تکمیل سفارش",
       "cancelOrder": "لغو سفارش",
       "detailsAudit": "جزئیات و لاگ رویدادها",
       "editOrder": "ویرایش اقلام"
     },
     "kanban": {
-      "submitted": "سفارش‌های ثبت شده",
-      "preparing": "در حال پخت آشپزخانه",
-      "ready": "آماده تحویل",
+      "waiting": "در انتظار تأیید",
+      "open": "باز",
       "completed": "تکمیل شده",
       "table": "میز: {{number}}",
       "placed": "زمان ثبت: {{time}}",

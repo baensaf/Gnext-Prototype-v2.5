@@ -19,11 +19,9 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import HistoryIcon from '@mui/icons-material/History';
 import PaymentIcon from '@mui/icons-material/Payment';
 import SecurityIcon from '@mui/icons-material/Security';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import {
   Box,
@@ -76,6 +74,38 @@ import { CheckoutModal } from 'src/components/CheckoutModal';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 import { OrderEditDialog } from 'src/components/orders/OrderEditDialog';
 
+// An order is waiting, open, completed or cancelled. How far the kitchen or the courier has
+// got is shown beside that rather than as a stage of its own: most branches print tickets and
+// have no screen that would ever move an order to "preparing" or "ready".
+const OPEN_STATUSES = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'KITCHEN_PREPARING', 'READY', 'OUT_FOR_DELIVERY'];
+
+type Lifecycle = 'WAITING' | 'OPEN' | 'COMPLETED' | 'CANCELLED' | 'OTHER';
+
+const lifecycleOf = (status: string): Lifecycle => {
+  if (status === 'PENDING_ACCEPTANCE') return 'WAITING';
+  if (OPEN_STATUSES.includes(status)) return 'OPEN';
+  if (status === 'COMPLETED') return 'COMPLETED';
+  if (status === 'CANCELLED' || status === 'REJECTED') return 'CANCELLED';
+  return 'OTHER';
+};
+
+/** The `orders.progress` key for an open order's kitchen or delivery progress. */
+const progressKeyOf = (status: string): string | null => {
+  switch (status) {
+    case 'SUBMITTED':
+    case 'CONFIRMED':
+      return 'sentToKitchen';
+    case 'PREPARING':
+    case 'KITCHEN_PREPARING':
+      return 'preparing';
+    case 'READY':
+      return 'ready';
+    case 'OUT_FOR_DELIVERY':
+      return 'outForDelivery';
+    default:
+      return null;
+  }
+};
 
 export function OrdersWorkflowPage() {
   const { t } = useTranslation();
@@ -148,26 +178,46 @@ export function OrdersWorkflowPage() {
 
   const getOrderStatusLabel = (status: string) => {
     switch (status) {
-      case 'PENDING_ACCEPTANCE':
-        return t('orders.statuses.pendingAcceptance');
-      case 'SUBMITTED':
-        return t('orders.statuses.submitted');
-      case 'KITCHEN_PREPARING':
-        return t('orders.statuses.kitchenPreparing');
-      case 'READY':
-        return t('orders.statuses.ready');
-      case 'COMPLETED':
-        return t('orders.statuses.completed');
-      case 'CANCELLED':
-        return t('orders.statuses.cancelled');
+      case 'DRAFT':
+        return t('orders.statuses.draft');
       case 'REJECTED':
         return t('orders.statuses.rejected');
       case 'REFUNDED':
         return t('orders.statuses.refunded');
       default:
+        break;
+    }
+    switch (lifecycleOf(status)) {
+      case 'WAITING':
+        return t('orders.statuses.pendingAcceptance');
+      case 'OPEN':
+        return t('orders.statuses.open');
+      case 'COMPLETED':
+        return t('orders.statuses.completed');
+      case 'CANCELLED':
+        return t('orders.statuses.cancelled');
+      default:
         return status;
     }
   };
+
+  const renderProgressChip = (status: string) => {
+    const key = progressKeyOf(status);
+    return key ? <Chip label={t(`orders.progress.${key}`)} size="small" variant="outlined" /> : null;
+  };
+
+  // Completing closes the check, so nothing may be left to pay. Delivery orders are finished
+  // on the delivery screen, where the courier's cash is counted in.
+  const canComplete = (order: OrderHeader) =>
+    !readOnly &&
+    lifecycleOf(order.status) === 'OPEN' &&
+    order.order_type !== 'DELIVERY' &&
+    order.status !== 'OUT_FOR_DELIVERY' &&
+    !MoneyUtil.greaterThan(order.due_amount || '0', '0');
+
+  // A waiting order is answered on Incoming Orders, and a finished one is refunded, not cancelled.
+  const canCancel = (order: OrderHeader) =>
+    !readOnly && (lifecycleOf(order.status) === 'OPEN' || order.status === 'DRAFT');
 
   const handleOpenOrderDrawer = async (order: OrderHeader) => {
     setSelectedOrder(order);
@@ -237,8 +287,10 @@ export function OrdersWorkflowPage() {
     try {
       await orderApi.updateOrderStatus(orderId, nextStatus);
       loadData();
+      return true;
     } catch (err: any) {
       setError(err.detail || t('orders.errors.updateStatusFailed'));
+      return false;
     }
   };
 
@@ -333,22 +385,18 @@ export function OrdersWorkflowPage() {
   };
 
   const getStatusChipColor = (status: string) => {
-    switch (status) {
-      case 'PENDING_ACCEPTANCE': return 'warning';
-      case 'SUBMITTED': return 'info';
-      case 'KITCHEN_PREPARING': return 'warning';
-      case 'READY': return 'success';
-      case 'COMPLETED': return 'default';
+    if (status === 'REFUNDED') return 'secondary';
+    switch (lifecycleOf(status)) {
+      case 'WAITING': return 'warning';
+      case 'OPEN': return 'info';
       case 'CANCELLED': return 'error';
-      case 'REJECTED': return 'error';
-      case 'REFUNDED': return 'secondary';
       default: return 'default';
     }
   };
 
   // Filtered orders list
   const filteredOrders = orders.filter((o) => {
-    const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
+    const matchesStatus = statusFilter === 'ALL' || lifecycleOf(o.status) === statusFilter;
     const q = searchQuery.toLowerCase().trim();
     const custName = getCustomerDisplayName(o).toLowerCase();
     const custMobile = (getCustomerMobile(o) || '').toLowerCase();
@@ -363,8 +411,8 @@ export function OrdersWorkflowPage() {
     return matchesStatus && matchesSearch;
   });
 
-  const getOrdersByStatus = (status: string) =>
-    orders.filter((o) => o.status === status);
+  const getOrdersByLifecycle = (lifecycle: string) =>
+    orders.filter((o) => lifecycleOf(o.status) === lifecycle);
 
   return (
     <Box sx={{ pb: 6 }}>
@@ -434,12 +482,10 @@ export function OrdersWorkflowPage() {
               variant="scrollable"
             >
               <Tab label={t('orders.tabs.all', { count: orders.length })} value="ALL" />
-              <Tab label={t('orders.tabs.submitted', { count: getOrdersByStatus('SUBMITTED').length })} value="SUBMITTED" />
-              <Tab label={t('orders.tabs.confirmed', { count: getOrdersByStatus('CONFIRMED').length })} value="CONFIRMED" />
-              <Tab label={t('orders.tabs.preparing', { count: getOrdersByStatus('KITCHEN_PREPARING').length })} value="KITCHEN_PREPARING" />
-              <Tab label={t('orders.tabs.ready', { count: getOrdersByStatus('READY').length })} value="READY" />
-              <Tab label={t('orders.tabs.completed', { count: getOrdersByStatus('COMPLETED').length })} value="COMPLETED" />
-              <Tab label={t('orders.tabs.cancelled', { count: getOrdersByStatus('CANCELLED').length })} value="CANCELLED" />
+              <Tab label={t('orders.tabs.waiting', { count: getOrdersByLifecycle('WAITING').length })} value="WAITING" />
+              <Tab label={t('orders.tabs.open', { count: getOrdersByLifecycle('OPEN').length })} value="OPEN" />
+              <Tab label={t('orders.tabs.completed', { count: getOrdersByLifecycle('COMPLETED').length })} value="COMPLETED" />
+              <Tab label={t('orders.tabs.cancelled', { count: getOrdersByLifecycle('CANCELLED').length })} value="CANCELLED" />
             </Tabs>
 
             <TextField
@@ -601,12 +647,15 @@ export function OrdersWorkflowPage() {
                           </Typography>
                         </TableCell>
                         <TableCell align="center">
-                          <Chip
-                            color={getStatusChipColor(order.status) as any}
-                            label={getOrderStatusLabel(order.status)}
-                            size="small"
-                            sx={{ fontWeight: 700 }}
-                          />
+                          <Stack spacing={0.5} sx={{ alignItems: 'center' }}>
+                            <Chip
+                              color={getStatusChipColor(order.status) as any}
+                              label={getOrderStatusLabel(order.status)}
+                              size="small"
+                              sx={{ fontWeight: 700 }}
+                            />
+                            {renderProgressChip(order.status)}
+                          </Stack>
                         </TableCell>
                         <TableCell align="center">
                           <Stack direction="row" spacing={1} sx={{ justifyContent: 'center' }}>
@@ -664,37 +713,7 @@ export function OrdersWorkflowPage() {
                               </Button>
                             )}
 
-                            {!readOnly && order.status === 'SUBMITTED' && (
-                              <Button
-                                color="warning"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleUpdateStatus(order.id, 'KITCHEN_PREPARING');
-                                }}
-                                size="small"
-                                startIcon={<PlayArrowIcon />}
-                                variant="contained"
-                              >
-                                {t('orders.actions.prep')}
-                              </Button>
-                            )}
-
-                            {!readOnly && order.status === 'KITCHEN_PREPARING' && (
-                              <Button
-                                color="success"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleUpdateStatus(order.id, 'READY');
-                                }}
-                                size="small"
-                                startIcon={<CheckCircleIcon />}
-                                variant="contained"
-                              >
-                                {t('orders.actions.ready')}
-                              </Button>
-                            )}
-
-                            {!readOnly && order.status === 'READY' && (
+                            {canComplete(order) && (
                               <Button
                                 color="primary"
                                 onClick={(e) => {
@@ -709,7 +728,7 @@ export function OrdersWorkflowPage() {
                               </Button>
                             )}
 
-                            {!readOnly && order.status !== 'COMPLETED' && order.status !== 'CANCELLED' && (
+                            {canCancel(order) && (
                               <Button
                                 color="error"
                                 onClick={(e) => {
@@ -739,20 +758,19 @@ export function OrdersWorkflowPage() {
       {viewMode === 'kanban' && (
         <Grid container spacing={2}>
           {[
-            { color: 'info.main', key: 'SUBMITTED', title: t('orders.kanban.submitted') },
-            { color: 'warning.main', key: 'KITCHEN_PREPARING', title: t('orders.kanban.preparing') },
-            { color: 'success.main', key: 'READY', title: t('orders.kanban.ready') },
+            { color: 'warning.main', key: 'WAITING', title: t('orders.kanban.waiting') },
+            { color: 'info.main', key: 'OPEN', title: t('orders.kanban.open') },
             { color: 'text.secondary', key: 'COMPLETED', title: t('orders.kanban.completed') },
           ].map((col) => (
-            <Grid key={col.key} size={{ md: 3, sm: 6, xs: 12 }}>
+            <Grid key={col.key} size={{ md: 4, xs: 12 }}>
               <Card sx={{ bgcolor: 'background.neutral', borderRadius: 3, boxShadow: 2, minHeight: 600 }}>
                 <CardContent sx={{ p: 2 }}>
                   <Typography sx={{ color: col.color, fontWeight: 'bold', mb: 2 }} variant="subtitle1">
-                    {col.title} ({getOrdersByStatus(col.key).length})
+                    {col.title} ({getOrdersByLifecycle(col.key).length})
                   </Typography>
 
                   <Stack spacing={2}>
-                    {getOrdersByStatus(col.key).map((order) => {
+                    {getOrdersByLifecycle(col.key).map((order) => {
                       const custName = getCustomerDisplayName(order);
 
                       return (
@@ -776,7 +794,10 @@ export function OrdersWorkflowPage() {
                             <Typography sx={{ fontWeight: 'bold' }} variant="subtitle2">
                               <code>{order.order_number}</code>
                             </Typography>
-                            <Chip label={getOrderTypeLabel(order.order_type)} size="small" variant="outlined" />
+                            <Stack direction="row" spacing={0.5}>
+                              {renderProgressChip(order.status)}
+                              <Chip label={getOrderTypeLabel(order.order_type)} size="small" variant="outlined" />
+                            </Stack>
                           </Stack>
 
                           <Typography color="text.primary" sx={{ fontWeight: 700, mb: 0.5 }} variant="body2">
@@ -861,41 +882,7 @@ export function OrdersWorkflowPage() {
                               </Button>
                             )}
 
-                            {!readOnly && order.status === 'SUBMITTED' && (
-                              <Button
-                                color="warning"
-                                fullWidth
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleUpdateStatus(order.id, 'KITCHEN_PREPARING');
-                                }}
-                                size="small"
-                                startIcon={<PlayArrowIcon />}
-                                sx={{ fontWeight: 'bold' }}
-                                variant="contained"
-                              >
-                                {t('orders.actions.startPrep')}
-                              </Button>
-                            )}
-
-                            {!readOnly && order.status === 'KITCHEN_PREPARING' && (
-                              <Button
-                                color="success"
-                                fullWidth
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleUpdateStatus(order.id, 'READY');
-                                }}
-                                size="small"
-                                startIcon={<CheckCircleIcon />}
-                                sx={{ fontWeight: 'bold' }}
-                                variant="contained"
-                              >
-                                {t('orders.actions.markReady')}
-                              </Button>
-                            )}
-
-                            {!readOnly && order.status === 'READY' && (
+                            {canComplete(order) && (
                               <Button
                                 color="primary"
                                 fullWidth
@@ -912,7 +899,7 @@ export function OrdersWorkflowPage() {
                               </Button>
                             )}
 
-                            {!readOnly && order.status !== 'COMPLETED' && order.status !== 'CANCELLED' && (
+                            {canCancel(order) && (
                               <Button
                                 color="error"
                                 fullWidth
@@ -1120,6 +1107,7 @@ export function OrdersWorkflowPage() {
                     size="small"
                     sx={{ fontWeight: 700 }}
                   />
+                  {renderProgressChip(selectedDrawerOrder.status)}
                   <Chip
                     label={getOrderTypeLabel(selectedDrawerOrder.order_type)}
                     size="small"
@@ -1448,40 +1436,15 @@ export function OrdersWorkflowPage() {
                     {t('orders.actions.pay')}
                   </Button>
                 )}
-                {!readOnly && selectedDrawerOrder.status === 'SUBMITTED' && (
-                  <Button
-                    color="warning"
-                    variant="contained"
-                    startIcon={<PlayArrowIcon />}
-                    onClick={async () => {
-                      await handleUpdateStatus(selectedDrawerOrder.id, 'KITCHEN_PREPARING');
-                      handleOpenOrderDrawer({ ...selectedDrawerOrder, status: 'KITCHEN_PREPARING' });
-                    }}
-                  >
-                    {t('orders.actions.startPrep')}
-                  </Button>
-                )}
-                {!readOnly && selectedDrawerOrder.status === 'KITCHEN_PREPARING' && (
-                  <Button
-                    color="success"
-                    variant="contained"
-                    startIcon={<CheckCircleIcon />}
-                    onClick={async () => {
-                      await handleUpdateStatus(selectedDrawerOrder.id, 'READY');
-                      handleOpenOrderDrawer({ ...selectedDrawerOrder, status: 'READY' });
-                    }}
-                  >
-                    {t('orders.actions.markReady')}
-                  </Button>
-                )}
-                {!readOnly && selectedDrawerOrder.status === 'READY' && (
+                {canComplete(selectedDrawerOrder) && (
                   <Button
                     color="primary"
                     variant="contained"
                     startIcon={<DoneAllIcon />}
                     onClick={async () => {
-                      await handleUpdateStatus(selectedDrawerOrder.id, 'COMPLETED');
-                      handleOpenOrderDrawer({ ...selectedDrawerOrder, status: 'COMPLETED' });
+                      if (await handleUpdateStatus(selectedDrawerOrder.id, 'COMPLETED')) {
+                        handleOpenOrderDrawer({ ...selectedDrawerOrder, status: 'COMPLETED' });
+                      }
                     }}
                   >
                     {t('orders.actions.completeOrder')}
@@ -1497,7 +1460,7 @@ export function OrdersWorkflowPage() {
                     {t('orders.actions.editOrder', 'Edit lines')}
                   </Button>
                 )}
-                {!readOnly && selectedDrawerOrder.status !== 'COMPLETED' && selectedDrawerOrder.status !== 'CANCELLED' && (
+                {canCancel(selectedDrawerOrder) && (
                   <Button
                     color="error"
                     variant="outlined"

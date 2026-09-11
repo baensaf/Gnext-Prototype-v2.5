@@ -169,6 +169,51 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
     });
   });
 
+  describe('Completing an order', () => {
+    const openOrder = (fields: Record<string, any>): any => ({
+      id: 'ord-1',
+      tenant_id: 't-1',
+      order_number: 'ORD-100',
+      ...fields,
+      status: fields.state,
+    });
+
+    it('refuses to complete an order that still has money owing', async () => {
+      orderRepo.findOne.mockResolvedValue(openOrder({ state: 'CONFIRMED', outstanding_total: '25000.0000' }));
+
+      await expect(service.transitionState('t-1', 'ord-1', 'COMPLETE', {})).rejects.toThrow(ConflictException);
+    });
+
+    it('completes a paid order straight from CONFIRMED, since a printer-only kitchen never marks it ready', async () => {
+      const order = openOrder({ state: 'CONFIRMED', outstanding_total: '0.0000' });
+      orderRepo.findOne.mockResolvedValue(order);
+
+      await service.transitionState('t-1', 'ord-1', 'COMPLETE', {});
+      expect(order.state).toBe('COMPLETED');
+    });
+
+    it('completes a takeaway order once it is paid in full', async () => {
+      const order = openOrder({ order_type: 'TAKEAWAY', state: 'CONFIRMED', outstanding_total: '0.0000' });
+      orderRepo.findOne.mockResolvedValue(order);
+
+      const result = await service.completeWhenPaidInFull('t-1', 'ord-1');
+      expect(result?.state).toBe('COMPLETED');
+    });
+
+    it.each([
+      ['a dine-in check, which closes with its table', { order_type: 'DINE_IN', state: 'CONFIRMED', outstanding_total: '0.0000' }],
+      ['a delivery, which the courier completes', { order_type: 'DELIVERY', state: 'CONFIRMED', outstanding_total: '0.0000' }],
+      ['a takeaway order with money still owing', { order_type: 'TAKEAWAY', state: 'CONFIRMED', outstanding_total: '10000.0000' }],
+      ['a takeaway order that was cancelled', { order_type: 'TAKEAWAY', state: 'CANCELLED', outstanding_total: '0.0000' }],
+    ])('does not complete %s on payment', async (_label, fields) => {
+      const order = openOrder(fields);
+      orderRepo.findOne.mockResolvedValue(order);
+
+      expect(await service.completeWhenPaidInFull('t-1', 'ord-1')).toBeNull();
+      expect(order.state).toBe(fields.state);
+    });
+  });
+
   describe('Idempotent Submission & Stale Quote (R12)', () => {
     it('should throw ConflictException 409 QUOTE_STALE if quoteVersion has changed before submit', async () => {
       const order = {

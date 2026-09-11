@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Param, Body, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Query, Req, Logger } from '@nestjs/common';
 import { Request } from 'express';
 import { PaymentService } from './payment.service';
+import { OrderService } from '../order/order.service';
 import {
   PaymentCreateDto,
   PaymentProcessDto,
@@ -12,7 +13,12 @@ import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorator
 
 @Controller('api/v1')
 export class PaymentController {
-  constructor(private readonly paymentService: PaymentService) {}
+  private readonly logger = new Logger(PaymentController.name);
+
+  constructor(
+    private readonly paymentService: PaymentService,
+    private readonly orderService: OrderService,
+  ) {}
 
   @Get('orders/:orderId/payments')
   async getOrderPayments(@Param('orderId') orderId: string, @Req() req: Request) {
@@ -43,7 +49,20 @@ export class PaymentController {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
-    return await this.paymentService.processPayment(tenantId, id, body, userId, correlationId);
+    const payment = await this.paymentService.processPayment(tenantId, id, body, userId, correlationId);
+
+    // Only once the payment has committed: completing inside its transaction would wait on
+    // the order row that transaction still holds. The money is taken either way, so a
+    // failure here is logged rather than reported as a failed payment.
+    if (payment.status === 'SUCCEEDED') {
+      try {
+        await this.orderService.completeWhenPaidInFull(tenantId, payment.order_id, userId, correlationId);
+      } catch (err) {
+        this.logger.error(`Could not complete order ${payment.order_id} after payment: ${(err as Error)?.message}`);
+      }
+    }
+
+    return payment;
   }
 
   @Post('payments/:id/void')

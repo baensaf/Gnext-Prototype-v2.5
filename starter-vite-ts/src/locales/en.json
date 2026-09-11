@@ -262,10 +262,8 @@
     "searchPlaceholder": "Search by order #, customer name, table...",
     "tabs": {
       "all": "All ({{count}})",
-      "submitted": "Submitted ({{count}})",
-      "confirmed": "Confirmed ({{count}})",
-      "preparing": "Preparing ({{count}})",
-      "ready": "Ready ({{count}})",
+      "waiting": "Waiting for acceptance ({{count}})",
+      "open": "Open ({{count}})",
       "completed": "Completed ({{count}})",
       "cancelled": "Cancelled ({{count}})"
     },
@@ -310,13 +308,18 @@
     },
     "statuses": {
       "pendingAcceptance": "AWAITING ACCEPTANCE",
-      "submitted": "SUBMITTED",
-      "kitchenPreparing": "PREPARING",
-      "ready": "READY",
+      "draft": "DRAFT",
+      "open": "OPEN",
       "completed": "COMPLETED",
       "cancelled": "CANCELLED",
       "rejected": "REJECTED",
       "refunded": "REFUNDED"
+    },
+    "progress": {
+      "sentToKitchen": "Sent to kitchen",
+      "preparing": "Preparing",
+      "ready": "Ready",
+      "outForDelivery": "Out for delivery"
     },
     "table": {
       "orderNumber": "Order Number",
@@ -344,21 +347,16 @@
       "receipt": "Receipt",
       "reprint": "Reprint",
       "pay": "Pay",
-      "prep": "Prep",
-      "ready": "Ready",
       "complete": "Complete",
       "cancel": "Cancel",
-      "startPrep": "Start Prep",
-      "markReady": "Mark Ready",
       "completeOrder": "Complete Order",
       "cancelOrder": "Cancel Order",
       "detailsAudit": "Details & Audit Log",
       "editOrder": "Edit lines"
     },
     "kanban": {
-      "submitted": "Submitted Orders",
-      "preparing": "Kitchen Preparing",
-      "ready": "Ready for Pickup",
+      "waiting": "Waiting for acceptance",
+      "open": "Open",
       "completed": "Completed",
       "table": "Table: {{number}}",
       "placed": "Placed: {{time}}",
