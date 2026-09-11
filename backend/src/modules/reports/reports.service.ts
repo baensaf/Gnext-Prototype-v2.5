@@ -1443,9 +1443,21 @@ export class ReportsService {
   }
 
   // Audit Logs with Masking & Paging
-  async getAuditLogs(tenantId: string, query: any = {}) {
+  /**
+   * `branchId` confines the trail to one site. Most writers never tag a branch on the event,
+   * so an event counts as the site's when it is tagged there or when one of the site's own
+   * accounts did it. Head office's untagged work — menu edits, price changes — stays out.
+   */
+  async getAuditLogs(tenantId: string, query: any = {}, branchId?: string) {
     const { page = 1, limit = 50, action, actorType, entityId, entityType } = query;
     const qb = this.auditRepo.createQueryBuilder('a').where('a.tenant_id = :tenantId', { tenantId });
+
+    if (branchId) {
+      qb.andWhere(
+        '(a.branch_id = :branchId OR a.actor_id IN (SELECT u.id FROM admin_user u WHERE u.branch_id = :branchId))',
+        { branchId },
+      );
+    }
 
     if (action) qb.andWhere('a.action = :action', { action });
     if (actorType) qb.andWhere('a.actor_type = :actorType', { actorType });
@@ -1485,7 +1497,10 @@ export class ReportsService {
   }
 
   // Operational Alerts
-  async getAlerts(tenantId: string) {
+  /** `branchId` confines the list to one site's alerts; head office passes nothing. */
+  async getAlerts(tenantId: string, branchId?: string) {
+    // The demo seed is decided on the whole tenant's count. Deciding it on the filtered one
+    // would reseed every time a branch with no alerts of its own opened the screen.
     let alerts = await this.alertRepo.find({
       where: { tenant_id: tenantId },
       order: { created_at: 'DESC' },
@@ -1514,12 +1529,13 @@ export class ReportsService {
       alerts = await this.alertRepo.save([alert1, alert2]);
     }
 
-    return alerts;
+    return branchId ? alerts.filter((a) => a.branch_id === branchId) : alerts;
   }
 
-  async acknowledgeAlert(tenantId: string, alertId: string, userId?: string) {
+  async acknowledgeAlert(tenantId: string, alertId: string, userId?: string, branchId?: string) {
     const alert = await this.alertRepo.findOne({ where: { id: alertId, tenant_id: tenantId } });
-    if (!alert) throw new NotFoundException('Alert not found');
+    // Another site's alert is answered as if it did not exist, the same as the list does.
+    if (!alert || (branchId && alert.branch_id !== branchId)) throw new NotFoundException('Alert not found');
 
     alert.acknowledged = true;
     alert.acknowledged_by = userId || 'ADMIN';
@@ -1556,7 +1572,7 @@ export class ReportsService {
         ? { tenant_id: tenantId, state: 'OPEN', branch_id: branchId }
         : { tenant_id: tenantId, state: 'OPEN' },
     });
-    const alerts = await this.getAlerts(tenantId);
+    const alerts = await this.getAlerts(tenantId, branchId);
 
     const todayStr = new Date().toISOString().split('T')[0];
     const todayOrders = orders.filter((o) => o.placed_at && new Date(o.placed_at).toISOString().startsWith(todayStr));

@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ReportsService } from '../src/modules/reports/reports.service';
+import { ReportsController } from '../src/modules/reports/reports.controller';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { OrderItem } from '../src/entities/OrderItem.entity';
@@ -211,5 +212,83 @@ describe('ReportsService (Unit)', () => {
 
     const ack = await service.acknowledgeAlert('t-1', alerts[0].id);
     expect(ack.acknowledged).toBe(true);
+  });
+
+  it('should show a branch only its own alerts, without reseeding the demo ones', async () => {
+    // The seeded alert-1 is the chain's (no branch). A branch asking must get nothing, and
+    // an empty filtered list must not be mistaken for an empty tenant and reseeded.
+    alertRepo.find.mockResolvedValueOnce([
+      { id: 'alert-1', tenant_id: 't-1', branch_id: null, acknowledged: false },
+      { id: 'alert-2', tenant_id: 't-1', branch_id: 'branch-2', acknowledged: false },
+    ]);
+    const mine = await service.getAlerts('t-1', 'branch-1');
+    expect(mine).toEqual([]);
+    expect(alertRepo.save).not.toHaveBeenCalled();
+
+    alertRepo.find.mockResolvedValueOnce([{ id: 'alert-2', tenant_id: 't-1', branch_id: 'branch-2' }]);
+    expect((await service.getAlerts('t-1', 'branch-2')).map((a) => a.id)).toEqual(['alert-2']);
+  });
+
+  it("should refuse to acknowledge another branch's alert", async () => {
+    alertRepo.findOne.mockResolvedValueOnce({ id: 'alert-1', tenant_id: 't-1', branch_id: 'branch-2' });
+    await expect(service.acknowledgeAlert('t-1', 'alert-1', 'u-1', 'branch-1')).rejects.toThrow('Alert not found');
+    expect(alertRepo.save).not.toHaveBeenCalled();
+  });
+
+  it("should confine a branch's audit trail to its own site and its own staff", async () => {
+    await service.getAuditLogs('t-1', {}, 'branch-1');
+    const qb = auditRepo.createQueryBuilder();
+    expect(qb.andWhere).toHaveBeenCalledWith(expect.stringContaining('a.branch_id = :branchId'), {
+      branchId: 'branch-1',
+    });
+    expect(qb.andWhere.mock.calls[0][0]).toContain('admin_user');
+  });
+
+  it('should leave head office with the whole audit trail', async () => {
+    await service.getAuditLogs('t-1', {});
+    expect(auditRepo.createQueryBuilder().andWhere).not.toHaveBeenCalled();
+  });
+});
+
+describe('ReportsController scope', () => {
+  // The GET and path-export routes used to call the service with no actor, which skipped
+  // both the chain-only refusal and the branch confinement: a branch login could read
+  // branch-comparison just by typing its address.
+  const service = {
+    queryReport: jest.fn().mockResolvedValue({}),
+    exportReport: jest.fn().mockResolvedValue({}),
+    getDashboardSummary: jest.fn().mockResolvedValue({}),
+  };
+  const controller = new ReportsController(service as any);
+  const branchReq = { tenantId: 't-1', userRole: 'MANAGER', userBranchId: 'branch-1' } as any;
+  const headOfficeReq = { tenantId: 't-1', userRole: 'SUPER_ADMIN', userBranchId: null } as any;
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('should pass the caller on GET :reportCode', async () => {
+    await controller.queryReportGet('branch-comparison', {}, branchReq);
+    expect(service.queryReport).toHaveBeenCalledWith('t-1', 'branch-comparison', {}, {
+      role: 'MANAGER',
+      branchId: 'branch-1',
+    });
+  });
+
+  it('should pass the caller on POST :reportCode/exports', async () => {
+    await controller.exportReportPath('sales-summary', { format: 'CSV' }, branchReq);
+    expect(service.exportReport).toHaveBeenCalledWith('t-1', 'sales-summary', {}, 'CSV', {
+      role: 'MANAGER',
+      branchId: 'branch-1',
+    });
+  });
+
+  it('should let head office see the branch it switched into on the dashboard, and hold a branch to its own', async () => {
+    await controller.getDashboardSummary('branch-9', headOfficeReq);
+    expect(service.getDashboardSummary).toHaveBeenLastCalledWith('t-1', 'branch-9');
+
+    await controller.getDashboardSummary('branch-9', branchReq);
+    expect(service.getDashboardSummary).toHaveBeenLastCalledWith('t-1', 'branch-1');
+
+    await controller.getDashboardSummary(undefined as any, headOfficeReq);
+    expect(service.getDashboardSummary).toHaveBeenLastCalledWith('t-1', undefined);
   });
 });

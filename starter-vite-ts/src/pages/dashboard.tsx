@@ -34,6 +34,9 @@ export function DashboardPage() {
   const { t } = useTranslation();
   const { tenant, user } = useAuthStore();
   const branchScope = useBranchContextOptional();
+  // The header's scope, not the account's: head office switched into a shop is looking at
+  // that shop, and the figures below have to agree with the switcher above them.
+  const scopedBranchId = branchScope?.isHeadOffice === false ? branchScope.selectedBranchId : '';
   const [branches, setBranches] = useState<Branch[]>([]);
   const [kpis, setKpis] = useState<any>({
     sales_today: '0.00',
@@ -45,11 +48,16 @@ export function DashboardPage() {
 
   useEffect(() => {
     tenantApi.getBranches().then(setBranches).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     axios
-      .get('/api/v1/reports/dashboard-summary')
+      .get('/api/v1/reports/dashboard-summary', { params: { branchId: scopedBranchId || undefined } })
       .then((res) => setKpis(res.data))
       .catch(() => {});
-  }, []);
+  }, [scopedBranchId]);
+
+  const shownBranches = scopedBranchId ? branches.filter((b) => b.id === scopedBranchId) : branches;
 
   return (
     <Box>
@@ -65,10 +73,10 @@ export function DashboardPage() {
             whether the takings on screen are yours or everybody's. */}
         <Chip
           size="small"
-          color={user?.branchId ? 'default' : 'info'}
+          color={scopedBranchId ? 'default' : 'info'}
           sx={{ mt: 1 }}
           label={
-            user?.branchId
+            scopedBranchId
               ? branchScope?.selectedBranch?.name || t('dashboard.scopeBranch', 'This branch')
               : t('dashboard.scopeChain', 'All branches')
           }
@@ -181,7 +189,7 @@ export function DashboardPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {branches.map((b) => (
+                {shownBranches.map((b) => (
                   <TableRow key={b.id}>
                     <TableCell><code>{b.code}</code></TableCell>
                     <TableCell sx={{ fontWeight: 'bold' }}>{b.name}</TableCell>
