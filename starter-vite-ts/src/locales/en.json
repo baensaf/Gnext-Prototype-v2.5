@@ -274,6 +274,7 @@
       "delivery": "Delivery"
     },
     "statuses": {
+      "pendingAcceptance": "AWAITING ACCEPTANCE",
       "submitted": "SUBMITTED",
       "kitchenPreparing": "PREPARING",
       "ready": "READY",

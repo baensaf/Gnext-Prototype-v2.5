@@ -6,7 +6,7 @@ import { IntegrationLog } from '../../entities/IntegrationLog.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { Product } from '../../entities/Product.entity';
-import { Branch } from '../../entities/Branch.entity';
+import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 
@@ -121,8 +121,7 @@ export class SimulationService {
     }
 
     // Process & Map Order deterministically without Math.random()
-    const branches = await this.branchRepo.find({ where: { tenant_id: tenantId } });
-    const branchId = payload.branch_id || (branches[0] ? branches[0].id : 'branch-1');
+    const branchId = await this.resolveWebhookBranch(tenantId, payload);
 
     const orderNum = `SNP-${payload.order_code || payload.event_id || '1001'}`;
     const itemsInput = payload.items || [
@@ -144,7 +143,11 @@ export class SimulationService {
       branch_id: branchId,
       order_number: orderNum,
       order_type: 'AGGREGATOR',
-      status: 'SUBMITTED',
+      channel: 'AGGREGATOR',
+      // Not SUBMITTED: the kitchen display fires every submitted order, and this one
+      // must wait until the store accepts it.
+      state: 'PENDING_ACCEPTANCE',
+      status: 'PENDING_ACCEPTANCE',
       fulfillment_status: 'PENDING',
       notes: `Snappfood Order [Code: ${payload.order_code || 'SNP-001'}]. Vendor Notes: ${payload.vendor_notes || payload.comment || 'None'}`,
       subtotal: subtotalStr,
@@ -222,6 +225,35 @@ export class SimulationService {
       order: savedHeader,
       log_id: logEntry.id,
     };
+  }
+
+  /**
+   * The branch an incoming order belongs to. Snappfood registers a webhook per branch, so
+   * an order addressed to a branch this tenant doesn't have is refused rather than filed
+   * under some other branch. With no branch named (the simulator), it goes to the first
+   * restaurant; an office or commissary never takes customer orders.
+   */
+  private async resolveWebhookBranch(tenantId: string, payload: any): Promise<string> {
+    const branches = await this.branchRepo.find({
+      where: { tenant_id: tenantId, is_active: true },
+      order: { created_at: 'ASC' },
+    });
+
+    if (payload.branch_id || payload.branch_code) {
+      const addressed = branches.find((b) =>
+        payload.branch_id ? b.id === payload.branch_id : b.code === payload.branch_code,
+      );
+      if (!addressed) {
+        throw new NotFoundException(`No active branch ${payload.branch_code || payload.branch_id} to receive this Snappfood order`);
+      }
+      return addressed.id;
+    }
+
+    const restaurant = branches.find((b) => SELLING_BRANCH_TYPES.includes(b.branch_type)) || branches[0];
+    if (!restaurant) {
+      throw new NotFoundException('This tenant has no branch to receive Snappfood orders');
+    }
+    return restaurant.id;
   }
 
   async generateSnappfoodOrder(tenantId: string, data: any, correlationId?: string) {
@@ -349,37 +381,31 @@ export class SimulationService {
     const action = data.action;
     let newStatusCode = 56;
     if (order) {
+      // Ack and pick only tell Snappfood the store has seen the order; it still waits
+      // for acceptance, so neither moves it.
       if (action === 'ACK') {
-        order.fulfillment_status = 'PENDING';
-        order.status = 'SUBMITTED';
         newStatusCode = 61; // 61 = Received by store after Ack
       } else if (action === 'PICK') {
-        order.fulfillment_status = 'PENDING';
-        order.status = 'SUBMITTED';
         newStatusCode = 713; // 713 = Picked / viewed by store
       } else if (action === 'ACCEPT' || action === 'PREPARING') {
-        order.fulfillment_status = 'PREPARING';
-        order.status = 'KITCHEN_PREPARING';
+        this.markAccepted(order);
         newStatusCode = 42; // 42 = Accepted
       } else if (action === 'DELIVERED') {
         order.fulfillment_status = 'DELIVERED';
+        order.state = 'COMPLETED';
         order.status = 'COMPLETED';
         newStatusCode = 42;
       } else if (action === 'REJECT') {
-        order.fulfillment_status = 'CANCELLED';
-        order.status = 'CANCELLED';
+        this.markCancelled(order);
         newStatusCode = 51; // 51 = Rejected by store
       } else if (action === 'CANCEL' || action === 'CANCELLED') {
-        order.fulfillment_status = 'CANCELLED';
-        order.status = 'CANCELLED';
+        this.markCancelled(order);
         newStatusCode = 54; // 54 = Cancelled
       } else if (action === 'MODIFY') {
-        order.fulfillment_status = 'PENDING';
-        order.status = 'SUBMITTED';
+        this.markAwaitingAcceptance(order);
         newStatusCode = 71; // 71 = Extra payment required
       } else if (action === 'RECOVER') {
-        order.fulfillment_status = 'PENDING';
-        order.status = 'SUBMITTED';
+        this.markAwaitingAcceptance(order);
         newStatusCode = 56;
       }
       await this.orderRepo.save(order);
@@ -712,13 +738,28 @@ export class SimulationService {
     };
   }
 
+  // The order state each Snappfood lifecycle step leaves behind. `status` is the legacy
+  // twin of `state` that the kitchen display still reads.
+  private markAwaitingAcceptance(order: OrderHeader) {
+    order.fulfillment_status = 'PENDING';
+    order.state = 'PENDING_ACCEPTANCE';
+    order.status = 'PENDING_ACCEPTANCE';
+  }
+
+  private markAccepted(order: OrderHeader) {
+    order.fulfillment_status = 'PREPARING';
+    order.state = 'CONFIRMED';
+    order.status = 'KITCHEN_PREPARING';
+  }
+
+  private markCancelled(order: OrderHeader) {
+    order.fulfillment_status = 'CANCELLED';
+    order.state = 'CANCELLED';
+    order.status = 'CANCELLED';
+  }
+
+  // Ack (61) says the store has received the order. It does not accept it.
   async ackOrder(tenantId: string, orderCode: string) {
-    // Find order if exists and set status 61
-    const order = await this.orderRepo.findOne({ where: { tenant_id: tenantId, order_number: `SNP-${orderCode}` } });
-    if (order) {
-      order.status = 'SUBMITTED';
-      await this.orderRepo.save(order);
-    }
     await this.logRepo.save(
       this.logRepo.create({
         tenant_id: tenantId,
@@ -733,12 +774,8 @@ export class SimulationService {
     return { status: 204, message: 'Successfully acked', statusCode: 61 };
   }
 
+  // Pick (713) says the store has opened the order. Like ack, it does not accept it.
   async pickOrder(tenantId: string, orderCode: string) {
-    const order = await this.orderRepo.findOne({ where: { tenant_id: tenantId, order_number: `SNP-${orderCode}` } });
-    if (order) {
-      order.status = 'SUBMITTED';
-      await this.orderRepo.save(order);
-    }
     await this.logRepo.save(
       this.logRepo.create({
         tenant_id: tenantId,
@@ -767,8 +804,7 @@ export class SimulationService {
 
     const order = await this.orderRepo.findOne({ where: { tenant_id: tenantId, order_number: `SNP-${orderCode}` } });
     if (order) {
-      order.fulfillment_status = 'PREPARING';
-      order.status = 'KITCHEN_PREPARING';
+      this.markAccepted(order);
       await this.orderRepo.save(order);
     }
 
@@ -789,8 +825,7 @@ export class SimulationService {
   async rejectOrder(tenantId: string, orderCode: string, body: any) {
     const order = await this.orderRepo.findOne({ where: { tenant_id: tenantId, order_number: `SNP-${orderCode}` } });
     if (order) {
-      order.fulfillment_status = 'CANCELLED';
-      order.status = 'CANCELLED';
+      this.markCancelled(order);
       await this.orderRepo.save(order);
     }
 

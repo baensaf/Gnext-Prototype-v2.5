@@ -274,6 +274,7 @@
       "delivery": "ارسال با پیک"
     },
     "statuses": {
+      "pendingAcceptance": "در انتظار تأیید",
       "submitted": "ثبت شده",
       "kitchenPreparing": "در حال آماده‌سازی",
       "ready": "آماده تحویل",

@@ -86,6 +86,25 @@ describe('KdsService (Unit & Integration)', () => {
     expect(itemRepo.save).toHaveBeenCalledWith(expect.objectContaining({ product_name: 'Cheeseburger' }));
   });
 
+  it('does not send an aggregator order to the kitchen before the store accepts it', async () => {
+    const orders = [
+      { id: 'ord-pos', tenant_id: 't-1', status: 'SUBMITTED' },
+      { id: 'ord-snp', tenant_id: 't-1', status: 'PENDING_ACCEPTANCE' },
+    ];
+    // Evaluate the sweep's status filter the way the database would.
+    orderRepo.find = jest.fn().mockImplementation(({ where }) =>
+      Promise.resolve(orders.filter((o) => (where.status.value as string[]).includes(o.status))),
+    );
+    ticketRepo.findOne.mockResolvedValue(null);
+    ticketRepo.find.mockResolvedValue([]);
+    const generate = jest.spyOn(service, 'generateTicketsForOrder').mockResolvedValue([] as any);
+
+    await service.getKdsTickets('t-1');
+
+    expect(generate).toHaveBeenCalledWith('t-1', 'ord-pos', 'auto-kds-sync');
+    expect(generate).not.toHaveBeenCalledWith('t-1', 'ord-snp', expect.anything());
+  });
+
   it('should start, bump, recall tickets and perform order readiness roll-up', async () => {
     ticketRepo.findOne.mockResolvedValue({ id: 'tkt-1', tenant_id: 't-1', order_id: 'ord-1', state: 'NEW' });
     ticketRepo.save.mockImplementation((t) => Promise.resolve(t));

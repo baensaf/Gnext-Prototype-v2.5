@@ -81,6 +81,7 @@ const isActiveLine = (item: { state?: string }): boolean =>
 // State Transition Matrix per Section 6.1
 const ALLOWED_TRANSITIONS: Record<OrderState, OrderState[]> = {
   DRAFT: ['SUBMITTED', 'CONFIRMED', 'CANCELLED'],
+  PENDING_ACCEPTANCE: ['CONFIRMED', 'CANCELLED'],
   SUBMITTED: ['CONFIRMED', 'CANCELLED'],
   CONFIRMED: ['PREPARING', 'CANCELLED'],
   PREPARING: ['READY', 'CANCELLED'],

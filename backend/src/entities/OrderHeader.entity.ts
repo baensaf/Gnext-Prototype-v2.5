@@ -6,6 +6,9 @@ import { OrderStateEvent } from './OrderStateEvent.entity';
 
 export type OrderState =
   | 'DRAFT'
+  // An aggregator or website order the store has not yet accepted. It is kept out of
+  // the kitchen until someone accepts it.
+  | 'PENDING_ACCEPTANCE'
   | 'SUBMITTED'
   | 'CONFIRMED'
   | 'PREPARING'

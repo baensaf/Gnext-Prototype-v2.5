@@ -148,6 +148,8 @@ export function OrdersWorkflowPage() {
 
   const getOrderStatusLabel = (status: string) => {
     switch (status) {
+      case 'PENDING_ACCEPTANCE':
+        return t('orders.statuses.pendingAcceptance');
       case 'SUBMITTED':
         return t('orders.statuses.submitted');
       case 'KITCHEN_PREPARING':
@@ -330,6 +332,7 @@ export function OrdersWorkflowPage() {
 
   const getStatusChipColor = (status: string) => {
     switch (status) {
+      case 'PENDING_ACCEPTANCE': return 'warning';
       case 'SUBMITTED': return 'info';
       case 'KITCHEN_PREPARING': return 'warning';
       case 'READY': return 'success';

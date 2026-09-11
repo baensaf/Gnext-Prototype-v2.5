@@ -91,6 +91,76 @@ describe('SimulationService (Unit)', () => {
     expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'SNAPPFOOD_WEBHOOK_PROCESSED' }));
   });
 
+  describe('an incoming Snappfood order waits for the store to accept it', () => {
+    const signed = (payload: any) => {
+      const rawBody = JSON.stringify(payload);
+      return { rawBody, sig: crypto.createHmac('sha256', 'snappfood-secret-key-123').update(rawBody).digest('hex') };
+    };
+
+    beforeEach(() => {
+      logRepo.findOne.mockResolvedValue(null);
+      orderRepo.create.mockImplementation((dto: any) => dto);
+      orderRepo.save.mockImplementation((dto: any) => Promise.resolve({ id: 'ord-snp-1', ...dto }));
+      orderItemRepo.create.mockImplementation((dto: any) => dto);
+      orderItemRepo.save.mockImplementation((dto: any) => Promise.resolve(dto));
+      branchRepo.find.mockResolvedValue([
+        { id: 'br-office', code: 'HQ', branch_type: 'OFFICE' },
+        { id: 'br-vanak', code: 'VANAK', branch_type: 'RESTAURANT' },
+        { id: 'br-tajrish', code: 'TAJRISH', branch_type: 'RESTAURANT' },
+      ]);
+    });
+
+    it('lands as an aggregator order awaiting acceptance, not as a submitted POS order', async () => {
+      const payload = { event_id: 'evt-300', order_code: 'SF-300' };
+      const { rawBody, sig } = signed(payload);
+
+      const result = await service.handleSnappfoodWebhook('t-1', rawBody, payload, sig);
+
+      expect(result.order).toEqual(expect.objectContaining({
+        channel: 'AGGREGATOR',
+        state: 'PENDING_ACCEPTANCE',
+        status: 'PENDING_ACCEPTANCE',
+      }));
+    });
+
+    it('lands at the branch the webhook was addressed to, and nowhere else', async () => {
+      const payload = { event_id: 'evt-301', order_code: 'SF-301', branch_code: 'TAJRISH' };
+      const { rawBody, sig } = signed(payload);
+
+      const result = await service.handleSnappfoodWebhook('t-1', rawBody, payload, sig);
+      expect(result.order.branch_id).toBe('br-tajrish');
+
+      const stray = { event_id: 'evt-302', order_code: 'SF-302', branch_code: 'NO-SUCH-BRANCH' };
+      const strayBody = signed(stray);
+      await expect(
+        service.handleSnappfoodWebhook('t-1', strayBody.rawBody, stray, strayBody.sig),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('without a branch, goes to a restaurant rather than the head office', async () => {
+      const payload = { event_id: 'evt-303', order_code: 'SF-303' };
+      const { rawBody, sig } = signed(payload);
+
+      const result = await service.handleSnappfoodWebhook('t-1', rawBody, payload, sig);
+      expect(result.order.branch_id).toBe('br-vanak');
+    });
+
+    it('stays out of the kitchen through ack and pick, and is confirmed only on accept', async () => {
+      const order: any = { id: 'ord-snp-1', order_number: 'SNP-SF-304', state: 'PENDING_ACCEPTANCE', status: 'PENDING_ACCEPTANCE' };
+      orderRepo.findOne.mockResolvedValue(order);
+
+      await service.ackOrder('t-1', 'SF-304');
+      await service.pickOrder('t-1', 'SF-304');
+      await service.triggerSnappfoodAction('t-1', { order_id: order.id, action: 'ACK' });
+      expect(order.state).toBe('PENDING_ACCEPTANCE');
+      expect(order.status).toBe('PENDING_ACCEPTANCE');
+
+      await service.acceptOrder('t-1', 'SF-304', {});
+      expect(order.state).toBe('CONFIRMED');
+      expect(order.status).toBe('KITCHEN_PREPARING');
+    });
+  });
+
   it('should suppress duplicate webhook requests (exactly-once processing)', async () => {
     logRepo.findOne.mockResolvedValue({ id: 'prev-log-1', idempotency_key: 'evt-200', status: 'SUCCESS' });
 
