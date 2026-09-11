@@ -151,9 +151,14 @@ export class PaymentService {
       }
 
       const paymentNumber = await this.generatePaymentNumber(tenantId, em);
-      // Recorded when there is a drawer open and left null when there is not: an intent can
-      // be raised before the till is.
-      const openShift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id, order.branch_id);
+      // The drawer at the register taking the money, which is not always the one the order
+      // was rung up on. Cash is refused here, before the intent exists, when there is no
+      // such drawer — a PENDING cash intent that can never capture blocks every other
+      // tender on the order. Card and credit only note the shift they happened in.
+      const openShift =
+        method.kind === 'CASH'
+          ? await this.shiftService.requireDrawer(tenantId, order.branch_id, order.terminal_id)
+          : await this.shiftService.resolveDrawer(tenantId, order.branch_id, order.terminal_id);
       const currentShiftId: string | null = openShift?.id ?? null;
 
       const payment = em.create(Payment, {
@@ -217,7 +222,11 @@ export class PaymentService {
       const methodKind = payment.method_kind;
 
       if (methodKind === 'CASH') {
-        const shift = await this.shiftService.requireCurrentShift(tenantId, order.terminal_id, order.branch_id);
+        // Into the drawer the intent was raised at; rows from before intents carried one
+        // fall back to finding it the same way.
+        const shift = payment.shift_id
+          ? await this.shiftService.requireOpenShiftById(tenantId, payment.shift_id, em)
+          : await this.shiftService.requireDrawer(tenantId, order.branch_id, order.terminal_id);
         await this.shiftService.recordCashPaymentMovement(tenantId, shift.id, payment.id, payment.amount, userId || undefined, em);
         payment.status = 'SUCCEEDED';
       } else if (methodKind === 'CUSTOMER_CREDIT') {
@@ -393,10 +402,16 @@ export class PaymentService {
         order.due_amount = order.outstanding_total;
         await em.save(OrderHeader, order);
 
-        // Cash going back out is recorded against the drawer it comes from. If none is
-        // open the reversal still stands — the money simply was not counted in a shift.
-        if (payment.method_kind === 'CASH' && order.terminal_id) {
-          const shift = await this.shiftService.getCurrentShift(tenantId, order.terminal_id, order.branch_id);
+        // Cash going back out is recorded against the drawer it comes from: the register doing
+        // the reversal, else the drawer the payment went into while that is still open. This
+        // used to run only when the order named a terminal, which the POS never sent — so a
+        // reversed cash sale stayed in the drawer's expected cash and read as a shortage at
+        // close. If no drawer is open the reversal still stands; the money was not counted.
+        if (payment.method_kind === 'CASH') {
+          let shift = await this.shiftService.resolveDrawer(tenantId, order.branch_id, order.terminal_id);
+          if (!shift && payment.shift_id) {
+            shift = await this.shiftService.requireOpenShiftById(tenantId, payment.shift_id, em).catch(() => null);
+          }
           if (shift) {
             await this.shiftService.recordCashRefundMovement(
               tenantId,

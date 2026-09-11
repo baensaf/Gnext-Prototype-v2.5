@@ -2,6 +2,8 @@ import type { AxiosError } from 'axios';
 
 import axios from 'axios';
 
+import { readDeviceTerminal } from 'src/utils/device-terminal';
+
 import { CONFIG } from 'src/global-config';
 
 import { showErrorToast } from 'src/components/snackbar';
@@ -56,6 +58,12 @@ httpClient.interceptors.request.use((config) => {
   // Attach Accept-Language
   const currentLang = localStorage.getItem('gnext_locale') || 'fa';
   config.headers['Accept-Language'] = currentLang;
+
+  // The register this device is set up as, so cash lands in this counter's drawer.
+  const register = readDeviceTerminal();
+  if (register) {
+    config.headers['X-Terminal-Id'] = register.id;
+  }
 
   // Attach Session Token Authorization header
   const accessToken = sessionStorage.getItem('jwt_access_token');

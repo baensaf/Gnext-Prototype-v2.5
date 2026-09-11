@@ -16,6 +16,7 @@ import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { BusinessDateUtil } from '../../common/utils/business-date.util';
+import { currentTillTerminalId } from '../../common/utils/till-context';
 import {
   ShiftOpenDto,
   CashMovementDto,
@@ -109,6 +110,101 @@ export class ShiftService {
         code: 'NO_OPEN_SHIFT',
         title: 'No Cash Drawer Open',
         detail: 'Cash cannot be taken or returned while no shift is open at this terminal. Open a shift first.',
+      });
+    }
+    return shift;
+  }
+
+  /**
+   * The drawer cash is changing hands at right now.
+   *
+   * The register is the one the request came from (see till-context.ts) or, failing that,
+   * the one the order was rung up on. It has to stand in the order's branch: a device set up
+   * at Central Plaza taking a Downtown order's cash would count it in Central Plaza's drawer.
+   *
+   * With no register at all — a device nobody set up — the branch's open drawer is used only
+   * when there is exactly one. With two open, "the newest" was the rule, and it put one
+   * till's takings into the other till's count.
+   *
+   * `strict` is for cash: an unknown or out-of-branch register is refused rather than
+   * shrugged off. Card and credit only record which shift they happened in, so they take a
+   * null instead of failing the sale.
+   */
+  async resolveDrawer(
+    tenantId: string,
+    branchId: string | null | undefined,
+    orderTerminalId?: string | null,
+    options: { strict?: boolean } = {},
+  ): Promise<CashierShift | null> {
+    const strict = options.strict ?? false;
+    const terminalId = currentTillTerminalId() || orderTerminalId || null;
+
+    if (terminalId) {
+      const terminal = await this.terminalRepo.findOne({ where: { id: terminalId, tenant_id: tenantId } });
+      if (!terminal) {
+        if (!strict) return null;
+        throw new BadRequestException({
+          code: 'UNKNOWN_REGISTER',
+          title: 'Unknown Register',
+          detail: 'This device is set up as a register that no longer exists. Set it up again.',
+        });
+      }
+      if (branchId && terminal.branch_id !== branchId) {
+        if (!strict) return null;
+        throw new BadRequestException({
+          code: 'REGISTER_OTHER_BRANCH',
+          title: 'Register In Another Branch',
+          detail: "This device is a register at another branch. Cash taken here would be counted in that branch's drawer.",
+        });
+      }
+      return await this.getCurrentShift(tenantId, terminalId, terminal.branch_id);
+    }
+
+    if (!branchId) return null;
+    const open = await this.shiftRepo.find({
+      where: [
+        { tenant_id: tenantId, branch_id: branchId, state: 'OPEN' },
+        { tenant_id: tenantId, branch_id: branchId, state: 'CLOSING_REVIEW' },
+      ],
+      order: { opened_at: 'DESC' },
+    });
+    if (open.length > 1) {
+      if (!strict) return null;
+      throw new ConflictException({
+        code: 'REGISTER_UNKNOWN',
+        title: 'Which Drawer?',
+        detail: `${open.length} drawers are open at this branch. Set this device up as one of the registers so the cash is counted in the right one.`,
+      });
+    }
+    return open[0] ?? null;
+  }
+
+  /** The drawer for cash, or a refusal naming why there is none. */
+  async requireDrawer(tenantId: string, branchId: string | null | undefined, orderTerminalId?: string | null) {
+    const shift = await this.resolveDrawer(tenantId, branchId, orderTerminalId, { strict: true });
+    if (!shift) {
+      throw new ConflictException({
+        code: 'NO_OPEN_SHIFT',
+        title: 'No Cash Drawer Open',
+        detail: 'Cash cannot be taken or returned while no shift is open at this register. Open a shift first.',
+      });
+    }
+    return shift;
+  }
+
+  /**
+   * A payment started against one drawer settles into that drawer, not whichever is open
+   * when it is captured — unless it has been counted down in between.
+   */
+  async requireOpenShiftById(tenantId: string, shiftId: string, entityManager?: EntityManager) {
+    const shift = await (entityManager ?? this.shiftRepo.manager).findOne(CashierShift, {
+      where: { id: shiftId, tenant_id: tenantId },
+    });
+    if (!shift || (shift.state !== 'OPEN' && shift.state !== 'CLOSING_REVIEW')) {
+      throw new ConflictException({
+        code: 'NO_OPEN_SHIFT',
+        title: 'Drawer Closed',
+        detail: 'The drawer this payment was started at has been closed since. Start the payment again.',
       });
     }
     return shift;

@@ -8,6 +8,7 @@ import { ShiftsController } from '../src/modules/cashier/shifts.controller';
 import { BusinessDaysController } from '../src/modules/cashier/business-days.controller';
 import { BRANCH_OWNED_KEY } from '../src/common/decorators/branch-owned.decorator';
 import { ROLES_KEY, MANAGER_AND_ABOVE } from '../src/common/decorators/roles.decorator';
+import { runWithTill } from '../src/common/utils/till-context';
 import { CashierShift } from '../src/entities/CashierShift.entity';
 import { CashMovement } from '../src/entities/CashMovement.entity';
 import { BusinessDayClose } from '../src/entities/BusinessDayClose.entity';
@@ -276,6 +277,48 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       withOpenShift({ id: 'shf-1', state: 'OPEN' });
 
       await expect(shiftService.requireCurrentShift('t-1', 'term-1')).resolves.toMatchObject({ id: 'shf-1' });
+    });
+  });
+
+  describe('Which drawer cash is counted in', () => {
+    const openOn = (shift: any) =>
+      shiftRepo.createQueryBuilder.mockReturnValue({
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(shift),
+      });
+
+    it('uses the register the request came from over the one the order was rung up on', async () => {
+      terminalRepo.findOne.mockImplementation(async ({ where }: any) => ({ id: where.id, branch_id: 'b-1' }));
+      openOn({ id: 'shf-counter-2' });
+
+      await runWithTill('term-2', () => shiftService.resolveDrawer('t-1', 'b-1', 'term-1'));
+      expect(terminalRepo.findOne).toHaveBeenCalledWith({ where: { id: 'term-2', tenant_id: 't-1' } });
+    });
+
+    it("refuses cash at a register in another branch, and lets card through without a drawer", async () => {
+      terminalRepo.findOne.mockResolvedValue({ id: 'term-9', branch_id: 'b-central' });
+
+      await expect(shiftService.requireDrawer('t-1', 'b-downtown', 'term-9')).rejects.toMatchObject({
+        response: { code: 'REGISTER_OTHER_BRANCH' },
+      });
+      await expect(shiftService.resolveDrawer('t-1', 'b-downtown', 'term-9')).resolves.toBeNull();
+    });
+
+    it('will not guess between two open drawers when no register is named', async () => {
+      shiftRepo.find = jest.fn().mockResolvedValue([{ id: 'shf-a' }, { id: 'shf-b' }]);
+
+      await expect(shiftService.requireDrawer('t-1', 'b-1', null)).rejects.toMatchObject({
+        response: { code: 'REGISTER_UNKNOWN' },
+      });
+      await expect(shiftService.resolveDrawer('t-1', 'b-1', null)).resolves.toBeNull();
+    });
+
+    it("uses the branch's only open drawer when no register is named", async () => {
+      shiftRepo.find = jest.fn().mockResolvedValue([{ id: 'shf-only' }]);
+      await expect(shiftService.requireDrawer('t-1', 'b-1', null)).resolves.toMatchObject({ id: 'shf-only' });
     });
   });
 

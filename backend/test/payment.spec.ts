@@ -39,7 +39,11 @@ describe('Payments & Split Settlement Suite (R15)', () => {
     shiftService = {
       getCurrentShift: jest.fn().mockResolvedValue(null),
       requireCurrentShift: jest.fn(),
+      resolveDrawer: jest.fn().mockResolvedValue(null),
+      requireDrawer: jest.fn().mockResolvedValue({ id: 'shf-1' }),
+      requireOpenShiftById: jest.fn().mockResolvedValue({ id: 'shf-1' }),
       recordCashPaymentMovement: jest.fn(),
+      recordCashRefundMovement: jest.fn(),
     };
     creditService = {
       getAccountByCustomer: jest.fn(),
@@ -147,13 +151,26 @@ describe('Payments & Split Settlement Suite (R15)', () => {
 
       paymentRepo.findOne.mockResolvedValue(payment);
       orderRepo.findOne.mockResolvedValue(order);
-      shiftService.requireCurrentShift.mockResolvedValue({ id: 'shf-1' });
+      shiftService.requireDrawer.mockResolvedValue({ id: 'shf-1' });
 
       const result = await service.processPayment('t-1', 'pay-1', {});
       expect(result.status).toBe('SUCCEEDED');
       expect(shiftService.recordCashPaymentMovement).toHaveBeenCalled();
       expect(order.paid_total).toBe('50000.0000');
       expect(order.outstanding_total).toBe('50000.0000');
+    });
+
+    it('settles cash into the drawer the intent was raised at, not whichever is open at capture', async () => {
+      const payment = { id: 'pay-2', tenant_id: 't-1', order_id: 'ord-1', method_kind: 'CASH', amount: '50000.0000', status: 'PENDING', currency_code: 'IRR', shift_id: 'shf-counter-2' };
+      const order = { id: 'ord-1', branch_id: 'b-1', terminal_id: 'term-1', grand_total: '100000.0000', paid_total: '0.0000', outstanding_total: '100000.0000', state: 'SUBMITTED' };
+
+      paymentRepo.findOne.mockResolvedValue(payment);
+      orderRepo.findOne.mockResolvedValue(order);
+      shiftService.requireOpenShiftById.mockResolvedValue({ id: 'shf-counter-2' });
+
+      await service.processPayment('t-1', 'pay-2', {});
+      expect(shiftService.requireDrawer).not.toHaveBeenCalled();
+      expect(shiftService.recordCashPaymentMovement.mock.calls[0][1]).toBe('shf-counter-2');
     });
 
     it('should retain earlier successful tender (Cash) when a later tender (POS) fails', async () => {
@@ -241,6 +258,56 @@ describe('Payments & Split Settlement Suite (R15)', () => {
     });
   });
 
+  describe('Which drawer cash goes into', () => {
+    const order = { id: 'ord-1', branch_id: 'b-1', terminal_id: null, state: 'SUBMITTED', currency_code: 'IRR', outstanding_total: '100000.0000' };
+
+    it('records the drawer on a cash intent', async () => {
+      orderRepo.findOne.mockResolvedValue(order);
+      paymentRepo.findOne.mockResolvedValue(null);
+      methodRepo.findOne.mockResolvedValue({ id: 'pm-cash', kind: 'CASH', is_active: true });
+      shiftService.requireDrawer.mockResolvedValue({ id: 'shf-7' });
+
+      const intent = await service.createPaymentIntent('t-1', { orderId: 'ord-1', methodId: 'pm-cash', amount: '50000.0000' });
+      expect(shiftService.requireDrawer).toHaveBeenCalledWith('t-1', 'b-1', null);
+      expect(intent.shift_id).toBe('shf-7');
+    });
+
+    it('refuses a cash intent with no drawer open, before the intent exists', async () => {
+      orderRepo.findOne.mockResolvedValue(order);
+      paymentRepo.findOne.mockResolvedValue(null);
+      methodRepo.findOne.mockResolvedValue({ id: 'pm-cash', kind: 'CASH', is_active: true });
+      shiftService.requireDrawer.mockRejectedValue(new ConflictException({ code: 'NO_OPEN_SHIFT' }));
+
+      await expect(
+        service.createPaymentIntent('t-1', { orderId: 'ord-1', methodId: 'pm-cash', amount: '50000.0000' }),
+      ).rejects.toThrow(ConflictException);
+      expect(auditWriter.write).not.toHaveBeenCalled();
+    });
+
+    it('does not fail a card payment over an unknown drawer', async () => {
+      orderRepo.findOne.mockResolvedValue(order);
+      paymentRepo.findOne.mockResolvedValue(null);
+      methodRepo.findOne.mockResolvedValue({ id: 'pm-card', kind: 'POS', is_active: true });
+
+      const intent = await service.createPaymentIntent('t-1', { orderId: 'ord-1', methodId: 'pm-card', amount: '50000.0000' });
+      expect(shiftService.requireDrawer).not.toHaveBeenCalled();
+      expect(intent.shift_id).toBeNull();
+    });
+
+    it('takes reversed cash back out of the drawer even when the order names no terminal', async () => {
+      // The POS never sent a terminal, and the reversal only looked for a drawer when the
+      // order had one — so reversed cash stayed in expected cash and read as short at close.
+      const payment = { id: 'pay-c', tenant_id: 't-1', order_id: 'ord-1', payment_number: 'PAY-11', method_kind: 'CASH', amount: '30000.0000', status: 'SUCCEEDED', shift_id: 'shf-7' };
+      paymentRepo.findOne.mockResolvedValue(payment);
+      orderRepo.findOne.mockResolvedValue({ ...order, grand_total: '100000.0000', paid_total: '30000.0000' });
+      shiftService.resolveDrawer.mockResolvedValue(null);
+      shiftService.requireOpenShiftById.mockResolvedValue({ id: 'shf-7' });
+
+      await service.reversePayment('t-1', 'pay-c', { reason: 'Wrong order' });
+      expect(shiftService.recordCashRefundMovement).toHaveBeenCalledWith('t-1', 'shf-7', 'pay-c', '30000.0000', undefined, expect.anything());
+    });
+  });
+
   describe('Customer Credit Reversal', () => {
     it('should give the customer their credit back when a CUSTOMER_CREDIT payment is reversed', async () => {
       const payment = {
@@ -304,8 +371,8 @@ describe('Payments & Split Settlement Suite (R15)', () => {
       });
       orderRepo.findOne.mockResolvedValue(order);
       methodRepo.findOne.mockResolvedValue(method);
-      shiftService.getCurrentShift.mockResolvedValue({ id: 'shf-1' });
-      shiftService.requireCurrentShift.mockResolvedValue({ id: 'shf-1' });
+      shiftService.resolveDrawer.mockResolvedValue({ id: 'shf-1' });
+      shiftService.requireDrawer.mockResolvedValue({ id: 'shf-1' });
 
       const correction = await service.correctPayment('t-1', 'pay-orig', {
         reason: 'Wrong payment method select',

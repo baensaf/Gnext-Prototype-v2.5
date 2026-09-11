@@ -1,6 +1,7 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
+import { TILL_TERMINAL_HEADER, parseTillTerminalHeader, runWithTill } from '../utils/till-context';
 
 @Injectable()
 export class RequestContextMiddleware implements NestMiddleware {
@@ -16,6 +17,10 @@ export class RequestContextMiddleware implements NestMiddleware {
     const preferredLocale = acceptLang && acceptLang.startsWith('en') ? 'en' : 'fa';
     (req as any).locale = preferredLocale;
 
-    next();
+    // The register this device is, when it has been set up as one. See till-context.ts.
+    const tillTerminalId = parseTillTerminalHeader(req.headers[TILL_TERMINAL_HEADER]);
+    (req as any).tillTerminalId = tillTerminalId;
+
+    runWithTill(tillTerminalId, () => next());
   }
 }

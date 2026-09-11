@@ -177,7 +177,7 @@ export class RefundService {
         if (targetMethod.kind === 'CASH') {
           // Checked before the refund row exists, so the till is known to be open by the
           // time there is anything to settle.
-          await this.shiftService.requireCurrentShift(tenantId, order.terminal_id, order.branch_id);
+          await this.shiftService.requireDrawer(tenantId, order.branch_id, order.terminal_id);
         }
       }
 
@@ -281,7 +281,8 @@ export class RefundService {
       const methodKind = refund.method_kind;
 
       if (methodKind === 'CASH') {
-        const shift = await this.shiftService.requireCurrentShift(tenantId, order.terminal_id, order.branch_id);
+        // Handed back from the drawer at the register doing the refund.
+        const shift = await this.shiftService.requireDrawer(tenantId, order.branch_id, order.terminal_id);
         refund.shift_id = shift.id;
         await this.shiftService.recordCashRefundMovement(tenantId, shift.id, refund.id, refund.amount, userId, em);
         refund.status = 'SUCCEEDED';

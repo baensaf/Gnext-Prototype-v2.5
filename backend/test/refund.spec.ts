@@ -36,6 +36,7 @@ describe('Refunds & Paid-Order Cancellation Suite (R16)', () => {
     shiftService = {
       getCurrentShift: jest.fn().mockResolvedValue(null),
       requireCurrentShift: jest.fn(),
+      requireDrawer: jest.fn(),
       recordCashRefundMovement: jest.fn(),
     };
     creditService = { getAccountByCustomer: jest.fn(), postRepayment: jest.fn(), reverseLoyaltyCashback: jest.fn().mockResolvedValue(true) };
@@ -158,7 +159,7 @@ describe('Refunds & Paid-Order Cancellation Suite (R16)', () => {
       orderRepo.findOne.mockResolvedValue(order);
       paymentRepo.find.mockResolvedValue([cashPayment]);
       methodRepo.findOne.mockResolvedValue(cashMethod);
-      shiftService.requireCurrentShift.mockResolvedValue({ id: 'shf-1' });
+      shiftService.requireDrawer.mockResolvedValue({ id: 'shf-1' });
 
       const cancelledOrder = await service.cancelPaidOrder('t-1', 'ord-1', { reason: 'Out of stock' });
       expect(cancelledOrder.state).toBe('CANCELLED');

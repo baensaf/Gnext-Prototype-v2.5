@@ -33,6 +33,8 @@ import { MoneyUtil } from '../../common/utils/money.util';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import { CashierShift } from '../../entities/CashierShift.entity';
+import { Terminal } from '../../entities/Terminal.entity';
+import { currentTillTerminalId } from '../../common/utils/till-context';
 import { Tenant } from '../../entities/Tenant.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { Payment } from '../../entities/Payment.entity';
@@ -156,18 +158,48 @@ export class OrderService {
     return order;
   }
 
+  /**
+   * The register an order is rung up on, and the shift open on it at the time.
+   *
+   * The POS never named either, so every order had a null shift: a shift statement always
+   * showed zero orders, and nothing tied a sale to the drawer it was taken at. The register
+   * is the one the order names or, failing that, the device the request came from; it must
+   * stand in the order's branch, and a stray one is dropped rather than refusing the sale.
+   * The shift is looked up here rather than taken from the client.
+   */
+  private async registerForNewOrder(
+    em: EntityManager,
+    tenantId: string,
+    dto: OrderCreateDto,
+  ): Promise<{ terminalId: string | null; shiftId: string | null }> {
+    const terminalId = dto.terminal_id || currentTillTerminalId();
+    if (!terminalId) return { terminalId: null, shiftId: dto.shift_id || null };
+
+    const terminal = await em.findOne(Terminal, { where: { id: terminalId, tenant_id: tenantId } });
+    if (!terminal || terminal.branch_id !== dto.branch_id) return { terminalId: null, shiftId: null };
+
+    const shift = await em.findOne(CashierShift, {
+      where: [
+        { tenant_id: tenantId, terminal_id: terminal.id, state: 'OPEN' },
+        { tenant_id: tenantId, terminal_id: terminal.id, state: 'CLOSING_REVIEW' },
+      ],
+    });
+    return { terminalId: terminal.id, shiftId: shift?.id ?? null };
+  }
+
   async createDraft(tenantId: string, dto: OrderCreateDto, userId?: string, correlationId?: string) {
     return await this.dataSource.transaction(async (em) => {
       const orderNumber = await this.sequenceService.generateOrderNumber(tenantId, em);
       const currencyCode = dto.currency_code || 'IRR';
       const channel = dto.channel || 'POS';
       const orderType = dto.order_type || 'DINE_IN';
+      const register = await this.registerForNewOrder(em, tenantId, dto);
 
       const order = em.create(OrderHeader, {
         tenant_id: tenantId,
         branch_id: dto.branch_id,
-        terminal_id: dto.terminal_id || null,
-        shift_id: dto.shift_id || null,
+        terminal_id: register.terminalId,
+        shift_id: register.shiftId,
         order_number: orderNumber,
         channel,
         order_type: orderType,
