@@ -26,6 +26,7 @@ import { PrintingModule } from '../printing/printing.module';
 import { DeliveryModule } from '../delivery/delivery.module';
 import { ApprovalModule } from '../approval/approval.module';
 import { RefundModule } from '../refund/refund.module';
+import { SimulationModule } from '../simulation/simulation.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { RefundModule } from '../refund/refund.module';
     DeliveryModule,
     ApprovalModule,
     RefundModule,
+    SimulationModule,
   ],
   providers: [OrderService, OrderSequenceService],
   controllers: [OrdersController],

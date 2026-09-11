@@ -35,8 +35,8 @@ export class BusinessDateUtil {
 export const ORDER_BUSINESS_DATE_EXPR = (alias: string) =>
   `COALESCE(${alias}.business_date, ${alias}.placed_at::date::text)`;
 
-/** Order states that are not revenue: cancelled never counted, drafts were never placed. */
-export const NON_REVENUE_ORDER_STATES = ['CANCELLED', 'DRAFT'];
+/** Order states that are not revenue: cancelled and rejected never counted, drafts were never placed. */
+export const NON_REVENUE_ORDER_STATES = ['CANCELLED', 'REJECTED', 'DRAFT'];
 
 /**
  * Keeps only orders that count as revenue.

@@ -159,6 +159,38 @@ describe('SimulationService (Unit)', () => {
       expect(order.state).toBe('CONFIRMED');
       expect(order.status).toBe('KITCHEN_PREPARING');
     });
+
+    // The store's own accept/reject (OrderService) moves the order itself and then tells
+    // Snappfood. Telling Snappfood must not move it a second time.
+    it('telling Snappfood about an acceptance leaves the local order alone', async () => {
+      orderRepo.findOne.mockResolvedValue({ id: 'ord-snp-1', order_number: 'SNP-SF-305', state: 'CONFIRMED', status: 'CONFIRMED' });
+
+      const res = await service.notifyAccepted('t-1', 'SF-305', { deliveryTime: 25 });
+
+      expect(res.statusCode).toBe(42);
+      expect(orderRepo.save).not.toHaveBeenCalled();
+      expect(logRepo.save).toHaveBeenCalledWith(expect.objectContaining({ event_type: 'ORDER_ACCEPT' }));
+    });
+
+    it('telling Snappfood about a rejection leaves the local order alone', async () => {
+      orderRepo.findOne.mockResolvedValue({ id: 'ord-snp-1', order_number: 'SNP-SF-306', state: 'REJECTED', status: 'REJECTED' });
+
+      const res = await service.notifyRejected('t-1', 'SF-306', { reasonId: 113 });
+
+      expect(res.statusCode).toBe(51);
+      expect(orderRepo.save).not.toHaveBeenCalled();
+      expect(logRepo.save).toHaveBeenCalledWith(expect.objectContaining({ event_type: 'ORDER_REJECT' }));
+    });
+
+    it('a store reject is a rejection, not a cancellation', async () => {
+      const order: any = { id: 'ord-snp-1', order_number: 'SNP-SF-307', state: 'PENDING_ACCEPTANCE', status: 'PENDING_ACCEPTANCE' };
+      orderRepo.findOne.mockResolvedValue(order);
+
+      await service.rejectOrder('t-1', 'SF-307', { reasonId: 113 });
+
+      expect(order.state).toBe('REJECTED');
+      expect(order.status).toBe('REJECTED');
+    });
   });
 
   it('should suppress duplicate webhook requests (exactly-once processing)', async () => {

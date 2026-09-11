@@ -396,7 +396,7 @@ export class SimulationService {
         order.status = 'COMPLETED';
         newStatusCode = 42;
       } else if (action === 'REJECT') {
-        this.markCancelled(order);
+        this.markRejected(order);
         newStatusCode = 51; // 51 = Rejected by store
       } else if (action === 'CANCEL' || action === 'CANCELLED') {
         this.markCancelled(order);
@@ -758,6 +758,13 @@ export class SimulationService {
     order.status = 'CANCELLED';
   }
 
+  // The store said no (51). Snappfood cancelling on the customer's side (54) stays CANCELLED.
+  private markRejected(order: OrderHeader) {
+    order.fulfillment_status = 'CANCELLED';
+    order.state = 'REJECTED';
+    order.status = 'REJECTED';
+  }
+
   // Ack (61) says the store has received the order. It does not accept it.
   async ackOrder(tenantId: string, orderCode: string) {
     await this.logRepo.save(
@@ -790,9 +797,10 @@ export class SimulationService {
     return { status: 204, message: 'Successfully picked', statusCode: 713 };
   }
 
-  async acceptOrder(tenantId: string, orderCode: string, body: any) {
+  // Snappfood's accept endpoint (42): enforce its limits and log the call. It leaves the
+  // local order alone; the store's own accept (OrderService) has already moved it.
+  async notifyAccepted(tenantId: string, orderCode: string, body: any) {
     const deliveryTime = body?.deliveryTime || 0;
-    const riderPickupTime = body?.riderPickupTime || 0;
     const delta = body?.delta || 0;
 
     if (deliveryTime > 70) {
@@ -800,12 +808,6 @@ export class SimulationService {
     }
     if (delta > 5000) {
       throw new BadRequestException({ status: 2112, title: 'delta_exceeded', detail: 'Delta surpasses limits' });
-    }
-
-    const order = await this.orderRepo.findOne({ where: { tenant_id: tenantId, order_number: `SNP-${orderCode}` } });
-    if (order) {
-      this.markAccepted(order);
-      await this.orderRepo.save(order);
     }
 
     await this.logRepo.save(
@@ -822,13 +824,19 @@ export class SimulationService {
     return { status: 204, message: 'Successfully accepted', statusCode: 42 };
   }
 
-  async rejectOrder(tenantId: string, orderCode: string, body: any) {
+  // The simulator's accept button plays both sides: Snappfood hears it and the order moves.
+  async acceptOrder(tenantId: string, orderCode: string, body: any) {
+    const res = await this.notifyAccepted(tenantId, orderCode, body);
     const order = await this.orderRepo.findOne({ where: { tenant_id: tenantId, order_number: `SNP-${orderCode}` } });
     if (order) {
-      this.markCancelled(order);
+      this.markAccepted(order);
       await this.orderRepo.save(order);
     }
+    return res;
+  }
 
+  // Snappfood's reject endpoint (51). Like notifyAccepted, it leaves the local order alone.
+  async notifyRejected(tenantId: string, orderCode: string, body: any) {
     await this.logRepo.save(
       this.logRepo.create({
         tenant_id: tenantId,
@@ -841,6 +849,16 @@ export class SimulationService {
       }),
     );
     return { status: 204, message: 'Successfully rejected', statusCode: 51 };
+  }
+
+  async rejectOrder(tenantId: string, orderCode: string, body: any) {
+    const res = await this.notifyRejected(tenantId, orderCode, body);
+    const order = await this.orderRepo.findOne({ where: { tenant_id: tenantId, order_number: `SNP-${orderCode}` } });
+    if (order) {
+      this.markRejected(order);
+      await this.orderRepo.save(order);
+    }
+    return res;
   }
 
   async getDeclineReasons() {

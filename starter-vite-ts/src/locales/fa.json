@@ -280,6 +280,7 @@
       "ready": "آماده تحویل",
       "completed": "تکمیل شده",
       "cancelled": "لغو شده",
+      "rejected": "رد شده",
       "refunded": "مرجوع شده"
     },
     "table": {

@@ -280,6 +280,7 @@
       "ready": "READY",
       "completed": "COMPLETED",
       "cancelled": "CANCELLED",
+      "rejected": "REJECTED",
       "refunded": "REFUNDED"
     },
     "table": {

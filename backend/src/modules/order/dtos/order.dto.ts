@@ -7,6 +7,7 @@ import {
   IsArray,
   ValidateNested,
   Min,
+  Max,
   IsNumberString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -360,6 +361,24 @@ export class OrderCancelDto {
 
   @IsOptional()
   refundPlan?: any;
+}
+
+/** The store takes an incoming order. Snappfood caps the promised time at 70 minutes. */
+export class OrderAcceptDto {
+  @IsInt()
+  @Min(1)
+  @Max(70)
+  prepMinutes: number;
+}
+
+/** The store turns an incoming order down, naming one of Snappfood's decline reasons. */
+export class OrderRejectDto {
+  @IsInt()
+  reasonId: number;
+
+  @IsOptional()
+  @IsString()
+  comment?: string;
 }
 
 export class OrderReopenDto {

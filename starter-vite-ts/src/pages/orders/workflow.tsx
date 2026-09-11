@@ -160,6 +160,8 @@ export function OrdersWorkflowPage() {
         return t('orders.statuses.completed');
       case 'CANCELLED':
         return t('orders.statuses.cancelled');
+      case 'REJECTED':
+        return t('orders.statuses.rejected');
       case 'REFUNDED':
         return t('orders.statuses.refunded');
       default:
@@ -338,6 +340,7 @@ export function OrdersWorkflowPage() {
       case 'READY': return 'success';
       case 'COMPLETED': return 'default';
       case 'CANCELLED': return 'error';
+      case 'REJECTED': return 'error';
       case 'REFUNDED': return 'secondary';
       default: return 'default';
     }

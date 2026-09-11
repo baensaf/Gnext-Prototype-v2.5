@@ -15,7 +15,10 @@ export type OrderState =
   | 'READY'
   | 'OUT_FOR_DELIVERY'
   | 'COMPLETED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  // The store turned down an incoming order. Final, and kept apart from CANCELLED
+  // because aggregators track a store's rejection rate.
+  | 'REJECTED';
 
 @Entity('order_header')
 export class OrderHeader {

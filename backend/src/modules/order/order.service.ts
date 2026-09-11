@@ -25,6 +25,7 @@ import { AuditWriter } from '../audit/audit-writer.service';
 import { OutboxWriter } from '../outbox/outbox-writer.service';
 import { KdsService } from '../kds/kds.service';
 import { PrintQueueService } from '../printing/print-queue.service';
+import { SimulationService } from '../simulation/simulation.service';
 import { CatalogService } from '../catalog/catalog.service';
 import { CreditService } from '../customer/credit.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
@@ -65,6 +66,8 @@ import {
   OrderItemReplaceDto,
   OrderCancelDto,
   OrderReopenDto,
+  OrderAcceptDto,
+  OrderRejectDto,
 } from './dtos/order.dto';
 
 /**
@@ -81,7 +84,7 @@ const isActiveLine = (item: { state?: string }): boolean =>
 // State Transition Matrix per Section 6.1
 const ALLOWED_TRANSITIONS: Record<OrderState, OrderState[]> = {
   DRAFT: ['SUBMITTED', 'CONFIRMED', 'CANCELLED'],
-  PENDING_ACCEPTANCE: ['CONFIRMED', 'CANCELLED'],
+  PENDING_ACCEPTANCE: ['CONFIRMED', 'REJECTED', 'CANCELLED'],
   SUBMITTED: ['CONFIRMED', 'CANCELLED'],
   CONFIRMED: ['PREPARING', 'CANCELLED'],
   PREPARING: ['READY', 'CANCELLED'],
@@ -89,7 +92,11 @@ const ALLOWED_TRANSITIONS: Record<OrderState, OrderState[]> = {
   OUT_FOR_DELIVERY: ['COMPLETED', 'READY', 'CANCELLED'],
   COMPLETED: [],
   CANCELLED: ['SUBMITTED'],
+  REJECTED: [],
 };
+
+/** Actions that answer an order waiting in PENDING_ACCEPTANCE, and only such an order. */
+const INCOMING_DECISIONS = ['ACCEPT', 'REJECT'];
 
 /** States in which the kitchen has the order and has not yet handed it over. */
 const KITCHEN_HOLDS_ORDER_STATES: OrderState[] = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY'];
@@ -119,6 +126,7 @@ export class OrderService {
     @Optional() private readonly kdsService?: KdsService,
     @Optional() private readonly printQueueService?: PrintQueueService,
     @Optional() private readonly creditService?: CreditService,
+    @Optional() private readonly simulationService?: SimulationService,
   ) {}
 
   async getOrders(tenantId: string, query: any) {
@@ -656,9 +664,30 @@ export class OrderService {
     userId?: string,
     correlationId?: string,
   ) {
+    const decidesIncoming = INCOMING_DECISIONS.includes(action.toUpperCase());
     return await this.dataSource.transaction(async (em) => {
-      const order = await em.findOne(OrderHeader, { where: { id, tenant_id: tenantId } });
+      // Accept and reject lock the row: two cashiers on the same incoming order queue up
+      // here, and the second finds it already decided.
+      const order = await em.findOne(OrderHeader, {
+        where: { id, tenant_id: tenantId },
+        ...(decidesIncoming ? { lock: { mode: 'pessimistic_write' as const } } : {}),
+      });
       if (!order) throw new NotFoundException(`Order ${id} not found`);
+
+      if (decidesIncoming && order.state !== 'PENDING_ACCEPTANCE') {
+        throw new ConflictException({
+          code: 'ORDER_ALREADY_DECIDED',
+          message: `Order ${order.order_number} is ${order.state}, not awaiting acceptance`,
+        });
+      }
+      // Confirming a waiting order would skip the kitchen, and cancelling it would leave
+      // Snappfood untold. The store answers it through accept or reject instead.
+      if (!decidesIncoming && order.state === 'PENDING_ACCEPTANCE') {
+        throw new ConflictException({
+          code: 'ORDER_AWAITING_ACCEPTANCE',
+          message: `Order ${order.order_number} is awaiting acceptance; accept or reject it`,
+        });
+      }
 
       const targetState = this.mapActionToTargetState(action);
       const allowedNextStates = ALLOWED_TRANSITIONS[order.state] || [];
@@ -716,7 +745,8 @@ export class OrderService {
       // Write Outbox Event
       await this.outboxWriter.enqueueInTransaction(em, {
         tenantId,
-        eventType: targetState === 'CANCELLED' ? 'ORDER_CANCELLED' : 'ORDER_UPDATED',
+        eventType:
+          targetState === 'CANCELLED' ? 'ORDER_CANCELLED' : targetState === 'REJECTED' ? 'ORDER_REJECTED' : 'ORDER_UPDATED',
         aggregateType: 'Order',
         aggregateId: order.id,
         payload: {
@@ -740,6 +770,84 @@ export class OrderService {
 
       return order;
     });
+  }
+
+  /**
+   * The store takes an incoming order: confirm it, fire it to the kitchen and its printer,
+   * then tell the aggregator. Local first, so the branch keeps serving when Snappfood is
+   * slow or down; a failed notice does not undo the accept.
+   */
+  async acceptIncomingOrder(tenantId: string, id: string, dto: OrderAcceptDto, userId?: string, correlationId?: string) {
+    const order = await this.transitionState(
+      tenantId,
+      id,
+      'ACCEPT',
+      { reasonText: `Prep time ${dto.prepMinutes} min` },
+      userId,
+      correlationId,
+    );
+
+    if (this.kdsService) {
+      try {
+        await this.kdsService.generateTicketsForOrder(tenantId, id, correlationId);
+      } catch (e) {
+        // KDS side effect error must not fail the accept
+      }
+    }
+
+    if (this.printQueueService) {
+      try {
+        await this.printQueueService.enqueueOrderPrintJobs(tenantId, id, 'KITCHEN_TICKET', false, undefined, userId);
+      } catch (e) {
+        // Printing side effect error must not fail the accept
+      }
+    }
+
+    const snappfoodCode = this.snappfoodOrderCode(order);
+    if (snappfoodCode && this.simulationService) {
+      try {
+        await this.simulationService.notifyAccepted(tenantId, snappfoodCode, { deliveryTime: dto.prepMinutes });
+      } catch (e) {
+        // The accept stands. Retrying a missed notice through the outbox is not built yet.
+      }
+    }
+
+    return order;
+  }
+
+  /**
+   * The store turns an incoming order down. Nothing reaches the kitchen, and the reason must
+   * be one of Snappfood's decline reasons, because that is what goes back to Snappfood.
+   */
+  async rejectIncomingOrder(tenantId: string, id: string, dto: OrderRejectDto, userId?: string, correlationId?: string) {
+    const reason = (await this.getDeclineReasons()).find((r) => r.id === dto.reasonId);
+    if (!reason) {
+      throw new BadRequestException({ code: 'UNKNOWN_DECLINE_REASON', message: `No decline reason ${dto.reasonId}` });
+    }
+    const reasonText = [`${reason.id} ${reason.title}`, dto.comment].filter(Boolean).join(': ');
+
+    const order = await this.transitionState(tenantId, id, 'REJECT', { reasonText }, userId, correlationId);
+
+    const snappfoodCode = this.snappfoodOrderCode(order);
+    if (snappfoodCode && this.simulationService) {
+      try {
+        await this.simulationService.notifyRejected(tenantId, snappfoodCode, { reasonId: dto.reasonId, comment: dto.comment });
+      } catch (e) {
+        // The rejection stands, as with accept.
+      }
+    }
+
+    return order;
+  }
+
+  async getDeclineReasons(): Promise<{ id: number; title: string; level: number }[]> {
+    return (await this.simulationService?.getDeclineReasons()) ?? [];
+  }
+
+  /** Snappfood's code for one of its orders: our order number without the SNP- prefix. */
+  private snappfoodOrderCode(order: OrderHeader): string | null {
+    if (order.channel !== 'AGGREGATOR' || !order.order_number?.startsWith('SNP-')) return null;
+    return order.order_number.slice('SNP-'.length);
   }
 
   /**
@@ -1237,6 +1345,14 @@ export class OrderService {
     });
     if (!order) throw new NotFoundException(`Order ${id} not found`);
 
+    // A waiting incoming order is turned down through reject, which tells Snappfood.
+    if (order.state === 'PENDING_ACCEPTANCE') {
+      throw new ConflictException({
+        code: 'ORDER_AWAITING_ACCEPTANCE',
+        message: `Order ${order.order_number} is awaiting acceptance; reject it instead of cancelling`,
+      });
+    }
+
     const netPaid = await this.calculateNetPaid(tenantId, id, this.dataSource.manager);
     const config = await this.getOrderActionConfig(tenantId, this.dataSource.manager, order.branch_id);
     const decision = resolveOrderEditDecision(
@@ -1487,6 +1603,10 @@ export class OrderService {
         return 'COMPLETED';
       case 'CANCEL':
         return 'CANCELLED';
+      case 'ACCEPT':
+        return 'CONFIRMED';
+      case 'REJECT':
+        return 'REJECTED';
       case 'REOPEN':
         return 'SUBMITTED';
       default:

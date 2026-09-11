@@ -12,6 +12,8 @@ import {
   OrderItemReplaceDto,
   OrderCancelDto,
   OrderReopenDto,
+  OrderAcceptDto,
+  OrderRejectDto,
 } from './dtos/order.dto';
 import { SplitOrderDto, TransferItemsDto } from '../dine-in/dtos/dine-in.dto';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
@@ -51,6 +53,30 @@ export class OrdersController {
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
     return await this.orderService.createDraft(tenantId, body, userId, correlationId);
+  }
+
+  // Snappfood's decline reasons; a store reject must name one. Declared before ':id' so
+  // the router does not take "decline-reasons" for an order id.
+  @Get('decline-reasons')
+  async getDeclineReasons() {
+    return await this.orderService.getDeclineReasons();
+  }
+
+  // An aggregator or website order waits in PENDING_ACCEPTANCE until the store answers.
+  @Post(':id/accept')
+  async acceptIncomingOrder(@Param('id') id: string, @Body() body: OrderAcceptDto, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    const correlationId = (req as any).correlationId;
+    return await this.orderService.acceptIncomingOrder(tenantId, id, body, userId, correlationId);
+  }
+
+  @Post(':id/reject')
+  async rejectIncomingOrder(@Param('id') id: string, @Body() body: OrderRejectDto, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    const correlationId = (req as any).correlationId;
+    return await this.orderService.rejectIncomingOrder(tenantId, id, body, userId, correlationId);
   }
 
   @Get(':id')
