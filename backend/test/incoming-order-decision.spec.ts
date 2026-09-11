@@ -200,6 +200,33 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
     });
   });
 
+  describe('an order nobody answers in time', () => {
+    it('is rejected by the system, with the time limit as the reason, and Snappfood is told', async () => {
+      orderRepo.findOne.mockResolvedValue(pendingOrder());
+
+      const result = await service.rejectUnanswered('t-1', 'order-1', 5);
+
+      expect(result.state).toBe('REJECTED');
+      const [event] = savedStateEvents();
+      expect(event).toEqual(expect.objectContaining({ to_state: 'REJECTED', action: 'REJECT', occurred_by: null }));
+      expect(event.reason_text).toContain('5 min');
+      expect(simulationService.notifyRejected).toHaveBeenCalledWith(
+        't-1',
+        'SF-304',
+        expect.objectContaining({ comment: expect.stringContaining('5 min') }),
+      );
+      expect(kdsService.generateTicketsForOrder).not.toHaveBeenCalled();
+    });
+
+    it('leaves alone an order a cashier answered a moment earlier', async () => {
+      orderRepo.findOne.mockResolvedValue(pendingOrder({ state: 'CONFIRMED', status: 'CONFIRMED' }));
+
+      await expect(service.rejectUnanswered('t-1', 'order-1', 5)).rejects.toBeInstanceOf(ConflictException);
+
+      expect(simulationService.notifyRejected).not.toHaveBeenCalled();
+    });
+  });
+
   it('a rejected order is not revenue', () => {
     expect(NON_REVENUE_ORDER_STATES).toContain('REJECTED');
   });

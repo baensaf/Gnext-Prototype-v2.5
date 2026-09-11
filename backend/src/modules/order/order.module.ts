@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
@@ -12,8 +12,11 @@ import { Product } from '../../entities/Product.entity';
 import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { OptionItem } from '../../entities/OptionItem.entity';
 import { OptionGroup } from '../../entities/OptionGroup.entity';
+import { TenantSetting } from '../../entities/TenantSetting.entity';
+import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { OrderService } from './order.service';
 import { OrderSequenceService } from './order-sequence.service';
+import { IncomingOrderPolicyService } from './incoming-order-policy.service';
 import { OrdersController } from './order.controller';
 import { CatalogModule } from '../catalog/catalog.module';
 import { PricingModule } from '../pricing/pricing.module';
@@ -43,6 +46,8 @@ import { SimulationModule } from '../simulation/simulation.module';
       ProductVariant,
       OptionItem,
       OptionGroup,
+      TenantSetting,
+      OperationalAlert,
     ]),
     CatalogModule,
     PricingModule,
@@ -55,10 +60,12 @@ import { SimulationModule } from '../simulation/simulation.module';
     DeliveryModule,
     ApprovalModule,
     RefundModule,
-    SimulationModule,
+    // Each needs the other: orders tell Snappfood about accepts and rejects, and a Snappfood
+    // order is put through the branch's acceptance policy as it lands.
+    forwardRef(() => SimulationModule),
   ],
-  providers: [OrderService, OrderSequenceService],
+  providers: [OrderService, OrderSequenceService, IncomingOrderPolicyService],
   controllers: [OrdersController],
-  exports: [OrderService, OrderSequenceService],
+  exports: [OrderService, OrderSequenceService, IncomingOrderPolicyService],
 })
 export class OrderModule {}

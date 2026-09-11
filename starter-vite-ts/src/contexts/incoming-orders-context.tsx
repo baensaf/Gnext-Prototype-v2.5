@@ -1,4 +1,4 @@
-import type { OrderHeader } from 'src/api/orderApi';
+import type { OrderHeader, IncomingOrderPolicy } from 'src/api/orderApi';
 
 import { useTranslation } from 'react-i18next';
 import { useRef, useMemo, useState, useEffect, useContext, useCallback, createContext } from 'react';
@@ -30,6 +30,8 @@ type IncomingOrdersValue = {
   enabled: boolean;
   /** Orders waiting for this branch to accept or reject them, oldest first. */
   orders: OrderHeader[];
+  /** The branch's time limit and default prep time; null until it has loaded. */
+  policy: IncomingOrderPolicy | null;
   refresh: () => Promise<void>;
 };
 
@@ -90,6 +92,17 @@ export function IncomingOrdersProvider({ children }: { children: React.ReactNode
     canReachPath(role, paths.app.orders.incoming, isHeadOfficeAccount);
 
   const [orders, setOrders] = useState<OrderHeader[]>([]);
+  const [policy, setPolicy] = useState<IncomingOrderPolicy | null>(null);
+
+  useEffect(() => {
+    setPolicy(null);
+    if (enabled) {
+      orderApi
+        .getIncomingPolicy(branchId)
+        .then(setPolicy)
+        .catch(() => setPolicy(null));
+    }
+  }, [enabled, branchId]);
 
   // Ids already announced. Null until the first read of a branch, so the orders already
   // waiting when the app opens fill the queue without a burst of toasts.
@@ -143,8 +156,8 @@ export function IncomingOrdersProvider({ children }: { children: React.ReactNode
   }, [waiting]);
 
   const value = useMemo(
-    () => ({ enabled, orders: enabled ? orders : [], refresh }),
-    [enabled, orders, refresh]
+    () => ({ enabled, orders: enabled ? orders : [], policy: enabled ? policy : null, refresh }),
+    [enabled, orders, policy, refresh]
   );
 
   return <IncomingOrdersContext.Provider value={value}>{children}</IncomingOrdersContext.Provider>;

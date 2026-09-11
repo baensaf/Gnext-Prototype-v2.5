@@ -18,6 +18,7 @@ import {
 import { SplitOrderDto, TransferItemsDto } from '../dine-in/dtos/dine-in.dto';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
+import { IncomingOrderPolicyService } from './incoming-order-policy.service';
 
 // Every :id on this controller is an order id, and an order belongs to the shop that
 // took it. Marking the class covers the transitions too — a branch may not confirm,
@@ -26,7 +27,10 @@ import { OrderHeader } from '../../entities/OrderHeader.entity';
 @BranchOwned(OrderHeader)
 @Controller('api/v1/orders')
 export class OrdersController {
-  constructor(private readonly orderService: OrderService) {}
+  constructor(
+    private readonly orderService: OrderService,
+    private readonly incomingPolicy: IncomingOrderPolicyService,
+  ) {}
 
   @Get()
   async getOrders(@Query() query: any, @Req() req: Request) {
@@ -60,6 +64,15 @@ export class OrdersController {
   @Get('decline-reasons')
   async getDeclineReasons() {
     return await this.orderService.getDeclineReasons();
+  }
+
+  // What the Incoming Orders queue needs from the branch's policy: the time limit for its
+  // countdown and the prep time an accept starts from.
+  @Get('incoming-policy')
+  async getIncomingPolicy(@Query() query: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const branchId = effectiveBranchId((req as any).userBranchId, query.branchId || query.branch_id);
+    return await this.incomingPolicy.policyFor(tenantId, branchId);
   }
 
   // An aggregator or website order waits in PENDING_ACCEPTANCE until the store answers.

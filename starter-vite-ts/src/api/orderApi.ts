@@ -92,6 +92,14 @@ export interface DeclineReason {
   level: number;
 }
 
+/** A branch's rules for orders from Snappfood, the website and the kiosk. */
+export interface IncomingOrderPolicy {
+  acceptance: Record<'AGGREGATOR' | 'ONLINE' | 'KIOSK', 'MANUAL' | 'AUTO'>;
+  timeoutMinutes: number;
+  timeoutAction: 'REJECT' | 'ACCEPT';
+  defaultPrepMinutes: number;
+}
+
 export const orderApi = {
   getOrders: async (branchId?: string | Record<string, any>, status?: string): Promise<OrderHeader[]> => {
     const params = typeof branchId === 'object' ? branchId : { branchId, status };
@@ -117,6 +125,12 @@ export const orderApi = {
     });
     const list: OrderHeader[] = Array.isArray(res.data?.data) ? res.data.data : [];
     return [...list].sort((a, b) => String(a.placed_at).localeCompare(String(b.placed_at)));
+  },
+
+  /** The branch's time limit for answering, what happens after it, and the default prep time. */
+  getIncomingPolicy: async (branchId: string): Promise<IncomingOrderPolicy> => {
+    const res = await httpClient.get('/api/v1/orders/incoming-policy', { params: { branchId } });
+    return res.data;
   },
 
   /** Snappfood's decline reasons. A reject must name one. */

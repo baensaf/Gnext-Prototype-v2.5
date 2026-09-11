@@ -1,3 +1,5 @@
+import type { IncomingOrderPolicy } from 'src/api/orderApi';
+
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
@@ -17,6 +19,7 @@ import {
   Switch,
   Button,
   Divider,
+  MenuItem,
   TextField,
   Typography,
   FormControlLabel,
@@ -35,6 +38,25 @@ import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
  */
 const ORDER_ACTION_DEFAULTS = { editWindowMinutes: 10, cancelWindowMinutes: 10 };
 
+/**
+ * Orders from Snappfood, the website and the kiosk, saved as `incomingOrders` in this same
+ * ORDER_WORKFLOW group. These match the server's defaults for when nothing has been written.
+ */
+const INCOMING_DEFAULTS: IncomingOrderPolicy = {
+  acceptance: { AGGREGATOR: 'MANUAL', ONLINE: 'MANUAL', KIOSK: 'AUTO' },
+  timeoutMinutes: 5,
+  timeoutAction: 'REJECT',
+  defaultPrepMinutes: 20,
+};
+
+const INCOMING_CHANNELS = [
+  { key: 'AGGREGATOR', labelKey: 'settings.orderWorkflow.incoming.aggregator', fallback: 'Snappfood orders' },
+  { key: 'ONLINE', labelKey: 'settings.orderWorkflow.incoming.online', fallback: 'Website orders' },
+  { key: 'KIOSK', labelKey: 'settings.orderWorkflow.incoming.kiosk', fallback: 'Kiosk orders' },
+] as const;
+
+const wholeIn = (raw: string, min: number, max: number) => Math.min(max, Math.max(min, parseInt(raw, 10) || min));
+
 export function OrderWorkflowSettingsPage() {
   const { t } = useTranslation();
 
@@ -44,7 +66,8 @@ export function OrderWorkflowSettingsPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   // Workflow settings state
-  const [autoAcceptOrders, setAutoAcceptOrders] = useState(true);
+  // Replaces the old "auto-accept" switch, which was saved but read by nothing.
+  const [incoming, setIncoming] = useState<IncomingOrderPolicy>(INCOMING_DEFAULTS);
   const [cashierEditWindowMinutes, setCashierEditWindowMinutes] = useState(ORDER_ACTION_DEFAULTS.editWindowMinutes);
   const [cashierCancelWindowMinutes, setCashierCancelWindowMinutes] = useState(ORDER_ACTION_DEFAULTS.cancelWindowMinutes);
   // What the windows were when the page loaded, so saving the workflow toggles at a
@@ -84,7 +107,12 @@ export function OrderWorkflowSettingsPage() {
       setCashierCancelWindowMinutes(windows.cancelWindowMinutes);
       setLoadedWindows(windows);
 
-      if (workflow.autoAcceptOrders !== undefined) setAutoAcceptOrders(Boolean(workflow.autoAcceptOrders));
+      const storedIncoming = workflow.incomingOrders || {};
+      setIncoming({
+        ...INCOMING_DEFAULTS,
+        ...storedIncoming,
+        acceptance: { ...INCOMING_DEFAULTS.acceptance, ...(storedIncoming.acceptance || {}) },
+      });
       if (workflow.autoRouteToKds !== undefined) setAutoRouteToKds(Boolean(workflow.autoRouteToKds));
       if (workflow.allowReopenClosedOrders !== undefined) setAllowReopenClosedOrders(Boolean(workflow.allowReopenClosedOrders));
       if (workflow.enableDineIn !== undefined) setEnableDineIn(Boolean(workflow.enableDineIn));
@@ -110,7 +138,7 @@ export function OrderWorkflowSettingsPage() {
     setSuccess(null);
 
     const payload = {
-      autoAcceptOrders,
+      incomingOrders: incoming,
       autoRouteToKds,
       allowReopenClosedOrders,
       enableDineIn,
@@ -302,28 +330,69 @@ export function OrderWorkflowSettingsPage() {
 
               <Stack spacing={2.5}>
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={autoAcceptOrders}
-                        onChange={(e) => setAutoAcceptOrders(e.target.checked)}
-                        color="primary"
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography variant="subtitle2">
-                          {t('settings.orderWorkflow.autoAcceptLabel', 'Auto-Accept In-Store & Kiosk Orders')}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {t(
-                            'settings.orderWorkflow.autoAcceptHelp',
-                            'Automatically advance paid counter and kiosk orders directly to Kitchen Prep queue.'
-                          )}
-                        </Typography>
-                      </Box>
-                    }
-                  />
+                  <Typography variant="subtitle2">
+                    {t('settings.orderWorkflow.incoming.title', 'Incoming Orders')}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 2 }}>
+                    {t(
+                      'settings.orderWorkflow.incoming.help',
+                      'Choose which orders wait in Incoming Orders for staff to accept, and what happens to one nobody answers in time.'
+                    )}
+                  </Typography>
+                  <Stack spacing={2}>
+                    {INCOMING_CHANNELS.map(({ key, labelKey, fallback }) => (
+                      <TextField
+                        key={key}
+                        select
+                        fullWidth
+                        size="small"
+                        label={t(labelKey, fallback)}
+                        value={incoming.acceptance[key]}
+                        onChange={(e) =>
+                          setIncoming((prev) => ({
+                            ...prev,
+                            acceptance: { ...prev.acceptance, [key]: e.target.value as 'MANUAL' | 'AUTO' },
+                          }))
+                        }
+                      >
+                        <MenuItem value="MANUAL">{t('settings.orderWorkflow.incoming.manual', 'Staff accept first')}</MenuItem>
+                        <MenuItem value="AUTO">{t('settings.orderWorkflow.incoming.auto', 'Accept automatically')}</MenuItem>
+                      </TextField>
+                    ))}
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="number"
+                      label={t('settings.orderWorkflow.incoming.timeout', 'Time to answer (minutes)')}
+                      value={incoming.timeoutMinutes}
+                      onChange={(e) => setIncoming((prev) => ({ ...prev, timeoutMinutes: wholeIn(e.target.value, 1, 60) }))}
+                      slotProps={{ htmlInput: { min: 1, max: 60 } }}
+                    />
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      label={t('settings.orderWorkflow.incoming.timeoutAction', 'If nobody answers in time')}
+                      value={incoming.timeoutAction}
+                      onChange={(e) =>
+                        setIncoming((prev) => ({ ...prev, timeoutAction: e.target.value as 'REJECT' | 'ACCEPT' }))
+                      }
+                    >
+                      <MenuItem value="REJECT">{t('settings.orderWorkflow.incoming.reject', 'Reject it and alert managers')}</MenuItem>
+                      <MenuItem value="ACCEPT">{t('settings.orderWorkflow.incoming.accept', 'Accept it and alert managers')}</MenuItem>
+                    </TextField>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="number"
+                      label={t('settings.orderWorkflow.incoming.prep', 'Default prep time on accept (minutes)')}
+                      value={incoming.defaultPrepMinutes}
+                      onChange={(e) =>
+                        setIncoming((prev) => ({ ...prev, defaultPrepMinutes: wholeIn(e.target.value, 1, 70) }))
+                      }
+                      slotProps={{ htmlInput: { min: 1, max: 70 } }}
+                    />
+                  </Stack>
                 </Paper>
 
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>

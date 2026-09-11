@@ -5,6 +5,8 @@ import {
   ConflictException,
   ForbiddenException,
   Optional,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityManager, In } from 'typeorm';
@@ -126,7 +128,7 @@ export class OrderService {
     @Optional() private readonly kdsService?: KdsService,
     @Optional() private readonly printQueueService?: PrintQueueService,
     @Optional() private readonly creditService?: CreditService,
-    @Optional() private readonly simulationService?: SimulationService,
+    @Optional() @Inject(forwardRef(() => SimulationService)) private readonly simulationService?: SimulationService,
   ) {}
 
   async getOrders(tenantId: string, query: any) {
@@ -825,13 +827,32 @@ export class OrderService {
       throw new BadRequestException({ code: 'UNKNOWN_DECLINE_REASON', message: `No decline reason ${dto.reasonId}` });
     }
     const reasonText = [`${reason.id} ${reason.title}`, dto.comment].filter(Boolean).join(': ');
+    return this.rejectWith(tenantId, id, reasonText, { reasonId: dto.reasonId, comment: dto.comment }, userId, correlationId);
+  }
 
+  /**
+   * Nobody answered within the branch's time limit, so the system turns the order down.
+   * No person acted: the state event carries no user and the audit entry reads SYSTEM.
+   */
+  async rejectUnanswered(tenantId: string, id: string, minutes: number, correlationId?: string) {
+    const reasonText = `Not answered within ${minutes} min; rejected automatically`;
+    return this.rejectWith(tenantId, id, reasonText, { comment: reasonText }, undefined, correlationId);
+  }
+
+  private async rejectWith(
+    tenantId: string,
+    id: string,
+    reasonText: string,
+    snappfoodNotice: Record<string, any>,
+    userId?: string,
+    correlationId?: string,
+  ) {
     const order = await this.transitionState(tenantId, id, 'REJECT', { reasonText }, userId, correlationId);
 
     const snappfoodCode = this.snappfoodOrderCode(order);
     if (snappfoodCode && this.simulationService) {
       try {
-        await this.simulationService.notifyRejected(tenantId, snappfoodCode, { reasonId: dto.reasonId, comment: dto.comment });
+        await this.simulationService.notifyRejected(tenantId, snappfoodCode, snappfoodNotice);
       } catch (e) {
         // The rejection stands, as with accept.
       }

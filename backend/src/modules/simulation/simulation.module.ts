@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { IntegrationLog } from '../../entities/IntegrationLog.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
@@ -10,6 +10,7 @@ import { SimulationService } from './simulation.service';
 import { SimulationController } from './simulation.controller';
 import { SimulatedWebhooksController } from './simulated-webhooks.controller';
 import { AuditModule } from '../audit/audit.module';
+import { OrderModule } from '../order/order.module';
 
 @Module({
   imports: [
@@ -22,6 +23,8 @@ import { AuditModule } from '../audit/audit.module';
       OperationalAlert,
     ]),
     AuditModule,
+    // For the branch's incoming-order policy; see the matching note in OrderModule.
+    forwardRef(() => OrderModule),
   ],
   providers: [SimulationService],
   controllers: [SimulationController, SimulatedWebhooksController],

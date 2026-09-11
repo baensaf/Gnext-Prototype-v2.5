@@ -163,6 +163,39 @@ describe('KioskService (Unit)', () => {
     expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'KIOSK_ORDER_CREATED' }));
   });
 
+  // Slice 4 of incoming orders: a kiosk order goes straight to the kitchen by default, but a
+  // branch can make it wait for staff like a Snappfood order.
+  describe('the branch acceptance policy for kiosk orders', () => {
+    const settings = (rows: any[]) =>
+      settingRepo.find.mockImplementation(({ where }: any) => Promise.resolve(rows.filter((r) => r.key === where.key)));
+    const kioskOrder = { branch_id: 'br-1', order_type: 'TAKEAWAY' as const, items: [{ product_id: 'prod-1', quantity: 1 }] };
+
+    beforeEach(() => {
+      productRepo.findOne.mockResolvedValue({ id: 'prod-1', name: 'Burger', base_price: '10.00' });
+      orderRepo.create.mockImplementation((dto: any) => dto);
+      orderRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'ord-kiosk-9' }));
+      orderItemRepo.create.mockImplementation((dto: any) => dto);
+      orderItemRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'item-9' }));
+    });
+
+    it('goes straight to the kitchen queue by default', async () => {
+      settings([]);
+
+      const order = await service.createKioskOrder('t-1', kioskOrder);
+
+      expect(order.state).toBe('SUBMITTED');
+    });
+
+    it('waits for staff when the branch says kiosk orders need accepting', async () => {
+      settings([{ key: 'ORDER_WORKFLOW', branch_id: 'br-1', value: { incomingOrders: { acceptance: { KIOSK: 'MANUAL' } } } }]);
+
+      const order = await service.createKioskOrder('t-1', kioskOrder);
+
+      expect(order.state).toBe('PENDING_ACCEPTANCE');
+      expect(order.status).toBe('PENDING_ACCEPTANCE');
+    });
+  });
+
   it('should process kiosk terminal payment and return simulated receipt', async () => {
     orderRepo.findOne.mockResolvedValue({
       id: 'ord-kiosk-1',

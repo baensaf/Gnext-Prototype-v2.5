@@ -8,6 +8,7 @@ import { Product } from '../src/entities/Product.entity';
 import { Branch } from '../src/entities/Branch.entity';
 import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
+import { IncomingOrderPolicyService } from '../src/modules/order/incoming-order-policy.service';
 
 // Slice 3 of incoming orders: what the cashier needs in front of them to answer an order,
 // and the Notification Center entry that records its arrival.
@@ -15,6 +16,7 @@ describe('an incoming Snappfood order carries what the store needs to answer it'
   let service: SimulationService;
   let orderItemRepo: any;
   let alertRepo: any;
+  let incomingPolicy: any;
 
   // The simulator's order form, as simulation-snappfood.tsx posts it.
   const simulatorOrder = {
@@ -31,6 +33,7 @@ describe('an incoming Snappfood order carries what the store needs to answer it'
   };
 
   beforeEach(async () => {
+    incomingPolicy = { applyOnArrival: jest.fn().mockResolvedValue(null) };
     const logRepo = {
       findOne: jest.fn().mockResolvedValue(null),
       create: jest.fn((dto: any) => dto),
@@ -58,6 +61,7 @@ describe('an incoming Snappfood order carries what the store needs to answer it'
         { provide: getRepositoryToken(Product), useValue: {} },
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
         { provide: getRepositoryToken(OperationalAlert), useValue: alertRepo },
+        { provide: IncomingOrderPolicyService, useValue: incomingPolicy },
         { provide: AuditWriter, useValue: { write: jest.fn() } },
       ],
     }).compile();
@@ -98,5 +102,21 @@ describe('an incoming Snappfood order carries what the store needs to answer it'
       expect.objectContaining({ tenant_id: 't-1', branch_id: 'br-tajrish', type: 'INCOMING_ORDER', severity: 'INFO', acknowledged: false }),
     );
     expect(alert.title).toContain(result.order.order_number);
+  });
+
+  // Slice 4: the branch's acceptance policy decides, as the order lands, whether it waits.
+  it('puts the order through the branch acceptance policy as it lands', async () => {
+    const result: any = await service.generateSnappfoodOrder('t-1', simulatorOrder);
+
+    expect(incomingPolicy.applyOnArrival).toHaveBeenCalledWith('t-1', 'ord-1', expect.any(String));
+    expect(result.order.state).toBe('PENDING_ACCEPTANCE');
+  });
+
+  it('answers with the accepted order when the policy let it straight through', async () => {
+    incomingPolicy.applyOnArrival.mockResolvedValue({ id: 'ord-1', state: 'CONFIRMED' });
+
+    const result: any = await service.generateSnappfoodOrder('t-1', simulatorOrder);
+
+    expect(result.order).toEqual(expect.objectContaining({ id: 'ord-1', state: 'CONFIRMED' }));
   });
 });

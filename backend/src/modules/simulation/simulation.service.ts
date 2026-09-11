@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, BadRequestException, Optional, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
@@ -8,6 +8,7 @@ import { OrderItem } from '../../entities/OrderItem.entity';
 import { Product } from '../../entities/Product.entity';
 import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
 import { OperationalAlert } from '../../entities/OperationalAlert.entity';
+import { IncomingOrderPolicyService } from '../order/incoming-order-policy.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 
@@ -21,6 +22,11 @@ export class SimulationService {
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
     @InjectRepository(OperationalAlert) private readonly alertRepo: Repository<OperationalAlert>,
     private readonly auditWriter: AuditWriter,
+    // The acceptance policy lives with orders, and orders tell Snappfood about their
+    // answers, so the two modules reach each other through forwardRef.
+    @Optional()
+    @Inject(forwardRef(() => IncomingOrderPolicyService))
+    private readonly incomingPolicy?: IncomingOrderPolicyService,
   ) {}
 
   verifyHmacSignature(rawBody: string, signature: string, secret: string = 'snappfood-secret-key-123', timestamp?: string): boolean {
@@ -237,12 +243,18 @@ export class SimulationService {
       afterData: { order_id: savedHeader.id, idempotencyKey },
     });
 
+    // A channel the branch lets straight through is accepted here, by the same accept a
+    // cashier uses. Otherwise the order waits in the Incoming Orders queue.
+    const accepted = this.incomingPolicy
+      ? await this.incomingPolicy.applyOnArrival(tenantId, savedHeader.id, corrId)
+      : null;
+
     return {
       simulated: true,
       correlationId: corrId,
       success: true,
       duplicate: false,
-      order: savedHeader,
+      order: accepted ?? savedHeader,
       log_id: logEntry.id,
     };
   }

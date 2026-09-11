@@ -9,6 +9,7 @@ import { ProductOptionGroup } from '../../entities/ProductOptionGroup.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
+import { acceptanceFor, resolveIncomingOrderPolicy } from '../../common/utils/incoming-order-policy.util';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
@@ -202,6 +203,14 @@ export class KioskService {
       customerId = customer.id;
     }
 
+    // A branch may make kiosk orders wait for staff like Snappfood ones. By default they go
+    // straight into the kitchen queue, as they always have.
+    const workflowRows = await this.settingRepo.find({
+      where: { tenant_id: tenantId, key: 'ORDER_WORKFLOW' },
+    });
+    const incomingPolicy = resolveIncomingOrderPolicy(pickSettingValue(workflowRows, data.branch_id));
+    const initialState = acceptanceFor(incomingPolicy, 'KIOSK') === 'MANUAL' ? 'PENDING_ACCEPTANCE' : 'SUBMITTED';
+
     const orderNum = `KOS-${Date.now().toString().slice(-6)}`;
     let subtotal = 0;
 
@@ -212,8 +221,8 @@ export class KioskService {
       order_number: orderNum,
       channel: 'KIOSK',
       order_type: data.order_type || 'TAKEAWAY',
-      state: 'SUBMITTED' as any,
-      status: 'SUBMITTED',
+      state: initialState as any,
+      status: initialState,
       fulfillment_status: 'PENDING',
       customer_id: customerId,
       notes: data.idempotency_key ? `IDEM:${data.idempotency_key}` : (data.notes || 'Kiosk Self-Service Order'),
