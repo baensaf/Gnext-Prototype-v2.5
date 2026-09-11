@@ -1,8 +1,8 @@
 import type { CashierShift } from '../../api/shiftApi';
 
 import { useTranslation } from 'react-i18next';
-import { useParams, useNavigate } from 'react-router';
 import { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router';
 
 import RefreshIcon from '@mui/icons-material/Refresh';
 import HistoryIcon from '@mui/icons-material/History';
@@ -37,6 +37,9 @@ export function ShiftDetailPage() {
   const params = useParams<{ id?: string; shiftId?: string }>();
   const id = params.id || params.shiftId;
   const navigate = useNavigate();
+  // Head office arrives from the chain roll-up, and has no branch Shifts page to go back to.
+  const [searchParams] = useSearchParams();
+  const backPath = searchParams.get('from') === 'rollup' ? '/app/cashier/rollup' : '/app/cashier/shifts';
   const { t } = useTranslation();
 
   const [shift, setShift] = useState<CashierShift | null>(null);
@@ -72,7 +75,7 @@ export function ShiftDetailPage() {
   if (error || !shift) {
     return (
       <Container maxWidth="xl" sx={{ py: 4 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/app/cashier/shifts')} sx={{ mb: 2 }}>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(backPath)} sx={{ mb: 2 }}>
           {t('common.back', 'Back to Shifts')}
         </Button>
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -119,7 +122,7 @@ export function ShiftDetailPage() {
       {/* Header */}
       <Stack sx={{ flexDirection: { xs: 'column', sm: 'row' }, alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 2, mb: 3 }}>
         <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/app/cashier/shifts')}>
+          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(backPath)}>
             {t('common.back', 'Back')}
           </Button>
           <Box>

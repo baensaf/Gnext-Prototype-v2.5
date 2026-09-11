@@ -2379,6 +2379,8 @@
       "closed": "Closed and counted",
       "staleOpen": "Left open from an earlier day",
       "staleWarning": "{{count}} drawer(s) are still open on a business date that has already ended. Those tills keep accumulating against a closed day until somebody at the branch counts them down.",
+      "drawerSubtitle": "Drawers on {{date}} · read-only",
+      "noShiftsThatDay": "No drawer was opened at this branch on this day.",
       "notTrading": "Branches with no till open",
       "expectedCash": "Expected cash",
       "countedCash": "Counted cash",

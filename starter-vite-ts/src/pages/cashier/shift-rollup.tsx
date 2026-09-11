@@ -30,6 +30,7 @@ import { MoneyUtil } from 'src/utils/money.util';
 import { rollupApi } from 'src/api/rollupApi';
 
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
+import { BranchShiftsDrawer } from 'src/components/shift/branch-shifts-drawer';
 
 // ----------------------------------------------------------------------
 
@@ -53,6 +54,8 @@ export function ShiftRollupPage() {
   const [data, setData] = useState<ShiftRollup | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // The branch whose drawers are open in the side panel.
+  const [drillBranch, setDrillBranch] = useState<{ id: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -189,7 +192,12 @@ export function ShiftRollupPage() {
                 </TableHead>
                 <TableBody>
                   {(data?.rows ?? []).map((row) => (
-                    <TableRow key={row.branch_id} hover>
+                    <TableRow
+                      key={row.branch_id}
+                      hover
+                      onClick={() => setDrillBranch({ id: row.branch_id, name: row.branch })}
+                      sx={{ cursor: 'pointer' }}
+                    >
                       <TableCell>
                         <Typography variant="subtitle2">{row.branch}</Typography>
                         <Typography variant="caption" color="text.secondary">
@@ -238,6 +246,14 @@ export function ShiftRollupPage() {
           'Over / short counts only drawers that have actually been counted, so a branch still trading reads as zero rather than as clean. "Left open from an earlier day" is not filtered by the date above.'
         )}
       </Typography>
+
+      <BranchShiftsDrawer
+        open={Boolean(drillBranch)}
+        onClose={() => setDrillBranch(null)}
+        branchId={drillBranch?.id ?? null}
+        branchName={drillBranch?.name}
+        businessDate={businessDate}
+      />
     </Box>
   );
 }
