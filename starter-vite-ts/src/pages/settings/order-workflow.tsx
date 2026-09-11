@@ -29,6 +29,12 @@ import { useBranchContext } from 'src/contexts/branch-context';
 import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
+/**
+ * The cashier windows live in their own group, ORDER_ACTIONS, because that is the one
+ * the till enforces. These defaults match the server's when no row has been written.
+ */
+const ORDER_ACTION_DEFAULTS = { editWindowMinutes: 10, cancelWindowMinutes: 10 };
+
 export function OrderWorkflowSettingsPage() {
   const { t } = useTranslation();
 
@@ -39,8 +45,11 @@ export function OrderWorkflowSettingsPage() {
 
   // Workflow settings state
   const [autoAcceptOrders, setAutoAcceptOrders] = useState(true);
-  const [cashierEditWindowMinutes, setCashierEditWindowMinutes] = useState(5);
-  const [cashierCancelWindowMinutes, setCashierCancelWindowMinutes] = useState(5);
+  const [cashierEditWindowMinutes, setCashierEditWindowMinutes] = useState(ORDER_ACTION_DEFAULTS.editWindowMinutes);
+  const [cashierCancelWindowMinutes, setCashierCancelWindowMinutes] = useState(ORDER_ACTION_DEFAULTS.cancelWindowMinutes);
+  // What the windows were when the page loaded, so saving the workflow toggles at a
+  // branch does not also pin that branch's windows to whatever head office has today.
+  const [loadedWindows, setLoadedWindows] = useState(ORDER_ACTION_DEFAULTS);
   const [autoRouteToKds, setAutoRouteToKds] = useState(true);
   const [allowReopenClosedOrders, setAllowReopenClosedOrders] = useState(false);
   const [enableDineIn, setEnableDineIn] = useState(true);
@@ -51,7 +60,10 @@ export function OrderWorkflowSettingsPage() {
 
   const { selectedBranchId, selectedBranch } = useBranchContext();
   // ORG while these values are still head office's, BRANCH once this location has its own.
-  const [source, setSource] = useState<'BRANCH' | 'ORG'>('ORG');
+  // Tracked per group, since a branch may override the windows and not the workflow.
+  const [workflowSource, setWorkflowSource] = useState<'BRANCH' | 'ORG'>('ORG');
+  const [actionsSource, setActionsSource] = useState<'BRANCH' | 'ORG'>('ORG');
+  const source = workflowSource === 'BRANCH' || actionsSource === 'BRANCH' ? 'BRANCH' : 'ORG';
 
   const loadSettings = useCallback(async () => {
     setLoading(true);
@@ -60,11 +72,19 @@ export function OrderWorkflowSettingsPage() {
       const scoped = await settingsApi.getScopedSettings(selectedBranchId || undefined);
       const group = scoped.groups?.ORDER_WORKFLOW || scoped.groups?.POS;
       const workflow = group?.value || {};
-      setSource(group?.source || 'ORG');
+      setWorkflowSource(scoped.groups?.ORDER_WORKFLOW?.source || 'ORG');
+
+      const actionsGroup = scoped.groups?.ORDER_ACTIONS;
+      const windows = {
+        editWindowMinutes: Number(actionsGroup?.value?.editWindowMinutes ?? ORDER_ACTION_DEFAULTS.editWindowMinutes),
+        cancelWindowMinutes: Number(actionsGroup?.value?.cancelWindowMinutes ?? ORDER_ACTION_DEFAULTS.cancelWindowMinutes),
+      };
+      setActionsSource(actionsGroup?.source || 'ORG');
+      setCashierEditWindowMinutes(windows.editWindowMinutes);
+      setCashierCancelWindowMinutes(windows.cancelWindowMinutes);
+      setLoadedWindows(windows);
 
       if (workflow.autoAcceptOrders !== undefined) setAutoAcceptOrders(Boolean(workflow.autoAcceptOrders));
-      if (workflow.cashierEditWindowMinutes !== undefined) setCashierEditWindowMinutes(Number(workflow.cashierEditWindowMinutes));
-      if (workflow.cashierCancelWindowMinutes !== undefined) setCashierCancelWindowMinutes(Number(workflow.cashierCancelWindowMinutes));
       if (workflow.autoRouteToKds !== undefined) setAutoRouteToKds(Boolean(workflow.autoRouteToKds));
       if (workflow.allowReopenClosedOrders !== undefined) setAllowReopenClosedOrders(Boolean(workflow.allowReopenClosedOrders));
       if (workflow.enableDineIn !== undefined) setEnableDineIn(Boolean(workflow.enableDineIn));
@@ -91,8 +111,6 @@ export function OrderWorkflowSettingsPage() {
 
     const payload = {
       autoAcceptOrders,
-      cashierEditWindowMinutes: Number(cashierEditWindowMinutes),
-      cashierCancelWindowMinutes: Number(cashierCancelWindowMinutes),
       autoRouteToKds,
       allowReopenClosedOrders,
       enableDineIn,
@@ -106,6 +124,18 @@ export function OrderWorkflowSettingsPage() {
       // At head office this writes the value every branch inherits; inside a branch it
       // writes that branch's override and leaves the rest of the chain alone.
       await settingsApi.updateSetting('ORDER_WORKFLOW', payload, selectedBranchId || undefined);
+
+      const windows = {
+        editWindowMinutes: Number(cashierEditWindowMinutes),
+        cancelWindowMinutes: Number(cashierCancelWindowMinutes),
+      };
+      const windowsChanged =
+        windows.editWindowMinutes !== loadedWindows.editWindowMinutes ||
+        windows.cancelWindowMinutes !== loadedWindows.cancelWindowMinutes;
+      if (windowsChanged) {
+        await settingsApi.updateSetting('ORDER_ACTIONS', windows, selectedBranchId || undefined);
+      }
+
       setSuccess(
         selectedBranchId
           ? t('settings.orderWorkflow.saveBranchSuccess', 'Saved as an override for this branch.')
@@ -124,7 +154,9 @@ export function OrderWorkflowSettingsPage() {
     setSaving(true);
     setError(null);
     try {
-      await settingsApi.clearBranchOverride('ORDER_WORKFLOW', selectedBranchId);
+      // Only groups this branch actually overrides have a row to remove.
+      if (workflowSource === 'BRANCH') await settingsApi.clearBranchOverride('ORDER_WORKFLOW', selectedBranchId);
+      if (actionsSource === 'BRANCH') await settingsApi.clearBranchOverride('ORDER_ACTIONS', selectedBranchId);
       setSuccess(t('settings.orderWorkflow.resetSuccess', 'Override removed. This branch follows head office again.'));
       await loadSettings();
     } catch (err: any) {
@@ -193,7 +225,7 @@ export function OrderWorkflowSettingsPage() {
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                 {t(
                   'settings.orderWorkflow.timeWindowsDesc',
-                  'Orders can be freely edited or cancelled by cashiers within this grace window. After expiration, supervisor PIN escalation is mandatory.'
+                  'Measured from when the order is submitted. Inside the window a cashier can remove items or cancel without a PIN; after it, a manager PIN is required. Removing items once the kitchen has started preparing, or from an order that has been paid, always needs a manager PIN. Adding items never does.'
                 )}
               </Typography>
 

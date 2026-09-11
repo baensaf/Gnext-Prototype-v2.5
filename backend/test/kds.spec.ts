@@ -108,6 +108,23 @@ describe('KdsService (Unit & Integration)', () => {
     expect(recalled.state).toBe('IN_PROGRESS');
   });
 
+  it('leaves a voided item cancelled when the ticket is bumped', async () => {
+    ticketRepo.findOne.mockResolvedValue({ id: 'tkt-1', tenant_id: 't-1', order_id: 'ord-1', state: 'IN_PROGRESS' });
+    ticketRepo.save.mockImplementation((t) => Promise.resolve(t));
+    ticketRepo.find.mockResolvedValue([{ id: 'tkt-1', state: 'READY' }]);
+    orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', status: 'CANCELLED' });
+    const ticketItems = [
+      { id: 'it-1', state: 'IN_PROGRESS' },
+      { id: 'it-2', state: 'CANCELLED' },
+    ];
+    itemRepo.find.mockResolvedValue(ticketItems);
+
+    await service.bumpTicket('t-1', 'tkt-1', 'corr-bump');
+
+    expect(ticketItems[0].state).toBe('READY');
+    expect(ticketItems[1].state).toBe('CANCELLED');
+  });
+
   it('should set ticket priority and record event', async () => {
     ticketRepo.findOne.mockResolvedValue({ id: 'tkt-1', tenant_id: 't-1', priority: 0, state: 'IN_PROGRESS' });
     ticketRepo.save.mockImplementation((t) => Promise.resolve(t));

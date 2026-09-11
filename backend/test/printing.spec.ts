@@ -134,4 +134,75 @@ describe('PrintingModule (Unit & Integration)', () => {
     expect(outcomeRes.attempt.status).toBe('FAILED');
     expect(outcomeRes.attempt.printer_id).toBe('prn-backup');
   });
+
+  describe('kitchen change tickets', () => {
+    const editedOrder = () => ({
+      id: 'ord-200',
+      branch_id: 'br-1',
+      order_number: 'ORD-200',
+      order_type: 'DINE_IN',
+      placed_at: new Date(),
+      items: [
+        { id: 'l-1', product_name: 'Kebab', quantity: '1', unit_price: '50.00', state: 'VOID' },
+        { id: 'l-2', product_name: 'Doogh', quantity: '2', unit_price: '5.00', state: 'ACTIVE' },
+        { id: 'l-3', product_name: 'Baklava', quantity: '1', unit_price: '8.00', state: 'ACTIVE' },
+      ],
+      grand_total: '18.00',
+    });
+
+    beforeEach(() => {
+      orderRepo.findOne.mockResolvedValue(editedOrder());
+      routeRepo.find.mockResolvedValue([]);
+      printerRepo.find.mockResolvedValue([{ id: 'prn-kitchen', name: 'Kitchen', is_active: true }]);
+      jobRepo.create.mockImplementation((j: any) => j);
+      jobRepo.save.mockImplementation((j: any) => Promise.resolve({ ...j, id: 'job-200' }));
+      attemptRepo.create.mockImplementation((a: any) => a);
+    });
+
+    it('prints only the delta, marking struck lines VOID and new lines ADD', async () => {
+      const job = await queueService.enqueueKitchenChangeTicket('t-1', 'ord-200', {
+        kind: 'AMENDED',
+        voidedItemIds: ['l-1'],
+        addedItemIds: ['l-3'],
+        reason: 'Swapped main for dessert',
+      });
+
+      expect(job!.document_type).toBe('KITCHEN_TICKET');
+      expect(job!.rendered_html).toContain('KITCHEN CHANGE - ORDER AMENDED');
+      expect(job!.rendered_html).toMatch(/VOID<\/strong> <span[^>]*line-through[^>]*><strong>1x<\/strong> Kebab/);
+      expect(job!.rendered_html).toMatch(/ADD<\/strong> <span><strong>1x<\/strong> Baklava/);
+      expect(job!.rendered_html).not.toContain('Doogh');
+      expect(job!.rendered_html).toContain('Swapped main for dessert');
+      expect(job!.reason).toBe('Order amended: Swapped main for dessert');
+    });
+
+    it('prints every live line under a STOP heading when the order is cancelled', async () => {
+      const job = await queueService.enqueueKitchenChangeTicket('t-1', 'ord-200', { kind: 'CANCELLED' });
+
+      expect(job!.rendered_html).toContain('ORDER CANCELLED - STOP');
+      expect(job!.rendered_html).toContain('Doogh');
+      expect(job!.rendered_html).toContain('Baklava');
+      // Already struck off by an earlier edit, and already told to the kitchen then.
+      expect(job!.rendered_html).not.toContain('Kebab');
+    });
+
+    it('prints nothing when the change touches no line on the order', async () => {
+      const job = await queueService.enqueueKitchenChangeTicket('t-1', 'ord-200', {
+        kind: 'AMENDED',
+        voidedItemIds: ['not-on-this-order'],
+        addedItemIds: [],
+      });
+
+      expect(job).toBeNull();
+      expect(jobRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('leaves voided lines off a kitchen reprint', async () => {
+      const job = await queueService.enqueueOrderPrintJobs('t-1', 'ord-200', 'KITCHEN_TICKET', true, 'Paper jam');
+
+      expect(job!.rendered_html).not.toContain('Kebab');
+      expect(job!.rendered_html).toContain('Doogh');
+      expect(job!.rendered_html).toContain('KITCHEN DISPATCH CHIT');
+    });
+  });
 });

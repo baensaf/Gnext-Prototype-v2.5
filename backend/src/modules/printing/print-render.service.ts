@@ -8,6 +8,13 @@ export interface RenderDocOptions {
   tableNumber?: string;
   customerName?: string;
   placedAt?: Date | string;
+  /**
+   * Set on a kitchen ticket that amends one the kitchen already holds. The chit is
+   * retitled so a cook cannot mistake it for a fresh order, and each line says whether
+   * it is being struck off or added.
+   */
+  kitchenChange?: 'AMENDED' | 'CANCELLED';
+  changeReason?: string;
   items: Array<{
     product_name: string;
     quantity: number | string;
@@ -15,6 +22,7 @@ export interface RenderDocOptions {
     total_price?: number | string;
     special_instructions?: string;
     options_summary?: string;
+    change?: 'VOID' | 'ADD';
   }>;
   subtotal?: string;
   discountTotal?: string;
@@ -33,15 +41,24 @@ export class PrintRenderService {
       GUEST_BILL: 'DINE-IN GUEST BILL',
     };
 
-    const docTitle = titleMap[opts.documentType] || opts.documentType;
+    const changeTitleMap: Record<string, string> = {
+      AMENDED: 'KITCHEN CHANGE - ORDER AMENDED',
+      CANCELLED: '*** ORDER CANCELLED - STOP ***',
+    };
+
+    const docTitle =
+      (opts.kitchenChange && changeTitleMap[opts.kitchenChange]) || titleMap[opts.documentType] || opts.documentType;
     const dateStr = opts.placedAt ? new Date(opts.placedAt).toLocaleString() : new Date().toLocaleString();
+
+    const changeMarker = (change?: 'VOID' | 'ADD') =>
+      change === 'VOID' ? '<strong>VOID</strong> ' : change === 'ADD' ? '<strong>ADD</strong> ' : '';
 
     const itemsHtml = opts.items
       .map(
         (item) => `
         <tr>
           <td style="padding: 4px 0; border-bottom: 1px dashed #eee;">
-            <strong>${item.quantity}x</strong> ${this.escapeHtml(item.product_name)}
+            ${changeMarker(item.change)}<span${item.change === 'VOID' ? ' style="text-decoration: line-through;"' : ''}><strong>${item.quantity}x</strong> ${this.escapeHtml(item.product_name)}</span>
             ${item.options_summary ? `<br/><small style="color: #666;">+ ${this.escapeHtml(item.options_summary)}</small>` : ''}
             ${item.special_instructions ? `<br/><small style="color: #d32f2f;">* ${this.escapeHtml(item.special_instructions)}</small>` : ''}
           </td>
@@ -89,6 +106,7 @@ export class PrintRenderService {
           <div><strong>DATE:</strong> ${dateStr}</div>
           ${opts.orderType ? `<div><strong>TYPE:</strong> ${opts.orderType} ${opts.tableNumber ? `(Table ${opts.tableNumber})` : ''}</div>` : ''}
           ${opts.customerName ? `<div><strong>CUSTOMER:</strong> ${this.escapeHtml(opts.customerName)}</div>` : ''}
+          ${opts.changeReason ? `<div><strong>REASON:</strong> ${this.escapeHtml(opts.changeReason)}</div>` : ''}
         </div>
         <table>
           ${itemsHtml}

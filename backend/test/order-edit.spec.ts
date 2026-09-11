@@ -26,6 +26,7 @@ import { ApprovalService } from '../src/modules/approval/approval.service';
 import { KdsService } from '../src/modules/kds/kds.service';
 import { CatalogService } from '../src/modules/catalog/catalog.service';
 import { RefundService } from '../src/modules/refund/refund.service';
+import { PrintQueueService } from '../src/modules/printing/print-queue.service';
 
 const TENANT = 't-1';
 const ORDER_ID = 'ord-1';
@@ -36,6 +37,7 @@ describe('Order edit command (spec 7.9)', () => {
   let service: OrderService;
   let approvalService: any;
   let kdsService: any;
+  let printQueueService: any;
   let stateEvents: any[];
   let order: any;
   let items: any[];
@@ -132,6 +134,7 @@ describe('Order edit command (spec 7.9)', () => {
       cancelTicketItemsForOrderItem: jest.fn().mockResolvedValue({ cancelled: 1 }),
       generateTicketsForOrder: jest.fn().mockResolvedValue([]),
     };
+    printQueueService = { enqueueKitchenChangeTicket: jest.fn().mockResolvedValue({ id: 'job-1' }) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -167,6 +170,7 @@ describe('Order edit command (spec 7.9)', () => {
         { provide: OutboxWriter, useValue: { enqueueInTransaction: jest.fn() } },
         { provide: ApprovalService, useValue: approvalService },
         { provide: KdsService, useValue: kdsService },
+        { provide: PrintQueueService, useValue: printQueueService },
         { provide: DataSource, useValue: { transaction: jest.fn(async (cb: any) => cb(em)), manager: em } },
       ],
     }).compile();
@@ -345,6 +349,88 @@ describe('Order edit command (spec 7.9)', () => {
       });
 
       expect(items.find((i) => i.id === 'item-1').state).toBe('VOID');
+    });
+  });
+
+  describe('kitchen change tickets', () => {
+    it('prints a VOID chit for a struck line', async () => {
+      await service.editOrder(TENANT, ORDER_ID, {
+        changes: { void: [{ orderItemId: 'item-1', reasonCodeId: REASON, reason: 'Customer changed mind' }] },
+      });
+
+      expect(printQueueService.enqueueKitchenChangeTicket).toHaveBeenCalledWith(
+        TENANT,
+        ORDER_ID,
+        { kind: 'AMENDED', voidedItemIds: ['item-1'], addedItemIds: [], reason: 'Customer changed mind' },
+        undefined,
+      );
+    });
+
+    it('prints an ADD chit for an appended line', async () => {
+      await service.editOrder(TENANT, ORDER_ID, {
+        changes: { add: [{ product_id: 'prod-9', quantity: '1.0000' } as any] },
+      });
+
+      const appended = items.find((i) => i.product_name === 'Baklava');
+      expect(printQueueService.enqueueKitchenChangeTicket).toHaveBeenCalledWith(
+        TENANT,
+        ORDER_ID,
+        expect.objectContaining({ kind: 'AMENDED', voidedItemIds: [], addedItemIds: [appended.id] }),
+        undefined,
+      );
+    });
+
+    it('still prints the chit when the station screens are down', async () => {
+      kdsService.cancelTicketItemsForOrderItem.mockRejectedValue(new Error('KDS offline'));
+
+      await service.editOrder(TENANT, ORDER_ID, {
+        changes: { void: [{ orderItemId: 'item-1', reasonCodeId: REASON }] },
+      });
+
+      expect(printQueueService.enqueueKitchenChangeTicket).toHaveBeenCalled();
+    });
+
+    it('prints the replaced line as VOID and its replacement as ADD', async () => {
+      await service.replaceItem(TENANT, ORDER_ID, {
+        orderItemId: 'item-1',
+        reasonCodeId: REASON,
+        replacement: { productId: 'prod-9', quantity: '1.0000' },
+      } as any);
+
+      const replacement = items.find((i) => i.replaces_item_id === 'item-1');
+      expect(printQueueService.enqueueKitchenChangeTicket).toHaveBeenCalledWith(
+        TENANT,
+        ORDER_ID,
+        expect.objectContaining({ kind: 'AMENDED', voidedItemIds: ['item-1'], addedItemIds: [replacement.id] }),
+        undefined,
+      );
+    });
+
+    it('stops the kitchen when a submitted order is cancelled', async () => {
+      order.items = items;
+
+      await service.cancelOrder(TENANT, ORDER_ID, { reasonCodeId: REASON, reason: 'Walked out' } as any);
+
+      expect(order.state).toBe('CANCELLED');
+      expect(kdsService.cancelTicketItemsForOrderItem).toHaveBeenCalledWith(TENANT, 'item-1', undefined);
+      expect(kdsService.cancelTicketItemsForOrderItem).toHaveBeenCalledWith(TENANT, 'item-2', undefined);
+      expect(printQueueService.enqueueKitchenChangeTicket).toHaveBeenCalledWith(
+        TENANT,
+        ORDER_ID,
+        { kind: 'CANCELLED', reason: 'Walked out' },
+        undefined,
+      );
+    });
+
+    it('sends nothing to the kitchen when a draft is discarded', async () => {
+      order.state = 'DRAFT';
+      order.submitted_at = null;
+      order.items = items;
+
+      await service.cancelOrder(TENANT, ORDER_ID, { reasonCodeId: REASON } as any);
+
+      expect(kdsService.cancelTicketItemsForOrderItem).not.toHaveBeenCalled();
+      expect(printQueueService.enqueueKitchenChangeTicket).not.toHaveBeenCalled();
     });
   });
 });

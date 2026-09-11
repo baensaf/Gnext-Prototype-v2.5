@@ -387,9 +387,11 @@ export class KdsService {
     ticket.ready_at = new Date();
     const saved = await this.ticketRepo.save(ticket);
 
-    // Update items to READY
+    // Update items to READY. A voided item stays CANCELLED: bumping must not turn food
+    // that was struck off into food the pass should hand out.
     const items = await this.itemRepo.find({ where: { tenant_id: tenantId, ticket_id: ticketId } });
     for (const it of items) {
+      if (it.state === 'CANCELLED') continue;
       it.state = 'READY';
       it.status = 'DONE';
       await this.itemRepo.save(it);

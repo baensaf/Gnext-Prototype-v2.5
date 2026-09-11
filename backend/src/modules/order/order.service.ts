@@ -88,6 +88,9 @@ const ALLOWED_TRANSITIONS: Record<OrderState, OrderState[]> = {
   CANCELLED: ['SUBMITTED'],
 };
 
+/** States in which the kitchen has the order and has not yet handed it over. */
+const KITCHEN_HOLDS_ORDER_STATES: OrderState[] = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY'];
+
 @Injectable()
 export class OrderService {
   constructor(
@@ -880,6 +883,7 @@ export class OrderService {
           relations: ['items', 'items.options', 'adjustments', 'stateEvents'],
         }),
         voidedItemIds: linesToVoid.map((l) => l.id),
+        addedItemIds: after.filter((l) => !before.some((b) => b.id === l.id)).map((l) => l.id),
       };
     });
 
@@ -890,7 +894,8 @@ export class OrderService {
       tenantId,
       id,
       result.voidedItemIds,
-      additions.length > 0,
+      result.addedItemIds,
+      dto.reason || removals[0]?.reason,
       userId,
     );
 
@@ -952,11 +957,15 @@ export class OrderService {
   }
 
   /**
-   * Retract voided lines from the kitchen and fire any newly appended ones.
+   * Retract voided lines from the kitchen and fire any newly appended ones, on both
+   * the station screens and the kitchen printer.
    *
    * MUST be called after the edit transaction commits, never inside it. KdsService
    * works through its own repositories on a separate connection, so a line added
    * in an open transaction is invisible to it and would never reach a station.
+   *
+   * A kitchen that works from paper never sees the screens, so the change chit is
+   * printed regardless of whether the KDS call succeeded.
    *
    * Best effort: a KDS hiccup must not fail an otherwise valid edit, since the
    * order and its money are already consistent by this point.
@@ -965,19 +974,61 @@ export class OrderService {
     tenantId: string,
     orderId: string,
     voidedItemIds: string[],
-    hasAdditions: boolean,
+    addedItemIds: string[],
+    reason?: string,
     userId?: string,
   ) {
-    if (!this.kdsService) return;
-    try {
-      for (const itemId of voidedItemIds) {
-        await this.kdsService.cancelTicketItemsForOrderItem(tenantId, itemId, userId);
+    if (this.kdsService) {
+      try {
+        for (const itemId of voidedItemIds) {
+          await this.kdsService.cancelTicketItemsForOrderItem(tenantId, itemId, userId);
+        }
+        if (addedItemIds.length > 0) {
+          await this.kdsService.generateTicketsForOrder(tenantId, orderId);
+        }
+      } catch (err) {
+        console.error(`KDS sync after edit of order ${orderId} failed`, err);
       }
-      if (hasAdditions) {
-        await this.kdsService.generateTicketsForOrder(tenantId, orderId);
+    }
+
+    if (this.printQueueService && (voidedItemIds.length > 0 || addedItemIds.length > 0)) {
+      await this.printQueueService.enqueueKitchenChangeTicket(
+        tenantId,
+        orderId,
+        { kind: 'AMENDED', voidedItemIds, addedItemIds, reason },
+        userId,
+      );
+    }
+  }
+
+  /**
+   * Stop the kitchen on an order that was cancelled after it was sent there: every
+   * line still on it comes off the station screens, and the printer gets a STOP chit.
+   * A draft never reached the kitchen, and an order out for delivery has already left
+   * it, so neither gets one.
+   */
+  private async stopKitchenAfterCancel(
+    tenantId: string,
+    orderId: string,
+    stateBeforeCancel: OrderState,
+    activeItemIds: string[],
+    reason?: string,
+    userId?: string,
+  ) {
+    if (!KITCHEN_HOLDS_ORDER_STATES.includes(stateBeforeCancel) || activeItemIds.length === 0) return;
+
+    if (this.kdsService) {
+      try {
+        for (const itemId of activeItemIds) {
+          await this.kdsService.cancelTicketItemsForOrderItem(tenantId, itemId, userId);
+        }
+      } catch (err) {
+        console.error(`KDS stop after cancel of order ${orderId} failed`, err);
       }
-    } catch (err) {
-      console.error(`KDS sync after edit of order ${orderId} failed`, err);
+    }
+
+    if (this.printQueueService) {
+      await this.printQueueService.enqueueKitchenChangeTicket(tenantId, orderId, { kind: 'CANCELLED', reason }, userId);
     }
   }
 
@@ -994,7 +1045,7 @@ export class OrderService {
       throw new BadRequestException('A replacement line is required; use the edit command to void without replacing');
     }
 
-    const replacedItemId = await this.dataSource.transaction(async (em) => {
+    const replaced = await this.dataSource.transaction(async (em) => {
       const order = await em.findOne(OrderHeader, {
         where: { id, tenant_id: tenantId },
         lock: { mode: 'pessimistic_write' },
@@ -1130,11 +1181,18 @@ export class OrderService {
         afterData: after,
       });
 
-      return item.id;
+      return { replacedItemId: item.id, replacementItemId: replacement?.id };
     });
 
     // Outside the transaction so the replacement line is visible to KDS.
-    await this.syncKitchenAfterEdit(tenantId, id, [replacedItemId], true, userId);
+    await this.syncKitchenAfterEdit(
+      tenantId,
+      id,
+      [replaced.replacedItemId],
+      replaced.replacementItemId ? [replaced.replacementItemId] : [],
+      dto.reason,
+      userId,
+    );
 
     return await this.getOrderById(tenantId, id);
   }
@@ -1170,8 +1228,11 @@ export class OrderService {
 
     // Spec 6.1: a DRAFT cancel needs a reason only once it has items on it, so
     // discarding an empty held draft stays a one-click action.
-    const hasLines = (order.items || []).filter(isActiveLine).length > 0;
-    if (hasLines && !dto.reasonCodeId) {
+    // Captured before the cancel runs: after it, the order reads CANCELLED and no
+    // longer says whether the kitchen ever had it.
+    const stateBeforeCancel = order.state;
+    const activeItemIds = (order.items || []).filter(isActiveLine).map((i) => i.id);
+    if (activeItemIds.length > 0 && !dto.reasonCodeId) {
       throw new BadRequestException('Cancelling an order with items requires a reason code');
     }
 
@@ -1180,28 +1241,30 @@ export class OrderService {
     // against a cancelled sale. That reversal is the refund module's
     // orchestration, which refunds same-tender and then cancels in one
     // transaction. The approval above is the gate for it.
-    if (MoneyUtil.greaterThan(netPaid, '0.0000')) {
-      return await this.refundService.cancelPaidOrder(
-        tenantId,
-        id,
-        {
-          reason: dto.reason || 'Paid order cancellation',
-          reasonCodeId: dto.reasonCodeId,
-          approvalRequestId: dto.approvalRequestId,
-        },
-        userId,
-        correlationId,
-      );
-    }
+    const cancelled = MoneyUtil.greaterThan(netPaid, '0.0000')
+      ? await this.refundService.cancelPaidOrder(
+          tenantId,
+          id,
+          {
+            reason: dto.reason || 'Paid order cancellation',
+            reasonCodeId: dto.reasonCodeId,
+            approvalRequestId: dto.approvalRequestId,
+          },
+          userId,
+          correlationId,
+        )
+      : await this.transitionState(
+          tenantId,
+          id,
+          'CANCEL',
+          { reasonCodeId: dto.reasonCodeId, reasonText: dto.reason, approvalRequestId: dto.approvalRequestId },
+          userId,
+          correlationId,
+        );
 
-    return await this.transitionState(
-      tenantId,
-      id,
-      'CANCEL',
-      { reasonCodeId: dto.reasonCodeId, reasonText: dto.reason, approvalRequestId: dto.approvalRequestId },
-      userId,
-      correlationId,
-    );
+    await this.stopKitchenAfterCancel(tenantId, id, stateBeforeCancel, activeItemIds, dto.reason, userId);
+
+    return cancelled;
   }
 
   /**

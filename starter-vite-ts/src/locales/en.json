@@ -1813,7 +1813,7 @@
       "subtitle": "Configure order lifecycle automation, cashier edit and cancellation time windows, and channel policies.",
       "saveSuccess": "Order workflow settings saved successfully.",
       "timeWindowsTitle": "Cashier Time Windows & Escalation",
-      "timeWindowsDesc": "Orders can be freely edited or cancelled by cashiers within this grace window. After expiration, supervisor PIN escalation is mandatory.",
+      "timeWindowsDesc": "Measured from when the order is submitted. Inside the window a cashier can remove items or cancel without a PIN; after it, a manager PIN is required. Removing items once the kitchen has started preparing, or from an order that has been paid, always needs a manager PIN. Adding items never does.",
       "editWindowLabel": "Order Edit Grace Window (Minutes)",
       "editWindowHelp": "Number of minutes a cashier can modify items on an open order without manager PIN approval.",
       "cancelWindowLabel": "Order Cancellation Grace Window (Minutes)",
