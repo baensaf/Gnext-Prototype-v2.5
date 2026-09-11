@@ -33,7 +33,6 @@ export async function runSeed() {
   const diningAreaRepo = AppDataSource.getRepository('DiningArea');
   const diningTableRepo = AppDataSource.getRepository('DiningTable');
   const courierRepo = AppDataSource.getRepository('Courier');
-  const customerGroupRepo = AppDataSource.getRepository('CustomerGroup');
   const customerRepo = AppDataSource.getRepository('Customer');
   const customerPhoneRepo = AppDataSource.getRepository('CustomerPhone');
   const customerAddressRepo = AppDataSource.getRepository('CustomerAddress');
@@ -372,16 +371,6 @@ export async function runSeed() {
 
   // 7b. Demo customers make directory, address, and credit-account screens useful
   // immediately after a fresh deployment.
-  let vipGroup = await customerGroupRepo.findOne({ where: { tenant_id: tenant.id, code: 'VIP' } });
-  if (!vipGroup) {
-    vipGroup = await customerGroupRepo.save(customerGroupRepo.create({
-      tenant_id: tenant.id,
-      code: 'VIP',
-      name: 'VIP Customers',
-      is_active: true,
-    }));
-  }
-
   const demoCustomers = [
     { code: 'CUST-1001', first_name: 'Reza', last_name: 'Mohammadi', mobile: '09121234567', email: 'reza@example.test', credit_limit: '5000000.0000', current_balance: '-350000.0000' },
     { code: 'CUST-1002', first_name: 'Sara', last_name: 'Ahmadi', mobile: '09121234568', email: 'sara@example.test', credit_limit: '3000000.0000', current_balance: '250000.0000' },
@@ -397,7 +386,6 @@ export async function runSeed() {
         last_name: demo.last_name,
         mobile: demo.mobile,
         email: demo.email,
-        customer_group_id: vipGroup.id,
         is_active: true,
       }));
     }

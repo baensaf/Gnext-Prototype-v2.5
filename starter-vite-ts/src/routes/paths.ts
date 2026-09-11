@@ -69,7 +69,6 @@ export const paths = {
     discounts: {
       customerRates: `${ROOTS.APP}/discounts/customer-rates`,
       coupons: `${ROOTS.APP}/discounts/coupons`,
-      authorizations: `${ROOTS.APP}/discounts/authorizations`,
       wallet: `${ROOTS.APP}/discounts/wallet`,
     },
     operations: {

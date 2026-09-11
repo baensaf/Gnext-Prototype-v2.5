@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { CustomerGroup } from '../../entities/CustomerGroup.entity';
 import { Customer } from '../../entities/Customer.entity';
 import { CustomerPhone } from '../../entities/CustomerPhone.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
@@ -23,7 +22,6 @@ import { AuditModule } from '../audit/audit.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      CustomerGroup,
       Customer,
       CustomerPhone,
       CustomerAddress,

@@ -214,7 +214,7 @@ export default function CustomerDiscountsPage({ isEmbedded = false }: CustomerDi
             {t('customerClub.title', 'Customer Specific Discounts')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {t('customerClub.subtitle', 'Assign dedicated percentage discount entitlements to individual customers or in bulk without complex campaigns.')}
+            {t('customerClub.subtitle', 'Assign dedicated percentage discount entitlements to individual customers or in bulk.')}
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>

@@ -2,115 +2,22 @@ import { Controller, Get, Post, Patch, Delete, Param, Body, Req } from '@nestjs/
 import { Request } from 'express';
 import { DiscountsService } from './discounts.service';
 import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
-import {
-  CreateDiscountCampaignDto,
-  UpdateDiscountCampaignDto,
-  CreateDiscountScopeDto,
-  CreateCouponDto,
-  DiscountQuoteRequestDto,
-} from './dtos/discounts.dto';
+import { DiscountQuoteRequestDto } from './dtos/discounts.dto';
 
+/**
+ * Three ways an order is discounted, in precedence order: the cashier's manual discount, a
+ * one-time coupon code, and the customer's own rate. Discount campaigns — automatic
+ * promotions with scopes and stacking — are not part of the prototype.
+ */
 @Controller('api/v1')
 export class DiscountsController {
   constructor(private readonly discountsService: DiscountsService) {}
-
-  @Get('discounts')
-  async getDiscounts(@Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.discountsService.getDiscounts(tenantId);
-  }
-
-  @Get('discounts/:id')
-  async getDiscountById(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.discountsService.getDiscountById(tenantId, id);
-  }
-
-  @HeadOfficeOnly()
-  @Post('discounts')
-  async createDiscount(@Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-
-    // Support both campaign DTO and legacy body
-    if (body.discount_type) {
-      return await this.discountsService.createDiscountCampaign(tenantId, body as CreateDiscountCampaignDto, correlationId);
-    }
-    const campaignDto: CreateDiscountCampaignDto = {
-      code: body.code,
-      name: body.name,
-      discount_type: body.calculation_type === 'FIXED_AMOUNT' ? ('FIXED_AMOUNT' as any) : ('PERCENTAGE' as any),
-      percentage: body.calculation_type === 'PERCENTAGE' || !body.calculation_type ? body.value : undefined,
-      amount: body.calculation_type === 'FIXED_AMOUNT' ? body.value : undefined,
-      coupon_required: body.kind === 'COUPON',
-      minimum_subtotal: body.min_order_total,
-      maximum_discount_amount: body.max_discount_amount,
-      is_active: body.is_active ?? true,
-    };
-    return await this.discountsService.createDiscountCampaign(tenantId, campaignDto, correlationId);
-  }
-
-  @HeadOfficeOnly()
-  @Patch('discounts/:id')
-  async updateDiscount(@Param('id') id: string, @Body() body: UpdateDiscountCampaignDto, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.discountsService.updateDiscountCampaign(tenantId, id, body, correlationId);
-  }
-
-  @HeadOfficeOnly()
-  @Delete('discounts/:id')
-  async archiveDiscount(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.discountsService.archiveDiscountCampaign(tenantId, id, correlationId);
-  }
-
-  // Scopes
-  @HeadOfficeOnly()
-  @Post('discounts/:id/scopes')
-  async addScope(
-    @Param('id') id: string,
-    @Body() body: CreateDiscountScopeDto,
-    @Req() req: Request,
-  ) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.discountsService.addScope(tenantId, id, body, correlationId);
-  }
-
-  @HeadOfficeOnly()
-  @Delete('discounts/:id/scopes/:scopeId')
-  async removeScope(
-    @Param('scopeId') scopeId: string,
-    @Req() req: Request,
-  ) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.discountsService.removeScope(tenantId, scopeId, correlationId);
-  }
 
   // Coupons
   @Get('coupons')
   async getCoupons(@Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.discountsService.getCoupons(tenantId);
-  }
-
-  @HeadOfficeOnly()
-  @Post('coupons')
-  async createCoupon(@Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-
-    const dto: CreateCouponDto = {
-      campaign_id: body.campaign_id || body.discount_id,
-      code: body.code,
-      max_uses: body.max_uses ?? body.max_redemptions,
-      effective_from: body.effective_from || body.starts_at,
-      effective_to: body.effective_to || body.expires_at,
-    };
-    return await this.discountsService.createCoupon(tenantId, dto, correlationId);
   }
 
   @Post('coupons/validate')

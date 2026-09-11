@@ -163,7 +163,7 @@ const GROUPS: { titleKey: string; title: string; rows: Capability[] }[] = [
       {
         path: '/app/discounts/customer-rates',
         labelKey: 'rolesPage.caps.discounts',
-        label: 'Run campaigns, coupons and customer rates',
+        label: 'Run coupons and customer rates',
         write: { CASHIER: 'NONE', MANAGER: 'NONE', HEAD_OFFICE: 'FULL' },
       },
       {

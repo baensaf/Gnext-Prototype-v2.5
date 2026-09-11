@@ -315,7 +315,7 @@ export class ImportExportService {
     const result: Record<string, Set<string>> = {};
 
     Object.entries(columnMapping).forEach(([header, targetField]) => {
-      if (['is_active', 'category_code', 'customer_group_id'].includes(targetField)) {
+      if (['is_active', 'category_code'].includes(targetField)) {
         result[targetField] = new Set<string>();
       }
     });

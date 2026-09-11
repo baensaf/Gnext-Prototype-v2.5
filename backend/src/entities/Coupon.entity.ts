@@ -8,14 +8,19 @@ export class Coupon {
   @Column({ type: 'uuid' })
   tenant_id: string;
 
-  @Column({ type: 'uuid', nullable: true })
-  campaign_id: string;
-
-  @Column({ type: 'uuid', nullable: true })
-  discount_id: string;
-
   @Column({ type: 'varchar', length: 32 })
   code: string;
+
+  /** A coupon carries its own terms; there is no campaign behind it to hold them. */
+  @Column({ type: 'numeric', precision: 5, scale: 2 })
+  percentage: string;
+
+  @Column({ type: 'numeric', precision: 19, scale: 4, nullable: true })
+  minimum_subtotal: string | null;
+
+  /** A cap on the whole coupon's discount, not on each line. */
+  @Column({ type: 'numeric', precision: 19, scale: 4, nullable: true })
+  maximum_discount_amount: string | null;
 
   @Column({ type: 'integer', nullable: true })
   max_uses: number | null;

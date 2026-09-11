@@ -20,6 +20,7 @@ import { useBranchContext } from 'src/contexts/branch-context';
 
 import { Iconify } from 'src/components/iconify';
 import { SettingScopeNotice } from 'src/components/setting-scope';
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 interface RolePolicy {
   cashierMaxPct: number;
@@ -256,5 +257,19 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
     </Box>
   );
 
-  return isEmbedded ? content : <DashboardContent>{content}</DashboardContent>;
+  return isEmbedded ? (
+    content
+  ) : (
+    <DashboardContent>
+      <CustomBreadcrumbs
+        links={[
+          { name: t('nav.home', 'Home'), href: '/app/dashboard' },
+          { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
+          { name: t('authPolicy.title', 'Cashier Manual Discount Authorizations') },
+        ]}
+        sx={{ mb: 2 }}
+      />
+      {content}
+    </DashboardContent>
+  );
 }

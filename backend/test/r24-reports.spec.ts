@@ -208,7 +208,6 @@ describe('R24 Reports, Alerts, Exports & Audit Verification Suite', () => {
       'alternative-refunds',
       'discounts',
       'manual-discounts',
-      'discount-stacking',
       'cashier-shifts',
       'cash-discrepancies',
       'customer-credit',

@@ -400,19 +400,19 @@ export class OrderService {
         couponCode: order.coupon_code || undefined,
       });
 
-      // Consume discounts inside transaction
-      const appliedCampaignIds = quoteRes.consideredDiscounts
-        .filter((d) => d.status === 'APPLIED' && d.campaignId)
-        .map((d) => d.campaignId!);
-
-      if (appliedCampaignIds.length > 0) {
+      // A coupon is the one discount with a use limit, so its redemption is counted here,
+      // inside the transaction. Before this passed the coupon, only the hidden campaign
+      // behind it was counted and the coupon's own uses never moved.
+      const appliedCoupon = quoteRes.consideredDiscounts.find(
+        (d) => d.status === 'APPLIED' && d.source === 'COUPON' && d.couponId,
+      );
+      if (appliedCoupon) {
         await this.discountEngine.consumeUsage(
           tenantId,
           order.id,
           order.customer_id || undefined,
-          appliedCampaignIds,
-          undefined,
-          quoteRes.discountTotal,
+          appliedCoupon.couponId!,
+          appliedCoupon.amount,
           em,
         );
       }
@@ -420,15 +420,14 @@ export class OrderService {
       // Persist OrderAdjustment records for applied discounts
       const appliedDiscounts = quoteRes.consideredDiscounts.filter((d) => d.status === 'APPLIED');
       for (const disc of appliedDiscounts) {
-        const isManual = disc.campaignName.toLowerCase().includes('manual');
         const adj = em.create(OrderAdjustment, {
           tenant_id: tenantId,
           order_id: order.id,
           type: 'DISCOUNT',
-          source_type: isManual ? 'MANUAL' : 'CAMPAIGN',
-          source_id: disc.campaignId || null,
-          code: disc.campaignCode || (isManual ? 'MANUAL_DISCOUNT' : null),
-          name: disc.campaignName,
+          source_type: disc.source,
+          source_id: disc.couponId || null,
+          code: disc.couponCode || (disc.source === 'MANUAL' ? 'MANUAL_DISCOUNT' : null),
+          name: disc.name,
           amount: disc.amount,
           funding_source: 'MERCHANT',
           calculation_snapshot: { discountType: disc.discountType, amount: disc.amount },

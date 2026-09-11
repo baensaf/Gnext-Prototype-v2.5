@@ -37,7 +37,7 @@ interface Coupon {
   effective_from?: string | null;
   effective_to?: string | null;
   is_active: boolean;
-  campaign_id?: string;
+  percentage: string;
 }
 
 interface CouponsPageProps {
@@ -255,6 +255,9 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
                         <TableCell>
                           <Typography variant="subtitle2" sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
                             {coupon.code}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {Number(coupon.percentage)}%
                           </Typography>
                         </TableCell>
                         <TableCell>

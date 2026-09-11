@@ -1,14 +1,5 @@
 import { httpClient } from './httpClient';
 
-export interface CustomerGroup {
-  id: string;
-  code: string;
-  name: string;
-  discount_id?: string;
-  price_group_id?: string;
-  is_active: boolean;
-}
-
 export interface Customer {
   id: string;
   code: string;
@@ -16,7 +7,6 @@ export interface Customer {
   last_name: string;
   mobile: string;
   email?: string;
-  customer_group_id?: string;
   national_id?: string;
   is_active: boolean;
   credit_account?: CustomerCreditAccount | null;
@@ -51,14 +41,6 @@ export interface CustomerCreditTransaction {
 }
 
 export const customerApi = {
-  getCustomerGroups: async (): Promise<CustomerGroup[]> => {
-    const res = await httpClient.get('/api/v1/customer-groups');
-    return res.data;
-  },
-  createCustomerGroup: async (data: Partial<CustomerGroup>): Promise<CustomerGroup> => {
-    const res = await httpClient.post('/api/v1/customer-groups', data);
-    return res.data;
-  },
 
   getCustomers: async (search?: string): Promise<Customer[]> => {
     const res = await httpClient.get('/api/v1/customers', { params: { search } });

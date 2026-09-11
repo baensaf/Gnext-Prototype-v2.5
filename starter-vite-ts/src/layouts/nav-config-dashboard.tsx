@@ -30,7 +30,6 @@ const ICONS = {
   coupons: icon('ic-order'),
   customers: icon('ic-user'),
   credit: icon('ic-banking'),
-  customerGroups: icon('ic-job'),
   settings: icon('ic-params'),
   reasons: icon('ic-lock'),
   media: icon('ic-file'),
@@ -174,7 +173,7 @@ export function useNavData(): NavSectionProps['data'] {
           ],
         },
         {
-          title: t('nav.discountsLoyalty', 'Discounts & Promotions Hub'),
+          title: t('nav.discountsLoyalty', 'Discounts & Loyalty'),
           path: '/app/discounts/customer-rates',
           icon: ICONS.discounts,
           children: [
@@ -185,10 +184,6 @@ export function useNavData(): NavSectionProps['data'] {
             {
               title: t('nav.coupons', 'One-Time Coupons Studio'),
               path: '/app/discounts/coupons',
-            },
-            {
-              title: t('nav.discountAuthorizations', 'Cashier Role Caps & Policy'),
-              path: '/app/discounts/authorizations',
             },
             {
               title: t('nav.customerWallet', 'Wallet & Cashback'),
@@ -256,10 +251,22 @@ export function useNavData(): NavSectionProps['data'] {
           path: '/app/settings',
           icon: ICONS.settings,
         },
+        // The label promised roles, and the role table was only reachable from a card in
+        // the settings hub. Both halves are head office's.
         {
           title: t('nav.users', 'Users & Roles'),
           path: '/app/settings/users',
           icon: ICONS.customers,
+          children: [
+            {
+              title: t('nav.userAccounts', 'User Accounts'),
+              path: '/app/settings/users',
+            },
+            {
+              title: t('rolesPage.title', 'Roles & Permissions'),
+              path: '/app/settings/roles',
+            },
+          ],
         },
       ],
     },

@@ -33,9 +33,18 @@ import {
 
 import { tenantApi } from '../../api/tenantApi';
 import { alertsApi } from '../../api/alertsApi';
+import { useBranchContextOptional } from '../../contexts/branch-context';
 
 export function MonitoringPage() {
   const { t } = useTranslation();
+  const branchScope = useBranchContextOptional();
+  // At head office the feed is every site's, so each alert says whose it is. Inside a
+  // branch the server has already narrowed it to that branch, and the label would be noise.
+  const alertOwner = (alert: OperationalAlertItem) => {
+    if (!branchScope?.isHeadOffice) return null;
+    if (!alert.branch_id) return t('monitoring.chainWide', 'Chain-wide');
+    return branchScope.branches.find((b) => b.id === alert.branch_id)?.name ?? alert.branch_id;
+  };
 
   const [alerts, setAlerts] = useState<OperationalAlertItem[]>([]);
   const [terminals, setTerminals] = useState<Terminal[]>([]);
@@ -179,10 +188,10 @@ export function MonitoringPage() {
             />
             <CardContent sx={{ pt: 0 }}>
               <Typography variant="h5" sx={{ fontWeight: 700, color: 'success.main' }}>
-                {t('monitoring.onlineHealthy', 'آنلاین و فعال')}
+                {t('monitoring.onlineHealthy', 'Online & healthy')}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                {t('monitoring.latencyStatus', 'تاخیر کمتر از ۱۵ میلی‌ثانیه | پایگاه‌داده فعال')}
+                {t('monitoring.latencyStatus', 'Latency under 15 ms | database online')}
               </Typography>
             </CardContent>
           </Card>
@@ -199,7 +208,7 @@ export function MonitoringPage() {
                 {criticalAlerts.length}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                {t('monitoring.requiresAction', 'نیازمند اقدام فوری مدیر')}
+                {t('monitoring.requiresAction', 'Needs a manager now')}
               </Typography>
             </CardContent>
           </Card>
@@ -216,7 +225,7 @@ export function MonitoringPage() {
                 {terminals.filter((term) => term.is_active).length} / {terminals.length}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                {t('monitoring.stationsType', 'پایانه‌های POS، کیوسک و KDS')}
+                {t('monitoring.stationsType', 'POS, kiosk and KDS terminals')}
               </Typography>
             </CardContent>
           </Card>
@@ -288,6 +297,7 @@ export function MonitoringPage() {
                             </Typography>
                             <Typography variant="caption" color="text.disabled" sx={{ mt: 1, display: 'block' }} dir="ltr">
                               {new Date(alert.created_at).toLocaleString()} | Type: {alert.type}
+                              {alertOwner(alert) && <> | {alertOwner(alert)}</>}
                             </Typography>
                           </Box>
                         </Stack>

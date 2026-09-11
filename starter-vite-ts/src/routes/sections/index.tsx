@@ -26,7 +26,6 @@ import { DiscountsHubPage } from 'src/pages/discounts/hub';
 import { RolesMatrixPage } from 'src/pages/settings/roles';
 import { BranchesPage } from 'src/pages/operations/branches';
 import { DeliveryPage } from 'src/pages/operations/delivery';
-import { FleetRollupPage } from 'src/pages/operations/fleet-rollup';
 import { PaymentsPage } from 'src/pages/operations/payments';
 import { ReasonCodesPage } from 'src/pages/settings/reasons';
 import { PrintersPage } from 'src/pages/operations/printers';
@@ -40,15 +39,16 @@ import { GeneralSettingsPage } from 'src/pages/settings/general';
 import { ImportWizardPage } from 'src/pages/tools/import-wizard';
 import { ShiftDetailPage } from 'src/pages/cashier/shift-detail';
 import { MonitoringPage } from 'src/pages/operations/monitoring';
+import { ShiftRollupPage } from 'src/pages/cashier/shift-rollup';
 import { AvailabilityPage } from 'src/pages/catalog/availability';
 import { CashDrawerPage } from 'src/pages/operations/cash-drawer';
-import { ShiftRollupPage } from 'src/pages/cashier/shift-rollup';
 import { PrintQueuePage } from 'src/pages/operations/print-queue';
 /* Detail & Simulation Sub-Pages */
 import { OrdersDetailPage } from 'src/pages/orders/orders-detail';
 import { PaymentSettingsPage } from 'src/pages/settings/payments';
 import { BusinessDaysPage } from 'src/pages/cashier/business-days';
 import { ReportViewerPage } from 'src/pages/reports/report-viewer';
+import { FleetRollupPage } from 'src/pages/operations/fleet-rollup';
 import { OfflineSyncPage } from 'src/pages/simulation/offline-sync';
 import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
 import { ProductDetailPage } from 'src/pages/catalog/product-detail';
@@ -61,6 +61,7 @@ import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
 import { KdsConfigurationPage } from 'src/pages/operations/kds-configuration';
 import { SettlementDetailPage } from 'src/pages/operations/settlement-detail';
 import { OrderWorkflowSettingsPage } from 'src/pages/settings/order-workflow';
+import DiscountAuthorizationsPage from 'src/pages/settings/discount-authorizations';
 import { MediaLocalizationDemoPage } from 'src/pages/simulation/media-localization';
 import { SimulationSnappfoodPage } from 'src/pages/simulation/simulation-snappfood';
 import { SimulationPaymentsPrintersPage } from 'src/pages/simulation/simulation-payments-printers';
@@ -148,12 +149,11 @@ export const routesSection: RouteObject[] = [
       { path: 'pricing/price-groups', element: <PricingPage /> },
       { path: 'pricing/bulk-update', element: <PricingPage /> },
       { path: 'discounts', element: <Navigate to="/app/discounts/customer-rates" replace /> },
-      { path: 'discounts/campaigns', element: <Navigate to="/app/discounts/customer-rates" replace /> },
-      { path: 'discounts/campaigns/:id', element: <Navigate to="/app/discounts/customer-rates" replace /> },
       { path: 'discounts/customer-rates', element: <DiscountsHubPage defaultTab={0} /> },
       { path: 'discounts/coupons', element: <DiscountsHubPage defaultTab={1} /> },
-      { path: 'discounts/authorizations', element: <DiscountsHubPage defaultTab={2} /> },
-      { path: 'discounts/wallet', element: <DiscountsHubPage defaultTab={3} /> },
+      // Cashier discount caps are a policy, so they live in Settings; this was a second door.
+      { path: 'discounts/authorizations', element: <Navigate to="/app/settings/discount-authorizations" replace /> },
+      { path: 'discounts/wallet', element: <DiscountsHubPage defaultTab={2} /> },
       { path: 'operations/branches', element: <BranchesPage /> },
       { path: 'operations/branches/:id', element: <BranchDetailPage /> },
       { path: 'operations/terminals', element: <TerminalsPage /> },
@@ -175,7 +175,7 @@ export const routesSection: RouteObject[] = [
       { path: 'settings/order-workflow', element: <OrderWorkflowSettingsPage /> },
       { path: 'settings/branch-overrides', element: <BranchOverridesPage /> },
       { path: 'settings/roles', element: <RolesMatrixPage /> },
-      { path: 'settings/discount-authorizations', element: <DiscountsHubPage defaultTab={2} /> },
+      { path: 'settings/discount-authorizations', element: <DiscountAuthorizationsPage /> },
       { path: 'settings/payments-refunds', element: <PaymentSettingsPage /> },
       { path: 'settings/payments', element: <Navigate to="/app/settings/payments-refunds" replace /> },
       { path: 'settings/approvals', element: <ApprovalsSettingsPage /> },

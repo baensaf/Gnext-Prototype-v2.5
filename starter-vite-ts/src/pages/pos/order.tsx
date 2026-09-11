@@ -102,7 +102,6 @@ interface CartItem {
 const DISCOUNT_REASONS = [
   { code: 'CUSTOMER_SATISFACTION', label: 'Customer Satisfaction / Courtesy' },
   { code: 'STAFF_DISCOUNT', label: 'Staff / Employee Privilege' },
-  { code: 'PROMOTION_OVERRIDE', label: 'Promotion Override' },
   { code: 'DAMAGED_ITEM', label: 'Minor Defect / Packaging Issue' },
   { code: 'VIP_COURTESY', label: 'VIP Club Member Courtesy' },
 ];
@@ -119,12 +118,10 @@ function formatRejectionReason(reason?: string, fallback: string = 'Discount was
       return 'Coupon has reached its maximum usage limit';
     case 'COUPON_ALREADY_REDEEMED_BY_CUSTOMER':
       return 'Coupon has already been used by this customer';
-    case 'MINIMUM_SUBTOTAL_NOT_MET':
-    case 'CAMPAIGN_MINIMUM_NOT_MET':
+    case 'COUPON_MINIMUM_NOT_MET':
       return 'Order subtotal does not meet the minimum required for this coupon';
     case 'NEVER_DISCOUNT':
-    case 'CAMPAIGN_EXCLUDED':
-      return 'Selected items in cart are excluded from promotional discounts';
+      return 'Selected items in cart are excluded from discounts';
     default:
       return reason || fallback;
   }
@@ -781,7 +778,7 @@ export function PosOrderPage() {
 
       if (applied) {
         const approvedBadge = appliedManualDiscount?.approvalRequestId ? ' [Manager Approved]' : '';
-        const msg = `Applied ${applied.campaignName}${approvedBadge}: -${MoneyUtil.formatCurrency(discAmount)} IRR`;
+        const msg = `Applied ${applied.name}${approvedBadge}: -${MoneyUtil.formatCurrency(discAmount)} IRR`;
         setDiscountMessage(msg);
         setError(null);
         if (appliedCouponCode) {

@@ -16,7 +16,6 @@ import { Customer } from '../src/entities/Customer.entity';
 import { CustomerCreditAccount } from '../src/entities/CustomerCreditAccount.entity';
 import { CreditEntry } from '../src/entities/CreditEntry.entity';
 import { OrderAdjustment } from '../src/entities/OrderAdjustment.entity';
-import { DiscountCampaign } from '../src/entities/DiscountCampaign.entity';
 import { PaymentDevice } from '../src/entities/PaymentDevice.entity';
 import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
 import { PrintJob } from '../src/entities/PrintJob.entity';
@@ -132,7 +131,6 @@ describe('ReportsService (Unit)', () => {
         { provide: getRepositoryToken(CustomerCreditAccount), useValue: mockRepo },
         { provide: getRepositoryToken(CreditEntry), useValue: mockRepo },
         { provide: getRepositoryToken(OrderAdjustment), useValue: mockRepo },
-        { provide: getRepositoryToken(DiscountCampaign), useValue: mockRepo },
         { provide: getRepositoryToken(PaymentDevice), useValue: mockRepo },
         { provide: getRepositoryToken(PaymentMethod), useValue: mockRepo },
         { provide: getRepositoryToken(PrintJob), useValue: mockRepo },

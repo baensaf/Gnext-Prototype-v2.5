@@ -97,12 +97,8 @@ import { ApprovalRule } from './entities/ApprovalRule.entity';
 import { ApprovalRequest } from './entities/ApprovalRequest.entity';
 import { ApprovalDecision } from './entities/ApprovalDecision.entity';
 import { PinAttemptLog } from './entities/PinAttemptLog.entity';
-import { Discount } from './entities/Discount.entity';
 import { Coupon } from './entities/Coupon.entity';
-import { DiscountCampaign } from './entities/DiscountCampaign.entity';
-import { DiscountScope } from './entities/DiscountScope.entity';
 import { DiscountUsage } from './entities/DiscountUsage.entity';
-import { CustomerGroup } from './entities/CustomerGroup.entity';
 import { Customer } from './entities/Customer.entity';
 import { CustomerDiscount } from './entities/CustomerDiscount.entity';
 import { CustomerPhone } from './entities/CustomerPhone.entity';
@@ -175,8 +171,8 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
           PriceEntry, PriceGroupBranch, PriceBulkJob,
           Menu, MenuCategory, MenuProduct, ProductAvailability,
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,
-          Discount, Coupon, DiscountCampaign, DiscountScope, DiscountUsage, CustomerDiscount,
-          CustomerGroup, Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CreditEntry,
+          Coupon, DiscountUsage, CustomerDiscount,
+          Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CreditEntry,
           CustomFieldDefinition, CustomerCustomValue, CustomerTag, CustomerTagLink, CustomerSegment,
           CustomerConsent, CustomerMerge,
           OrderHeader, OrderItem, OrderItemOption, OrderAdjustment, OrderNote, OrderLink, OrderStateEvent, OrderSequence,

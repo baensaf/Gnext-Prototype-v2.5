@@ -1,8 +1,6 @@
 import { Injectable, BadRequestException, ForbiddenException, ConflictException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager, In } from 'typeorm';
-import { DiscountCampaign } from '../../entities/DiscountCampaign.entity';
-import { DiscountScope } from '../../entities/DiscountScope.entity';
 import { Coupon } from '../../entities/Coupon.entity';
 import { DiscountUsage } from '../../entities/DiscountUsage.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
@@ -14,9 +12,11 @@ import { MoneyUtil } from '../../common/utils/money.util';
 import { DiscountQuoteRequestDto, QuoteItemDto, ManualDiscountDto } from './dtos/discounts.dto';
 
 export interface ConsideredDiscount {
-  campaignId?: string;
-  campaignCode?: string;
-  campaignName: string;
+  /** Who granted it: the cashier, a coupon code, or the customer's own rate. */
+  source: 'MANUAL' | 'COUPON' | 'CUSTOMER';
+  name: string;
+  couponId?: string;
+  couponCode?: string;
   discountType: string;
   status: 'APPLIED' | 'REJECTED';
   rejectionReason?: string;
@@ -53,10 +53,6 @@ export interface DiscountQuoteResult {
 @Injectable()
 export class DiscountEvaluationService {
   constructor(
-    @InjectRepository(DiscountCampaign)
-    private readonly campaignRepo: Repository<DiscountCampaign>,
-    @InjectRepository(DiscountScope)
-    private readonly scopeRepo: Repository<DiscountScope>,
     @InjectRepository(Coupon)
     private readonly couponRepo: Repository<Coupon>,
     @InjectRepository(DiscountUsage)
@@ -84,7 +80,11 @@ export class DiscountEvaluationService {
     const warnings: string[] = [];
 
     const requestedItems = orderDraft.items || [];
-    const productIds = [...new Set(requestedItems.map((item) => item.productId).filter(Boolean))];
+    // Only real product ids go to the database. The coupon test bench quotes a stand-in
+    // line ('temp-item'), and Postgres rejects a non-uuid in a uuid IN (...), which turned
+    // every coupon check on that screen into a 500.
+    const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const productIds = [...new Set(requestedItems.map((item) => item.productId).filter((id) => id && isUuid(id)))];
     const products = this.productRepo && productIds.length > 0
       ? await this.productRepo.find({ where: { tenant_id: tenantId, id: In(productIds) } })
       : [];
@@ -115,8 +115,8 @@ export class DiscountEvaluationService {
       return lineItems[idx].subtotal;
     });
 
-    const isCampaignEligibleLine = (orderDraft.items || []).map((item) => {
-      return !item.neverDiscount && !item.campaignExcluded && !item.ownNonStackableApplied;
+    const isDiscountableLine = (orderDraft.items || []).map((item) => {
+      return !item.neverDiscount && !item.ownNonStackableApplied;
     });
 
     // Calculate subtotal across non-reward items
@@ -167,7 +167,8 @@ export class DiscountEvaluationService {
         const pctVal = MoneyUtil.format(manualDiscount.value);
         if (MoneyUtil.greaterThan(pctVal, policyMaxPct)) {
           consideredDiscounts.push({
-            campaignName: 'Manual Discount',
+            source: 'MANUAL',
+            name: 'Manual Discount',
             discountType: 'PERCENTAGE',
             status: 'REJECTED',
             rejectionReason: `Exceeds maximum permitted policy limit of ${policyMaxPct}%`,
@@ -188,7 +189,8 @@ export class DiscountEvaluationService {
               if (!appReq || appReq.status !== 'APPROVED' || (appReq.expires_at && new Date(appReq.expires_at) < now)) {
                 isValidApproval = false;
                 consideredDiscounts.push({
-                  campaignName: 'Manual Discount',
+                  source: 'MANUAL',
+                  name: 'Manual Discount',
                   discountType: 'PERCENTAGE',
                   status: 'REJECTED',
                   rejectionReason: `Invalid or unapproved escalation approval request ${manualDiscount.approvalRequestId}`,
@@ -207,7 +209,8 @@ export class DiscountEvaluationService {
         const fixedVal = MoneyUtil.format(manualDiscount.value);
         if (MoneyUtil.greaterThan(fixedVal, policyMaxFixed)) {
           consideredDiscounts.push({
-            campaignName: 'Manual Discount',
+            source: 'MANUAL',
+            name: 'Manual Discount',
             discountType: 'FIXED_AMOUNT',
             status: 'REJECTED',
             rejectionReason: `Exceeds maximum permitted policy fixed limit of ${policyMaxFixed}`,
@@ -228,7 +231,8 @@ export class DiscountEvaluationService {
               if (!appReq || appReq.status !== 'APPROVED' || (appReq.expires_at && new Date(appReq.expires_at) < now)) {
                 isValidApproval = false;
                 consideredDiscounts.push({
-                  campaignName: 'Manual Discount',
+                  source: 'MANUAL',
+                  name: 'Manual Discount',
                   discountType: 'FIXED_AMOUNT',
                   status: 'REJECTED',
                   rejectionReason: `Invalid or unapproved escalation approval request ${manualDiscount.approvalRequestId}`,
@@ -247,7 +251,8 @@ export class DiscountEvaluationService {
       if (MoneyUtil.greaterThan(manualAmount, '0')) {
         discountTotal = MoneyUtil.add(discountTotal, manualAmount);
         consideredDiscounts.push({
-          campaignName: 'Manual Cashier Discount',
+          source: 'MANUAL',
+          name: 'Manual Cashier Discount',
           discountType: manualDiscount.calculation_type,
           status: 'APPLIED',
           amount: manualAmount,
@@ -257,85 +262,84 @@ export class DiscountEvaluationService {
     }
 
     // B. Workflow 4: One-Time Percentage Coupon Code (Second Precedence)
-    let matchedCoupon: Coupon | null = null;
-    let couponCampaign: DiscountCampaign | null = null;
-
+    // A presented coupon is a deliberate act at the till, so it wins over the customer's
+    // standing rate. The coupon carries its own terms.
     if (!singleDiscountApplied && couponCode && couponCode.trim()) {
       const normalizedCode = couponCode.trim().toUpperCase();
-      matchedCoupon = await this.couponRepo.findOne({
+      const couponName = `Coupon (${normalizedCode})`;
+      const reject = (rejectionReason: string, warning: string) => {
+        consideredDiscounts.push({
+          source: 'COUPON',
+          name: couponName,
+          couponCode: normalizedCode,
+          discountType: 'COUPON',
+          status: 'REJECTED',
+          rejectionReason,
+          amount: '0.0000',
+        });
+        warnings.push(warning);
+      };
+
+      const coupon = await this.couponRepo.findOne({
         where: { tenant_id: tenantId, code: normalizedCode },
       });
 
-      if (!matchedCoupon || !matchedCoupon.is_active) {
-        consideredDiscounts.push({
-          campaignName: `Coupon (${normalizedCode})`,
-          discountType: 'COUPON',
-          status: 'REJECTED',
-          rejectionReason: 'INVALID_OR_INACTIVE_COUPON',
-          amount: '0.0000',
-        });
-        warnings.push(`Coupon code ${normalizedCode} is invalid or inactive`);
+      if (!coupon || !coupon.is_active) {
+        reject('INVALID_OR_INACTIVE_COUPON', `Coupon code ${normalizedCode} is invalid or inactive`);
+      } else if (coupon.effective_from && new Date(coupon.effective_from) > now) {
+        reject('COUPON_NOT_YET_ACTIVE', `Coupon code ${normalizedCode} is not active yet`);
+      } else if (coupon.effective_to && new Date(coupon.effective_to) < now) {
+        reject('COUPON_EXPIRED', `Coupon code ${normalizedCode} has expired`);
+      } else if ((coupon.uses_count ?? 0) >= (coupon.max_uses ?? 1)) {
+        reject('COUPON_MAX_USES_REACHED', `Coupon code ${normalizedCode} has reached maximum usage limit`);
+      } else if (
+        orderDraft.customerId &&
+        (await this.usageRepo.count({
+          where: { tenant_id: tenantId, coupon_id: coupon.id, customer_id: orderDraft.customerId },
+        })) >= 1
+      ) {
+        reject('COUPON_ALREADY_REDEEMED_BY_CUSTOMER', `Coupon ${normalizedCode} already used by this customer`);
+      } else if (coupon.minimum_subtotal && MoneyUtil.lessThan(subtotal, coupon.minimum_subtotal)) {
+        reject(
+          'COUPON_MINIMUM_NOT_MET',
+          `Coupon ${normalizedCode} needs a subtotal of at least ${coupon.minimum_subtotal}`,
+        );
       } else {
-        const startsAt = matchedCoupon.effective_from || matchedCoupon.starts_at;
-        const expiresAt = matchedCoupon.effective_to || matchedCoupon.expires_at;
-        const maxUses = matchedCoupon.max_uses ?? matchedCoupon.max_redemptions ?? 1;
-        const usesCount = matchedCoupon.uses_count ?? matchedCoupon.current_redemptions ?? 0;
+        const pctDec = MoneyUtil.divide(coupon.percentage, '100', 6);
+        let lineDiscs = lineItems.map((_, i) =>
+          isDiscountableLine[i] && MoneyUtil.greaterThan(remainingBases[i], '0')
+            ? MoneyUtil.multiply(remainingBases[i], pctDec)
+            : '0.0000',
+        );
+        const sum = (values: string[]) => values.reduce((acc, v) => MoneyUtil.add(acc, v), '0.0000');
+        const uncapped = sum(lineDiscs);
 
-        if (startsAt && new Date(startsAt) > now) {
-          consideredDiscounts.push({
-            campaignName: `Coupon (${normalizedCode})`,
-            discountType: 'COUPON',
-            status: 'REJECTED',
-            rejectionReason: 'COUPON_NOT_YET_ACTIVE',
-            amount: '0.0000',
-          });
-          warnings.push(`Coupon code ${normalizedCode} is not active yet`);
-        } else if (expiresAt && new Date(expiresAt) < now) {
-          consideredDiscounts.push({
-            campaignName: `Coupon (${normalizedCode})`,
-            discountType: 'COUPON',
-            status: 'REJECTED',
-            rejectionReason: 'COUPON_EXPIRED',
-            amount: '0.0000',
-          });
-          warnings.push(`Coupon code ${normalizedCode} has expired`);
-        } else if (usesCount >= maxUses) {
-          consideredDiscounts.push({
-            campaignName: `Coupon (${normalizedCode})`,
-            discountType: 'COUPON',
-            status: 'REJECTED',
-            rejectionReason: 'COUPON_MAX_USES_REACHED',
-            amount: '0.0000',
-          });
-          warnings.push(`Coupon code ${normalizedCode} has reached maximum usage limit`);
-        } else {
-          // Check per customer redemption
-          if (orderDraft.customerId) {
-            const customerUses = await this.usageRepo.count({
-              where: { tenant_id: tenantId, coupon_id: matchedCoupon.id, customer_id: orderDraft.customerId },
-            });
-            if (customerUses >= 1) {
-              consideredDiscounts.push({
-                campaignName: `Coupon (${normalizedCode})`,
-                discountType: 'COUPON',
-                status: 'REJECTED',
-                rejectionReason: 'COUPON_ALREADY_REDEEMED_BY_CUSTOMER',
-                amount: '0.0000',
-              });
-              warnings.push(`Coupon ${normalizedCode} already used by this customer`);
-              matchedCoupon = null;
-            }
-          }
+        // The cap is on the coupon as a whole. Each line is scaled down in proportion so
+        // the per-line figures still add up to what the order is discounted by.
+        const cap = coupon.maximum_discount_amount;
+        if (cap && MoneyUtil.greaterThan(uncapped, cap)) {
+          lineDiscs = lineDiscs.map((d) => MoneyUtil.divide(MoneyUtil.multiply(d, cap), uncapped));
+        }
+        const couponAmount = sum(lineDiscs);
 
-          if (matchedCoupon) {
-            const cId = matchedCoupon.campaign_id || matchedCoupon.discount_id;
-            if (cId) {
-              couponCampaign = await this.campaignRepo.findOne({
-                where: { id: cId, tenant_id: tenantId },
-                relations: ['scopes'],
-              });
-            }
-          }
+        for (let i = 0; i < lineItems.length; i++) {
+          if (MoneyUtil.lessThanOrEqual(lineDiscs[i], '0')) continue;
+          lineItems[i].discountTotal = MoneyUtil.add(lineItems[i].discountTotal, lineDiscs[i]);
+          remainingBases[i] = MoneyUtil.subtract(remainingBases[i], lineDiscs[i]);
+        }
+
+        if (MoneyUtil.greaterThan(couponAmount, '0')) {
+          discountTotal = MoneyUtil.add(discountTotal, couponAmount);
+          consideredDiscounts.push({
+            source: 'COUPON',
+            name: `${couponName} ${MoneyUtil.format(coupon.percentage, 2)}%`,
+            couponId: coupon.id,
+            couponCode: normalizedCode,
+            discountType: 'PERCENTAGE',
+            status: 'APPLIED',
+            amount: couponAmount,
+          });
+          singleDiscountApplied = true;
         }
       }
     }
@@ -355,7 +359,7 @@ export class DiscountEvaluationService {
           let custDiscountAmt = '0.0000';
 
           for (let i = 0; i < lineItems.length; i++) {
-            if (!isCampaignEligibleLine[i]) continue;
+            if (!isDiscountableLine[i]) continue;
             const lineEligible = remainingBases[i];
             if (MoneyUtil.lessThanOrEqual(lineEligible, '0')) continue;
 
@@ -368,168 +372,13 @@ export class DiscountEvaluationService {
           if (MoneyUtil.greaterThan(custDiscountAmt, '0')) {
             discountTotal = MoneyUtil.add(discountTotal, custDiscountAmt);
             consideredDiscounts.push({
-              campaignName: `Customer Specific Discount (${customerDiscount.discount_percentage}%)`,
+              source: 'CUSTOMER',
+              name: `Customer Specific Discount (${customerDiscount.discount_percentage}%)`,
               discountType: 'CUSTOMER_DISCOUNT',
               status: 'APPLIED',
               amount: custDiscountAmt,
             });
             singleDiscountApplied = true;
-          }
-        }
-      }
-    }
-
-    // D. Additional Campaigns Evaluation (if no single discount was applied yet)
-    if (!singleDiscountApplied) {
-      const campaigns = await this.campaignRepo.find({
-        where: { tenant_id: tenantId, is_active: true },
-        relations: ['scopes'],
-      });
-
-      const evaluatedCandidates: {
-        campaign: DiscountCampaign;
-        isCoupon: boolean;
-        priority: number;
-        amount: string;
-        lineAllocations: string[];
-      }[] = [];
-
-      for (const campaign of campaigns) {
-        const isCouponMatch = matchedCoupon && couponCampaign && couponCampaign.id === campaign.id;
-
-        if (campaign.coupon_required && !isCouponMatch) continue;
-        if (campaign.effective_from && new Date(campaign.effective_from) > now) continue;
-        if (campaign.effective_to && new Date(campaign.effective_to) < now) continue;
-        if (campaign.usage_limit_total && campaign.usage_count >= campaign.usage_limit_total) continue;
-
-        // Check scopes
-        if (campaign.scopes && campaign.scopes.length > 0) {
-          const exclusionScopes = campaign.scopes.filter((s) => s.is_exclusion);
-          const inclusionScopes = campaign.scopes.filter((s) => !s.is_exclusion);
-
-          // If any exclusion scope matches the draft, reject the campaign
-          const isExcluded = exclusionScopes.some((s) => this.matchesScope(s, orderDraft));
-          if (isExcluded) {
-            consideredDiscounts.push({
-              campaignId: campaign.id,
-              campaignCode: campaign.code,
-              campaignName: campaign.name,
-              discountType: campaign.discount_type,
-              status: 'REJECTED',
-              rejectionReason: 'EXCLUDED_BY_SCOPE',
-              amount: '0.0000',
-            });
-            continue;
-          }
-
-          // If there are inclusion scopes, at least one must match
-          if (inclusionScopes.length > 0) {
-            const matchesInclusion = inclusionScopes.some((s) => this.matchesScope(s, orderDraft));
-            if (!matchesInclusion) {
-              if (isCouponMatch) {
-                consideredDiscounts.push({
-                  campaignId: campaign.id,
-                  campaignCode: campaign.code,
-                  campaignName: campaign.name,
-                  discountType: campaign.discount_type,
-                  status: 'REJECTED',
-                  rejectionReason: 'SCOPE_MISMATCH',
-                  amount: '0.0000',
-                });
-              }
-              continue;
-            }
-          }
-        }
-
-        if (campaign.minimum_subtotal && MoneyUtil.lessThan(subtotal, campaign.minimum_subtotal)) {
-          if (isCouponMatch) {
-            consideredDiscounts.push({
-              campaignName: campaign.name,
-              discountType: campaign.discount_type,
-              status: 'REJECTED',
-              rejectionReason: `Minimum purchase requirement of ${campaign.minimum_subtotal} not met`,
-              amount: '0.0000',
-            });
-          }
-          continue;
-        }
-
-        const effectivePriority = isCouponMatch ? (campaign.priority || 20) : (campaign.priority || 30);
-        evaluatedCandidates.push({
-          campaign,
-          isCoupon: !!isCouponMatch,
-          priority: effectivePriority,
-          amount: '0.0000',
-          lineAllocations: lineItems.map(() => '0.0000'),
-        });
-      }
-
-      evaluatedCandidates.sort((a, b) => a.priority - b.priority);
-
-      for (const candidate of evaluatedCandidates) {
-        const campaign = candidate.campaign;
-        let campaignAmount = '0.0000';
-
-        if (campaign.discount_type === 'FREE_DELIVERY') {
-          if (MoneyUtil.greaterThan(deliveryFee, '0.0000')) {
-            campaignAmount = deliveryFee;
-            deliveryFee = '0.0000';
-          }
-        } else if (campaign.discount_type === 'PERCENTAGE' && campaign.percentage) {
-          const pctDecimal = MoneyUtil.divide(campaign.percentage, '100');
-          for (let i = 0; i < lineItems.length; i++) {
-            if (!isCampaignEligibleLine[i]) continue;
-            const lineEligible = remainingBases[i];
-            if (MoneyUtil.lessThanOrEqual(lineEligible, '0')) continue;
-
-            let lineDisc = MoneyUtil.multiply(lineEligible, pctDecimal);
-            if (campaign.maximum_discount_amount && MoneyUtil.greaterThan(lineDisc, campaign.maximum_discount_amount)) {
-              lineDisc = campaign.maximum_discount_amount;
-            }
-            lineItems[i].discountTotal = MoneyUtil.add(lineItems[i].discountTotal, lineDisc);
-            remainingBases[i] = MoneyUtil.subtract(remainingBases[i], lineDisc);
-            campaignAmount = MoneyUtil.add(campaignAmount, lineDisc);
-          }
-        } else if (campaign.discount_type === 'FIXED_AMOUNT' && campaign.amount) {
-          let totalEligibleBasis = '0.0000';
-          for (let i = 0; i < lineItems.length; i++) {
-            if (isCampaignEligibleLine[i] && MoneyUtil.greaterThan(remainingBases[i], '0')) {
-              totalEligibleBasis = MoneyUtil.add(totalEligibleBasis, remainingBases[i]);
-            }
-          }
-
-          if (MoneyUtil.greaterThan(totalEligibleBasis, '0')) {
-            const targetDiscount = MoneyUtil.greaterThan(campaign.amount, totalEligibleBasis)
-              ? totalEligibleBasis
-              : campaign.amount;
-
-            for (let i = 0; i < lineItems.length; i++) {
-              if (!isCampaignEligibleLine[i]) continue;
-              const lineEligible = remainingBases[i];
-              if (MoneyUtil.lessThanOrEqual(lineEligible, '0')) continue;
-
-              const lineDisc = MoneyUtil.divide(MoneyUtil.multiply(targetDiscount, lineEligible), totalEligibleBasis);
-              lineItems[i].discountTotal = MoneyUtil.add(lineItems[i].discountTotal, lineDisc);
-              remainingBases[i] = MoneyUtil.subtract(remainingBases[i], lineDisc);
-              campaignAmount = MoneyUtil.add(campaignAmount, lineDisc);
-            }
-          }
-        }
-
-        if (MoneyUtil.greaterThan(campaignAmount, '0')) {
-          discountTotal = MoneyUtil.add(discountTotal, campaignAmount);
-          consideredDiscounts.push({
-            campaignId: campaign.id,
-            campaignCode: campaign.code,
-            campaignName: campaign.name,
-            discountType: campaign.discount_type,
-            status: 'APPLIED',
-            amount: campaignAmount,
-          });
-          if (!campaign.is_stackable) {
-            singleDiscountApplied = true;
-            break; // Non-stackable campaign stops further discounts
           }
         }
       }
@@ -569,102 +418,42 @@ export class DiscountEvaluationService {
     };
   }
 
-  private matchesScope(scope: DiscountScope, draft: DiscountQuoteRequestDto['orderDraft']): boolean {
-    if (!scope.scope_id) return true;
-    switch (scope.scope_type) {
-      case 'BRANCH':
-        return draft.branchId === scope.scope_id;
-      case 'CUSTOMER':
-        return draft.customerId === scope.scope_id;
-      case 'CUSTOMER_TAG':
-        return (draft.customerTagIds || []).includes(scope.scope_id);
-      case 'CUSTOMER_SEGMENT':
-        return (draft.customerSegmentIds || []).includes(scope.scope_id);
-      case 'CHANNEL':
-        return draft.channel === scope.scope_id;
-      case 'ORDER_TYPE':
-        return draft.orderType === scope.scope_id;
-      case 'PRODUCT':
-        return (draft.items || []).some((i) => i.productId === scope.scope_id);
-      case 'CATEGORY':
-        return (draft.items || []).some((i) => i.categoryId === scope.scope_id);
-      default:
-        return false;
-    }
-  }
-
+  /**
+   * Counts a coupon redemption against its limit, inside the order's transaction. The row
+   * is locked so two tills cannot both spend the last use of the same code.
+   */
   async consumeUsage(
     tenantId: string,
     orderId: string,
     customerId: string | undefined,
-    appliedCampaignIds: string[],
-    couponId: string | undefined,
+    couponId: string,
     discountAmount: string,
     entityManager: EntityManager,
   ): Promise<void> {
-    for (const cId of appliedCampaignIds) {
-      // Lock campaign row using FOR UPDATE
-      const campaign = await entityManager
-        .createQueryBuilder(DiscountCampaign, 'c')
-        .setLock('pessimistic_write')
-        .where('c.id = :cId AND c.tenant_id = :tenantId', { cId, tenantId })
-        .getOne();
+    const coupon = await entityManager
+      .createQueryBuilder(Coupon, 'cp')
+      .setLock('pessimistic_write')
+      .where('cp.id = :couponId AND cp.tenant_id = :tenantId', { couponId, tenantId })
+      .getOne();
 
-      if (campaign) {
-        if (campaign.usage_limit_total !== null && campaign.usage_limit_total !== undefined && campaign.usage_count >= campaign.usage_limit_total) {
-          throw new ConflictException(`Discount campaign ${campaign.code} usage limit reached during submission`);
-        }
+    if (!coupon) return;
 
-        campaign.usage_count += 1;
-        await entityManager.save(campaign);
-
-        // Record discount usage
-        const usage = entityManager.create(DiscountUsage, {
-          tenant_id: tenantId,
-          campaign_id: cId,
-          coupon_id: couponId || null,
-          customer_id: customerId || null,
-          order_id: orderId,
-          amount: MoneyUtil.format(discountAmount),
-          currency_code: 'IRR',
-          used_at: new Date(),
-        });
-        await entityManager.save(usage);
-      }
+    const maxUses = coupon.max_uses ?? 1;
+    if (coupon.uses_count >= maxUses) {
+      throw new ConflictException(`Coupon ${coupon.code} max redemptions reached during submission`);
     }
+    coupon.uses_count += 1;
+    await entityManager.save(coupon);
 
-    // Lock and consume coupon independently if passed
-    if (couponId) {
-      const coupon = await entityManager
-        .createQueryBuilder(Coupon, 'cp')
-        .setLock('pessimistic_write')
-        .where('cp.id = :couponId AND cp.tenant_id = :tenantId', { couponId, tenantId })
-        .getOne();
-
-      if (coupon) {
-        const maxUses = coupon.max_uses ?? coupon.max_redemptions;
-        const currentUses = coupon.uses_count ?? coupon.current_redemptions;
-        if (maxUses !== null && maxUses !== undefined && currentUses >= maxUses) {
-          throw new ConflictException(`Coupon ${coupon.code} max redemptions reached during submission`);
-        }
-        coupon.uses_count = currentUses + 1;
-        coupon.current_redemptions = coupon.uses_count;
-        await entityManager.save(coupon);
-
-        if (appliedCampaignIds.length === 0) {
-          const usage = entityManager.create(DiscountUsage, {
-            tenant_id: tenantId,
-            campaign_id: coupon.campaign_id || null,
-            coupon_id: coupon.id,
-            customer_id: customerId || null,
-            order_id: orderId,
-            amount: MoneyUtil.format(discountAmount),
-            currency_code: 'IRR',
-            used_at: new Date(),
-          });
-          await entityManager.save(usage);
-        }
-      }
-    }
+    const usage = entityManager.create(DiscountUsage, {
+      tenant_id: tenantId,
+      coupon_id: coupon.id,
+      customer_id: customerId || null,
+      order_id: orderId,
+      amount: MoneyUtil.format(discountAmount),
+      currency_code: 'IRR',
+      used_at: new Date(),
+    });
+    await entityManager.save(usage);
   }
 }

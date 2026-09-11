@@ -23,9 +23,6 @@ export class Customer {
   @Column({ type: 'varchar', length: 160, nullable: true })
   email: string;
 
-  @Column({ type: 'uuid', nullable: true })
-  customer_group_id: string;
-
   @Column({ type: 'varchar', length: 20, nullable: true })
   national_id: string;
 

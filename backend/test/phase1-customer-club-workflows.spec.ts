@@ -7,9 +7,6 @@ import { DiscountsService } from '../src/modules/discounts/discounts.service';
 import { DiscountEvaluationService } from '../src/modules/discounts/discount-evaluation.service';
 import { CreditService } from '../src/modules/customer/credit.service';
 
-import { Discount } from '../src/entities/Discount.entity';
-import { DiscountCampaign } from '../src/entities/DiscountCampaign.entity';
-import { DiscountScope } from '../src/entities/DiscountScope.entity';
 import { Coupon } from '../src/entities/Coupon.entity';
 import { DiscountUsage } from '../src/entities/DiscountUsage.entity';
 import { CustomerDiscount } from '../src/entities/CustomerDiscount.entity';
@@ -28,9 +25,6 @@ describe('Phase 1 Customer Club, Discounts & Coupons Workflows (Spec)', () => {
   let customerDiscountRepo: any;
   let customerRepo: any;
   let couponRepo: any;
-  let campaignRepo: any;
-  let discountRepo: any;
-  let scopeRepo: any;
   let usageRepo: any;
   let settingRepo: any;
   let approvalRequestRepo: any;
@@ -61,15 +55,6 @@ describe('Phase 1 Customer Club, Discounts & Coupons Workflows (Spec)', () => {
       save: jest.fn().mockImplementation((entity) => Promise.resolve({ id: 'coup-1', ...entity })),
     };
 
-    campaignRepo = {
-      find: jest.fn().mockResolvedValue([]),
-      findOne: jest.fn().mockResolvedValue(null),
-      create: jest.fn().mockImplementation((dto) => dto),
-      save: jest.fn().mockImplementation((entity) => Promise.resolve({ id: 'camp-1', ...entity })),
-    };
-
-    discountRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null) };
-    scopeRepo = { find: jest.fn().mockResolvedValue([]) };
     usageRepo = { find: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) };
     settingRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null) };
     approvalRequestRepo = { findOne: jest.fn().mockResolvedValue(null) };
@@ -120,9 +105,6 @@ describe('Phase 1 Customer Club, Discounts & Coupons Workflows (Spec)', () => {
         { provide: getRepositoryToken(CustomerDiscount), useValue: customerDiscountRepo },
         { provide: getRepositoryToken(Customer), useValue: customerRepo },
         { provide: getRepositoryToken(Coupon), useValue: couponRepo },
-        { provide: getRepositoryToken(DiscountCampaign), useValue: campaignRepo },
-        { provide: getRepositoryToken(Discount), useValue: discountRepo },
-        { provide: getRepositoryToken(DiscountScope), useValue: scopeRepo },
         { provide: getRepositoryToken(DiscountUsage), useValue: usageRepo },
         { provide: getRepositoryToken(TenantSetting), useValue: settingRepo },
         { provide: getRepositoryToken(ApprovalRequest), useValue: approvalRequestRepo },
@@ -319,6 +301,9 @@ describe('Phase 1 Customer Club, Discounts & Coupons Workflows (Spec)', () => {
       expect(coupon).toBeDefined();
       expect(coupon.code).toBe('ONE15');
       expect(coupon.max_uses).toBe(1);
+      // The terms live on the coupon; there is no campaign row behind it any more.
+      expect(coupon.percentage).toBe('15.0000');
+      expect(coupon.minimum_subtotal).toBe('50000.0000');
     });
   });
 });

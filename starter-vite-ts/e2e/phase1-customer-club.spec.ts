@@ -56,8 +56,10 @@ test.describe('Phase 1 Customer Club, Discounts & Coupons E2E Workflows', () => 
   test('Workflow 3: Cashier Manual Discount Authorizations Page displays role limits', async ({ page }) => {
     await loginUser(page);
 
+    // Cashier caps live in Settings; the old Discounts-hub address forwards there.
     await page.goto('/app/discounts/authorizations');
     await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/\/app\/settings\/discount-authorizations/);
 
     await expect(page.locator('body')).toContainText(/Cashier Manual Discount Authorizations|اختیارات تخفیف دستی صندوق‌داران|سقف اختیارات و قوانین پین/i, { timeout: 15000 });
     await expect(page.locator('body')).toContainText(/Cashier Role Limits|سقف دسترسی صندوق‌دار/i);
@@ -79,21 +81,20 @@ test.describe('Phase 1 Customer Club, Discounts & Coupons E2E Workflows', () => 
     await savePolicyBtn.click();
   });
 
-  test('Discounts Hub tabs only show 4 Phase 1 tabs and redirects /discounts/campaigns to /customer-rates', async ({ page }) => {
+  test('Discounts hub has three tabs, and campaigns no longer have an address', async ({ page }) => {
     await loginUser(page);
+
+    await page.goto('/app/discounts/customer-rates');
+    await page.waitForLoadState('networkidle');
+
+    const tabList = page.locator('.MuiTabs-root');
+    await expect(tabList).toBeVisible();
+    await expect(tabList.locator('.MuiTab-root')).toHaveCount(3);
+    await expect(page.locator('body')).not.toContainText(/Campaign/i);
 
     await page.goto('/app/discounts/campaigns');
     await page.waitForLoadState('networkidle');
-
-    // Should redirect to customer-rates
-    await expect(page).toHaveURL(/.*\/app\/discounts\/customer-rates/);
-    await expect(page.locator('body')).not.toContainText(/Advanced Discount Campaigns/i);
-    await expect(page.locator('body')).not.toContainText(/V5 Preview/i);
-
-    // Verify all 4 tabs exist in tabs bar
-    const tabList = page.locator('.MuiTabs-root');
-    await expect(tabList).toBeVisible();
-    await expect(tabList.locator('.MuiTab-root')).toHaveCount(4);
+    await expect(page.locator('body')).not.toContainText(/Campaign/i);
   });
-});
 
+});

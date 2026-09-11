@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
-import { CustomerGroup } from '../../entities/CustomerGroup.entity';
 import { Customer } from '../../entities/Customer.entity';
 import { CustomerPhone } from '../../entities/CustomerPhone.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
@@ -33,7 +32,6 @@ export function normalizePhone(rawPhone: string): string {
 @Injectable()
 export class CustomerService {
   constructor(
-    @InjectRepository(CustomerGroup) private readonly groupRepo: Repository<CustomerGroup>,
     @InjectRepository(Customer) private readonly customerRepo: Repository<Customer>,
     @InjectRepository(CustomerPhone) private readonly phoneRepo: Repository<CustomerPhone>,
     @InjectRepository(CustomerAddress) private readonly addressRepo: Repository<CustomerAddress>,
@@ -46,44 +44,6 @@ export class CustomerService {
     private readonly auditWriter: AuditWriter,
     private readonly dataSource: DataSource,
   ) {}
-
-  // Customer Groups
-  async getCustomerGroups(tenantId: string) {
-    return await this.groupRepo.find({ where: { tenant_id: tenantId }, order: { code: 'ASC' } });
-  }
-
-  async createCustomerGroup(
-    tenantId: string,
-    data: { code: string; name: string; discount_id?: string; price_group_id?: string },
-    correlationId: string,
-  ) {
-    const code = data.code.toUpperCase();
-    const existing = await this.groupRepo.findOne({ where: { tenant_id: tenantId, code } });
-    if (existing) throw new ConflictException(`Customer Group code ${code} already exists`);
-
-    const group = this.groupRepo.create({
-      tenant_id: tenantId,
-      code,
-      name: data.name,
-      discount_id: data.discount_id || null,
-      price_group_id: data.price_group_id || null,
-      is_active: true,
-    });
-
-    const saved = await this.groupRepo.save(group);
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'CUSTOMER_GROUP_CREATED',
-      entityType: 'CustomerGroup',
-      entityId: saved.id,
-      correlationId,
-      afterData: saved,
-    });
-
-    return saved;
-  }
 
   private async enrichCustomersWithCredit(tenantId: string, customers: Customer[]): Promise<any[]> {
     if (!customers || customers.length === 0) return [];
@@ -172,7 +132,6 @@ export class CustomerService {
       last_name: string;
       mobile: string;
       email?: string;
-      customer_group_id?: string;
       national_id?: string;
       credit_limit?: string;
     },
@@ -197,7 +156,6 @@ export class CustomerService {
       last_name: data.last_name,
       mobile: normMobile || rawMobile,
       email: data.email || null,
-      customer_group_id: data.customer_group_id || null,
       national_id: data.national_id || null,
       is_active: true,
     });

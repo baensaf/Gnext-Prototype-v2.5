@@ -13,20 +13,6 @@ export class CustomerController {
     private readonly creditService: CreditService,
   ) {}
 
-  @Get('customer-groups')
-  async getCustomerGroups(@Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.customerService.getCustomerGroups(tenantId);
-  }
-
-  @HeadOfficeOnly()
-  @Post('customer-groups')
-  async createCustomerGroup(@Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.customerService.createCustomerGroup(tenantId, body, correlationId);
-  }
-
   @Get('customers')
   async getCustomers(
     @Query('search') search?: string,

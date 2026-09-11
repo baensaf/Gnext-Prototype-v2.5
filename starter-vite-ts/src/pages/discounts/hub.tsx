@@ -6,10 +6,7 @@ import Tab from '@mui/material/Tab';
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
 import Tabs from '@mui/material/Tabs';
-import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
 import GroupIcon from '@mui/icons-material/Group';
-import SecurityIcon from '@mui/icons-material/Security';
 import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 
@@ -17,7 +14,7 @@ import { DashboardContent } from 'src/layouts/dashboard';
 import { CouponsPage } from 'src/pages/discounts/coupons';
 import WalletCashbackPage from 'src/pages/customer-club/wallet-cashback';
 import CustomerDiscountsPage from 'src/pages/customer-club/customer-discounts';
-import DiscountAuthorizationsPage from 'src/pages/settings/discount-authorizations';
+
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 interface DiscountsHubPageProps {
@@ -32,10 +29,9 @@ export function DiscountsHubPage({ defaultTab = 0 }: DiscountsHubPageProps) {
   const tabFromPath = useMemo(() => {
     const p = location.pathname;
     if (p.includes('/coupons')) return 1;
-    if (p.includes('/authorizations') || p.includes('/discount-authorizations')) return 2;
-    if (p.includes('/wallet')) return 3;
+    if (p.includes('/wallet')) return 2;
     if (p.includes('/customer-rates') || p.includes('/discounts')) return 0;
-    return defaultTab < 4 ? defaultTab : 0;
+    return defaultTab < 3 ? defaultTab : 0;
   }, [location.pathname, defaultTab]);
 
   const [tabIndex, setTabIndex] = useState(tabFromPath);
@@ -49,7 +45,6 @@ export function DiscountsHubPage({ defaultTab = 0 }: DiscountsHubPageProps) {
     const routes = [
       '/app/discounts/customer-rates',
       '/app/discounts/coupons',
-      '/app/discounts/authorizations',
       '/app/discounts/wallet',
     ];
     if (routes[newIndex]) {
@@ -57,19 +52,14 @@ export function DiscountsHubPage({ defaultTab = 0 }: DiscountsHubPageProps) {
     }
   };
 
-  const isFromSettings = location.pathname.startsWith('/app/settings');
-
   return (
     <DashboardContent>
       {/* Header */}
       <CustomBreadcrumbs
-        heading={t('discounts.hubTitle', 'Discounts & Promotions Hub')}
+        heading={t('discounts.hubTitle', 'Discounts & Coupons')}
         links={[
           { name: t('nav.home', 'Home'), href: '/app/dashboard' },
-          ...(isFromSettings
-            ? [{ name: t('nav.settingsHub', 'Settings'), href: '/app/settings' }]
-            : []),
-          { name: t('discounts.hubTitle', 'Discounts Hub') },
+          { name: t('discounts.hubTitle', 'Discounts & Coupons') },
         ]}
       />
 
@@ -103,11 +93,6 @@ export function DiscountsHubPage({ defaultTab = 0 }: DiscountsHubPageProps) {
             label={t('discounts.tabCoupons', 'One-Time Coupons Studio')}
           />
           <Tab
-            icon={<SecurityIcon sx={{ mr: 1, fontSize: 20 }} />}
-            iconPosition="start"
-            label={t('discounts.tabAuthorizations', 'Cashier Role Caps & PIN Rules')}
-          />
-          <Tab
             icon={<AccountBalanceWalletIcon sx={{ mr: 1, fontSize: 20 }} />}
             iconPosition="start"
             label={t('discounts.tabWallet', 'Loyalty Wallet & Cashback')}
@@ -119,8 +104,7 @@ export function DiscountsHubPage({ defaultTab = 0 }: DiscountsHubPageProps) {
       <Box>
         {tabIndex === 0 && <CustomerDiscountsPage isEmbedded />}
         {tabIndex === 1 && <CouponsPage isEmbedded />}
-        {tabIndex === 2 && <DiscountAuthorizationsPage isEmbedded />}
-        {tabIndex === 3 && <WalletCashbackPage isEmbedded />}
+        {tabIndex === 2 && <WalletCashbackPage isEmbedded />}
       </Box>
     </DashboardContent>
   );

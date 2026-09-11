@@ -23,7 +23,6 @@ import { Customer } from '../../entities/Customer.entity';
 import { CustomerCreditAccount } from '../../entities/CustomerCreditAccount.entity';
 import { CreditEntry } from '../../entities/CreditEntry.entity';
 import { OrderAdjustment } from '../../entities/OrderAdjustment.entity';
-import { DiscountCampaign } from '../../entities/DiscountCampaign.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { PrintJob } from '../../entities/PrintJob.entity';
@@ -62,7 +61,6 @@ export class ReportsService {
     @InjectRepository(CustomerCreditAccount) private readonly creditAccountRepo: Repository<CustomerCreditAccount>,
     @InjectRepository(CreditEntry) private readonly creditEntryRepo: Repository<CreditEntry>,
     @InjectRepository(OrderAdjustment) private readonly adjustmentRepo: Repository<OrderAdjustment>,
-    @InjectRepository(DiscountCampaign) private readonly campaignRepo: Repository<DiscountCampaign>,
     @InjectRepository(PaymentDevice) private readonly paymentDeviceRepo: Repository<PaymentDevice>,
     @InjectRepository(PaymentMethod) private readonly paymentMethodRepo: Repository<PaymentMethod>,
     @InjectRepository(PrintJob) private readonly printJobRepo: Repository<PrintJob>,
@@ -92,9 +90,8 @@ export class ReportsService {
       { code: 'mixed-payments', name: 'Mixed Payments Audit', category: 'PAYMENT' },
       { code: 'mobile-pos', name: 'Mobile POS Terminal Operations', category: 'PAYMENT' },
       { code: 'alternative-refunds', name: 'Alternative Method Refunds', category: 'PAYMENT' },
-      { code: 'discounts', name: 'Discounts & Promotion Performance', category: 'PROMOTION' },
+      { code: 'discounts', name: 'Discounts Given (Manual, Coupon, Customer Rate)', category: 'PROMOTION' },
       { code: 'manual-discounts', name: 'Cashier Manual Discounts & Deductions', category: 'PROMOTION' },
-      { code: 'discount-stacking', name: 'Exclusions & Discount Stacking', category: 'PROMOTION' },
       { code: 'cashier-shifts', name: 'Cashier Shifts & EOD Balancing', category: 'CASH' },
       { code: 'cash-discrepancies', name: 'Cash & Settlement Discrepancies', category: 'CASH' },
       { code: 'customer-credit', name: 'Customer Credit Ledger', category: 'CREDIT' },
@@ -690,9 +687,10 @@ export class ReportsService {
             adjustment_id: a.id,
             order_id: a.order_id,
             type: a.type || 'DISCOUNT',
-            code: a.code || 'PROMO10',
+            source: a.source_type,
+            code: a.code || '',
             discount_amount: amtStr,
-            reason: a.name || 'Standard Promotion',
+            reason: a.name || '',
           };
         });
 
@@ -735,31 +733,6 @@ export class ReportsService {
           summary_totals: {
             manual_discount_count: rows.length,
             amount: totalManual,
-          },
-        };
-      }
-
-      case 'discount-stacking': {
-        const stackingOrderIds = await this.branchOrderIds(tenantId, branchId);
-        const adjustments = await this.adjustmentRepo.find({
-          where: { tenant_id: tenantId, ...(stackingOrderIds ? { order_id: In(stackingOrderIds) } : {}) },
-        });
-        const rows = adjustments.map((a) => ({
-          adjustment_id: a.id,
-          order_id: a.order_id,
-          campaign_code: a.code || 'DEFAULT_STACK',
-          decision_reason: 'ALLOWED_SEQUENTIAL',
-          amount: MoneyUtil.format(a.amount || '0', 2),
-        }));
-
-        const totalAmt = adjustments.reduce((acc, a) => MoneyUtil.add(acc, a.amount || '0', 2), '0.00');
-
-        return {
-          report_code: reportCode,
-          rows,
-          summary_totals: {
-            stacking_records: rows.length,
-            amount: totalAmt,
           },
         };
       }

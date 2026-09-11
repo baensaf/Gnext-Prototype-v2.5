@@ -66,7 +66,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
         discountTotal: '10000.0000',
         taxTotal: '0.0000',
         grandTotal: '90000.0000',
-        consideredDiscounts: [{ campaignName: '10% Discount', status: 'APPLIED', amount: '10000.0000' }],
+        consideredDiscounts: [{ source: 'CUSTOMER', name: 'Customer Specific Discount (10%)', status: 'APPLIED', amount: '10000.0000' }],
         warnings: [],
       }),
       consumeUsage: jest.fn().mockResolvedValue(undefined),

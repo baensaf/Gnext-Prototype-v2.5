@@ -1,6 +1,5 @@
 import type {
   Customer,
-  CustomerGroup,
   CustomerAddress,
   CustomerCreditAccount,
   CustomerCreditTransaction} from 'src/api/customerApi';
@@ -54,7 +53,6 @@ import { ServerDataGrid } from 'src/components/server-data-grid';
 export function CustomersPage() {
 
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([]);
   const [search, setSearch] = useState('');
   const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +64,6 @@ export function CustomersPage() {
   const [lastName, setLastName] = useState('');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
-  const [groupId, setGroupId] = useState('');
   const [creditLimit, setCreditLimit] = useState('10000000');
 
   // Credit Account Modal state
@@ -89,8 +86,6 @@ export function CustomersPage() {
     try {
       const cList = await customerApi.getCustomers(search || undefined);
       setCustomers(cList);
-      const gList = await customerApi.getCustomerGroups();
-      setCustomerGroups(gList);
       setError(null);
     } catch (err: any) {
       setError(err.detail || 'Failed to load customers');
@@ -113,7 +108,6 @@ export function CustomersPage() {
         last_name: lastName,
         mobile,
         email,
-        customer_group_id: groupId || undefined,
         credit_limit: creditLimit,
       });
       setDrawerOpen(false);
@@ -130,7 +124,6 @@ export function CustomersPage() {
     setLastName('');
     setMobile('');
     setEmail('');
-    setGroupId('');
     setCreditLimit('10000000');
   };
 
@@ -213,7 +206,7 @@ export function CustomersPage() {
             Customer Relationship & Accounts
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage customer profiles, delivery addresses, customer groups, and credit account ledgers
+            Manage customer profiles, delivery addresses and credit account ledgers
           </Typography>
         </Box>
         <Button
@@ -272,15 +265,6 @@ export function CustomersPage() {
             headerName: 'Mobile Number',
             width: 150,
             renderCell: (params) => <span dir="ltr">{params.value}</span>,
-          },
-          {
-            field: 'customer_group_id',
-            headerName: 'Customer Group',
-            width: 150,
-            renderCell: (params) => {
-              const grpObj = customerGroups.find((g) => g.id === params.value);
-              return grpObj ? <Chip label={grpObj.name} color="info" size="small" /> : 'Regular';
-            },
           },
           {
             field: 'wallet_balance',
@@ -411,22 +395,6 @@ export function CustomersPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
-
-              <FormControl fullWidth>
-                <InputLabel>Customer Group</InputLabel>
-                <Select
-                  value={groupId}
-                  label="Customer Group"
-                  onChange={(e) => setGroupId(e.target.value)}
-                >
-                  <MenuItem value="">Regular Customer</MenuItem>
-                  {customerGroups.map((g) => (
-                    <MenuItem key={g.id} value={g.id}>
-                      {g.name} ({g.code})
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
 
               <TextField
                 label="Assigned Credit Line / Overdraft Limit (IRR)"

@@ -1,7 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CustomerService, normalizePhone } from '../src/modules/customer/customer.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { CustomerGroup } from '../src/entities/CustomerGroup.entity';
 import { Customer } from '../src/entities/Customer.entity';
 import { CustomerPhone } from '../src/entities/CustomerPhone.entity';
 import { CustomerAddress } from '../src/entities/CustomerAddress.entity';
@@ -32,7 +31,6 @@ describe('CustomerService (Unit)', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CustomerService,
-        { provide: getRepositoryToken(CustomerGroup), useValue: {} },
         { provide: getRepositoryToken(Customer), useValue: customerRepo },
         { provide: getRepositoryToken(CustomerPhone), useValue: { create: jest.fn(), save: jest.fn() } },
         { provide: getRepositoryToken(CustomerAddress), useValue: {} },

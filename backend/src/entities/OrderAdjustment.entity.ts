@@ -25,7 +25,8 @@ export class OrderAdjustment {
   @Column({ type: 'varchar', length: 24, default: 'DISCOUNT' })
   type: string;
 
-  @Column({ type: 'varchar', length: 32, default: 'CAMPAIGN' })
+  /** MANUAL (the cashier), COUPON or CUSTOMER (the customer's own rate). */
+  @Column({ type: 'varchar', length: 32, default: 'MANUAL' })
   source_type: string;
 
   @Column({ type: 'uuid', nullable: true })

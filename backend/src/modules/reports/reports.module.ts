@@ -14,7 +14,6 @@ import { Customer } from '../../entities/Customer.entity';
 import { CustomerCreditAccount } from '../../entities/CustomerCreditAccount.entity';
 import { CreditEntry } from '../../entities/CreditEntry.entity';
 import { OrderAdjustment } from '../../entities/OrderAdjustment.entity';
-import { DiscountCampaign } from '../../entities/DiscountCampaign.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { PrintJob } from '../../entities/PrintJob.entity';
@@ -48,7 +47,6 @@ import { ReportsController } from './reports.controller';
       CustomerCreditAccount,
       CreditEntry,
       OrderAdjustment,
-      DiscountCampaign,
       PaymentDevice,
       PaymentMethod,
       PrintJob,

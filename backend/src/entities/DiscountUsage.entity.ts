@@ -13,11 +13,9 @@ export class DiscountUsage {
   @Column({ type: 'uuid' })
   tenant_id: string;
 
+  /** A redemption of a coupon — the only discount that is counted against a limit. */
   @Column({ type: 'uuid' })
-  campaign_id: string;
-
-  @Column({ type: 'uuid', nullable: true })
-  coupon_id: string | null;
+  coupon_id: string;
 
   @Column({ type: 'uuid', nullable: true })
   customer_id: string | null;
