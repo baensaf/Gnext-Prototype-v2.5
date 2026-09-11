@@ -17,6 +17,9 @@ import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import { currentTillTerminalId } from '../../common/utils/till-context';
+import { isApprover } from '../../common/utils/user-scope.util';
+import { ApprovalService } from '../approval/approval.service';
+import { ShiftPolicy, SHIFT_POLICY_DEFAULTS } from './shift-policy';
 import {
   ShiftOpenDto,
   CashMovementDto,
@@ -36,7 +39,41 @@ export class ShiftService {
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
     private readonly auditWriter: AuditWriter,
     private readonly dataSource: DataSource,
+    private readonly approvalService: ApprovalService,
   ) {}
+
+  /** The drawer rules in force at a branch. */
+  async policyFor(_tenantId: string, _branchId?: string | null): Promise<ShiftPolicy> {
+    return SHIFT_POLICY_DEFAULTS;
+  }
+
+  /**
+   * What someone counting down a drawer may see of it before they have counted.
+   *
+   * Showing the expected cash beforehand invites typing it in, and the count then proves
+   * nothing — the old dialog even filled it in. So while a shift is open, a caller who is not
+   * an approver gets the float and their own pay-ins and pay-outs, but not the sales, the
+   * refunds or the total the drawer should hold. `blind` tells the screen which it has.
+   */
+  async redactForBlindCount<T extends Record<string, any> | null>(
+    tenantId: string,
+    payload: T,
+    viewer: { role?: string | null },
+  ): Promise<T> {
+    if (!payload || isApprover(viewer.role)) return payload;
+    const state = payload.state || payload.status;
+    if (state === 'CLOSED') return payload;
+    const branchId = payload.branch_id || payload.branchId;
+    if (!(await this.policyFor(tenantId, branchId)).blindClose) return payload;
+
+    const visible = new Set(['OPENING_FLOAT', 'PAID_IN', 'PAID_OUT']);
+    const copy: Record<string, any> = { ...payload, blind: true };
+    if (Array.isArray(copy.movements)) copy.movements = copy.movements.filter((m: any) => visible.has(m.type));
+    for (const key of ['expectedCash', 'cashSales', 'cashRefunds', 'shortOver', 'expected_cash', 'short_over', 'over_short_amount']) {
+      if (key in copy) copy[key] = null;
+    }
+    return copy as T;
+  }
 
   async getShifts(tenantId: string, query: any) {
     const qb = this.shiftRepo
@@ -459,11 +496,31 @@ export class ShiftService {
     });
   }
 
-  async closeShift(tenantId: string, shiftId: string, dto: ShiftCloseDto, userId?: string, correlationId?: string) {
+  /**
+   * Counting a drawer down.
+   *
+   * The count is taken blind (see `redactForBlindCount`), so the first the closer learns of
+   * a difference is this call refusing with `SHIFT_COUNT_NEEDS_SIGNOFF`, which carries the
+   * figures: any difference needs a reason, and one beyond the branch's tolerance needs an
+   * approver's pin as well — the same `verifyApproverPin` a refund goes through. An approver
+   * closing a drawer carries that authority already. The refused count is audited, so a
+   * recount after seeing the difference leaves a trail.
+   */
+  async closeShift(
+    tenantId: string,
+    shiftId: string,
+    dto: ShiftCloseDto,
+    userId?: string,
+    correlationId?: string,
+    closer?: { role?: string | null },
+  ) {
     return await this.dataSource.transaction(async (em) => {
+      // Loaded without its movements on purpose. `movements` cascades, so saving a shift
+      // that carries the list read here treats the CLOSE_ADJUSTMENT written below as removed
+      // from it and nulls its shift_id — every close with a difference failed on the
+      // not-null constraint. The movements are read separately for the arithmetic.
       const shift = await em.findOne(CashierShift, {
         where: { id: shiftId, tenant_id: tenantId },
-        relations: ['movements'],
       });
       if (!shift) throw new NotFoundException(`Shift ${shiftId} not found`);
 
@@ -490,11 +547,52 @@ export class ShiftService {
       const actualCash = MoneyUtil.format(dto.actualCash);
       const shortOver = MoneyUtil.subtract(actualCash, expectedCash);
 
-      // Nonzero discrepancy check
-      if (MoneyUtil.notEqual(shortOver, '0.0000')) {
-        if (!dto.reasonCodeId && !dto.reason) {
-          throw new BadRequestException('Cash discrepancy (short/over) requires a reason');
-        }
+      const policy = await this.policyFor(tenantId, shift.branch_id);
+      const hasDifference = MoneyUtil.notEqual(shortOver, '0.0000');
+      const beyondTolerance = MoneyUtil.greaterThan(MoneyUtil.abs(shortOver), MoneyUtil.format(policy.varianceTolerance));
+      const needsReason = hasDifference && !dto.reasonCodeId && !dto.reason;
+      const needsApproval = beyondTolerance && !isApprover(closer?.role);
+
+      if (needsReason || (needsApproval && !dto.pin)) {
+        await this.auditWriter.write({
+          tenantId,
+          actorType: userId ? 'ADMIN' : 'SYSTEM',
+          actorId: userId,
+          action: 'SHIFT_COUNT_SUBMITTED',
+          entityType: 'CashierShift',
+          entityId: shiftId,
+          correlationId,
+          details: { actualCash, expectedCash, shortOver },
+        });
+        throw new BadRequestException({
+          code: 'SHIFT_COUNT_NEEDS_SIGNOFF',
+          title: 'Drawer Does Not Balance',
+          detail: needsApproval
+            ? 'The count is further out than this branch allows. Give a reason and a manager PIN to close.'
+            : 'The count differs from what the drawer should hold. Give a reason to close.',
+          context: {
+            expectedCash,
+            actualCash,
+            shortOver,
+            varianceTolerance: MoneyUtil.format(policy.varianceTolerance),
+            needsReason: hasDifference,
+            needsApproval,
+          },
+        });
+      }
+
+      let approverId: string | null = null;
+      if (needsApproval) {
+        const approval = await this.approvalService.verifyApproverPin(
+          tenantId,
+          dto.pin || '',
+          'SHIFT_CLOSE_VARIANCE',
+          userId || '',
+          shift.branch_id,
+        );
+        approverId = approval.approver_user_id;
+      } else if (beyondTolerance) {
+        approverId = userId || null;
       }
 
       // If discrepancy exists, record CLOSE_ADJUSTMENT movement
@@ -535,6 +633,7 @@ export class ShiftService {
         entityId: shiftId,
         correlationId,
         afterData: savedShift,
+        details: approverId ? { varianceApprovedBy: approverId, shortOver } : undefined,
       });
 
       return await this.getShiftStatement(tenantId, shiftId, em);
@@ -556,7 +655,9 @@ export class ShiftService {
       let expectedCash = '0.0000';
 
       for (const m of movements) {
-        expectedCash = MoneyUtil.add(expectedCash, m.amount);
+        // The close adjustment books the difference found at the count. Adding it in made a
+        // closed drawer's "expected" equal to what was counted, so every statement balanced.
+        if (m.type !== 'CLOSE_ADJUSTMENT') expectedCash = MoneyUtil.add(expectedCash, m.amount);
         switch (m.type) {
           case 'OPENING_FLOAT':
             openingFloat = MoneyUtil.add(openingFloat, m.amount);

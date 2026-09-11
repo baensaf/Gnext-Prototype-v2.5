@@ -12,9 +12,11 @@ import { BusinessDayService } from './business-day.service';
 import { ShiftsController } from './shifts.controller';
 import { BusinessDaysController } from './business-days.controller';
 import { AuditModule } from '../audit/audit.module';
+import { ApprovalModule } from '../approval/approval.module';
 
 @Module({
   imports: [
+    ApprovalModule,
     TypeOrmModule.forFeature([
       CashierShift,
       CashMovement,

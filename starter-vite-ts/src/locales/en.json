@@ -936,7 +936,18 @@
       "counted": "Counted cash (IRR)",
       "notes": "Notes / reason for a difference",
       "confirm": "Close shift",
-      "error": "Could not close the shift"
+      "error": "Could not close the shift",
+      "submitCount": "Submit count",
+      "blindHelp": "Count the cash in the drawer and enter the total. What it should hold is shown after you have counted.",
+      "needsReason": "The drawer does not balance. Give a reason to close.",
+      "needsApproval": "The drawer is out by more than {{tolerance}}. A reason and a manager PIN are needed to close.",
+      "countedLabel": "Counted",
+      "cashSales": "Cash sales",
+      "cashRefunds": "Cash refunds",
+      "paidInOut": "Paid in / out",
+      "balanced": "Shift closed. The drawer balanced.",
+      "closedWithDifference": "Shift closed with a difference.",
+      "done": "Done"
     },
     "bar": {
       "shift": "Shift",

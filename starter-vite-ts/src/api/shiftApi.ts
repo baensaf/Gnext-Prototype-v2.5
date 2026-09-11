@@ -51,12 +51,31 @@ export interface ShiftStatement {
   cashRefunds: string;
   paidIn: string;
   paidOut: string;
-  expectedCash: string;
+  /** Null while the shift is open and the viewer is counting blind. */
+  expectedCash: string | null;
   actualCash?: string;
-  shortOver?: string;
+  shortOver?: string | null;
   previewVersion?: string;
   orderCount: number;
   movements: CashMovement[];
+  /** True when sales, refunds and the expected total were withheld for a blind count. */
+  blind?: boolean;
+}
+
+export interface ShiftPolicy {
+  defaultOpeningFloat: string;
+  varianceTolerance: string;
+  blindClose: boolean;
+}
+
+/** What a close refused with `SHIFT_COUNT_NEEDS_SIGNOFF` hands back. */
+export interface ShiftCountSignoff {
+  expectedCash: string;
+  actualCash: string;
+  shortOver: string;
+  varianceTolerance: string;
+  needsReason: boolean;
+  needsApproval: boolean;
 }
 
 export interface BusinessDayClose {
@@ -138,9 +157,17 @@ export const shiftApi = {
       reason?: string;
       approvalRequestId?: string;
       previewVersion?: string;
+      /** An approver's pin, when the count is further out than the branch allows. */
+      pin?: string;
     },
   ): Promise<ShiftStatement> => {
     const res = await httpClient.post(`/api/v1/shifts/${shiftId}/close`, data);
+    return res.data;
+  },
+
+  /** The drawer rules where the caller is working: float offered, tolerance, blind count. */
+  getPolicy: async (branchId?: string): Promise<ShiftPolicy> => {
+    const res = await httpClient.get('/api/v1/shifts/policy', { params: { branchId: branchId || undefined } });
     return res.data;
   },
 

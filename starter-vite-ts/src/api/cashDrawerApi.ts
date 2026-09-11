@@ -10,7 +10,7 @@ export interface CashDrawerShift {
   opened_at: string;
   closed_at?: string;
   opening_float: string;
-  expected_cash: string;
+  expected_cash: string | null;
   actual_cash?: string;
   over_short_amount?: string;
   status: string;
@@ -30,17 +30,19 @@ export interface CashDrawerTransaction {
 
 export interface ShiftSummary {
   opening_float: string;
-  cash_sales: string;
+  cash_sales: string | null;
   pay_in: string;
   pay_out: string;
   safe_drop: string;
-  expected_cash: string;
+  expected_cash: string | null;
 }
 
 export interface ActiveShiftResponse {
   shift: CashDrawerShift;
   transactions: CashDrawerTransaction[];
   summary: ShiftSummary;
+  /** Sales and the expected total are withheld until the drawer is counted. */
+  blind: boolean;
 }
 
 export const cashDrawerApi = {
@@ -86,7 +88,7 @@ export const cashDrawerApi = {
         expected_cash: stmt.expectedCash,
       };
 
-      return { shift: legacyShift, transactions: legacyTxs, summary };
+      return { shift: legacyShift, transactions: legacyTxs, summary, blind: !!stmt.blind };
     } catch (err: any) {
       if (err.status === 404 || err.response?.status === 404) return null;
       throw err;
@@ -118,51 +120,5 @@ export const cashDrawerApi = {
       note: move.reason_text || move.reference,
       recorded_at: move.posted_at,
     };
-  },
-
-  closeShift: async (
-    shiftId: string,
-    data: {
-      actual_cash: string;
-      notes?: string;
-    },
-  ): Promise<{ shift: CashDrawerShift; summary: ShiftSummary; overShort: string }> => {
-    let stmt: any;
-    try {
-      stmt = await shiftApi.beginClose(shiftId);
-    } catch {
-      // If already in closing review, proceed to close
-    }
-
-    const closedStmt = await shiftApi.closeShift(shiftId, {
-      actualCash: data.actual_cash,
-      reason: data.notes,
-      previewVersion: stmt?.previewVersion,
-    });
-
-    const shiftRes: CashDrawerShift = {
-      id: closedStmt.shiftId,
-      branch_id: closedStmt.branchId,
-      terminal_id: closedStmt.terminalId,
-      shift_number: closedStmt.shiftNumber,
-      opened_at: closedStmt.openedAt,
-      closed_at: closedStmt.closedAt,
-      opening_float: closedStmt.openingFloat,
-      expected_cash: closedStmt.expectedCash,
-      actual_cash: closedStmt.actualCash || data.actual_cash,
-      over_short_amount: closedStmt.shortOver || '0.0000',
-      status: closedStmt.state,
-    };
-
-    const summary: ShiftSummary = {
-      opening_float: closedStmt.openingFloat,
-      cash_sales: closedStmt.cashSales,
-      pay_in: closedStmt.paidIn,
-      pay_out: closedStmt.paidOut,
-      safe_drop: '0.0000',
-      expected_cash: closedStmt.expectedCash,
-    };
-
-    return { shift: shiftRes, summary, overShort: closedStmt.shortOver || '0.0000' };
   },
 };

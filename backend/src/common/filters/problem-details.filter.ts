@@ -19,6 +19,11 @@ export interface ProblemDetailsResponse {
   fieldErrors?: FieldError[];
   /** Machine codes naming why an action was escalated, e.g. `CANCEL_ORDER:CANCEL_AGAINST_PAID_ORDER`. */
   escalations?: string[];
+  /**
+   * Figures the client needs to act on a refusal — a drawer that does not balance returns
+   * what it should have held, so the closer can give a reason and fetch a manager.
+   */
+  context?: Record<string, unknown>;
 }
 
 @Catch()
@@ -36,6 +41,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     let type = 'https://gnext.local/problems/internal';
     let fieldErrors: FieldError[] | undefined = undefined;
     let escalations: string[] | undefined = undefined;
+    let context: Record<string, unknown> | undefined = undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -52,6 +58,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         // the approver, so it has to survive the trip rather than being dropped
         // into a generic problem body.
         if (Array.isArray(resObj.escalations)) escalations = resObj.escalations;
+        if (resObj.context && typeof resObj.context === 'object') context = resObj.context;
 
         if (Array.isArray(resObj.message)) {
           fieldErrors = resObj.message.map((msg: any) => {
@@ -85,6 +92,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       correlationId,
       ...(fieldErrors && { fieldErrors }),
       ...(escalations && { escalations }),
+      ...(context && { context }),
     };
 
     response.status(status).json(problemDetails);

@@ -94,6 +94,11 @@ export class ShiftCloseDto {
   @IsString()
   previewVersion?: string;
 
+  /** An approver's pin, when the count is further out than the branch's tolerance. */
+  @IsOptional()
+  @IsString()
+  pin?: string;
+
   @IsOptional()
   @IsInt()
   version?: number;

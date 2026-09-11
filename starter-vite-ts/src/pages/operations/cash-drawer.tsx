@@ -227,7 +227,7 @@ export function CashDrawerPage() {
               <Card sx={{ borderRadius: 3, boxShadow: 1, textAlign: 'center', p: 2 }}>
                 <Typography variant="caption" color="text.secondary">Cash Sales</Typography>
                 <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 1, color: 'success.main' }}>
-                  +{MoneyUtil.formatCurrency(summary?.cash_sales)}
+                  {activeShiftData?.blind ? '—' : `+${MoneyUtil.formatCurrency(summary?.cash_sales)}`}
                 </Typography>
               </Card>
             </Grid>
@@ -263,7 +263,8 @@ export function CashDrawerPage() {
               <Card sx={{ borderRadius: 3, boxShadow: 2, textAlign: 'center', p: 2, bgcolor: 'primary.lighter' }}>
                 <Typography variant="caption" color="primary.dark font-bold">EXPECTED CASH</Typography>
                 <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 1, color: 'primary.main' }}>
-                  {MoneyUtil.formatCurrency(summary?.expected_cash)} IRR
+                  {/* Withheld from whoever will count this drawer down until they have. */}
+                  {activeShiftData?.blind ? '—' : `${MoneyUtil.formatCurrency(summary?.expected_cash)} IRR`}
                 </Typography>
               </Card>
             </Grid>

@@ -57,11 +57,19 @@ export class ShiftsController {
     // the screen would have offered to close somebody else's till. A branch account is
     // held to its own shop; head office working inside a branch names it, because with no
     // branch at all the answer was the newest drawer open anywhere in the chain.
-    return await this.shiftService.getCurrentShift(
+    const shift = await this.shiftService.getCurrentShift(
       tenantId,
       terminalId,
       effectiveBranchId((req as any).userBranchId, branchId),
     );
+    return await this.shiftService.redactForBlindCount(tenantId, shift, this.viewer(req));
+  }
+
+  /** The drawer rules in force where the caller is working: the float offered, blind count. */
+  @Get('policy')
+  async getPolicy(@Query('branchId') branchId: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.shiftService.policyFor(tenantId, effectiveBranchId((req as any).userBranchId, branchId));
   }
 
   /**
@@ -82,7 +90,8 @@ export class ShiftsController {
   @Get(':id')
   async getShiftById(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.shiftService.getShiftById(tenantId, id);
+    const shift = await this.shiftService.getShiftById(tenantId, id);
+    return await this.shiftService.redactForBlindCount(tenantId, shift, this.viewer(req));
   }
 
   @Post(':id/movements')
@@ -98,7 +107,8 @@ export class ShiftsController {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
-    return await this.shiftService.beginClose(tenantId, id, userId, correlationId);
+    const preview = await this.shiftService.beginClose(tenantId, id, userId, correlationId);
+    return await this.shiftService.redactForBlindCount(tenantId, preview, this.viewer(req));
   }
 
   @Post(':id/return-to-open')
@@ -114,12 +124,17 @@ export class ShiftsController {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
-    return await this.shiftService.closeShift(tenantId, id, body, userId, correlationId);
+    return await this.shiftService.closeShift(tenantId, id, body, userId, correlationId, this.viewer(req));
   }
 
   @Get(':id/statement')
   async getShiftStatement(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.shiftService.getShiftStatement(tenantId, id);
+    const statement = await this.shiftService.getShiftStatement(tenantId, id);
+    return await this.shiftService.redactForBlindCount(tenantId, statement, this.viewer(req));
+  }
+
+  private viewer(req: Request) {
+    return { role: (req as any).userRole ?? null };
   }
 }
