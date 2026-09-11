@@ -28,7 +28,9 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 
+import { fitsWorkspace } from 'src/config/role-access';
 import { httpClient as axios } from 'src/api/httpClient';
+import { useWorkspaceScope } from 'src/contexts/branch-context';
 
 export function OrdersDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -37,6 +39,9 @@ export function OrdersDetailPage() {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  // Refunds are handed back at the branch; head office looks the order up but does not
+  // get a button into a desk its menu does not have.
+  const canRefundHere = fitsWorkspace('/app/refunds', useWorkspaceScope());
 
   useEffect(() => {
     async function loadOrder() {
@@ -86,7 +91,7 @@ export function OrdersDetailPage() {
           >
             {t('orders.printReceipt', 'Thermal Receipt')}
           </Button>
-          {['SUBMITTED', 'PENDING', 'ACCEPTED'].includes(order.state) && (
+          {canRefundHere && ['SUBMITTED', 'PENDING', 'ACCEPTED'].includes(order.state) && (
             <Button
               variant="outlined"
               color="error"
