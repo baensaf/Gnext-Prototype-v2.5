@@ -67,22 +67,20 @@ const OPEN_BY_DESIGN: Array<[string, any, string[]]> = [
   // Reads in all but HTTP verb — the register calls both in the middle of an order.
   ['discounts', DiscountsController, ['coupons/validate', 'discount-quotes']],
   ['localization', LocalizationController, []],
-  // Everything a counter does with a customer: sign one up, add a phone, take a payment
-  // against their account. Only the group taxonomy is chain-wide.
+  // Everything a counter does with a customer: sign one up, add a phone, an address, a
+  // consent. The record itself is the chain's, so merging two and the group taxonomy are not.
   [
     'customer',
     CustomerController,
     [
       'customers',
-      'customers/merge',
       'customers/:id/phones',
       'customers/:id/consents',
       'customers/:id/addresses',
     ],
   ],
-  // Money on a customer's account — limits, repayments, adjustments — is a manager's call at
-  // their own counter. Nothing here checked anything at all until an audit found a register
-  // account could read the whole chain's ledger and move balances on it.
+  // Credit is held centrally. Nothing here checked anything at all until an audit found a
+  // register account could read the whole chain's ledger and move balances on it.
   ['credit', CreditController, []],
   // The demo sandbox writes real orders and flips connectivity the whole demo reads. Its
   // screens are head office's; so is the API.
@@ -108,16 +106,40 @@ describe.each(OPEN_BY_DESIGN)('%s: what the chain decides once', (label, control
 });
 
 describe('money on a customer account', () => {
-  // Seniority, not reach: a branch manager settles their own customer's balance, so this is
-  // @Roles rather than @HeadOfficeOnly — and a register operator is not on the list.
-  it('keeps credit limits, repayments and adjustments with a manager', () => {
-    const routes = writeRoutes(CreditController);
+  // Reach, not seniority: one limit and one ledger per customer, usable at every branch,
+  // so no branch — not even its manager — sets a limit, takes a repayment or adjusts one.
+  it('keeps credit limits, repayments and adjustments with head office', () => {
+    const creditPaths = (path: string | string[]) =>
+      ([] as string[]).concat(path).some((p) => p.includes('credit'));
+    const routes = [
+      ...writeRoutes(CreditController),
+      ...writeRoutes(CustomerController).filter((route) => creditPaths(route.path)),
+    ];
     expect(routes.length).toBeGreaterThan(0);
     for (const route of routes) {
-      expect(route.roles).toBeDefined();
-      expect(route.roles).toContain('MANAGER');
-      expect(route.roles).not.toContain('CASHIER');
+      expect(route.headOfficeOnly).toBe(true);
     }
+  });
+});
+
+describe('signing a customer up at the counter', () => {
+  // Creating a customer also opens their credit account, and the POS sends a limit with every
+  // sign-up — so without this a cashier granted credit to whoever they signed on.
+  async function limitPassedOn(user: { userRole: string; userBranchId: string | null }) {
+    const service = { createCustomer: jest.fn().mockResolvedValue({}) };
+    const controller = new CustomerController(service as any, {} as any);
+    const body = { first_name: 'Sara', mobile: '09120000000', credit_limit: '10000000' };
+    await controller.createCustomer(body, { tenantId: 'tenant', ...user } as any);
+    return service.createCustomer.mock.calls[0][1].credit_limit;
+  }
+
+  it('signs the customer up but drops a limit sent from a branch', async () => {
+    expect(await limitPassedOn({ userRole: 'CASHIER', userBranchId: 'branch-downtown' })).toBeUndefined();
+    expect(await limitPassedOn({ userRole: 'MANAGER', userBranchId: 'branch-downtown' })).toBeUndefined();
+  });
+
+  it('lets head office open the account with a limit', async () => {
+    expect(await limitPassedOn({ userRole: 'SUPER_ADMIN', userBranchId: null })).toBe('10000000');
   });
 });
 

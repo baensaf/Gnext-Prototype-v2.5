@@ -1,7 +1,8 @@
 import { Controller, Get, Post, Patch, Param, Body, Query, Req, NotFoundException } from '@nestjs/common';
 import { Request } from 'express';
 import { CustomerService } from './customer.service';
-import { HeadOfficeOnly, Roles, MANAGER_AND_ABOVE } from '../../common/decorators/roles.decorator';
+import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
+import { isHeadOfficeUser } from '../../common/utils/user-scope.util';
 import { CreditService } from './credit.service';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
@@ -43,6 +44,8 @@ export class CustomerController {
     return await this.customerService.getDuplicateCandidates(tenantId);
   }
 
+  // One customer record serves the whole chain, so folding two into one is head office's.
+  @HeadOfficeOnly()
   @Post('customers/merge')
   async mergeCustomers(
     @Body() body: { target_customer_id: string; source_customer_id: string; field_resolutions?: Record<string, string> },
@@ -63,7 +66,12 @@ export class CustomerController {
   async createCustomer(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
-    return await this.customerService.createCustomer(tenantId, body, correlationId);
+    // Signing a customer up is the counter's; granting them credit is not. Creating the
+    // customer also opens their credit account, so a limit sent from a branch is dropped
+    // and the account opens at zero until head office sets one.
+    const scope = { role: (req as any).userRole, branchId: (req as any).userBranchId ?? null };
+    const data = isHeadOfficeUser(scope) ? body : { ...body, credit_limit: undefined };
+    return await this.customerService.createCustomer(tenantId, data, correlationId);
   }
 
   @Post('customers/:id/phones')
@@ -98,7 +106,7 @@ export class CustomerController {
     return await this.customerService.createAddress(tenantId, id, body);
   }
 
-  @Roles(...MANAGER_AND_ABOVE)
+  @HeadOfficeOnly()
   @Get(['customers/:id/credit-account', 'customers/:id/credit'])
   async getCustomerCreditAccount(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -121,7 +129,7 @@ export class CustomerController {
     };
   }
 
-  @Roles(...MANAGER_AND_ABOVE)
+  @HeadOfficeOnly()
   @Post(['customers/:id/credit-account/transactions', 'customers/:id/credit/transactions'])
   async postCustomerCreditTransaction(
     @Param('id') id: string,
@@ -141,7 +149,7 @@ export class CustomerController {
     );
   }
 
-  @Roles(...MANAGER_AND_ABOVE)
+  @HeadOfficeOnly()
   @Get(['customers/:id/credit-account/statement', 'customers/:id/credit/statement'])
   async getCustomerStatement(@Param('id') id: string, @Query() query: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -155,7 +163,7 @@ export class CustomerController {
     return await this.creditService.getAccountStatement(tenantId, acc.id, query);
   }
 
-  @Roles(...MANAGER_AND_ABOVE)
+  @HeadOfficeOnly()
   @Post(['customers/:id/credit-account/repayments', 'customers/:id/credit/repayments'])
   async postCustomerRepayment(
     @Param('id') id: string,
@@ -197,7 +205,7 @@ export class CustomerController {
     };
   }
 
-  @Roles(...MANAGER_AND_ABOVE)
+  @HeadOfficeOnly()
   @Post(['customers/:id/credit-account/adjustments', 'customers/:id/credit/adjustments'])
   async postCustomerAdjustment(
     @Param('id') id: string,

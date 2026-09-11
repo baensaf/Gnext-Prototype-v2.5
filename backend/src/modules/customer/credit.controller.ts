@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Patch, Param, Body, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { CreditService } from './credit.service';
-import { Roles, MANAGER_AND_ABOVE } from '../../common/decorators/roles.decorator';
+import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 import {
   CreditAccountCreateDto,
   CreditAccountUpdateDto,
@@ -13,13 +13,14 @@ import {
 /**
  * Customer credit: limits, repayments, adjustments and the ledger they move.
  *
- * Seniority rather than reach — this is a manager's call at their own counter, not head
- * office's, which is why it is `@Roles` and not `@HeadOfficeOnly`. It sits on the class
- * because there is no read here a register operator needs: the POS takes a credit payment
- * through the payment module, which does its own credit work server-side.
+ * Reach, not seniority: the chain holds credit centrally — one limit and one ledger per
+ * customer, usable at every branch — so a branch manager setting a limit or taking a
+ * repayment would be deciding for all of them. It sits on the class because no branch
+ * screen reads any of it: the POS takes a credit payment through the payment module, which
+ * does its own credit work server-side.
  */
 @Controller('api/v1')
-@Roles(...MANAGER_AND_ABOVE)
+@HeadOfficeOnly()
 export class CreditController {
   constructor(private readonly creditService: CreditService) {}
 

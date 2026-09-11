@@ -6,21 +6,19 @@ import type { ReasonCode } from 'src/api/settingsApi';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
-import { useBranchContext, useScopedBranchId } from 'src/contexts/branch-context';
-
 import CodeIcon from '@mui/icons-material/Code';
+import EditIcon from '@mui/icons-material/Edit';
 import CloseIcon from '@mui/icons-material/Close';
 import PrintIcon from '@mui/icons-material/Print';
 import CancelIcon from '@mui/icons-material/Cancel';
-import EditIcon from '@mui/icons-material/Edit';
 import PersonIcon from '@mui/icons-material/Person';
 import SearchIcon from '@mui/icons-material/Search';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import HistoryIcon from '@mui/icons-material/History';
-import SecurityIcon from '@mui/icons-material/Security';
 import PaymentIcon from '@mui/icons-material/Payment';
+import SecurityIcon from '@mui/icons-material/Security';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
@@ -72,16 +70,21 @@ import { paymentApi } from 'src/api/paymentApi';
 import { customerApi } from 'src/api/customerApi';
 import { settingsApi } from 'src/api/settingsApi';
 import { httpClient as axios } from 'src/api/httpClient';
+import { useBranchContext, useScopedBranchId } from 'src/contexts/branch-context';
 
 import { CheckoutModal } from 'src/components/CheckoutModal';
-import { OrderEditDialog } from 'src/components/orders/OrderEditDialog';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
+import { OrderEditDialog } from 'src/components/orders/OrderEditDialog';
 
 
 export function OrdersWorkflowPage() {
   const { t } = useTranslation();
   const [branchId] = useScopedBranchId();
-  const { branches } = useBranchContext();
+  const { branches, isHeadOffice } = useBranchContext();
+  // Head office looks orders up — a complaint, a courier dispute, a Snappfood query — but the
+  // order is the branch's to move, take payment on, print or cancel. So here it is a list to
+  // read: details and receipts, and none of the buttons that change an order.
+  const readOnly = isHeadOffice;
   const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
   // Only head office ever sees more than one, and only there does the column mean anything.
   const showBranchColumn = !branchId && branches.length > 1;
@@ -626,19 +629,21 @@ export function OrdersWorkflowPage() {
                               {t('orders.actions.receipt')}
                             </Button>
 
-                            <Button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenReprintDialog(order);
-                              }}
-                              size="small"
-                              startIcon={<PrintIcon />}
-                              variant="outlined"
-                            >
-                              {t('orders.actions.reprint')}
-                            </Button>
+                            {!readOnly && (
+                              <Button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenReprintDialog(order);
+                                }}
+                                size="small"
+                                startIcon={<PrintIcon />}
+                                variant="outlined"
+                              >
+                                {t('orders.actions.reprint')}
+                              </Button>
+                            )}
 
-                            {order.status !== 'CANCELLED' && MoneyUtil.greaterThan(order.due_amount, '0') && (
+                            {!readOnly && order.status !== 'CANCELLED' && MoneyUtil.greaterThan(order.due_amount, '0') && (
                               <Button
                                 color="success"
                                 onClick={(e) => {
@@ -653,7 +658,7 @@ export function OrdersWorkflowPage() {
                               </Button>
                             )}
 
-                            {order.status === 'SUBMITTED' && (
+                            {!readOnly && order.status === 'SUBMITTED' && (
                               <Button
                                 color="warning"
                                 onClick={(e) => {
@@ -668,7 +673,7 @@ export function OrdersWorkflowPage() {
                               </Button>
                             )}
 
-                            {order.status === 'KITCHEN_PREPARING' && (
+                            {!readOnly && order.status === 'KITCHEN_PREPARING' && (
                               <Button
                                 color="success"
                                 onClick={(e) => {
@@ -683,7 +688,7 @@ export function OrdersWorkflowPage() {
                               </Button>
                             )}
 
-                            {order.status === 'READY' && (
+                            {!readOnly && order.status === 'READY' && (
                               <Button
                                 color="primary"
                                 onClick={(e) => {
@@ -698,7 +703,7 @@ export function OrdersWorkflowPage() {
                               </Button>
                             )}
 
-                            {order.status !== 'COMPLETED' && order.status !== 'CANCELLED' && (
+                            {!readOnly && order.status !== 'COMPLETED' && order.status !== 'CANCELLED' && (
                               <Button
                                 color="error"
                                 onClick={(e) => {
@@ -817,21 +822,23 @@ export function OrdersWorkflowPage() {
                               {t('orders.actions.detailsAudit')}
                             </Button>
 
-                            <Button
-                              color="inherit"
-                              fullWidth
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenReprintDialog(order);
-                              }}
-                              size="small"
-                              startIcon={<PrintIcon />}
-                              variant="outlined"
-                            >
-                              {t('orders.actions.reprint')}
-                            </Button>
+                            {!readOnly && (
+                              <Button
+                                color="inherit"
+                                fullWidth
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenReprintDialog(order);
+                                }}
+                                size="small"
+                                startIcon={<PrintIcon />}
+                                variant="outlined"
+                              >
+                                {t('orders.actions.reprint')}
+                              </Button>
+                            )}
 
-                            {order.status !== 'CANCELLED' && MoneyUtil.greaterThan(order.due_amount, '0') && (
+                            {!readOnly && order.status !== 'CANCELLED' && MoneyUtil.greaterThan(order.due_amount, '0') && (
                               <Button
                                 color="success"
                                 fullWidth
@@ -848,7 +855,7 @@ export function OrdersWorkflowPage() {
                               </Button>
                             )}
 
-                            {order.status === 'SUBMITTED' && (
+                            {!readOnly && order.status === 'SUBMITTED' && (
                               <Button
                                 color="warning"
                                 fullWidth
@@ -865,7 +872,7 @@ export function OrdersWorkflowPage() {
                               </Button>
                             )}
 
-                            {order.status === 'KITCHEN_PREPARING' && (
+                            {!readOnly && order.status === 'KITCHEN_PREPARING' && (
                               <Button
                                 color="success"
                                 fullWidth
@@ -882,7 +889,7 @@ export function OrdersWorkflowPage() {
                               </Button>
                             )}
 
-                            {order.status === 'READY' && (
+                            {!readOnly && order.status === 'READY' && (
                               <Button
                                 color="primary"
                                 fullWidth
@@ -899,7 +906,7 @@ export function OrdersWorkflowPage() {
                               </Button>
                             )}
 
-                            {order.status !== 'COMPLETED' && order.status !== 'CANCELLED' && (
+                            {!readOnly && order.status !== 'COMPLETED' && order.status !== 'CANCELLED' && (
                               <Button
                                 color="error"
                                 fullWidth
@@ -1413,14 +1420,16 @@ export function OrdersWorkflowPage() {
                 >
                   {t('orders.actions.receipt')}
                 </Button>
-                <Button
-                  startIcon={<PrintIcon />}
-                  variant="outlined"
-                  onClick={() => handleOpenReprintDialog(selectedDrawerOrder)}
-                >
-                  {t('orders.actions.reprint')}
-                </Button>
-                {selectedDrawerOrder.status !== 'CANCELLED' && MoneyUtil.greaterThan(selectedDrawerOrder.due_amount, '0') && (
+                {!readOnly && (
+                  <Button
+                    startIcon={<PrintIcon />}
+                    variant="outlined"
+                    onClick={() => handleOpenReprintDialog(selectedDrawerOrder)}
+                  >
+                    {t('orders.actions.reprint')}
+                  </Button>
+                )}
+                {!readOnly && selectedDrawerOrder.status !== 'CANCELLED' && MoneyUtil.greaterThan(selectedDrawerOrder.due_amount, '0') && (
                   <Button
                     color="success"
                     variant="contained"
@@ -1433,7 +1442,7 @@ export function OrdersWorkflowPage() {
                     {t('orders.actions.pay')}
                   </Button>
                 )}
-                {selectedDrawerOrder.status === 'SUBMITTED' && (
+                {!readOnly && selectedDrawerOrder.status === 'SUBMITTED' && (
                   <Button
                     color="warning"
                     variant="contained"
@@ -1446,7 +1455,7 @@ export function OrdersWorkflowPage() {
                     {t('orders.actions.startPrep')}
                   </Button>
                 )}
-                {selectedDrawerOrder.status === 'KITCHEN_PREPARING' && (
+                {!readOnly && selectedDrawerOrder.status === 'KITCHEN_PREPARING' && (
                   <Button
                     color="success"
                     variant="contained"
@@ -1459,7 +1468,7 @@ export function OrdersWorkflowPage() {
                     {t('orders.actions.markReady')}
                   </Button>
                 )}
-                {selectedDrawerOrder.status === 'READY' && (
+                {!readOnly && selectedDrawerOrder.status === 'READY' && (
                   <Button
                     color="primary"
                     variant="contained"
@@ -1472,7 +1481,7 @@ export function OrdersWorkflowPage() {
                     {t('orders.actions.completeOrder')}
                   </Button>
                 )}
-                {!['COMPLETED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(selectedDrawerOrder.status) && (
+                {!readOnly && !['COMPLETED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(selectedDrawerOrder.status) && (
                   <Button
                     color="inherit"
                     variant="outlined"
@@ -1482,7 +1491,7 @@ export function OrdersWorkflowPage() {
                     {t('orders.actions.editOrder', 'Edit lines')}
                   </Button>
                 )}
-                {selectedDrawerOrder.status !== 'COMPLETED' && selectedDrawerOrder.status !== 'CANCELLED' && (
+                {!readOnly && selectedDrawerOrder.status !== 'COMPLETED' && selectedDrawerOrder.status !== 'CANCELLED' && (
                   <Button
                     color="error"
                     variant="outlined"

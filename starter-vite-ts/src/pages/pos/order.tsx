@@ -1,8 +1,8 @@
 import type { OrderHeader } from 'src/api/orderApi';
-import type { Customer, CustomerAddress } from 'src/api/customerApi';
-import type { DeliveryZone } from 'src/api/deliveryApi';
 import type { DiningTable } from 'src/api/dineInApi';
+import type { DeliveryZone } from 'src/api/deliveryApi';
 import type { ManualDiscount } from 'src/api/discountsApi';
+import type { Customer, CustomerAddress } from 'src/api/customerApi';
 import type {
   Product,
   Category,
@@ -184,8 +184,8 @@ export function PosOrderPage() {
         first_name: newCustFirstName.trim(),
         last_name: newCustLastName.trim(),
         mobile: newCustMobile.trim(),
+        // No credit limit: credit is granted centrally, by head office, not at the counter.
         email: newCustEmail.trim() || undefined,
-        credit_limit: '10000000',
       });
       const updatedList = await customerApi.getCustomers();
       setCustomers(updatedList);

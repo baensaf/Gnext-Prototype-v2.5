@@ -99,6 +99,12 @@ const CHAIN_ONLY_PATHS = [
   // was a second, open door to the head-office-only screen at /app/settings/discount-authorizations.
   '/app/discounts',
   '/app/customer-club',
+  // Customers and their credit are held centrally: one record per customer across the
+  // chain, one limit and one ledger. The counter still looks customers up and signs new
+  // ones on at the POS, and takes a credit payment through the payment module — neither
+  // goes through these screens.
+  '/app/customers',
+  '/app/credit',
 ];
 
 /**
@@ -109,9 +115,8 @@ const CHAIN_ONLY_PATHS = [
 const SITE_ONLY_PATHS = [
   '/app/delivery',
   '/app/cashier',
-  // Orders are taken, paid and handed back at a till, so the order list and the payment
-  // and refund desks are the branch's. Head office reads the totals in reports.
-  '/app/orders',
+  // Money is taken and handed back at a till, so the payment and refund desks are the
+  // branch's. Orders are not listed here: head office looks them up, read-only.
   '/app/payments',
   '/app/refunds',
   '/app/operations/terminals',
