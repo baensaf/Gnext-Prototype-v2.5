@@ -230,4 +230,10 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
   it('a rejected order is not revenue', () => {
     expect(NON_REVENUE_ORDER_STATES).toContain('REJECTED');
   });
+
+  // Until the store accepts it, an incoming order may still be rejected or expire, so it
+  // is not a sale yet. It used to count in the sales summary and the business-day close.
+  it('an order still waiting for acceptance is not revenue', () => {
+    expect(NON_REVENUE_ORDER_STATES).toContain('PENDING_ACCEPTANCE');
+  });
 });

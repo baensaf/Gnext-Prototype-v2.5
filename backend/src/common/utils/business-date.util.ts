@@ -35,8 +35,11 @@ export class BusinessDateUtil {
 export const ORDER_BUSINESS_DATE_EXPR = (alias: string) =>
   `COALESCE(${alias}.business_date, ${alias}.placed_at::date::text)`;
 
-/** Order states that are not revenue: cancelled and rejected never counted, drafts were never placed. */
-export const NON_REVENUE_ORDER_STATES = ['CANCELLED', 'REJECTED', 'DRAFT'];
+/**
+ * Order states that are not revenue: cancelled and rejected never counted, drafts were never
+ * placed, and an incoming order awaiting acceptance may still be rejected or expire.
+ */
+export const NON_REVENUE_ORDER_STATES = ['CANCELLED', 'REJECTED', 'DRAFT', 'PENDING_ACCEPTANCE'];
 
 /**
  * Keeps only orders that count as revenue.

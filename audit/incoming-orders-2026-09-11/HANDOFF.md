@@ -1,156 +1,113 @@
 # Incoming Orders: handoff
 
 For a Claude session picking this work up from GitHub. It covers what was agreed, what
-slice 1 changed, and what slices 2 to 4 still need.
+each slice changed, and what is still open. All four planned slices are done.
 
 - Repo: `https://github.com/baensaf/Gnext-Prototype-v2.5`, branch `main`
-- Slice 1 commit: `dd8b8de` fix(snappfood): hold incoming orders out of the kitchen until the store accepts them
-- Written: 2026-09-11
+- Slices: 1 `dd8b8de`, 2 `caee4c3`, 3 `6e164f2`, 4 `8fae888`
+- Written: 2026-09-11. Updated the same day after slices 2 to 4 landed.
 
 ## Start here
 
 ```bash
 git pull origin main
-cd backend && npx jest            # expect 45 suites, 513 tests, all green (as of dd8b8de)
+cd backend && npx jest            # expect 48 suites, 547 tests, all green
 npx tsc --noEmit -p tsconfig.json # backend typecheck
 cd ../starter-vite-ts && npx tsc --noEmit -p tsconfig.json
 ```
 
 - Dev servers are defined in `.claude/launch.json`: `gnext-api` (NestJS, port 3100) and `gnext-web` (Vite, port 8081).
 - Demo credentials come from `backend/src/seed.ts` (`ADMIN_USERNAME` / `ADMIN_PASSWORD`, approver PIN). Don't copy them into docs.
-- Backend tests are unit tests with mocked TypeORM repositories (see `backend/test/simulation.spec.ts` and `backend/test/kds.spec.ts`), plus a few Postgres integration specs.
+- **Check which database you are about to touch before running migrations or the seed.** `src/scripts/migration-fresh.ts` sets `DB_PORT` to `5432` before dotenv loads, so a `DB_PORT` in `backend/.env` is ignored by `npm run migration:run:fresh`. Set the `DB_*` variables in the shell instead.
+- Backend tests are unit tests with mocked TypeORM repositories, plus a few Postgres integration specs. The frontend has no unit tests: check it with `tsc`, `eslint` on the files you touched, and `npm run i18n:check`.
 
 ### Working agreements with this user
 
-- **Pause between slices.** Present each slice with its cost, risk and impact, do it, then stop and wait for a go before the next one.
+- **Keep updates short and in plain language.** Long technical reports confused them. Say what changed, whether it works, and what they need to do, if anything.
+- **Pause between slices.** Present each piece of work, do it, then stop and wait for a go before the next one.
+- **Ask before committing.** The user approves each commit and push.
 - **Prove a bug before fixing it.** Write the failing test first, then fix. Don't harden beyond what the demo needs; this is a prototype.
-- **Other sessions commit to `main` at the same time.** Run `git fetch` before starting, stage only your own files by name (never `git add -A`), and pull/rebase before pushing.
+- **Other sessions may commit to `main` at the same time.** Run `git fetch` before starting, stage only your own files by name (never `git add -A`), and pull/rebase before pushing.
 - **Commit messages go through a file.** In PowerShell a message containing `"` breaks `git commit -m`, so write it to a file and use `git commit -F <file>`. Style: conventional prefix, then a plain sentence (`fix(snappfood): ...`), with a body explaining why.
 - Never enter the demo password into the app yourself. Verify with tests, or ask the user to click through.
 
-## The design (agreed direction)
+## The design and what was decided
 
-The user proposed this flow for aggregator (Snappfood), website and kiosk orders, and agreed to build it in slices:
+The flow for aggregator (Snappfood), website and kiosk orders:
 
-1. The order arrives and waits **awaiting acceptance**. It does not reach the KDS.
-2. The cashier gets a toast ("New Snappfood order — 450,000 Toman") with View / Accept / Reject, plus a sound.
-3. The order also sits in a persistent **Incoming Orders** queue, with a badge in the header or sidebar, until someone handles it.
-4. The **Notification Center** mirrors the event for history only. It is not the operational queue.
-5. The cashier opens the order and sees the customer, items, notes, payment, source and delivery details.
-6. **Accept:** confirm the order, send it to the KDS, print kitchen tickets, send the acceptance to the aggregator, and start the prep timer.
-7. **Reject:** a reason is required. Tell the aggregator; nothing goes to the kitchen.
+1. The order arrives and waits **awaiting acceptance** (`PENDING_ACCEPTANCE`). It does not reach the KDS.
+2. The cashier gets a toast with a View link, plus a chime that repeats while anything is waiting.
+3. The order sits in the **Incoming Orders** queue (`/app/orders/incoming`), with a count in the header and sidebar, until it is answered.
+4. The **Notification Center** records each arrival (`INCOMING_ORDER`) and each expiry (`INCOMING_ORDER_EXPIRED`), for history only.
+5. The cashier opens the order and sees the customer, items, notes, payment, source and time left.
+6. **Accept:** confirm, send to the KDS, print kitchen tickets, tell the aggregator. The prep time defaults from settings.
+7. **Reject:** a Snappfood decline reason is required. Tell the aggregator; nothing goes to the kitchen.
 
-Refinements proposed in review. The user approved the slice plan but hasn't signed off on each of these individually, so confirm the ones marked (open) before building them.
+Where each refinement from the original review stands:
 
-- **Approval is a per-channel policy.** Aggregator: manual. Website: manual or auto (open). Kiosk: auto by default, because the customer is standing there and has often already paid.
-- **A timeout is required.** Snappfood cancels or penalises a store that doesn't respond in time. The queue shows a countdown and the sound repeats while anything is pending. On expiry, auto-reject or auto-accept per policy and raise an alert. Duration and default expiry action: (open).
-- **Accepting is a role permission, not the PIN approval workflow.** The approval engine (`backend/src/modules/approval/`) is for actions beyond a cashier's limits. Putting a PIN on every incoming order would stall a rush. Escalation applies only to rejecting an order that was already accepted, which is effectively a cancellation. Permission name: (open).
-- **Accept asks for a prep time.** Default it from settings, with +5 / +10 buttons. Snappfood's accept takes `deliveryTime` (max 70), `riderPickupTime` and `delta`.
-- **Reject reasons come from Snappfood's decline-reason list.** For "out of stock", offer to suspend the item on Snappfood (temporary item suspension is in scope).
-- **Rejected is its own terminal state, separate from Cancelled.** Rejection rate is a KPI aggregators track.
-- **Only one person can accept.** The queue shows on every POS in the branch; the order's `@VersionColumn` stops two cashiers accepting the same order.
-- **Accept works locally first.** Confirm and fire to the kitchen straight away, then send the acceptance to the aggregator with retries (the outbox exists: `backend/src/modules/outbox/`). The scope requires the branch to keep running during a cloud outage. One exception: if the aggregator says the customer already cancelled, pull the tickets back.
+| Refinement | Status |
+|---|---|
+| Approval is a per-channel policy | **Built** (slice 4). Agreed defaults: Snappfood and website wait for staff, kiosk is accepted automatically. |
+| A timeout is required | **Built** (slice 4). Agreed: 5 minutes, then reject and alert managers. Configurable per branch. |
+| Accepting is a role permission, not the PIN workflow | **Not built.** Anyone who can open the queue can accept. The permission name is still open. |
+| Accept asks for a prep time | **Built.** Defaults from settings (20 min), +5 / +10, maximum 70 (Snappfood's cap). |
+| Reject reasons come from Snappfood's list | **Built** with the simulator's three reasons. "Out of stock, suspend the item on Snappfood" is **not built**. |
+| Rejected is its own terminal state | **Built.** `REJECTED`, separate from `CANCELLED`. |
+| Only one person can accept | **Built.** Accept and reject lock the row; the second till gets 409. |
+| Accept works locally first | **Built.** The aggregator notice is best effort: a failure is swallowed and there is **no outbox retry yet**. Pulling tickets back when the customer already cancelled is **not built**. |
 
-## What slice 1 did (dd8b8de)
+## What each slice did
 
-Before this commit, a Snappfood order landed with `status: 'SUBMITTED'`. `KdsService.getKdsTickets` creates tickets for every `SUBMITTED` order whenever the KDS polls, so the kitchen received orders nobody had accepted. Ack and pick also reset orders to `SUBMITTED`.
+**Slice 1 (`dd8b8de`).** New `PENDING_ACCEPTANCE` state. Snappfood webhook orders land with `channel: 'AGGREGATOR'` and both `state` and `status` pending, filed under the addressed branch (per-branch webhook `POST /simulated-webhooks/snappfood/:branchCode`) or the oldest active restaurant. Ack and pick no longer move the order.
 
-Changes:
+**Slice 2 (`caee4c3`).** `POST /api/v1/orders/:id/accept { prepMinutes }` and `POST /api/v1/orders/:id/reject { reasonId, comment? }`, plus `GET /api/v1/orders/decline-reasons`. Accept goes through `transitionState` (action `ACCEPT`), fires kitchen tickets, enqueues one `KITCHEN_TICKET` print, then calls `SimulationService.notifyAccepted`. Reject moves to `REJECTED` and calls `notifyRejected`. The simulator's own accept/reject buttons now call the same notify methods and then move the order.
 
-- **New state.** `OrderState` now includes `PENDING_ACCEPTANCE` (`backend/src/entities/OrderHeader.entity.ts`). Its transitions are `PENDING_ACCEPTANCE -> CONFIRMED | CANCELLED` (`ALLOWED_TRANSITIONS` in `backend/src/modules/order/order.service.ts`).
-- **Webhook orders** (`SimulationService.handleSnappfoodWebhook`) now land with `channel: 'AGGREGATOR'`, `state` and `status` both `'PENDING_ACCEPTANCE'`. Previously `state` defaulted to `DRAFT` and `channel` to `POS`.
-- **Branch resolution** (`SimulationService.resolveWebhookBranch`). The per-branch webhook (`POST /simulated-webhooks/snappfood/:branchCode`) files the order under that branch and refuses an unknown or inactive one with 404. With no branch named (the simulator), it picks the oldest active `RESTAURANT` branch, never an office or commissary.
-- **Lifecycle actions** (`triggerSnappfoodAction`, `ackOrder`, `pickOrder`, `acceptOrder`, `rejectOrder`) use three helpers: `markAwaitingAcceptance`, `markAccepted` and `markCancelled`.
-  - Ack and pick don't change the order.
-  - Modify and recover set it back to awaiting acceptance.
-  - Accept sets `state: CONFIRMED`, `status: KITCHEN_PREPARING`.
-  - Reject and cancel set `CANCELLED`; deliver sets `COMPLETED`.
-- **Orders page** (`starter-vite-ts/src/pages/orders/workflow.tsx`) shows an "Awaiting acceptance" chip, keys `orders.statuses.pendingAcceptance` in `en.json` and `fa.json`.
-- **Tests:**
-  - `backend/test/simulation.spec.ts`, block "an incoming Snappfood order waits for the store to accept it": webhook channel and state, branch routing, no head-office fallback, ack/pick don't accept.
-  - `backend/test/kds.spec.ts`, test "does not send an aggregator order to the kitchen before the store accepts it": a guard on the KDS sweep.
+**Slice 3 (`6e164f2`).** Incoming Orders page, header badge, sidebar count, toast and chime, all fed by one `IncomingOrdersProvider` that polls every 5 s. The simulator gained a branch picker. The webhook now keeps the customer, phone, address, delivery type, payment type and note in `notes`, turns Snappfood `products` into numbered order lines, and writes the Notification Center entry.
 
-**How accept reaches the kitchen today:** simulator Accept sets `status: KITCHEN_PREPARING`, and the next KDS poll creates tickets through the sweep. That is a stopgap. Slice 2 should fire tickets explicitly.
+**Slice 4 (`8fae888`).** Policy stored as `incomingOrders` inside the branch-overridable `ORDER_WORKFLOW` setting, edited on Settings > Order Workflow (it replaced an `autoAcceptOrders` switch that nothing read). `IncomingOrderPolicyService` accepts on arrival when a channel is `AUTO`, and every 15 s answers orders past their limit through `OrderService.rejectUnanswered` (a SYSTEM rejection) or accept. Kiosk orders land pending when a branch sets kiosk to manual. `GET /api/v1/orders/incoming-policy` feeds the queue's countdown and default prep time.
 
-### State model gotchas
+**Follow-up.** Orders awaiting acceptance no longer count as revenue: `PENDING_ACCEPTANCE` joined `NON_REVENUE_ORDER_STATES`, which the sales reports and the business-day close share.
 
-- **`state` and `status` both exist.** `status` is the legacy twin of `state`. The KDS sweep (`kds.service.ts`, `getKdsTickets`) and the readiness roll-up (`checkOrderReadinessRollup`) still read **`status`**, and the sweep's list is `SUBMITTED | CONFIRMED | KITCHEN_PREPARING`. Keep the two in step. Never add `PENDING_ACCEPTANCE` to that list.
-- **The KDS sweep is tenant-wide.** It creates tickets for any matching order in the tenant, whatever the branch filter.
-- **`OrderService.transitionState` writes the same value to both fields** (`order.status = targetState`), so `POST /api/v1/orders/:id/confirm` already moves a pending order to `CONFIRMED`. It does not generate kitchen tickets or print; only `submitOrder` does that (see around `order.service.ts:587-602`).
-- **Cancelling a pending order through the generic endpoint works, but silently.** `resolveOrderEditDecision` in `order-edit-policy.ts` returns FORBID for `PENDING_ACCEPTANCE` via its default branch. But `cancelOrder` leaves FORBID to `transitionState`, which allows `PENDING_ACCEPTANCE -> CANCELLED`. So `POST /api/v1/orders/:id/cancel` does cancel it, without telling Snappfood. Slice 2 should route aggregator rejection through its own endpoint and decide whether the generic cancel should be blocked for aggregator orders.
-- **`SimulationController` is `@HeadOfficeOnly()`.** A branch cashier can't call `/api/v1/simulation/...`, so the real accept/reject must live somewhere branch-scoped.
+## State model gotchas
+
+- **`state` and `status` both exist.** `status` is the legacy twin of `state`. The KDS sweep (`kds.service.ts`, `getKdsTickets`) still reads **`status`**, and its list is `SUBMITTED | CONFIRMED | KITCHEN_PREPARING`. Never add `PENDING_ACCEPTANCE` to that list. Accept fires tickets explicitly; `generateTicketsForOrder` is idempotent per station and item, so the sweep picking the order up as well does no harm.
+- **A pending order only moves through accept, reject or the time limit.** The generic `/confirm` and `/cancel` refuse it with 409 `ORDER_AWAITING_ACCEPTANCE`. The one exception is Snappfood cancelling on the customer's side (simulator status 54), which still sets `CANCELLED` directly in `SimulationService`.
+- **`REJECTED` is terminal** (no transitions out) and is not revenue. `NON_REVENUE_ORDER_STATES` is `CANCELLED, REJECTED, DRAFT, PENDING_ACCEPTANCE`, and the revenue filter excludes an order only when both `state` and `status` are in it.
+- **Order and simulation modules import each other through `forwardRef`.** Orders notify Snappfood; the webhook applies the acceptance policy. `OrderService` injects `SimulationService`, `SimulationService` injects `IncomingOrderPolicyService`, and `IncomingOrderPolicyService` injects `OrderService`, all with `@Inject(forwardRef(...))`. Drop one and Nest fails at startup, which unit tests do not catch; start the backend to check.
+- **The time-limit timer** starts in `onApplicationBootstrap` and is skipped when `NODE_ENV=test`. Tests call `expireOverdue(now)` directly.
+- **`ts-node-dev` can keep a stale compiled file** after many quick edits and keep reporting a compile error that `tsc` no longer shows. Restart the dev server.
+- **Aggregator customer details live in `notes`.** An aggregator order has no customer or address columns yet.
+- **The simulator is head office only** (`SimulationController` is `@HeadOfficeOnly()`), while the queue only shows inside a restaurant branch. To see a toast arrive, watch the queue in a second browser signed in as a branch manager while head office sends orders.
 
 ## Code map
 
 | Concern | Where |
 |---|---|
-| Snappfood webhook, lifecycle, decline reasons (simulated) | `backend/src/modules/simulation/simulation.service.ts`, exported from `simulation.module.ts` |
+| Snappfood webhook, notify methods, decline reasons (simulated) | `backend/src/modules/simulation/simulation.service.ts` |
 | Per-branch webhook route | `backend/src/modules/simulation/simulated-webhooks.controller.ts` |
-| Simulator UI (generate order, ack/pick/accept/reject buttons) | `starter-vite-ts/src/pages/simulation/simulation-snappfood.tsx`. Sends **no branch** yet. |
-| Order states, transitions, submit side effects | `backend/src/entities/OrderHeader.entity.ts`, `backend/src/modules/order/order.service.ts` |
-| Order routes (branch-guarded by `@BranchOwned(OrderHeader)`) | `backend/src/modules/order/order.controller.ts` |
-| Edit/cancel policy | `backend/src/modules/order/order-edit-policy.ts` |
-| Kitchen tickets | `KdsService.generateTicketsForOrder` in `backend/src/modules/kds/kds.service.ts` |
-| Printing | `PrintQueueService.enqueueOrderPrintJobs(tenantId, orderId, 'KITCHEN_TICKET', ...)` in `backend/src/modules/printing/print-queue.service.ts` |
-| Outbox (for retrying aggregator calls) | `backend/src/modules/outbox/outbox-writer.service.ts` |
-| Kiosk orders (auto-accepted: `state` and `status` `SUBMITTED`) | `backend/src/modules/kiosk/kiosk.service.ts` |
-| Order-workflow settings page (the `autoAcceptOrders` toggle) | `starter-vite-ts/src/pages/settings/order-workflow.tsx`, saved as setting group `ORDER_WORKFLOW` |
-| Branch-aware setting lookup | `pickSettingValue(rows, branchId)` in `backend/src/common/utils/setting-scope.util.ts`. `ORDER_WORKFLOW` is branch-overridable. |
-| Notification Center (history) | `starter-vite-ts/src/layouts/components/notifications-drawer/`, backed by `alertsApi` |
-| Reason codes | `backend/src/entities/ReasonCode.entity.ts`; `OrderHeader.cancellation_reason_code_id` |
+| Simulator UI (branch picker, generate order, lifecycle buttons) | `starter-vite-ts/src/pages/simulation/simulation-snappfood.tsx` |
+| Order states, transitions, accept/reject/rejectUnanswered | `backend/src/entities/OrderHeader.entity.ts`, `backend/src/modules/order/order.service.ts` |
+| Order routes, including accept, reject, decline-reasons, incoming-policy | `backend/src/modules/order/order.controller.ts` |
+| Policy defaults and parsing | `backend/src/common/utils/incoming-order-policy.util.ts` |
+| Accept on arrival, time-limit sweep | `backend/src/modules/order/incoming-order-policy.service.ts` |
+| Kiosk orders and their policy | `backend/src/modules/kiosk/kiosk.service.ts` |
+| Revenue exclusion shared by reports and day close | `backend/src/common/utils/business-date.util.ts` |
+| Queue page and drawer | `starter-vite-ts/src/pages/orders/incoming.tsx` |
+| Polling, toast, chime, policy for the UI | `starter-vite-ts/src/contexts/incoming-orders-context.tsx` |
+| Header badge | `starter-vite-ts/src/layouts/components/incoming-orders-button.tsx` |
+| Policy settings | `starter-vite-ts/src/pages/settings/order-workflow.tsx` |
+| Who can reach the page | `starter-vite-ts/src/config/role-access.ts` (cashier via `/app/orders`; hidden at head office) |
 
 Snappfood status codes used by the simulator: 56 new, 61 acked, 713 picked, 42 accepted, 51 rejected by store, 54 cancelled, 71 extra payment required.
 
-## Remaining slices
+## Still open
 
-### Slice 2: real accept and reject (cost medium, risk medium; the core flow)
-
-The goal is branch-scoped endpoints a cashier can call, which do everything steps 6 and 7 describe.
-
-- **Endpoints.** Add `POST /api/v1/orders/:id/accept` and `POST /api/v1/orders/:id/reject` to `OrdersController`, so they inherit `@BranchOwned`.
-  - Accept body: `{ prepMinutes }`.
-  - Reject body: `{ reasonId, comment? }`, where `reasonId` is required.
-- **Accept:**
-  1. Only from `PENDING_ACCEPTANCE`, otherwise 409.
-  2. Transition to `CONFIRMED` through `transitionState` so an `OrderStateEvent` is recorded.
-  3. Call `generateTicketsForOrder` explicitly.
-  4. Enqueue `KITCHEN_TICKET` print jobs.
-  5. Tell the aggregator. In the prototype that means calling `SimulationService.acceptOrder(tenantId, orderCode, { deliveryTime, ... })`, where `orderCode` is `order_number` without the `SNP-` prefix. Import `SimulationModule` into `OrderModule`; there's no cycle today.
-- **Reject:**
-  1. Only from `PENDING_ACCEPTANCE`.
-  2. Record the reason and move to a terminal state. Decide between adding `REJECTED` to `OrderState` (recommended above) or `CANCELLED` plus a reason. If you add `REJECTED`, update `ALLOWED_TRANSITIONS`, the frontend labels and chip colours, and check reports that count cancellations.
-  3. Call `SimulationService.rejectOrder`.
-  4. No tickets, no printing.
-- **Use Snappfood's decline reasons.** Serve them to the frontend (the simulator already has `getDeclineReasons()`), or map them to `ReasonCode` rows.
-- **Only one accept wins.** Two concurrent accepts should give one success and one 409, relying on the version column or a state check inside the transaction.
-- **Tests:**
-  - accept fires tickets and prints exactly once;
-  - reject fires neither;
-  - accept or reject from any other state is refused;
-  - the Snappfood call is made with the right code.
-- Then decide what the generic `/cancel` does for aggregator orders (see the gotchas above).
-
-### Slice 3: Incoming Orders queue, badge, toast, sound (cost medium, risk low; what the demo shows)
-
-- **Backend list.** Add `GET /api/v1/orders?state=PENDING_ACCEPTANCE` or a dedicated `GET /api/v1/orders/incoming`, scoped to the caller's branch like `getOrders` does with `effectiveBranchId`.
-- **Frontend page.** Add an Incoming Orders page under operations, with a header or sidebar badge showing the count.
-  - Poll every few seconds; the prototype doesn't need websockets.
-  - Clicking a row opens a drawer with the customer, items, notes, payment, source, delivery address and Accept / Reject.
-- **Toast.** Show a toast when a new pending order appears; the snackbar component is in `starter-vite-ts/src/components/snackbar/`.
-- **Sound.** Repeat the sound while any order is pending, not once per order.
-- **Notification Center.** Mirror each arrival there for history.
-- **Simulator.** Add a branch picker to `simulation-snappfood.tsx` and send `branch_id`, so the demo can target a branch. The backend already honours `branch_id` and `branch_code`.
-- Add i18n keys in both `en.json` and `fa.json`.
-
-### Slice 4: per-channel policy and timeout (cost medium, risk low; can come after the demo)
-
-- **Policy.** Replace or extend `ORDER_WORKFLOW.autoAcceptOrders`, which the settings page saves but **no backend code reads**, with a per-channel policy: aggregator, website, kiosk. Read it with `pickSettingValue(rows, order.branch_id)`.
-- **Auto-accept.** When a channel's policy is auto, run the slice 2 accept path at ingest time.
-- **Timeout.** Expire orders left in `PENDING_ACCEPTANCE` longer than the configured time. Apply the expiry action, raise an alert, and record who or what acted (`SYSTEM`).
-
-## Known leftovers (not in any slice yet)
-
-- Webhook order items all get `line_number: 1` and a placeholder `product_id` (`00000000-0000-0000-0000-000000000001`). There's no product mapping from Snappfood `vmsFoodId` yet, though the scope lists aggregator product mapping.
-- `order_type` is always `AGGREGATOR`; `expeditionType` (DELIVERY / PICKUP ...) isn't mapped.
-- The webhook doesn't write an `OrderStateEvent` for the order's creation, so the Orders timeline starts empty for aggregator orders.
-- Snappfood orders created before `dd8b8de` still have `status: SUBMITTED` and may already have kitchen tickets. That's demo data and harmless; reseed if it gets in the way.
+- A role permission for accepting and rejecting (name not decided).
+- Rejecting for "out of stock" should offer to suspend the item on Snappfood.
+- Retrying a failed aggregator notice through the outbox (`backend/src/modules/outbox/`).
+- Pulling kitchen tickets back when the aggregator says the customer already cancelled.
+- There is no website order intake yet; the `ONLINE` policy is stored but nothing uses it.
+- Product mapping from Snappfood `vmsFoodId`: lines keep the dish names but carry a placeholder `product_id`.
+- `expeditionType` (DELIVERY / PICKUP ...) is recorded in `notes` but not mapped to `order_type`.
+- The webhook doesn't write an `OrderStateEvent` for the order's creation, so the Orders timeline starts at the answer.
+- Slices 3 and 4 were typechecked and linted but not clicked through by Claude; the user tests the screens.
