@@ -109,8 +109,9 @@ const CHAIN_ONLY_PATHS = [
 const SITE_ONLY_PATHS = [
   '/app/delivery',
   '/app/cashier',
-  // Money is taken and handed back at a till, so the payment and refund desks are the
-  // branch's. Head office reads the totals in reports.
+  // Orders are taken, paid and handed back at a till, so the order list and the payment
+  // and refund desks are the branch's. Head office reads the totals in reports.
+  '/app/orders',
   '/app/payments',
   '/app/refunds',
   '/app/operations/terminals',
