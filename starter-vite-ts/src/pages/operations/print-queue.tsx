@@ -245,14 +245,14 @@ export function PrintQueuePage() {
 
       {/* Rendered HTML Preview Modal */}
       <Dialog open={Boolean(previewJob)} onClose={() => setPreviewJob(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>{t('printQueue.simulateOutcome', 'Simulated Thermal Print Preview')}</DialogTitle>
+        <DialogTitle>{t('printQueue.previewTitle', 'Print Preview')}</DialogTitle>
         <DialogContent dividers>
           {previewJob && (
             // The rendered job is a whole document with its own body styles. In a frame
             // they style the ticket; injected into the page they restyled the app itself.
             <Box
               component="iframe"
-              title={t('printQueue.previewFrameTitle', 'Print job preview')}
+              title={t('printQueue.previewTitle', 'Print Preview')}
               srcDoc={previewJob.rendered_html}
               sandbox=""
               sx={{

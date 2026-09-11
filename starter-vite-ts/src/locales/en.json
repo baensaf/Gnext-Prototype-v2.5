@@ -2331,6 +2331,7 @@
     "retry": "Retry",
     "reprint": "Reprint",
     "simulateOutcome": "Simulate Outcome",
+    "previewTitle": "Print Preview",
     "filterStatus": "Status Filter",
     "filterDocType": "Document Type",
     "allStatuses": "All Statuses",
