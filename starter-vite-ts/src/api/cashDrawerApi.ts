@@ -46,7 +46,7 @@ export interface ActiveShiftResponse {
 export const cashDrawerApi = {
   getActiveShift: async (branchId?: string, terminalId?: string): Promise<ActiveShiftResponse | null> => {
     try {
-      const shift = await shiftApi.getCurrentShift(terminalId);
+      const shift = await shiftApi.getCurrentShift(terminalId, branchId);
       // No drawer open is the ordinary state, and the screen renders its own empty view for
       // it. It used to arrive as a 404 caught below, which meant a normal visit printed a
       // failed request in the console.

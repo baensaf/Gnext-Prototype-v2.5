@@ -1,9 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { ShiftService } from '../src/modules/cashier/shift.service';
 import { BusinessDayService } from '../src/modules/cashier/business-day.service';
+import { ShiftsController } from '../src/modules/cashier/shifts.controller';
+import { BusinessDaysController } from '../src/modules/cashier/business-days.controller';
+import { BRANCH_OWNED_KEY } from '../src/common/decorators/branch-owned.decorator';
+import { ROLES_KEY, MANAGER_AND_ABOVE } from '../src/common/decorators/roles.decorator';
 import { CashierShift } from '../src/entities/CashierShift.entity';
 import { CashMovement } from '../src/entities/CashMovement.entity';
 import { BusinessDayClose } from '../src/entities/BusinessDayClose.entity';
@@ -96,6 +100,65 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
 
       const result = await shiftService.openShift('t-1', { terminalId: 'term-1', openingCash: '50000.0000' });
       expect(result).toBeDefined();
+    });
+
+    it("refuses a branch account opening a drawer on another branch's terminal", async () => {
+      terminalRepo.findOne.mockResolvedValue({ id: 'term-9', branch_id: 'b-central', terminal_type: 'CASHIER' });
+      shiftRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        shiftService.openShift('t-1', { terminalId: 'term-9' }, 'cashier-1', undefined, 'b-downtown'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('takes the branch from the terminal, not from the caller', async () => {
+      terminalRepo.findOne.mockResolvedValue({ id: 'term-2', branch_id: 'b-downtown', terminal_type: 'CASHIER' });
+      shiftRepo.findOne.mockResolvedValue(null);
+
+      await shiftService.openShift('t-1', { terminalId: 'term-2' }, 'cashier-1', undefined, 'b-downtown');
+      const created = auditWriter.write.mock.calls[0][0].afterData;
+      expect(created.branch_id).toBe('b-downtown');
+    });
+
+    it('refuses a drawer on a kiosk or an inactive terminal', async () => {
+      shiftRepo.findOne.mockResolvedValue(null);
+      terminalRepo.findOne.mockResolvedValue({ id: 'k-1', branch_id: 'b-1', terminal_type: 'KIOSK' });
+      await expect(shiftService.openShift('t-1', { terminalId: 'k-1' })).rejects.toThrow(BadRequestException);
+
+      terminalRepo.findOne.mockResolvedValue({ id: 'term-1', branch_id: 'b-1', terminal_type: 'CASHIER', is_active: false });
+      await expect(shiftService.openShift('t-1', { terminalId: 'term-1' })).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('Branch boundary on the shift routes', () => {
+    it('holds every shift named by id to the caller branch', () => {
+      expect(Reflect.getMetadata(BRANCH_OWNED_KEY, ShiftsController)).toMatchObject({ entity: CashierShift });
+    });
+
+    it('asks about the branch head office is working in, and confines a branch account to its own', async () => {
+      const service = { getCurrentShift: jest.fn().mockResolvedValue(null) };
+      const controller = new ShiftsController(service as any);
+
+      await controller.getCurrentShift(undefined as any, 'b-downtown', { tenantId: 't-1', userBranchId: null } as any);
+      expect(service.getCurrentShift).toHaveBeenLastCalledWith('t-1', undefined, 'b-downtown');
+
+      await controller.getCurrentShift(undefined as any, 'b-central', { tenantId: 't-1', userBranchId: 'b-downtown' } as any);
+      expect(service.getCurrentShift).toHaveBeenLastCalledWith('t-1', undefined, 'b-downtown');
+    });
+
+    it('leaves closing and reopening a business day to a manager, and reopening to its own branch', () => {
+      const proto = BusinessDaysController.prototype;
+      expect(Reflect.getMetadata(ROLES_KEY, proto.closeBusinessDay)).toEqual(MANAGER_AND_ABOVE);
+      expect(Reflect.getMetadata(ROLES_KEY, proto.reopenBusinessDay)).toEqual(MANAGER_AND_ABOVE);
+      expect(Reflect.getMetadata(BRANCH_OWNED_KEY, proto.reopenBusinessDay)).toMatchObject({ entity: BusinessDayClose });
+    });
+
+    it("does not let a branch account read another shop's business days through ?branch=", async () => {
+      const service = { getBusinessDays: jest.fn().mockResolvedValue({ data: [] }) };
+      const controller = new BusinessDaysController(service as any);
+
+      await controller.getBusinessDays({ branch: 'b-central' }, { tenantId: 't-1', userBranchId: 'b-downtown' } as any);
+      expect(service.getBusinessDays.mock.calls[0][1]).toMatchObject({ branch: 'b-downtown', branchId: 'b-downtown' });
     });
   });
 

@@ -114,12 +114,34 @@ export class ShiftService {
     return shift;
   }
 
-  async openShift(tenantId: string, dto: ShiftOpenDto, userId?: string, correlationId?: string) {
+  /**
+   * The branch comes from the terminal, never from the caller: a drawer sits in one shop.
+   * `callerBranchId` is the account's own branch, when it has one — a Downtown cashier
+   * naming Central Plaza's terminal would otherwise open a till in a shop they are not in.
+   */
+  async openShift(
+    tenantId: string,
+    dto: ShiftOpenDto,
+    userId?: string,
+    correlationId?: string,
+    callerBranchId?: string | null,
+  ) {
     return await this.dataSource.transaction(async (em) => {
       const terminal = await em.findOne(Terminal, {
         where: { id: dto.terminalId, tenant_id: tenantId },
       });
       if (!terminal) throw new NotFoundException(`Terminal ${dto.terminalId} not found`);
+      if (callerBranchId && terminal.branch_id !== callerBranchId) {
+        throw new ForbiddenException({
+          code: 'OTHER_BRANCH',
+          title: 'Belongs To Another Branch',
+          detail: 'This terminal belongs to a branch other than your own.',
+        });
+      }
+      // A kiosk or a kitchen screen has no drawer to count.
+      if (terminal.is_active === false || (terminal.terminal_type && terminal.terminal_type !== 'CASHIER')) {
+        throw new BadRequestException(`Terminal ${terminal.code || terminal.id} is not an active cash register`);
+      }
 
       const currencyCode = dto.currencyCode || 'IRR';
 

@@ -3,6 +3,8 @@ import { Request } from 'express';
 import { ShiftService } from './shift.service';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
 import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
+import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
+import { CashierShift } from '../../entities/CashierShift.entity';
 import {
   ShiftOpenDto,
   CashMovementDto,
@@ -11,6 +13,12 @@ import {
   ShiftCloseDto,
 } from './dtos/shift.dto';
 
+/**
+ * Every route that names a shift by id is held to the caller's own branch by
+ * `BranchOwnershipGuard`: a shift id is not a permission, and without this a Downtown
+ * account could read, pay into or count down Central Plaza's drawer.
+ */
+@BranchOwned(CashierShift)
 @Controller('api/v1/shifts')
 export class ShiftsController {
   constructor(private readonly shiftService: ShiftService) {}
@@ -28,20 +36,31 @@ export class ShiftsController {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
-    return await this.shiftService.openShift(tenantId, body, userId, correlationId);
+    return await this.shiftService.openShift(
+      tenantId,
+      body,
+      userId,
+      correlationId,
+      (req as any).userBranchId ?? null,
+    );
   }
 
   @Get('current')
-  async getCurrentShift(@Query('terminalId') terminalId: string, @Req() req: Request) {
+  async getCurrentShift(
+    @Query('terminalId') terminalId: string,
+    @Query('branchId') branchId: string,
+    @Req() req: Request,
+  ) {
     const tenantId = (req as any).tenantId;
     // The branch never appeared in the query, so nothing was there to confine: a Downtown
     // cashier asking whether their drawer was open was answered about Central Plaza's, and
-    // the screen would have offered to close somebody else's till. The service has always
-    // taken a branch — the route just never passed one.
+    // the screen would have offered to close somebody else's till. A branch account is
+    // held to its own shop; head office working inside a branch names it, because with no
+    // branch at all the answer was the newest drawer open anywhere in the chain.
     return await this.shiftService.getCurrentShift(
       tenantId,
       terminalId,
-      effectiveBranchId((req as any).userBranchId, undefined),
+      effectiveBranchId((req as any).userBranchId, branchId),
     );
   }
 

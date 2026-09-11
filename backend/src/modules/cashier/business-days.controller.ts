@@ -2,6 +2,10 @@ import { Controller, Get, Post, Param, Body, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { BusinessDayService } from './business-day.service';
 import { BusinessDayCloseDto, BusinessDayReopenDto } from './dtos/shift.dto';
+import { effectiveBranchId } from '../../common/utils/user-scope.util';
+import { Roles, MANAGER_AND_ABOVE } from '../../common/decorators/roles.decorator';
+import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
+import { BusinessDayClose } from '../../entities/BusinessDayClose.entity';
 
 @Controller('api/v1/business-days')
 export class BusinessDaysController {
@@ -10,9 +14,14 @@ export class BusinessDaysController {
   @Get()
   async getBusinessDays(@Query() query: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.businessDayService.getBusinessDays(tenantId, query);
+    // The screen sends `branch`, which the branch-scope interceptor does not know to
+    // confine — so a branch account naming another shop there was answered about it.
+    const branch = effectiveBranchId((req as any).userBranchId, query.branch || query.branchId);
+    return await this.businessDayService.getBusinessDays(tenantId, { ...query, branch, branchId: branch });
   }
 
+  /** Closing the day is the branch manager's call; the interceptor holds `branchId` to theirs. */
+  @Roles(...MANAGER_AND_ABOVE)
   @Post('close')
   async closeBusinessDay(@Body() body: BusinessDayCloseDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -21,6 +30,8 @@ export class BusinessDaysController {
     return await this.businessDayService.closeBusinessDay(tenantId, body, userId, correlationId);
   }
 
+  @Roles(...MANAGER_AND_ABOVE)
+  @BranchOwned(BusinessDayClose)
   @Post(':id/reopen')
   async reopenBusinessDay(@Param('id') id: string, @Body() body: BusinessDayReopenDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

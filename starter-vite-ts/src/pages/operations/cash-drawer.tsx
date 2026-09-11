@@ -74,7 +74,7 @@ export function CashDrawerPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const active = await cashDrawerApi.getActiveShift();
+      const active = await cashDrawerApi.getActiveShift(openBranchId || undefined);
       setActiveShiftData(active);
 
       const bList = await tenantApi.getBranches();

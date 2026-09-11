@@ -80,9 +80,14 @@ export const shiftApi = {
     return res.data;
   },
 
-  /** Null when no drawer is open at this terminal, which is most of the day. */
-  getCurrentShift: async (terminalId?: string): Promise<CashierShift | null> => {
-    const res = await httpClient.get('/api/v1/shifts/current', { params: { terminalId } });
+  /**
+   * Null when no drawer is open at this terminal, which is most of the day. Head office
+   * working inside a branch names it; a branch account is held to its own by the server.
+   */
+  getCurrentShift: async (terminalId?: string, branchId?: string): Promise<CashierShift | null> => {
+    const res = await httpClient.get('/api/v1/shifts/current', {
+      params: { terminalId: terminalId || undefined, branchId: branchId || undefined },
+    });
     return res.data || null;
   },
 
