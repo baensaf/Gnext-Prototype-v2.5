@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SimulationService } from '../src/modules/simulation/simulation.service';
+import { SimulatedWebhooksController } from '../src/modules/simulation/simulated-webhooks.controller';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { IntegrationLog } from '../src/entities/IntegrationLog.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
@@ -23,7 +24,7 @@ describe('SimulationService (Unit)', () => {
   beforeEach(async () => {
     logRepo = { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
     orderRepo = { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
-    orderItemRepo = { create: jest.fn(), save: jest.fn() };
+    orderItemRepo = { create: jest.fn(), save: jest.fn(), update: jest.fn(), count: jest.fn().mockResolvedValue(0) };
     productRepo = { find: jest.fn(), findOne: jest.fn() };
     branchRepo = { find: jest.fn() };
     auditWriter = { write: jest.fn() };
@@ -192,6 +193,127 @@ describe('SimulationService (Unit)', () => {
 
       expect(order.state).toBe('REJECTED');
       expect(order.status).toBe('REJECTED');
+    });
+  });
+
+  // Snappfood's webhook (annex 4.3.0, section 5) carries no event id. It sends the whole
+  // order again, under the same `code`, every time the order's statusCode changes.
+  describe('Snappfood sends the whole order again on every status change', () => {
+    const snappfoodSends = (statusCode: number, extra: any = {}) => ({
+      code: 'ykj7g6vy',
+      statusCode: String(statusCode),
+      fullName: 'Hamid Bayanak',
+      products: [
+        { id: 101, quantity: 1, price: 500, title: 'Pizza One' },
+        { id: 102, quantity: 1, price: 600, title: 'Pizza Two' },
+      ],
+      ...extra,
+    });
+    const deliver = (payload: any) => service.handleSnappfoodWebhook('t-1', JSON.stringify(payload), payload);
+    const storeHas = (state: string, extra: any = {}) => {
+      const order: any = { id: 'ord-known', tenant_id: 't-1', order_number: 'SNP-ykj7g6vy', state, status: state, ...extra };
+      orderRepo.findOne.mockResolvedValue(order);
+      return order;
+    };
+
+    beforeEach(() => {
+      logRepo.findOne.mockResolvedValue(null);
+      orderRepo.findOne.mockResolvedValue(null);
+      orderRepo.create.mockImplementation((dto: any) => dto);
+      orderRepo.save.mockImplementation((dto: any) => Promise.resolve({ id: 'ord-new', ...dto }));
+      orderItemRepo.create.mockImplementation((dto: any) => dto);
+      orderItemRepo.save.mockImplementation((dto: any) => Promise.resolve(dto));
+      branchRepo.find.mockResolvedValue([{ id: 'br-vanak', code: 'VANAK', branch_type: 'RESTAURANT' }]);
+    });
+
+    it("files a new order under the code Snappfood sends, which accept and reject send back", async () => {
+      const result: any = await deliver(snappfoodSends(56));
+
+      expect(result.order.order_number).toBe('SNP-ykj7g6vy');
+    });
+
+    it('takes every new order, although none of them carries an event id', async () => {
+      logRepo.findOne.mockImplementation(({ where }: any) =>
+        Promise.resolve(where.idempotency_key === 'snapp-1001' ? { id: 'earlier', status: 'SUCCESS' } : null),
+      );
+
+      const first: any = await deliver(snappfoodSends(56, { code: 'first111' }));
+      const second: any = await deliver(snappfoodSends(56, { code: 'second22' }));
+
+      expect(first.duplicate).toBe(false);
+      expect(second.duplicate).toBe(false);
+      expect(orderRepo.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not open a second order when Snappfood reports progress on one the store has', async () => {
+      for (const statusCode of [61, 713, 42, 51, 71]) {
+        const order = storeHas('CONFIRMED');
+
+        const result: any = await deliver(snappfoodSends(statusCode));
+
+        expect(result.order.id).toBe('ord-known');
+        expect(order.state).toBe('CONFIRMED');
+      }
+      expect(orderRepo.findOne).toHaveBeenCalledWith({ where: { tenant_id: 't-1', order_number: 'SNP-ykj7g6vy' } });
+      expect(orderRepo.create).not.toHaveBeenCalled();
+      expect(orderItemRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('cancels the order the store has when Snappfood cancels it (54)', async () => {
+      const order = storeHas('CONFIRMED');
+
+      await deliver(snappfoodSends(54));
+
+      expect(order.state).toBe('CANCELLED');
+      expect(order.status).toBe('CANCELLED');
+      expect(orderRepo.save).toHaveBeenCalledWith(order);
+      expect(orderRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('puts a rejected order back in the queue, with its new lines, when Snappfood re-sends it changed', async () => {
+      const longAgo = new Date('2026-01-01T10:00:00Z');
+      const order = storeHas('REJECTED', { placed_at: longAgo });
+      orderItemRepo.count.mockResolvedValue(2);
+
+      const result: any = await deliver(snappfoodSends(56, { products: [{ id: 103, quantity: 2, price: 700, title: 'Pizza Three' }] }));
+
+      expect(result.order.id).toBe('ord-known');
+      expect(order.state).toBe('PENDING_ACCEPTANCE');
+      expect(order.status).toBe('PENDING_ACCEPTANCE');
+      expect(order.grand_total).toBe('1526.0000'); // 2 x 700, plus 9%
+      // The time limit counts from the re-send, not from the first arrival.
+      expect(new Date(order.placed_at).getTime()).toBeGreaterThan(longAgo.getTime());
+      expect(orderItemRepo.update).toHaveBeenCalledWith({ tenant_id: 't-1', order_id: 'ord-known', state: 'ACTIVE' }, { state: 'VOID' });
+      expect(orderItemRepo.save).toHaveBeenCalledTimes(1);
+      expect(orderItemRepo.save).toHaveBeenCalledWith(expect.objectContaining({ product_name: 'Pizza Three', line_number: 3 }));
+      expect(orderRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('treats a new order arriving twice as one order', async () => {
+      storeHas('PENDING_ACCEPTANCE');
+
+      const result: any = await deliver(snappfoodSends(56));
+
+      expect(result.duplicate).toBe(true);
+      expect(orderRepo.create).not.toHaveBeenCalled();
+      expect(orderItemRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('opens no order for a status change on an order the store never received', async () => {
+      const result: any = await deliver(snappfoodSends(54));
+
+      expect(result.success).toBe(true);
+      expect(orderRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('the per-branch webhook passes no made-up event id along', async () => {
+      const simulation: any = { handleSnappfoodWebhook: jest.fn().mockResolvedValue({}) };
+      const controller = new SimulatedWebhooksController(simulation);
+
+      await controller.handleRawSnappfoodWebhook('VANAK', snappfoodSends(56), '', '', '', { tenantId: 't-1' } as any);
+
+      const [, , payload] = simulation.handleSnappfoodWebhook.mock.calls[0];
+      expect(payload.event_id).toBeUndefined();
     });
   });
 

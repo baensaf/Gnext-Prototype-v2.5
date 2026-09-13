@@ -877,7 +877,9 @@ export class OrderService {
    */
   async rejectUnanswered(tenantId: string, id: string, minutes: number, correlationId?: string) {
     const reasonText = `Not answered within ${minutes} min; rejected automatically`;
-    return this.rejectWith(tenantId, id, reasonText, { comment: reasonText }, undefined, correlationId);
+    // Snappfood refuses a reject that names none of its decline reasons. None of them says
+    // nobody answered; 153, a delay in sending the order, is the nearest.
+    return this.rejectWith(tenantId, id, reasonText, { reasonId: 153, comment: reasonText }, undefined, correlationId);
   }
 
   private async rejectWith(

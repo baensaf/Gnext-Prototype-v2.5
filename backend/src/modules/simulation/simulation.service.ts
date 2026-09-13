@@ -12,6 +12,17 @@ import { IncomingOrderPolicyService } from '../order/incoming-order-policy.servi
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 
+/** What a Snappfood webhook call answers: the order it opened or moved, or why it did neither. */
+export interface SnappfoodWebhookResult {
+  simulated: boolean;
+  correlationId: string;
+  success: boolean;
+  duplicate: boolean;
+  order?: OrderHeader | null;
+  message?: string;
+  log_id: string;
+}
+
 @Injectable()
 export class SimulationService {
   constructor(
@@ -73,9 +84,13 @@ export class SimulationService {
     timestamp?: string,
     secret: string = 'snappfood-secret-key-123',
     correlationId?: string,
-  ) {
+  ): Promise<SnappfoodWebhookResult> {
     const corrId = correlationId || `corr-snapp-${Date.now()}`;
-    const idempotencyKey = payload.event_id || payload.order_id || `snapp-${payload.id || '1001'}`;
+    // Snappfood's own webhook has no event id. It sends the whole order again, under the same
+    // code, whenever the order's status changes, so the code and status name each message.
+    const orderCode = payload.code || payload.order_code;
+    const statusCode = Number(payload.statusCode ?? 56); // 56 = new order
+    const idempotencyKey = payload.event_id || `${orderCode || 'no-code'}:${statusCode}`;
 
     // Verify HMAC and timestamp skew if signature provided
     if (signature) {
@@ -98,57 +113,46 @@ export class SimulationService {
       }
     }
 
-    // Check Duplicate Idempotency Key
-    const existingLog = await this.logRepo.findOne({
-      where: { tenant_id: tenantId, provider: 'SNAPPFOOD', idempotency_key: idempotencyKey, status: 'SUCCESS' },
-    });
+    // An event id seen before is a replay. Without one, the order the store already has decides.
+    if (payload.event_id) {
+      const existingLog = await this.logRepo.findOne({
+        where: { tenant_id: tenantId, provider: 'SNAPPFOOD', idempotency_key: idempotencyKey, status: 'SUCCESS' },
+      });
+      if (existingLog) {
+        return this.recordDuplicate(tenantId, payload, signature, idempotencyKey, corrId);
+      }
+    }
 
-    if (existingLog) {
-      const duplicateLog = await this.logRepo.save(
+    const known = orderCode
+      ? await this.orderRepo.findOne({ where: { tenant_id: tenantId, order_number: `SNP-${orderCode}` } })
+      : null;
+    if (known) {
+      return this.applySnappfoodStatus(tenantId, known, statusCode, payload, signature, idempotencyKey, corrId);
+    }
+
+    // Only a new order (56) opens one. Any other status is about an order this store never got.
+    if (statusCode !== 56) {
+      const ignoredLog = await this.logRepo.save(
         this.logRepo.create({
           tenant_id: tenantId,
           provider: 'SNAPPFOOD',
-          event_type: 'DUPLICATE_REJECTED',
+          event_type: `STATUS_${statusCode}_UNKNOWN_ORDER`,
           hmac_signature: signature || 'simulated-valid-hmac',
           idempotency_key: idempotencyKey,
-          is_duplicate: true,
+          is_duplicate: false,
           status: 'SUCCESS',
           request_payload: payload,
-          response_payload: { message: 'Duplicate webhook event ignored (exactly-once)' },
+          response_payload: { message: `No order ${orderCode} to apply status ${statusCode} to` },
         }),
       );
-
-      return {
-        simulated: true,
-        correlationId: corrId,
-        success: true,
-        duplicate: true,
-        message: 'Duplicate Snappfood webhook event ignored (exactly-once enforced)',
-        log_id: duplicateLog.id,
-      };
+      return { simulated: true, correlationId: corrId, success: true, duplicate: false, order: null, log_id: ignoredLog.id };
     }
 
     // Process & Map Order deterministically without Math.random()
     const branchId = await this.resolveWebhookBranch(tenantId, payload);
 
-    const orderNum = `SNP-${payload.order_code || payload.event_id || '1001'}`;
-    // Snappfood sends `products`, each with a title; older payloads send `items` with a
-    // product_name. Either way the lines keep the customer's dishes, quantities and prices.
-    const itemsInput =
-      payload.items ||
-      (Array.isArray(payload.products) && payload.products.length
-        ? payload.products.map((p: any) => ({ product_name: p.title, quantity: p.quantity, price: p.price }))
-        : [{ product_name: 'Snappfood Combo Meal', quantity: 1, price: 15.0 }]);
-
-    let subtotalStr = '0.0000';
-    for (const item of itemsInput) {
-      const priceStr = MoneyUtil.format(item.price || '15.0', 4);
-      const qtyStr = MoneyUtil.format(item.quantity || 1, 4);
-      const lineTotalStr = MoneyUtil.multiply(priceStr, qtyStr, 4);
-      subtotalStr = MoneyUtil.add(subtotalStr, lineTotalStr, 4);
-    }
-    const taxAmountStr = MoneyUtil.multiply(subtotalStr, '0.09', 4);
-    const totalAmountStr = MoneyUtil.add(subtotalStr, taxAmountStr, 4);
+    const orderNum = `SNP-${orderCode || payload.event_id || '1001'}`;
+    const lines = this.snappfoodLines(payload);
 
     const orderHeader = this.orderRepo.create({
       tenant_id: tenantId,
@@ -162,50 +166,11 @@ export class SimulationService {
       status: 'PENDING_ACCEPTANCE',
       fulfillment_status: 'PENDING',
       notes: this.describeSnappfoodOrder(payload),
-      subtotal: subtotalStr,
-      subtotal_amount: subtotalStr,
-      tax_total: taxAmountStr,
-      tax_amount: taxAmountStr,
-      discount_total: '0.0000',
-      discount_amount: '0.0000',
-      grand_total: totalAmountStr,
-      total_amount: totalAmountStr,
-      paid_total: totalAmountStr,
-      paid_amount: totalAmountStr,
-      outstanding_total: '0.0000',
-      due_amount: '0.0000',
+      ...this.snappfoodTotals(lines),
     });
 
     const savedHeader = await this.orderRepo.save(orderHeader);
-
-    for (const item of itemsInput) {
-      const priceStr = MoneyUtil.format(item.price || '15.0', 4);
-      const qtyStr = MoneyUtil.format(item.quantity || 1, 4);
-      const lineTotalStr = MoneyUtil.multiply(priceStr, qtyStr, 4);
-
-      const orderItem = this.orderItemRepo.create({
-        tenant_id: tenantId,
-        order_id: savedHeader.id,
-        line_number: itemsInput.indexOf(item) + 1,
-        product_id: item.product_id || '00000000-0000-0000-0000-000000000001',
-        product_name: item.product_name || 'Snappfood Item',
-        unit_price: priceStr,
-        quantity: qtyStr,
-        base_total: lineTotalStr,
-        subtotal: lineTotalStr,
-        modifier_total: '0.0000',
-        discount_total: '0.0000',
-        discount_amount: '0.0000',
-        tax_total: MoneyUtil.multiply(lineTotalStr, '0.09', 4),
-        tax_amount: MoneyUtil.multiply(lineTotalStr, '0.09', 4),
-        packaging_total: '0.0000',
-        line_total: lineTotalStr,
-        total_amount: MoneyUtil.multiply(lineTotalStr, '1.09', 4),
-        special_instructions: item.notes || null,
-        state: 'ACTIVE',
-      });
-      await this.orderItemRepo.save(orderItem);
-    }
+    await this.writeSnappfoodLines(tenantId, savedHeader.id, lines, 1);
 
     const logEntry = await this.logRepo.save(
       this.logRepo.create({
@@ -230,7 +195,7 @@ export class SimulationService {
         type: 'INCOMING_ORDER',
         severity: 'INFO',
         title: `New Snappfood order ${savedHeader.order_number}`,
-        message: `${payload.fullName || 'A customer'}: ${MoneyUtil.format(totalAmountStr, 0)} waiting for acceptance`,
+        message: `${payload.fullName || 'A customer'}: ${MoneyUtil.format(savedHeader.grand_total, 0)} waiting for acceptance`,
         acknowledged: false,
       }),
     );
@@ -277,6 +242,192 @@ export class SimulationService {
     ]
       .filter(Boolean)
       .join('\n');
+  }
+
+  /**
+   * A message about an order the store already has. Only two statuses move it: Snappfood
+   * cancelling (54), and the order coming back as new (56) after the store rejected it and
+   * Snappfood support changed it. Every other status reports a step the store took itself,
+   * or one it waits out (71, the customer owes more).
+   */
+  private async applySnappfoodStatus(
+    tenantId: string,
+    order: OrderHeader,
+    statusCode: number,
+    payload: any,
+    signature: string | undefined,
+    idempotencyKey: string,
+    corrId: string,
+  ): Promise<SnappfoodWebhookResult> {
+    if (statusCode === 56) {
+      if (order.state !== 'REJECTED') {
+        return this.recordDuplicate(tenantId, payload, signature, idempotencyKey, corrId);
+      }
+      await this.resendSnappfoodOrder(tenantId, order, payload);
+    } else if (statusCode === 54 && !['REJECTED', 'CANCELLED', 'COMPLETED'].includes(order.state)) {
+      this.markCancelled(order);
+      await this.orderRepo.save(order);
+    }
+
+    const log = await this.logRepo.save(
+      this.logRepo.create({
+        tenant_id: tenantId,
+        provider: 'SNAPPFOOD',
+        event_type: `STATUS_${statusCode}`,
+        hmac_signature: signature || 'simulated-valid-hmac',
+        idempotency_key: idempotencyKey,
+        is_duplicate: false,
+        status: 'SUCCESS',
+        request_payload: payload,
+        response_payload: { order_id: order.id, state: order.state },
+      }),
+    );
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'SYSTEM',
+      action: `SNAPPFOOD_STATUS_${statusCode}`,
+      correlationId: corrId,
+      afterData: { order_id: order.id, state: order.state },
+    });
+
+    // A re-sent order is answered like a new one, so the branch's policy applies again.
+    const accepted =
+      statusCode === 56 && this.incomingPolicy
+        ? await this.incomingPolicy.applyOnArrival(tenantId, order.id, corrId)
+        : null;
+
+    return { simulated: true, correlationId: corrId, success: true, duplicate: false, order: accepted ?? order, log_id: log.id };
+  }
+
+  /**
+   * The store rejected the order and Snappfood support changed it, so it comes back under the
+   * same code. The old lines are voided rather than deleted, the new ones follow them, and the
+   * order waits again with its time limit counted from now.
+   */
+  private async resendSnappfoodOrder(tenantId: string, order: OrderHeader, payload: any) {
+    const lines = this.snappfoodLines(payload);
+    const earlier = await this.orderItemRepo.count({ where: { tenant_id: tenantId, order_id: order.id } });
+    await this.orderItemRepo.update({ tenant_id: tenantId, order_id: order.id, state: 'ACTIVE' }, { state: 'VOID' });
+    await this.writeSnappfoodLines(tenantId, order.id, lines, earlier + 1);
+
+    Object.assign(order, this.snappfoodTotals(lines));
+    order.notes = this.describeSnappfoodOrder(payload);
+    order.placed_at = new Date();
+    this.markAwaitingAcceptance(order);
+    await this.orderRepo.save(order);
+
+    await this.alertRepo.save(
+      this.alertRepo.create({
+        tenant_id: tenantId,
+        branch_id: order.branch_id,
+        type: 'INCOMING_ORDER',
+        severity: 'INFO',
+        title: `Snappfood sent order ${order.order_number} again, changed`,
+        message: `${payload.fullName || 'A customer'}: ${MoneyUtil.format(order.grand_total, 0)} waiting for acceptance`,
+        acknowledged: false,
+      }),
+    );
+  }
+
+  private async recordDuplicate(
+    tenantId: string,
+    payload: any,
+    signature: string | undefined,
+    idempotencyKey: string,
+    corrId: string,
+  ): Promise<SnappfoodWebhookResult> {
+    const duplicateLog = await this.logRepo.save(
+      this.logRepo.create({
+        tenant_id: tenantId,
+        provider: 'SNAPPFOOD',
+        event_type: 'DUPLICATE_REJECTED',
+        hmac_signature: signature || 'simulated-valid-hmac',
+        idempotency_key: idempotencyKey,
+        is_duplicate: true,
+        status: 'SUCCESS',
+        request_payload: payload,
+        response_payload: { message: 'Duplicate webhook event ignored (exactly-once)' },
+      }),
+    );
+
+    return {
+      simulated: true,
+      correlationId: corrId,
+      success: true,
+      duplicate: true,
+      message: 'Duplicate Snappfood webhook event ignored (exactly-once enforced)',
+      log_id: duplicateLog.id,
+    };
+  }
+
+  /**
+   * The order's lines. Snappfood sends `products`, each with a title; older payloads send
+   * `items` with a product_name. Either way the lines keep the dishes, quantities and prices.
+   */
+  private snappfoodLines(payload: any): any[] {
+    return (
+      payload.items ||
+      (Array.isArray(payload.products) && payload.products.length
+        ? payload.products.map((p: any) => ({ product_name: p.title, quantity: p.quantity, price: p.price }))
+        : [{ product_name: 'Snappfood Combo Meal', quantity: 1, price: 15.0 }])
+    );
+  }
+
+  private snappfoodTotals(lines: any[]) {
+    let subtotal = '0.0000';
+    for (const line of lines) {
+      const lineTotal = MoneyUtil.multiply(MoneyUtil.format(line.price || '15.0', 4), MoneyUtil.format(line.quantity || 1, 4), 4);
+      subtotal = MoneyUtil.add(subtotal, lineTotal, 4);
+    }
+    const tax = MoneyUtil.multiply(subtotal, '0.09', 4);
+    const total = MoneyUtil.add(subtotal, tax, 4);
+    return {
+      subtotal,
+      subtotal_amount: subtotal,
+      tax_total: tax,
+      tax_amount: tax,
+      discount_total: '0.0000',
+      discount_amount: '0.0000',
+      grand_total: total,
+      total_amount: total,
+      paid_total: total,
+      paid_amount: total,
+      outstanding_total: '0.0000',
+      due_amount: '0.0000',
+    };
+  }
+
+  private async writeSnappfoodLines(tenantId: string, orderId: string, lines: any[], firstLineNumber: number) {
+    for (let index = 0; index < lines.length; index++) {
+      const item = lines[index];
+      const priceStr = MoneyUtil.format(item.price || '15.0', 4);
+      const qtyStr = MoneyUtil.format(item.quantity || 1, 4);
+      const lineTotalStr = MoneyUtil.multiply(priceStr, qtyStr, 4);
+
+      const orderItem = this.orderItemRepo.create({
+        tenant_id: tenantId,
+        order_id: orderId,
+        line_number: firstLineNumber + index,
+        product_id: item.product_id || '00000000-0000-0000-0000-000000000001',
+        product_name: item.product_name || 'Snappfood Item',
+        unit_price: priceStr,
+        quantity: qtyStr,
+        base_total: lineTotalStr,
+        subtotal: lineTotalStr,
+        modifier_total: '0.0000',
+        discount_total: '0.0000',
+        discount_amount: '0.0000',
+        tax_total: MoneyUtil.multiply(lineTotalStr, '0.09', 4),
+        tax_amount: MoneyUtil.multiply(lineTotalStr, '0.09', 4),
+        packaging_total: '0.0000',
+        line_total: lineTotalStr,
+        total_amount: MoneyUtil.multiply(lineTotalStr, '1.09', 4),
+        special_instructions: item.notes || null,
+        state: 'ACTIVE',
+      });
+      await this.orderItemRepo.save(orderItem);
+    }
   }
 
   /**

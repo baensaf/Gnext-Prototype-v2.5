@@ -22,11 +22,11 @@ export class SimulatedWebhooksController {
     const correlationId = (req as any).correlationId || `corr-snapp-${Date.now()}`;
     const rawBody = (req as any).rawBody || JSON.stringify(body);
     const timestamp = timestampHeader || body.timestamp || new Date().toISOString();
-    const eventId = eventIdHeader || body.event_id || body.eventId;
-
+    // Snappfood's own webhook carries no event id, and one made up here would never repeat,
+    // so a resent order would pass as new. Without one, the order code and status decide.
     const payload = {
       ...body,
-      event_id: eventId || body.event_id || `evt-${Date.now()}`,
+      event_id: eventIdHeader || body.event_id || body.eventId,
       branch_code: branchCode,
     };
 

@@ -40,6 +40,7 @@ describe('an incoming Snappfood order carries what the store needs to answer it'
       save: jest.fn((dto: any) => Promise.resolve({ ...dto, id: 'log-1' })),
     };
     const orderRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
       create: jest.fn((dto: any) => dto),
       save: jest.fn((dto: any) => Promise.resolve({ id: 'ord-1', ...dto })),
     };

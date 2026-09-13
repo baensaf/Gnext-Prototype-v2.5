@@ -213,7 +213,8 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
       expect(simulationService.notifyRejected).toHaveBeenCalledWith(
         't-1',
         'SF-304',
-        expect.objectContaining({ comment: expect.stringContaining('5 min') }),
+        // Snappfood refuses a reject without one of its decline reasons.
+        expect.objectContaining({ reasonId: 153, comment: expect.stringContaining('5 min') }),
       );
       expect(kdsService.generateTicketsForOrder).not.toHaveBeenCalled();
     });
