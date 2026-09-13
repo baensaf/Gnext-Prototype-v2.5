@@ -58,6 +58,8 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci --legacy-peer-deps
       - run: npm run typecheck
+      # Several suites call runMigrations() in parallel; on an empty database they race.
+      - run: npm run migration:run
       - run: npm test
 
   frontend:
