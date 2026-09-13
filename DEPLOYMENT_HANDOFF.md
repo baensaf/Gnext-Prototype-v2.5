@@ -49,6 +49,17 @@ docker compose -f docker-compose.prod.yml logs --tail=200 backend frontend
 
 Expected result: PostgreSQL, backend, and frontend are healthy; `/health/ready` returns HTTP 200; the admin can sign in and the seeded branches, catalog, tables, courier, and customers are visible.
 
+## CI/CD (GitHub Actions)
+
+`.github/workflows/ci-cd.yml` runs on every push: backend typecheck and Jest against a throwaway Postgres, and the frontend build. A push to `main` that passes deploys to the VPS; other branches only check that GitHub can reach the VPS.
+
+- The only secret is `VPS_SSH_KEY` (Settings → Secrets and variables → Actions). Its public half sits in the VPS `~/.ssh/authorized_keys` as `restrict,command="/home/baensaf/gnext-deploy/deploy.sh"`, so that key can run the deploy script and nothing else.
+- The workflow streams `git archive` of the commit to `deploy/deploy.sh` (installed on the VPS as `~/gnext-deploy/deploy.sh`). It unpacks to `~/gnext-deploy/releases/<sha>`, links the shared `~/gnext-deploy/.env`, runs `docker compose up -d --build --wait`, and checks `/health/ready`. `~/gnext-deploy/current` points at the running release; the last 5 are kept.
+- The Compose project is pinned to `gnext-v2`, so every release reuses the same database and upload volumes. The pipeline never runs `down -v`.
+- Redeploy or roll back: Actions → CI/CD → Run workflow on `main`, optionally with a commit sha.
+- Manual operations: `cd ~/gnext-deploy/current && docker compose -f docker-compose.prod.yml ps`.
+- If `deploy/deploy.sh` changes, copy it to `~/gnext-deploy/deploy.sh` on the VPS; the pipeline does not update its own entry point.
+
 ## Arvan origin
 
 Point the Arvan origin to the VPS over HTTP port 80. Preserve forwarding of `Host`, `X-Forwarded-For`, and `X-Forwarded-Proto`. Do not expose PostgreSQL (`5432`) or the backend (`3100`) publicly.

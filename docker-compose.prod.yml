@@ -1,4 +1,7 @@
-﻿services:
+﻿# Fixed project name: the volumes below are gnext-v2_*, whichever folder this runs from.
+name: gnext-v2
+
+services:
   postgres:
     image: postgres:16-alpine
     container_name: gnext_postgres
