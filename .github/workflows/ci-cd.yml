@@ -1,0 +1,121 @@
+name: CI/CD
+
+# Every push runs the checks. A push to main that passes them deploys to the VPS.
+# To redeploy or roll back: Actions > CI/CD > Run workflow on main, optionally with a commit sha.
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit sha to deploy (empty = latest main)
+        required: false
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  DEPLOY_HOST: 195.234.80.33
+  DEPLOY_PORT: '20481'
+  DEPLOY_USER: baensaf
+  DEPLOY_KNOWN_HOST: '[195.234.80.33]:20481 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK+Zrt2kVT+8saVUy3+QcJE5pcza3Vo5YV1Un3fCSZaK'
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: admin
+          POSTGRES_DB: appdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U admin -d appdb"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DB_HOST: localhost
+      DB_PORT: '5432'
+      DB_USER: admin
+      DB_PASSWORD: admin
+      DB_NAME: appdb
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --legacy-peer-deps
+      - run: npm run typecheck
+      - run: npm test
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: starter-vite-ts
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: starter-vite-ts/package-lock.json
+      - run: npm ci --legacy-peer-deps
+      # tsc + vite build. Lint is not a gate yet: the existing import-order errors come first.
+      - run: npm run build
+
+  # Branches only: proves GitHub can reach the VPS with the deploy key, without deploying.
+  deploy-check:
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          [ -n "$DEPLOY_KEY" ] || { echo "::error::Add the VPS_SSH_KEY repository secret"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOST" > ~/.ssh/known_hosts
+      - name: Ping the VPS
+        run: ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" -o ConnectTimeout=20 "$DEPLOY_USER@$DEPLOY_HOST" ping
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - name: Set up SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          [ -n "$DEPLOY_KEY" ] || { echo "::error::Add the VPS_SSH_KEY repository secret"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOST" > ~/.ssh/known_hosts
+      - name: Deploy
+        run: |
+          sha=$(git rev-parse HEAD)
+          git archive --format=tar.gz "$sha" \
+            | ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" -o ConnectTimeout=20 -o ServerAliveInterval=30 \
+                "$DEPLOY_USER@$DEPLOY_HOST" "deploy $sha"
