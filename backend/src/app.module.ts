@@ -37,6 +37,8 @@ import { OfflineSyncModule } from './modules/offline-sync/offline-sync.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { ImportExportModule } from './modules/import-export/import-export.module';
 import { UsersModule } from './modules/users/users.module';
+import { MoadianModule } from './modules/moadian/moadian.module';
+import { TaxInvoice } from './entities/TaxInvoice.entity';
 import { ImportJob } from './entities/ImportJob.entity';
 import { ImportRow } from './entities/ImportRow.entity';
 
@@ -188,6 +190,7 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
           OfflineQueueItem, SyncConflictRecord, SyncCategoryLog,
           ImportJob, ImportRow,
           OperationalAlert, SavedReportView, ReportExportJob,
+          TaxInvoice,
         ],
         synchronize: false, // Mandatory AD-02
         logging: config.get<string>('NODE_ENV') === 'development' ? ['error', 'warn'] : false,
@@ -217,6 +220,7 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
     SimulationModule,
     OfflineSyncModule,
     ReportsModule,
+    MoadianModule,
     ImportExportModule,
     UsersModule,
     TypeOrmModule.forFeature([AdminUser, Session, IdempotencyRecord]),

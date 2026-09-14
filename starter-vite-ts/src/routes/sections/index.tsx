@@ -56,6 +56,7 @@ import { ProductDetailPage } from 'src/pages/catalog/product-detail';
 import { BranchDetailPage } from 'src/pages/operations/branch-detail';
 import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
 import { CourierDetailPage } from 'src/pages/operations/courier-detail';
+import { MoadianInvoicesPage } from 'src/pages/moadian/moadian-invoices';
 import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
 import { BranchOverridesPage } from 'src/pages/settings/branch-overrides';
 import { ShiftPolicySettingsPage } from 'src/pages/settings/shift-policy';
@@ -176,6 +177,7 @@ export const routesSection: RouteObject[] = [
       { path: 'reports', element: <ReportsIndexPage /> },
       { path: 'reports/:reportCode', element: <ReportViewerPage /> },
       { path: 'audit', element: <AuditExplorerPage /> },
+      { path: 'moadian', element: <MoadianInvoicesPage /> },
       { path: 'settings', element: <SettingsHubPage /> },
       { path: 'settings/users', element: <UsersPage /> },
       { path: 'settings/general', element: <GeneralSettingsPage /> },

@@ -32,6 +32,8 @@ import { fitsWorkspace } from 'src/config/role-access';
 import { httpClient as axios } from 'src/api/httpClient';
 import { useWorkspaceScope } from 'src/contexts/branch-context';
 
+import { MoadianOrderPanel } from 'src/components/moadian/moadian-order-panel';
+
 export function OrdersDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -204,6 +206,10 @@ export function OrdersDetailPage() {
               </Stack>
             </Stack>
           </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12 }}>
+          <MoadianOrderPanel orderId={order.id} orderState={order.state} />
         </Grid>
       </Grid>
     </Container>

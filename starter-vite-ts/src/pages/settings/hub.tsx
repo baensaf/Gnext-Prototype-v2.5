@@ -271,6 +271,19 @@ export function SettingsHubPage() {
           tags: ['payments', 'refunds', 'gateways', 'eft', 'cash drawer', 'cards', 'transactions', 'پرداخت', 'استرداد', 'کارتخوان', 'پوز', 'مرجوعی'],
         },
         {
+          id: 'moadian',
+          scope: 'ORG',
+          title: t('settings.hub.items.moadian.title', 'Moadian e-invoicing'),
+          description: t(
+            'settings.hub.items.moadian.description',
+            'Tax memory ID, economic code and the simulated tax office; every e-invoice and where it stands.'
+          ),
+          path: '/app/moadian',
+          icon: <ReceiptLongIcon sx={{ color: 'info.main' }} />,
+          badge: { color: 'info', label: t('settings.hub.items.moadian.badge', 'Simulated') },
+          tags: ['moadian', 'tax', 'e-invoice', 'vat', 'مودیان', 'مالیات', 'صورتحساب الکترونیکی'],
+        },
+        {
           id: 'reasons',
           scope: 'ORG',
           title: t('settings.hub.items.reasons.title', 'Reason Codes & Compliance'),

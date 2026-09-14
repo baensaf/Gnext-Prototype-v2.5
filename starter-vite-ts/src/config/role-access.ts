@@ -53,6 +53,7 @@ const MANAGER_PATHS = [
   '/app/operations',
   '/app/reports',
   '/app/audit',
+  '/app/moadian',
   '/app/settings',
 ];
 
