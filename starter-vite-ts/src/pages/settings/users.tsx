@@ -19,25 +19,23 @@ import {
   Drawer,
   Switch,
   TableRow,
+  MenuItem,
   TableBody,
   TableCell,
   TableHead,
-  MenuItem,
   TextField,
   Typography,
   IconButton,
   CardContent,
-  FormControlLabel,
   TableContainer,
+  FormControlLabel,
   CircularProgress,
 } from '@mui/material';
 
 import { usersApi } from 'src/api/usersApi';
 import { tenantApi } from 'src/api/tenantApi';
-
-import { useAuthStore } from 'src/store/useAuthStore';
-
 import { ROLE_LABELS } from 'src/config/role-access';
+import { useAuthStore } from 'src/store/useAuthStore';
 
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 

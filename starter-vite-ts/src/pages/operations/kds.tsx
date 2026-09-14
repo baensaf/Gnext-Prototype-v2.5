@@ -1,7 +1,6 @@
 import type { KitchenTicket, KitchenStation } from 'src/api/kdsApi';
 
 import { useTranslation } from 'react-i18next';
-import { useScopedBranchId } from 'src/contexts/branch-context';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import UndoIcon from '@mui/icons-material/Undo';
@@ -36,6 +35,7 @@ import {
 } from '@mui/material';
 
 import { kdsApi } from 'src/api/kdsApi';
+import { useScopedBranchId } from 'src/contexts/branch-context';
 
 import { Label } from 'src/components/label';
 
@@ -150,9 +150,9 @@ export function KdsPage() {
     return 'success';
   };
 
-  const newTickets = tickets.filter((t) => t.state === 'NEW' || t.status === 'NEW');
-  const inPrepTickets = tickets.filter((t) => t.state === 'IN_PROGRESS' || t.status === 'IN_PREPARATION');
-  const readyTickets = tickets.filter((t) => t.state === 'READY' || t.state === 'BUMPED' || t.status === 'READY' || t.status === 'BUMPED');
+  const newTickets = tickets.filter((ticket) => ticket.state === 'NEW' || ticket.status === 'NEW');
+  const inPrepTickets = tickets.filter((ticket) => ticket.state === 'IN_PROGRESS' || ticket.status === 'IN_PREPARATION');
+  const readyTickets = tickets.filter((ticket) => ticket.state === 'READY' || ticket.state === 'BUMPED' || ticket.status === 'READY' || ticket.status === 'BUMPED');
 
   return (
     <Box sx={{ p: 3 }}>

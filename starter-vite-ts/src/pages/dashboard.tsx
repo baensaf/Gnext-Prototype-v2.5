@@ -25,10 +25,9 @@ import {
 } from '@mui/material';
 
 import { tenantApi } from 'src/api/tenantApi';
-
-import { useBranchContextOptional } from 'src/contexts/branch-context';
 import { useAuthStore } from 'src/store/useAuthStore';
 import { httpClient as axios } from 'src/api/httpClient';
+import { useBranchContextOptional } from 'src/contexts/branch-context';
 
 export function DashboardPage() {
   const { t } = useTranslation();

@@ -1,8 +1,10 @@
 import type { Branch } from 'src/api/tenantApi';
 
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 
+import SyncIcon from '@mui/icons-material/Sync';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import {
   Box,
   Card,
@@ -31,13 +33,12 @@ import {
   TableContainer,
   FormControlLabel,
 } from '@mui/material';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import SyncIcon from '@mui/icons-material/Sync';
 
-import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 import { tenantApi } from 'src/api/tenantApi';
 import { httpClient as axios } from 'src/api/httpClient';
 import { useScopedBranchId } from 'src/contexts/branch-context';
+
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function OfflineSyncPage() {
   const { t } = useTranslation();

@@ -33,10 +33,10 @@ import {
 } from '@mui/material';
 
 import { tenantApi } from 'src/api/tenantApi';
+import { useScopedBranchId } from 'src/contexts/branch-context';
 
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
-import { useScopedBranchId } from 'src/contexts/branch-context';
 
 export function TerminalsPage() {
   const { t } = useTranslation();

@@ -1,17 +1,16 @@
-import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
-import ReplayIcon from '@mui/icons-material/Replay';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import PrintDisabledIcon from '@mui/icons-material/PrintDisabled';
+import WifiOffIcon from '@mui/icons-material/WifiOff';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import SyncProblemIcon from '@mui/icons-material/SyncProblem';
 import ElectricBoltIcon from '@mui/icons-material/ElectricBolt';
-import VisibilityIcon from '@mui/icons-material/Visibility';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import WifiOffIcon from '@mui/icons-material/WifiOff';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PrintDisabledIcon from '@mui/icons-material/PrintDisabled';
 import {
   Box,
   Card,
@@ -25,6 +24,7 @@ import {
   Dialog,
   Divider,
   TableRow,
+  useTheme,
   TableBody,
   TableCell,
   TableHead,
@@ -34,14 +34,15 @@ import {
   DialogContent,
   DialogActions,
   TableContainer,
-  useTheme,
 } from '@mui/material';
 
 import { RouterLink } from 'src/routes/components';
-import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
-import { httpClient as axios } from 'src/api/httpClient';
-import { tenantApi } from 'src/api/tenantApi';
+
 import { kdsApi } from 'src/api/kdsApi';
+import { tenantApi } from 'src/api/tenantApi';
+import { httpClient as axios } from 'src/api/httpClient';
+
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function SimulationCenterPage() {
   const { t } = useTranslation();

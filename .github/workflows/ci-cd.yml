@@ -77,7 +77,7 @@ jobs:
           cache: npm
           cache-dependency-path: starter-vite-ts/package-lock.json
       - run: npm ci --legacy-peer-deps
-      # tsc + vite build. Lint is not a gate yet: the existing import-order errors come first.
+      - run: npm run lint
       - run: npm run build
 
   # Branches only: proves GitHub can reach the VPS with the deploy key, without deploying.

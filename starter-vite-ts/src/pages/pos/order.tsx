@@ -315,7 +315,7 @@ export function PosOrderPage() {
     if (orderType !== 'DELIVERY' || !selectedCustomerId) {
       setCustomerAddresses([]);
       setSelectedDeliveryAddressId('');
-      return;
+      return undefined;
     }
     let cancelled = false;
     setDeliveryOptionsLoading(true);
@@ -343,7 +343,7 @@ export function PosOrderPage() {
     if (orderType !== 'DELIVERY' || !selectedBranchId) {
       setDeliveryZones([]);
       setSelectedDeliveryZoneId('');
-      return;
+      return undefined;
     }
     let cancelled = false;
     setDeliveryOptionsLoading(true);
