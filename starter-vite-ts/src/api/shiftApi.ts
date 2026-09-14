@@ -91,6 +91,28 @@ export interface BusinessDayClose {
   approval_request_id?: string;
 }
 
+/** An order still open when its branch's day is being closed. */
+export interface DayCloseOpenOrder {
+  id: string;
+  orderNumber: string;
+  orderType: string;
+  channel: string;
+  state: string;
+  businessDate: string | null;
+  placedAt: string;
+  tableNumber: string | null;
+  grandTotal: string;
+  outstandingTotal: string;
+  issue?: 'UNPAID' | 'NOT_SUBMITTED' | 'AWAITING_ACCEPTANCE' | 'DELIVERY_NOT_FINISHED';
+}
+
+export interface DayCloseOpenOrders {
+  /** Paid orders the close completes. */
+  toComplete: DayCloseOpenOrder[];
+  /** Orders that block the close unless they are carried over with a reason. */
+  needsDecision: DayCloseOpenOrder[];
+}
+
 export const shiftApi = {
   getShifts: async (params?: Record<string, any>): Promise<{ data: CashierShift[]; total: number }> => {
     const res = await httpClient.get('/api/v1/shifts', { params });
@@ -185,10 +207,22 @@ export const shiftApi = {
     return res.data;
   },
 
+  /** The branch's open orders closing this day would complete, and those it waits on. */
+  getDayCloseOpenOrders: async (params: {
+    branchId: string;
+    businessDate: string;
+    currencyCode?: string;
+  }): Promise<DayCloseOpenOrders> => {
+    const res = await httpClient.get('/api/v1/business-days/open-orders', { params });
+    return res.data;
+  },
+
   closeBusinessDay: async (data: {
     branchId: string;
     businessDate: string;
     currencyCode?: string;
+    /** Closes the day with its unpaid or unfinished orders left open for the next one. */
+    carryOverReason?: string;
   }): Promise<BusinessDayClose> => {
     const res = await httpClient.post('/api/v1/business-days/close', data);
     return res.data;

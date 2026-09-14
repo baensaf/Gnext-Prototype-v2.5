@@ -114,6 +114,14 @@ export class BusinessDayCloseDto {
   @IsOptional()
   @IsString()
   currencyCode?: string;
+
+  /**
+   * Closes the day although some open orders are unpaid or unfinished. They stay open and
+   * come up again at the next close; the reason is kept with the day's totals and in audit.
+   */
+  @IsOptional()
+  @IsString()
+  carryOverReason?: string;
 }
 
 export class BusinessDayReopenDto {

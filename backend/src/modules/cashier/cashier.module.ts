@@ -13,6 +13,7 @@ import { ShiftsController } from './shifts.controller';
 import { BusinessDaysController } from './business-days.controller';
 import { AuditModule } from '../audit/audit.module';
 import { ApprovalModule } from '../approval/approval.module';
+import { OrderLifecycleModule } from '../order-lifecycle/order-lifecycle.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ApprovalModule } from '../approval/approval.module';
       Branch,
     ]),
     AuditModule,
+    OrderLifecycleModule,
   ],
   providers: [ShiftService, BusinessDayService],
   controllers: [ShiftsController, BusinessDaysController],
