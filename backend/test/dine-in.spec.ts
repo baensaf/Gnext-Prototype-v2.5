@@ -9,6 +9,7 @@ import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { OrderItem } from '../src/entities/OrderItem.entity';
 import { OrderLink } from '../src/entities/OrderLink.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
+import { OrderTransitionRecorder } from '../src/modules/order-lifecycle/order-transition-recorder.service';
 import { DataSource } from 'typeorm';
 import { BadRequestException } from '@nestjs/common';
 
@@ -20,6 +21,7 @@ describe('DineInService & Operations (Unit)', () => {
   let occupancyRepo: any;
   let orderRepo: any;
   let auditWriter: any;
+  let transitionRecorder: any;
   let dataSource: any;
 
   beforeEach(async () => {
@@ -29,6 +31,7 @@ describe('DineInService & Operations (Unit)', () => {
     occupancyRepo = { create: jest.fn(), save: jest.fn() };
     orderRepo = { findOne: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() };
     auditWriter = { write: jest.fn() };
+    transitionRecorder = { record: jest.fn() };
     dataSource = {
       transaction: jest.fn().mockImplementation((cb) => cb({
         findOne: jest.fn(),
@@ -47,6 +50,7 @@ describe('DineInService & Operations (Unit)', () => {
         { provide: getRepositoryToken(TableOccupancyEvent), useValue: occupancyRepo },
         { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
         { provide: AuditWriter, useValue: auditWriter },
+        { provide: OrderTransitionRecorder, useValue: transitionRecorder },
         { provide: DataSource, useValue: dataSource },
       ],
     }).compile();
@@ -68,27 +72,30 @@ describe('DineInService & Operations (Unit)', () => {
     expect(occupancyRepo.save).toHaveBeenCalled();
   });
 
+  /** An EntityManager for releaseTable, with `activeOrder` as the order holding the table. */
+  const releaseEm = (session: any, activeOrder: any) => ({
+    findOne: jest.fn().mockImplementation((entity: any) => {
+      if (entity === DiningTable) return Promise.resolve({ id: 'tbl-1', table_number: '1' });
+      if (entity === TableSession) return Promise.resolve(session);
+      return Promise.resolve(null);
+    }),
+    createQueryBuilder: jest.fn().mockReturnValue({
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(activeOrder),
+    }),
+    save: jest.fn().mockImplementation((entity: any, obj: any) => Promise.resolve(obj || entity)),
+    create: jest.fn().mockImplementation((entity: any, obj: any) => obj),
+  });
+
   it('should release table and set closed_at timestamp', async () => {
     // releaseTable now does its work inside a transaction, because freeing a table has to
     // settle the order holding it as well as close the session. That means it reads and
     // writes through the EntityManager, not through the repositories this suite stubs.
     const session: any = { id: 'sess-1', table_id: 'tbl-1', status: 'OCCUPIED', closed_at: null };
-    const mockEm = {
-      findOne: jest.fn().mockImplementation((entity: any) => {
-        if (entity === DiningTable) return Promise.resolve({ id: 'tbl-1', table_number: '1' });
-        if (entity === TableSession) return Promise.resolve(session);
-        return Promise.resolve(null);
-      }),
-      // No order is holding the table, so the release is just the session close.
-      createQueryBuilder: jest.fn().mockReturnValue({
-        setLock: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        getOne: jest.fn().mockResolvedValue(null),
-      }),
-      save: jest.fn().mockImplementation((entity: any, obj: any) => Promise.resolve(obj || entity)),
-      create: jest.fn().mockImplementation((entity: any, obj: any) => obj),
-    };
+    // No order is holding the table, so the release is just the session close.
+    const mockEm = releaseEm(session, null);
     dataSource.transaction.mockImplementation((cb: any) => cb(mockEm));
 
     const result = await service.releaseTable('t-1', 'tbl-1', 'AVAILABLE', 'corr-release');
@@ -99,6 +106,35 @@ describe('DineInService & Operations (Unit)', () => {
       expect.objectContaining({ status: 'AVAILABLE' }),
     );
     expect(session.closed_at).toBeInstanceOf(Date);
+    expect(transitionRecorder.record).not.toHaveBeenCalled();
+  });
+
+  it('completes the paid order holding a released table and records the transition', async () => {
+    const session: any = { id: 'sess-1', table_id: 'tbl-1', status: 'OCCUPIED', closed_at: null };
+    const order: any = { id: 'ord-5', tenant_id: 't-1', table_id: 'tbl-1', state: 'READY', outstanding_total: '0.0000' };
+    const mockEm = releaseEm(session, order);
+    dataSource.transaction.mockImplementation((cb: any) => cb(mockEm));
+
+    await service.releaseTable('t-1', 'tbl-1', 'AVAILABLE', 'corr-release', 'user-1');
+
+    expect(order.state).toBe('COMPLETED');
+    expect(order.completed_at).toBeInstanceOf(Date);
+    // The history row, sync event and loyalty cashback come from the recorder, in the same
+    // transaction as the save.
+    expect(transitionRecorder.record).toHaveBeenCalledWith(
+      mockEm,
+      expect.objectContaining({ tenantId: 't-1', order, fromState: 'READY', action: 'COMPLETE', userId: 'user-1' }),
+    );
+  });
+
+  it('refuses to release a table whose order still owes money', async () => {
+    const session: any = { id: 'sess-1', table_id: 'tbl-1', status: 'OCCUPIED', closed_at: null };
+    const order: any = { id: 'ord-6', tenant_id: 't-1', table_id: 'tbl-1', state: 'SUBMITTED', outstanding_total: '50000.0000' };
+    dataSource.transaction.mockImplementation((cb: any) => cb(releaseEm(session, order)));
+
+    await expect(service.releaseTable('t-1', 'tbl-1', 'AVAILABLE')).rejects.toThrow(BadRequestException);
+    expect(order.state).toBe('SUBMITTED');
+    expect(transitionRecorder.record).not.toHaveBeenCalled();
   });
 
   it('should sort lock IDs alphabetically to prevent deadlocks in moveTable', async () => {

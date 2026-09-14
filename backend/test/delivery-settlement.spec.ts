@@ -10,6 +10,7 @@ import { Payment } from '../src/entities/Payment.entity';
 import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
 import { ApprovalRequest } from '../src/entities/ApprovalRequest.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
+import { OrderTransitionRecorder } from '../src/modules/order-lifecycle/order-transition-recorder.service';
 import { ConflictException, BadRequestException } from '@nestjs/common';
 
 import { DeliveryZone } from '../src/entities/DeliveryZone.entity';
@@ -80,6 +81,7 @@ describe('DeliveryService (Courier Settlement)', () => {
         // Only the chain roll-up reads branches; nothing under test here does.
         { provide: getRepositoryToken(Branch), useValue: { find: jest.fn().mockResolvedValue([]) } },
         { provide: AuditWriter, useValue: auditWriter },
+        { provide: OrderTransitionRecorder, useValue: { record: jest.fn() } },
       ],
     }).compile();
 

@@ -20,6 +20,7 @@ import { DeliveryService } from './delivery.service';
 import { DeliveryController } from './delivery.controller';
 import { CourierSettlementsController } from './courier-settlements.controller';
 import { AuditModule } from '../audit/audit.module';
+import { OrderLifecycleModule } from '../order-lifecycle/order-lifecycle.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { AuditModule } from '../audit/audit.module';
       Branch,
     ]),
     AuditModule,
+    OrderLifecycleModule,
   ],
   providers: [DeliveryService],
   controllers: [DeliveryController, CourierSettlementsController],

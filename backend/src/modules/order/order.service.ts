@@ -25,6 +25,7 @@ import { DiscountEvaluationService } from '../discounts/discount-evaluation.serv
 import { OrderSequenceService } from './order-sequence.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { OutboxWriter } from '../outbox/outbox-writer.service';
+import { OrderTransitionRecorder } from '../order-lifecycle/order-transition-recorder.service';
 import { KdsService } from '../kds/kds.service';
 import { PrintQueueService } from '../printing/print-queue.service';
 import { SimulationService } from '../simulation/simulation.service';
@@ -130,6 +131,7 @@ export class OrderService {
     private readonly approvalService: ApprovalService,
     private readonly refundService: RefundService,
     private readonly dataSource: DataSource,
+    private readonly transitionRecorder: OrderTransitionRecorder,
     @Optional() private readonly kdsService?: KdsService,
     @Optional() private readonly printQueueService?: PrintQueueService,
     @Optional() private readonly creditService?: CreditService,
@@ -718,25 +720,6 @@ export class OrderService {
 
       if (targetState === 'COMPLETED') {
         order.completed_at = new Date();
-        if (order.customer_id && this.creditService) {
-          const eligiblePaidSubtotal = MoneyUtil.subtract(order.subtotal, order.discount_total);
-          if (MoneyUtil.greaterThan(eligiblePaidSubtotal, '0.0000')) {
-            const settingRepo = em.getRepository(TenantSetting);
-            // Loyalty economics stay chain-wide: CUSTOMER_CLUB is not branch-overridable,
-            // so this deliberately reads the organization row.
-            const settingRows = await settingRepo.find({ where: { tenant_id: tenantId, key: 'CUSTOMER_CLUB' } });
-            const cashbackPct = (pickSettingValue(settingRows) as any)?.cashback_percentage ?? '5.00';
-            await this.creditService.awardLoyaltyCashback(
-              tenantId,
-              order.customer_id,
-              order.id,
-              eligiblePaidSubtotal,
-              cashbackPct,
-              order.currency_code || 'IRR',
-              em,
-            );
-          }
-        }
       } else if (targetState === 'CANCELLED') {
         order.cancelled_at = new Date();
         order.cancellation_reason_code_id = dto.reasonCodeId || null;
@@ -744,44 +727,18 @@ export class OrderService {
 
       await em.save(OrderHeader, order);
 
-      // Record state event
-      const stateEvt = em.create(OrderStateEvent, {
-        tenant_id: tenantId,
-        order_id: order.id,
-        from_state: fromState,
-        to_state: targetState,
+      // History, outbox event, audit and, on completion, the loyalty cashback. Tables, couriers
+      // and the kitchen screen record their transitions through the same recorder.
+      await this.transitionRecorder.record(em, {
+        tenantId,
+        order,
+        fromState,
         action,
-        reason_code_id: dto.reasonCodeId || null,
-        reason_text: dto.reasonText || null,
-        approval_request_id: dto.approvalRequestId || null,
-        occurred_by: userId || null,
-      });
-      await em.save(OrderStateEvent, stateEvt);
-
-      // Write Outbox Event
-      await this.outboxWriter.enqueueInTransaction(em, {
-        tenantId,
-        eventType:
-          targetState === 'CANCELLED' ? 'ORDER_CANCELLED' : targetState === 'REJECTED' ? 'ORDER_REJECTED' : 'ORDER_UPDATED',
-        aggregateType: 'Order',
-        aggregateId: order.id,
-        payload: {
-          orderId: order.id,
-          orderNumber: order.order_number,
-          fromState,
-          toState: targetState,
-          action,
-        },
-      });
-
-      await this.auditWriter.write({
-        tenantId,
-        actorType: userId ? 'ADMIN' : 'SYSTEM',
-        actorId: userId,
-        action: `ORDER_${action.toUpperCase()}`,
-        entityType: 'Order',
-        entityId: order.id,
+        userId,
         correlationId,
+        reasonCodeId: dto.reasonCodeId,
+        reasonText: dto.reasonText,
+        approvalRequestId: dto.approvalRequestId,
       });
 
       return order;

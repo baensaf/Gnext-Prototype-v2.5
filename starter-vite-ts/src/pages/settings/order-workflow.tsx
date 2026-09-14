@@ -73,7 +73,6 @@ export function OrderWorkflowSettingsPage() {
   // What the windows were when the page loaded, so saving the workflow toggles at a
   // branch does not also pin that branch's windows to whatever head office has today.
   const [loadedWindows, setLoadedWindows] = useState(ORDER_ACTION_DEFAULTS);
-  const [autoRouteToKds, setAutoRouteToKds] = useState(true);
   const [allowReopenClosedOrders, setAllowReopenClosedOrders] = useState(false);
   const [enableDineIn, setEnableDineIn] = useState(true);
   const [enableTakeaway, setEnableTakeaway] = useState(true);
@@ -113,7 +112,6 @@ export function OrderWorkflowSettingsPage() {
         ...storedIncoming,
         acceptance: { ...INCOMING_DEFAULTS.acceptance, ...(storedIncoming.acceptance || {}) },
       });
-      if (workflow.autoRouteToKds !== undefined) setAutoRouteToKds(Boolean(workflow.autoRouteToKds));
       if (workflow.allowReopenClosedOrders !== undefined) setAllowReopenClosedOrders(Boolean(workflow.allowReopenClosedOrders));
       if (workflow.enableDineIn !== undefined) setEnableDineIn(Boolean(workflow.enableDineIn));
       if (workflow.enableTakeaway !== undefined) setEnableTakeaway(Boolean(workflow.enableTakeaway));
@@ -139,7 +137,6 @@ export function OrderWorkflowSettingsPage() {
 
     const payload = {
       incomingOrders: incoming,
-      autoRouteToKds,
       allowReopenClosedOrders,
       enableDineIn,
       enableTakeaway,
@@ -393,31 +390,6 @@ export function OrderWorkflowSettingsPage() {
                       slotProps={{ htmlInput: { min: 1, max: 70 } }}
                     />
                   </Stack>
-                </Paper>
-
-                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={autoRouteToKds}
-                        onChange={(e) => setAutoRouteToKds(e.target.checked)}
-                        color="info"
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography variant="subtitle2">
-                          {t('settings.orderWorkflow.autoRouteKdsLabel', 'Immediate Kitchen KDS Dispatch')}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {t(
-                            'settings.orderWorkflow.autoRouteKdsHelp',
-                            'Broadcast tickets to kitchen bump screens immediately upon order submission.'
-                          )}
-                        </Typography>
-                      </Box>
-                    }
-                  />
                 </Paper>
 
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>

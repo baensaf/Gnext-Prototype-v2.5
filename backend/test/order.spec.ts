@@ -22,6 +22,7 @@ import { OutboxWriter } from '../src/modules/outbox/outbox-writer.service';
 import { ApprovalService } from '../src/modules/approval/approval.service';
 import { CatalogService } from '../src/modules/catalog/catalog.service';
 import { RefundService } from '../src/modules/refund/refund.service';
+import { OrderTransitionRecorder } from '../src/modules/order-lifecycle/order-transition-recorder.service';
 
 describe('Order Aggregate & State Machine Suite (R12)', () => {
   let service: OrderService;
@@ -123,6 +124,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
         { provide: AuditWriter, useValue: auditWriter },
         { provide: OutboxWriter, useValue: outboxWriter },
         { provide: ApprovalService, useValue: approvalService },
+        OrderTransitionRecorder,
         { provide: DataSource, useValue: dataSource },
       ],
     }).compile();

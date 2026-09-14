@@ -12,6 +12,7 @@ import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
 import { Payment } from '../../entities/Payment.entity';
 import { PaymentAllocation } from '../../entities/PaymentAllocation.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { OrderTransitionRecorder } from '../order-lifecycle/order-transition-recorder.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { CreateSectionDto, UpdateSectionDto, CreateTableDto, UpdateTableDto, MergeOrdersDto } from './dtos/dine-in.dto';
 
@@ -25,6 +26,7 @@ export class DineInService {
     @InjectRepository(OrderHeader) private readonly orderRepo: Repository<OrderHeader>,
     private readonly auditWriter: AuditWriter,
     private readonly dataSource: DataSource,
+    private readonly transitionRecorder: OrderTransitionRecorder,
   ) {}
 
   async getSections(tenantId: string, branchId?: string) {
@@ -585,10 +587,22 @@ export class DineInService {
             `Cannot release table: order ${activeOrder.order_number} still has an outstanding balance of ${outstanding}`,
           );
         }
+        const fromState = activeOrder.state;
         activeOrder.state = 'COMPLETED';
         activeOrder.status = 'COMPLETED';
         activeOrder.completed_at = new Date();
         await em.save(OrderHeader, activeOrder);
+        // A check closed by freeing its table gets the same history, sync event and loyalty
+        // cashback as one completed at the till.
+        await this.transitionRecorder.record(em, {
+          tenantId,
+          order: activeOrder,
+          fromState,
+          action: 'COMPLETE',
+          userId,
+          correlationId,
+          reasonText: 'Table released',
+        });
       }
 
       const session = await em.findOne(TableSession, { where: { tenant_id: tenantId, table_id: tableId, closed_at: null as any } });

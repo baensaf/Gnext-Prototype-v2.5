@@ -30,6 +30,7 @@ import { DeliveryModule } from '../delivery/delivery.module';
 import { ApprovalModule } from '../approval/approval.module';
 import { RefundModule } from '../refund/refund.module';
 import { SimulationModule } from '../simulation/simulation.module';
+import { OrderLifecycleModule } from '../order-lifecycle/order-lifecycle.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { SimulationModule } from '../simulation/simulation.module';
     DeliveryModule,
     ApprovalModule,
     RefundModule,
+    OrderLifecycleModule,
     // Each needs the other: orders tell Snappfood about accepts and rejects, and a Snappfood
     // order is put through the branch's acceptance policy as it lands.
     forwardRef(() => SimulationModule),

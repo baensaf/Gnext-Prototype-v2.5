@@ -13,6 +13,7 @@ import { Product } from '../../entities/Product.entity';
 import { KdsService } from './kds.service';
 import { KdsController } from './kds.controller';
 import { AuditModule } from '../audit/audit.module';
+import { OrderLifecycleModule } from '../order-lifecycle/order-lifecycle.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { AuditModule } from '../audit/audit.module';
       Product,
     ]),
     AuditModule,
+    OrderLifecycleModule,
   ],
   providers: [KdsService],
   controllers: [KdsController],
