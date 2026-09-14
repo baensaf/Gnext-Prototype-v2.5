@@ -1031,7 +1031,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
   // =========================================================================
   // WORKFLOW 4: SNAPPFOOD AGGREGATOR COMPLETE LIFECYCLE (§16.3.4)
   // =========================================================================
-  it('Workflow 4: Snappfood - Generate, Accept/Modify/Add Payment, Duplicate Idempotency, Cancel/Refund, Exactly-One-Order & Logs', async () => {
+  it('Workflow 4: Snappfood - Generate, Accept, Duplicate Idempotency, Snappfood Cancel (no till refund), Exactly-One-Order & Logs', async () => {
     const correlationId = `corr-snapp-${Date.now()}`;
     const seed = Date.now().toString().slice(-6);
 
@@ -1071,26 +1071,9 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     expect(acceptResult.success).toBe(true);
     expect(acceptResult.order.status).toBe('KITCHEN_PREPARING');
 
-    // Assert pre-paid amount on OrderHeader
+    // Assert pre-paid amount on OrderHeader: Snappfood collected it, not the till.
     expect(MoneyUtil.format(createdOrder.paid_amount)).toBe(MoneyUtil.format(createdOrder.total_amount));
     expect(MoneyUtil.format(createdOrder.outstanding_total)).toBe('0.0000');
-
-    // Save succeeded Payment record for pre-paid order to ensure refund traceability
-    const paymentRepo = dataSource.getRepository(Payment);
-    await paymentRepo.save(
-      paymentRepo.create({
-        tenant_id: tenantId,
-        order_id: createdOrder.id,
-        payment_number: `PAY-SNP-${seed}`,
-        method_id: posPaymentMethodId,
-        method_kind: 'NETWORK_POS',
-        status: 'SUCCEEDED',
-        amount: createdOrder.total_amount,
-        currency_code: 'IRR',
-        reference: `SNAPP-POS-${seed}`,
-        business_date: new Date().toISOString().slice(0, 10),
-      }),
-    );
 
     // Step 3: Duplicate Idempotency Suppression Test
     // Trigger duplicate event with identical idempotency key (`snapp-evt-${seed}`)
@@ -1136,28 +1119,23 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     expect(cancelResult.success).toBe(true);
     expect(cancelResult.order.status).toBe('CANCELLED');
 
-    // Process refund intent for the paid amount during order cancellation orchestration
-    const refundIntent = await refundService.createRefundIntent(
-      tenantId,
-      createdOrder.id,
-      {
-        amount: createdOrder.total_amount,
-        targetMethodId: posPaymentMethodId,
-        reason: 'Snappfood order cancellation refund',
-        full: true,
-      },
-      cashierUserId,
-      correlationId,
-      true, // isCancellationOrchestration
-    );
-    const processedRefund = await refundService.processRefund(
-      tenantId,
-      refundIntent.id,
-      {},
-      cashierUserId,
-      correlationId,
-    );
-    expect(processedRefund.status).toBe('SUCCEEDED');
+    // Snappfood refunds its own customer, so the till refuses to refund a Snappfood order.
+    const tillRefund = await refundService
+      .createRefundIntent(
+        tenantId,
+        createdOrder.id,
+        {
+          amount: createdOrder.total_amount,
+          targetMethodId: posPaymentMethodId,
+          reason: 'Snappfood order cancellation refund',
+          full: true,
+        },
+        cashierUserId,
+        correlationId,
+        true, // isCancellationOrchestration
+      )
+      .catch((err) => err);
+    expect(tillRefund.getResponse?.()).toEqual(expect.objectContaining({ code: 'SNAPPFOOD_ORDER_LOCKED' }));
 
     // Step 5: Verify Reconciliation & Integration Logs
     const snappLogs = await simulationService.getLogs(tenantId, 'SNAPPFOOD');

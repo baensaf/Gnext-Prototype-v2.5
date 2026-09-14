@@ -157,6 +157,33 @@ export class OrderHeader {
   @Column({ type: 'uuid', nullable: true })
   parent_order_id: string;
 
+  // Snappfood's timing for one of its orders, from the webhook: how long it expects the
+  // kitchen to take, how many minutes the store may add, and how the order travels
+  // (DELIVERY is the store's own courier, ZF_EXPRESS a Snapp Express rider).
+  @Column({ type: 'integer', nullable: true })
+  aggregator_prep_minutes: number;
+
+  @Column({ type: 'integer', nullable: true })
+  aggregator_max_extra_minutes: number;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  aggregator_expedition: string;
+
+  // When the store accepted an incoming order, and the minutes it promised.
+  @Column({ type: 'timestamptz', nullable: true })
+  accepted_at: Date;
+
+  @Column({ type: 'integer', nullable: true })
+  promised_minutes: number;
+
+  // The store handed an accepted Snappfood order back to Snappfood support (a delay, or it
+  // cannot be made) and waits for support to cancel it or send it back.
+  @Column({ type: 'timestamptz', nullable: true })
+  aggregator_issue_at: Date;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  aggregator_issue: string;
+
   @CreateDateColumn({ type: 'timestamptz' })
   placed_at: Date;
 

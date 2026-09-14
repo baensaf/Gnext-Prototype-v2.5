@@ -14,6 +14,7 @@ import {
   OrderReopenDto,
   OrderAcceptDto,
   OrderRejectDto,
+  OrderSnappfoodReportDto,
 } from './dtos/order.dto';
 import { SplitOrderDto, TransferItemsDto } from '../dine-in/dtos/dine-in.dto';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
@@ -90,6 +91,15 @@ export class OrdersController {
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
     return await this.orderService.rejectIncomingOrder(tenantId, id, body, userId, correlationId);
+  }
+
+  // An accepted Snappfood order needs more time or cannot be made: Snappfood support takes it.
+  @Post(':id/report-to-snappfood')
+  async reportToSnappfood(@Param('id') id: string, @Body() body: OrderSnappfoodReportDto, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    const correlationId = (req as any).correlationId;
+    return await this.orderService.reportToSnappfood(tenantId, id, body, userId, correlationId);
   }
 
   @Get(':id')

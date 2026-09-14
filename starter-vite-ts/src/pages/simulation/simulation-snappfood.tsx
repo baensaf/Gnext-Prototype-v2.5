@@ -258,6 +258,23 @@ export function SimulationSnappfoodPage() {
     }
   };
 
+  // Handler: Snappfood support answering an order the store rejected or reported.
+  // 54 cancels it; 56 sends it back for the store to accept again with a new time.
+  const handleSupportDecision = async (statusCode: 54 | 56) => {
+    setLoading(true);
+    try {
+      const res = await axios.post(`/api/v1/simulation/snappfood/orders/${orderCode}/support`, { statusCode });
+      setActionResponse(res.data);
+      setCurrentStatus(statusCode);
+      fetchLogs();
+    } catch (err: any) {
+      setActionResponse(err.response?.data || { error: err.message });
+      alert('Action error: ' + (err.response?.data?.detail || err.response?.data?.message || err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Handler: Test Vendor Automation Endpoints (v4.3.0)
   const handleRunVendorApi = async () => {
     setLoading(true);
@@ -638,6 +655,22 @@ export function SimulationSnappfoodPage() {
                     <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                       <Button fullWidth variant="contained" color="error" onClick={() => handleExecuteAction('REJECT')} disabled={loading}>
                         {t('simulation.snappfood.stepper.reject', '4. Reject Order (POST /reject) → Code 51')}
+                      </Button>
+                    </Grid>
+                  </Grid>
+
+                  <Typography variant="subtitle2" sx={{ mt: 3, mb: 1, fontWeight: 'bold' }}>
+                    {t('simulation.snappfood.stepper.supportActions')}
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <Button fullWidth variant="outlined" color="error" onClick={() => handleSupportDecision(54)} disabled={loading}>
+                        {t('simulation.snappfood.stepper.supportCancel')}
+                      </Button>
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <Button fullWidth variant="outlined" color="primary" onClick={() => handleSupportDecision(56)} disabled={loading}>
+                        {t('simulation.snappfood.stepper.supportResend')}
                       </Button>
                     </Grid>
                   </Grid>

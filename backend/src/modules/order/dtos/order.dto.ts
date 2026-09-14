@@ -381,6 +381,25 @@ export class OrderRejectDto {
   comment?: string;
 }
 
+/**
+ * The store hands an accepted Snappfood order back to Snappfood support, naming a decline
+ * reason. For a delay (153) it says how many more minutes the order needs.
+ */
+export class OrderSnappfoodReportDto {
+  @IsInt()
+  reasonId: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(120)
+  extraMinutes?: number;
+
+  @IsOptional()
+  @IsString()
+  comment?: string;
+}
+
 export class OrderReopenDto {
   @IsOptional()
   @IsUUID()

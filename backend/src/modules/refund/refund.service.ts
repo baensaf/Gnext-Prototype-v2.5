@@ -15,6 +15,7 @@ import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
 import { Payment } from '../../entities/Payment.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { isAggregatorOrder } from '../../common/utils/snappfood-order.util';
 import { ShiftService } from '../cashier/shift.service';
 import { CreditService } from '../customer/credit.service';
 import { AuditWriter } from '../audit/audit-writer.service';
@@ -117,6 +118,14 @@ export class RefundService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!order) throw new NotFoundException(`Order ${orderId} not found`);
+
+      // Snappfood took the customer's money and refunds it itself; the till never held it.
+      if (isAggregatorOrder(order)) {
+        throw new ConflictException({
+          code: 'SNAPPFOOD_ORDER_LOCKED',
+          message: `Order ${order.order_number} was paid through Snappfood, which refunds its customers itself`,
+        });
+      }
 
       // Ordinary refund rule: order must be COMPLETED unless cancellation orchestration
       if (!isCancellationOrchestration && order.state !== 'COMPLETED') {

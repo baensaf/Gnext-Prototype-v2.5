@@ -93,7 +93,8 @@ export function OrdersDetailPage() {
           >
             {t('orders.printReceipt', 'Thermal Receipt')}
           </Button>
-          {canRefundHere && ['SUBMITTED', 'PENDING', 'ACCEPTED'].includes(order.state) && (
+          {/* Snappfood took the customer's money and refunds it itself. */}
+          {canRefundHere && order.channel !== 'AGGREGATOR' && ['SUBMITTED', 'PENDING', 'ACCEPTED'].includes(order.state) && (
             <Button
               variant="outlined"
               color="error"

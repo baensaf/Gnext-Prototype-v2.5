@@ -26,6 +26,8 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { isSnappfoodOrder, maxPromiseMinutes, promisesDeliveryTime } from 'src/utils/snappfood-order';
+
 import { orderApi } from 'src/api/orderApi';
 import { formatOrderTotal, useIncomingOrders } from 'src/contexts/incoming-orders-context';
 
@@ -210,19 +212,30 @@ type IncomingOrderDrawerProps = {
 
 function IncomingOrderDrawer({ order, reasons, policy, now, onClose, onAnswered }: IncomingOrderDrawerProps) {
   const { t } = useTranslation();
-  const defaultPrep = policy?.defaultPrepMinutes ?? DEFAULT_PREP_MINUTES;
-  const [prepMinutes, setPrepMinutes] = useState(defaultPrep);
+  const snappfood = !!order && isSnappfoodOrder(order);
+  const riderPickup = snappfood && !promisesDeliveryTime(order);
+  // Snappfood caps what the store may promise per order: 70 minutes with its own courier, or
+  // Snappfood's prep time plus the minutes it lets the vendor add when a rider collects.
+  const maxPrep = snappfood ? maxPromiseMinutes(order) : MAX_PREP_MINUTES;
+  // A rider pickup starts from Snappfood's own prep time; anything else from the branch default.
+  const startPrep = Math.min(
+    maxPrep,
+    riderPickup && order.aggregator_prep_minutes
+      ? order.aggregator_prep_minutes
+      : (policy?.defaultPrepMinutes ?? DEFAULT_PREP_MINUTES)
+  );
+  const [prepMinutes, setPrepMinutes] = useState(startPrep);
   const [reasonId, setReasonId] = useState<number | ''>('');
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState<'accept' | 'reject' | null>(null);
 
   useEffect(() => {
-    setPrepMinutes(defaultPrep);
+    setPrepMinutes(startPrep);
     setReasonId('');
     setComment('');
-  }, [order?.id, defaultPrep]);
+  }, [order?.id, startPrep]);
 
-  const clampPrep = (minutes: number) => Math.min(MAX_PREP_MINUTES, Math.max(1, Math.round(minutes || 0)));
+  const clampPrep = (minutes: number) => Math.min(maxPrep, Math.max(1, Math.round(minutes || 0)));
 
   const answer = async (kind: 'accept' | 'reject') => {
     if (!order) return;
@@ -324,10 +337,12 @@ function IncomingOrderDrawer({ order, reasons, policy, now, onClose, onAnswered 
               <TextField
                 type="number"
                 size="small"
-                label={t('orders.incoming.prepMinutes')}
+                label={t(
+                  snappfood && !riderPickup ? 'orders.incoming.deliveryMinutes' : 'orders.incoming.prepMinutes'
+                )}
                 value={prepMinutes}
                 onChange={(e) => setPrepMinutes(clampPrep(Number(e.target.value)))}
-                slotProps={{ htmlInput: { min: 1, max: MAX_PREP_MINUTES } }}
+                slotProps={{ htmlInput: { min: 1, max: maxPrep } }}
                 sx={{ flexGrow: 1 }}
               />
               <Button variant="outlined" onClick={() => setPrepMinutes((m) => clampPrep(m + 5))}>
@@ -337,6 +352,17 @@ function IncomingOrderDrawer({ order, reasons, policy, now, onClose, onAnswered 
                 +10
               </Button>
             </Stack>
+            {snappfood && (
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                {riderPickup
+                  ? t('orders.incoming.limitRider', {
+                      prep: order.aggregator_prep_minutes,
+                      extra: order.aggregator_max_extra_minutes ?? 0,
+                      max: maxPrep,
+                    })
+                  : t('orders.incoming.limitOwnDelivery', { max: maxPrep })}
+              </Typography>
+            )}
             <Button
               size="large"
               variant="contained"

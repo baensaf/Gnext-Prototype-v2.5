@@ -36,6 +36,14 @@ import Decimal from 'decimal.js';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { BusinessDateUtil } from '../../common/utils/business-date.util';
+import {
+  SNAPPFOOD_DELAY_REASON_ID,
+  SNAPPFOOD_REPORT_WINDOW_MINUTES,
+  acceptNotice,
+  isAggregatorOrder,
+  maxPromiseMinutes,
+  reportWindowEndsAt,
+} from '../../common/utils/snappfood-order.util';
 import { CashierShift } from '../../entities/CashierShift.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { currentTillTerminalId } from '../../common/utils/till-context';
@@ -71,6 +79,7 @@ import {
   OrderReopenDto,
   OrderAcceptDto,
   OrderRejectDto,
+  OrderSnappfoodReportDto,
 } from './dtos/order.dto';
 
 /**
@@ -669,7 +678,8 @@ export class OrderService {
     tenantId: string,
     id: string,
     action: string,
-    dto: OrderTransitionDto,
+    // promisedMinutes rides along with an accept, and only an accept.
+    dto: OrderTransitionDto & { promisedMinutes?: number },
     userId?: string,
     correlationId?: string,
   ) {
@@ -699,6 +709,11 @@ export class OrderService {
       }
 
       const targetState = this.mapActionToTargetState(action);
+      // Once the store has accepted a Snappfood order, only Snappfood cancels it, and a
+      // cancelled one stays cancelled. The store reports a problem to Snappfood instead.
+      if (targetState === 'CANCELLED' || order.state === 'CANCELLED') {
+        this.refuseSnappfoodChange(order, 'cancel or reopen it');
+      }
       const allowedNextStates = ALLOWED_TRANSITIONS[order.state] || [];
 
       if (!allowedNextStates.includes(targetState)) {
@@ -717,6 +732,11 @@ export class OrderService {
       const fromState = order.state;
       order.state = targetState;
       order.status = targetState;
+
+      if (action.toUpperCase() === 'ACCEPT') {
+        order.accepted_at = new Date();
+        order.promised_minutes = dto.promisedMinutes ?? null;
+      }
 
       if (targetState === 'COMPLETED') {
         order.completed_at = new Date();
@@ -778,14 +798,39 @@ export class OrderService {
    * slow or down; a failed notice does not undo the accept.
    */
   async acceptIncomingOrder(tenantId: string, id: string, dto: OrderAcceptDto, userId?: string, correlationId?: string) {
+    // Snappfood refuses a promise past its limit for the order. Say so before the kitchen
+    // has it, not after the store has already started cooking.
+    const waiting = await this.orderRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (waiting && isAggregatorOrder(waiting) && dto.prepMinutes > maxPromiseMinutes(waiting)) {
+      const maxMinutes = maxPromiseMinutes(waiting);
+      throw new BadRequestException({
+        code: 'PROMISE_OVER_SNAPPFOOD_LIMIT',
+        message: `Snappfood takes at most ${maxMinutes} minutes for order ${waiting.order_number}`,
+        maxMinutes,
+      });
+    }
+
     const order = await this.transitionState(
       tenantId,
       id,
       'ACCEPT',
-      { reasonText: `Prep time ${dto.prepMinutes} min` },
+      { reasonText: `Prep time ${dto.prepMinutes} min`, promisedMinutes: dto.prepMinutes },
       userId,
       correlationId,
     );
+
+    if (this.kdsService && isAggregatorOrder(order)) {
+      try {
+        // Snappfood support sent the order back changed after the kitchen had it. The lines
+        // it struck off come off the tickets before the new ones go on.
+        const struckOff = await this.itemRepo.find({ where: { tenant_id: tenantId, order_id: id, state: 'VOID' } });
+        for (const line of struckOff) {
+          await this.kdsService.cancelTicketItemsForOrderItem(tenantId, line.id, userId);
+        }
+      } catch (e) {
+        // Like the tickets below, a kitchen side effect must not fail the accept
+      }
+    }
 
     if (this.kdsService) {
       try {
@@ -806,7 +851,7 @@ export class OrderService {
     const snappfoodCode = this.snappfoodOrderCode(order);
     if (snappfoodCode && this.simulationService) {
       try {
-        await this.simulationService.notifyAccepted(tenantId, snappfoodCode, { deliveryTime: dto.prepMinutes });
+        await this.simulationService.notifyAccepted(tenantId, snappfoodCode, acceptNotice(order, dto.prepMinutes));
       } catch (e) {
         // The accept stands. Retrying a missed notice through the outbox is not built yet.
       }
@@ -865,6 +910,92 @@ export class OrderService {
     return (await this.simulationService?.getDeclineReasons()) ?? [];
   }
 
+  /**
+   * After accepting a Snappfood order the store finds it needs more time, or cannot make it.
+   * The annex has no call to change the promised time: within an hour of accepting, the store
+   * rejects the order ("needs a call", 51) with a reason, 153 for a delay. The kitchen keeps
+   * the order meanwhile. Snappfood support then cancels it (54) or sends it back (56), and the
+   * store accepts it again with a new time.
+   */
+  async reportToSnappfood(
+    tenantId: string,
+    id: string,
+    dto: OrderSnappfoodReportDto,
+    userId?: string,
+    correlationId?: string,
+  ) {
+    const order = await this.orderRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!order) throw new NotFoundException(`Order ${id} not found`);
+
+    const snappfoodCode = this.snappfoodOrderCode(order);
+    if (!snappfoodCode) {
+      throw new BadRequestException({ code: 'NOT_A_SNAPPFOOD_ORDER', message: `Order ${order.order_number} did not come from Snappfood` });
+    }
+    if (!order.accepted_at || !KITCHEN_HOLDS_ORDER_STATES.includes(order.state)) {
+      throw new ConflictException({
+        code: 'ORDER_NOT_IN_KITCHEN',
+        message: `Order ${order.order_number} is ${order.state}; only an accepted order the kitchen still has can be reported`,
+      });
+    }
+    if (order.aggregator_issue_at) {
+      throw new ConflictException({
+        code: 'SNAPPFOOD_REPORT_OPEN',
+        message: `Order ${order.order_number} is already with Snappfood support`,
+      });
+    }
+    if (Date.now() > reportWindowEndsAt(order)!.getTime()) {
+      throw new ConflictException({
+        code: 'SNAPPFOOD_REPORT_WINDOW_CLOSED',
+        message: `Snappfood takes a report only within ${SNAPPFOOD_REPORT_WINDOW_MINUTES} minutes of accepting; call Snappfood support about order ${order.order_number}`,
+      });
+    }
+
+    const reason = (await this.getDeclineReasons()).find((r) => r.id === dto.reasonId);
+    if (!reason) {
+      throw new BadRequestException({ code: 'UNKNOWN_DECLINE_REASON', message: `No decline reason ${dto.reasonId}` });
+    }
+    if (dto.reasonId === SNAPPFOOD_DELAY_REASON_ID && !dto.extraMinutes) {
+      throw new BadRequestException({ code: 'EXTRA_MINUTES_REQUIRED', message: 'Say how many more minutes the order needs' });
+    }
+
+    const comment = [dto.extraMinutes && `Needs ${dto.extraMinutes} more minutes`, dto.comment?.trim()]
+      .filter(Boolean)
+      .join('. ');
+
+    // Nothing has changed yet, so a refusal from Snappfood reaches the cashier as it is.
+    await this.simulationService?.notifyRejected(tenantId, snappfoodCode, { reasonId: dto.reasonId, comment });
+
+    order.aggregator_issue_at = new Date();
+    order.aggregator_issue = [`${reason.id} ${reason.title}`, comment].filter(Boolean).join(': ').slice(0, 255);
+    const saved = await this.orderRepo.save(order);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      actorId: userId,
+      action: 'SNAPPFOOD_ORDER_REPORTED',
+      entityType: 'ORDER',
+      entityId: order.id,
+      branchId: order.branch_id,
+      correlationId,
+      afterData: { reasonId: dto.reasonId, extraMinutes: dto.extraMinutes ?? null, comment },
+    });
+
+    return saved;
+  }
+
+  /**
+   * Snappfood owns the lines and the money on one of its orders: the annex gives a store no
+   * call to change, cancel or charge one, so doing it here would leave Snappfood untold.
+   */
+  private refuseSnappfoodChange(order: OrderHeader, change: string) {
+    if (!isAggregatorOrder(order)) return;
+    throw new ConflictException({
+      code: 'SNAPPFOOD_ORDER_LOCKED',
+      message: `Order ${order.order_number} came from Snappfood, which does not let a store ${change}. Report a problem to Snappfood instead.`,
+    });
+  }
+
   /** Snappfood's code for one of its orders: our order number without the SNP- prefix. */
   private snappfoodOrderCode(order: OrderHeader): string | null {
     if (order.channel !== 'AGGREGATOR' || !order.order_number?.startsWith('SNP-')) return null;
@@ -893,6 +1024,7 @@ export class OrderService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!order) throw new NotFoundException(`Order ${id} not found`);
+      this.refuseSnappfoodChange(order, 'change its lines');
 
       const items = await em.find(OrderItem, { where: { order_id: id, tenant_id: tenantId } });
 
@@ -1213,6 +1345,7 @@ export class OrderService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!order) throw new NotFoundException(`Order ${id} not found`);
+      this.refuseSnappfoodChange(order, 'change its lines');
 
       const item = await em.findOne(OrderItem, {
         where: { id: dto.orderItemId, tenant_id: tenantId, order_id: id },
@@ -1373,6 +1506,7 @@ export class OrderService {
         message: `Order ${order.order_number} is awaiting acceptance; reject it instead of cancelling`,
       });
     }
+    this.refuseSnappfoodChange(order, 'cancel it');
 
     const netPaid = await this.calculateNetPaid(tenantId, id, this.dataSource.manager);
     const config = await this.getOrderActionConfig(tenantId, this.dataSource.manager, order.branch_id);
@@ -1447,6 +1581,7 @@ export class OrderService {
   async reopenOrder(tenantId: string, id: string, dto: OrderReopenDto, userId?: string, correlationId?: string) {
     const order = await this.orderRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!order) throw new NotFoundException(`Order ${id} not found`);
+    this.refuseSnappfoodChange(order, 'reopen it');
 
     if (!dto.approvalRequestId) {
       throw new ForbiddenException({
@@ -1711,6 +1846,7 @@ export class OrderService {
         relations: ['items', 'items.options'],
       });
       if (!sourceOrder) throw new NotFoundException(`Order ${sourceOrderId} not found`);
+      this.refuseSnappfoodChange(sourceOrder, 'split it');
 
       if (['COMPLETED', 'CANCELLED'].includes(sourceOrder.state)) {
         throw new BadRequestException(`Cannot split order in state ${sourceOrder.state}`);
@@ -1879,6 +2015,8 @@ export class OrderService {
       if (!sourceOrder || !targetOrder) {
         throw new NotFoundException('Source or target order not found');
       }
+      this.refuseSnappfoodChange(sourceOrder, 'move its lines');
+      this.refuseSnappfoodChange(targetOrder, 'add lines to it');
 
       if (sourceOrder.branch_id !== targetOrder.branch_id || sourceOrder.currency_code !== targetOrder.currency_code) {
         throw new BadRequestException('Source and target orders must have the same branch and currency');

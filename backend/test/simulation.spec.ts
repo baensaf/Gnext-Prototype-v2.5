@@ -289,6 +289,43 @@ describe('SimulationService (Unit)', () => {
       expect(orderRepo.create).not.toHaveBeenCalled();
     });
 
+    it('sends back an accepted order the store reported, unchanged, keeping its lines for the kitchen', async () => {
+      const order = storeHas('CONFIRMED', { accepted_at: new Date(), promised_minutes: 20, aggregator_issue_at: new Date() });
+      orderItemRepo.find = jest.fn().mockResolvedValue([
+        { product_name: 'Pizza Two', quantity: '1.0000', unit_price: '600.0000' },
+        { product_name: 'Pizza One', quantity: '1.0000', unit_price: '500.0000' },
+      ]);
+
+      const result: any = await deliver(snappfoodSends(56, { preparationTime: 15, vendorMaxPreparationTime: 20 }));
+
+      expect(result.duplicate).toBe(false);
+      expect(order.state).toBe('PENDING_ACCEPTANCE');
+      expect(orderItemRepo.update).not.toHaveBeenCalled();
+      expect(orderItemRepo.save).not.toHaveBeenCalled();
+      // Accepting it again sets a new time and opens a new report window.
+      expect(order.accepted_at).toBeNull();
+      expect(order.promised_minutes).toBeNull();
+      expect(order.aggregator_issue_at).toBeNull();
+      expect(order.aggregator_max_extra_minutes).toBe(20);
+    });
+
+    it('does not put an accepted order back in the queue when the store never reported it', async () => {
+      const order = storeHas('CONFIRMED', { accepted_at: new Date() });
+
+      const result: any = await deliver(snappfoodSends(56));
+
+      expect(result.duplicate).toBe(true);
+      expect(order.state).toBe('CONFIRMED');
+    });
+
+    it("keeps Snappfood's timing on a new order", async () => {
+      await deliver(snappfoodSends(56, { preparationTime: '15', vendorMaxPreparationTime: 10, expeditionType: 'ZF_EXPRESS' }));
+
+      expect(orderRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ aggregator_prep_minutes: 15, aggregator_max_extra_minutes: 10, aggregator_expedition: 'ZF_EXPRESS' }),
+      );
+    });
+
     it('treats a new order arriving twice as one order', async () => {
       storeHas('PENDING_ACCEPTANCE');
 
