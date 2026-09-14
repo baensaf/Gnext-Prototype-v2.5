@@ -29,6 +29,7 @@
   },
   "nav": {
     "home": "Home",
+    "moadian": "Moadian e-invoices",
     "dashboard": "Dashboard",
     "liveOperations": "Live Operations",
     "businessManagement": "Business Management",
@@ -2967,6 +2968,74 @@
       "compare": "Compare one branch against another",
       "fleetRollup": "See every branch’s couriers on one screen",
       "shiftRollup": "See every branch’s tills, and the drawers left open"
+    }
+  },
+  "moadian": {
+    "title": "Moadian e-invoices",
+    "processNow": "Send & collect answers now",
+    "simulationNotice": "Simulation: invoices are built the way the tax office expects (22-character tax ID, type-2 consumer invoice), but nothing leaves this system. The simulated tax office answers about 8 seconds after an invoice is sent.",
+    "loadError": "Failed to load Moadian e-invoices",
+    "actionError": "The action failed",
+    "processed": "Queued {{queued}}, sent {{sent}}, answered {{answered}}.",
+    "retried": "Invoice queued to be sent again with the same tax ID.",
+    "all": "All",
+    "empty": "No e-invoices yet. Turn Moadian on, then complete and pay an order.",
+    "view": "View",
+    "retry": "Send again",
+    "status": {
+      "QUEUED": "Queued",
+      "PENDING": "Waiting for an answer",
+      "SUCCESS": "Accepted",
+      "FAILED": "Rejected"
+    },
+    "subject": {
+      "original": "Original",
+      "cancellation": "Cancellation",
+      "return": "Return"
+    },
+    "col": {
+      "taxId": "Tax ID",
+      "order": "Order",
+      "subject": "Type",
+      "total": "Total",
+      "status": "Status",
+      "deadline": "Deadline"
+    },
+    "deadline": {
+      "met": "Met",
+      "overdue": "Overdue",
+      "left": "{{count}} days left"
+    },
+    "settings": {
+      "title": "Connection settings",
+      "hint": "Set once at head office for the whole chain.",
+      "readOnly": "Head office manages these settings.",
+      "enabled": "Issue e-invoices",
+      "memoryId": "Tax memory ID",
+      "memoryIdHelp": "6 letters or digits, e.g. A1B2C3",
+      "economicCode": "Seller economic code",
+      "sstid": "Goods/service ID",
+      "sstidHelp": "13-digit ID used on every invoice line",
+      "unitCode": "Unit of measure code",
+      "rejectionRate": "Simulated rejection rate (%)",
+      "rejectionRateHelp": "Set 100 to rehearse a rejected invoice.",
+      "since": "Orders completed since {{date}} are invoiced automatically.",
+      "saved": "Moadian settings saved."
+    },
+    "detail": {
+      "title": "E-invoice",
+      "attempts": "Sent {{count}} times",
+      "reference": "Refers to invoice",
+      "referenceNumber": "Tax office reference number",
+      "payload": "Invoice JSON as it would be sent"
+    },
+    "orderPanel": {
+      "title": "Moadian e-invoice",
+      "issue": "Issue e-invoice",
+      "issueError": "Could not issue the e-invoice",
+      "openAll": "All e-invoices",
+      "none": "No e-invoice yet. Completed, paid orders are invoiced automatically while Moadian is on.",
+      "notCompleted": "An e-invoice is issued once the order is completed and paid."
     }
   }
 }
