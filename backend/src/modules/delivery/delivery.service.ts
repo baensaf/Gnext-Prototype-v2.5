@@ -18,6 +18,7 @@ import { Terminal } from '../../entities/Terminal.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { OrderTransitionRecorder } from '../order-lifecycle/order-transition-recorder.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { BusinessDateUtil } from '../../common/utils/business-date.util';
 
@@ -40,6 +41,7 @@ export class DeliveryService {
     @InjectRepository(Terminal) private readonly terminalRepo: Repository<Terminal>,
     @InjectRepository(CustomerAddress) private readonly customerAddressRepo: Repository<CustomerAddress>,
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
+    private readonly transitionRecorder: OrderTransitionRecorder,
     private readonly auditWriter: AuditWriter,
   ) {}
 
@@ -520,10 +522,11 @@ export class DeliveryService {
       }
     }
 
+    const fromOrderState = order.state;
     order.state = 'OUT_FOR_DELIVERY';
     order.status = 'OUT_FOR_DELIVERY';
     order.fulfillment_status = 'OUT_FOR_DELIVERY';
-    await this.orderRepo.save(order);
+    await this.saveOrderTransition(tenantId, order, fromOrderState, 'DISPATCH', userId);
 
     return saved;
   }
@@ -599,13 +602,33 @@ export class DeliveryService {
       await this.assignmentRepo.save(assignment);
     }
 
+    const fromOrderState = order.state;
     order.state = 'COMPLETED';
     order.status = 'COMPLETED';
     order.fulfillment_status = 'DELIVERED';
     order.completed_at = new Date();
-    await this.orderRepo.save(order);
+    await this.saveOrderTransition(tenantId, order, fromOrderState, 'COMPLETE', userId, 'Delivered');
 
     return saved;
+  }
+
+  /**
+   * Saves the parent order's new state with the history row, outbox event, audit entry and
+   * loyalty cashback that a transition through the order service would leave.
+   */
+  private async saveOrderTransition(
+    tenantId: string,
+    order: OrderHeader,
+    fromState: string,
+    action: string,
+    userId?: string,
+    reasonText?: string,
+  ) {
+    await this.orderRepo.manager.transaction(async (em) => {
+      await em.save(OrderHeader, order);
+      if (fromState === order.state) return;
+      await this.transitionRecorder.record(em, { tenantId, order, fromState, action, userId, reasonText });
+    });
   }
 
   async failDelivery(tenantId: string, deliveryId: string, reason: string, userId?: string) {

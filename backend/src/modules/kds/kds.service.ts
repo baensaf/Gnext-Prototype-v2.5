@@ -14,6 +14,16 @@ import { Printer } from '../../entities/Printer.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { Product } from '../../entities/Product.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { OrderTransitionRecorder } from '../order-lifecycle/order-transition-recorder.service';
+
+/**
+ * Open orders that starting a ticket moves to PREPARING. KITCHEN_PREPARING is the legacy
+ * status a Snappfood accept leaves beside a CONFIRMED state.
+ */
+const ORDER_STATES_KITCHEN_CAN_START: string[] = ['SUBMITTED', 'CONFIRMED', 'KITCHEN_PREPARING'];
+
+/** Open orders that bumping the last ticket moves to READY. */
+const ORDER_STATES_KITCHEN_CAN_READY: string[] = [...ORDER_STATES_KITCHEN_CAN_START, 'PREPARING'];
 
 export interface MessageEvent {
   data: string | object;
@@ -37,6 +47,7 @@ export class KdsService {
     @InjectRepository(OrderHeader) private readonly orderRepo: Repository<OrderHeader>,
     @InjectRepository(Product) private readonly productRepo: Repository<Product>,
     private readonly auditWriter: AuditWriter,
+    private readonly transitionRecorder: OrderTransitionRecorder,
   ) {}
 
   // SSE Stream
@@ -372,6 +383,13 @@ export class KdsService {
     }
 
     await this.recordKdsEvent(tenantId, ticketId, fromState, 'IN_PROGRESS', 'START', userId);
+
+    // The cook has the order now, so removing items from it needs a manager PIN from here on.
+    const order = await this.orderRepo.findOne({ where: { id: ticket.order_id, tenant_id: tenantId } });
+    if (order && ORDER_STATES_KITCHEN_CAN_START.includes(order.state || order.status)) {
+      await this.moveOrder(tenantId, order, 'PREPARING', 'START_PREPARATION', userId);
+    }
+
     this.eventSubject.next({ type: 'TICKET_UPDATED', payload: { ticketId } });
     return saved;
   }
@@ -400,7 +418,7 @@ export class KdsService {
     await this.recordKdsEvent(tenantId, ticketId, fromState, 'READY', 'BUMP', userId);
 
     // Order readiness roll-up check
-    await this.checkOrderReadinessRollup(tenantId, ticket.order_id);
+    await this.checkOrderReadinessRollup(tenantId, ticket.order_id, userId);
 
     this.eventSubject.next({ type: 'TICKET_UPDATED', payload: { ticketId } });
     return saved;
@@ -513,17 +531,29 @@ export class KdsService {
     await this.kdsEventRepo.save(evt);
   }
 
-  private async checkOrderReadinessRollup(tenantId: string, orderId: string) {
+  private async checkOrderReadinessRollup(tenantId: string, orderId: string, userId?: string) {
     const tickets = await this.ticketRepo.find({ where: { tenant_id: tenantId, order_id: orderId } });
     const allReady = tickets.length > 0 && tickets.every((t) => t.state === 'READY' || t.state === 'CANCELLED');
 
     if (allReady) {
       const order = await this.orderRepo.findOne({ where: { id: orderId, tenant_id: tenantId } });
-      if (order && (order.status === 'SUBMITTED' || order.status === 'CONFIRMED' || order.status === 'KITCHEN_PREPARING')) {
-        order.status = 'READY';
-        order.state = 'READY';
-        await this.orderRepo.save(order);
+      if (order && ORDER_STATES_KITCHEN_CAN_READY.includes(order.state || order.status)) {
+        await this.moveOrder(tenantId, order, 'READY', 'MARK_READY', userId);
       }
     }
+  }
+
+  /**
+   * Moves the order the kitchen is working on, with the history row, outbox event and audit
+   * entry a transition through the order service would leave.
+   */
+  private async moveOrder(tenantId: string, order: OrderHeader, toState: 'PREPARING' | 'READY', action: string, userId?: string) {
+    const fromState = order.state || order.status;
+    order.state = toState;
+    order.status = toState;
+    await this.orderRepo.manager.transaction(async (em) => {
+      await em.save(OrderHeader, order);
+      await this.transitionRecorder.record(em, { tenantId, order, fromState, action, userId });
+    });
   }
 }

@@ -27,6 +27,7 @@ import { KdsService } from '../src/modules/kds/kds.service';
 import { CatalogService } from '../src/modules/catalog/catalog.service';
 import { RefundService } from '../src/modules/refund/refund.service';
 import { PrintQueueService } from '../src/modules/printing/print-queue.service';
+import { OrderTransitionRecorder } from '../src/modules/order-lifecycle/order-transition-recorder.service';
 
 const TENANT = 't-1';
 const ORDER_ID = 'ord-1';
@@ -171,6 +172,7 @@ describe('Order edit command (spec 7.9)', () => {
         { provide: ApprovalService, useValue: approvalService },
         { provide: KdsService, useValue: kdsService },
         { provide: PrintQueueService, useValue: printQueueService },
+        OrderTransitionRecorder,
         { provide: DataSource, useValue: { transaction: jest.fn(async (cb: any) => cb(em)), manager: em } },
       ],
     }).compile();

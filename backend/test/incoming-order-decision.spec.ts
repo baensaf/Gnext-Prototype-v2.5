@@ -25,6 +25,7 @@ import { RefundService } from '../src/modules/refund/refund.service';
 import { KdsService } from '../src/modules/kds/kds.service';
 import { PrintQueueService } from '../src/modules/printing/print-queue.service';
 import { SimulationService } from '../src/modules/simulation/simulation.service';
+import { OrderTransitionRecorder } from '../src/modules/order-lifecycle/order-transition-recorder.service';
 import { NON_REVENUE_ORDER_STATES } from '../src/common/utils/business-date.util';
 
 // Slice 2 of incoming orders: the store's answer to an order that is waiting for it.
@@ -99,6 +100,7 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
         { provide: KdsService, useValue: kdsService },
         { provide: PrintQueueService, useValue: printQueueService },
         { provide: SimulationService, useValue: simulationService },
+        OrderTransitionRecorder,
       ],
     }).compile();
 

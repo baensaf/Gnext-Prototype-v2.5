@@ -10,6 +10,7 @@ import { PaymentAllocation } from '../../entities/PaymentAllocation.entity';
 import { DineInService } from './dine-in.service';
 import { DineInController } from './dine-in.controller';
 import { AuditModule } from '../audit/audit.module';
+import { OrderLifecycleModule } from '../order-lifecycle/order-lifecycle.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { AuditModule } from '../audit/audit.module';
       PaymentAllocation,
     ]),
     AuditModule,
+    OrderLifecycleModule,
   ],
   providers: [DineInService],
   controllers: [DineInController],

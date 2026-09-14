@@ -2027,8 +2027,6 @@
         "accept": "Accept it and alert managers",
         "prep": "Default prep time on accept (minutes)"
       },
-      "autoRouteKdsLabel": "Immediate Kitchen KDS Dispatch",
-      "autoRouteKdsHelp": "Broadcast tickets to kitchen bump screens immediately upon order submission.",
       "requireTableLabel": "Enforce Table Selection for Dine-In",
       "requireTableHelp": "Cashiers must designate a floor table before confirming any Dine-In transaction.",
       "channelsTitle": "Active Dining Channels",

@@ -11,6 +11,7 @@ import { Printer } from '../src/entities/Printer.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { Product } from '../src/entities/Product.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
+import { OrderTransitionRecorder } from '../src/modules/order-lifecycle/order-transition-recorder.service';
 
 describe('KdsService (Unit & Integration)', () => {
   let service: KdsService;
@@ -24,6 +25,7 @@ describe('KdsService (Unit & Integration)', () => {
   let orderRepo: any;
   let productRepo: any;
   let auditWriter: any;
+  let transitionRecorder: any;
 
   beforeEach(async () => {
     stationRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), softDelete: jest.fn() };
@@ -33,9 +35,16 @@ describe('KdsService (Unit & Integration)', () => {
     itemRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
     kdsEventRepo = { create: jest.fn().mockImplementation((e) => e), save: jest.fn().mockImplementation((e) => Promise.resolve(e)) };
     printerRepo = { find: jest.fn(), create: jest.fn(), save: jest.fn() };
-    orderRepo = { findOne: jest.fn(), save: jest.fn() };
+    orderRepo = {
+      findOne: jest.fn(),
+      save: jest.fn(),
+      // Order moves are saved in a transaction with their history; hand the save back to the
+      // repository the assertions watch.
+      manager: { transaction: jest.fn(async (cb: any) => cb({ save: (_entity: any, order: any) => orderRepo.save(order) })) },
+    };
     productRepo = { findOne: jest.fn().mockResolvedValue({ id: 'prod-1', category_id: 'cat-hot-dishes' }) };
     auditWriter = { write: jest.fn() };
+    transitionRecorder = { record: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -50,6 +59,7 @@ describe('KdsService (Unit & Integration)', () => {
         { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
         { provide: getRepositoryToken(Product), useValue: productRepo },
         { provide: AuditWriter, useValue: auditWriter },
+        { provide: OrderTransitionRecorder, useValue: transitionRecorder },
       ],
     }).compile();
 
@@ -127,6 +137,56 @@ describe('KdsService (Unit & Integration)', () => {
     expect(recalled.state).toBe('IN_PROGRESS');
   });
 
+  it('moves the order to PREPARING when the kitchen starts its ticket, and records it', async () => {
+    ticketRepo.findOne.mockResolvedValue({ id: 'tkt-1', tenant_id: 't-1', order_id: 'ord-1', state: 'NEW' });
+    ticketRepo.save.mockImplementation((t) => Promise.resolve(t));
+    itemRepo.find.mockResolvedValue([]);
+    // A Snappfood order after accept: CONFIRMED, with the legacy KITCHEN_PREPARING status.
+    const order: any = { id: 'ord-1', tenant_id: 't-1', state: 'CONFIRMED', status: 'KITCHEN_PREPARING' };
+    orderRepo.findOne.mockResolvedValue(order);
+
+    await service.startTicket('t-1', 'tkt-1', 'user-1');
+
+    // Removing items now needs a manager PIN: the kitchen has the food on the go.
+    expect(order.state).toBe('PREPARING');
+    expect(order.status).toBe('PREPARING');
+    expect(transitionRecorder.record).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ tenantId: 't-1', order, fromState: 'CONFIRMED', action: 'START_PREPARATION', userId: 'user-1' }),
+    );
+  });
+
+  it('leaves an order the kitchen has already moved on alone when another ticket starts', async () => {
+    ticketRepo.findOne.mockResolvedValue({ id: 'tkt-2', tenant_id: 't-1', order_id: 'ord-1', state: 'NEW' });
+    ticketRepo.save.mockImplementation((t) => Promise.resolve(t));
+    itemRepo.find.mockResolvedValue([]);
+    const order: any = { id: 'ord-1', tenant_id: 't-1', state: 'COMPLETED', status: 'COMPLETED' };
+    orderRepo.findOne.mockResolvedValue(order);
+
+    await service.startTicket('t-1', 'tkt-2');
+
+    expect(order.state).toBe('COMPLETED');
+    expect(orderRepo.save).not.toHaveBeenCalled();
+    expect(transitionRecorder.record).not.toHaveBeenCalled();
+  });
+
+  it('readies an order the kitchen had started once its last ticket is bumped', async () => {
+    ticketRepo.findOne.mockResolvedValue({ id: 'tkt-1', tenant_id: 't-1', order_id: 'ord-1', state: 'IN_PROGRESS' });
+    ticketRepo.save.mockImplementation((t) => Promise.resolve(t));
+    itemRepo.find.mockResolvedValue([{ id: 'it-1', state: 'IN_PROGRESS' }]);
+    ticketRepo.find.mockResolvedValue([{ id: 'tkt-1', state: 'READY' }]);
+    const order: any = { id: 'ord-1', tenant_id: 't-1', state: 'PREPARING', status: 'PREPARING' };
+    orderRepo.findOne.mockResolvedValue(order);
+
+    await service.bumpTicket('t-1', 'tkt-1', 'corr-bump', 'user-1');
+
+    expect(order.state).toBe('READY');
+    expect(transitionRecorder.record).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ order, fromState: 'PREPARING', action: 'MARK_READY', userId: 'user-1' }),
+    );
+  });
+
   it('leaves a voided item cancelled when the ticket is bumped', async () => {
     ticketRepo.findOne.mockResolvedValue({ id: 'tkt-1', tenant_id: 't-1', order_id: 'ord-1', state: 'IN_PROGRESS' });
     ticketRepo.save.mockImplementation((t) => Promise.resolve(t));
@@ -142,6 +202,7 @@ describe('KdsService (Unit & Integration)', () => {
 
     expect(ticketItems[0].state).toBe('READY');
     expect(ticketItems[1].state).toBe('CANCELLED');
+    expect(transitionRecorder.record).not.toHaveBeenCalled();
   });
 
   it('should set ticket priority and record event', async () => {

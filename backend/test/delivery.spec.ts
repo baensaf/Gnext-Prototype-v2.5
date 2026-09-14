@@ -19,6 +19,7 @@ import { Terminal } from '../src/entities/Terminal.entity';
 import { CustomerAddress } from '../src/entities/CustomerAddress.entity';
 import { Branch } from '../src/entities/Branch.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
+import { OrderTransitionRecorder } from '../src/modules/order-lifecycle/order-transition-recorder.service';
 
 describe('DeliveryService (R19 Unit & Integration)', () => {
   let service: DeliveryService;
@@ -39,11 +40,19 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
   let terminalRepo: any;
   let customerAddressRepo: any;
   let auditWriter: any;
+  let transitionRecorder: any;
 
   beforeEach(async () => {
     courierRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn().mockImplementation((c) => c), save: jest.fn().mockImplementation((c) => Promise.resolve(c)) };
     assignmentRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn().mockImplementation((a) => a), save: jest.fn().mockImplementation((a) => Promise.resolve(a)) };
-    orderRepo = { findOne: jest.fn(), save: jest.fn().mockImplementation((o) => Promise.resolve(o)) };
+    orderRepo = {
+      findOne: jest.fn(),
+      save: jest.fn().mockImplementation((o) => Promise.resolve(o)),
+      // Order moves are saved in a transaction with their history; hand the save back to the
+      // repository the assertions watch.
+      manager: { transaction: jest.fn(async (cb: any) => cb({ save: (_entity: any, order: any) => orderRepo.save(order) })) },
+    };
+    transitionRecorder = { record: jest.fn() };
     settlementRepo = { findOne: jest.fn(), find: jest.fn(), save: jest.fn() };
     settlementLineRepo = { findOne: jest.fn(), find: jest.fn(), save: jest.fn() };
     paymentRepo = { find: jest.fn().mockResolvedValue([]) };
@@ -79,6 +88,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
         // Only the chain roll-up reads branches; nothing under test here does.
         { provide: getRepositoryToken(Branch), useValue: { find: jest.fn().mockResolvedValue([]) } },
         { provide: AuditWriter, useValue: auditWriter },
+        { provide: OrderTransitionRecorder, useValue: transitionRecorder },
       ],
     }).compile();
 
@@ -126,6 +136,10 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
     const departed = await service.departDelivery('t-1', 'del-10');
     expect(departed.state).toBe('EN_ROUTE');
     expect(orderRepo.save).toHaveBeenCalledWith(expect.objectContaining({ state: 'OUT_FOR_DELIVERY' }));
+    expect(transitionRecorder.record).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ tenantId: 't-1', fromState: 'READY', action: 'DISPATCH' }),
+    );
 
     // Complete -> DELIVERED, snapshot compensation & order COMPLETED
     deliveryRepo.findOne.mockResolvedValue({ id: 'del-10', tenant_id: 't-1', order_id: 'ord-10', courier_id: 'cour-1', state: 'EN_ROUTE' });
@@ -134,6 +148,11 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
     expect(completed.state).toBe('DELIVERED');
     expect(completed.compensation_amount).toBe('15000.0000');
     expect(orderRepo.save).toHaveBeenCalledWith(expect.objectContaining({ state: 'COMPLETED' }));
+    // An order the courier completes still gets its history row, sync event and loyalty cashback.
+    expect(transitionRecorder.record).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ tenantId: 't-1', fromState: 'OUT_FOR_DELIVERY', action: 'COMPLETE' }),
+    );
   });
 
   it('reconciles a stale delivery with a completed parent order before returning the board', async () => {
