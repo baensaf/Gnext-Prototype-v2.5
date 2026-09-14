@@ -1,7 +1,7 @@
-import type { OrderHeader } from 'src/api/orderApi';
 import type { Customer } from 'src/api/customerApi';
 import type { ReceiptData } from 'src/api/paymentApi';
 import type { ReasonCode } from 'src/api/settingsApi';
+import type { OrderHeader, DeclineReason } from 'src/api/orderApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
@@ -18,6 +18,7 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import HistoryIcon from '@mui/icons-material/History';
 import PaymentIcon from '@mui/icons-material/Payment';
+import ScheduleIcon from '@mui/icons-material/Schedule';
 import SecurityIcon from '@mui/icons-material/Security';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
@@ -61,6 +62,12 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import {
+  promisedBy,
+  isSnappfoodOrder,
+  reportMinutesLeft,
+  SNAPPFOOD_DELAY_REASON_ID,
+} from 'src/utils/snappfood-order';
 
 import { kdsApi } from 'src/api/kdsApi';
 import { orderApi } from 'src/api/orderApi';
@@ -163,6 +170,15 @@ export function OrdersWorkflowPage() {
   const [drawerTab, setDrawerTab] = useState<'details' | 'audit'>('details');
   const [inspectingJson, setInspectingJson] = useState<any>(null);
 
+  // Report an accepted Snappfood order to Snappfood support: more time, or it cannot be made.
+  const [reportOrder, setReportOrder] = useState<OrderHeader | null>(null);
+  const [declineReasons, setDeclineReasons] = useState<DeclineReason[]>([]);
+  const [reportReasonId, setReportReasonId] = useState<number>(SNAPPFOOD_DELAY_REASON_ID);
+  const [reportExtraMinutes, setReportExtraMinutes] = useState(15);
+  const [reportComment, setReportComment] = useState('');
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+
   const getOrderTypeLabel = (orderType: string) => {
     switch (orderType) {
       case 'DINE_IN':
@@ -206,6 +222,24 @@ export function OrdersWorkflowPage() {
     return key ? <Chip label={t(`orders.progress.${key}`)} size="small" variant="outlined" /> : null;
   };
 
+  // An open Snappfood order shows the time the store promised, or that Snappfood support has it.
+  const renderSnappfoodChips = (order: OrderHeader) => {
+    if (!isSnappfoodOrder(order) || lifecycleOf(order.status) !== 'OPEN') return null;
+    if (order.aggregator_issue_at) {
+      return <Chip color="warning" label={t('orders.snappfood.withSupport')} size="small" />;
+    }
+    const by = promisedBy(order);
+    return by ? (
+      <Chip
+        label={t('orders.snappfood.promisedBy', {
+          time: by.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        })}
+        size="small"
+        variant="outlined"
+      />
+    ) : null;
+  };
+
   // Completing closes the check, so nothing may be left to pay. Delivery orders are finished
   // on the delivery screen, where the courier's cash is counted in.
   const canComplete = (order: OrderHeader) =>
@@ -216,8 +250,49 @@ export function OrdersWorkflowPage() {
     !MoneyUtil.greaterThan(order.due_amount || '0', '0');
 
   // A waiting order is answered on Incoming Orders, and a finished one is refunded, not cancelled.
+  // Only Snappfood cancels one of its orders; the store reports a problem to Snappfood instead.
   const canCancel = (order: OrderHeader) =>
-    !readOnly && (lifecycleOf(order.status) === 'OPEN' || order.status === 'DRAFT');
+    !readOnly && !isSnappfoodOrder(order) && (lifecycleOf(order.status) === 'OPEN' || order.status === 'DRAFT');
+
+  // Snappfood collects for its orders, so the till never takes money for one.
+  const canPay = (order: OrderHeader) =>
+    !readOnly && !isSnappfoodOrder(order) && order.status !== 'CANCELLED' && MoneyUtil.greaterThan(order.due_amount, '0');
+
+  const canReport = (order: OrderHeader) => !readOnly && reportMinutesLeft(order, Date.now()) > 0;
+
+  const handleOpenReport = (order: OrderHeader) => {
+    setReportOrder(order);
+    setReportReasonId(SNAPPFOOD_DELAY_REASON_ID);
+    setReportExtraMinutes(15);
+    setReportComment('');
+    setReportError(null);
+    if (declineReasons.length === 0) {
+      orderApi.getDeclineReasons().then(setDeclineReasons).catch(() => setDeclineReasons([]));
+    }
+  };
+
+  const handleSendReport = async () => {
+    if (!reportOrder) return;
+    try {
+      setReportSubmitting(true);
+      setReportError(null);
+      const reported = await orderApi.reportToSnappfood(reportOrder.id, {
+        reasonId: reportReasonId,
+        extraMinutes: reportReasonId === SNAPPFOOD_DELAY_REASON_ID ? reportExtraMinutes : undefined,
+        comment: reportComment.trim(),
+      });
+      setSuccess(t('orders.snappfood.reported', { orderNumber: reportOrder.order_number }));
+      setReportOrder(null);
+      loadData();
+      if (drawerOpen && selectedDrawerOrder?.id === reported.id) {
+        handleOpenOrderDrawer(reported);
+      }
+    } catch (err: any) {
+      setReportError(err?.detail || err?.message || t('orders.snappfood.reportFailed'));
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
 
   const handleOpenOrderDrawer = async (order: OrderHeader) => {
     setSelectedOrder(order);
@@ -655,6 +730,7 @@ export function OrdersWorkflowPage() {
                               sx={{ fontWeight: 700 }}
                             />
                             {renderProgressChip(order.status)}
+                            {renderSnappfoodChips(order)}
                           </Stack>
                         </TableCell>
                         <TableCell align="center">
@@ -698,7 +774,7 @@ export function OrdersWorkflowPage() {
                               </Button>
                             )}
 
-                            {!readOnly && order.status !== 'CANCELLED' && MoneyUtil.greaterThan(order.due_amount, '0') && (
+                            {canPay(order) && (
                               <Button
                                 color="success"
                                 onClick={(e) => {
@@ -725,6 +801,21 @@ export function OrdersWorkflowPage() {
                                 variant="contained"
                               >
                                 {t('orders.actions.complete')}
+                              </Button>
+                            )}
+
+                            {canReport(order) && (
+                              <Button
+                                color="warning"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenReport(order);
+                                }}
+                                size="small"
+                                startIcon={<ScheduleIcon />}
+                                variant="outlined"
+                              >
+                                {t('orders.actions.reportToSnappfood')}
                               </Button>
                             )}
 
@@ -865,7 +956,7 @@ export function OrdersWorkflowPage() {
                               </Button>
                             )}
 
-                            {!readOnly && order.status !== 'CANCELLED' && MoneyUtil.greaterThan(order.due_amount, '0') && (
+                            {canPay(order) && (
                               <Button
                                 color="success"
                                 fullWidth
@@ -956,6 +1047,72 @@ export function OrdersWorkflowPage() {
           <Button onClick={() => setCancelDialogOpen(false)}>{t('orders.cancelDialog.keepOrder')}</Button>
           <Button color="error" onClick={() => handleConfirmCancel()} sx={{ fontWeight: 'bold' }} variant="contained">
             {t('orders.cancelDialog.confirm')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Report an accepted Snappfood order to Snappfood support */}
+      <Dialog fullWidth maxWidth="xs" onClose={() => !reportSubmitting && setReportOrder(null)} open={!!reportOrder}>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 'bold' }}>
+          <ScheduleIcon color="warning" />
+          {t('orders.snappfood.reportTitle', { orderNumber: reportOrder?.order_number })}
+        </DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary" sx={{ mb: 2 }} variant="body2">
+            {t('orders.snappfood.reportDescription', {
+              count: reportOrder ? reportMinutesLeft(reportOrder, Date.now()) : 0,
+            })}
+          </Typography>
+
+          <Stack spacing={2}>
+            <FormControl fullWidth>
+              <InputLabel>{t('orders.snappfood.reason')}</InputLabel>
+              <Select
+                label={t('orders.snappfood.reason')}
+                onChange={(e) => setReportReasonId(Number(e.target.value))}
+                value={declineReasons.length ? reportReasonId : ''}
+              >
+                {declineReasons.map((reason) => (
+                  <MenuItem key={reason.id} value={reason.id}>
+                    {reason.title}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            {reportReasonId === SNAPPFOOD_DELAY_REASON_ID && (
+              <TextField
+                fullWidth
+                label={t('orders.snappfood.extraMinutes')}
+                onChange={(e) => setReportExtraMinutes(Math.min(120, Math.max(1, Math.round(Number(e.target.value) || 0))))}
+                slotProps={{ htmlInput: { min: 1, max: 120 } }}
+                type="number"
+                value={reportExtraMinutes}
+              />
+            )}
+
+            <TextField
+              fullWidth
+              label={t('orders.snappfood.comment')}
+              onChange={(e) => setReportComment(e.target.value)}
+              value={reportComment}
+            />
+
+            {reportError && <Alert severity="error">{reportError}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={reportSubmitting} onClick={() => setReportOrder(null)}>
+            {t('orders.snappfood.close')}
+          </Button>
+          <Button
+            color="warning"
+            disabled={reportSubmitting || declineReasons.length === 0}
+            onClick={handleSendReport}
+            startIcon={reportSubmitting ? <CircularProgress size={16} /> : <ScheduleIcon />}
+            variant="contained"
+          >
+            {t('orders.snappfood.send')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1108,6 +1265,7 @@ export function OrdersWorkflowPage() {
                     sx={{ fontWeight: 700 }}
                   />
                   {renderProgressChip(selectedDrawerOrder.status)}
+                  {renderSnappfoodChips(selectedDrawerOrder)}
                   <Chip
                     label={getOrderTypeLabel(selectedDrawerOrder.order_type)}
                     size="small"
@@ -1125,6 +1283,11 @@ export function OrdersWorkflowPage() {
                 {selectedDrawerOrder.table_number && ` • ${t('orders.drawer.table', { number: selectedDrawerOrder.table_number })}`}
                 {selectedDrawerOrder.notes && ` • ${t('orders.drawer.note', { note: selectedDrawerOrder.notes })}`}
               </Typography>
+              {selectedDrawerOrder.aggregator_issue && (
+                <Typography variant="caption" color="warning.main" sx={{ display: 'block', fontWeight: 600 }}>
+                  {t('orders.snappfood.issue', { issue: selectedDrawerOrder.aggregator_issue })}
+                </Typography>
+              )}
 
               {/* Tabs */}
               <Tabs
@@ -1423,7 +1586,7 @@ export function OrdersWorkflowPage() {
                     {t('orders.actions.reprint')}
                   </Button>
                 )}
-                {!readOnly && selectedDrawerOrder.status !== 'CANCELLED' && MoneyUtil.greaterThan(selectedDrawerOrder.due_amount, '0') && (
+                {canPay(selectedDrawerOrder) && (
                   <Button
                     color="success"
                     variant="contained"
@@ -1450,7 +1613,10 @@ export function OrdersWorkflowPage() {
                     {t('orders.actions.completeOrder')}
                   </Button>
                 )}
-                {!readOnly && !['COMPLETED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(selectedDrawerOrder.status) && (
+                {/* Snappfood's lines are Snappfood's: it has no call for a store to change them. */}
+                {!readOnly &&
+                  !isSnappfoodOrder(selectedDrawerOrder) &&
+                  !['COMPLETED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(selectedDrawerOrder.status) && (
                   <Button
                     color="inherit"
                     variant="outlined"
@@ -1458,6 +1624,16 @@ export function OrdersWorkflowPage() {
                     onClick={() => setEditDialogOpen(true)}
                   >
                     {t('orders.actions.editOrder', 'Edit lines')}
+                  </Button>
+                )}
+                {canReport(selectedDrawerOrder) && (
+                  <Button
+                    color="warning"
+                    variant="outlined"
+                    startIcon={<ScheduleIcon />}
+                    onClick={() => handleOpenReport(selectedDrawerOrder)}
+                  >
+                    {t('orders.actions.reportToSnappfood')}
                   </Button>
                 )}
                 {canCancel(selectedDrawerOrder) && (

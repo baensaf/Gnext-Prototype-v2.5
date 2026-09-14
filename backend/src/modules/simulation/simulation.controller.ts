@@ -80,6 +80,18 @@ export class SimulationController {
     return await this.simulationService.triggerSnappfoodDuplicate(tenantId, logId, correlationId);
   }
 
+  // Snappfood support's answer to an order the store handed back: 54 cancels it, 56 sends it back.
+  @Post('snappfood/orders/:orderCode/support')
+  async sendSnappfoodSupportDecision(
+    @Param('orderCode') orderCode: string,
+    @Body() body: { statusCode: number },
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.simulationService.sendSupportDecision(tenantId, orderCode, Number(body?.statusCode), correlationId);
+  }
+
   @Post('snappfood/orders/:orderId/action')
   async triggerSnappfoodOrderAction(
     @Param('orderId') orderId: string,

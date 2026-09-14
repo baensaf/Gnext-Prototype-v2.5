@@ -18,7 +18,13 @@ import {
   acceptanceFor,
   resolveIncomingOrderPolicy,
 } from '../../common/utils/incoming-order-policy.util';
+import { isAggregatorOrder, maxPromiseMinutes } from '../../common/utils/snappfood-order.util';
 import { OrderService } from './order.service';
+
+/** The branch's default prep time, brought within Snappfood's limit for one of its orders. */
+function prepMinutesFor(order: OrderHeader, policy: IncomingOrderPolicy): number {
+  return isAggregatorOrder(order) ? Math.min(policy.defaultPrepMinutes, maxPromiseMinutes(order)) : policy.defaultPrepMinutes;
+}
 
 /** How often the time limit is checked, so an order can overrun its limit by up to this much. */
 const SWEEP_MS = 15000;
@@ -60,7 +66,7 @@ export class IncomingOrderPolicyService implements OnApplicationBootstrap, OnMod
     return await this.orderService.acceptIncomingOrder(
       tenantId,
       orderId,
-      { prepMinutes: policy.defaultPrepMinutes },
+      { prepMinutes: prepMinutesFor(order, policy) },
       undefined,
       correlationId,
     );
@@ -86,7 +92,7 @@ export class IncomingOrderPolicyService implements OnApplicationBootstrap, OnMod
 
       try {
         if (policy.timeoutAction === 'ACCEPT') {
-          await this.orderService.acceptIncomingOrder(order.tenant_id, order.id, { prepMinutes: policy.defaultPrepMinutes });
+          await this.orderService.acceptIncomingOrder(order.tenant_id, order.id, { prepMinutes: prepMinutesFor(order, policy) });
         } else {
           await this.orderService.rejectUnanswered(order.tenant_id, order.id, policy.timeoutMinutes);
         }

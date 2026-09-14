@@ -167,6 +167,7 @@ export class SimulationService {
       fulfillment_status: 'PENDING',
       notes: this.describeSnappfoodOrder(payload),
       ...this.snappfoodTotals(lines),
+      ...this.snappfoodTiming(payload),
     });
 
     const savedHeader = await this.orderRepo.save(orderHeader);
@@ -245,10 +246,26 @@ export class SimulationService {
   }
 
   /**
+   * Snappfood's timing for the order: its preparation time, the minutes it lets this vendor
+   * add (vendorMaxPreparationTime) and how the order travels. Together they cap the time the
+   * store may promise when it accepts.
+   */
+  private snappfoodTiming(payload: any) {
+    const minutes = (value: any) =>
+      value === null || value === undefined || value === '' || isNaN(Number(value)) ? null : Math.round(Number(value));
+    return {
+      aggregator_prep_minutes: minutes(payload.preparationTime),
+      aggregator_max_extra_minutes: minutes(payload.vendorMaxPreparationTime ?? payload.vendorMaxPreprationTime),
+      aggregator_expedition: payload.expeditionType ? String(payload.expeditionType).slice(0, 20) : null,
+    };
+  }
+
+  /**
    * A message about an order the store already has. Only two statuses move it: Snappfood
-   * cancelling (54), and the order coming back as new (56) after the store rejected it and
-   * Snappfood support changed it. Every other status reports a step the store took itself,
-   * or one it waits out (71, the customer owes more).
+   * cancelling (54), and the order coming back as new (56) after the store handed it to
+   * Snappfood support, by rejecting it or by reporting a problem after accepting it. Every
+   * other status reports a step the store took itself, or one it waits out (71, the customer
+   * owes more).
    */
   private async applySnappfoodStatus(
     tenantId: string,
@@ -260,7 +277,9 @@ export class SimulationService {
     corrId: string,
   ): Promise<SnappfoodWebhookResult> {
     if (statusCode === 56) {
-      if (order.state !== 'REJECTED') {
+      const handedBack =
+        order.state === 'REJECTED' || (!!order.aggregator_issue_at && !['CANCELLED', 'COMPLETED'].includes(order.state));
+      if (!handedBack) {
         return this.recordDuplicate(tenantId, payload, signature, idempotencyKey, corrId);
       }
       await this.resendSnappfoodOrder(tenantId, order, payload);
@@ -301,19 +320,29 @@ export class SimulationService {
   }
 
   /**
-   * The store rejected the order and Snappfood support changed it, so it comes back under the
-   * same code. The old lines are voided rather than deleted, the new ones follow them, and the
-   * order waits again with its time limit counted from now.
+   * Snappfood support sends back an order the store handed it, under the same code. Changed
+   * lines void the old ones rather than delete them, and the new ones follow. An accepted order
+   * sent back unchanged, say after the store asked for more time, keeps its lines, so the
+   * kitchen's tickets stand. Either way the order waits again, its time limit counted from
+   * now, for the store to accept it with a new time.
    */
   private async resendSnappfoodOrder(tenantId: string, order: OrderHeader, payload: any) {
     const lines = this.snappfoodLines(payload);
-    const earlier = await this.orderItemRepo.count({ where: { tenant_id: tenantId, order_id: order.id } });
-    await this.orderItemRepo.update({ tenant_id: tenantId, order_id: order.id, state: 'ACTIVE' }, { state: 'VOID' });
-    await this.writeSnappfoodLines(tenantId, order.id, lines, earlier + 1);
+    const unchanged = order.state !== 'REJECTED' && (await this.hasSameLines(tenantId, order.id, lines));
+    if (!unchanged) {
+      const earlier = await this.orderItemRepo.count({ where: { tenant_id: tenantId, order_id: order.id } });
+      await this.orderItemRepo.update({ tenant_id: tenantId, order_id: order.id, state: 'ACTIVE' }, { state: 'VOID' });
+      await this.writeSnappfoodLines(tenantId, order.id, lines, earlier + 1);
+      Object.assign(order, this.snappfoodTotals(lines));
+    }
 
-    Object.assign(order, this.snappfoodTotals(lines));
     order.notes = this.describeSnappfoodOrder(payload);
     order.placed_at = new Date();
+    Object.assign(order, this.snappfoodTiming(payload));
+    order.accepted_at = null;
+    order.promised_minutes = null;
+    order.aggregator_issue_at = null;
+    order.aggregator_issue = null;
     this.markAwaitingAcceptance(order);
     await this.orderRepo.save(order);
 
@@ -323,11 +352,50 @@ export class SimulationService {
         branch_id: order.branch_id,
         type: 'INCOMING_ORDER',
         severity: 'INFO',
-        title: `Snappfood sent order ${order.order_number} again, changed`,
+        title: unchanged
+          ? `Snappfood sent order ${order.order_number} back to accept with a new time`
+          : `Snappfood sent order ${order.order_number} again, changed`,
         message: `${payload.fullName || 'A customer'}: ${MoneyUtil.format(order.grand_total, 0)} waiting for acceptance`,
         acknowledged: false,
       }),
     );
+  }
+
+  /** Whether Snappfood's lines are the order's active lines: same dishes, quantities and prices. */
+  private async hasSameLines(tenantId: string, orderId: string, lines: any[]): Promise<boolean> {
+    const current = await this.orderItemRepo.find({ where: { tenant_id: tenantId, order_id: orderId, state: 'ACTIVE' } });
+    // The same defaults writeSnappfoodLines fills in.
+    const key = (name: any, quantity: any, price: any) => `${name || 'Snappfood Item'}|${Number(quantity || 1)}|${Number(price || 15)}`;
+    const had = current.map((item) => key(item.product_name, item.quantity, item.unit_price)).sort();
+    const sent = lines.map((line) => key(line.product_name, line.quantity, line.price)).sort();
+    return had.length === sent.length && had.every((entry, index) => entry === sent[index]);
+  }
+
+  /**
+   * The simulator plays Snappfood support answering an order the store handed back: 54 cancels
+   * it, 56 sends it back. Support sends the order as Snappfood last sent it, so the webhook
+   * carries the same customer, timing and lines.
+   */
+  async sendSupportDecision(tenantId: string, orderCode: string, statusCode: number, correlationId?: string) {
+    if (statusCode !== 54 && statusCode !== 56) {
+      throw new BadRequestException('Snappfood support answers with 54 (cancel) or 56 (send back)');
+    }
+    const last = await this.logRepo
+      .createQueryBuilder('log')
+      .where('log.tenant_id = :tenantId', { tenantId })
+      .andWhere('log.provider = :provider', { provider: 'SNAPPFOOD' })
+      .andWhere('log.event_type IN (:...types)', { types: ['ORDER_CREATED', 'STATUS_56'] })
+      .andWhere(`log.request_payload ->> 'code' = :orderCode`, { orderCode })
+      .orderBy('log.created_at', 'DESC')
+      .getOne();
+    if (!last?.request_payload) {
+      throw new NotFoundException(`No Snappfood order ${orderCode} to answer`);
+    }
+
+    const payload: any = { ...last.request_payload, statusCode };
+    // Snappfood's status messages carry no event id, and the original's would read as a replay.
+    delete payload.event_id;
+    return this.handleSnappfoodWebhook(tenantId, JSON.stringify(payload), payload, undefined, undefined, undefined, correlationId);
   }
 
   private async recordDuplicate(

@@ -81,6 +81,15 @@ export interface OrderHeader {
   submitted_at?: string;
   completed_at?: string;
   cancelled_at?: string;
+  /** Snappfood's preparation time, the minutes it lets the store add, and how the order travels. */
+  aggregator_prep_minutes?: number | null;
+  aggregator_max_extra_minutes?: number | null;
+  aggregator_expedition?: string | null;
+  accepted_at?: string | null;
+  promised_minutes?: number | null;
+  /** Set while an accepted Snappfood order is with Snappfood support. */
+  aggregator_issue_at?: string | null;
+  aggregator_issue?: string | null;
   version: number;
   items: OrderItem[];
 }
@@ -151,6 +160,21 @@ export const orderApi = {
   /** Turn an incoming order down. Nothing reaches the kitchen; the aggregator is told why. */
   rejectIncomingOrder: async (id: string, reasonId: number, comment?: string): Promise<OrderHeader> => {
     const res = await httpClient.post(`/api/v1/orders/${id}/reject`, { reasonId, comment: comment || undefined });
+    return res.data;
+  },
+
+  /**
+   * Hand an accepted Snappfood order to Snappfood support: it needs more time (reason 153,
+   * with the extra minutes) or cannot be made. Only within an hour of accepting.
+   */
+  reportToSnappfood: async (
+    id: string,
+    report: { reasonId: number; extraMinutes?: number; comment?: string }
+  ): Promise<OrderHeader> => {
+    const res = await httpClient.post(`/api/v1/orders/${id}/report-to-snappfood`, {
+      ...report,
+      comment: report.comment || undefined,
+    });
     return res.data;
   },
 

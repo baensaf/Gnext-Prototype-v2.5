@@ -298,6 +298,9 @@
       "paidOnline": "Paid online",
       "toCollect": "To collect: {{amount}}",
       "prepMinutes": "Ready in (minutes)",
+      "deliveryMinutes": "Delivered in (minutes)",
+      "limitRider": "Snappfood expects it ready in {{prep}} min and lets you add up to {{extra}} more, so at most {{max}} min.",
+      "limitOwnDelivery": "With your own courier, Snappfood takes a delivery time of at most {{max}} min.",
       "accept": "Accept and send to kitchen",
       "rejectReason": "Reason for rejecting",
       "rejectComment": "Comment (optional)",
@@ -352,7 +355,22 @@
       "completeOrder": "Complete Order",
       "cancelOrder": "Cancel Order",
       "detailsAudit": "Details & Audit Log",
-      "editOrder": "Edit lines"
+      "editOrder": "Edit lines",
+      "reportToSnappfood": "Report to Snappfood"
+    },
+    "snappfood": {
+      "withSupport": "With Snappfood support",
+      "promisedBy": "Promised by {{time}}",
+      "issue": "Reported to Snappfood: {{issue}}",
+      "reportTitle": "Report order {{orderNumber}} to Snappfood",
+      "reportDescription": "Once you accept, Snappfood has no way to change the time or the items. Reporting hands the order to Snappfood support, which calls you and the customer, then cancels the order or sends it back for you to accept with a new time. The kitchen keeps the order meanwhile. {{count}} min left to report it.",
+      "reason": "Reason",
+      "extraMinutes": "More minutes needed",
+      "comment": "Comment (optional)",
+      "close": "Close",
+      "send": "Send to Snappfood",
+      "reported": "Order {{orderNumber}} is with Snappfood support",
+      "reportFailed": "Could not report this order to Snappfood"
     },
     "kanban": {
       "waiting": "Waiting for acceptance",
@@ -1804,7 +1822,10 @@
         "reasonDelay": "153: Delivery delay",
         "reasonDeliveryFee": "154: Delivery fee changed",
         "rejectComment": "Reject: Comment",
-        "actionResponse": "Action Response"
+        "actionResponse": "Action Response",
+        "supportActions": "Snappfood support, after the store rejects or reports an order:",
+        "supportCancel": "Cancel the order (webhook → Code 54)",
+        "supportResend": "Send the order back (webhook → Code 56)"
       },
       "vendorApi": {
         "title": "Vendor Automation API Test Console (v4.3.0)",

@@ -15,6 +15,7 @@ import { PaymentAttempt } from '../../entities/PaymentAttempt.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { SettlementAccount } from '../../entities/SettlementAccount.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { isAggregatorOrder } from '../../common/utils/snappfood-order.util';
 import { ShiftService } from '../cashier/shift.service';
 import { CreditService } from '../customer/credit.service';
 import { AuditWriter } from '../audit/audit-writer.service';
@@ -79,6 +80,14 @@ export class PaymentService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!order) throw new NotFoundException(`Order ${dto.orderId} not found`);
+
+      // Snappfood collects for its orders, so the till takes no money for one.
+      if (isAggregatorOrder(order)) {
+        throw new ConflictException({
+          code: 'SNAPPFOOD_ORDER_LOCKED',
+          message: `Order ${order.order_number} is paid through Snappfood; the till takes no payment for it`,
+        });
+      }
 
       if (order.state === 'CANCELLED') {
         throw new BadRequestException(`Cannot initiate payment for CANCELLED order ${order.id}`);
