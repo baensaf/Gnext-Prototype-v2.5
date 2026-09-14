@@ -1,13 +1,13 @@
 import type { Customer } from 'src/api/customerApi';
-import type { CreditAccount, CreditAging, CreditStatement } from 'src/api/creditApi';
+import type { CreditAging, CreditAccount, CreditStatement } from 'src/api/creditApi';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 
+import AddIcon from '@mui/icons-material/Add';
 import TuneIcon from '@mui/icons-material/Tune';
 import BlockIcon from '@mui/icons-material/Block';
 import SearchIcon from '@mui/icons-material/Search';
-import AddIcon from '@mui/icons-material/Add';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
@@ -207,8 +207,7 @@ export function CustomerCreditPage() {
   }, [customers]);
 
   // Client-side search & balance filter
-  const filteredAccounts = useMemo(() => {
-    return accounts
+  const filteredAccounts = useMemo(() => accounts
       .map((acc) => {
         const cust = acc.customer || customerMap.get(acc.customer_id);
         const custName = cust ? `${cust.first_name} ${cust.last_name}`.trim() : '';
@@ -242,8 +241,7 @@ export function CustomerCreditPage() {
         }
 
         return true;
-      });
-  }, [accounts, customerMap, searchQuery, filterBalance]);
+      }), [accounts, customerMap, searchQuery, filterBalance]);
 
   // Customers who do not currently have a credit account
   const eligibleCustomersForNewAccount = useMemo(() => {

@@ -6,7 +6,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import SoupKitchenIcon from '@mui/icons-material/SoupKitchen';
 import {
   Box,
   Tab,

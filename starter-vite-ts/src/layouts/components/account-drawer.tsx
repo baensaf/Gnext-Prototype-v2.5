@@ -16,9 +16,8 @@ import { paths } from 'src/routes/paths';
 import { usePathname } from 'src/routes/hooks';
 import { RouterLink } from 'src/routes/components';
 
-import { useAuthStore } from 'src/store/useAuthStore';
-
 import { ROLE_LABELS } from 'src/config/role-access';
+import { useAuthStore } from 'src/store/useAuthStore';
 
 import { Label } from 'src/components/label';
 import { Iconify } from 'src/components/iconify';

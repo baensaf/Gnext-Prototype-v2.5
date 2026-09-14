@@ -33,8 +33,9 @@ import {
   TablePagination,
 } from '@mui/material';
 
-import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 import { httpClient as axios } from 'src/api/httpClient';
+
+import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export interface IntegrationLogItem {
   id: string;

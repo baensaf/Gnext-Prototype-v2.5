@@ -16,7 +16,6 @@ import {
 
 import { useAuthStore } from 'src/store/useAuthStore';
 import { AuthSplitLayout } from 'src/layouts/auth-split';
-
 import { homePathForRole } from 'src/config/role-access';
 
 import { useSettingsContext } from 'src/components/settings';
