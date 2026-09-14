@@ -950,6 +950,25 @@
     "closedDays": "Closed days",
     "confirmClose": "Close day",
     "confirmReopen": "Reopen day",
+    "openOrders": {
+      "checking": "Checking open orders…",
+      "noneOpen": "No orders are left open for this day.",
+      "pickBranch": "Pick a branch in the header to close its day.",
+      "toComplete": "{{count}} paid order(s) will be marked completed",
+      "needsDecision": "{{count}} order(s) need a decision before the day closes",
+      "needsDecisionHelp": "Take the payment, cancel, or finish the delivery for each, or carry them over to the next day with a reason.",
+      "carryOver": "Close anyway and carry these orders over",
+      "carryOverReason": "Why they are carried over",
+      "closeAndCarryOver": "Close day and carry over",
+      "carriedOver": "Carried over",
+      "loadFailed": "Could not check the open orders",
+      "issue": {
+        "UNPAID": "Unpaid",
+        "NOT_SUBMITTED": "Draft, never sent",
+        "AWAITING_ACCEPTANCE": "Waiting for acceptance",
+        "DELIVERY_NOT_FINISHED": "Delivery not finished"
+      }
+    },
     "noBusinessDays": "No business day has been closed yet",
     "noMovements": "No cash movements recorded in this shift yet.",
     "reason": "Reason",

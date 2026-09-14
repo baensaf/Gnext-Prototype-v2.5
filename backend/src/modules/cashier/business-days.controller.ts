@@ -20,6 +20,19 @@ export class BusinessDaysController {
     return await this.businessDayService.getBusinessDays(tenantId, { ...query, branch, branchId: branch });
   }
 
+  /** The open orders closing a day would complete, and those it is waiting on a decision for. */
+  @Roles(...MANAGER_AND_ABOVE)
+  @Get('open-orders')
+  async getOpenOrders(@Query() query: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const branchId = effectiveBranchId((req as any).userBranchId, query.branchId || query.branch);
+    return await this.businessDayService.getOpenOrders(tenantId, {
+      branchId,
+      businessDate: query.businessDate,
+      currencyCode: query.currencyCode,
+    });
+  }
+
   /** Closing the day is the branch manager's call; the interceptor holds `branchId` to theirs. */
   @Roles(...MANAGER_AND_ABOVE)
   @Post('close')

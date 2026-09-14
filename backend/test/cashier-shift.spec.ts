@@ -18,7 +18,9 @@ import { Terminal } from '../src/entities/Terminal.entity';
 import { Payment } from '../src/entities/Payment.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { Branch } from '../src/entities/Branch.entity';
+import { TableSession } from '../src/entities/TableSession.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
+import { OrderTransitionRecorder } from '../src/modules/order-lifecycle/order-transition-recorder.service';
 
 describe('Cashier Shift & Business Day Suite (R13)', () => {
   let shiftService: ShiftService;
@@ -32,6 +34,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
   let branchRepo: any;
   let dayCloseRepo: any;
   let auditWriter: any;
+  let transitionRecorder: any;
   let approvalService: any;
   let dataSource: any;
   /** SHIFT_POLICY rows the policy lookup finds; none means the defaults. */
@@ -47,6 +50,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
     branchRepo = { find: jest.fn().mockResolvedValue([]) };
     dayCloseRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() };
     auditWriter = { write: jest.fn() };
+    transitionRecorder = { record: jest.fn() };
     approvalService = {
       verifyApproverPin: jest.fn().mockResolvedValue({ success: true, approver_user_id: 'manager-1', role: 'MANAGER' }),
     };
@@ -87,6 +91,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
         { provide: getRepositoryToken(BusinessDayClose), useValue: dayCloseRepo },
         { provide: AuditWriter, useValue: auditWriter },
+        { provide: OrderTransitionRecorder, useValue: transitionRecorder },
         { provide: DataSource, useValue: dataSource },
         { provide: ApprovalService, useValue: approvalService },
       ],
@@ -520,6 +525,139 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       await shiftService.openShift('t-1', { terminalId: 'term-1' });
       const created = auditWriter.write.mock.calls[0][0].afterData;
       expect(created.business_date).toBe(new Date().toLocaleDateString('en-CA'));
+    });
+  });
+
+  describe('Open orders at business day close', () => {
+    /**
+     * An EntityManager for the close: its first query finds `open`, the second the day's
+     * revenue orders, and `sessions` are the seated tables it can free.
+     */
+    const dayCloseEm = (open: any[], revenue: any[] = [], sessions: any[] = []) => {
+      const qb: any = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValueOnce(open).mockResolvedValueOnce(revenue),
+      };
+      const em: any = {
+        find: jest.fn(async (entity: any) => (entity === TableSession ? sessions : [])),
+        findOne: jest.fn(async () => null),
+        create: jest.fn((_entity: any, data: any) => ({ ...data })),
+        save: jest.fn(async (_entity: any, data: any) => data),
+        createQueryBuilder: jest.fn(() => qb),
+      };
+      dataSource.transaction.mockImplementation(async (cb: any) => cb(em));
+      dataSource.manager = em;
+      return em;
+    };
+
+    const order = (overrides: any) => ({
+      id: 'ord-x',
+      order_number: 'ORD-1',
+      order_type: 'TAKEAWAY',
+      channel: 'POS',
+      state: 'CONFIRMED',
+      status: 'CONFIRMED',
+      outstanding_total: '0.0000',
+      grand_total: '120000.0000',
+      business_date: '2026-09-10',
+      placed_at: new Date('2026-09-10T12:00:00Z'),
+      ...overrides,
+    });
+
+    it('sorts the open orders into those the close completes and those it waits on', async () => {
+      dayCloseEm([
+        order({ id: 'paid-dine-in', order_type: 'DINE_IN', table_id: 'tbl-1' }),
+        order({ id: 'unpaid', outstanding_total: '50000.0000' }),
+        order({ id: 'draft', state: 'DRAFT', status: 'DRAFT' }),
+        order({ id: 'snappfood', order_type: 'AGGREGATOR', state: 'PENDING_ACCEPTANCE', status: 'PENDING_ACCEPTANCE' }),
+        order({ id: 'delivery', order_type: 'DELIVERY', state: 'OUT_FOR_DELIVERY', status: 'OUT_FOR_DELIVERY' }),
+      ]);
+
+      const result = await dayService.getOpenOrders('t-1', { branchId: 'b-1', businessDate: '2026-09-10' });
+
+      expect(result.toComplete.map((o) => o.id)).toEqual(['paid-dine-in']);
+      expect(result.needsDecision.map((o) => [o.id, o.issue])).toEqual([
+        ['unpaid', 'UNPAID'],
+        ['draft', 'NOT_SUBMITTED'],
+        ['snappfood', 'AWAITING_ACCEPTANCE'],
+        // Paid, but a courier finishes a delivery; its cash settles off that step.
+        ['delivery', 'DELIVERY_NOT_FINISHED'],
+      ]);
+    });
+
+    it('will not close the day while an order still owes money, and completes nothing', async () => {
+      const paid = order({ id: 'paid' });
+      const em = dayCloseEm([paid, order({ id: 'unpaid', outstanding_total: '50000.0000' })]);
+
+      await expect(
+        dayService.closeBusinessDay('t-1', { branchId: 'b-1', businessDate: '2026-09-10' }),
+      ).rejects.toMatchObject({
+        response: {
+          code: 'OPEN_ORDERS_NEED_DECISION',
+          context: { needsDecision: [expect.objectContaining({ id: 'unpaid', issue: 'UNPAID' })] },
+        },
+      });
+      expect(paid.state).toBe('CONFIRMED');
+      expect(transitionRecorder.record).not.toHaveBeenCalled();
+      expect(em.save).not.toHaveBeenCalledWith(BusinessDayClose, expect.anything());
+    });
+
+    it('completes the paid orders nobody closed off, frees their tables, and records each', async () => {
+      const paid = order({ id: 'paid', order_type: 'DINE_IN', table_id: 'tbl-1', state: 'READY', status: 'READY' });
+      const session: any = { id: 'sess-1', table_id: 'tbl-1', closed_at: null, status: 'OCCUPIED' };
+      const em = dayCloseEm([paid], [paid], [session]);
+
+      const closed = await dayService.closeBusinessDay('t-1', { branchId: 'b-1', businessDate: '2026-09-10' }, 'manager-1');
+
+      expect(paid.state).toBe('COMPLETED');
+      expect(session.closed_at).toBeInstanceOf(Date);
+      expect(transitionRecorder.record).toHaveBeenCalledWith(
+        em,
+        expect.objectContaining({ order: paid, fromState: 'READY', action: 'COMPLETE', userId: 'manager-1' }),
+      );
+      expect(closed.totals).toMatchObject({ orderCount: 1, totalSales: '120000.0000', autoCompletedOrders: 1, carriedOverOrders: 0 });
+    });
+
+    it('closes with unfinished orders carried over when the manager gives a reason', async () => {
+      const unpaid = order({ id: 'unpaid', outstanding_total: '50000.0000' });
+      dayCloseEm([unpaid]);
+
+      const closed = await dayService.closeBusinessDay(
+        't-1',
+        { branchId: 'b-1', businessDate: '2026-09-10', carryOverReason: 'Customer pays tomorrow' },
+        'manager-1',
+      );
+
+      expect(unpaid.state).toBe('CONFIRMED');
+      expect(closed.totals).toMatchObject({ carriedOverOrders: 1, carryOverReason: 'Customer pays tomorrow' });
+      expect(auditWriter.write).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'BUSINESS_DAY_CLOSED',
+          details: expect.objectContaining({ carriedOverOrderIds: ['unpaid'] }),
+        }),
+      );
+    });
+
+    it('does not take a blank reason as a decision to carry orders over', async () => {
+      dayCloseEm([order({ id: 'draft', state: 'DRAFT', status: 'DRAFT' })]);
+
+      await expect(
+        dayService.closeBusinessDay('t-1', { branchId: 'b-1', businessDate: '2026-09-10', carryOverReason: '   ' }),
+      ).rejects.toMatchObject({ response: { code: 'OPEN_ORDERS_NEED_DECISION' } });
+    });
+
+    it("keeps the open-order check to managers, and a branch account to its own branch", async () => {
+      expect(Reflect.getMetadata(ROLES_KEY, BusinessDaysController.prototype.getOpenOrders)).toEqual(MANAGER_AND_ABOVE);
+
+      const service = { getOpenOrders: jest.fn().mockResolvedValue({ toComplete: [], needsDecision: [] }) };
+      const controller = new BusinessDaysController(service as any);
+      await controller.getOpenOrders(
+        { branchId: 'b-central', businessDate: '2026-09-10' },
+        { tenantId: 't-1', userBranchId: 'b-downtown' } as any,
+      );
+      expect(service.getOpenOrders).toHaveBeenCalledWith('t-1', expect.objectContaining({ branchId: 'b-downtown' }));
     });
   });
 });
