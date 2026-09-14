@@ -251,8 +251,7 @@
     "fullName": "Full Name",
     "proceedToPayment": "Proceed to Payment",
     "paymentSuccessful": "Order Placed Successfully!",
-    "newOrder": "New Order",
-    "sentToKitchen": "Order sent to kitchen display system."
+    "newOrder": "New Order"
   },
   "orders": {
     "title": "Order Management & Dispatch",

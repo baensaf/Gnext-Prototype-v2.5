@@ -251,8 +251,7 @@
     "fullName": "نام و نام خانوادگی",
     "proceedToPayment": "ورود به مرحله پرداخت",
     "paymentSuccessful": "سفارش با موفقیت ثبت شد!",
-    "newOrder": "سفارش جدید",
-    "sentToKitchen": "سفارش به نمایشگر آشپزخانه ارسال شد."
+    "newOrder": "سفارش جدید"
   },
   "orders": {
     "title": "مدیریت و گردش کار سفارش‌ها",
