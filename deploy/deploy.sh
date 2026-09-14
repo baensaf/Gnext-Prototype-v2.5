@@ -50,5 +50,6 @@ ln -sfn "$release" "$BASE/current"
 echo "==> healthy: $sha"
 
 # Keep the newest releases for inspection; never remove the one now running.
-ls -1dt "$BASE"/releases/*/ | tail -n +$((KEEP + 1)) | grep -v "/$sha/$" | xargs -r rm -rf
+# (grep exits 1 when there is nothing to prune; that is not a failed deploy.)
+ls -1dt "$BASE"/releases/*/ | tail -n +$((KEEP + 1)) | { grep -v "/$sha/$" || true; } | xargs -r rm -rf
 docker image prune -f > /dev/null
