@@ -962,6 +962,7 @@
       "carryOverReason": "Why they are carried over",
       "closeAndCarryOver": "Close day and carry over",
       "carriedOver": "Carried over",
+      "alreadyClosed": "This day is already closed at this branch. Pick another date, or reopen it from the list.",
       "loadFailed": "Could not check the open orders",
       "issue": {
         "UNPAID": "Unpaid",

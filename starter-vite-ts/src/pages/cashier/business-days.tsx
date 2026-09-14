@@ -44,6 +44,15 @@ import { ServerDataGrid } from '../../components/server-data-grid';
 const errorText = (err: any, fallback: string) =>
   err?.response?.data?.message || err?.detail || err?.message || fallback;
 
+/** The day after `date` (YYYY-MM-DD), but never a day that has not started yet. */
+const nextBusinessDate = (date: string) => {
+  const next = new Date(`${date}T12:00:00`);
+  next.setDate(next.getDate() + 1);
+  const nextText = next.toLocaleDateString('en-CA');
+  const today = new Date().toLocaleDateString('en-CA');
+  return nextText > today ? today : nextText;
+};
+
 const ISSUE_FALLBACK: Record<string, string> = {
   UNPAID: 'Unpaid',
   NOT_SUBMITTED: 'Draft, never sent',
@@ -148,9 +157,14 @@ export function BusinessDaysPage() {
     }
   }, [branchId, businessDate, t]);
 
+  // Closing a day this branch has already closed would only be refused, so say so up front.
+  const alreadyClosed = businessDays.some(
+    (day) => day.branch_id === branchId && day.business_date === businessDate && day.status === 'CLOSED'
+  );
+
   useEffect(() => {
-    if (openCloseDialog) loadOpenOrders();
-  }, [openCloseDialog, loadOpenOrders]);
+    if (openCloseDialog && !alreadyClosed) loadOpenOrders();
+  }, [openCloseDialog, alreadyClosed, loadOpenOrders]);
 
   const openDialog = () => {
     setCloseError(null);
@@ -159,11 +173,12 @@ export function BusinessDaysPage() {
     setOpenCloseDialog(true);
   };
 
-  const toComplete = openOrders?.toComplete ?? [];
-  const needsDecision = openOrders?.needsDecision ?? [];
+  const toComplete = alreadyClosed ? [] : (openOrders?.toComplete ?? []);
+  const needsDecision = alreadyClosed ? [] : (openOrders?.needsDecision ?? []);
   const carryingOver = needsDecision.length > 0;
   const canClose =
     Boolean(branchId) &&
+    !alreadyClosed &&
     !openOrdersLoading &&
     openOrders !== null &&
     (!carryingOver || (carryOver && carryOverReason.trim().length > 0));
@@ -179,6 +194,8 @@ export function BusinessDaysPage() {
       });
       setSuccess(t('cashier.dayClosed', 'Business day {{date}} closed', { date: businessDate }));
       setOpenCloseDialog(false);
+      // The dialog kept the day just closed, which could only be refused next time.
+      setBusinessDate(nextBusinessDate(businessDate));
       fetchBusinessDays();
     } catch (err: any) {
       setCloseError(errorText(err, 'Failed to close business day'));
@@ -236,6 +253,45 @@ export function BusinessDaysPage() {
         />
       ),
     },
+    // The day's figures sit beside its status, ahead of the timestamps: at the end of the row
+    // they were the part a narrow screen scrolled out of view.
+    {
+      field: 'totals',
+      headerName: t('cashier.totals', 'EOD Summary'),
+      minWidth: 240,
+      flex: 1,
+      renderCell: (params) => {
+        const totals = params.value;
+        if (!totals) return <Typography variant="caption" color="text.secondary">-</Typography>;
+        // The close stores the day's order count and sales; "Shifts" was read from a field
+        // it never writes, so every row said zero.
+        return (
+          <Typography variant="caption">
+            {t('cashier.ordersCount', 'Orders')}: {totals.orderCount ?? 0} · {t('cashier.sales', 'Sales')}:{' '}
+            <span dir="ltr">{Number(totals.grossSales || totals.totalSales || 0).toLocaleString()} IRR</span>
+          </Typography>
+        );
+      },
+    },
+    {
+      field: 'carried_over',
+      headerName: t('cashier.openOrders.carriedOver', 'Carried over'),
+      width: 120,
+      sortable: false,
+      renderCell: (params) => {
+        const count = params.row.totals?.carriedOverOrders ?? 0;
+        if (!count) return <Typography variant="caption" color="text.secondary">-</Typography>;
+        return (
+          <Chip
+            size="small"
+            color="warning"
+            variant="outlined"
+            label={count}
+            title={params.row.totals?.carryOverReason || undefined}
+          />
+        );
+      },
+    },
     {
       field: 'closed_at',
       headerName: t('cashier.closedAt', 'Closed At'),
@@ -255,26 +311,6 @@ export function BusinessDaysPage() {
           {params.value ? new Date(params.value).toLocaleString() : '-'}
         </Typography>
       ),
-    },
-    {
-      field: 'totals',
-      headerName: t('cashier.totals', 'EOD Summary'),
-      flex: 1,
-      minWidth: 200,
-      renderCell: (params) => {
-        const totals = params.value;
-        if (!totals) return <Typography variant="caption" color="text.secondary">-</Typography>;
-        // The close stores the day's order count and sales; "Shifts" was read from a field
-        // it never writes, so every row said zero.
-        return (
-          <Typography variant="caption">
-            {t('cashier.ordersCount', 'Orders')}: {totals.orderCount ?? 0} · {t('cashier.sales', 'Sales')}:{' '}
-            <span dir="ltr">{Number(totals.grossSales || totals.totalSales || 0).toLocaleString()} IRR</span>
-            {totals.carriedOverOrders > 0 &&
-              ` · ${t('cashier.openOrders.carriedOver', 'Carried over')}: ${totals.carriedOverOrders}`}
-          </Typography>
-        );
-      },
     },
     {
       field: 'actions',
@@ -428,7 +464,16 @@ export function BusinessDaysPage() {
               </Alert>
             )}
 
-            {openOrdersLoading && (
+            {alreadyClosed && (
+              <Alert severity="info">
+                {t(
+                  'cashier.openOrders.alreadyClosed',
+                  'This day is already closed at this branch. Pick another date, or reopen it from the list.'
+                )}
+              </Alert>
+            )}
+
+            {!alreadyClosed && openOrdersLoading && (
               <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
                 <CircularProgress size={16} />
                 <Typography variant="body2" color="text.secondary">
@@ -437,7 +482,7 @@ export function BusinessDaysPage() {
               </Stack>
             )}
 
-            {!openOrdersLoading && openOrders && toComplete.length === 0 && needsDecision.length === 0 && (
+            {!alreadyClosed && !openOrdersLoading && openOrders && toComplete.length === 0 && needsDecision.length === 0 && (
               <Alert severity="success">
                 {t('cashier.openOrders.noneOpen', 'No orders are left open for this day.')}
               </Alert>
