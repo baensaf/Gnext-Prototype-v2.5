@@ -1,4 +1,4 @@
-import type { Courier, Delivery, DeliveryZone, CourierOnFile, DeliveryEvent } from 'src/api/deliveryApi';
+import type { Courier, Delivery, DeliveryZone, CourierOnFile, DeliveryEvent, CourierPayMode } from 'src/api/deliveryApi';
 
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
@@ -6,6 +6,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import MapIcon from '@mui/icons-material/Map';
+import EditIcon from '@mui/icons-material/Edit';
 import UndoIcon from '@mui/icons-material/Undo';
 import PersonIcon from '@mui/icons-material/Person';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -52,8 +53,9 @@ import { paths } from 'src/routes/paths';
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { tenantApi } from 'src/api/tenantApi';
-import { deliveryApi } from 'src/api/deliveryApi';
+import { settingsApi } from 'src/api/settingsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
+import { deliveryApi, COURIER_PAY_MODES } from 'src/api/deliveryApi';
 
 import { CourierSettlementsPage } from './settlements';
 
@@ -128,10 +130,27 @@ export function DeliveryPage() {
   const [failReason, setFailReason] = useState('');
 
   const [courierModalOpen, setCourierModalOpen] = useState(false);
-  const [courierForm, setCourierForm] = useState({ code: '', name: '', phone: '', vehicle_type: 'MOTORCYCLE', compensation_per_delivery: '15000' });
+  const [defaultPayMode, setDefaultPayMode] = useState<CourierPayMode>('FLAT');
+  const emptyCourierForm = (payMode: CourierPayMode) => ({
+    code: '',
+    name: '',
+    phone: '',
+    vehicle_type: 'MOTORCYCLE',
+    pay_mode: payMode,
+    compensation_per_delivery: '15000',
+  });
+  const [courierForm, setCourierForm] = useState(() => emptyCourierForm('FLAT'));
+  const [payEdit, setPayEdit] = useState<{ courier: Courier; pay_mode: CourierPayMode; amount: string } | null>(null);
 
   const [zoneModalOpen, setZoneModalOpen] = useState(false);
-  const [zoneForm, setZoneForm] = useState({ code: '', name: '', fee: '25000', estimated_minutes: 30 });
+  const [zoneForm, setZoneForm] = useState({ code: '', name: '', fee: '25000', estimated_minutes: 30, courier_pay: '' });
+  const [zoneEdit, setZoneEdit] = useState<{
+    zone: DeliveryZone;
+    name: string;
+    fee: string;
+    estimated_minutes: number;
+    courier_pay: string;
+  } | null>(null);
 
   const [terminalAssignModalOpen, setTerminalAssignModalOpen] = useState(false);
   const [selectedCourierForTerminal, setSelectedCourierForTerminal] = useState<Courier | null>(null);
@@ -170,6 +189,92 @@ export function DeliveryPage() {
     setSelectedEvents([]);
     setNotice(null);
   }, [branchId]);
+
+  // The pay rule a new courier starts on is the branch's COURIER_PAY default.
+  useEffect(() => {
+    let cancelled = false;
+    settingsApi
+      .getScopedSettings(branchId)
+      .then((scoped: any) => {
+        const mode = scoped?.groups?.COURIER_PAY?.value?.defaultPayMode;
+        if (!cancelled) setDefaultPayMode((COURIER_PAY_MODES as readonly string[]).includes(mode) ? mode : 'FLAT');
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [branchId]);
+
+  const openAddCourier = () => {
+    setCourierForm(emptyCourierForm(defaultPayMode));
+    setCourierModalOpen(true);
+  };
+
+  const handleSavePay = async () => {
+    if (!payEdit) return;
+    try {
+      setPendingAction(`pay:${payEdit.courier.id}`);
+      await deliveryApi.updateCourierPay(payEdit.courier.id, {
+        pay_mode: payEdit.pay_mode,
+        compensation_per_delivery: payEdit.amount || '0',
+      });
+      setPayEdit(null);
+      await loadData();
+    } catch (err: any) {
+      setError(err.detail || t('delivery.errors.updatePayFailed'));
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handleSaveZone = async () => {
+    if (!zoneEdit) return;
+    try {
+      setPendingAction(`zone:${zoneEdit.zone.id}`);
+      await deliveryApi.updateZone(zoneEdit.zone.id, {
+        name: zoneEdit.name,
+        fee: zoneEdit.fee || '0',
+        estimated_minutes: zoneEdit.estimated_minutes,
+        courier_pay: zoneEdit.courier_pay.trim() === '' ? null : zoneEdit.courier_pay,
+      });
+      setZoneEdit(null);
+      await loadData();
+    } catch (err: any) {
+      setError(err.detail || t('delivery.errors.updateZoneFailed'));
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  /** A pay rule picker with the rule's meaning underneath, shared by the add and edit dialogs. */
+  const renderPayModeSelect = (value: CourierPayMode, onChange: (mode: CourierPayMode) => void) => (
+    <TextField
+      select
+      fullWidth
+      label={t('delivery.modals.addCourier.payMode')}
+      value={value}
+      onChange={(e) => onChange(e.target.value as CourierPayMode)}
+      helperText={`${t(`delivery.payRules.help_${value}`)} ${t('delivery.payRules.tipsNote')}`}
+    >
+      {COURIER_PAY_MODES.map((mode) => (
+        <MenuItem key={mode} value={mode}>
+          {t(`delivery.payRules.${mode}`)}
+        </MenuItem>
+      ))}
+    </TextField>
+  );
+
+  /** The amount field only a rule that uses it shows: FLAT pays it, ZONE_RATE falls back to it. */
+  const renderPayAmount = (mode: CourierPayMode, value: string, onChange: (amount: string) => void) =>
+    mode === 'DELIVERY_FEE' ? null : (
+      <TextField
+        fullWidth
+        label={t(mode === 'FLAT' ? 'delivery.modals.addCourier.compensationFlat' : 'delivery.modals.addCourier.compensationFallback')}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
+      />
+    );
 
   const handleOpenAssignModal = (del: Delivery) => {
     setSelectedDeliveryForAssign(del);
@@ -296,7 +401,7 @@ export function DeliveryPage() {
         compensation_per_delivery: courierForm.compensation_per_delivery.toString(),
       });
       setCourierModalOpen(false);
-      setCourierForm({ code: '', name: '', phone: '', vehicle_type: 'MOTORCYCLE', compensation_per_delivery: '15000' });
+      setCourierForm(emptyCourierForm(defaultPayMode));
       loadData();
     } catch (err: any) {
       // Somebody already on file — here archived, or at another branch. Offer the move
@@ -317,7 +422,7 @@ export function DeliveryPage() {
       await deliveryApi.moveCourier(courierOnFile.id, branchId);
       setNotice(t('delivery.modals.moveCourier.moved', { name: courierOnFile.name }));
       setCourierOnFile(null);
-      setCourierForm({ code: '', name: '', phone: '', vehicle_type: 'MOTORCYCLE', compensation_per_delivery: '15000' });
+      setCourierForm(emptyCourierForm(defaultPayMode));
       await loadData();
     } catch (err: any) {
       setCourierOnFile(null);
@@ -340,7 +445,7 @@ export function DeliveryPage() {
         fee: zoneForm.fee.toString(),
       });
       setZoneModalOpen(false);
-      setZoneForm({ code: '', name: '', fee: '25000', estimated_minutes: 30 });
+      setZoneForm({ code: '', name: '', fee: '25000', estimated_minutes: 30, courier_pay: '' });
       loadData();
     } catch (err: any) {
       setError(err.detail || t('delivery.errors.createZoneFailed'));
@@ -687,7 +792,7 @@ export function DeliveryPage() {
         <Card sx={{ p: 3, borderRadius: 2 }}>
           <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t('delivery.couriers.title')} ({couriers.length})</Typography>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCourierModalOpen(true)}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openAddCourier}>
               {t('delivery.couriers.addCourier')}
             </Button>
           </Stack>
@@ -724,7 +829,33 @@ export function DeliveryPage() {
                       <Typography variant="caption" color="text.secondary">{c.phone || t('delivery.card.noPhone')}</Typography>
                     </TableCell>
                     <TableCell><Chip label={getVehicleTypeLabel(c.vehicle_type)} size="small" /></TableCell>
-                    <TableCell>{MoneyUtil.formatCurrency(c.compensation_per_delivery || '0')} IRR</TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                        <Box>
+                          <Typography variant="body2">{t(`delivery.payRules.${c.pay_mode || 'FLAT'}`)}</Typography>
+                          {c.pay_mode !== 'DELIVERY_FEE' && (
+                            <Typography variant="caption" color="text.secondary">
+                              {t(c.pay_mode === 'ZONE_RATE' ? 'delivery.payRules.zoneFallback' : 'delivery.payRules.flatAmount', {
+                                amount: `${MoneyUtil.formatCurrency(c.compensation_per_delivery || '0')} IRR`,
+                              })}
+                            </Typography>
+                          )}
+                        </Box>
+                        <IconButton
+                          size="small"
+                          aria-label={t('delivery.couriers.editPay')}
+                          onClick={() =>
+                            setPayEdit({
+                              courier: c,
+                              pay_mode: (c.pay_mode || 'FLAT') as CourierPayMode,
+                              amount: String(Number(c.compensation_per_delivery || 0)),
+                            })
+                          }
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    </TableCell>
                     <TableCell>
                       <Chip
                         label={getAttendanceStatusLabel(c.attendance?.status)}
@@ -807,8 +938,10 @@ export function DeliveryPage() {
                 <TableCell>{t('delivery.zones.code')}</TableCell>
                 <TableCell>{t('delivery.zones.zoneName')}</TableCell>
                 <TableCell>{t('delivery.zones.standardFee')}</TableCell>
+                <TableCell>{t('delivery.zones.courierPay')}</TableCell>
                 <TableCell>{t('delivery.zones.estimatedMinutes')}</TableCell>
                 <TableCell>{t('delivery.zones.status')}</TableCell>
+                <TableCell align="right">{t('delivery.zones.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -817,8 +950,32 @@ export function DeliveryPage() {
                   <TableCell><strong>{z.code}</strong></TableCell>
                   <TableCell>{z.name}</TableCell>
                   <TableCell>{MoneyUtil.formatCurrency(z.fee)} {z.currency_code}</TableCell>
+                  <TableCell>
+                    {z.courier_pay !== null && z.courier_pay !== undefined ? (
+                      `${MoneyUtil.formatCurrency(z.courier_pay)} ${z.currency_code}`
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">{t('delivery.zones.courierPayUnset')}</Typography>
+                    )}
+                  </TableCell>
                   <TableCell>{z.estimated_minutes} {t('delivery.zones.mins')}</TableCell>
                   <TableCell><Chip label={z.is_active ? t('delivery.zones.active') : t('delivery.zones.inactive')} color="success" size="small" /></TableCell>
+                  <TableCell align="right">
+                    <IconButton
+                      size="small"
+                      aria-label={t('delivery.zones.edit')}
+                      onClick={() =>
+                        setZoneEdit({
+                          zone: z,
+                          name: z.name,
+                          fee: String(Number(z.fee || 0)),
+                          estimated_minutes: z.estimated_minutes,
+                          courier_pay: z.courier_pay !== null && z.courier_pay !== undefined ? String(Number(z.courier_pay)) : '',
+                        })
+                      }
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -972,7 +1129,10 @@ export function DeliveryPage() {
                 <MenuItem value="ON_FOOT">{t('delivery.couriers.vehicleTypes.onFoot')}</MenuItem>
               </Select>
             </FormControl>
-            <TextField label={t('delivery.modals.addCourier.compensation')} value={courierForm.compensation_per_delivery} onChange={(e) => setCourierForm({ ...courierForm, compensation_per_delivery: e.target.value })} fullWidth />
+            {renderPayModeSelect(courierForm.pay_mode, (mode) => setCourierForm({ ...courierForm, pay_mode: mode }))}
+            {renderPayAmount(courierForm.pay_mode, courierForm.compensation_per_delivery, (amount) =>
+              setCourierForm({ ...courierForm, compensation_per_delivery: amount })
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -1024,6 +1184,66 @@ export function DeliveryPage() {
         </DialogActions>
       </Dialog>
 
+      {/* Courier Pay Rule */}
+      <Dialog open={Boolean(payEdit)} onClose={() => setPayEdit(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t('delivery.modals.courierPay.title', { name: payEdit?.courier.name })}</DialogTitle>
+        <DialogContent>
+          {payEdit && (
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {renderPayModeSelect(payEdit.pay_mode, (mode) => setPayEdit({ ...payEdit, pay_mode: mode }))}
+              {renderPayAmount(payEdit.pay_mode, payEdit.amount, (amount) => setPayEdit({ ...payEdit, amount }))}
+              <Alert severity="info">{t('delivery.modals.courierPay.note')}</Alert>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPayEdit(null)}>{t('delivery.modals.courierPay.cancel')}</Button>
+          <Button variant="contained" disabled={Boolean(pendingAction)} onClick={handleSavePay}>
+            {pendingAction?.startsWith('pay:') ? <CircularProgress size={20} color="inherit" /> : t('delivery.modals.courierPay.submit')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Zone */}
+      <Dialog open={Boolean(zoneEdit)} onClose={() => setZoneEdit(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t('delivery.modals.editZone.title', { code: zoneEdit?.zone.code })}</DialogTitle>
+        <DialogContent>
+          {zoneEdit && (
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <TextField label={t('delivery.modals.addZone.name')} value={zoneEdit.name} onChange={(e) => setZoneEdit({ ...zoneEdit, name: e.target.value })} fullWidth />
+              <TextField
+                label={t('delivery.modals.addZone.fee')}
+                value={zoneEdit.fee}
+                onChange={(e) => setZoneEdit({ ...zoneEdit, fee: e.target.value })}
+                slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
+                fullWidth
+              />
+              <TextField
+                label={t('delivery.modals.addZone.courierPay')}
+                helperText={t('delivery.modals.addZone.courierPayHelp')}
+                value={zoneEdit.courier_pay}
+                onChange={(e) => setZoneEdit({ ...zoneEdit, courier_pay: e.target.value })}
+                slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
+                fullWidth
+              />
+              <TextField
+                label={t('delivery.modals.addZone.estimatedMinutes')}
+                type="number"
+                value={zoneEdit.estimated_minutes}
+                onChange={(e) => setZoneEdit({ ...zoneEdit, estimated_minutes: Number(e.target.value) })}
+                fullWidth
+              />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setZoneEdit(null)}>{t('delivery.modals.editZone.cancel')}</Button>
+          <Button variant="contained" disabled={Boolean(pendingAction) || !zoneEdit?.name.trim()} onClick={handleSaveZone}>
+            {pendingAction?.startsWith('zone:') ? <CircularProgress size={20} color="inherit" /> : t('delivery.modals.editZone.submit')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Add Zone Modal */}
       <Dialog open={zoneModalOpen} onClose={() => setZoneModalOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>{t('delivery.modals.addZone.title')}</DialogTitle>
@@ -1032,6 +1252,14 @@ export function DeliveryPage() {
             <TextField label={t('delivery.modals.addZone.code')} value={zoneForm.code} onChange={(e) => setZoneForm({ ...zoneForm, code: e.target.value })} fullWidth />
             <TextField label={t('delivery.modals.addZone.name')} value={zoneForm.name} onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })} fullWidth />
             <TextField label={t('delivery.modals.addZone.fee')} value={zoneForm.fee} onChange={(e) => setZoneForm({ ...zoneForm, fee: e.target.value })} fullWidth />
+            <TextField
+              label={t('delivery.modals.addZone.courierPay')}
+              helperText={t('delivery.modals.addZone.courierPayHelp')}
+              value={zoneForm.courier_pay}
+              onChange={(e) => setZoneForm({ ...zoneForm, courier_pay: e.target.value })}
+              slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
+              fullWidth
+            />
             <TextField label={t('delivery.modals.addZone.estimatedMinutes')} type="number" value={zoneForm.estimated_minutes} onChange={(e) => setZoneForm({ ...zoneForm, estimated_minutes: Number(e.target.value) })} fullWidth />
           </Stack>
         </DialogContent>

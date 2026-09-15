@@ -32,6 +32,10 @@ export class DeliveryAssignment {
   @Column({ type: 'numeric', precision: 12, scale: 2, default: '0.00' })
   tip_amount: string;
 
+  /** What this courier earned for this attempt — a delivery, or a paid failed ride. */
+  @Column({ type: 'numeric', precision: 12, scale: 2, default: '0.00' })
+  compensation_amount: string;
+
   @Column({ type: 'text', nullable: true })
   failure_reason: string;
 

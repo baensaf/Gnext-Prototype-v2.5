@@ -16,6 +16,8 @@ export const BRANCH_OVERRIDABLE_SETTING_GROUPS = [
   'ORDER_WORKFLOW',
   'KIOSK_CUSTOMER_IDENTITY_POLICY',
   'SHIFT_POLICY',
+  // How a new courier is paid and whether a failed ride is paid: shops in one chain differ.
+  'COURIER_PAY',
 ];
 
 export function isBranchOverridable(key: string): boolean {

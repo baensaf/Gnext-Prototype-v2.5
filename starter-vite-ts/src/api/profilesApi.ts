@@ -93,6 +93,7 @@ export interface CourierProfile {
     is_active: boolean;
     branch_id: string | null;
     branch_name: string | null;
+    pay_mode?: string;
     compensation_per_delivery: string;
     currency_code: string;
     created_at: string;

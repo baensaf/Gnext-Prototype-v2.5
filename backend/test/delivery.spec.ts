@@ -18,6 +18,7 @@ import { DeliveryEvent } from '../src/entities/DeliveryEvent.entity';
 import { Terminal } from '../src/entities/Terminal.entity';
 import { CustomerAddress } from '../src/entities/CustomerAddress.entity';
 import { Branch } from '../src/entities/Branch.entity';
+import { TenantSetting } from '../src/entities/TenantSetting.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { OrderTransitionRecorder } from '../src/modules/order-lifecycle/order-transition-recorder.service';
 
@@ -42,9 +43,11 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
   let auditWriter: any;
   let transitionRecorder: any;
   let branchRepo: any;
+  let settingRepo: any;
 
   beforeEach(async () => {
     branchRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() };
+    settingRepo = { find: jest.fn().mockResolvedValue([]) };
     courierRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn().mockImplementation((c) => c), save: jest.fn().mockImplementation((c) => Promise.resolve(c)) };
     assignmentRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn().mockImplementation((a) => a), save: jest.fn().mockImplementation((a) => Promise.resolve(a)) };
     orderRepo = {
@@ -88,6 +91,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
         { provide: getRepositoryToken(Terminal), useValue: terminalRepo },
         { provide: getRepositoryToken(CustomerAddress), useValue: customerAddressRepo },
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
+        { provide: getRepositoryToken(TenantSetting), useValue: settingRepo },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: OrderTransitionRecorder, useValue: transitionRecorder },
       ],
@@ -196,6 +200,75 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
 
     await expect(service.assignCourier('t-1', 'del-1', 'cour-1')).rejects.toThrow(BadRequestException);
     expect(deliveryRepo.save).not.toHaveBeenCalled();
+  });
+
+  describe('courier pay rules', () => {
+    const enRoute = { id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', zone_id: 'zone-1', courier_id: 'cour-1', state: 'EN_ROUTE', fee: '25000.0000' };
+
+    beforeEach(() => {
+      // A fresh order each read: completing one marks it COMPLETED in place.
+      orderRepo.findOne.mockImplementation(() =>
+        Promise.resolve({ id: 'ord-1', tenant_id: 't-1', branch_id: 'downtown', state: 'OUT_FOR_DELIVERY' }),
+      );
+    });
+
+    it("pays a DELIVERY_FEE courier the zone's listed fee plus any tip, and records the rule", async () => {
+      deliveryRepo.findOne.mockResolvedValue({ ...enRoute });
+      courierRepo.findOne.mockResolvedValue({ id: 'cour-1', pay_mode: 'DELIVERY_FEE', compensation_per_delivery: '10000.0000' });
+      assignmentRepo.findOne.mockResolvedValue({ id: 'asgn-1', status: 'OUT_FOR_DELIVERY', tip_amount: '5000.00' });
+
+      const done = await service.completeDelivery('t-1', 'del-1', {});
+
+      expect(done.compensation_amount).toBe('30000.0000');
+      expect(done.compensation_basis).toBe('DELIVERY_FEE');
+      expect(assignmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ status: 'DELIVERED', compensation_amount: '30000.00' }));
+    });
+
+    it("pays a ZONE_RATE courier the zone's courier rate, and their own rate where the zone has none", async () => {
+      courierRepo.findOne.mockResolvedValue({ id: 'cour-1', pay_mode: 'ZONE_RATE', compensation_per_delivery: '10000.0000' });
+      assignmentRepo.findOne.mockResolvedValue(null);
+
+      deliveryRepo.findOne.mockResolvedValue({ ...enRoute });
+      zoneRepo.findOne.mockResolvedValue({ id: 'zone-1', courier_pay: '18000.0000' });
+      expect((await service.completeDelivery('t-1', 'del-1', {})).compensation_amount).toBe('18000.0000');
+
+      deliveryRepo.findOne.mockResolvedValue({ ...enRoute });
+      zoneRepo.findOne.mockResolvedValue({ id: 'zone-1', courier_pay: null });
+      const fallback = await service.completeDelivery('t-1', 'del-1', {});
+      expect(fallback.compensation_amount).toBe('10000.0000');
+      expect(fallback.compensation_basis).toBe('FLAT');
+    });
+
+    it('pays a failed ride only when the branch policy says so, and only if the courier rode out', async () => {
+      courierRepo.findOne.mockResolvedValue({ id: 'cour-1', pay_mode: 'FLAT', compensation_per_delivery: '10000.0000' });
+
+      deliveryRepo.findOne.mockResolvedValue({ ...enRoute });
+      assignmentRepo.findOne.mockResolvedValue({ id: 'asgn-1', status: 'OUT_FOR_DELIVERY' });
+      await service.failDelivery('t-1', 'del-1', 'Nobody home');
+      expect(assignmentRepo.save).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'FAILED', compensation_amount: '0.00' }));
+
+      settingRepo.find.mockResolvedValue([{ key: 'COURIER_PAY', branch_id: 'downtown', value: { payFailedDeliveries: true } }]);
+      deliveryRepo.findOne.mockResolvedValue({ ...enRoute });
+      assignmentRepo.findOne.mockResolvedValue({ id: 'asgn-2', status: 'OUT_FOR_DELIVERY' });
+      await service.failDelivery('t-1', 'del-1', 'Nobody home');
+      expect(assignmentRepo.save).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'FAILED', compensation_amount: '10000.00' }));
+
+      deliveryRepo.findOne.mockResolvedValue({ ...enRoute, state: 'ASSIGNED' });
+      assignmentRepo.findOne.mockResolvedValue({ id: 'asgn-3', status: 'ASSIGNED' });
+      await service.failDelivery('t-1', 'del-1', 'Kitchen could not make it');
+      expect(assignmentRepo.save).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'FAILED', compensation_amount: '0.00' }));
+    });
+
+    it("starts a new courier on the branch's default pay rule unless one is chosen", async () => {
+      courierRepo.find.mockResolvedValue([]);
+      settingRepo.find.mockResolvedValue([{ key: 'COURIER_PAY', branch_id: null, value: { defaultPayMode: 'DELIVERY_FEE' } }]);
+
+      const defaulted = await service.createCourier('t-1', { branch_id: 'downtown', code: 'CR-9', name: 'Reza', phone: '09129999999' });
+      expect(defaulted.pay_mode).toBe('DELIVERY_FEE');
+
+      const chosen = await service.createCourier('t-1', { branch_id: 'downtown', code: 'CR-10', name: 'Mina', phone: '09128888888', pay_mode: 'FLAT' });
+      expect(chosen.pay_mode).toBe('FLAT');
+    });
   });
 
   describe('one courier record across branches', () => {

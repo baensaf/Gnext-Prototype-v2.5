@@ -26,6 +26,10 @@ export class DeliveryZone {
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
   fee: string;
 
+  /** What a courier on ZONE_RATE is paid for a trip here; null means the courier's own rate. */
+  @Column({ type: 'numeric', precision: 19, scale: 4, nullable: true })
+  courier_pay: string | null;
+
   @Column({ type: 'varchar', length: 3, default: 'IRR' })
   currency_code: string;
 

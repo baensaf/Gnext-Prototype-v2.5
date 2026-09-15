@@ -155,6 +155,7 @@ const SELLING_SITE_PATHS = [
   '/app/operations/kds-configuration',
   '/app/settings/order-workflow',
   '/app/settings/shift-policy',
+  '/app/settings/courier-pay',
 ];
 
 const FULL_ACCESS: RoleAccess = { allow: ['*'], deny: [], home: '/app/dashboard' };

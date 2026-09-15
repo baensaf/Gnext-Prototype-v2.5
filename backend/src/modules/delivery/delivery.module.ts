@@ -16,6 +16,7 @@ import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { Branch } from '../../entities/Branch.entity';
+import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { DeliveryService } from './delivery.service';
 import { DeliveryController } from './delivery.controller';
 import { CourierSettlementsController } from './courier-settlements.controller';
@@ -41,6 +42,7 @@ import { OrderLifecycleModule } from '../order-lifecycle/order-lifecycle.module'
       CustomerAddress,
       Terminal,
       Branch,
+      TenantSetting,
     ]),
     AuditModule,
     OrderLifecycleModule,
