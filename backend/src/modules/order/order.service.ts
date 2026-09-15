@@ -186,6 +186,43 @@ export class OrderService {
   }
 
   /**
+   * Who an order involves, by name: its customer, the account that took it, and the courier
+   * who carried it. The delivery record names the current courier; an assignment row is only
+   * consulted when there is no delivery, as on orders dispatched before deliveries existed.
+   */
+  async getOrderPeople(tenantId: string, order: { id: string; customer_id: string | null; created_by: string | null }) {
+    const [customer, takenBy, courier] = await Promise.all([
+      order.customer_id
+        ? this.dataSource.query(
+            `SELECT id, code, first_name, last_name FROM customer WHERE tenant_id = $1 AND id = $2`,
+            [tenantId, order.customer_id],
+          )
+        : [],
+      order.created_by
+        ? this.dataSource.query(
+            `SELECT id, username, display_name FROM admin_user WHERE tenant_id = $1 AND id = $2`,
+            [tenantId, order.created_by],
+          )
+        : [],
+      this.dataSource.query(
+        `SELECT c.id, c.code, c.name
+           FROM (
+             SELECT d.courier_id, 0 AS preference, d.assigned_at FROM delivery d
+              WHERE d.tenant_id = $1 AND d.order_id = $2 AND d.courier_id IS NOT NULL
+             UNION ALL
+             SELECT da.courier_id, 1 AS preference, da.assigned_at FROM delivery_assignment da
+              WHERE da.tenant_id = $1 AND da.order_id = $2
+           ) handed
+           JOIN courier c ON c.id = handed.courier_id AND c.tenant_id = $1
+          ORDER BY handed.preference, handed.assigned_at DESC NULLS LAST
+          LIMIT 1`,
+        [tenantId, order.id],
+      ),
+    ]);
+    return { customer: customer[0] ?? null, taken_by: takenBy[0] ?? null, courier: courier[0] ?? null };
+  }
+
+  /**
    * The register an order is rung up on, and the shift open on it at the time.
    *
    * The POS never named either, so every order had a null shift: a shift statement always

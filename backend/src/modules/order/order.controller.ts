@@ -105,7 +105,9 @@ export class OrdersController {
   @Get(':id')
   async getOrderById(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.orderService.getOrderById(tenantId, id);
+    const order = await this.orderService.getOrderById(tenantId, id);
+    // The names behind the ids, so the detail page can say who was involved and link to them.
+    return { ...order, people: await this.orderService.getOrderPeople(tenantId, order) };
   }
 
   @Patch(':id')

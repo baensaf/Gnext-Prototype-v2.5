@@ -254,6 +254,15 @@
     "newOrder": "New Order"
   },
   "orders": {
+    "people": {
+      "title": "People",
+      "customer": "Customer",
+      "takenBy": "Taken by",
+      "courier": "Courier",
+      "noCustomer": "No customer",
+      "notRecorded": "Not recorded",
+      "noCourier": "Not assigned"
+    },
     "title": "Order Management & Dispatch",
     "subtitle": "Real-time order registry, interactive state machine controls, and KDS workflow status board",
     "tableView": "Table View",
