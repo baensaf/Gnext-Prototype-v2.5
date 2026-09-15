@@ -56,6 +56,10 @@ export class Delivery {
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
   compensation_amount: string;
 
+  /** The pay rule that priced `compensation_amount`, fixed at completion. */
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  compensation_basis: string | null;
+
   @Column({ type: 'text', nullable: true })
   failure_reason: string;
 

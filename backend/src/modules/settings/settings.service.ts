@@ -13,6 +13,7 @@ import {
   resolveSettingsForBranch,
 } from '../../common/utils/setting-scope.util';
 import { canActOnBranch, isHeadOfficeUser, UserScope } from '../../common/utils/user-scope.util';
+import { COURIER_PAY_MODES, isCourierPayMode } from '../delivery/courier-pay';
 
 @Injectable()
 export class SettingsService {
@@ -91,6 +92,15 @@ export class SettingsService {
       }
       if (value.blindClose !== undefined && typeof value.blindClose !== 'boolean') {
         throw new BadRequestException('SHIFT_POLICY setting property blindClose must be a boolean');
+      }
+    } else if (group === 'COURIER_PAY') {
+      if (value.defaultPayMode !== undefined && !isCourierPayMode(value.defaultPayMode)) {
+        throw new BadRequestException(
+          `COURIER_PAY setting property defaultPayMode must be one of ${COURIER_PAY_MODES.join(', ')}`,
+        );
+      }
+      if (value.payFailedDeliveries !== undefined && typeof value.payFailedDeliveries !== 'boolean') {
+        throw new BadRequestException('COURIER_PAY setting property payFailedDeliveries must be a boolean');
       }
     } else if (group === 'DISCOUNTS') {
       if (value.cashierMaxDiscountPercent !== undefined) {

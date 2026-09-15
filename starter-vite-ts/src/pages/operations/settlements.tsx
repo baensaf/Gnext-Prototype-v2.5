@@ -440,22 +440,22 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
               </Typography>
 
               <Grid container spacing={2}>
-                <Grid size={{ xs: 6 }}>
-                  <Paper sx={{ p: 2, bgcolor: 'background.neutral' }}>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('settlements.previewModal.expectedCash')}
-                    </Typography>
-                    <Typography variant="h6" dir="ltr">{MoneyUtil.formatCurrency(previewData.expected_cash_amount || 0)} IRR</Typography>
-                  </Paper>
-                </Grid>
-                <Grid size={{ xs: 6 }}>
-                  <Paper sx={{ p: 2, bgcolor: 'background.neutral' }}>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('settlements.previewModal.expectedPos')}
-                    </Typography>
-                    <Typography variant="h6" dir="ltr">{MoneyUtil.formatCurrency(previewData.expected_pos_amount || 0)} IRR</Typography>
-                  </Paper>
-                </Grid>
+                {[
+                  { label: t('settlements.previewModal.expectedCash'), value: previewData.expected_cash_amount },
+                  { label: t('settlements.previewModal.expectedPos'), value: previewData.expected_pos_amount },
+                  // Priced on each trip when it closed, under the courier's pay rule.
+                  { label: t('delivery.payRules.settlementPay'), value: previewData.total_compensation_amount },
+                  { label: t('delivery.payRules.settlementNet'), value: previewData.net_settlement_amount },
+                ].map((tile) => (
+                  <Grid key={tile.label} size={{ xs: 6, md: 3 }}>
+                    <Paper sx={{ p: 2, bgcolor: 'background.neutral', height: '100%' }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {tile.label}
+                      </Typography>
+                      <Typography variant="h6" dir="ltr">{MoneyUtil.formatCurrency(tile.value || 0)} IRR</Typography>
+                    </Paper>
+                  </Grid>
+                ))}
               </Grid>
 
               <Typography variant="subtitle2" sx={{ mt: 2 }}>

@@ -104,6 +104,7 @@ export const paths = {
       general: `${ROOTS.APP}/settings/general`,
       orderWorkflow: `${ROOTS.APP}/settings/order-workflow`,
       shiftPolicy: `${ROOTS.APP}/settings/shift-policy`,
+      courierPay: `${ROOTS.APP}/settings/courier-pay`,
       discountsCredit: `${ROOTS.APP}/settings/discounts-credit`,
       discountAuthorizations: `${ROOTS.APP}/settings/discount-authorizations`,
       paymentsRefunds: `${ROOTS.APP}/settings/payments-refunds`,

@@ -21,6 +21,7 @@ import { DeliveryEvent } from '../src/entities/DeliveryEvent.entity';
 import { Terminal } from '../src/entities/Terminal.entity';
 import { CustomerAddress } from '../src/entities/CustomerAddress.entity';
 import { Branch } from '../src/entities/Branch.entity';
+import { TenantSetting } from '../src/entities/TenantSetting.entity';
 
 describe('DeliveryService (Courier Settlement)', () => {
   let service: DeliveryService;
@@ -80,6 +81,7 @@ describe('DeliveryService (Courier Settlement)', () => {
         },
         // Only the chain roll-up reads branches; nothing under test here does.
         { provide: getRepositoryToken(Branch), useValue: { find: jest.fn().mockResolvedValue([]) } },
+        { provide: getRepositoryToken(TenantSetting), useValue: { find: jest.fn().mockResolvedValue([]) } },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: OrderTransitionRecorder, useValue: { record: jest.fn() } },
       ],
@@ -129,6 +131,35 @@ describe('DeliveryService (Courier Settlement)', () => {
     ]);
 
     await expect(service.previewSettlement('t-1', 'c-1', ['asgn-settled'])).rejects.toThrow(ConflictException);
+  });
+
+  it("deducts the couriers' pay already priced on each attempt, and expects no cash from a failed ride", async () => {
+    courierRepo.findOne.mockResolvedValue({ id: 'c-1', name: 'Courier 1', code: 'C01' });
+    assignmentRepo.find.mockResolvedValue([
+      { id: 'asgn-done', order_id: 'ord-1', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '10.00', compensation_amount: '30.00', is_settled: false },
+      { id: 'asgn-failed', order_id: 'ord-2', courier_id: 'c-1', status: 'FAILED', delivery_fee: '10.00', compensation_amount: '12.00', is_settled: false },
+    ]);
+    orderRepo.findOne.mockImplementation(({ where }: any) => Promise.resolve({ id: where.id, total_amount: '100.00' }));
+    paymentRepo.find.mockResolvedValue([{ payment_method_code: 'CASH', amount: '100.00' }]);
+    settlementRepo.create.mockImplementation((dto: any) => dto);
+    settlementRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'settle-1' }));
+    settlementLineRepo.create.mockImplementation((dto: any) => dto);
+    settlementLineRepo.save.mockImplementation((dto: any) => Promise.resolve(dto));
+    assignmentRepo.findOne.mockImplementation(({ where }: any) =>
+      Promise.resolve(where.id === 'asgn-done'
+        ? { id: 'asgn-done', order_id: 'ord-1', status: 'DELIVERED', delivery_fee: '10.00' }
+        : { id: 'asgn-failed', order_id: 'ord-2', status: 'FAILED', delivery_fee: '10.00' }),
+    );
+
+    const preview = await service.previewSettlement('t-1', 'c-1');
+    expect(preview.expected_cash_amount).toBe('100.00');
+    expect(preview.total_compensation_amount).toBe('42.00');
+    expect(preview.net_settlement_amount).toBe('58.00');
+
+    const batch = await service.createSettlement('t-1', 'user-1', { courier_id: 'c-1', branch_id: 'b-1' });
+    expect(batch.total_compensation_amount).toBe('42.00');
+    expect(batch.net_settlement_amount).toBe('58.00');
+    expect(batch.lines.find((l: any) => l.delivery_assignment_id === 'asgn-failed').expected_cash).toBe('0.00');
   });
 
   it('leaves settled deliveries out of a preview that names none, so a courier can be settled again', async () => {

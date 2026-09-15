@@ -648,6 +648,20 @@
     "activeBranch": "Active Branch",
     "refresh": "Refresh",
     "refreshing": "Refreshing…",
+    "payRules": {
+      "label": "Pay rule",
+      "FLAT": "Fixed per delivery",
+      "DELIVERY_FEE": "Delivery fee",
+      "ZONE_RATE": "Zone rate",
+      "flatAmount": "{{amount}} per delivery",
+      "zoneFallback": "Zone rate, else {{amount}}",
+      "help_FLAT": "The same amount for every delivery.",
+      "help_DELIVERY_FEE": "The zone's listed delivery fee, even when the customer got free or discounted delivery.",
+      "help_ZONE_RATE": "The courier rate set on each zone. A zone without one pays the amount below.",
+      "tipsNote": "Tips always go to the courier in full.",
+      "settlementPay": "Courier pay (kept by the courier)",
+      "settlementNet": "Net to hand back"
+    },
     "tabs": {
       "board": "Dispatch Board",
       "couriers": "Couriers & Roster",
@@ -708,6 +722,7 @@
       "checkIn": "Check-In",
       "checkOut": "Check-Out",
       "assignPos": "Assign POS",
+      "editPay": "Change pay rule",
       "vehicleTypes": {
         "motorcycle": "Motorcycle",
         "bicycle": "Bicycle",
@@ -732,6 +747,10 @@
       "zoneName": "Zone Name",
       "standardFee": "Standard Delivery Fee",
       "estimatedMinutes": "Estimated Minutes",
+      "courierPay": "Courier Pay",
+      "courierPayUnset": "Courier's own rate",
+      "actions": "Actions",
+      "edit": "Edit zone",
       "status": "Status",
       "active": "Active",
       "inactive": "Inactive",
@@ -777,6 +796,9 @@
         "phoneHelp": "A courier already riding for another branch is found by this number and moved, not added twice.",
         "vehicleType": "Vehicle Type",
         "compensation": "Compensation per Delivery (IRR)",
+        "payMode": "Pay rule",
+        "compensationFlat": "Pay per delivery (IRR)",
+        "compensationFallback": "Pay where a zone has no courier rate (IRR)",
         "cancel": "Cancel",
         "submit": "Save Courier"
       },
@@ -791,11 +813,24 @@
         "restore": "Bring back",
         "moved": "{{name}} now works at this branch."
       },
+      "courierPay": {
+        "title": "Pay rule for {{name}}",
+        "note": "Applies to deliveries completed from now on. Trips already paid keep their pay.",
+        "cancel": "Cancel",
+        "submit": "Save"
+      },
+      "editZone": {
+        "title": "Edit zone {{code}}",
+        "cancel": "Cancel",
+        "submit": "Save Zone"
+      },
       "addZone": {
         "title": "Add Delivery Zone",
         "code": "Zone Code",
         "name": "Zone Name",
         "fee": "Delivery Fee (IRR)",
+        "courierPay": "Courier pay (IRR, optional)",
+        "courierPayHelp": "Paid per trip to couriers on the zone-rate rule. Leave empty to use each courier's own rate.",
         "estimatedMinutes": "Estimated Minutes",
         "cancel": "Cancel",
         "submit": "Save Zone"
@@ -819,6 +854,8 @@
       "availabilityFailed": "Failed to set availability",
       "createCourierFailed": "Failed to create courier profile",
       "moveCourierFailed": "Could not move the courier",
+      "updatePayFailed": "Could not save the pay rule",
+      "updateZoneFailed": "Could not save the zone",
       "createZoneFailed": "Failed to create delivery zone",
       "assignTerminalFailed": "Failed to assign mobile terminal",
       "unassignTerminalFailed": "Failed to unassign terminal",
@@ -2064,6 +2101,17 @@
       "loadError": "Failed to load the shift policy",
       "saveError": "Failed to save the shift policy"
     },
+    "courierPay": {
+      "title": "Courier Pay",
+      "cardTitle": "How couriers are paid",
+      "defaultLabel": "Pay rule for new couriers",
+      "defaultHelp": "Pre-selected when a courier is added; each courier's rule can still be changed on the Couriers tab.",
+      "failedLabel": "Pay couriers for failed deliveries",
+      "failedHelp": "A courier who rode out and could not deliver is paid for the trip under their own rule. A delivery that failed before the courier left is never paid.",
+      "saveSuccess": "Courier pay saved for every branch that follows head office.",
+      "loadError": "Failed to load courier pay settings",
+      "saveError": "Failed to save courier pay settings"
+    },
     "orderWorkflow": {
       "title": "Order & Workflow Policies",
       "subtitle": "Configure order lifecycle automation, cashier edit and cancellation time windows, and channel policies.",
@@ -2387,6 +2435,10 @@
         "shiftPolicy": {
           "title": "Shift & Drawer Policy",
           "description": "Default opening float, how far a drawer may be out before a manager signs off, and blind counting at close."
+        },
+        "courierPay": {
+          "title": "Courier Pay",
+          "description": "The pay rule new couriers start on, and whether failed deliveries are paid."
         },
         "payments": {
           "title": "Payments & Refund Methods",

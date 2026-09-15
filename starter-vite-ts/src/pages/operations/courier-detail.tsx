@@ -218,8 +218,11 @@ export function CourierDetailPage() {
                 { label: t('profile.courier.branch'), value: courier.branch_name || '—' },
                 { label: t('profile.courier.vehicle'), value: courier.vehicle_type || '—' },
                 {
-                  label: t('profile.courier.feePerDelivery'),
-                  value: formatMoney(courier.compensation_per_delivery, currency),
+                  label: t('delivery.payRules.label'),
+                  value:
+                    courier.pay_mode === 'DELIVERY_FEE'
+                      ? t('delivery.payRules.DELIVERY_FEE')
+                      : `${t(`delivery.payRules.${courier.pay_mode || 'FLAT'}`)} · ${formatMoney(courier.compensation_per_delivery, currency)}`,
                 },
                 {
                   label: t('profile.status'),

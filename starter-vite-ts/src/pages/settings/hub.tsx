@@ -8,6 +8,7 @@ import ShieldIcon from '@mui/icons-material/Shield';
 import SearchIcon from '@mui/icons-material/Search';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import TranslateIcon from '@mui/icons-material/Translate';
+import TwoWheelerIcon from '@mui/icons-material/TwoWheeler';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
@@ -256,6 +257,15 @@ export function SettingsHubPage() {
           path: '/app/settings/shift-policy',
           icon: <PointOfSaleIcon sx={{ color: 'success.main' }} />,
           tags: ['shift', 'drawer', 'float', 'variance', 'blind count', 'cash', 'شیفت', 'صندوق', 'کشو', 'مغایرت'],
+        },
+        {
+          id: 'courierPay',
+          scope: 'BRANCH',
+          title: t('settings.hub.items.courierPay.title'),
+          description: t('settings.hub.items.courierPay.description'),
+          path: '/app/settings/courier-pay',
+          icon: <TwoWheelerIcon sx={{ color: 'primary.main' }} />,
+          tags: ['courier', 'pay', 'delivery fee', 'zone rate', 'failed delivery', 'سفیر', 'دستمزد', 'پیک', 'کرایه'],
         },
         {
           id: 'payments',

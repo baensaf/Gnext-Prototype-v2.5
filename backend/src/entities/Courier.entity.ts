@@ -26,6 +26,11 @@ export class Courier {
   @Column({ type: 'varchar', length: 32, default: 'AVAILABLE' }) // AVAILABLE, ON_DELIVERY, INACTIVE
   status: string;
 
+  /** FLAT, DELIVERY_FEE or ZONE_RATE — see `courier-pay.ts`. */
+  @Column({ type: 'varchar', length: 20, default: 'FLAT' })
+  pay_mode: string;
+
+  /** The fixed amount per delivery under FLAT, and the fallback for a zone with no courier rate. */
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
   compensation_per_delivery: string;
 

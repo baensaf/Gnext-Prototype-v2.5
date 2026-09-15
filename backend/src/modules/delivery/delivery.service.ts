@@ -22,6 +22,9 @@ import { OrderTransitionRecorder } from '../order-lifecycle/order-transition-rec
 import { MoneyUtil } from '../../common/utils/money.util';
 import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import { normalizePhone } from '../customer/customer.service';
+import { TenantSetting } from '../../entities/TenantSetting.entity';
+import { pickSettingValue } from '../../common/utils/setting-scope.util';
+import { CourierPayMode, computeCourierPay, isCourierPayMode, resolveCourierPayPolicy } from './courier-pay';
 
 const ACTIVE_DELIVERY_STATES: DeliveryState[] = ['ASSIGNED', 'PICKED_UP', 'EN_ROUTE'];
 
@@ -44,6 +47,7 @@ export class DeliveryService {
     @InjectRepository(Terminal) private readonly terminalRepo: Repository<Terminal>,
     @InjectRepository(CustomerAddress) private readonly customerAddressRepo: Repository<CustomerAddress>,
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
+    @InjectRepository(TenantSetting) private readonly settingRepo: Repository<TenantSetting>,
     private readonly transitionRecorder: OrderTransitionRecorder,
     private readonly auditWriter: AuditWriter,
   ) {}
@@ -55,7 +59,7 @@ export class DeliveryService {
     return await this.zoneRepo.find({ where, order: { name: 'ASC' } });
   }
 
-  async createZone(tenantId: string, data: { branch_id: string; code: string; name: string; fee?: string | number; estimated_minutes?: number; polygon?: any; postal_prefixes?: string[] }) {
+  async createZone(tenantId: string, data: { branch_id: string; code: string; name: string; fee?: string | number; estimated_minutes?: number; courier_pay?: string | null; polygon?: any; postal_prefixes?: string[] }) {
     const existing = await this.zoneRepo.findOne({ where: { tenant_id: tenantId, branch_id: data.branch_id, code: data.code.toUpperCase() } });
     if (existing) throw new ConflictException(`Delivery zone code ${data.code} already exists for this branch`);
 
@@ -66,6 +70,7 @@ export class DeliveryService {
       name: data.name,
       fee: MoneyUtil.format(data.fee || '0', 4),
       estimated_minutes: data.estimated_minutes || 30,
+      courier_pay: DeliveryService.optionalAmount(data.courier_pay),
       polygon: data.polygon || null,
       postal_prefixes: data.postal_prefixes || null,
       is_active: true,
@@ -87,6 +92,43 @@ export class DeliveryService {
 
     await this.zoneRepo.softDelete(id);
     return { success: true };
+  }
+
+  async updateZone(
+    tenantId: string,
+    id: string,
+    data: { name?: string; fee?: string; estimated_minutes?: number; courier_pay?: string | null },
+    actorId?: string,
+  ) {
+    const zone = await this.zoneRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!zone) throw new NotFoundException('Delivery zone not found');
+
+    const before = { name: zone.name, fee: zone.fee, estimated_minutes: zone.estimated_minutes, courier_pay: zone.courier_pay };
+    if (data.name !== undefined) zone.name = data.name;
+    if (data.fee !== undefined) zone.fee = MoneyUtil.format(data.fee || '0', 4);
+    if (data.estimated_minutes !== undefined) zone.estimated_minutes = data.estimated_minutes;
+    if (data.courier_pay !== undefined) zone.courier_pay = DeliveryService.optionalAmount(data.courier_pay);
+
+    const saved = await this.zoneRepo.save(zone);
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      actorId,
+      action: 'DELIVERY_ZONE_UPDATED',
+      entityType: 'DeliveryZone',
+      entityId: saved.id,
+      branchId: saved.branch_id,
+      correlationId: 'corr-zone-update',
+      beforeData: before,
+      afterData: { name: saved.name, fee: saved.fee, estimated_minutes: saved.estimated_minutes, courier_pay: saved.courier_pay },
+    });
+    return saved;
+  }
+
+  /** A blank amount means "not set", which is different from zero. */
+  private static optionalAmount(value?: string | number | null): string | null {
+    if (value === null || value === undefined || String(value).trim() === '') return null;
+    return MoneyUtil.format(value, 4);
   }
 
   // --- 2. COURIERS & ATTENDANCE ---
@@ -159,7 +201,7 @@ export class DeliveryService {
 
   async createCourier(
     tenantId: string,
-    data: { branch_id?: string; code: string; name: string; phone?: string; vehicle_type?: string; compensation_per_delivery?: string | number },
+    data: { branch_id?: string; code: string; name: string; phone?: string; vehicle_type?: string; compensation_per_delivery?: string | number; pay_mode?: string },
     correlationId: string = 'corr-courier-create',
     actorId?: string,
   ) {
@@ -185,6 +227,10 @@ export class DeliveryService {
       });
     }
 
+    const payMode = isCourierPayMode(data.pay_mode)
+      ? data.pay_mode
+      : (await this.payPolicyFor(tenantId, data.branch_id)).defaultPayMode;
+
     const courier = this.courierRepo.create({
       tenant_id: tenantId,
       branch_id: data.branch_id || null,
@@ -192,6 +238,7 @@ export class DeliveryService {
       name: data.name,
       phone: data.phone || null,
       vehicle_type: data.vehicle_type || 'MOTORCYCLE',
+      pay_mode: payMode,
       compensation_per_delivery: MoneyUtil.format(data.compensation_per_delivery || '0', 4),
       status: 'AVAILABLE',
       is_active: true,
@@ -292,6 +339,70 @@ export class DeliveryService {
     }
 
     return await this.getCourierById(tenantId, courierId);
+  }
+
+  async updateCourierPay(
+    tenantId: string,
+    courierId: string,
+    data: { pay_mode: string; compensation_per_delivery?: string },
+    actorId?: string,
+  ) {
+    if (!isCourierPayMode(data.pay_mode)) throw new BadRequestException('Unknown courier pay rule');
+
+    const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
+    if (!courier) throw new NotFoundException('Courier not found');
+
+    const before = { pay_mode: courier.pay_mode, compensation_per_delivery: courier.compensation_per_delivery };
+    courier.pay_mode = data.pay_mode;
+    if (data.compensation_per_delivery !== undefined) {
+      courier.compensation_per_delivery = MoneyUtil.format(data.compensation_per_delivery || '0', 4);
+    }
+    const saved = await this.courierRepo.save(courier);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      actorId,
+      action: 'COURIER_PAY_UPDATED',
+      entityType: 'Courier',
+      entityId: saved.id,
+      branchId: saved.branch_id ?? undefined,
+      correlationId: 'corr-courier-pay',
+      beforeData: before,
+      afterData: { pay_mode: saved.pay_mode, compensation_per_delivery: saved.compensation_per_delivery },
+    });
+    return saved;
+  }
+
+  /** The COURIER_PAY policy in force at a branch: its own override, else head office's. */
+  async payPolicyFor(tenantId: string, branchId?: string | null) {
+    const rows = (await this.settingRepo.find({ where: { tenant_id: tenantId, key: 'COURIER_PAY' } })) || [];
+    return resolveCourierPayPolicy(pickSettingValue(rows, branchId));
+  }
+
+  /**
+   * What the delivery's courier earns for this trip under their own pay rule. Changing a
+   * rule or a rate later does not reprice trips already paid: callers store the result.
+   */
+  private async payForTrip(tenantId: string, delivery: Delivery, tip?: string | null): Promise<{ amount: string; basis: CourierPayMode } | null> {
+    if (!delivery.courier_id) return null;
+    const courier = await this.courierRepo.findOne({ where: { id: delivery.courier_id } });
+    if (!courier) return null;
+
+    const zone =
+      courier.pay_mode === 'ZONE_RATE' && delivery.zone_id
+        ? await this.zoneRepo.findOne({ where: { id: delivery.zone_id, tenant_id: tenantId } })
+        : null;
+
+    return computeCourierPay({
+      mode: courier.pay_mode,
+      courierRate: courier.compensation_per_delivery,
+      // Snapshotted from the zone when the delivery was created: the listed fee, before any
+      // discount the customer got.
+      listedFee: delivery.fee,
+      zoneRate: zone?.courier_pay ?? null,
+      tip,
+    });
   }
 
   async updateCourierStatus(tenantId: string, courierId: string, status: 'AVAILABLE' | 'ON_DELIVERY' | 'INACTIVE', correlationId?: string, actorId?: string) {
@@ -516,8 +627,15 @@ export class DeliveryService {
 
     if (!expectedState) return delivery;
 
+    // The attempt that matches the delivery as it stands. A failed earlier ride by another
+    // courier keeps its own status, or a later completion would hand them the order's cash.
     const assignment = await this.assignmentRepo.findOne({
-      where: { tenant_id: tenantId, order_id: delivery.order_id },
+      where: {
+        tenant_id: tenantId,
+        order_id: delivery.order_id,
+        ...(delivery.courier_id ? { courier_id: delivery.courier_id } : {}),
+        status: Not('FAILED'),
+      },
     });
     if (assignment && assignment.status !== expectedState) {
       assignment.status = expectedState;
@@ -646,7 +764,10 @@ export class DeliveryService {
     const saved = await this.deliveryRepo.save(delivery);
     await this.logDeliveryEvent(tenantId, saved.id, fromState, 'ASSIGNED', `Assigned to ${courier.name}`, userId);
 
-    let assignment = await this.assignmentRepo.findOne({ where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: courierId } });
+    // A failed ride stays a record of its own, so a retry by the same courier is a new attempt.
+    let assignment = await this.assignmentRepo.findOne({
+      where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: courierId, status: Not('FAILED') },
+    });
     if (!assignment) {
       assignment = this.assignmentRepo.create({
         tenant_id: tenantId,
@@ -698,7 +819,9 @@ export class DeliveryService {
     await this.logDeliveryEvent(tenantId, saved.id, fromState, 'EN_ROUTE', 'Courier departed with delivery package', userId);
 
     if (delivery.courier_id) {
-      const assignment = await this.assignmentRepo.findOne({ where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: delivery.courier_id } });
+      const assignment = await this.assignmentRepo.findOne({
+        where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: delivery.courier_id, status: Not('FAILED') },
+      });
       if (assignment) {
         assignment.status = 'OUT_FOR_DELIVERY';
         assignment.picked_up_at = new Date();
@@ -756,18 +879,22 @@ export class DeliveryService {
     delivery.cash_expected = cashExpStr;
     delivery.mobile_pos_expected = posExpStr;
 
-    if (delivery.courier_id) {
-      const courier = await this.courierRepo.findOne({ where: { id: delivery.courier_id } });
-      if (courier) {
-        delivery.compensation_amount = courier.compensation_per_delivery || '0.0000';
-      }
+    let assignment = delivery.courier_id
+      ? await this.assignmentRepo.findOne({
+          where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: delivery.courier_id, status: Not('FAILED') },
+        })
+      : null;
+
+    const pay = await this.payForTrip(tenantId, delivery, assignment?.tip_amount);
+    if (pay) {
+      delivery.compensation_amount = pay.amount;
+      delivery.compensation_basis = pay.basis;
     }
 
     const saved = await this.deliveryRepo.save(delivery);
     await this.logDeliveryEvent(tenantId, saved.id, fromState, 'DELIVERED', 'Delivery successfully completed', userId);
 
     if (delivery.courier_id) {
-      let assignment = await this.assignmentRepo.findOne({ where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: delivery.courier_id } });
       if (!assignment) {
         assignment = this.assignmentRepo.create({
           tenant_id: tenantId,
@@ -783,6 +910,7 @@ export class DeliveryService {
         assignment.status = 'DELIVERED';
         assignment.delivered_at = new Date();
       }
+      assignment.compensation_amount = MoneyUtil.format(pay?.amount || '0', 2);
       await this.assignmentRepo.save(assignment);
     }
 
@@ -827,6 +955,25 @@ export class DeliveryService {
     await this.logDeliveryEvent(tenantId, saved.id, fromState, 'FAILED', `Delivery failed: ${reason}`, userId);
 
     const order = await this.orderRepo.findOne({ where: { id: delivery.order_id, tenant_id: tenantId } });
+
+    // The courier's attempt is closed as failed, carrying its pay: a courier who rode out and
+    // came back is paid for the trip when the branch's COURIER_PAY policy says so. A courier
+    // who never left is not. No cash is expected from a failed attempt.
+    if (delivery.courier_id) {
+      const assignment = await this.assignmentRepo.findOne({
+        where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: delivery.courier_id, status: Not('FAILED') },
+      });
+      if (assignment) {
+        const rodeOut = ['PICKED_UP', 'EN_ROUTE'].includes(fromState);
+        const policy = rodeOut ? await this.payPolicyFor(tenantId, order?.branch_id) : null;
+        const pay = policy?.payFailedDeliveries ? await this.payForTrip(tenantId, delivery) : null;
+        assignment.status = 'FAILED';
+        assignment.failure_reason = delivery.failure_reason;
+        assignment.compensation_amount = MoneyUtil.format(pay?.amount || '0', 2);
+        await this.assignmentRepo.save(assignment);
+      }
+    }
+
     if (order) {
       order.state = 'READY';
       order.status = 'READY';
@@ -970,6 +1117,14 @@ export class DeliveryService {
    * still settled here. The figures are the settlement preview's own, so the card and the
    * batch it starts cannot disagree.
    */
+  /** The money a courier's attempt should bring back: the order's payments if delivered, nothing if it failed. */
+  private async expectedFromAttempt(assignment: DeliveryAssignment, order?: OrderHeader | null) {
+    if (assignment.status !== 'DELIVERED') {
+      return { expCashStr: '0.00', expPosStr: '0.00', primaryMethod: 'CASH', expCash: '0.00', expPos: '0.00' };
+    }
+    return await this.calculatePaymentBreakdown(assignment.order_id, order?.total_amount || '0');
+  }
+
   async getUnsettledSummary(tenantId: string, branchId?: string) {
     const pending = await this.assignmentRepo.find({
       where: { tenant_id: tenantId, is_settled: false, status: In(['DELIVERED', 'FAILED', 'RETURNED']) },
@@ -989,6 +1144,7 @@ export class DeliveryService {
         expected_cash: preview.expected_cash_amount,
         expected_pos: preview.expected_pos_amount,
         total_delivery_fees: preview.total_delivery_fees,
+        total_compensation: preview.total_compensation_amount,
         net_due_amount: preview.net_settlement_amount,
       });
     }
@@ -1053,6 +1209,7 @@ export class DeliveryService {
     let expCashStr = '0.00';
     let expPosStr = '0.00';
     let totalFeeStr = '0.00';
+    let compensationStr = '0.00';
     const eligibleAssignments: DeliveryAssignment[] = [];
     const lines = [];
 
@@ -1060,9 +1217,10 @@ export class DeliveryService {
       const order = await this.orderRepo.findOne({ where: { id: a.order_id } });
       if (branchId && order?.branch_id && order.branch_id !== branchId) continue;
 
-      const breakdown = await this.calculatePaymentBreakdown(a.order_id, order?.total_amount || '0');
+      const breakdown = await this.expectedFromAttempt(a, order);
       eligibleAssignments.push(a);
       totalFeeStr = MoneyUtil.add(totalFeeStr, a.delivery_fee || '0', 2);
+      compensationStr = MoneyUtil.add(compensationStr, a.compensation_amount || '0', 2);
       expCashStr = MoneyUtil.add(expCashStr, breakdown.expCashStr, 2);
       expPosStr = MoneyUtil.add(expPosStr, breakdown.expPosStr, 2);
       lines.push({
@@ -1083,7 +1241,10 @@ export class DeliveryService {
       expected_cash_amount: expCashStr,
       expected_pos_amount: expPosStr,
       total_delivery_fees: totalFeeStr,
-      net_settlement_amount: MoneyUtil.add(expCashStr, expPosStr, 2),
+      // The couriers' pay for these attempts, already priced when each was closed. The net
+      // is what they owe back once their pay is kept — the same sum updateSettlement makes.
+      total_compensation_amount: compensationStr,
+      net_settlement_amount: MoneyUtil.subtract(MoneyUtil.add(expCashStr, expPosStr, 2), compensationStr, 2),
       assignment_ids: eligibleAssignments.map((a) => a.id),
       lines,
     };
@@ -1125,7 +1286,7 @@ export class DeliveryService {
       actual_pos_amount: preview.expected_pos_amount,
       cash_discrepancy_amount: '0.00',
       pos_discrepancy_amount: '0.00',
-      total_compensation_amount: '0.00',
+      total_compensation_amount: preview.total_compensation_amount,
       total_adjustment_amount: '0.00',
       net_settlement_amount: preview.net_settlement_amount,
       created_by_user_id: userId,
@@ -1140,7 +1301,7 @@ export class DeliveryService {
       if (!asgn) continue;
 
       const order = await this.orderRepo.findOne({ where: { id: asgn.order_id } });
-      const breakdown = await this.calculatePaymentBreakdown(asgn.order_id, order?.total_amount || '0');
+      const breakdown = await this.expectedFromAttempt(asgn, order);
 
       const line = this.settlementLineRepo.create({
         settlement_id: savedSettlement.id,

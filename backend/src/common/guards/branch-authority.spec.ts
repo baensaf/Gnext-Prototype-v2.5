@@ -37,7 +37,7 @@ function authorityOf(controller: any, method: string): Handler {
 
 /** Equipment and layout belonging to one shop: its manager's, never the register's. */
 const SITE_CONFIG: [any, string[]][] = [
-  [DeliveryController, ['createZone', 'deleteZone', 'createCourier']],
+  [DeliveryController, ['createZone', 'updateZone', 'deleteZone', 'createCourier', 'updateCourierPay']],
   [DineInController, ['createSection', 'updateSection', 'archiveSection', 'createTable', 'updateTable', 'archiveTable']],
   [KdsController, ['createStation', 'updateStation', 'deleteStation', 'createScreen', 'updateScreen', 'deleteScreen', 'createRoutingRule', 'deleteRoutingRule']],
   [PrintersController, ['createPrinter', 'updatePrinter', 'deletePrinter', 'createGroup', 'updateGroup', 'deleteGroup', 'createRoute', 'updateRoute', 'deleteRoute']],
@@ -102,7 +102,9 @@ const BY_ID: [any, string[]][] = [
     DeliveryController,
     [
       'deleteZone',
+      'updateZone',
       'getCourierById',
+      'updateCourierPay',
       'updateCourierStatus',
       'setCourierAvailability',
       'assignMobileTerminal',
