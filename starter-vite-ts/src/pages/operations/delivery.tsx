@@ -20,6 +20,7 @@ import {
   Tabs,
   Chip,
   Grid,
+  Link,
   Table,
   Stack,
   Alert,
@@ -45,6 +46,8 @@ import {
   LinearProgress,
   CircularProgress,
 } from '@mui/material';
+
+import { paths } from 'src/routes/paths';
 
 import { MoneyUtil } from 'src/utils/money.util';
 
@@ -671,7 +674,14 @@ export function DeliveryPage() {
                   <TableRow key={c.id}>
                     <TableCell><strong>{c.code}</strong></TableCell>
                     <TableCell>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{c.name}</Typography>
+                      <Link
+                        component="button"
+                        variant="subtitle2"
+                        onClick={() => navigate(paths.app.delivery.courierDetail(c.id))}
+                        sx={{ fontWeight: 'bold', display: 'block' }}
+                      >
+                        {c.name}
+                      </Link>
                       <Typography variant="caption" color="text.secondary">{c.phone || t('delivery.card.noPhone')}</Typography>
                     </TableCell>
                     <TableCell><Chip label={getVehicleTypeLabel(c.vehicle_type)} size="small" /></TableCell>

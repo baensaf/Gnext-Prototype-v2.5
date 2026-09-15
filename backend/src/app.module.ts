@@ -37,6 +37,7 @@ import { OfflineSyncModule } from './modules/offline-sync/offline-sync.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { ImportExportModule } from './modules/import-export/import-export.module';
 import { UsersModule } from './modules/users/users.module';
+import { ProfilesModule } from './modules/profiles/profiles.module';
 import { MoadianModule } from './modules/moadian/moadian.module';
 import { TaxInvoice } from './entities/TaxInvoice.entity';
 import { ImportJob } from './entities/ImportJob.entity';
@@ -223,6 +224,7 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
     MoadianModule,
     ImportExportModule,
     UsersModule,
+    ProfilesModule,
     TypeOrmModule.forFeature([AdminUser, Session, IdempotencyRecord]),
   ],
   controllers: [HealthController],

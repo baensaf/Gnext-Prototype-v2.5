@@ -136,6 +136,7 @@ export class CustomerService {
       credit_limit?: string;
     },
     correlationId: string,
+    actorId?: string,
   ) {
     const normMobile = normalizePhone(data.mobile);
     const rawMobile = data.mobile ? data.mobile.trim() : '';
@@ -190,6 +191,7 @@ export class CustomerService {
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
+      actorId,
       action: 'CUSTOMER_CREATED',
       entityType: 'Customer',
       entityId: saved.id,
@@ -298,7 +300,7 @@ export class CustomerService {
   }
 
   // Phones, Tags, Consents
-  async addPhone(tenantId: string, customerId: string, phoneNumber: string, label: string = 'MOBILE', isPrimary: boolean = false) {
+  async addPhone(tenantId: string, customerId: string, phoneNumber: string, label: string = 'MOBILE', isPrimary: boolean = false, actorId?: string) {
     const norm = normalizePhone(phoneNumber);
     if (isPrimary) {
       await this.phoneRepo.update({ tenant_id: tenantId, customer_id: customerId }, { is_primary: false });
@@ -314,17 +316,37 @@ export class CustomerService {
       is_primary: isPrimary,
       is_verified: true,
     });
-    return await this.phoneRepo.save(phone);
+    const saved = await this.phoneRepo.save(phone);
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      actorId,
+      action: 'CUSTOMER_PHONE_ADDED',
+      entityType: 'Customer',
+      entityId: customerId,
+      afterData: saved,
+    });
+    return saved;
   }
 
-  async addConsent(tenantId: string, customerId: string, consentType: string, granted: boolean = true) {
+  async addConsent(tenantId: string, customerId: string, consentType: string, granted: boolean = true, actorId?: string) {
     const consent = this.consentRepo.create({
       tenant_id: tenantId,
       customer_id: customerId,
       consent_type: consentType,
       granted,
     });
-    return await this.consentRepo.save(consent);
+    const saved = await this.consentRepo.save(consent);
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      actorId,
+      action: 'CUSTOMER_CONSENT_RECORDED',
+      entityType: 'Customer',
+      entityId: customerId,
+      afterData: saved,
+    });
+    return saved;
   }
 
   // Addresses
@@ -336,6 +358,7 @@ export class CustomerService {
     tenantId: string,
     customerId: string,
     data: { title: string; address_text: string; postal_code?: string; is_default?: boolean },
+    actorId?: string,
   ) {
     await this.getCustomerById(tenantId, customerId);
 
@@ -352,7 +375,17 @@ export class CustomerService {
       is_default: data.is_default ?? false,
     });
 
-    return await this.addressRepo.save(addr);
+    const saved = await this.addressRepo.save(addr);
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      actorId,
+      action: 'CUSTOMER_ADDRESS_ADDED',
+      entityType: 'Customer',
+      entityId: customerId,
+      afterData: saved,
+    });
+    return saved;
   }
 }
 

@@ -57,7 +57,7 @@ export class CustomerController {
     // and the account opens at zero until head office sets one.
     const scope = { role: (req as any).userRole, branchId: (req as any).userBranchId ?? null };
     const data = isHeadOfficeUser(scope) ? body : { ...body, credit_limit: undefined };
-    return await this.customerService.createCustomer(tenantId, data, correlationId);
+    return await this.customerService.createCustomer(tenantId, data, correlationId, (req as any).userId);
   }
 
   @Post('customers/:id/phones')
@@ -67,7 +67,7 @@ export class CustomerController {
     @Req() req: Request,
   ) {
     const tenantId = (req as any).tenantId;
-    return await this.customerService.addPhone(tenantId, id, body.phoneNumber, body.label, body.isPrimary);
+    return await this.customerService.addPhone(tenantId, id, body.phoneNumber, body.label, body.isPrimary, (req as any).userId);
   }
 
   @Post('customers/:id/consents')
@@ -77,7 +77,7 @@ export class CustomerController {
     @Req() req: Request,
   ) {
     const tenantId = (req as any).tenantId;
-    return await this.customerService.addConsent(tenantId, id, body.consentType, body.granted);
+    return await this.customerService.addConsent(tenantId, id, body.consentType, body.granted, (req as any).userId);
   }
 
   @Get('customers/:id/addresses')
@@ -89,7 +89,7 @@ export class CustomerController {
   @Post('customers/:id/addresses')
   async createAddress(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.customerService.createAddress(tenantId, id, body);
+    return await this.customerService.createAddress(tenantId, id, body, (req as any).userId);
   }
 
   @HeadOfficeOnly()

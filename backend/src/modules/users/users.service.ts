@@ -57,6 +57,17 @@ export class UsersService {
     };
   }
 
+  /** What an audit event records of an account: its standing, never its credentials. */
+  private auditable(user: AdminUser) {
+    return {
+      display_name: user.display_name,
+      role: user.role,
+      branch_id: user.branch_id ?? null,
+      is_active: user.is_active,
+      preferred_locale: user.preferred_locale,
+    };
+  }
+
   async list(tenantId: string) {
     const [users, branches] = await Promise.all([
       this.userRepo.find({ where: { tenant_id: tenantId }, order: { username: 'ASC' } }),
@@ -113,8 +124,13 @@ export class UsersService {
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
+      actorId,
       action: 'USER_CREATED',
+      entityType: 'AdminUser',
+      entityId: saved.id,
+      branchId: saved.branch_id ?? undefined,
       correlationId,
+      afterData: this.auditable(saved),
       details: { userId: saved.id, username: saved.username, role: saved.role, branchId: saved.branch_id },
     });
 
@@ -155,7 +171,7 @@ export class UsersService {
       }
     }
 
-    const before = { role: user.role, branch_id: user.branch_id, is_active: user.is_active };
+    const before = this.auditable(user);
 
     if (data.display_name !== undefined) user.display_name = data.display_name;
     if (data.role !== undefined) user.role = data.role.toUpperCase();
@@ -166,12 +182,22 @@ export class UsersService {
     user.updated_by = actorId;
 
     const saved = await this.userRepo.save(user);
+    const after = this.auditable(saved);
+    const changed = (Object.keys(after) as (keyof typeof after)[]).filter((key) => before[key] !== after[key]);
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
-      action: 'USER_UPDATED',
+      actorId,
+      // Switching an account off or back on is the change anyone reading the trail looks for.
+      action:
+        changed.includes('is_active') ? (saved.is_active ? 'USER_REACTIVATED' : 'USER_DEACTIVATED') : 'USER_UPDATED',
+      entityType: 'AdminUser',
+      entityId: saved.id,
+      branchId: saved.branch_id ?? undefined,
       correlationId,
-      details: { userId: saved.id, before, after: { role: saved.role, branch_id: saved.branch_id, is_active: saved.is_active } },
+      beforeData: before,
+      afterData: after,
+      details: { userId: saved.id, changed: data.pin ? [...changed, 'pin'] : changed },
     });
 
     const branch = saved.branch_id
