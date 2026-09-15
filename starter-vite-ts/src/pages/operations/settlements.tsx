@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import {
   Box,
@@ -31,6 +31,7 @@ import {
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { httpClient as axios } from 'src/api/httpClient';
+import { useBranchContext } from 'src/contexts/branch-context';
 
 import { Iconify } from 'src/components/iconify';
 
@@ -103,9 +104,14 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
   const [statementModalOpen, setStatementModalOpen] = useState(false);
   const [statementData, setStatementData] = useState<any>(null);
 
-  const fetchData = async () => {
+  // Cash is handed back at the shop it was collected for, so the cards and batches are the
+  // header branch's — including couriers who have since moved to another branch.
+  const { selectedBranchId } = useBranchContext();
+  const branchId = selectedBranchId || undefined;
+
+  const fetchData = useCallback(async () => {
     try {
-      const summaryRes = await axios.get('/api/v1/delivery/settlements/unsettled-summary');
+      const summaryRes = await axios.get('/api/v1/delivery/settlements/unsettled-summary', { params: { branchId } });
       const summaryArray = Array.isArray(summaryRes.data)
         ? summaryRes.data
         : Array.isArray(summaryRes.data?.data)
@@ -113,7 +119,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
         : [];
       setUnsettledSummaries(summaryArray);
 
-      const batchesRes = await axios.get('/api/v1/delivery/settlements');
+      const batchesRes = await axios.get('/api/v1/delivery/settlements', { params: { branchId } });
       const batchesArray = Array.isArray(batchesRes.data)
         ? batchesRes.data
         : Array.isArray(batchesRes.data?.data)
@@ -125,16 +131,16 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
       setUnsettledSummaries([]);
       setBatches([]);
     }
-  };
+  }, [branchId]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const handleStartCreateSettlement = async (courierId: string) => {
     setSelectedCourierId(courierId);
     try {
-      const res = await axios.post('/api/v1/delivery/settlements/preview', { courier_id: courierId });
+      const res = await axios.post('/api/v1/delivery/settlements/preview', { courier_id: courierId, branch_id: branchId });
       setPreviewData(res.data);
       setCreateDialogOpen(true);
     } catch (err) {
@@ -145,7 +151,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
   const handleConfirmCreateSettlement = async () => {
     if (!selectedCourierId) return;
     try {
-      await axios.post('/api/v1/delivery/settlements', { courier_id: selectedCourierId });
+      await axios.post('/api/v1/delivery/settlements', { courier_id: selectedCourierId, branch_id: branchId });
       setCreateDialogOpen(false);
       fetchData();
     } catch (err) {

@@ -45,6 +45,17 @@ export interface Courier {
   active_delivery_count?: number;
 }
 
+/** The courier a new-courier form turned out to describe, sent back with a 409 `COURIER_EXISTS`. */
+export interface CourierOnFile {
+  id: string;
+  code: string;
+  name: string;
+  phone?: string | null;
+  branch_id?: string | null;
+  branch_name?: string | null;
+  is_active: boolean;
+}
+
 export interface Delivery {
   id: string;
   order_id: string;
@@ -105,6 +116,11 @@ export const deliveryApi = {
   },
   createCourier: async (data: Partial<Courier>): Promise<Courier> => {
     const res = await httpClient.post('/api/v1/delivery/couriers', data);
+    return res.data;
+  },
+  /** Brings a courier on file at another branch over to `branchId`, keeping one record and one history. */
+  moveCourier: async (id: string, branchId?: string): Promise<Courier> => {
+    const res = await httpClient.post(`/api/v1/delivery/couriers/${id}/move`, { branch_id: branchId });
     return res.data;
   },
   updateCourierStatus: async (id: string, status: 'AVAILABLE' | 'ON_DELIVERY' | 'INACTIVE'): Promise<Courier> => {

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { DeliveryService } from '../src/modules/delivery/delivery.service';
 import { Courier } from '../src/entities/Courier.entity';
 import { DeliveryAssignment } from '../src/entities/DeliveryAssignment.entity';
@@ -41,8 +41,10 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
   let customerAddressRepo: any;
   let auditWriter: any;
   let transitionRecorder: any;
+  let branchRepo: any;
 
   beforeEach(async () => {
+    branchRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() };
     courierRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn().mockImplementation((c) => c), save: jest.fn().mockImplementation((c) => Promise.resolve(c)) };
     assignmentRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn().mockImplementation((a) => a), save: jest.fn().mockImplementation((a) => Promise.resolve(a)) };
     orderRepo = {
@@ -85,8 +87,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
         { provide: getRepositoryToken(DeliveryEvent), useValue: deliveryEventRepo },
         { provide: getRepositoryToken(Terminal), useValue: terminalRepo },
         { provide: getRepositoryToken(CustomerAddress), useValue: customerAddressRepo },
-        // Only the chain roll-up reads branches; nothing under test here does.
-        { provide: getRepositoryToken(Branch), useValue: { find: jest.fn().mockResolvedValue([]) } },
+        { provide: getRepositoryToken(Branch), useValue: branchRepo },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: OrderTransitionRecorder, useValue: transitionRecorder },
       ],
@@ -185,5 +186,72 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
     await expect(service.assignCourier('t-1', 'del-1', 'cour-1')).rejects.toThrow(BadRequestException);
     expect(deliveryRepo.save).toHaveBeenCalledWith(expect.objectContaining({ state: 'DELIVERED' }));
     expect(courierRepo.findOne).not.toHaveBeenCalled();
+  });
+
+  it("refuses to hand one branch's order to a courier who works at another", async () => {
+    deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', state: 'UNASSIGNED' });
+    orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', branch_id: 'downtown', state: 'READY' });
+    courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', branch_id: 'central', name: 'Ali', is_active: true });
+    attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_IN', availability_status: 'AVAILABLE' });
+
+    await expect(service.assignCourier('t-1', 'del-1', 'cour-1')).rejects.toThrow(BadRequestException);
+    expect(deliveryRepo.save).not.toHaveBeenCalled();
+  });
+
+  describe('one courier record across branches', () => {
+    it('refuses to add a courier twice when the same mobile is typed another way', async () => {
+      courierRepo.find.mockResolvedValue([
+        { id: 'cour-1', code: 'CR-001', name: 'Ali Rezaei', phone: '09120000001', branch_id: 'central', is_active: true },
+      ]);
+      branchRepo.findOne.mockResolvedValue({ id: 'central', name: 'Central Plaza' });
+
+      const attempt = service.createCourier('t-1', { branch_id: 'downtown', code: 'CR-099', name: 'Ali R.', phone: '+98 912 000 0001' });
+
+      await expect(attempt).rejects.toThrow(ConflictException);
+      await attempt.catch((err: any) => {
+        expect(err.getResponse().code).toBe('COURIER_EXISTS');
+        expect(err.getResponse().context.courier).toEqual(expect.objectContaining({ id: 'cour-1', branch_name: 'Central Plaza' }));
+      });
+      expect(courierRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('moves a courier who is between shifts, and records where from', async () => {
+      courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', branch_id: 'central', name: 'Ali', is_active: true });
+      branchRepo.findOne.mockResolvedValue({ id: 'downtown', tenant_id: 't-1', name: 'Downtown Express' });
+      attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_OUT' });
+      terminalAssignRepo.findOne.mockResolvedValue(null);
+
+      await service.moveCourier('t-1', 'cour-1', 'downtown', 'user-1');
+
+      expect(courierRepo.save).toHaveBeenCalledWith(expect.objectContaining({ id: 'cour-1', branch_id: 'downtown' }));
+      expect(auditWriter.write).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'COURIER_MOVED', beforeData: { branch_id: 'central' }, afterData: { branch_id: 'downtown' } }),
+      );
+    });
+
+    it.each([
+      ['still carrying orders', () => deliveryRepo.count.mockResolvedValue(2)],
+      ['still checked in at the old shop', () => attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_IN' })],
+      ["still holding the old shop's mobile POS", () => terminalAssignRepo.findOne.mockResolvedValue({ id: 'cta-1', is_active: true })],
+    ])('will not move a courier %s', async (_label, arrange) => {
+      courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', branch_id: 'central', name: 'Ali', is_active: true });
+      branchRepo.findOne.mockResolvedValue({ id: 'downtown', tenant_id: 't-1', name: 'Downtown Express' });
+      arrange();
+
+      await expect(service.moveCourier('t-1', 'cour-1', 'downtown')).rejects.toThrow(ConflictException);
+      expect(courierRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('will not check a courier in at a branch they do not work for', async () => {
+      courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', branch_id: 'central', name: 'Ali' });
+
+      await expect(
+        service.recordAttendance('t-1', { courier_id: 'cour-1', branch_id: 'downtown', status: 'CHECKED_IN' }),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.recordAttendance('t-1', { courier_id: 'cour-1', branch_id: 'central', status: 'CHECKED_IN' }, 'user-1', 'downtown'),
+      ).rejects.toThrow(ForbiddenException);
+      expect(attendanceRepo.save).not.toHaveBeenCalled();
+    });
   });
 });

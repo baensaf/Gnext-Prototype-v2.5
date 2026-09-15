@@ -98,7 +98,34 @@ describe('authority declared on the routes', () => {
  * branch and the interceptor only ever confined the query string and the body.
  */
 const BY_ID: [any, string[]][] = [
-  [DeliveryController, ['deleteZone', 'getCourierById', 'updateCourierStatus', 'setCourierAvailability', 'assignMobileTerminal', 'unassignMobileTerminal']],
+  [
+    DeliveryController,
+    [
+      'deleteZone',
+      'getCourierById',
+      'updateCourierStatus',
+      'setCourierAvailability',
+      'assignMobileTerminal',
+      'unassignMobileTerminal',
+      // A delivery's branch is its order's.
+      'createDeliveryForOrder',
+      'assignCourierToDelivery',
+      'departDelivery',
+      'completeDelivery',
+      'failDelivery',
+      'requeueDelivery',
+      'getDeliveryEvents',
+      'assignOrder',
+      'updateAssignmentStatus',
+      'getSettlementDetail',
+      'updateSettlement',
+      'reviewSettlement',
+      'returnSettlement',
+      'closeSettlement',
+      'reverseSettlement',
+      'getSettlementStatement',
+    ],
+  ],
   [DineInController, ['updateSection', 'archiveSection', 'updateTable', 'archiveTable', 'seatGuests', 'releaseTable']],
   [KdsController, ['updateStation', 'deleteStation', 'updateScreen', 'deleteScreen', 'deleteRoutingRule']],
   [PrintersController, ['updatePrinter', 'deletePrinter', 'updateGroup', 'deleteGroup', 'updateRoute', 'deleteRoute']],

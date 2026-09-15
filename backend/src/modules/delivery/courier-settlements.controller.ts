@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Patch, Param, Query, Body, Req, UnauthorizedException } from '@nestjs/common';
 import { Request } from 'express';
 import { DeliveryService } from './delivery.service';
+import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
+import { CourierSettlement } from '../../entities/CourierSettlement.entity';
 
 @Controller('api/v1/courier-settlements')
 export class CourierSettlementsController {
@@ -70,12 +72,14 @@ export class CourierSettlementsController {
     );
   }
 
+  @BranchOwned(CourierSettlement)
   @Get(':id')
   async getSettlementDetail(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.deliveryService.getSettlementDetail(tenantId, id);
   }
 
+  @BranchOwned(CourierSettlement)
   @Patch(':id')
   async updateSettlement(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -83,6 +87,7 @@ export class CourierSettlementsController {
     return await this.deliveryService.updateSettlement(tenantId, id, body, correlationId);
   }
 
+  @BranchOwned(CourierSettlement)
   @Post(':id/review')
   async reviewSettlement(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -92,6 +97,7 @@ export class CourierSettlementsController {
     return await this.deliveryService.reviewSettlement(tenantId, id, userId, correlationId);
   }
 
+  @BranchOwned(CourierSettlement)
   @Post(':id/return')
   async returnSettlement(@Param('id') id: string, @Body() body: { reason?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -101,6 +107,7 @@ export class CourierSettlementsController {
     return await this.deliveryService.returnSettlement(tenantId, id, userId, body?.reason, correlationId);
   }
 
+  @BranchOwned(CourierSettlement)
   @Post(':id/close')
   async closeSettlement(@Param('id') id: string, @Body() body: { reasonCodeId?: string; reason?: string; approvalRequestId?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -110,6 +117,7 @@ export class CourierSettlementsController {
     return await this.deliveryService.closeSettlement(tenantId, id, userId, body?.approvalRequestId, correlationId);
   }
 
+  @BranchOwned(CourierSettlement)
   @Post(':id/reverse')
   async reverseSettlement(@Param('id') id: string, @Body() body: { reasonCodeId?: string; reason?: string; approvalRequestId?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -119,6 +127,7 @@ export class CourierSettlementsController {
     return await this.deliveryService.reverseSettlement(tenantId, id, userId, body?.reason, correlationId);
   }
 
+  @BranchOwned(CourierSettlement)
   @Get(':id/statement')
   async getSettlementStatement(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
