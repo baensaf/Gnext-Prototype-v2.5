@@ -99,6 +99,8 @@ export const paths = {
     },
     settings: {
       root: `${ROOTS.APP}/settings`,
+      users: `${ROOTS.APP}/settings/users`,
+      userDetail: (id: string) => `${ROOTS.APP}/settings/users/${id}`,
       general: `${ROOTS.APP}/settings/general`,
       orderWorkflow: `${ROOTS.APP}/settings/order-workflow`,
       shiftPolicy: `${ROOTS.APP}/settings/shift-policy`,

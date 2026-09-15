@@ -52,7 +52,7 @@ export class DeliveryController {
   async createCourier(@Body() body: CreateCourierDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
-    return await this.deliveryService.createCourier(tenantId, body, correlationId);
+    return await this.deliveryService.createCourier(tenantId, body, correlationId, (req as any).userId);
   }
 
   @BranchOwned(Courier)
@@ -60,20 +60,20 @@ export class DeliveryController {
   async updateCourierStatus(@Param('id') id: string, @Body() body: { status: 'AVAILABLE' | 'ON_DELIVERY' | 'INACTIVE' }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
-    return await this.deliveryService.updateCourierStatus(tenantId, id, body.status, correlationId);
+    return await this.deliveryService.updateCourierStatus(tenantId, id, body.status, correlationId, (req as any).userId);
   }
 
   @Post('couriers/attendance')
   async recordAttendance(@Body() body: { courier_id: string; branch_id: string; status: 'CHECKED_IN' | 'CHECKED_OUT' | 'PAUSED'; availability_status?: 'AVAILABLE' | 'BUSY' | 'OFF_LINE' }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.deliveryService.recordAttendance(tenantId, body);
+    return await this.deliveryService.recordAttendance(tenantId, body, (req as any).userId);
   }
 
   @BranchOwned(Courier)
   @Post('couriers/:id/availability')
   async setCourierAvailability(@Param('id') courierId: string, @Body() body: { availability_status: 'AVAILABLE' | 'BUSY' | 'OFF_LINE' }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.deliveryService.setCourierAvailability(tenantId, courierId, body.availability_status);
+    return await this.deliveryService.setCourierAvailability(tenantId, courierId, body.availability_status, (req as any).userId);
   }
 
   // --- 3. TERMINAL ASSIGNMENTS ---
@@ -81,14 +81,14 @@ export class DeliveryController {
   @Post('couriers/:id/terminal-assignment')
   async assignMobileTerminal(@Param('id') courierId: string, @Body() body: { terminalId: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.deliveryService.assignMobileTerminal(tenantId, courierId, body.terminalId);
+    return await this.deliveryService.assignMobileTerminal(tenantId, courierId, body.terminalId, (req as any).userId);
   }
 
   @BranchOwned(Courier)
   @Delete('couriers/:id/terminal-assignment')
   async unassignMobileTerminal(@Param('id') courierId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.deliveryService.unassignMobileTerminal(tenantId, courierId);
+    return await this.deliveryService.unassignMobileTerminal(tenantId, courierId, (req as any).userId);
   }
 
   // --- 4. DELIVERY EXECUTION & STATE MACHINE ---

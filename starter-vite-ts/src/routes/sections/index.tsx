@@ -47,6 +47,7 @@ import { PrintQueuePage } from 'src/pages/operations/print-queue';
 /* Detail & Simulation Sub-Pages */
 import { OrdersDetailPage } from 'src/pages/orders/orders-detail';
 import { PaymentSettingsPage } from 'src/pages/settings/payments';
+import { UserProfilePage } from 'src/pages/settings/user-profile';
 import { BusinessDaysPage } from 'src/pages/cashier/business-days';
 import { ReportViewerPage } from 'src/pages/reports/report-viewer';
 import { FleetRollupPage } from 'src/pages/operations/fleet-rollup';
@@ -60,6 +61,7 @@ import { MoadianInvoicesPage } from 'src/pages/moadian/moadian-invoices';
 import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
 import { BranchOverridesPage } from 'src/pages/settings/branch-overrides';
 import { ShiftPolicySettingsPage } from 'src/pages/settings/shift-policy';
+import { CustomerProfilePage } from 'src/pages/customers/customer-profile';
 import { IncomingOrdersProvider } from 'src/contexts/incoming-orders-context';
 import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
 import { KdsConfigurationPage } from 'src/pages/operations/kds-configuration';
@@ -142,7 +144,7 @@ export const routesSection: RouteObject[] = [
       { path: 'customer-club/discounts', element: <Navigate to="/app/discounts/customer-rates" replace /> },
       { path: 'customer-club/wallet', element: <Navigate to="/app/discounts/wallet" replace /> },
       { path: 'customers', element: <CustomersPage /> },
-      { path: 'customers/:id', element: <CustomersPage /> },
+      { path: 'customers/:id', element: <CustomerProfilePage /> },
       { path: 'credit/accounts', element: <CustomerCreditPage /> },
       { path: 'credit/accounts/:id', element: <CustomerCreditPage /> },
       { path: 'catalog/categories', element: <CategoriesPage /> },
@@ -180,6 +182,7 @@ export const routesSection: RouteObject[] = [
       { path: 'moadian', element: <MoadianInvoicesPage /> },
       { path: 'settings', element: <SettingsHubPage /> },
       { path: 'settings/users', element: <UsersPage /> },
+      { path: 'settings/users/:id', element: <UserProfilePage /> },
       { path: 'settings/general', element: <GeneralSettingsPage /> },
       { path: 'settings/order-workflow', element: <OrderWorkflowSettingsPage /> },
       { path: 'settings/shift-policy', element: <ShiftPolicySettingsPage /> },

@@ -4,17 +4,20 @@ import type {
   CustomerCreditAccount,
   CustomerCreditTransaction} from 'src/api/customerApi';
 
+import { useNavigate } from 'react-router';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import HomeIcon from '@mui/icons-material/Home';
 import SearchIcon from '@mui/icons-material/Search';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import {
   Box,
   Card,
   Chip,
   Grid,
+  Link,
   Stack,
   Table,
   Paper,
@@ -40,7 +43,7 @@ import {
   TableContainer,
 } from '@mui/material';
 
-import { useParams } from 'src/routes/hooks';
+import { paths } from 'src/routes/paths';
 
 import { MoneyUtil } from 'src/utils/money.util';
 
@@ -51,6 +54,7 @@ import {
 import { ServerDataGrid } from 'src/components/server-data-grid';
 
 export function CustomersPage() {
+  const navigate = useNavigate();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
@@ -139,17 +143,6 @@ export function CustomersPage() {
       setError(err.detail || 'Failed to fetch credit account');
     }
   }, []);
-
-  const { id } = useParams();
-
-  useEffect(() => {
-    if (id && customers.length > 0) {
-      const match = customers.find((c) => c.id === id || c.code === id);
-      if (match) {
-        handleOpenCredit(match);
-      }
-    }
-  }, [id, customers, handleOpenCredit]);
 
   const handlePostTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -257,7 +250,13 @@ export function CustomersPage() {
             minWidth: 180,
             valueGetter: (_value, row) => `${row.first_name || ''} ${row.last_name || ''}`.trim(),
             renderCell: (params) => (
-              <Typography sx={{ fontWeight: 600 }}>{params.value}</Typography>
+              <Link
+                component="button"
+                onClick={() => navigate(paths.app.customers.detail(params.row.id))}
+                sx={{ fontWeight: 600 }}
+              >
+                {params.value}
+              </Link>
             ),
           },
           {
@@ -308,12 +307,19 @@ export function CustomersPage() {
           {
             field: 'actions',
             headerName: 'Actions',
-            width: 120,
+            width: 150,
             sortable: false,
             renderCell: (params) => {
               const c = params.row as Customer;
               return (
                 <Stack direction="row" spacing={0.5}>
+                  <IconButton
+                    size="small"
+                    title="View profile"
+                    onClick={() => navigate(paths.app.customers.detail(c.id))}
+                  >
+                    <VisibilityIcon fontSize="small" />
+                  </IconButton>
                   <IconButton
                     size="small"
                     title="Customer Wallet & Credit Ledger"

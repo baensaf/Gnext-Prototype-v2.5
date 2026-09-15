@@ -1,16 +1,19 @@
 import type { Branch } from 'src/api/tenantApi';
 import type { AdminUserRow, AdminUserWrite } from 'src/api/usersApi';
 
+import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
   Box,
   Card,
   Chip,
+  Link,
   Stack,
   Table,
   Paper,
@@ -31,6 +34,8 @@ import {
   FormControlLabel,
   CircularProgress,
 } from '@mui/material';
+
+import { paths } from 'src/routes/paths';
 
 import { usersApi } from 'src/api/usersApi';
 import { tenantApi } from 'src/api/tenantApi';
@@ -56,6 +61,7 @@ const emptyForm: AdminUserWrite = {
 
 export function UsersPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const currentUserId = useAuthStore((state) => state.user?.id);
 
   const [users, setUsers] = useState<AdminUserRow[]>([]);
@@ -194,9 +200,14 @@ export function UsersPage() {
                 {users.map((user) => (
                   <TableRow key={user.id} hover>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      <Link
+                        component="button"
+                        variant="body2"
+                        onClick={() => navigate(paths.app.settings.userDetail(user.id))}
+                        sx={{ fontFamily: 'monospace' }}
+                      >
                         {user.username}
-                      </Typography>
+                      </Link>
                     </TableCell>
                     <TableCell>{user.display_name}</TableCell>
                     <TableCell>
@@ -218,6 +229,13 @@ export function UsersPage() {
                       />
                     </TableCell>
                     <TableCell align="center">
+                      <IconButton
+                        size="small"
+                        title={t('profile.viewProfile')}
+                        onClick={() => navigate(paths.app.settings.userDetail(user.id))}
+                      >
+                        <VisibilityIcon fontSize="small" />
+                      </IconButton>
                       <IconButton size="small" onClick={() => openEdit(user)}>
                         <EditIcon fontSize="small" />
                       </IconButton>

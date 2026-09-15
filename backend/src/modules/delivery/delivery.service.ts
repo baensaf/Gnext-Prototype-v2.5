@@ -158,6 +158,7 @@ export class DeliveryService {
     tenantId: string,
     data: { branch_id?: string; code: string; name: string; phone?: string; vehicle_type?: string; compensation_per_delivery?: string | number },
     correlationId: string = 'corr-courier-create',
+    actorId?: string,
   ) {
     const courier = this.courierRepo.create({
       tenant_id: tenantId,
@@ -174,24 +175,34 @@ export class DeliveryService {
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
+      actorId,
       action: 'COURIER_CREATED',
+      entityType: 'Courier',
+      entityId: saved.id,
+      branchId: saved.branch_id ?? undefined,
       correlationId,
       afterData: saved,
     });
     return saved;
   }
 
-  async updateCourierStatus(tenantId: string, courierId: string, status: 'AVAILABLE' | 'ON_DELIVERY' | 'INACTIVE', correlationId?: string) {
+  async updateCourierStatus(tenantId: string, courierId: string, status: 'AVAILABLE' | 'ON_DELIVERY' | 'INACTIVE', correlationId?: string, actorId?: string) {
     const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
     if (!courier) throw new NotFoundException('Courier not found');
 
+    const previousStatus = courier.status;
     courier.status = status;
     const saved = await this.courierRepo.save(courier);
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
+      actorId,
       action: 'COURIER_STATUS_UPDATED',
+      entityType: 'Courier',
+      entityId: saved.id,
+      branchId: saved.branch_id ?? undefined,
       correlationId: correlationId || 'corr-courier-status',
+      beforeData: { status: previousStatus },
       afterData: saved,
     });
     return saved;
@@ -200,6 +211,7 @@ export class DeliveryService {
   async recordAttendance(
     tenantId: string,
     data: { courier_id: string; branch_id: string; status: 'CHECKED_IN' | 'CHECKED_OUT' | 'PAUSED'; availability_status?: 'AVAILABLE' | 'BUSY' | 'OFF_LINE' },
+    actorId?: string,
   ) {
     const courier = await this.courierRepo.findOne({ where: { id: data.courier_id, tenant_id: tenantId } });
     if (!courier) throw new NotFoundException('Courier not found');
@@ -247,7 +259,11 @@ export class DeliveryService {
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
+      actorId,
       action: 'COURIER_ATTENDANCE_UPDATED',
+      entityType: 'Courier',
+      entityId: courier.id,
+      branchId: saved.branch_id ?? undefined,
       correlationId: 'corr-courier-attendance',
       afterData: saved,
     });
@@ -255,7 +271,7 @@ export class DeliveryService {
     return saved;
   }
 
-  async setCourierAvailability(tenantId: string, courierId: string, availabilityStatus: 'AVAILABLE' | 'BUSY' | 'OFF_LINE') {
+  async setCourierAvailability(tenantId: string, courierId: string, availabilityStatus: 'AVAILABLE' | 'BUSY' | 'OFF_LINE', actorId?: string) {
     const todayStr = new Date().toISOString().slice(0, 10);
     let attendance = await this.attendanceRepo.findOne({
       where: { tenant_id: tenantId, courier_id: courierId, date: todayStr },
@@ -265,13 +281,25 @@ export class DeliveryService {
       throw new BadRequestException('Courier is not checked in today. Please check in first.');
     }
 
+    const previousAvailability = attendance.availability_status;
     attendance.availability_status = availabilityStatus;
     const saved = await this.attendanceRepo.save(attendance);
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      actorId,
+      action: 'COURIER_AVAILABILITY_UPDATED',
+      entityType: 'Courier',
+      entityId: courierId,
+      branchId: saved.branch_id ?? undefined,
+      beforeData: { availability_status: previousAvailability },
+      afterData: saved,
+    });
     return saved;
   }
 
   // --- 3. MOBILE TERMINAL ASSIGNMENT ---
-  async assignMobileTerminal(tenantId: string, courierId: string, terminalId: string) {
+  async assignMobileTerminal(tenantId: string, courierId: string, terminalId: string, actorId?: string) {
     const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
     if (!courier) throw new NotFoundException('Courier not found');
 
@@ -306,15 +334,19 @@ export class DeliveryService {
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
+      actorId,
       action: 'COURIER_TERMINAL_ASSIGNED',
+      entityType: 'Courier',
+      entityId: courier.id,
+      branchId: courier.branch_id ?? undefined,
       correlationId: 'corr-terminal-assign',
-      afterData: saved,
+      afterData: { ...saved, terminal_name: terminal.name || terminal.code },
     });
 
     return saved;
   }
 
-  async unassignMobileTerminal(tenantId: string, courierId: string) {
+  async unassignMobileTerminal(tenantId: string, courierId: string, actorId?: string) {
     const activeAssigns = await this.terminalAssignRepo.find({
       where: { tenant_id: tenantId, courier_id: courierId, is_active: true },
     });
@@ -322,6 +354,17 @@ export class DeliveryService {
       a.is_active = false;
       a.unassigned_at = new Date();
       await this.terminalAssignRepo.save(a);
+    }
+    if (activeAssigns.length) {
+      await this.auditWriter.write({
+        tenantId,
+        actorType: 'ADMIN',
+        actorId,
+        action: 'COURIER_TERMINAL_UNASSIGNED',
+        entityType: 'Courier',
+        entityId: courierId,
+        beforeData: { terminal_ids: activeAssigns.map((a) => a.terminal_id) },
+      });
     }
     return { success: true };
   }
