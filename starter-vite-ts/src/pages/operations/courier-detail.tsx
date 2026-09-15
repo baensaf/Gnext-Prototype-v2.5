@@ -45,10 +45,21 @@ import {
 
 type ProfileTab = 'overview' | 'orders' | 'money' | 'attendance' | 'audit';
 
-const STATUS_COLOR: Record<string, 'success' | 'warning' | 'default'> = {
+const AVAILABILITY_COLOR: Record<string, 'success' | 'warning' | 'default'> = {
   AVAILABLE: 'success',
-  ON_DELIVERY: 'warning',
   BUSY: 'warning',
+};
+
+const ATTENDANCE_KEY: Record<string, string> = {
+  CHECKED_IN: 'checkedIn',
+  CHECKED_OUT: 'checkedOut',
+  PAUSED: 'paused',
+};
+
+const AVAILABILITY_KEY: Record<string, string> = {
+  AVAILABLE: 'available',
+  BUSY: 'busy',
+  OFF_LINE: 'offline',
 };
 
 export function CourierDetailPage() {
@@ -58,6 +69,7 @@ export function CourierDetailPage() {
 
   const [profile, setProfile] = useState<CourierProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<ProfileTab>('overview');
 
@@ -68,7 +80,7 @@ export function CourierDetailPage() {
     try {
       setProfile(await profilesApi.courier(id));
     } catch (err: any) {
-      setError(err?.response?.data?.detail || err?.message || t('profile.loadFailed'));
+      setError(err?.detail || err?.message || t('profile.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -78,13 +90,25 @@ export function CourierDetailPage() {
     load();
   }, [load]);
 
-  const handleStatusUpdate = async (status: 'AVAILABLE' | 'ON_DELIVERY' | 'INACTIVE') => {
-    if (!id) return;
+  const attendanceLabel = (status?: string) =>
+    t(`delivery.couriers.attendanceStatus.${ATTENDANCE_KEY[status || ''] || 'checkedOut'}`);
+  const availabilityLabel = (status?: string) =>
+    t(`delivery.couriers.availabilityStatus.${AVAILABILITY_KEY[status || ''] || 'offline'}`);
+
+  /**
+   * The same shift controls as the Couriers tab. Dispatch reads today's attendance, so these
+   * are what decide whether the courier can be handed an order — the courier's own status
+   * column is only ever a by-product of them.
+   */
+  const runShiftAction = async (action: () => Promise<unknown>) => {
+    setSaving(true);
     try {
-      await deliveryApi.updateCourierStatus(id, status);
+      await action();
       await load();
     } catch (err: any) {
-      setError(err?.response?.data?.detail || err?.message || t('profile.courier.statusFailed'));
+      setError(err?.detail || err?.message || t('profile.courier.statusFailed'));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -107,6 +131,16 @@ export function CourierDetailPage() {
   const { courier, stats } = profile;
   const currency = courier.currency_code || 'IRR';
   const cashDiscrepancy = MoneyUtil.sum(profile.settlements.map((s) => s.cash_discrepancy_amount || '0'));
+  const attendanceStatus = courier.attendance?.status || 'CHECKED_OUT';
+  const availability = courier.attendance?.availability_status || 'OFF_LINE';
+  const checkedIn = attendanceStatus === 'CHECKED_IN';
+
+  const setAttendance = (status: 'CHECKED_IN' | 'CHECKED_OUT') =>
+    runShiftAction(() =>
+      deliveryApi.recordAttendance({ courier_id: courier.id, branch_id: courier.branch_id || '', status })
+    );
+  const setAvailability = (status: 'AVAILABLE' | 'BUSY') =>
+    runShiftAction(() => deliveryApi.setAvailability(courier.id, status));
 
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
@@ -122,12 +156,12 @@ export function CourierDetailPage() {
         onRefresh={load}
         chips={
           <>
-            <Chip label={courier.status || 'AVAILABLE'} color={STATUS_COLOR[courier.status] || 'default'} />
-            {courier.attendance && (
+            <Chip label={attendanceLabel(attendanceStatus)} color={checkedIn ? 'success' : 'default'} />
+            {checkedIn && (
               <Chip
                 variant="outlined"
-                label={courier.attendance.availability_status || courier.attendance.status}
-                color={STATUS_COLOR[courier.attendance.availability_status] || 'default'}
+                label={availabilityLabel(availability)}
+                color={AVAILABILITY_COLOR[availability] || 'default'}
               />
             )}
           </>
@@ -205,10 +239,10 @@ export function CourierDetailPage() {
               title={t('profile.courier.today')}
               icon={<AccessTimeIcon color="info" />}
               rows={[
-                { label: t('profile.courier.attendanceStatus'), value: courier.attendance?.status || 'CHECKED_OUT' },
+                { label: t('profile.courier.attendanceStatus'), value: attendanceLabel(attendanceStatus) },
                 {
                   label: t('profile.courier.availability'),
-                  value: courier.attendance?.availability_status || 'OFF_LINE',
+                  value: availabilityLabel(availability),
                 },
                 {
                   label: t('profile.courier.checkedIn'),
@@ -236,33 +270,40 @@ export function CourierDetailPage() {
           </Grid>
           <Grid size={{ xs: 12 }}>
             <Card sx={{ p: 2 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
-                {t('profile.courier.quickStatus')}
+              <Typography variant="subtitle2">{t('profile.courier.quickStatus')}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                {t('profile.courier.shiftHint', { branch: courier.branch_name || '—' })}
               </Typography>
               <Stack sx={{ flexDirection: 'row', gap: 1.5, flexWrap: 'wrap' }}>
+                {checkedIn ? (
+                  <Button variant="outlined" color="error" disabled={saving} onClick={() => setAttendance('CHECKED_OUT')}>
+                    {t('profile.courier.checkOut')}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="contained"
+                    color="success"
+                    disabled={saving || !courier.branch_id}
+                    onClick={() => setAttendance('CHECKED_IN')}
+                  >
+                    {t('profile.courier.checkIn')}
+                  </Button>
+                )}
                 <Button
                   variant="outlined"
                   color="success"
-                  disabled={courier.status === 'AVAILABLE'}
-                  onClick={() => handleStatusUpdate('AVAILABLE')}
+                  disabled={saving || !checkedIn || availability === 'AVAILABLE'}
+                  onClick={() => setAvailability('AVAILABLE')}
                 >
                   {t('profile.courier.setAvailable')}
                 </Button>
                 <Button
                   variant="outlined"
                   color="warning"
-                  disabled={courier.status === 'ON_DELIVERY'}
-                  onClick={() => handleStatusUpdate('ON_DELIVERY')}
+                  disabled={saving || !checkedIn || availability === 'BUSY'}
+                  onClick={() => setAvailability('BUSY')}
                 >
-                  {t('profile.courier.setOnDelivery')}
-                </Button>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  disabled={courier.status === 'INACTIVE'}
-                  onClick={() => handleStatusUpdate('INACTIVE')}
-                >
-                  {t('profile.courier.setInactive')}
+                  {t('profile.courier.setBusy')}
                 </Button>
               </Stack>
             </Card>
@@ -345,9 +386,13 @@ export function CourierDetailPage() {
                   <TableCell dir="ltr">{row.date}</TableCell>
                   <TableCell>{row.branch_name || '—'}</TableCell>
                   <TableCell>
-                    <Chip size="small" label={row.status} color={row.status === 'CHECKED_IN' ? 'success' : 'default'} />
+                    <Chip
+                      size="small"
+                      label={attendanceLabel(row.status)}
+                      color={row.status === 'CHECKED_IN' ? 'success' : 'default'}
+                    />
                   </TableCell>
-                  <TableCell>{row.availability_status}</TableCell>
+                  <TableCell>{availabilityLabel(row.availability_status)}</TableCell>
                   <TableCell dir="ltr">{formatDateTime(row.checked_in_at)}</TableCell>
                   <TableCell dir="ltr">{formatDateTime(row.checked_out_at)}</TableCell>
                 </TableRow>

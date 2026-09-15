@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Not } from 'typeorm';
 import { Courier } from '../../entities/Courier.entity';
@@ -21,6 +21,9 @@ import { AuditWriter } from '../audit/audit-writer.service';
 import { OrderTransitionRecorder } from '../order-lifecycle/order-transition-recorder.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { BusinessDateUtil } from '../../common/utils/business-date.util';
+import { normalizePhone } from '../customer/customer.service';
+
+const ACTIVE_DELIVERY_STATES: DeliveryState[] = ['ASSIGNED', 'PICKED_UP', 'EN_ROUTE'];
 
 @Injectable()
 export class DeliveryService {
@@ -92,7 +95,7 @@ export class DeliveryService {
     if (branchId) where.branch_id = branchId;
     const couriers = await this.courierRepo.find({ where, order: { name: 'ASC' } });
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = BusinessDateUtil.today();
     const enriched = [];
 
     for (const c of couriers) {
@@ -128,7 +131,7 @@ export class DeliveryService {
     const c = await this.courierRepo.findOne({ where: { tenant_id: tenantId, id } });
     if (!c) throw new NotFoundException(`Courier ${id} not found`);
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = BusinessDateUtil.today();
     const attendance = await this.attendanceRepo.findOne({
       where: { tenant_id: tenantId, courier_id: c.id, date: todayStr },
       order: { created_at: 'DESC' },
@@ -160,10 +163,32 @@ export class DeliveryService {
     correlationId: string = 'corr-courier-create',
     actorId?: string,
   ) {
+    const code = data.code.trim().toUpperCase();
+    const onFile = await this.findCourierOnFile(tenantId, code, data.phone);
+    if (onFile) {
+      const branch = onFile.branch_id ? await this.branchRepo.findOne({ where: { id: onFile.branch_id, tenant_id: tenantId } }) : null;
+      throw new ConflictException({
+        code: 'COURIER_EXISTS',
+        title: 'Courier Already On File',
+        detail: `${onFile.name} is already on file${branch ? ` at ${branch.name}` : ''}. Move them to this branch instead of adding them twice.`,
+        context: {
+          courier: {
+            id: onFile.id,
+            code: onFile.code,
+            name: onFile.name,
+            phone: onFile.phone,
+            branch_id: onFile.branch_id,
+            branch_name: branch?.name ?? null,
+            is_active: onFile.is_active,
+          },
+        },
+      });
+    }
+
     const courier = this.courierRepo.create({
       tenant_id: tenantId,
       branch_id: data.branch_id || null,
-      code: data.code.toUpperCase(),
+      code,
       name: data.name,
       phone: data.phone || null,
       vehicle_type: data.vehicle_type || 'MOTORCYCLE',
@@ -184,6 +209,89 @@ export class DeliveryService {
       afterData: saved,
     });
     return saved;
+  }
+
+  /**
+   * A courier is one person to the chain, however many shops they ride for over time. The
+   * code or the mobile number finds them — the number normalised, since the same phone gets
+   * typed as 0912…, 912… and +98912… by different counters.
+   */
+  private async findCourierOnFile(tenantId: string, code: string, phone?: string | null): Promise<Courier | null> {
+    const phoneKey = phone ? normalizePhone(phone) : '';
+    const couriers = (await this.courierRepo.find({ where: { tenant_id: tenantId } })) || [];
+    return (
+      couriers.find((c) => c.code?.toUpperCase() === code) ||
+      (phoneKey ? couriers.find((c) => c.phone && normalizePhone(c.phone) === phoneKey) : undefined) ||
+      null
+    );
+  }
+
+  /**
+   * Moves a courier's record to another branch, so a rider who changes shops keeps one
+   * profile and one history instead of turning up twice.
+   *
+   * What they did before stays where it happened: a delivery belongs to the branch of its
+   * order, attendance and settlements carry their own branch. So cash still owed from the
+   * old shop is settled there, and nothing is copied or re-pointed. A courier is only moved
+   * between shifts — not while carrying orders, checked in, or holding the old shop's
+   * mobile POS, each of which the old branch has to close out first.
+   */
+  async moveCourier(tenantId: string, courierId: string, targetBranchId: string | undefined, actorId?: string) {
+    if (!targetBranchId) throw new BadRequestException('Name the branch the courier is moving to');
+
+    const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
+    if (!courier) throw new NotFoundException('Courier not found');
+
+    const target = await this.branchRepo.findOne({ where: { id: targetBranchId, tenant_id: tenantId } });
+    if (!target) throw new NotFoundException('Branch not found');
+
+    // Same branch and still active: nothing to move. An archived courier on this branch's
+    // own books is brought back the same way.
+    if (courier.branch_id !== targetBranchId || !courier.is_active) {
+      const refuse = (code: string, detail: string) => new ConflictException({ code, title: 'Courier Cannot Move Yet', detail });
+
+      const activeCount = await this.deliveryRepo.count({
+        where: { tenant_id: tenantId, courier_id: courierId, state: In(ACTIVE_DELIVERY_STATES) },
+      });
+      if (activeCount > 0) {
+        throw refuse('COURIER_ON_THE_ROAD', `${courier.name} still has ${activeCount} delivery(s) under way at their current branch.`);
+      }
+
+      const attendance = await this.attendanceRepo.findOne({
+        where: { tenant_id: tenantId, courier_id: courierId, date: BusinessDateUtil.today() },
+      });
+      if (attendance && attendance.status !== 'CHECKED_OUT') {
+        throw refuse('COURIER_ON_SHIFT', `${courier.name} is still checked in at their current branch. Check them out there first.`);
+      }
+
+      const terminal = await this.terminalAssignRepo.findOne({
+        where: { tenant_id: tenantId, courier_id: courierId, is_active: true },
+      });
+      if (terminal) {
+        throw refuse('COURIER_HOLDS_TERMINAL', `${courier.name} still holds a mobile POS from their current branch. Release it there first.`);
+      }
+
+      const fromBranchId = courier.branch_id ?? null;
+      courier.branch_id = targetBranchId;
+      courier.is_active = true;
+      await this.courierRepo.save(courier);
+
+      await this.auditWriter.write({
+        tenantId,
+        actorType: 'ADMIN',
+        actorId,
+        action: 'COURIER_MOVED',
+        entityType: 'Courier',
+        entityId: courier.id,
+        branchId: targetBranchId,
+        correlationId: 'corr-courier-move',
+        beforeData: { branch_id: fromBranchId },
+        afterData: { branch_id: targetBranchId },
+        details: { courierId: courier.id, fromBranchId, toBranchId: targetBranchId },
+      });
+    }
+
+    return await this.getCourierById(tenantId, courierId);
   }
 
   async updateCourierStatus(tenantId: string, courierId: string, status: 'AVAILABLE' | 'ON_DELIVERY' | 'INACTIVE', correlationId?: string, actorId?: string) {
@@ -212,17 +320,43 @@ export class DeliveryService {
     tenantId: string,
     data: { courier_id: string; branch_id: string; status: 'CHECKED_IN' | 'CHECKED_OUT' | 'PAUSED'; availability_status?: 'AVAILABLE' | 'BUSY' | 'OFF_LINE' },
     actorId?: string,
+    userBranchId?: string | null,
   ) {
     const courier = await this.courierRepo.findOne({ where: { id: data.courier_id, tenant_id: tenantId } });
     if (!courier) throw new NotFoundException('Courier not found');
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    // The courier is named in the body, which the ownership guard cannot see.
+    if (userBranchId && courier.branch_id !== userBranchId) {
+      throw new ForbiddenException({
+        code: 'OTHER_BRANCH',
+        title: 'Belongs To Another Branch',
+        detail: 'This record belongs to a branch other than your own.',
+      });
+    }
+    // A courier signs in where they work. Riding for another shop is a move, not a check-in
+    // somewhere else, or the same person ends up on two branches' rosters at once.
+    if (courier.branch_id && data.branch_id && data.branch_id !== courier.branch_id) {
+      throw new BadRequestException({
+        code: 'COURIER_OTHER_BRANCH',
+        title: 'Courier Works At Another Branch',
+        detail: `${courier.name} works at another branch. Move them to this branch before checking them in.`,
+      });
+    }
+
+    const todayStr = BusinessDateUtil.today();
     let attendance = await this.attendanceRepo.findOne({
       where: { tenant_id: tenantId, courier_id: data.courier_id, date: todayStr },
     });
 
+    // Checked out at the old shop this morning, moved, and checking in at the new one.
+    if (attendance && courier.branch_id && attendance.branch_id !== courier.branch_id && data.status === 'CHECKED_IN') {
+      attendance.branch_id = courier.branch_id;
+      attendance.checked_in_at = new Date();
+      attendance.checked_out_at = null;
+    }
+
     if (!attendance) {
-      let targetBranchId = data.branch_id || courier.branch_id;
+      let targetBranchId = courier.branch_id || data.branch_id;
       if (!targetBranchId) {
         const defaultTerm = await this.terminalRepo.findOne({ where: { tenant_id: tenantId } });
         targetBranchId = defaultTerm?.branch_id || null;
@@ -272,7 +406,7 @@ export class DeliveryService {
   }
 
   async setCourierAvailability(tenantId: string, courierId: string, availabilityStatus: 'AVAILABLE' | 'BUSY' | 'OFF_LINE', actorId?: string) {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = BusinessDateUtil.today();
     let attendance = await this.attendanceRepo.findOne({
       where: { tenant_id: tenantId, courier_id: courierId, date: todayStr },
     });
@@ -477,8 +611,15 @@ export class DeliveryService {
     const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
     if (!courier) throw new NotFoundException('Courier not found');
     if (!courier.is_active) throw new BadRequestException('Courier profile is inactive');
+    if (courier.branch_id && order.branch_id && courier.branch_id !== order.branch_id) {
+      throw new BadRequestException({
+        code: 'COURIER_OTHER_BRANCH',
+        title: 'Courier Works At Another Branch',
+        detail: `${courier.name} works at another branch and cannot take this branch's orders.`,
+      });
+    }
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = BusinessDateUtil.today();
     const attendance = await this.attendanceRepo.findOne({
       where: { tenant_id: tenantId, courier_id: courierId, date: todayStr },
     });
@@ -821,49 +962,46 @@ export class DeliveryService {
     return { expCashStr, expPosStr, primaryMethod, expCash: expCashStr, expPos: expPosStr };
   }
 
+  /**
+   * Who still owes a branch money for its deliveries, one card per courier.
+   *
+   * Read from the deliveries rather than from the branch's roster: a courier who has since
+   * moved to another shop is off this branch's list, but the cash they collected here is
+   * still settled here. The figures are the settlement preview's own, so the card and the
+   * batch it starts cannot disagree.
+   */
   async getUnsettledSummary(tenantId: string, branchId?: string) {
-    const couriers = await this.getCouriers(tenantId, branchId);
+    const pending = await this.assignmentRepo.find({
+      where: { tenant_id: tenantId, is_settled: false, status: In(['DELIVERED', 'FAILED', 'RETURNED']) },
+    });
+    const courierIds = Array.from(new Set(pending.map((a) => a.courier_id)));
     const summary = [];
 
-    for (const courier of couriers) {
-      const unsettledDeliveries = await this.deliveryRepo.find({
-        where: {
-          tenant_id: tenantId,
-          courier_id: courier.id,
-          state: 'DELIVERED',
-        },
-      });
-
-      let totalExpectedCash = '0.0000';
-      let totalExpectedPos = '0.0000';
-      let totalDeliveryFees = '0.0000';
-      let totalCompensation = '0.0000';
-
-      for (const d of unsettledDeliveries) {
-        totalDeliveryFees = MoneyUtil.add(totalDeliveryFees, d.fee || '0', 4);
-        totalExpectedCash = MoneyUtil.add(totalExpectedCash, d.cash_expected || '0', 4);
-        totalExpectedPos = MoneyUtil.add(totalExpectedPos, d.mobile_pos_expected || '0', 4);
-        totalCompensation = MoneyUtil.add(totalCompensation, d.compensation_amount || '0', 4);
-      }
-
-      const totalExpected = MoneyUtil.add(totalExpectedCash, totalExpectedPos, 4);
-      const netDue = MoneyUtil.subtract(totalExpected, totalCompensation, 4);
+    for (const courierId of courierIds) {
+      const preview = await this.previewSettlement(tenantId, courierId, undefined, branchId).catch(() => null);
+      if (!preview || preview.line_count === 0) continue;
 
       summary.push({
-        courier_id: courier.id,
-        courier_name: courier.name,
-        unsettled_orders_count: unsettledDeliveries.length,
-        total_delivery_fees: totalDeliveryFees,
-        total_expected_cash: totalExpectedCash,
-        total_expected_pos: totalExpectedPos,
-        total_compensation: totalCompensation,
-        net_due_amount: netDue,
+        courier_id: courierId,
+        courier_name: preview.courier_name,
+        courier_code: preview.courier_code,
+        unsettled_count: preview.line_count,
+        expected_cash: preview.expected_cash_amount,
+        expected_pos: preview.expected_pos_amount,
+        total_delivery_fees: preview.total_delivery_fees,
+        net_due_amount: preview.net_settlement_amount,
       });
     }
 
-    return summary;
+    return summary.sort((a, z) => a.courier_name.localeCompare(z.courier_name));
   }
 
+  /**
+   * The deliveries a settlement batch would take. Named lines are checked and refused when
+   * already settled or reserved; with none named, those are simply left out — otherwise one
+   * closed batch would make every later preview for the same courier fail. `branchId` keeps
+   * to the deliveries that branch sold, since cash is handed back at the shop it came from.
+   */
   async previewSettlement(tenantId: string, courierId: string, assignmentIds?: string[], branchId?: string, dateFrom?: string, dateTo?: string, currency?: string) {
     const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
     if (!courier) throw new NotFoundException('Courier not found');
@@ -887,36 +1025,54 @@ export class DeliveryService {
       }
     }
 
+    const named = Boolean(assignmentIds && assignmentIds.length > 0);
     const where: any = {
       tenant_id: tenantId,
       courier_id: courierId,
       status: In(['DELIVERED', 'FAILED', 'RETURNED']),
     };
-    if (assignmentIds && assignmentIds.length > 0) {
+    if (named) {
       where.id = In(assignmentIds);
+    } else {
+      where.is_settled = false;
     }
 
     const assignments = await this.assignmentRepo.find({ where });
-    for (const a of assignments) {
-      if (a.is_settled) {
-        throw new ConflictException(`Assignment ${a.id} is already settled`);
-      }
-      if (reservedLineAssignmentIds.has(a.id)) {
-        throw new ConflictException(`Assignment ${a.id} is already reserved in an active or closed settlement`);
+    if (named) {
+      for (const a of assignments) {
+        if (a.is_settled) {
+          throw new ConflictException(`Assignment ${a.id} is already settled`);
+        }
+        if (reservedLineAssignmentIds.has(a.id)) {
+          throw new ConflictException(`Assignment ${a.id} is already reserved in an active or closed settlement`);
+        }
       }
     }
-    const eligibleAssignments = assignments;
+    const candidates = named ? assignments : assignments.filter((a) => !a.is_settled && !reservedLineAssignmentIds.has(a.id));
 
     let expCashStr = '0.00';
     let expPosStr = '0.00';
     let totalFeeStr = '0.00';
+    const eligibleAssignments: DeliveryAssignment[] = [];
+    const lines = [];
 
-    for (const a of eligibleAssignments) {
-      totalFeeStr = MoneyUtil.add(totalFeeStr, a.delivery_fee || '0', 2);
+    for (const a of candidates) {
       const order = await this.orderRepo.findOne({ where: { id: a.order_id } });
+      if (branchId && order?.branch_id && order.branch_id !== branchId) continue;
+
       const breakdown = await this.calculatePaymentBreakdown(a.order_id, order?.total_amount || '0');
+      eligibleAssignments.push(a);
+      totalFeeStr = MoneyUtil.add(totalFeeStr, a.delivery_fee || '0', 2);
       expCashStr = MoneyUtil.add(expCashStr, breakdown.expCashStr, 2);
       expPosStr = MoneyUtil.add(expPosStr, breakdown.expPosStr, 2);
+      lines.push({
+        assignment_id: a.id,
+        order_number: order?.order_number || 'ORD-00',
+        delivery_status: a.status,
+        payment_method_code: breakdown.primaryMethod,
+        expected_cash: MoneyUtil.format(breakdown.expCashStr, 2),
+        expected_pos: MoneyUtil.format(breakdown.expPosStr, 2),
+      });
     }
 
     return {
@@ -929,6 +1085,7 @@ export class DeliveryService {
       total_delivery_fees: totalFeeStr,
       net_settlement_amount: MoneyUtil.add(expCashStr, expPosStr, 2),
       assignment_ids: eligibleAssignments.map((a) => a.id),
+      lines,
     };
   }
 
@@ -939,6 +1096,9 @@ export class DeliveryService {
     correlationId?: string,
   ) {
     const preview = await this.previewSettlement(tenantId, data.courier_id, data.assignment_ids, data.branch_id, data.dateFrom, data.dateTo, data.currency);
+    if (preview.line_count === 0) {
+      throw new BadRequestException('This courier has no unsettled deliveries to put in a batch');
+    }
     const courier = await this.courierRepo.findOne({ where: { id: data.courier_id } });
 
     const settlementNumber = `SET-${Date.now().toString().slice(-6)}`;

@@ -4,8 +4,14 @@ import { DeliveryService } from './delivery.service';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { Courier } from '../../entities/Courier.entity';
+import { CourierSettlement } from '../../entities/CourierSettlement.entity';
+import { Delivery } from '../../entities/Delivery.entity';
 import { DeliveryZone } from '../../entities/DeliveryZone.entity';
+import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { CreateCourierDto, CreateZoneDto } from './dtos/delivery-config.dto';
+
+/** A delivery has no branch column: it belongs to the shop that sold its order. */
+const BY_ORDER = { through: { entity: OrderHeader, foreignKey: 'order_id' } };
 
 @Controller('api/v1/delivery')
 export class DeliveryController {
@@ -55,6 +61,22 @@ export class DeliveryController {
     return await this.deliveryService.createCourier(tenantId, body, correlationId, (req as any).userId);
   }
 
+  /**
+   * Brings a courier who is on file at another branch over to this one.
+   *
+   * Deliberately not `@BranchOwned`: the courier belongs to another shop until this call
+   * succeeds, so that check would refuse every move. What it may not do is send a courier
+   * anywhere but the caller's own branch — a pinned account's target is its own branch
+   * whatever the body says, and only head office names one.
+   */
+  @Roles(...MANAGER_AND_ABOVE)
+  @Post('couriers/:id/move')
+  async moveCourier(@Param('id') id: string, @Body() body: { branch_id?: string }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const targetBranchId = (req as any).userBranchId ?? body?.branch_id;
+    return await this.deliveryService.moveCourier(tenantId, id, targetBranchId, (req as any).userId);
+  }
+
   @BranchOwned(Courier)
   @Post('couriers/:id/status')
   async updateCourierStatus(@Param('id') id: string, @Body() body: { status: 'AVAILABLE' | 'ON_DELIVERY' | 'INACTIVE' }, @Req() req: Request) {
@@ -66,7 +88,7 @@ export class DeliveryController {
   @Post('couriers/attendance')
   async recordAttendance(@Body() body: { courier_id: string; branch_id: string; status: 'CHECKED_IN' | 'CHECKED_OUT' | 'PAUSED'; availability_status?: 'AVAILABLE' | 'BUSY' | 'OFF_LINE' }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.deliveryService.recordAttendance(tenantId, body, (req as any).userId);
+    return await this.deliveryService.recordAttendance(tenantId, body, (req as any).userId, (req as any).userBranchId ?? null);
   }
 
   @BranchOwned(Courier)
@@ -98,12 +120,14 @@ export class DeliveryController {
     return await this.deliveryService.getDeliveries(tenantId, branchId, state);
   }
 
+  @BranchOwned(OrderHeader, { param: 'orderId' })
   @Post('orders/:orderId')
   async createDeliveryForOrder(@Param('orderId') orderId: string, @Body() body: { zoneId?: string; addressSnapshot?: any }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.deliveryService.createDeliveryForOrder(tenantId, orderId, body.zoneId, body.addressSnapshot);
   }
 
+  @BranchOwned(Delivery, BY_ORDER)
   @Post(':id/assign')
   async assignCourierToDelivery(@Param('id') deliveryId: string, @Body() body: { courierId: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -111,6 +135,7 @@ export class DeliveryController {
     return await this.deliveryService.assignCourier(tenantId, deliveryId, body.courierId, userId);
   }
 
+  @BranchOwned(Delivery, BY_ORDER)
   @Post(':id/depart')
   async departDelivery(@Param('id') deliveryId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -118,6 +143,7 @@ export class DeliveryController {
     return await this.deliveryService.departDelivery(tenantId, deliveryId, userId);
   }
 
+  @BranchOwned(Delivery, BY_ORDER)
   @Post(':id/complete')
   async completeDelivery(@Param('id') deliveryId: string, @Body() body: { cashCollected?: number; posAmount?: number }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -125,6 +151,7 @@ export class DeliveryController {
     return await this.deliveryService.completeDelivery(tenantId, deliveryId, body, userId);
   }
 
+  @BranchOwned(Delivery, BY_ORDER)
   @Post(':id/fail')
   async failDelivery(@Param('id') deliveryId: string, @Body() body: { reason: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -132,6 +159,7 @@ export class DeliveryController {
     return await this.deliveryService.failDelivery(tenantId, deliveryId, body.reason, userId);
   }
 
+  @BranchOwned(Delivery, BY_ORDER)
   @Post(':id/requeue')
   async requeueDelivery(@Param('id') deliveryId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -139,6 +167,7 @@ export class DeliveryController {
     return await this.deliveryService.requeueDelivery(tenantId, deliveryId, userId);
   }
 
+  @BranchOwned(Delivery, BY_ORDER)
   @Get(':id/events')
   async getDeliveryEvents(@Param('id') deliveryId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -152,6 +181,7 @@ export class DeliveryController {
     return await this.deliveryService.getAssignments(tenantId, branchId, statusFilter);
   }
 
+  @BranchOwned(OrderHeader)
   @Post('orders/:id/assign')
   async assignOrder(@Param('id') orderId: string, @Body() body: { courierId: string; deliveryFee?: number; tipAmount?: number }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -159,6 +189,8 @@ export class DeliveryController {
     return await this.deliveryService.assignOrder(tenantId, orderId, body.courierId, body.deliveryFee, body.tipAmount, correlationId);
   }
 
+  // Despite the path, the id here is a delivery's.
+  @BranchOwned(Delivery, BY_ORDER)
   @Post('assignments/:id/status')
   async updateAssignmentStatus(
     @Param('id') assignmentId: string,
@@ -234,12 +266,14 @@ export class DeliveryController {
     );
   }
 
+  @BranchOwned(CourierSettlement)
   @Get('settlements/:id')
   async getSettlementDetail(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.deliveryService.getSettlementDetail(tenantId, id);
   }
 
+  @BranchOwned(CourierSettlement)
   @Patch('settlements/:id')
   async updateSettlement(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -247,6 +281,7 @@ export class DeliveryController {
     return await this.deliveryService.updateSettlement(tenantId, id, body, correlationId);
   }
 
+  @BranchOwned(CourierSettlement)
   @Post('settlements/:id/review')
   async reviewSettlement(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -256,6 +291,7 @@ export class DeliveryController {
     return await this.deliveryService.reviewSettlement(tenantId, id, userId, correlationId);
   }
 
+  @BranchOwned(CourierSettlement)
   @Post('settlements/:id/return')
   async returnSettlement(@Param('id') id: string, @Body() body: { reason?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -265,6 +301,7 @@ export class DeliveryController {
     return await this.deliveryService.returnSettlement(tenantId, id, userId, body?.reason, correlationId);
   }
 
+  @BranchOwned(CourierSettlement)
   @Post('settlements/:id/close')
   async closeSettlement(@Param('id') id: string, @Body() body: { reasonCodeId?: string; reason?: string; approvalRequestId?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -274,6 +311,7 @@ export class DeliveryController {
     return await this.deliveryService.closeSettlement(tenantId, id, userId, body?.approvalRequestId, correlationId);
   }
 
+  @BranchOwned(CourierSettlement)
   @Post('settlements/:id/reverse')
   async reverseSettlement(@Param('id') id: string, @Body() body: { reasonCodeId?: string; reason?: string; approvalRequestId?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -283,6 +321,7 @@ export class DeliveryController {
     return await this.deliveryService.reverseSettlement(tenantId, id, userId, body?.reason, correlationId);
   }
 
+  @BranchOwned(CourierSettlement)
   @Get('settlements/:id/statement')
   async getSettlementStatement(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

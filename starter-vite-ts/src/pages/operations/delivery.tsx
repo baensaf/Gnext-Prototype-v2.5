@@ -1,8 +1,8 @@
-import type { Courier, Delivery, DeliveryZone, DeliveryEvent } from 'src/api/deliveryApi';
+import type { Courier, Delivery, DeliveryZone, CourierOnFile, DeliveryEvent } from 'src/api/deliveryApi';
 
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import MapIcon from '@mui/icons-material/Map';
@@ -94,7 +94,12 @@ export function DeliveryPage() {
     if (!location.pathname.startsWith(TAB_PATHS[next])) navigate(TAB_PATHS[next]);
   };
 
-  const { selectedBranchId, branches } = useBranchContext();
+  // Everything on this page is one branch's: the header's. Head office inside Downtown sees
+  // Downtown's board, not the chain's deliveries mixed together.
+  const { selectedBranchId } = useBranchContext();
+  const branchId = selectedBranchId || undefined;
+  const branchRef = useRef(branchId);
+  branchRef.current = branchId;
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [zones, setZones] = useState<DeliveryZone[]>([]);
@@ -105,6 +110,8 @@ export function DeliveryPage() {
   const [loading, setLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [courierOnFile, setCourierOnFile] = useState<CourierOnFile | null>(null);
 
   // Dialogs
   const [assignCourierModalOpen, setAssignCourierModalOpen] = useState(false);
@@ -134,11 +141,13 @@ export function DeliveryPage() {
     setLoading(true);
     try {
       const [delList, courList, znList, termList] = await Promise.all([
-        deliveryApi.getDeliveries(),
-        deliveryApi.getCouriers(),
-        deliveryApi.getZones(),
-        tenantApi.getTerminals().catch(() => []),
+        deliveryApi.getDeliveries(branchId),
+        deliveryApi.getCouriers(branchId),
+        deliveryApi.getZones(branchId),
+        tenantApi.getTerminals(branchId).catch(() => []),
       ]);
+      // A poll that left before the header switched branch must not repaint the new one.
+      if (branchRef.current !== branchId) return;
       setDeliveries(delList);
       setCouriers(courList);
       setZones(znList);
@@ -149,13 +158,18 @@ export function DeliveryPage() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [branchId, t]);
 
   useEffect(() => {
     loadData();
     const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
   }, [loadData]);
+
+  useEffect(() => {
+    setSelectedEvents([]);
+    setNotice(null);
+  }, [branchId]);
 
   const handleOpenAssignModal = (del: Delivery) => {
     setSelectedDeliveryForAssign(del);
@@ -244,7 +258,7 @@ export function DeliveryPage() {
 
   const handleRecordAttendance = async (courierId: string, status: 'CHECKED_IN' | 'CHECKED_OUT' | 'PAUSED') => {
     try {
-      const targetBranchId = selectedBranchId || zones[0]?.branch_id || branches[0]?.id;
+      const targetBranchId = branchId;
       if (!targetBranchId) {
         setError(t('delivery.errors.noBranch'));
         return;
@@ -271,7 +285,7 @@ export function DeliveryPage() {
 
   const handleCreateCourier = async () => {
     try {
-      const targetBranchId = selectedBranchId || zones[0]?.branch_id || branches[0]?.id;
+      const targetBranchId = branchId;
       if (!targetBranchId) {
         setError(t('delivery.errors.noBranch'));
         return;
@@ -285,13 +299,37 @@ export function DeliveryPage() {
       setCourierForm({ code: '', name: '', phone: '', vehicle_type: 'MOTORCYCLE', compensation_per_delivery: '15000' });
       loadData();
     } catch (err: any) {
+      // Somebody already on file — here archived, or at another branch. Offer the move
+      // rather than a second record for the same person.
+      if (err?.code === 'COURIER_EXISTS' && err?.context?.courier) {
+        setCourierModalOpen(false);
+        setCourierOnFile(err.context.courier as CourierOnFile);
+        return;
+      }
       setError(err.detail || t('delivery.errors.createCourierFailed'));
+    }
+  };
+
+  const handleMoveCourier = async () => {
+    if (!courierOnFile) return;
+    try {
+      setPendingAction(`move:${courierOnFile.id}`);
+      await deliveryApi.moveCourier(courierOnFile.id, branchId);
+      setNotice(t('delivery.modals.moveCourier.moved', { name: courierOnFile.name }));
+      setCourierOnFile(null);
+      setCourierForm({ code: '', name: '', phone: '', vehicle_type: 'MOTORCYCLE', compensation_per_delivery: '15000' });
+      await loadData();
+    } catch (err: any) {
+      setCourierOnFile(null);
+      setError(err.detail || t('delivery.errors.moveCourierFailed'));
+    } finally {
+      setPendingAction(null);
     }
   };
 
   const handleCreateZone = async () => {
     try {
-      const targetBranchId = selectedBranchId || zones[0]?.branch_id || branches[0]?.id;
+      const targetBranchId = branchId;
       if (!targetBranchId) {
         setError(t('delivery.errors.noBranch'));
         return;
@@ -422,12 +460,13 @@ export function DeliveryPage() {
             startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <RefreshIcon />}
             onClick={loadData}
           >
-            {loading ? 'Refreshing…' : t('delivery.refresh')}
+            {loading ? t('delivery.refreshing') : t('delivery.refresh')}
           </Button>
         </Stack>
       </Stack>
 
-      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+      {error && <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>{error}</Alert>}
+      {notice && <Alert severity="success" sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice}</Alert>}
       {(loading || pendingAction) && <LinearProgress sx={{ mb: 2 }} />}
 
       <Paper sx={{ mb: 3, borderRadius: 2 }}>
@@ -517,7 +556,7 @@ export function DeliveryPage() {
                           startIcon={pendingAction === `depart:${del.id}` ? <CircularProgress size={16} color="inherit" /> : <LocalShippingIcon />}
                           onClick={() => handleDepartDelivery(del.id)}
                         >
-                          {pendingAction === `depart:${del.id}` ? 'Departing…' : t('delivery.card.depart')}
+                          {pendingAction === `depart:${del.id}` ? t('delivery.card.departing') : t('delivery.card.depart')}
                         </Button>
                         <Button
                           variant="outlined"
@@ -915,7 +954,15 @@ export function DeliveryPage() {
           <Stack spacing={2} sx={{ pt: 1 }}>
             <TextField label={t('delivery.modals.addCourier.code')} value={courierForm.code} onChange={(e) => setCourierForm({ ...courierForm, code: e.target.value })} fullWidth />
             <TextField label={t('delivery.modals.addCourier.name')} value={courierForm.name} onChange={(e) => setCourierForm({ ...courierForm, name: e.target.value })} fullWidth />
-            <TextField label={t('delivery.modals.addCourier.phone')} value={courierForm.phone} onChange={(e) => setCourierForm({ ...courierForm, phone: e.target.value })} fullWidth />
+            <TextField
+              required
+              label={t('delivery.modals.addCourier.phone')}
+              value={courierForm.phone}
+              onChange={(e) => setCourierForm({ ...courierForm, phone: e.target.value })}
+              helperText={t('delivery.modals.addCourier.phoneHelp')}
+              slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'tel' } }}
+              fullWidth
+            />
             <FormControl fullWidth>
               <InputLabel>{t('delivery.modals.addCourier.vehicleType')}</InputLabel>
               <Select value={courierForm.vehicle_type} label={t('delivery.modals.addCourier.vehicleType')} onChange={(e) => setCourierForm({ ...courierForm, vehicle_type: e.target.value })}>
@@ -930,7 +977,50 @@ export function DeliveryPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCourierModalOpen(false)}>{t('delivery.modals.addCourier.cancel')}</Button>
-          <Button variant="contained" onClick={handleCreateCourier}>{t('delivery.modals.addCourier.submit')}</Button>
+          <Button
+            variant="contained"
+            disabled={!courierForm.code.trim() || !courierForm.name.trim() || !courierForm.phone.trim()}
+            onClick={handleCreateCourier}
+          >
+            {t('delivery.modals.addCourier.submit')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Courier Already On File */}
+      <Dialog open={Boolean(courierOnFile)} onClose={() => setCourierOnFile(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t('delivery.modals.moveCourier.title')}</DialogTitle>
+        <DialogContent>
+          {courierOnFile && (
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <Typography variant="body2">
+                {courierOnFile.branch_id === branchId
+                  ? t('delivery.modals.moveCourier.descriptionHere', { name: courierOnFile.name, code: courierOnFile.code })
+                  : t('delivery.modals.moveCourier.description', {
+                      name: courierOnFile.name,
+                      code: courierOnFile.code,
+                      branch: courierOnFile.branch_name || t('delivery.modals.moveCourier.otherBranch'),
+                    })}
+              </Typography>
+              {courierOnFile.branch_id !== branchId && (
+                <Alert severity="info">{t('delivery.modals.moveCourier.unsettledNote')}</Alert>
+              )}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCourierOnFile(null)}>{t('delivery.modals.moveCourier.cancel')}</Button>
+          {courierOnFile && (courierOnFile.branch_id !== branchId || !courierOnFile.is_active) && (
+            <Button variant="contained" disabled={Boolean(pendingAction)} onClick={handleMoveCourier}>
+              {pendingAction?.startsWith('move:') ? (
+                <CircularProgress size={20} color="inherit" />
+              ) : courierOnFile.branch_id === branchId ? (
+                t('delivery.modals.moveCourier.restore')
+              ) : (
+                t('delivery.modals.moveCourier.submit')
+              )}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 

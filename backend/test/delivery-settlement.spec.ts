@@ -128,7 +128,43 @@ describe('DeliveryService (Courier Settlement)', () => {
       { id: 'asgn-settled', order_id: 'ord-1', courier_id: 'c-1', is_settled: true },
     ]);
 
-    await expect(service.previewSettlement('t-1', 'c-1')).rejects.toThrow(ConflictException);
+    await expect(service.previewSettlement('t-1', 'c-1', ['asgn-settled'])).rejects.toThrow(ConflictException);
+  });
+
+  it('leaves settled deliveries out of a preview that names none, so a courier can be settled again', async () => {
+    courierRepo.findOne.mockResolvedValue({ id: 'c-1', name: 'Courier 1', code: 'C01' });
+    assignmentRepo.find.mockResolvedValue([
+      { id: 'asgn-old', order_id: 'ord-1', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '10.00', is_settled: true },
+      { id: 'asgn-new', order_id: 'ord-2', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '15.00', is_settled: false },
+    ]);
+    orderRepo.findOne.mockResolvedValue({ id: 'ord-2', order_number: 'ORD-1002', total_amount: '200.00' });
+    paymentRepo.find.mockResolvedValue([]);
+
+    const preview = await service.previewSettlement('t-1', 'c-1');
+
+    expect(preview.assignment_ids).toEqual(['asgn-new']);
+    expect(preview.lines).toHaveLength(1);
+  });
+
+  it('settles only the deliveries the branch sold, so a courier who moved still owes the old shop', async () => {
+    courierRepo.findOne.mockResolvedValue({ id: 'c-1', name: 'Courier 1', code: 'C01', branch_id: 'b-new' });
+    assignmentRepo.find.mockResolvedValue([
+      { id: 'asgn-old-shop', order_id: 'ord-old', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '10.00', is_settled: false },
+      { id: 'asgn-new-shop', order_id: 'ord-new', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '15.00', is_settled: false },
+    ]);
+    orderRepo.findOne.mockImplementation(({ where }: any) =>
+      Promise.resolve(
+        where.id === 'ord-old'
+          ? { id: 'ord-old', branch_id: 'b-old', total_amount: '100.00' }
+          : { id: 'ord-new', branch_id: 'b-new', total_amount: '200.00' },
+      ),
+    );
+    paymentRepo.find.mockResolvedValue([]);
+
+    const preview = await service.previewSettlement('t-1', 'c-1', undefined, 'b-old');
+
+    expect(preview.assignment_ids).toEqual(['asgn-old-shop']);
+    expect(preview.expected_cash_amount).toBe('100.00');
   });
 
   it('should create a DRAFT courier settlement batch', async () => {

@@ -647,6 +647,7 @@
     "banner": "DELIVERY EXECUTION & COURIER INSTRUMENT DISPATCHER",
     "activeBranch": "Active Branch",
     "refresh": "Refresh",
+    "refreshing": "Refreshing…",
     "tabs": {
       "board": "Dispatch Board",
       "couriers": "Couriers & Roster",
@@ -677,6 +678,7 @@
       "compensation": "Compensation",
       "assignCourier": "Assign Courier",
       "depart": "Depart",
+      "departing": "Departing…",
       "reassign": "Reassign",
       "complete": "Complete",
       "failed": "Failed",
@@ -718,9 +720,9 @@
         "paused": "Paused"
       },
       "availabilityStatus": {
-        "available": "AVAILABLE",
-        "busy": "BUSY",
-        "offline": "OFF_LINE"
+        "available": "Available",
+        "busy": "Busy",
+        "offline": "Offline"
       }
     },
     "zones": {
@@ -772,10 +774,22 @@
         "code": "Courier Code",
         "name": "Courier Name",
         "phone": "Phone Number",
+        "phoneHelp": "A courier already riding for another branch is found by this number and moved, not added twice.",
         "vehicleType": "Vehicle Type",
         "compensation": "Compensation per Delivery (IRR)",
         "cancel": "Cancel",
         "submit": "Save Courier"
+      },
+      "moveCourier": {
+        "title": "Courier already on file",
+        "description": "{{name}} ({{code}}) already works at {{branch}}. Move them to this branch to keep one profile and one history.",
+        "descriptionHere": "{{name}} ({{code}}) is already on this branch's books but archived. Bring them back instead of adding them twice.",
+        "otherBranch": "another branch",
+        "unsettledNote": "Cash they still owe their old branch stays there and is settled there.",
+        "cancel": "Cancel",
+        "submit": "Move to this branch",
+        "restore": "Bring back",
+        "moved": "{{name}} now works at this branch."
       },
       "addZone": {
         "title": "Add Delivery Zone",
@@ -804,6 +818,7 @@
       "attendanceFailed": "Failed to update attendance",
       "availabilityFailed": "Failed to set availability",
       "createCourierFailed": "Failed to create courier profile",
+      "moveCourierFailed": "Could not move the courier",
       "createZoneFailed": "Failed to create delivery zone",
       "assignTerminalFailed": "Failed to assign mobile terminal",
       "unassignTerminalFailed": "Failed to unassign terminal",
@@ -3150,7 +3165,7 @@
       "noAccount": "This customer has no credit account."
     },
     "courier": {
-      "statusFailed": "Could not update the courier status",
+      "statusFailed": "Could not update the courier's shift",
       "delivered": "Delivered",
       "failedActive": "{{failed}} failed · {{active}} on the road",
       "orderValue": "Completed order value",
@@ -3175,10 +3190,12 @@
       "unassigned": "Unassigned",
       "assignedAt": "Assigned",
       "unassignedAt": "Released",
-      "quickStatus": "Quick status",
-      "setAvailable": "Set available",
-      "setOnDelivery": "Set on delivery",
-      "setInactive": "Set inactive",
+      "quickStatus": "Today's shift",
+      "shiftHint": "Shifts are recorded at {{branch}}, where this courier works.",
+      "checkIn": "Check in",
+      "checkOut": "Check out",
+      "setAvailable": "Available",
+      "setBusy": "Busy",
       "discrepancyNotice": "{{count}} settlements listed · net cash discrepancy {{amount}}",
       "settlementNumber": "Settlement",
       "settlementDate": "Date",
