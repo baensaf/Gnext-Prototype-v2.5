@@ -10,6 +10,7 @@ import {
   Card,
   Grid,
   Chip,
+  Link,
   Table,
   Paper,
   Alert,
@@ -26,11 +27,14 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { paths } from 'src/routes/paths';
+
 import { MoneyUtil } from 'src/utils/money.util';
 
-import { fitsWorkspace } from 'src/config/role-access';
 import { httpClient as axios } from 'src/api/httpClient';
 import { useWorkspaceScope } from 'src/contexts/branch-context';
+import { canReachPath, fitsWorkspace } from 'src/config/role-access';
+import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
 import { MoadianOrderPanel } from 'src/components/moadian/moadian-order-panel';
 
@@ -44,6 +48,11 @@ export function OrdersDetailPage() {
   // Refunds are handed back at the branch; head office looks the order up but does not
   // get a button into a desk its menu does not have.
   const canRefundHere = fitsWorkspace('/app/refunds', useWorkspaceScope());
+  // A name links to its profile only for an account the router would let through to it:
+  // customers and accounts are head office's, couriers their branch's.
+  const role = useAuthStore((state) => state.user?.role);
+  const isHeadOffice = useIsHeadOffice();
+  const canOpen = (path: string) => canReachPath(role, path, isHeadOffice);
 
   useEffect(() => {
     async function loadOrder() {
@@ -137,6 +146,66 @@ export function OrdersDetailPage() {
               {order.placed_at ? new Date(order.placed_at).toLocaleString() : '-'}
             </Typography>
           </Grid>
+        </Grid>
+      </Card>
+
+      <Card sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          {t('orders.people.title')}
+        </Typography>
+        <Grid container spacing={2}>
+          {[
+            {
+              key: 'customer',
+              label: t('orders.people.customer'),
+              name: order.people?.customer
+                ? `${order.people.customer.first_name || ''} ${order.people.customer.last_name || ''}`.trim() ||
+                  order.people.customer.code
+                : null,
+              href: order.people?.customer ? paths.app.customers.detail(order.people.customer.id) : null,
+              empty: t('orders.people.noCustomer'),
+            },
+            {
+              key: 'takenBy',
+              label: t('orders.people.takenBy'),
+              name: order.people?.taken_by
+                ? order.people.taken_by.display_name || order.people.taken_by.username
+                : null,
+              href: order.people?.taken_by ? paths.app.settings.userDetail(order.people.taken_by.id) : null,
+              empty: t('orders.people.notRecorded'),
+            },
+            ...(order.order_type === 'DELIVERY' || order.people?.courier
+              ? [
+                  {
+                    key: 'courier',
+                    label: t('orders.people.courier'),
+                    name: order.people?.courier?.name ?? null,
+                    href: order.people?.courier ? paths.app.delivery.courierDetail(order.people.courier.id) : null,
+                    empty: t('orders.people.noCourier'),
+                  },
+                ]
+              : []),
+          ].map((person) => (
+            <Grid key={person.key} size={{ xs: 12, sm: 4 }}>
+              <Typography variant="caption" color="text.secondary">
+                {person.label}
+              </Typography>
+              {person.name && person.href && canOpen(person.href) ? (
+                <Link
+                  component="button"
+                  variant="subtitle1"
+                  onClick={() => navigate(person.href!)}
+                  sx={{ display: 'block', textAlign: 'start' }}
+                >
+                  {person.name}
+                </Link>
+              ) : (
+                <Typography variant="subtitle1" color={person.name ? 'text.primary' : 'text.secondary'}>
+                  {person.name || person.empty}
+                </Typography>
+              )}
+            </Grid>
+          ))}
         </Grid>
       </Card>
 
