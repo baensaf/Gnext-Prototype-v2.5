@@ -300,6 +300,17 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     );
     creditPaymentMethodId = creditPm.id;
 
+    // What a Snappfood customer paid online is booked to this method.
+    await pmRepo.save(
+      pmRepo.create({
+        tenant_id: tenantId,
+        code: 'PM-ONLINE',
+        name: 'Online (aggregator)',
+        kind: 'ONLINE',
+        is_active: true,
+      }),
+    );
+
     // 6. Printers & Kitchen Station
     const printerRepo = dataSource.getRepository(Printer);
     const backupPrn = await printerRepo.save(
@@ -1058,6 +1069,11 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     // Assert pre-paid amount on OrderHeader: Snappfood collected it, not the till.
     expect(MoneyUtil.format(createdOrder.paid_amount)).toBe(MoneyUtil.format(createdOrder.total_amount));
     expect(MoneyUtil.format(createdOrder.outstanding_total)).toBe('0.0000');
+    // ...and it is a payment, so it shows in payments by method.
+    const onlinePayments = await dataSource.getRepository(Payment).find({ where: { tenant_id: tenantId, order_id: createdOrder.id } });
+    expect(onlinePayments.map((p) => [p.method_kind, p.status, MoneyUtil.format(p.amount)])).toEqual([
+      ['ONLINE', 'SUCCEEDED', MoneyUtil.format(createdOrder.total_amount)],
+    ]);
 
     // Step 3: Duplicate Idempotency Suppression Test
     // Trigger duplicate event with identical idempotency key (`snapp-evt-${seed}`)

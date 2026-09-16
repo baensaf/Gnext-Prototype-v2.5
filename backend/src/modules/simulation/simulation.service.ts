@@ -11,6 +11,33 @@ import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { IncomingOrderPolicyService } from '../order/incoming-order-policy.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { BusinessDateUtil } from '../../common/utils/business-date.util';
+import { Payment } from '../../entities/Payment.entity';
+import { PaymentAllocation } from '../../entities/PaymentAllocation.entity';
+import { PaymentMethod } from '../../entities/PaymentMethod.entity';
+import { CustomerPhone } from '../../entities/CustomerPhone.entity';
+import { CustomerAddress } from '../../entities/CustomerAddress.entity';
+import { CustomerService, normalizePhone } from '../customer/customer.service';
+
+/** Snappfood quotes every amount in Toman. The store keeps its books in Rial, ten to the Toman. */
+export function tomanToRial(toman: any): string {
+  return MoneyUtil.multiply(MoneyUtil.format(toman || 0, 4), '10', 4);
+}
+
+/** Paid to Snappfood before it reached the store: online, or from the customer's Snappfood credit. */
+function snappfoodPaidOnline(payload: any): boolean {
+  return ['ONLINE', 'CREDIT'].includes(String(payload.orderPaymentTypeCode || 'ONLINE').toUpperCase());
+}
+
+interface SnappfoodLine {
+  product_name: string;
+  product_id?: string;
+  notes?: string;
+  quantity: string;
+  unit_price: string;
+  line_total: string;
+  tax: string;
+}
 
 /** What a Snappfood webhook call answers: the order it opened or moved, or why it did neither. */
 export interface SnappfoodWebhookResult {
@@ -32,6 +59,12 @@ export class SimulationService {
     @InjectRepository(Product) private readonly productRepo: Repository<Product>,
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
     @InjectRepository(OperationalAlert) private readonly alertRepo: Repository<OperationalAlert>,
+    @InjectRepository(Payment) private readonly paymentRepo: Repository<Payment>,
+    @InjectRepository(PaymentAllocation) private readonly allocationRepo: Repository<PaymentAllocation>,
+    @InjectRepository(PaymentMethod) private readonly paymentMethodRepo: Repository<PaymentMethod>,
+    @InjectRepository(CustomerPhone) private readonly customerPhoneRepo: Repository<CustomerPhone>,
+    @InjectRepository(CustomerAddress) private readonly customerAddressRepo: Repository<CustomerAddress>,
+    private readonly customerService: CustomerService,
     private readonly auditWriter: AuditWriter,
     // The acceptance policy lives with orders, and orders tell Snappfood about their
     // answers, so the two modules reach each other through forwardRef.
@@ -166,12 +199,15 @@ export class SimulationService {
       status: 'PENDING_ACCEPTANCE',
       fulfillment_status: 'PENDING',
       notes: this.describeSnappfoodOrder(payload),
-      ...this.snappfoodTotals(lines),
+      ...this.snappfoodTotals(payload, lines).totals,
       ...this.snappfoodTiming(payload),
     });
+    await this.linkSnappfoodCustomer(tenantId, orderHeader, payload, corrId);
 
-    const savedHeader = await this.orderRepo.save(orderHeader);
+    let savedHeader = await this.orderRepo.save(orderHeader);
     await this.writeSnappfoodLines(tenantId, savedHeader.id, lines, 1);
+    await this.applySnappfoodMoney(tenantId, savedHeader, payload, lines);
+    savedHeader = await this.orderRepo.save(savedHeader);
 
     const logEntry = await this.logRepo.save(
       this.logRepo.create({
@@ -283,8 +319,10 @@ export class SimulationService {
         return this.recordDuplicate(tenantId, payload, signature, idempotencyKey, corrId);
       }
       await this.resendSnappfoodOrder(tenantId, order, payload);
-    } else if (statusCode === 54 && !['REJECTED', 'CANCELLED', 'COMPLETED'].includes(order.state)) {
-      this.markCancelled(order);
+    } else if (statusCode === 54 && !['CANCELLED', 'COMPLETED'].includes(order.state)) {
+      // A rejected order that Snappfood then cancels is refunded too, so its payment goes.
+      if (order.state !== 'REJECTED') this.markCancelled(order);
+      await this.reverseSnappfoodPayments(tenantId, order);
       await this.orderRepo.save(order);
     }
 
@@ -333,8 +371,9 @@ export class SimulationService {
       const earlier = await this.orderItemRepo.count({ where: { tenant_id: tenantId, order_id: order.id } });
       await this.orderItemRepo.update({ tenant_id: tenantId, order_id: order.id, state: 'ACTIVE' }, { state: 'VOID' });
       await this.writeSnappfoodLines(tenantId, order.id, lines, earlier + 1);
-      Object.assign(order, this.snappfoodTotals(lines));
     }
+    await this.applySnappfoodMoney(tenantId, order, payload, lines);
+    await this.linkSnappfoodCustomer(tenantId, order, payload, `resend-${order.id}`);
 
     order.notes = this.describeSnappfoodOrder(payload);
     order.placed_at = new Date();
@@ -362,12 +401,11 @@ export class SimulationService {
   }
 
   /** Whether Snappfood's lines are the order's active lines: same dishes, quantities and prices. */
-  private async hasSameLines(tenantId: string, orderId: string, lines: any[]): Promise<boolean> {
+  private async hasSameLines(tenantId: string, orderId: string, lines: SnappfoodLine[]): Promise<boolean> {
     const current = await this.orderItemRepo.find({ where: { tenant_id: tenantId, order_id: orderId, state: 'ACTIVE' } });
-    // The same defaults writeSnappfoodLines fills in.
-    const key = (name: any, quantity: any, price: any) => `${name || 'Snappfood Item'}|${Number(quantity || 1)}|${Number(price || 15)}`;
+    const key = (name: any, quantity: any, price: any) => `${name}|${Number(quantity)}|${Number(price)}`;
     const had = current.map((item) => key(item.product_name, item.quantity, item.unit_price)).sort();
-    const sent = lines.map((line) => key(line.product_name, line.quantity, line.price)).sort();
+    const sent = lines.map((line) => key(line.product_name, line.quantity, line.unit_price)).sort();
     return had.length === sent.length && had.every((entry, index) => entry === sent[index]);
   }
 
@@ -430,72 +468,230 @@ export class SimulationService {
   }
 
   /**
-   * The order's lines. Snappfood sends `products`, each with a title; older payloads send
-   * `items` with a product_name. Either way the lines keep the dishes, quantities and prices.
+   * The order's lines, in Rial. Snappfood sends `products`, each with a title; older payloads
+   * send `items` with a product_name. Prices arrive in Toman, and each line keeps the VAT rate
+   * Snappfood charged on it (the product's, else the order's).
    */
-  private snappfoodLines(payload: any): any[] {
-    return (
+  private snappfoodLines(payload: any): SnappfoodLine[] {
+    const raw: any[] =
       payload.items ||
       (Array.isArray(payload.products) && payload.products.length
-        ? payload.products.map((p: any) => ({ product_name: p.title, quantity: p.quantity, price: p.price }))
-        : [{ product_name: 'Snappfood Combo Meal', quantity: 1, price: 15.0 }])
-    );
+        ? payload.products.map((p: any) => ({ product_name: p.title, quantity: p.quantity, price: p.price, vat: p.vat }))
+        : [{ product_name: 'Snappfood Combo Meal', quantity: 1, price: 15.0 }]);
+    return raw.map((line) => {
+      const quantity = MoneyUtil.format(line.quantity || 1, 4);
+      const unitPrice = tomanToRial(line.price ?? 15);
+      const lineTotal = MoneyUtil.multiply(unitPrice, quantity, 4);
+      const vat = MoneyUtil.format(line.vat ?? payload.vat ?? 0, 4);
+      return {
+        product_name: line.product_name || line.title || 'Snappfood Item',
+        product_id: line.product_id,
+        notes: line.notes,
+        quantity,
+        unit_price: unitPrice,
+        line_total: lineTotal,
+        tax: MoneyUtil.multiply(lineTotal, vat, 4),
+      };
+    });
   }
 
-  private snappfoodTotals(lines: any[]) {
-    let subtotal = '0.0000';
-    for (const line of lines) {
-      const lineTotal = MoneyUtil.multiply(MoneyUtil.format(line.price || '15.0', 4), MoneyUtil.format(line.quantity || 1, 4), 4);
-      subtotal = MoneyUtil.add(subtotal, lineTotal, 4);
-    }
-    const tax = MoneyUtil.multiply(subtotal, '0.09', 4);
-    const total = MoneyUtil.add(subtotal, tax, 4);
-    return {
+  /**
+   * The order's money, as Snappfood charged it, in Rial. Snappfood's `price` is what the
+   * customer was billed (dishes, packing, delivery and VAT, less discounts) and its `tax` is the
+   * VAT on it; the store records those rather than pricing the order again, so the order
+   * reconciles against Snappfood's settlement statement. Whatever the parts don't explain is the
+   * discount. A customer who paid online has paid; one paying cash owes it all.
+   */
+  private snappfoodTotals(payload: any, lines: SnappfoodLine[]) {
+    const has = (value: any) => value !== undefined && value !== null && value !== '';
+    const subtotal = MoneyUtil.sum(lines.map((l) => l.line_total));
+    const tax = has(payload.tax) ? tomanToRial(payload.tax) : MoneyUtil.sum(lines.map((l) => l.tax));
+    const delivery = tomanToRial(payload.deliveryPrice || 0);
+    const packaging = tomanToRial(payload.packingPrice || 0);
+    const beforeDiscount = MoneyUtil.sum([subtotal, tax, delivery, packaging]);
+    const total = has(payload.price) ? tomanToRial(payload.price) : beforeDiscount;
+    const gap = MoneyUtil.subtract(beforeDiscount, total, 4);
+    const discount = MoneyUtil.greaterThan(gap, '0') ? gap : '0.0000';
+
+    const onlinePaid = snappfoodPaidOnline(payload)
+      ? tomanToRial(has(payload.paidPrice) ? payload.paidPrice : payload.price ?? 0)
+      : '0.0000';
+    const totals = {
+      currency_code: 'IRR',
       subtotal,
       subtotal_amount: subtotal,
       tax_total: tax,
       tax_amount: tax,
-      discount_total: '0.0000',
-      discount_amount: '0.0000',
+      delivery_fee: delivery,
+      packaging_total: packaging,
+      discount_total: discount,
+      discount_amount: discount,
       grand_total: total,
       total_amount: total,
-      paid_total: total,
-      paid_amount: total,
-      outstanding_total: '0.0000',
-      due_amount: '0.0000',
+      // Set by the payment itself, once one is recorded.
+      paid_total: '0.0000',
+      paid_amount: '0.0000',
+      outstanding_total: total,
+      due_amount: total,
     };
+    return { totals, onlinePaid };
   }
 
-  private async writeSnappfoodLines(tenantId: string, orderId: string, lines: any[], firstLineNumber: number) {
+  private async writeSnappfoodLines(tenantId: string, orderId: string, lines: SnappfoodLine[], firstLineNumber: number) {
     for (let index = 0; index < lines.length; index++) {
       const item = lines[index];
-      const priceStr = MoneyUtil.format(item.price || '15.0', 4);
-      const qtyStr = MoneyUtil.format(item.quantity || 1, 4);
-      const lineTotalStr = MoneyUtil.multiply(priceStr, qtyStr, 4);
-
       const orderItem = this.orderItemRepo.create({
         tenant_id: tenantId,
         order_id: orderId,
         line_number: firstLineNumber + index,
         product_id: item.product_id || '00000000-0000-0000-0000-000000000001',
-        product_name: item.product_name || 'Snappfood Item',
-        unit_price: priceStr,
-        quantity: qtyStr,
-        base_total: lineTotalStr,
-        subtotal: lineTotalStr,
+        product_name: item.product_name,
+        unit_price: item.unit_price,
+        quantity: item.quantity,
+        base_total: item.line_total,
+        subtotal: item.line_total,
         modifier_total: '0.0000',
         discount_total: '0.0000',
         discount_amount: '0.0000',
-        tax_total: MoneyUtil.multiply(lineTotalStr, '0.09', 4),
-        tax_amount: MoneyUtil.multiply(lineTotalStr, '0.09', 4),
+        tax_total: item.tax,
+        tax_amount: item.tax,
         packaging_total: '0.0000',
-        line_total: lineTotalStr,
-        total_amount: MoneyUtil.multiply(lineTotalStr, '1.09', 4),
+        line_total: item.line_total,
+        total_amount: MoneyUtil.add(item.line_total, item.tax, 4),
         special_instructions: item.notes || null,
         state: 'ACTIVE',
       });
       await this.orderItemRepo.save(orderItem);
     }
+  }
+
+  /**
+   * Applies Snappfood's totals to the order and records what the customer paid Snappfood
+   * online as an ONLINE payment, so it shows in payments by method. A re-sent order whose total
+   * changed reverses the earlier payment first. Without an active ONLINE method the order is
+   * left owing and the branch is told, rather than marked paid with no payment behind it.
+   */
+  private async applySnappfoodMoney(tenantId: string, order: OrderHeader, payload: any, lines: SnappfoodLine[]) {
+    const { totals, onlinePaid } = this.snappfoodTotals(payload, lines);
+    Object.assign(order, totals);
+
+    const earlier = await this.paymentRepo.find({
+      where: { tenant_id: tenantId, order_id: order.id, reference: order.order_number, status: 'SUCCEEDED' },
+    });
+    const earlierTotal = MoneyUtil.sum(earlier.map((p) => p.amount));
+    if (earlier.length && MoneyUtil.equals(earlierTotal, onlinePaid)) {
+      this.settleOrderTotals(order, earlierTotal);
+      return;
+    }
+    await this.reverseSnappfoodPayments(tenantId, order);
+
+    if (!MoneyUtil.greaterThan(onlinePaid, '0')) {
+      this.settleOrderTotals(order, '0');
+      return;
+    }
+    const method = await this.paymentMethodRepo.findOne({ where: { tenant_id: tenantId, kind: 'ONLINE', is_active: true } });
+    if (!method) {
+      this.settleOrderTotals(order, '0');
+      await this.alertRepo.save(
+        this.alertRepo.create({
+          tenant_id: tenantId,
+          branch_id: order.branch_id,
+          type: 'INCOMING_ORDER',
+          severity: 'WARNING',
+          title: `Snappfood order ${order.order_number} was paid online, but no ONLINE payment method is active`,
+          message: 'The order shows as owing until an ONLINE payment method is set up and the payment is recorded.',
+          acknowledged: false,
+        }),
+      );
+      return;
+    }
+
+    const count = await this.paymentRepo.count({ where: { tenant_id: tenantId, order_id: order.id } });
+    const payment = await this.paymentRepo.save(
+      this.paymentRepo.create({
+        tenant_id: tenantId,
+        order_id: order.id,
+        payment_number: `PAY-${order.order_number}-${count + 1}`.slice(0, 40),
+        method_id: method.id,
+        method_kind: method.kind,
+        status: 'SUCCEEDED',
+        amount: onlinePaid,
+        currency_code: 'IRR',
+        reference: order.order_number,
+        business_date: order.business_date || BusinessDateUtil.today(),
+        idempotency_key: `snappfood:${order.id}:${count + 1}`,
+        posted_at: new Date(),
+      }),
+    );
+    await this.allocationRepo.save(
+      this.allocationRepo.create({ tenant_id: tenantId, payment_id: payment.id, order_id: order.id, amount: onlinePaid, currency_code: 'IRR' }),
+    );
+    this.settleOrderTotals(order, onlinePaid);
+  }
+
+  /** Snappfood refunds a cancelled order's online payment, so the store's record of it goes too. */
+  private async reverseSnappfoodPayments(tenantId: string, order: OrderHeader) {
+    const earlier = await this.paymentRepo.find({
+      where: { tenant_id: tenantId, order_id: order.id, reference: order.order_number, status: 'SUCCEEDED' },
+    });
+    for (const payment of earlier) {
+      payment.status = 'REVERSED';
+      await this.paymentRepo.save(payment);
+    }
+    if (earlier.length) this.settleOrderTotals(order, '0');
+  }
+
+  private settleOrderTotals(order: OrderHeader, paid: string) {
+    const owed = MoneyUtil.subtract(order.grand_total || '0', paid, 4);
+    order.paid_total = MoneyUtil.format(paid, 4);
+    order.paid_amount = order.paid_total;
+    order.outstanding_total = MoneyUtil.greaterThan(owed, '0') ? owed : '0.0000';
+    order.due_amount = order.outstanding_total;
+  }
+
+  /**
+   * The Snappfood customer as a customer record: found by phone, or registered, with the
+   * delivery address added to them when it is new. The order then links to both, so the
+   * customer's history and the courier's address come from the record, not the notes.
+   */
+  private async linkSnappfoodCustomer(tenantId: string, order: OrderHeader, payload: any, corrId: string) {
+    const phone = normalizePhone(payload.phone || '');
+    if (!phone) return;
+
+    const known = await this.customerPhoneRepo.findOne({ where: { tenant_id: tenantId, normalized_phone: phone } });
+    let customerId = known?.customer_id;
+    if (!customerId) {
+      const [first, ...rest] = String(payload.fullName || '').trim().split(/\s+/);
+      const created: any = await this.customerService.createCustomer(
+        tenantId,
+        {
+          first_name: payload.firstName || first || 'Snappfood',
+          last_name: payload.lastName || rest.join(' ') || 'Customer',
+          mobile: phone,
+        },
+        corrId,
+      );
+      customerId = created.id;
+    }
+    order.customer_id = customerId!;
+
+    const text = String(payload.deliverAddress || '').trim();
+    if (!text) return;
+    const addresses = await this.customerAddressRepo.find({ where: { tenant_id: tenantId, customer_id: customerId } });
+    const address =
+      addresses.find((a) => a.address_text?.trim() === text) ||
+      (await this.customerAddressRepo.save(
+        this.customerAddressRepo.create({
+          tenant_id: tenantId,
+          customer_id: customerId,
+          title: 'Snappfood',
+          address_text: text,
+          latitude: payload.latitude != null ? String(payload.latitude) : null,
+          longitude: payload.longitude != null ? String(payload.longitude) : null,
+          is_default: addresses.length === 0,
+        } as any),
+      ));
+    order.customer_address_id = (address as any).id;
   }
 
   /**
@@ -674,6 +870,7 @@ export class SimulationService {
         newStatusCode = 51; // 51 = Rejected by store
       } else if (action === 'CANCEL' || action === 'CANCELLED') {
         this.markCancelled(order);
+        await this.reverseSnappfoodPayments(tenantId, order);
         newStatusCode = 54; // 54 = Cancelled
       } else if (action === 'MODIFY') {
         this.markAwaitingAcceptance(order);

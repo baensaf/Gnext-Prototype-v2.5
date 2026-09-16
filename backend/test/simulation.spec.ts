@@ -11,6 +11,7 @@ import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import * as crypto from 'crypto';
+import { snappfoodIntakeMocks } from './utils/snappfood-intake-mocks';
 
 describe('SimulationService (Unit)', () => {
   let service: SimulationService;
@@ -42,6 +43,7 @@ describe('SimulationService (Unit)', () => {
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
         { provide: getRepositoryToken(OperationalAlert), useValue: { create: jest.fn((dto: any) => dto), save: jest.fn() } },
         { provide: AuditWriter, useValue: auditWriter },
+        ...snappfoodIntakeMocks().providers,
       ],
     }).compile();
 
@@ -90,7 +92,7 @@ describe('SimulationService (Unit)', () => {
     expect(result.success).toBe(true);
     expect(result.duplicate).toBe(false);
     expect(result.order.order_type).toBe('AGGREGATOR');
-    expect(result.order.total_amount).toBe('21.8000'); // (2*10) * 1.09
+    expect(result.order.total_amount).toBe('200.0000'); // 2 x 10 Toman, in Rial; the payload charges no VAT
     expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'SNAPPFOOD_WEBHOOK_PROCESSED' }));
   });
 
@@ -280,7 +282,7 @@ describe('SimulationService (Unit)', () => {
       expect(result.order.id).toBe('ord-known');
       expect(order.state).toBe('PENDING_ACCEPTANCE');
       expect(order.status).toBe('PENDING_ACCEPTANCE');
-      expect(order.grand_total).toBe('1526.0000'); // 2 x 700, plus 9%
+      expect(order.grand_total).toBe('14000.0000'); // 2 x 700 Toman, in Rial
       // The time limit counts from the re-send, not from the first arrival.
       expect(new Date(order.placed_at).getTime()).toBeGreaterThan(longAgo.getTime());
       expect(orderItemRepo.update).toHaveBeenCalledWith({ tenant_id: 't-1', order_id: 'ord-known', state: 'ACTIVE' }, { state: 'VOID' });
@@ -292,8 +294,9 @@ describe('SimulationService (Unit)', () => {
     it('sends back an accepted order the store reported, unchanged, keeping its lines for the kitchen', async () => {
       const order = storeHas('CONFIRMED', { accepted_at: new Date(), promised_minutes: 20, aggregator_issue_at: new Date() });
       orderItemRepo.find = jest.fn().mockResolvedValue([
-        { product_name: 'Pizza Two', quantity: '1.0000', unit_price: '600.0000' },
-        { product_name: 'Pizza One', quantity: '1.0000', unit_price: '500.0000' },
+        // Stored in Rial: Snappfood's 600 and 500 Toman.
+        { product_name: 'Pizza Two', quantity: '1.0000', unit_price: '6000.0000' },
+        { product_name: 'Pizza One', quantity: '1.0000', unit_price: '5000.0000' },
       ]);
 
       const result: any = await deliver(snappfoodSends(56, { preparationTime: 15, vendorMaxPreparationTime: 20 }));
