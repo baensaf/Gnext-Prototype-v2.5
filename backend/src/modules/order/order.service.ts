@@ -529,7 +529,13 @@ export class OrderService {
           name: disc.name,
           amount: disc.amount,
           funding_source: 'MERCHANT',
-          calculation_snapshot: { discountType: disc.discountType, amount: disc.amount },
+          // A manual discount keeps the escalation that allowed it, so the manual-discounts
+          // report can say who approved it instead of guessing.
+          calculation_snapshot: {
+            discountType: disc.discountType,
+            amount: disc.amount,
+            ...(disc.source === 'MANUAL' ? { approvalRequestId: submittedManualDiscount?.approvalRequestId || null } : {}),
+          },
         });
         await em.save(OrderAdjustment, adj);
       }
