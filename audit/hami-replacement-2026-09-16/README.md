@@ -21,5 +21,5 @@ Can Gnext replace HAMI for Iran Burger? Audited against `Phase 1-- HAMI Replacem
 | F8 no printers or tenders seeded | Gap | #20 | Open, CI green |
 | F10 cash-on-delivery never becomes a payment | Blocker | #22 | Open. Decided: COD is paid at the settlement handover; a shortage is the courier's debt, booked against the drawer, not the customer's |
 | F2 no Jalali calendar | Blocker | — | Not started; a project, not a fix |
-| F13 Snappfood re-pricing and Toman/Rial | Gap | — | Not started |
+| F13 Snappfood re-pricing and Toman/Rial | Gap | `fix/snappfood-toman-pricing` | Open. Snappfood's amounts ×10 into Rial, kept as billed; online-paid orders get an ONLINE payment, reversed on cancel; customer and address linked by phone. Showing Toman in the UI is a separate slice |
 | F4 / F5 / F6 / F7 / F9 / F15 | Gap / minor | — | Not started |

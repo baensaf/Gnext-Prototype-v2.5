@@ -6,11 +6,17 @@ import { OrderItem } from '../../entities/OrderItem.entity';
 import { Product } from '../../entities/Product.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { OperationalAlert } from '../../entities/OperationalAlert.entity';
+import { Payment } from '../../entities/Payment.entity';
+import { PaymentAllocation } from '../../entities/PaymentAllocation.entity';
+import { PaymentMethod } from '../../entities/PaymentMethod.entity';
+import { CustomerPhone } from '../../entities/CustomerPhone.entity';
+import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { SimulationService } from './simulation.service';
 import { SimulationController } from './simulation.controller';
 import { SimulatedWebhooksController } from './simulated-webhooks.controller';
 import { AuditModule } from '../audit/audit.module';
 import { OrderModule } from '../order/order.module';
+import { CustomerModule } from '../customer/customer.module';
 
 @Module({
   imports: [
@@ -21,8 +27,15 @@ import { OrderModule } from '../order/order.module';
       Product,
       Branch,
       OperationalAlert,
+      Payment,
+      PaymentAllocation,
+      PaymentMethod,
+      CustomerPhone,
+      CustomerAddress,
     ]),
     AuditModule,
+    // Snappfood's customer becomes a customer record.
+    CustomerModule,
     // For the branch's incoming-order policy; see the matching note in OrderModule.
     forwardRef(() => OrderModule),
   ],
