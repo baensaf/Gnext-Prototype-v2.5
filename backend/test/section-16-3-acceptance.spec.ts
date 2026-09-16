@@ -852,44 +852,13 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     const submittedDelOrder = await orderService.submitOrder(tenantId, delOrder.id, {}, cashierUserId, correlationId);
     expect(['SUBMITTED', 'CONFIRMED']).toContain(submittedDelOrder.state);
 
-    // Pay for delivery order (Cash 220,000 + POS 180,000 = 400,000 IRR)
-    const cashIntent = await paymentService.createPaymentIntent(
-      tenantId,
-      {
-        orderId: submittedDelOrder.id,
-        methodId: cashPaymentMethodId,
-        amount: '220000.0000',
-        reference: 'DEL-CASH-PAY',
-      },
-      cashierUserId,
-      correlationId,
-    );
-    await paymentService.processPayment(
-      tenantId,
-      cashIntent.id,
-      {},
-      cashierUserId,
-      correlationId,
-    );
-
-    const posIntent = await paymentService.createPaymentIntent(
-      tenantId,
-      {
-        orderId: submittedDelOrder.id,
-        methodId: posPaymentMethodId,
-        amount: '180000.0000',
-        reference: 'DEL-POS-PAY',
-      },
-      cashierUserId,
-      correlationId,
-    );
-    await paymentService.processPayment(
-      tenantId,
-      posIntent.id,
-      {},
-      cashierUserId,
-      correlationId,
-    );
+    // Cash on delivery: nothing is taken at the counter. The courier collects the whole bill at
+    // the door — 180,000 on the company mobile POS, the rest in cash. (This workflow used to
+    // pay the order in full here and then still expect the courier to bring the same money
+    // back, which is the double count the F10 audit finding removed.)
+    const codTotal = MoneyUtil.format(submittedDelOrder.grand_total);
+    const codCash = MoneyUtil.subtract(codTotal, '180000.0000');
+    const codCashShort = MoneyUtil.subtract(codCash, '10000.0000');
 
     // Step 2: Register Courier & Record Attendance Check-In
     const courier = await deliveryService.createCourier(
@@ -934,21 +903,24 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     const departedDelivery = await deliveryService.departDelivery(tenantId, deliveryRecord.id, cashierUserId);
     expect(departedDelivery.state).toBe('EN_ROUTE');
 
-    // Step 5: Deliver with Multi-Instrument Collection (Cash 220,000 IRR + Mobile POS 180,000 IRR)
+    // Step 5: Deliver, collecting 180,000 IRR on the mobile POS and the rest in cash
     const completedDelivery = await deliveryService.completeDelivery(
       tenantId,
       deliveryRecord.id,
       {
-        cashCollected: 220000,
         posAmount: 180000,
       },
       cashierUserId,
     );
     expect(completedDelivery.state).toBe('DELIVERED');
+    // Delivered but not yet paid: the money is with the courier until they are settled.
+    const deliveredOrder = await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: submittedDelOrder.id });
+    expect(deliveredOrder.state).not.toBe('COMPLETED');
+    expect(MoneyUtil.format(deliveredOrder.outstanding_total)).toBe(codTotal);
 
     // Step 6: Courier Settlement Preview with Separate Expected Instrument Totals
     const previewSettlement = await deliveryService.previewSettlement(tenantId, courier.id);
-    expect(MoneyUtil.format(previewSettlement.expected_cash_amount, 2)).toBe('220000.00');
+    expect(MoneyUtil.format(previewSettlement.expected_cash_amount, 2)).toBe(MoneyUtil.format(codCash, 2));
     expect(MoneyUtil.format(previewSettlement.expected_pos_amount, 2)).toBe('180000.00');
 
     // Create Settlement Batch
@@ -960,7 +932,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     );
     expect(settlement.status).toBe('DRAFT');
 
-    // Enter Actuals with Cash Discrepancy (Courier submitted 210,000 IRR cash -> 10,000 IRR short)
+    // Enter Actuals with Cash Discrepancy (the courier hands over 10,000 IRR less cash than collected)
     const updatedSettlement = await deliveryService.updateSettlement(
       tenantId,
       settlement.id,
@@ -968,7 +940,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
         lines: [
           {
             id: settlement.lines[0].id,
-            actual_cash: '210000.00',
+            actual_cash: MoneyUtil.format(codCashShort, 2),
             actual_pos: '180000.00',
             receipt_verified: true,
           },
@@ -1018,10 +990,22 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     expect(closedSettlement.approval_request_id).toBe(settleApprovalReq.id);
 
     // Step 8: Assert Separate Instrument Totals & Courier Report
-    expect(MoneyUtil.format(closedSettlement.expected_cash_amount, 2)).toBe('220000.00');
-    expect(MoneyUtil.format(closedSettlement.actual_cash_amount, 2)).toBe('210000.00');
+    expect(MoneyUtil.format(closedSettlement.expected_cash_amount, 2)).toBe(MoneyUtil.format(codCash, 2));
+    expect(MoneyUtil.format(closedSettlement.actual_cash_amount, 2)).toBe(MoneyUtil.format(codCashShort, 2));
     expect(MoneyUtil.format(closedSettlement.expected_pos_amount, 2)).toBe('180000.00');
     expect(MoneyUtil.format(closedSettlement.actual_pos_amount, 2)).toBe('180000.00');
+
+    // The handover paid the customer's bill in full — cash into the open drawer, the card part
+    // as a card payment — completed the order, and left the 10,000 short against the courier.
+    const settledOrder = await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: submittedDelOrder.id });
+    expect(settledOrder.state).toBe('COMPLETED');
+    expect(MoneyUtil.format(settledOrder.paid_total)).toBe(codTotal);
+    expect(MoneyUtil.format(settledOrder.outstanding_total)).toBe('0.0000');
+    const codPayments = await dataSource.getRepository(Payment).find({ where: { order_id: submittedDelOrder.id, status: 'SUCCEEDED' } });
+    expect(codPayments.map((p) => [p.method_kind, MoneyUtil.format(p.amount)]).sort()).toEqual(
+      [['CASH', codCash], ['NETWORK_POS', '180000.0000']].sort(),
+    );
+    expect(codPayments.find((p) => p.method_kind === 'CASH')?.shift_id).toBeTruthy();
 
     const courierReport = await reportsService.queryReport(tenantId, 'courier-settlements', {});
     expect(courierReport).toBeDefined();

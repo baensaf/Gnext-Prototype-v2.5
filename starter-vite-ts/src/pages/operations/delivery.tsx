@@ -122,7 +122,6 @@ export function DeliveryPage() {
 
   const [completeModalOpen, setCompleteModalOpen] = useState(false);
   const [selectedDeliveryForComplete, setSelectedDeliveryForComplete] = useState<Delivery | null>(null);
-  const [cashCollected, setCashCollected] = useState<string>('0');
   const [posAmount, setPosAmount] = useState<string>('0');
 
   const [failModalOpen, setFailModalOpen] = useState(false);
@@ -310,16 +309,22 @@ export function DeliveryPage() {
 
   const handleOpenCompleteModal = (del: Delivery) => {
     setSelectedDeliveryForComplete(del);
-    setCashCollected(del.grand_total || '0');
     setPosAmount('0');
     setCompleteModalOpen(true);
   };
+
+  // What the customer still owed when the order left. The courier brings it back at
+  // settlement: whatever did not go on the mobile card reader, in cash. The cash they
+  // actually hand over is counted there, not typed in here.
+  const owedOnDelivery = selectedDeliveryForComplete?.outstanding_total ?? selectedDeliveryForComplete?.grand_total ?? '0';
+  const posEntered = MoneyUtil.isValid(posAmount) ? posAmount : '0';
+  const cashToHandBack = MoneyUtil.greaterThan(posEntered, owedOnDelivery) ? '0' : MoneyUtil.subtract(owedOnDelivery, posEntered);
 
   const handleCompleteDelivery = async () => {
     if (!selectedDeliveryForComplete) return;
     try {
       setPendingAction(`complete:${selectedDeliveryForComplete.id}`);
-      await deliveryApi.completeDelivery(selectedDeliveryForComplete.id, cashCollected, posAmount);
+      await deliveryApi.completeDelivery(selectedDeliveryForComplete.id, undefined, posAmount);
       setCompleteModalOpen(false);
       await loadData();
     } catch (err: any) {
@@ -1059,16 +1064,20 @@ export function DeliveryPage() {
             <Typography variant="body2">
               {t('delivery.modals.complete.description', { orderNumber: selectedDeliveryForComplete?.order_number })}
             </Typography>
-            <TextField
-              label={t('delivery.modals.complete.cashLabel')}
-              value={cashCollected}
-              onChange={(e) => setCashCollected(e.target.value)}
-              fullWidth
-            />
+            <Typography variant="body2">
+              {t('delivery.modals.complete.owedLabel')}: {MoneyUtil.formatCurrency(owedOnDelivery)} IRR
+            </Typography>
             <TextField
               label={t('delivery.modals.complete.posLabel')}
               value={posAmount}
               onChange={(e) => setPosAmount(e.target.value)}
+              fullWidth
+            />
+            <TextField
+              label={t('delivery.modals.complete.cashLabel')}
+              value={MoneyUtil.formatCurrency(cashToHandBack)}
+              slotProps={{ input: { readOnly: true } }}
+              helperText={t('delivery.modals.complete.cashHelper')}
               fullWidth
             />
           </Stack>

@@ -21,6 +21,7 @@ import { Branch } from '../src/entities/Branch.entity';
 import { TenantSetting } from '../src/entities/TenantSetting.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { OrderTransitionRecorder } from '../src/modules/order-lifecycle/order-transition-recorder.service';
+import { ShiftService } from '../src/modules/cashier/shift.service';
 
 describe('DeliveryService (R19 Unit & Integration)', () => {
   let service: DeliveryService;
@@ -94,6 +95,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
         { provide: getRepositoryToken(TenantSetting), useValue: settingRepo },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: OrderTransitionRecorder, useValue: transitionRecorder },
+        { provide: ShiftService, useValue: { requireDrawer: jest.fn(), recordCashPaymentMovement: jest.fn() } },
       ],
     }).compile();
 
@@ -158,6 +160,23 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
       expect.anything(),
       expect.objectContaining({ tenantId: 't-1', fromState: 'OUT_FOR_DELIVERY', action: 'COMPLETE' }),
     );
+  });
+
+  // F10: a cash-on-delivery order used to be marked COMPLETED the moment it was delivered, with
+  // nothing paid, and whatever cash the courier typed became what they were expected to bring.
+  it('keeps an order that still owes money open on delivery, and expects the balance back', async () => {
+    deliveryRepo.findOne.mockResolvedValue({ id: 'del-cod', tenant_id: 't-1', order_id: 'ord-cod', courier_id: 'cour-1', state: 'EN_ROUTE' });
+    orderRepo.findOne.mockResolvedValue({ id: 'ord-cod', tenant_id: 't-1', state: 'OUT_FOR_DELIVERY', outstanding_total: '565000.0000' });
+    courierRepo.findOne.mockResolvedValue({ id: 'cour-1', compensation_per_delivery: '15000.0000' });
+
+    const delivered = await service.completeDelivery('t-1', 'del-cod', { cashCollected: 500000, posAmount: 0 });
+
+    expect(delivered.state).toBe('DELIVERED');
+    expect(delivered.cash_expected).toBe('565000.0000');
+    expect(delivered.mobile_pos_expected).toBe('0.0000');
+    expect(orderRepo.save).toHaveBeenCalledWith(expect.objectContaining({ state: 'OUT_FOR_DELIVERY', fulfillment_status: 'DELIVERED' }));
+    expect(orderRepo.save).not.toHaveBeenCalledWith(expect.objectContaining({ state: 'COMPLETED' }));
+    expect(transitionRecorder.record).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'COMPLETE' }));
   });
 
   it('reconciles a stale delivery with a completed parent order before returning the board', async () => {

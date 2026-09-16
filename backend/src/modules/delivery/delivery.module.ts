@@ -22,6 +22,7 @@ import { DeliveryController } from './delivery.controller';
 import { CourierSettlementsController } from './courier-settlements.controller';
 import { AuditModule } from '../audit/audit.module';
 import { OrderLifecycleModule } from '../order-lifecycle/order-lifecycle.module';
+import { CashierModule } from '../cashier/cashier.module';
 
 @Module({
   imports: [
@@ -46,6 +47,8 @@ import { OrderLifecycleModule } from '../order-lifecycle/order-lifecycle.module'
     ]),
     AuditModule,
     OrderLifecycleModule,
+    // A courier's cash is received into a register's drawer when their batch is closed.
+    CashierModule,
   ],
   providers: [DeliveryService],
   controllers: [DeliveryController, CourierSettlementsController],
