@@ -310,11 +310,61 @@ export async function runSeed() {
     { tenant_id: tenant.id, code: 'CASH', name: 'Cash', kind: 'CASH', is_active: true },
     { tenant_id: tenant.id, code: 'CARD_POS', name: 'Bank Card POS', kind: 'CARD_POS', is_active: true },
     { tenant_id: tenant.id, code: 'CREDIT_ACCOUNT', name: 'Customer Credit Account', kind: 'CUSTOMER_CREDIT', is_active: true },
+    // The couriers carry company card readers, and the scope reports those separately from
+    // cash and from the counter terminal; online and bank transfer are the other two tenders
+    // a refund may go back through.
+    { tenant_id: tenant.id, code: 'MOBILE_POS', name: 'Courier Mobile POS', kind: 'MOBILE_POS', is_active: true },
+    { tenant_id: tenant.id, code: 'ONLINE', name: 'Online Payment', kind: 'ONLINE', is_active: true },
+    { tenant_id: tenant.id, code: 'BANK_TRANSFER', name: 'Bank Transfer', kind: 'BANK_TRANSFER', is_active: true },
   ];
   for (const pm of payMethods) {
     const existing = await payMethodRepo.findOne({ where: { tenant_id: tenant.id, code: pm.code } });
     if (!existing) {
       await payMethodRepo.save(payMethodRepo.create(pm));
+    }
+  }
+
+  // 6a. Idempotent printers, one receipt and one kitchen printer per selling site, each
+  // with a group and routes. With none, every receipt and kitchen ticket in the demo had
+  // nowhere to go — and a kitchen ticket with no printer is an order nobody cooks.
+  const printerRepo = AppDataSource.getRepository('Printer');
+  const printerGroupRepo = AppDataSource.getRepository('PrinterGroup');
+  const printerMemberRepo = AppDataSource.getRepository('PrinterGroupMember');
+  const printRouteRepo = AppDataSource.getRepository('PrintRoute');
+  for (const site of [branchTeh, branchExpress, branchNorth]) {
+    const findOrCreate = async (repo: any, where: Record<string, unknown>, data: Record<string, unknown>) =>
+      (await repo.findOne({ where })) || (await repo.save(repo.create({ ...where, ...data })));
+
+    const receiptPrinter = await findOrCreate(
+      printerRepo,
+      { tenant_id: tenant.id, branch_id: site.id, code: `PRN-${site.code}-RCPT` },
+      { name: `${site.name} Receipt Printer`, printer_type: 'THERMAL_RECEIPT', paper_width_mm: 80, is_active: true, simulated_address: 'sim://receipt' },
+    );
+    const kitchenPrinter = await findOrCreate(
+      printerRepo,
+      { tenant_id: tenant.id, branch_id: site.id, code: `PRN-${site.code}-KIT` },
+      // If the kitchen printer jams, the ticket comes out at the counter rather than nowhere.
+      { name: `${site.name} Kitchen Printer`, printer_type: 'KITCHEN_IMPACT', paper_width_mm: 80, is_active: true, simulated_address: 'sim://kitchen', fallback_printer_id: receiptPrinter.id },
+    );
+
+    const routes: Array<{ group: string; name: string; printer: any; documents: string[] }> = [
+      { group: 'RCPT', name: 'Counter', printer: receiptPrinter, documents: ['CUSTOMER_RECEIPT', 'GUEST_BILL', 'COURIER_SLIP'] },
+      { group: 'KIT', name: 'Kitchen', printer: kitchenPrinter, documents: ['KITCHEN_TICKET'] },
+    ];
+    for (const route of routes) {
+      const group = await findOrCreate(
+        printerGroupRepo,
+        { tenant_id: tenant.id, branch_id: site.id, code: `GRP-${site.code}-${route.group}` },
+        { name: `${site.name} ${route.name}` },
+      );
+      await findOrCreate(printerMemberRepo, { group_id: group.id, printer_id: route.printer.id }, { priority: 1, copies: 1 });
+      for (const documentType of route.documents) {
+        await findOrCreate(
+          printRouteRepo,
+          { tenant_id: tenant.id, branch_id: site.id, document_type: documentType, printer_group_id: group.id },
+          { priority: 10, copies: 1 },
+        );
+      }
     }
   }
 
