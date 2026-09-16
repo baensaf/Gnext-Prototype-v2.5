@@ -17,7 +17,10 @@ import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
+import { PaymentAllocation } from '../../entities/PaymentAllocation.entity';
+import { CashMovement } from '../../entities/CashMovement.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { ShiftService } from '../cashier/shift.service';
 import { OrderTransitionRecorder } from '../order-lifecycle/order-transition-recorder.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { BusinessDateUtil } from '../../common/utils/business-date.util';
@@ -50,6 +53,7 @@ export class DeliveryService {
     @InjectRepository(TenantSetting) private readonly settingRepo: Repository<TenantSetting>,
     private readonly transitionRecorder: OrderTransitionRecorder,
     private readonly auditWriter: AuditWriter,
+    private readonly shiftService: ShiftService,
   ) {}
 
   // --- 1. DELIVERY ZONES ---
@@ -860,22 +864,11 @@ export class DeliveryService {
     delivery.state = 'DELIVERED';
     delivery.delivered_at = new Date();
 
-    const payments = await this.paymentRepo.find({ where: { order_id: delivery.order_id, tenant_id: tenantId } });
-    let cashExpStr = '0.0000';
-    let posExpStr = '0.0000';
-
-    for (const p of payments) {
-      const pAmtStr = MoneyUtil.format(p.amount || '0', 4);
-      if (p.method_kind === 'CASH' || (p as any).payment_method_code === 'CASH') {
-        cashExpStr = MoneyUtil.add(cashExpStr, pAmtStr, 4);
-      } else {
-        posExpStr = MoneyUtil.add(posExpStr, pAmtStr, 4);
-      }
-    }
-
-    if (data?.cashCollected !== undefined) cashExpStr = MoneyUtil.format(data.cashCollected, 4);
-    if (data?.posAmount !== undefined) posExpStr = MoneyUtil.format(data.posAmount, 4);
-
+    // What the courier owes back is the balance the customer had left to pay, split by what
+    // they say went on the mobile card reader. The cash they report is not taken as the
+    // expectation — it used to overwrite it, so a short courier was never short. What they
+    // actually hand over is counted at settlement.
+    const { cash: cashExpStr, pos: posExpStr } = this.splitCollection(order.outstanding_total, data?.posAmount);
     delivery.cash_expected = cashExpStr;
     delivery.mobile_pos_expected = posExpStr;
 
@@ -915,10 +908,15 @@ export class DeliveryService {
     }
 
     const fromOrderState = order.state;
-    order.state = 'COMPLETED';
-    order.status = 'COMPLETED';
     order.fulfillment_status = 'DELIVERED';
-    order.completed_at = new Date();
+    // An order the customer paid for before it left is done. One still owing is not: the money
+    // is in the courier's pocket until they hand it over, so the order stays open until the
+    // settlement records the payment. Completing it here closed orders with nothing paid.
+    if (!MoneyUtil.greaterThan(order.outstanding_total || '0', '0')) {
+      order.state = 'COMPLETED';
+      order.status = 'COMPLETED';
+      order.completed_at = new Date();
+    }
     await this.saveOrderTransition(tenantId, order, fromOrderState, 'COMPLETE', userId, 'Delivered');
 
     return saved;
@@ -1016,6 +1014,7 @@ export class DeliveryService {
         ...reconciled,
         order_number: order ? order.order_number : 'ORD-00',
         grand_total: order ? order.grand_total : '0.0000',
+        outstanding_total: order ? order.outstanding_total : '0.0000',
         customer_name: order ? (order as any).customer_name || 'Customer' : 'Customer',
         courier_name: courier ? courier.name : 'Unassigned',
         courier_phone: courier ? courier.phone : '',
@@ -1076,37 +1075,27 @@ export class DeliveryService {
     throw new NotFoundException('Delivery not found');
   }
 
-  private async calculatePaymentBreakdown(orderId: string, defaultTotal: string | number = '0.0000') {
-    const payments = await this.paymentRepo.find({ where: { order_id: orderId, status: In(['SUCCEEDED', 'COMPLETED']) as any } });
-    let expCashStr = '0.0000';
-    let expPosStr = '0.0000';
-    let primaryMethod = 'CASH';
-
-    if (payments && payments.length > 0) {
-      for (const p of payments) {
-        let isCash = false;
-        if ((p as any).payment_method_code) {
-          isCash = (p as any).payment_method_code === 'CASH';
-        } else if (p.method_id || (p as any).payment_method_id) {
-          const pm = await this.paymentMethodRepo.findOne({ where: { id: p.method_id || (p as any).payment_method_id } });
-          if (pm && (pm.kind === 'CASH' || pm.code === 'CASH')) {
-            isCash = true;
-          }
-        }
-        const pAmtStr = MoneyUtil.format(p.amount || '0', 4);
-        if (isCash) {
-          expCashStr = MoneyUtil.add(expCashStr, pAmtStr, 4);
-        } else {
-          expPosStr = MoneyUtil.add(expPosStr, pAmtStr, 4);
-        }
-      }
-      primaryMethod = MoneyUtil.greaterThanOrEqual(expCashStr, expPosStr) ? 'CASH' : 'CARD';
-    } else {
-      expCashStr = MoneyUtil.format(defaultTotal || 0, 4);
-      primaryMethod = 'CASH';
+  private async activeMethod(tenantId: string, kinds: string[]): Promise<PaymentMethod> {
+    const methods = await this.paymentMethodRepo.find({ where: { tenant_id: tenantId, kind: In(kinds), is_active: true } });
+    const method = kinds.map((k) => methods.find((m) => m.kind === k)).find(Boolean);
+    if (!method) {
+      throw new BadRequestException(`No active ${kinds.join(' or ')} payment method is set up to record the courier's collection`);
     }
+    return method;
+  }
 
-    return { expCashStr, expPosStr, primaryMethod, expCash: expCashStr, expPos: expPosStr };
+  /**
+   * What the courier collects on a delivered order: whatever the customer still owed when it
+   * left the shop — cash, less any part the courier declared on the mobile card reader. It
+   * used to count the order's payments, so a card prepaid at the counter was "expected" back
+   * from the courier, and an unpaid order was expected only by accident of the fallback.
+   */
+  private splitCollection(owed: string, declaredPos?: string | number | null) {
+    const owedStr = MoneyUtil.greaterThan(owed || '0', '0') ? MoneyUtil.format(owed, 4) : '0.0000';
+    let posStr = MoneyUtil.format(declaredPos || 0, 4);
+    if (MoneyUtil.lessThan(posStr, '0')) posStr = '0.0000';
+    if (MoneyUtil.greaterThan(posStr, owedStr)) posStr = owedStr;
+    return { cash: MoneyUtil.subtract(owedStr, posStr, 4), pos: posStr };
   }
 
   /**
@@ -1117,12 +1106,17 @@ export class DeliveryService {
    * still settled here. The figures are the settlement preview's own, so the card and the
    * batch it starts cannot disagree.
    */
-  /** The money a courier's attempt should bring back: the order's payments if delivered, nothing if it failed. */
+  /** The money a courier's attempt should bring back: the unpaid balance if delivered, nothing if it failed. */
   private async expectedFromAttempt(assignment: DeliveryAssignment, order?: OrderHeader | null) {
-    if (assignment.status !== 'DELIVERED') {
+    if (assignment.status !== 'DELIVERED' || !order) {
       return { expCashStr: '0.00', expPosStr: '0.00', primaryMethod: 'CASH', expCash: '0.00', expPos: '0.00' };
     }
-    return await this.calculatePaymentBreakdown(assignment.order_id, order?.total_amount || '0');
+    const delivery = await this.deliveryRepo.findOne({ where: { order_id: order.id, tenant_id: order.tenant_id } });
+    const { cash, pos } = this.splitCollection(order.outstanding_total, delivery?.mobile_pos_expected);
+    const expCashStr = MoneyUtil.format(cash, 2);
+    const expPosStr = MoneyUtil.format(pos, 2);
+    const primaryMethod = MoneyUtil.greaterThan(expPosStr, expCashStr) ? 'MOBILE_POS' : 'CASH';
+    return { expCashStr, expPosStr, primaryMethod, expCash: expCashStr, expPos: expPosStr };
   }
 
   async getUnsettledSummary(tenantId: string, branchId?: string) {
@@ -1472,24 +1466,116 @@ export class DeliveryService {
       }
     }
 
-    settlement.status = 'CLOSED';
-    settlement.closed_at = new Date();
-    settlement.closed_by_user_id = userId;
-    if (approvalRequestId) settlement.approval_request_id = approvalRequestId;
-
-    const saved = await this.settlementRepo.save(settlement);
     const lines = await this.settlementLineRepo.find({ where: { settlement_id: id } });
 
+    // The handover is when cash-on-delivery money is actually received, so this is where it
+    // becomes a payment. Until now closing a batch recorded nothing: the order stayed owing
+    // its full amount forever and the cash never reached a drawer.
+    const collections: Array<{ orderId: string; cash: string; pos: string }> = [];
     for (const l of lines) {
-      if (l.delivery_assignment_id) {
-        const asgn = await this.assignmentRepo.findOne({ where: { id: l.delivery_assignment_id } });
+      if (l.delivery_status !== 'DELIVERED' || !l.order_id) continue;
+      const order = await this.orderRepo.findOne({ where: { id: l.order_id, tenant_id: tenantId } });
+      if (!order || order.state === 'CANCELLED') continue;
+      const { cash, pos } = this.splitCollection(order.outstanding_total, l.expected_pos);
+      if (MoneyUtil.greaterThan(cash, '0') || MoneyUtil.greaterThan(pos, '0')) {
+        collections.push({ orderId: order.id, cash, pos });
+      }
+    }
+
+    const expectedCash = MoneyUtil.sum(collections.map((c) => c.cash));
+    const cashShortOver = MoneyUtil.format(settlement.cash_discrepancy_amount || '0', 4);
+    const handsOverCash = MoneyUtil.greaterThan(expectedCash, '0') || MoneyUtil.greaterThan(settlement.actual_cash_amount || '0', '0');
+    // The courier's cash goes into the drawer of the register the batch is closed at.
+    const drawer = handsOverCash ? await this.shiftService.requireDrawer(tenantId, settlement.branch_id, null) : null;
+    const cashMethod = collections.some((c) => MoneyUtil.greaterThan(c.cash, '0')) ? await this.activeMethod(tenantId, ['CASH']) : null;
+    const posMethod = collections.some((c) => MoneyUtil.greaterThan(c.pos, '0')) ? await this.activeMethod(tenantId, ['MOBILE_POS', 'CARD_POS', 'NETWORK_POS', 'CARD']) : null;
+    const courier = await this.courierRepo.findOne({ where: { id: settlement.courier_id, tenant_id: tenantId } });
+
+    const saved = await this.orderRepo.manager.transaction(async (em) => {
+      let seq = 0;
+      for (const c of collections) {
+        const order = await em.findOne(OrderHeader, { where: { id: c.orderId, tenant_id: tenantId }, lock: { mode: 'pessimistic_write' } });
+        if (!order) continue;
+        for (const [method, amount] of [[cashMethod, c.cash], [posMethod, c.pos]] as Array<[PaymentMethod | null, string]>) {
+          if (!method || !MoneyUtil.greaterThan(amount, '0')) continue;
+          const payment = await em.save(
+            Payment,
+            em.create(Payment, {
+              tenant_id: tenantId,
+              order_id: order.id,
+              payment_number: `PAY-${settlement.settlement_number}-${++seq}`,
+              method_id: method.id,
+              method_kind: method.kind,
+              status: 'SUCCEEDED',
+              amount,
+              currency_code: order.currency_code || 'IRR',
+              reference: settlement.settlement_number,
+              shift_id: drawer?.id ?? null,
+              business_date: order.business_date || BusinessDateUtil.today(),
+              idempotency_key: `cod:${settlement.id}:${order.id}:${method.kind}`,
+              posted_at: new Date(),
+            }),
+          );
+          await em.save(PaymentAllocation, em.create(PaymentAllocation, { tenant_id: tenantId, payment_id: payment.id, order_id: order.id, amount, currency_code: payment.currency_code }));
+          if (method.kind === 'CASH' && drawer) {
+            await this.shiftService.recordCashPaymentMovement(tenantId, drawer.id, payment.id, amount, userId, em);
+          }
+          order.paid_total = MoneyUtil.add(order.paid_total || '0', amount);
+        }
+
+        const owed = MoneyUtil.subtract(order.grand_total || '0', order.paid_total || '0');
+        order.outstanding_total = MoneyUtil.greaterThan(owed, '0') ? owed : '0.0000';
+        order.paid_amount = order.paid_total;
+        order.due_amount = order.outstanding_total;
+        const fromState = order.state;
+        if (MoneyUtil.isZero(order.outstanding_total) && order.state !== 'COMPLETED') {
+          order.state = 'COMPLETED';
+          order.status = 'COMPLETED';
+          order.completed_at = new Date();
+        }
+        await em.save(OrderHeader, order);
+        if (fromState !== order.state) {
+          await this.transitionRecorder.record(em, { tenantId, order, fromState, action: 'COMPLETE', userId, reasonText: `Settled in ${settlement.settlement_number}` });
+        }
+      }
+
+      // The customer paid in full; a gap between that and what the courier handed over is
+      // the courier's, recorded on the batch. The drawer is moved by the gap so its count
+      // matches the cash really in it, and the cashier is not left carrying the shortage.
+      if (drawer && !MoneyUtil.isZero(cashShortOver)) {
+        const short = MoneyUtil.lessThan(cashShortOver, '0');
+        await em.save(
+          CashMovement,
+          em.create(CashMovement, {
+            tenant_id: tenantId,
+            shift_id: drawer.id,
+            type: short ? 'PAID_OUT' : 'PAID_IN',
+            amount: cashShortOver,
+            currency_code: drawer.currency_code,
+            reason_text: `Courier ${courier?.name || settlement.courier_id} ${short ? 'short' : 'over'} on ${settlement.settlement_number}`,
+            reference: settlement.settlement_number,
+            posted_by: userId || null,
+          }),
+        );
+      }
+
+      settlement.status = 'CLOSED';
+      settlement.closed_at = new Date();
+      settlement.closed_by_user_id = userId;
+      if (approvalRequestId) settlement.approval_request_id = approvalRequestId;
+      const closed = await em.save(CourierSettlement, settlement);
+
+      for (const l of lines) {
+        if (!l.delivery_assignment_id) continue;
+        const asgn = await em.findOne(DeliveryAssignment, { where: { id: l.delivery_assignment_id } });
         if (asgn) {
           asgn.is_settled = true;
           asgn.settlement_id = id;
-          await this.assignmentRepo.save(asgn);
+          await em.save(DeliveryAssignment, asgn);
         }
       }
-    }
+      return closed;
+    });
 
     await this.auditWriter.write({
       tenantId,
@@ -1508,6 +1594,16 @@ export class DeliveryService {
 
     if (settlement.status !== 'CLOSED') {
       throw new BadRequestException(`Only CLOSED settlements can be reversed (current status: ${settlement.status})`);
+    }
+
+    // Closing a batch now takes the customers' payments and puts the cash in a drawer.
+    // Reopening the batch would leave those in place and let them be taken a second time, so
+    // a batch that posted money is corrected through the orders, not by reversing it.
+    const posted = await this.paymentRepo.count({ where: { tenant_id: tenantId, reference: settlement.settlement_number, status: 'SUCCEEDED' } });
+    if (posted > 0) {
+      throw new ConflictException(
+        `Settlement ${settlement.settlement_number} already recorded ${posted} customer payment(s). Refund or correct those orders instead of reversing the batch.`,
+      );
     }
 
     settlement.status = 'REVERSED';

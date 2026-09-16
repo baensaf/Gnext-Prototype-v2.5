@@ -76,6 +76,8 @@ export interface Delivery {
   fee: string;
   currency_code: string;
   grand_total: string;
+  /** What the customer still owes on the order; a courier brings it back at settlement. */
+  outstanding_total?: string;
   customer_name: string;
   address_snapshot?: any;
   assigned_at?: string;

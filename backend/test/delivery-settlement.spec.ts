@@ -11,6 +11,8 @@ import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
 import { ApprovalRequest } from '../src/entities/ApprovalRequest.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { OrderTransitionRecorder } from '../src/modules/order-lifecycle/order-transition-recorder.service';
+import { ShiftService } from '../src/modules/cashier/shift.service';
+import { CashMovement } from '../src/entities/CashMovement.entity';
 import { ConflictException, BadRequestException } from '@nestjs/common';
 
 import { DeliveryZone } from '../src/entities/DeliveryZone.entity';
@@ -40,15 +42,33 @@ describe('DeliveryService (Courier Settlement)', () => {
   let deliveryEventRepo: any;
   let terminalRepo: any;
   let auditWriter: any;
+  let em: any;
+  let shiftService: any;
 
   beforeEach(async () => {
     courierRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
     assignmentRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
-    orderRepo = { findOne: jest.fn(), save: jest.fn() };
+    // Closing a batch posts payments inside one transaction; this manager hands the test its EntityManager.
+    em = {
+      findOne: jest.fn(),
+      save: jest.fn((_entity: any, obj: any) => Promise.resolve(obj)),
+      create: jest.fn((_entity: any, obj: any) => ({ ...obj })),
+    };
+    orderRepo = { findOne: jest.fn(), save: jest.fn(), manager: { transaction: jest.fn((cb: any) => cb(em)) } };
+    shiftService = {
+      requireDrawer: jest.fn().mockResolvedValue({ id: 'shift-1', currency_code: 'IRR' }),
+      recordCashPaymentMovement: jest.fn().mockResolvedValue({}),
+    };
     settlementRepo = { findOne: jest.fn(), find: jest.fn(), count: jest.fn(), create: jest.fn(), save: jest.fn() };
     settlementLineRepo = { findOne: jest.fn(), find: jest.fn(), count: jest.fn(), create: jest.fn(), save: jest.fn() };
-    paymentRepo = { find: jest.fn() };
-    paymentMethodRepo = { findOne: jest.fn() };
+    paymentRepo = { find: jest.fn(), count: jest.fn().mockResolvedValue(0) };
+    paymentMethodRepo = {
+      findOne: jest.fn(),
+      find: jest.fn().mockResolvedValue([
+        { id: 'pm-cash', kind: 'CASH' },
+        { id: 'pm-mpos', kind: 'MOBILE_POS' },
+      ]),
+    };
     approvalRepo = { findOne: jest.fn() };
     zoneRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
     attendanceRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
@@ -84,41 +104,38 @@ describe('DeliveryService (Courier Settlement)', () => {
         { provide: getRepositoryToken(TenantSetting), useValue: { find: jest.fn().mockResolvedValue([]) } },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: OrderTransitionRecorder, useValue: { record: jest.fn() } },
+        { provide: ShiftService, useValue: shiftService },
       ],
     }).compile();
 
     service = module.get<DeliveryService>(DeliveryService);
   });
 
-  it('should preview courier settlement with separate expected cash and expected POS amounts', async () => {
+  // The courier owes what the customer still owed: cash, less the part they put on the
+  // mobile card reader. A card taken at the counter before dispatch is not theirs to return.
+  it('expects back the unpaid balance, split into cash and mobile POS as the courier declared', async () => {
     courierRepo.findOne.mockResolvedValue({ id: 'c-1', name: 'Courier 1', code: 'C01' });
     assignmentRepo.find.mockResolvedValue([
       { id: 'asgn-1', order_id: 'ord-1', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '10.00', is_settled: false },
       { id: 'asgn-2', order_id: 'ord-2', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '15.00', is_settled: false },
+      { id: 'asgn-3', order_id: 'ord-3', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '15.00', is_settled: false },
     ]);
     settlementLineRepo.findOne.mockResolvedValue(null);
 
     orderRepo.findOne.mockImplementation(({ where }: any) => {
-      if (where.id === 'ord-1') return Promise.resolve({ id: 'ord-1', order_number: 'ORD-1001', total_amount: '100.00' });
-      if (where.id === 'ord-2') return Promise.resolve({ id: 'ord-2', order_number: 'ORD-1002', total_amount: '200.00' });
+      if (where.id === 'ord-1') return Promise.resolve({ id: 'ord-1', order_number: 'ORD-1001', total_amount: '100.00', outstanding_total: '100.00' });
+      if (where.id === 'ord-2') return Promise.resolve({ id: 'ord-2', order_number: 'ORD-1002', total_amount: '200.00', outstanding_total: '200.00' });
+      // Paid by card at the counter before it left: the courier brings nothing back.
+      if (where.id === 'ord-3') return Promise.resolve({ id: 'ord-3', order_number: 'ORD-1003', total_amount: '500.00', outstanding_total: '0.0000' });
       return Promise.resolve(null);
     });
-
-    paymentRepo.find.mockImplementation(({ where }: any) => {
-      if (where.order_id === 'ord-1') return Promise.resolve([{ payment_method_id: 'pm-cash', amount: '100.00', status: 'COMPLETED' }]);
-      if (where.order_id === 'ord-2') return Promise.resolve([{ payment_method_id: 'pm-card', amount: '200.00', status: 'COMPLETED' }]);
-      return Promise.resolve([]);
-    });
-
-    paymentMethodRepo.findOne.mockImplementation(({ where }: any) => {
-      if (where.id === 'pm-cash') return Promise.resolve({ id: 'pm-cash', kind: 'CASH', code: 'CASH' });
-      if (where.id === 'pm-card') return Promise.resolve({ id: 'pm-card', kind: 'NETWORK_POS', code: 'CARD' });
-      return Promise.resolve(null);
-    });
+    deliveryRepo.findOne.mockImplementation(({ where }: any) =>
+      Promise.resolve(where.order_id === 'ord-2' ? { order_id: 'ord-2', mobile_pos_expected: '200.0000' } : { order_id: where.order_id, mobile_pos_expected: '0.0000' }),
+    );
 
     const preview = await service.previewSettlement('t-1', 'c-1');
 
-    expect(preview.line_count).toBe(2);
+    expect(preview.line_count).toBe(3);
     expect(preview.expected_cash_amount).toBe('100.00');
     expect(preview.expected_pos_amount).toBe('200.00');
     expect(preview.net_settlement_amount).toBe('300.00');
@@ -139,7 +156,7 @@ describe('DeliveryService (Courier Settlement)', () => {
       { id: 'asgn-done', order_id: 'ord-1', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '10.00', compensation_amount: '30.00', is_settled: false },
       { id: 'asgn-failed', order_id: 'ord-2', courier_id: 'c-1', status: 'FAILED', delivery_fee: '10.00', compensation_amount: '12.00', is_settled: false },
     ]);
-    orderRepo.findOne.mockImplementation(({ where }: any) => Promise.resolve({ id: where.id, total_amount: '100.00' }));
+    orderRepo.findOne.mockImplementation(({ where }: any) => Promise.resolve({ id: where.id, total_amount: '100.00', outstanding_total: '100.00' }));
     paymentRepo.find.mockResolvedValue([{ payment_method_code: 'CASH', amount: '100.00' }]);
     settlementRepo.create.mockImplementation((dto: any) => dto);
     settlementRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'settle-1' }));
@@ -186,7 +203,7 @@ describe('DeliveryService (Courier Settlement)', () => {
     orderRepo.findOne.mockImplementation(({ where }: any) =>
       Promise.resolve(
         where.id === 'ord-old'
-          ? { id: 'ord-old', branch_id: 'b-old', total_amount: '100.00' }
+          ? { id: 'ord-old', branch_id: 'b-old', total_amount: '100.00', outstanding_total: '100.00' }
           : { id: 'ord-new', branch_id: 'b-new', total_amount: '200.00' },
       ),
     );
@@ -205,7 +222,7 @@ describe('DeliveryService (Courier Settlement)', () => {
     ]);
     assignmentRepo.findOne.mockResolvedValue({ id: 'asgn-1', order_id: 'ord-1', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '10.00', is_settled: false });
     settlementLineRepo.findOne.mockResolvedValue(null);
-    orderRepo.findOne.mockResolvedValue({ id: 'ord-1', order_number: 'ORD-1001', total_amount: '100.00' });
+    orderRepo.findOne.mockResolvedValue({ id: 'ord-1', order_number: 'ORD-1001', total_amount: '100.00', outstanding_total: '100.00' });
     paymentRepo.find.mockResolvedValue([{ payment_method_id: 'pm-cash', amount: '100.00' }]);
     paymentMethodRepo.findOne.mockResolvedValue({ id: 'pm-cash', kind: 'CASH', code: 'CASH' });
 
@@ -275,17 +292,112 @@ describe('DeliveryService (Courier Settlement)', () => {
       pos_discrepancy_amount: '0.00',
     };
     settlementRepo.findOne.mockResolvedValue(settlement);
-    settlementRepo.save.mockImplementation((s: any) => Promise.resolve(s));
     settlementLineRepo.find.mockResolvedValue([{ id: 'line-1', delivery_assignment_id: 'asgn-1' }]);
-    
-    const assignment = { id: 'asgn-1', is_settled: false, settlement_id: null };
-    assignmentRepo.findOne.mockResolvedValue(assignment);
-    assignmentRepo.save.mockImplementation((a: any) => Promise.resolve(a));
+
+    em.findOne.mockResolvedValue({ id: 'asgn-1', is_settled: false, settlement_id: null });
 
     const closed = await service.closeSettlement('t-1', 'settle-1', 'user-1');
 
     expect(closed.status).toBe('CLOSED');
-    expect(assignmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ is_settled: true, settlement_id: 'settle-1' }));
+    expect(em.save).toHaveBeenCalledWith(DeliveryAssignment, expect.objectContaining({ is_settled: true, settlement_id: 'settle-1' }));
+    // Nothing was owed on these lines, so no drawer is needed and nothing is paid.
+    expect(shiftService.requireDrawer).not.toHaveBeenCalled();
+    expect(em.save).not.toHaveBeenCalledWith(Payment, expect.anything());
+  });
+
+  // The audit (F10) closed a batch for a 565,000 cash-on-delivery order and the order still
+  // owed 565,000 afterwards, with no payment and the cash in no drawer.
+  describe('closing a batch receives the money the courier collected', () => {
+    const codOrder = () => ({
+      id: 'ord-cod',
+      tenant_id: 't-1',
+      order_number: 'ORD-COD',
+      state: 'OUT_FOR_DELIVERY',
+      currency_code: 'IRR',
+      business_date: '2026-09-16',
+      grand_total: '565000.0000',
+      paid_total: '0.0000',
+      outstanding_total: '565000.0000',
+    });
+    let order: any;
+
+    beforeEach(() => {
+      order = codOrder();
+      settlementLineRepo.find.mockResolvedValue([
+        { id: 'line-1', delivery_assignment_id: 'asgn-1', order_id: 'ord-cod', delivery_status: 'DELIVERED', expected_cash: '565000.00', expected_pos: '0.00' },
+      ]);
+      orderRepo.findOne.mockResolvedValue(codOrder());
+      courierRepo.findOne.mockResolvedValue({ id: 'c-1', name: 'Ali Rezaei' });
+      em.findOne.mockImplementation((entity: any) =>
+        Promise.resolve(entity === OrderHeader ? order : { id: 'asgn-1', is_settled: false }),
+      );
+    });
+
+    it('pays the order in full, puts the cash in the drawer, and completes the order', async () => {
+      settlementRepo.findOne.mockResolvedValue({
+        id: 'settle-1', tenant_id: 't-1', branch_id: 'b-1', courier_id: 'c-1', settlement_number: 'SET-1',
+        status: 'UNDER_REVIEW', actual_cash_amount: '565000.00', cash_discrepancy_amount: '0.00', pos_discrepancy_amount: '0.00',
+      });
+
+      await service.closeSettlement('t-1', 'settle-1', 'user-1');
+
+      expect(shiftService.requireDrawer).toHaveBeenCalledWith('t-1', 'b-1', null);
+      expect(em.save).toHaveBeenCalledWith(Payment, expect.objectContaining({ method_kind: 'CASH', amount: '565000.0000', status: 'SUCCEEDED', shift_id: 'shift-1', reference: 'SET-1' }));
+      expect(shiftService.recordCashPaymentMovement).toHaveBeenCalledWith('t-1', 'shift-1', undefined, '565000.0000', 'user-1', em);
+      expect(order).toEqual(expect.objectContaining({ paid_total: '565000.0000', outstanding_total: '0.0000', state: 'COMPLETED' }));
+      expect(em.save).not.toHaveBeenCalledWith(CashMovement, expect.anything());
+    });
+
+    it("records a shortage against the courier's handover, not as money the customer still owes", async () => {
+      settlementRepo.findOne.mockResolvedValue({
+        id: 'settle-1', tenant_id: 't-1', branch_id: 'b-1', courier_id: 'c-1', settlement_number: 'SET-1',
+        status: 'UNDER_REVIEW', actual_cash_amount: '500000.00', cash_discrepancy_amount: '-65000.00', pos_discrepancy_amount: '0.00',
+      });
+      approvalRepo.findOne.mockResolvedValue({ id: 'apr-1', status: 'APPROVED' });
+
+      await service.closeSettlement('t-1', 'settle-1', 'user-1', 'apr-1');
+
+      expect(order).toEqual(expect.objectContaining({ outstanding_total: '0.0000', state: 'COMPLETED' }));
+      expect(em.save).toHaveBeenCalledWith(
+        CashMovement,
+        expect.objectContaining({ shift_id: 'shift-1', type: 'PAID_OUT', amount: '-65000.0000', reason_text: 'Courier Ali Rezaei short on SET-1' }),
+      );
+    });
+
+    it('books the part taken on the mobile card reader as mobile POS, not cash', async () => {
+      settlementLineRepo.find.mockResolvedValue([
+        { id: 'line-1', delivery_assignment_id: 'asgn-1', order_id: 'ord-cod', delivery_status: 'DELIVERED', expected_cash: '65000.00', expected_pos: '500000.00' },
+      ]);
+      settlementRepo.findOne.mockResolvedValue({
+        id: 'settle-1', tenant_id: 't-1', branch_id: 'b-1', courier_id: 'c-1', settlement_number: 'SET-1',
+        status: 'UNDER_REVIEW', actual_cash_amount: '65000.00', cash_discrepancy_amount: '0.00', pos_discrepancy_amount: '0.00',
+      });
+
+      await service.closeSettlement('t-1', 'settle-1', 'user-1');
+
+      expect(em.save).toHaveBeenCalledWith(Payment, expect.objectContaining({ method_kind: 'MOBILE_POS', amount: '500000.0000' }));
+      expect(em.save).toHaveBeenCalledWith(Payment, expect.objectContaining({ method_kind: 'CASH', amount: '65000.0000' }));
+      expect(order.state).toBe('COMPLETED');
+    });
+
+    it('refuses to close without an open drawer to take the cash', async () => {
+      settlementRepo.findOne.mockResolvedValue({
+        id: 'settle-1', tenant_id: 't-1', branch_id: 'b-1', courier_id: 'c-1', settlement_number: 'SET-1',
+        status: 'UNDER_REVIEW', actual_cash_amount: '565000.00', cash_discrepancy_amount: '0.00', pos_discrepancy_amount: '0.00',
+      });
+      shiftService.requireDrawer.mockRejectedValue(new ConflictException({ code: 'NO_OPEN_SHIFT' }));
+
+      await expect(service.closeSettlement('t-1', 'settle-1', 'user-1')).rejects.toThrow(ConflictException);
+      expect(orderRepo.manager.transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  it('will not reverse a batch whose collections were already paid onto the orders', async () => {
+    settlementRepo.findOne.mockResolvedValue({ id: 'settle-1', tenant_id: 't-1', status: 'CLOSED', settlement_number: 'SET-1' });
+    paymentRepo.count.mockResolvedValue(1);
+
+    await expect(service.reverseSettlement('t-1', 'settle-1', 'user-1', 'mistake')).rejects.toThrow(ConflictException);
+    expect(settlementRepo.save).not.toHaveBeenCalled();
   });
 
   it('should reverse a closed settlement and unlock delivery assignments', async () => {

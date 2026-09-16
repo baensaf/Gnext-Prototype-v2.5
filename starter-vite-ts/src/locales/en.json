@@ -777,8 +777,10 @@
       "complete": {
         "title": "Complete Delivery & Instrument Actuals",
         "description": "Record collected instruments for Order #{{orderNumber}}",
-        "cashLabel": "Courier Cash Collected (IRR)",
-        "posLabel": "Company Mobile POS Amount (IRR)",
+        "owedLabel": "Still owed by the customer",
+        "cashLabel": "Cash to hand back at settlement (IRR)",
+        "cashHelper": "The order is paid, and the cash counted, when the courier is settled.",
+        "posLabel": "Taken on the company mobile POS (IRR)",
         "cancel": "Cancel",
         "submit": "Confirm Delivery"
       },
