@@ -9,6 +9,7 @@ import { PrinterGroupMember } from '../../entities/PrinterGroupMember.entity';
 import { PrintRoute } from '../../entities/PrintRoute.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
+import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { PrintRenderService } from './print-render.service';
 import { PrintRoutingService } from './print-routing.service';
 import { AuditWriter } from '../audit/audit-writer.service';
@@ -33,6 +34,7 @@ export class PrintQueueService {
     private readonly renderService: PrintRenderService,
     private readonly routingService: PrintRoutingService,
     private readonly auditWriter: AuditWriter,
+    @InjectRepository(OperationalAlert) private readonly alertRepo: Repository<OperationalAlert>,
   ) {}
 
   // Enqueue print jobs for order submission or reprint
@@ -165,6 +167,27 @@ export class PrintQueueService {
 
     const savedJob = await this.jobRepo.save(job);
 
+    // No route matched, so nothing will ever print this. It used to stay QUEUED with no
+    // printer and an ordinary "enqueued" audit entry — a kitchen ticket that went nowhere
+    // looked exactly like one that printed. Fail it where the print queue shows failures,
+    // and tell the branch.
+    if (!primaryPrinter) {
+      savedJob.status = 'FAILED';
+      await this.jobRepo.save(savedJob);
+      await this.raiseUnroutedAlert(tenantId, order, documentType);
+      await this.auditWriter.write({
+        tenantId,
+        actorType: opts.userId ? 'ADMIN' : 'SYSTEM',
+        actorId: opts.userId,
+        action: 'PRINT_JOB_UNROUTED',
+        entityType: 'PrintJob',
+        entityId: savedJob.id,
+        correlationId: 'corr-print-enqueue',
+        details: { documentType, orderNumber: order.order_number, branchId: order.branch_id },
+      });
+      return savedJob;
+    }
+
     // Create initial simulated attempt
     if (primaryPrinter) {
       const attempt = this.attemptRepo.create({
@@ -193,6 +216,30 @@ export class PrintQueueService {
     });
 
     return savedJob;
+  }
+
+  /**
+   * One open alert per branch and document type: a branch with no kitchen printer would
+   * otherwise raise one for every order until somebody noticed.
+   */
+  private async raiseUnroutedAlert(tenantId: string, order: OrderHeader, documentType: string) {
+    const title = `No printer for ${documentType}`;
+    const open = await this.alertRepo.findOne({
+      where: { tenant_id: tenantId, branch_id: order.branch_id, type: 'PRINT_UNROUTED', title, acknowledged: false },
+    });
+    if (open) return;
+    await this.alertRepo.save(
+      this.alertRepo.create({
+        tenant_id: tenantId,
+        branch_id: order.branch_id,
+        type: 'PRINT_UNROUTED',
+        // A kitchen ticket that never prints is food nobody cooks.
+        severity: documentType === 'KITCHEN_TICKET' ? 'CRITICAL' : 'WARNING',
+        title,
+        message: `Order ${order.order_number}: no active printer is routed for ${documentType} at this branch, so it did not print. Add a printer and a print route, then retry the job from the print queue.`,
+        acknowledged: false,
+      }),
+    );
   }
 
   // Handle simulation outcome
@@ -254,6 +301,23 @@ export class PrintQueueService {
   async retryJob(tenantId: string, jobId: string, data: { scenarioId?: string; useFallback?: boolean; reason?: string }) {
     const job = await this.jobRepo.findOne({ where: { id: jobId, tenant_id: tenantId } });
     if (!job) throw new NotFoundException(`Print job ${jobId} not found`);
+
+    // A job that failed for want of a route gets one now, if the branch has added a printer
+    // since; otherwise say what is missing rather than "Printer ID is required".
+    if (!job.printer_id) {
+      const { printers } = await this.routingService.resolvePrintersForRoute({
+        tenantId,
+        branchId: job.branch_id,
+        documentType: job.document_type,
+      });
+      if (!printers[0]) {
+        throw new BadRequestException(
+          `No printer is routed for ${job.document_type} at this branch. Add a printer and a print route, then retry.`,
+        );
+      }
+      job.printer_id = printers[0].id;
+      await this.jobRepo.save(job);
+    }
 
     return await this.processSimulationOutcome(tenantId, {
       printJobId: job.id,
