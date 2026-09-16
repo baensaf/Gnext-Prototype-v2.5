@@ -8,6 +8,7 @@ import { PrintJob } from '../../entities/PrintJob.entity';
 import { PrintAttempt } from '../../entities/PrintAttempt.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { Branch } from '../../entities/Branch.entity';
+import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { PrintRenderService } from './print-render.service';
 import { PrintRoutingService } from './print-routing.service';
 import { PrintQueueService } from './print-queue.service';
@@ -25,6 +26,7 @@ import { AuditModule } from '../audit/audit.module';
       PrintAttempt,
       OrderHeader,
       Branch,
+      OperationalAlert,
     ]),
     AuditModule,
   ],

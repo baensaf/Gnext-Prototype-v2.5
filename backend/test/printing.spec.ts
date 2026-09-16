@@ -11,6 +11,7 @@ import { PrintJob } from '../src/entities/PrintJob.entity';
 import { PrintAttempt } from '../src/entities/PrintAttempt.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
+import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
 
 describe('PrintingModule (Unit & Integration)', () => {
   let renderService: PrintRenderService;
@@ -25,6 +26,7 @@ describe('PrintingModule (Unit & Integration)', () => {
   let attemptRepo: any;
   let orderRepo: any;
   let auditWriter: any;
+  let alertRepo: any;
 
   beforeEach(async () => {
     printerRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
@@ -35,6 +37,7 @@ describe('PrintingModule (Unit & Integration)', () => {
     attemptRepo = { findOne: jest.fn(), find: jest.fn(), count: jest.fn().mockResolvedValue(0), create: jest.fn(), save: jest.fn() };
     orderRepo = { findOne: jest.fn() };
     auditWriter = { write: jest.fn() };
+    alertRepo = { findOne: jest.fn().mockResolvedValue(null), create: jest.fn((a) => a), save: jest.fn((a) => Promise.resolve(a)) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -49,6 +52,7 @@ describe('PrintingModule (Unit & Integration)', () => {
         { provide: getRepositoryToken(PrintAttempt), useValue: attemptRepo },
         { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
         { provide: AuditWriter, useValue: auditWriter },
+        { provide: getRepositoryToken(OperationalAlert), useValue: alertRepo },
       ],
     }).compile();
 
@@ -133,6 +137,66 @@ describe('PrintingModule (Unit & Integration)', () => {
 
     expect(outcomeRes.attempt.status).toBe('FAILED');
     expect(outcomeRes.attempt.printer_id).toBe('prn-backup');
+  });
+
+  // The 2026-09-16 audit found every print job in the demo still QUEUED with no printer and
+  // no attempt: the branch had no printers, and a kitchen ticket that went nowhere looked
+  // exactly like one that printed.
+  describe('a document with no printer to go to', () => {
+    beforeEach(() => {
+      orderRepo.findOne.mockResolvedValue({
+        id: 'ord-300',
+        branch_id: 'br-1',
+        order_number: 'ORD-300',
+        order_type: 'DINE_IN',
+        placed_at: new Date(),
+        items: [{ product_name: 'Burger', quantity: 1, unit_price: '250000.00' }],
+        grand_total: '272500.00',
+      });
+      routeRepo.find.mockResolvedValue([]);
+      printerRepo.find.mockResolvedValue([]);
+      jobRepo.create.mockImplementation((j: any) => j);
+      jobRepo.save.mockImplementation((j: any) => Promise.resolve({ ...j, id: 'job-300' }));
+      alertRepo.findOne.mockResolvedValue(null);
+    });
+
+    it('fails the job, records why, and raises a critical alert for a kitchen ticket', async () => {
+      const job = await queueService.enqueueOrderPrintJobs('t-1', 'ord-300', 'KITCHEN_TICKET');
+
+      expect(job.status).toBe('FAILED');
+      expect(attemptRepo.save).not.toHaveBeenCalled();
+      expect(alertRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ branch_id: 'br-1', type: 'PRINT_UNROUTED', severity: 'CRITICAL', acknowledged: false }),
+      );
+      expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'PRINT_JOB_UNROUTED' }));
+      expect(auditWriter.write).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'PRINT_JOB_ENQUEUED' }));
+    });
+
+    it('raises one open alert per branch and document, not one per order', async () => {
+      alertRepo.findOne.mockResolvedValue({ id: 'alert-open', type: 'PRINT_UNROUTED', acknowledged: false });
+
+      const job = await queueService.enqueueOrderPrintJobs('t-1', 'ord-300', 'CUSTOMER_RECEIPT');
+
+      expect(job.status).toBe('FAILED');
+      expect(alertRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('says what is missing when retried before a printer exists', async () => {
+      jobRepo.findOne.mockResolvedValue({ id: 'job-300', tenant_id: 't-1', branch_id: 'br-1', document_type: 'KITCHEN_TICKET', printer_id: null, status: 'FAILED' });
+
+      await expect(queueService.retryJob('t-1', 'job-300', {})).rejects.toThrow(/No printer is routed for KITCHEN_TICKET/);
+    });
+
+    it('prints on retry once the branch has a printer', async () => {
+      jobRepo.findOne.mockResolvedValue({ id: 'job-300', tenant_id: 't-1', branch_id: 'br-1', document_type: 'KITCHEN_TICKET', printer_id: null, status: 'FAILED' });
+      printerRepo.find.mockResolvedValue([{ id: 'prn-kitchen', name: 'Kitchen', is_active: true }]);
+      attemptRepo.create.mockImplementation((a: any) => a);
+
+      const res = await queueService.retryJob('t-1', 'job-300', {});
+
+      expect(res.attempt.printer_id).toBe('prn-kitchen');
+      expect(res.job.status).toBe('SUCCESS');
+    });
   });
 
   describe('kitchen change tickets', () => {
