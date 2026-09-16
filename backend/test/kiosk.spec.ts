@@ -15,6 +15,8 @@ import { OrderItemOption } from '../src/entities/OrderItemOption.entity';
 import { Payment } from '../src/entities/Payment.entity';
 import { Customer } from '../src/entities/Customer.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
+import { KdsService } from '../src/modules/kds/kds.service';
+import { PrintQueueService } from '../src/modules/printing/print-queue.service';
 import { ForbiddenException, BadRequestException } from '@nestjs/common';
 
 describe('KioskService (Unit)', () => {
@@ -33,6 +35,8 @@ describe('KioskService (Unit)', () => {
   let paymentRepo: any;
   let customerRepo: any;
   let auditWriter: any;
+  let kdsService: any;
+  let printQueueService: any;
 
   beforeEach(async () => {
     categoryRepo = { find: jest.fn() };
@@ -49,6 +53,8 @@ describe('KioskService (Unit)', () => {
     paymentRepo = { create: jest.fn(), save: jest.fn() };
     customerRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
     auditWriter = { write: jest.fn() };
+    kdsService = { generateTicketsForOrder: jest.fn().mockResolvedValue([]) };
+    printQueueService = { enqueueOrderPrintJobs: jest.fn().mockResolvedValue([]) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -67,6 +73,8 @@ describe('KioskService (Unit)', () => {
         { provide: getRepositoryToken(Payment), useValue: paymentRepo },
         { provide: getRepositoryToken(Customer), useValue: customerRepo },
         { provide: AuditWriter, useValue: auditWriter },
+        { provide: KdsService, useValue: kdsService },
+        { provide: PrintQueueService, useValue: printQueueService },
       ],
     }).compile();
 
@@ -196,28 +204,80 @@ describe('KioskService (Unit)', () => {
     });
   });
 
-  it('should process kiosk terminal payment and return simulated receipt', async () => {
-    orderRepo.findOne.mockResolvedValue({
+  // The 2026-09-16 audit paid for a kiosk order and found it booked as CASH, still showing
+  // nothing paid, and parked in READY with no kitchen ticket — while the receipt said it had
+  // gone to the kitchen.
+  describe('paying at the kiosk terminal', () => {
+    const unpaidOrder = (overrides: Record<string, any> = {}) => ({
       id: 'ord-kiosk-1',
       tenant_id: 't-1',
       order_number: 'KOS-1001',
       order_type: 'TAKEAWAY',
-      total_amount: '21.80',
-      paid_amount: '0.00',
-      due_amount: '21.80',
+      state: 'SUBMITTED',
+      status: 'SUBMITTED',
+      grand_total: '163500.0000',
+      total_amount: '163500.0000',
+      paid_total: '0.0000',
+      paid_amount: '0.0000',
+      outstanding_total: '163500.0000',
+      due_amount: '163500.0000',
+      ...overrides,
+    });
+    // Cash is listed first, as in the seed, so a first-row fallback would pick it.
+    const seededMethods = [
+      { id: 'pm-cash', name: 'Cash', kind: 'CASH' },
+      { id: 'pm-card', name: 'Bank Card POS', kind: 'CARD_POS' },
+    ];
+
+    beforeEach(() => {
+      paymentRepo.create.mockImplementation((dto: any) => dto);
+      paymentRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'pay-1' }));
+      orderRepo.save.mockImplementation((o: any) => Promise.resolve(o));
     });
 
-    paymentMethodRepo.find.mockResolvedValue([{ id: 'pm-card', name: 'Card Terminal', kind: 'NETWORK_POS' }]);
-    paymentRepo.create.mockImplementation((dto: any) => dto);
-    paymentRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'pay-1' }));
-    orderRepo.save.mockImplementation((o: any) => Promise.resolve(o));
+    it('takes the card, marks the order paid and confirmed, and sends it to the kitchen', async () => {
+      orderRepo.findOne.mockResolvedValue(unpaidOrder());
+      paymentMethodRepo.find.mockResolvedValue(seededMethods);
 
-    const res = await service.processKioskPayment('t-1', { order_id: 'ord-kiosk-1' });
+      const res = await service.processKioskPayment('t-1', { order_id: 'ord-kiosk-1' });
 
-    expect(res.success).toBe(true);
-    expect(res.receipt.status).toBe('PAID & SENT TO KITCHEN');
-    expect(res.order.status).toBe('READY');
-    expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'KIOSK_PAYMENT_PROCESSED' }));
+      expect(res.payment).toEqual(expect.objectContaining({ method_id: 'pm-card', method_kind: 'CARD_POS', amount: '163500.0000' }));
+      expect(res.order).toEqual(expect.objectContaining({ state: 'CONFIRMED', paid_total: '163500.0000', outstanding_total: '0.0000' }));
+      expect(kdsService.generateTicketsForOrder).toHaveBeenCalledWith('t-1', 'ord-kiosk-1', undefined);
+      expect(printQueueService.enqueueOrderPrintJobs).toHaveBeenCalledWith('t-1', 'ord-kiosk-1', 'KITCHEN_TICKET', false);
+      expect(res.receipt.status).toBe('PAID & SENT TO KITCHEN');
+      expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'KIOSK_PAYMENT_PROCESSED' }));
+    });
+
+    it('refuses to take payment when no card method exists rather than booking cash', async () => {
+      orderRepo.findOne.mockResolvedValue(unpaidOrder());
+      paymentMethodRepo.find.mockResolvedValue([{ id: 'pm-cash', name: 'Cash', kind: 'CASH' }]);
+
+      await expect(service.processKioskPayment('t-1', { order_id: 'ord-kiosk-1' })).rejects.toThrow(BadRequestException);
+      expect(paymentRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('leaves an order that needs staff acceptance waiting, and out of the kitchen', async () => {
+      orderRepo.findOne.mockResolvedValue(unpaidOrder({ state: 'PENDING_ACCEPTANCE', status: 'PENDING_ACCEPTANCE' }));
+      paymentMethodRepo.find.mockResolvedValue(seededMethods);
+
+      const res = await service.processKioskPayment('t-1', { order_id: 'ord-kiosk-1' });
+
+      expect(res.order.state).toBe('PENDING_ACCEPTANCE');
+      expect(res.order.paid_total).toBe('163500.0000');
+      expect(kdsService.generateTicketsForOrder).not.toHaveBeenCalled();
+      expect(res.receipt.status).toBe('PAID & WAITING FOR STAFF');
+    });
+
+    it('returns the existing payment when a paid order is paid again', async () => {
+      orderRepo.findOne.mockResolvedValue(unpaidOrder({ state: 'CONFIRMED', paid_total: '163500.0000', outstanding_total: '0.0000', due_amount: '0.0000' }));
+      paymentRepo.findOne = jest.fn().mockResolvedValue({ id: 'pay-1', reference: 'POS-KOS-1' });
+
+      const res = await service.processKioskPayment('t-1', { order_id: 'ord-kiosk-1' });
+
+      expect(res.payment).toEqual(expect.objectContaining({ id: 'pay-1' }));
+      expect(paymentRepo.save).not.toHaveBeenCalled();
+    });
   });
 
   it('should ignore client-supplied unit price and use authoritative database price', async () => {
