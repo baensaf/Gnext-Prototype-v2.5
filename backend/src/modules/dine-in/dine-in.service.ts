@@ -11,6 +11,7 @@ import { OrderLink } from '../../entities/OrderLink.entity';
 import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
 import { Payment } from '../../entities/Payment.entity';
 import { PaymentAllocation } from '../../entities/PaymentAllocation.entity';
+import { Product } from '../../entities/Product.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { OrderTransitionRecorder } from '../order-lifecycle/order-transition-recorder.service';
 import { MoneyUtil } from '../../common/utils/money.util';
@@ -429,11 +430,14 @@ export class DineInService {
 
       let lineNo = (targetOrder.items || []).length + 1;
       for (const sOrd of sourceOrders) {
+        // Move the lines with a plain UPDATE and drop the loaded relation. Saving the source
+        // header while `items` still held these lines let TypeORM's cascade write each one
+        // straight back onto the order being cancelled, so the merged table's food left
+        // every bill.
         for (const item of sOrd.items || []) {
-          item.order_id = targetOrder.id;
-          item.line_number = lineNo++;
-          await em.save(OrderItem, item);
+          await em.update(OrderItem, { id: item.id, tenant_id: tenantId }, { order_id: targetOrder.id, line_number: lineNo++ });
         }
+        delete (sOrd as Partial<OrderHeader>).items;
 
         // Create OrderLink 'MERGE'
         const link = em.create(OrderLink, {
@@ -450,8 +454,13 @@ export class DineInService {
         sOrd.state = 'CANCELLED';
         sOrd.status = 'CANCELLED';
         sOrd.subtotal = '0.0000';
+        sOrd.subtotal_amount = '0.0000';
+        sOrd.tax_total = '0.0000';
+        sOrd.tax_amount = '0.0000';
         sOrd.grand_total = '0.0000';
+        sOrd.total_amount = '0.0000';
         sOrd.outstanding_total = '0.0000';
+        sOrd.due_amount = '0.0000';
         await em.save(OrderHeader, sOrd);
 
         const stateEvt = em.create(OrderStateEvent, {
@@ -489,9 +498,21 @@ export class DineInService {
       }
 
       // Requote & recalculate target order totals
-      const freshTargetItems = await em.find(OrderItem, { where: { order_id: targetOrder.id, tenant_id: tenantId } });
+      // Voided and replaced lines stay on the order for the record but never reach the money,
+      // and the tax has to be worked out again over everything the table now owes — carrying
+      // the target's old tax_total forward left the merged-in food untaxed.
+      delete (targetOrder as Partial<OrderHeader>).items;
+      const freshTargetItems = await em.find(OrderItem, { where: { order_id: targetOrder.id, tenant_id: tenantId, state: 'ACTIVE' } });
+      const productIds = [...new Set(freshTargetItems.map((i) => i.product_id).filter(Boolean))];
+      const taxRateById = new Map<string, string>();
+      if (productIds.length > 0) {
+        const products = await em.find(Product, { where: { id: In(productIds) } });
+        products.forEach((p) => taxRateById.set(p.id, p.tax_rate || '0.0000'));
+      }
+
       let subtotal = '0.0000';
       let modifierTotal = '0.0000';
+      let taxTotal = '0.0000';
 
       for (const item of freshTargetItems) {
         const lineBase = MoneyUtil.multiply(item.unit_price, item.quantity);
@@ -499,18 +520,21 @@ export class DineInService {
         item.line_total = MoneyUtil.add(lineBase, item.modifier_total || '0.0000');
         subtotal = MoneyUtil.add(subtotal, item.line_total);
         modifierTotal = MoneyUtil.add(modifierTotal, item.modifier_total || '0.0000');
+        taxTotal = MoneyUtil.add(taxTotal, MoneyUtil.multiply(item.line_total, taxRateById.get(item.product_id) || '0.0000'));
         await em.save(OrderItem, item);
       }
 
       targetOrder.subtotal = subtotal;
       targetOrder.subtotal_amount = subtotal;
       targetOrder.modifier_total = modifierTotal;
+      targetOrder.tax_total = taxTotal;
+      targetOrder.tax_amount = taxTotal;
 
       const netBeforeTax = MoneyUtil.subtract(
         MoneyUtil.add(MoneyUtil.add(targetOrder.subtotal, targetOrder.packaging_total || '0.0000'), targetOrder.delivery_fee || '0.0000'),
         targetOrder.discount_total || '0.0000',
       );
-      const grandTotal = MoneyUtil.add(netBeforeTax, targetOrder.tax_total || '0.0000');
+      const grandTotal = MoneyUtil.add(netBeforeTax, taxTotal);
       targetOrder.grand_total = MoneyUtil.greaterThan(grandTotal, '0.0000') ? grandTotal : '0.0000';
       targetOrder.total_amount = targetOrder.grand_total;
 
