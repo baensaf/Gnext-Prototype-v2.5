@@ -36,6 +36,9 @@ import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
 import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { SavedReportView } from '../../entities/SavedReportView.entity';
 import { ReportExportJob } from '../../entities/ReportExportJob.entity';
+import { ApprovalRequest } from '../../entities/ApprovalRequest.entity';
+import { ApprovalDecision } from '../../entities/ApprovalDecision.entity';
+import { AdminUser } from '../../entities/AdminUser.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import {
   BusinessDateUtil,
@@ -476,15 +479,24 @@ export class ReportsService {
 
         const payments = await qb.getMany();
 
+        // Money handed back is a Refund row of its own, never a change to the payment. This
+        // report used to hardcode refunds to zero, so a card refund left CARD_POS overstated
+        // by exactly the refund.
+        const refundQb = this.refundRepo.createQueryBuilder('r')
+          .where('r.tenant_id = :tenantId', { tenantId })
+          .andWhere('r.status IN (:...refundDone)', { refundDone: ['SUCCEEDED', 'COMPLETED'] });
+        this.applyDateFilter(refundQb, 'r.initiated_at', startDate, endDate);
+        this.applyBranchViaOrder(refundQb, 'r', branchId);
+        const refunds = await refundQb.getMany();
+
         let totalSucceeded = '0.00';
         let totalReversed = '0.00';
         let totalRefunded = '0.00';
         let totalNet = '0.00';
 
         const methodMap = new Map<string, any>();
-        payments.forEach((p) => {
-          const key = p.method_kind || 'CASH';
-          const existing = methodMap.get(key) || {
+        const methodRow = (key: string) =>
+          methodMap.get(key) || {
             method_kind: key,
             method_name: key,
             count: 0,
@@ -494,8 +506,10 @@ export class ReportsService {
             net: '0.00',
           };
 
+        payments.forEach((p) => {
+          const key = p.method_kind || 'CASH';
+          const existing = methodRow(key);
           const amtStr = MoneyUtil.format(p.amount || '0', 2);
-          const refStr = '0.00';
           existing.count += 1;
 
           if (p.status === 'REVERSED' || p.status === 'FAILED') {
@@ -503,14 +517,22 @@ export class ReportsService {
             totalReversed = MoneyUtil.add(totalReversed, amtStr, 2);
           } else {
             existing.succeeded = MoneyUtil.add(existing.succeeded, amtStr, 2);
-            existing.refunded = MoneyUtil.add(existing.refunded, refStr, 2);
-            const netAmt = MoneyUtil.subtract(amtStr, refStr, 2);
-            existing.net = MoneyUtil.add(existing.net, netAmt, 2);
+            existing.net = MoneyUtil.add(existing.net, amtStr, 2);
             totalSucceeded = MoneyUtil.add(totalSucceeded, amtStr, 2);
-            totalRefunded = MoneyUtil.add(totalRefunded, refStr, 2);
-            totalNet = MoneyUtil.add(totalNet, netAmt, 2);
+            totalNet = MoneyUtil.add(totalNet, amtStr, 2);
           }
 
+          methodMap.set(key, existing);
+        });
+
+        refunds.forEach((r) => {
+          const key = r.method_kind || 'CASH';
+          const existing = methodRow(key);
+          const refStr = MoneyUtil.format(r.amount || '0', 2);
+          existing.refunded = MoneyUtil.add(existing.refunded, refStr, 2);
+          existing.net = MoneyUtil.subtract(existing.net, refStr, 2);
+          totalRefunded = MoneyUtil.add(totalRefunded, refStr, 2);
+          totalNet = MoneyUtil.subtract(totalNet, refStr, 2);
           methodMap.set(key, existing);
         });
 
@@ -710,22 +732,51 @@ export class ReportsService {
           where: { tenant_id: tenantId, ...(manualOrderIds ? { order_id: In(manualOrderIds) } : {}) },
         });
         let totalManual = '0.00';
+        const manual = adjustments.filter((a) => a.type === 'MANUAL' || a.source_type === 'MANUAL');
 
-        const rows = adjustments
-          .filter((a) => a.type === 'MANUAL' || a.source_type === 'MANUAL')
-          .map((a) => {
-            const amtStr = MoneyUtil.format(a.amount || '0', 2);
-            totalManual = MoneyUtil.add(totalManual, a.amount || '0', 2);
+        // Who rang it up and who let it through, read from the order and the escalation the
+        // discount was submitted with. These were hardcoded to 'CASHIER-1' and 'NONE', so a
+        // manager-approved discount was reported as unapproved and by nobody.
+        const manager = this.adjustmentRepo.manager;
+        const orderIds = [...new Set(manual.map((a) => a.order_id))];
+        const orders = orderIds.length ? await manager.find(OrderHeader, { where: { tenant_id: tenantId, id: In(orderIds) } }) : [];
+        const orderById = new Map(orders.map((o) => [o.id, o]));
+        const approvalIds = [...new Set(manual.map((a) => a.calculation_snapshot?.approvalRequestId).filter(Boolean))] as string[];
+        const approvals = approvalIds.length ? await manager.find(ApprovalRequest, { where: { tenant_id: tenantId, id: In(approvalIds) } }) : [];
+        const approvalById = new Map(approvals.map((r) => [r.id, r]));
+        const decisions = approvalIds.length
+          ? await manager.find(ApprovalDecision, { where: { tenant_id: tenantId, request_id: In(approvalIds), decision: 'APPROVED' } })
+          : [];
+        const approverByRequest = new Map(decisions.map((d) => [d.request_id, d.approver_user_id]));
+        const userIds = [
+          ...new Set([...orders.map((o) => o.created_by), ...decisions.map((d) => d.approver_user_id)].filter(Boolean)),
+        ] as string[];
+        const users = userIds.length ? await manager.find(AdminUser, { where: { tenant_id: tenantId, id: In(userIds) } }) : [];
+        const nameOf = (id?: string | null) => (id ? users.find((u) => u.id === id)?.display_name || id : null);
 
-            return {
-              adjustment_id: a.id,
-              order_id: a.order_id,
-              cashier_id: 'CASHIER-1',
-              amount: amtStr,
-              reason: a.name || 'Manager Courtesy',
-              approval_status: 'NONE',
-            };
-          });
+        const rows = manual.map((a) => {
+          const amtStr = MoneyUtil.format(a.amount || '0', 2);
+          totalManual = MoneyUtil.add(totalManual, a.amount || '0', 2);
+          const order = orderById.get(a.order_id);
+          const approvalId: string | null = a.calculation_snapshot?.approvalRequestId || null;
+          const approval = approvalId ? approvalById.get(approvalId) : undefined;
+          const recordsApproval = a.calculation_snapshot && 'approvalRequestId' in a.calculation_snapshot;
+
+          return {
+            adjustment_id: a.id,
+            order_id: a.order_id,
+            order_number: order?.order_number || null,
+            cashier_id: order?.created_by || null,
+            cashier_name: nameOf(order?.created_by),
+            amount: amtStr,
+            reason: a.name || null,
+            // WITHIN_LIMIT: no escalation was needed. NOT_RECORDED: the discount predates
+            // approvals being kept on the adjustment, so the report cannot tell.
+            approval_status: approval ? approval.status : recordsApproval ? 'WITHIN_LIMIT' : 'NOT_RECORDED',
+            approval_request_id: approvalId,
+            approved_by: nameOf(approverByRequest.get(approvalId || '')),
+          };
+        });
 
         return {
           report_code: reportCode,
