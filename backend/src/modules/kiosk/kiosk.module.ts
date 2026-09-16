@@ -16,6 +16,8 @@ import { Customer } from '../../entities/Customer.entity';
 import { KioskService } from './kiosk.service';
 import { KioskController } from './kiosk.controller';
 import { AuditModule } from '../audit/audit.module';
+import { KdsModule } from '../kds/kds.module';
+import { PrintingModule } from '../printing/printing.module';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { AuditModule } from '../audit/audit.module';
       Customer,
     ]),
     AuditModule,
+    KdsModule,
+    PrintingModule,
   ],
   providers: [KioskService],
   controllers: [KioskController],
