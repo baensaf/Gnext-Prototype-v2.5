@@ -249,6 +249,18 @@ export class DiscountEvaluationService {
       }
 
       if (MoneyUtil.greaterThan(manualAmount, '0')) {
+        // The grand total and the tax are built from each line's own discount, so the amount
+        // has to be spread over the lines it was measured on. Adding it to discountTotal alone
+        // recorded the discount while still charging, and taxing, the full price.
+        const eligible = lineItems
+          .map((_, i) => i)
+          .filter((i) => !(orderDraft.items || [])[i]?.neverDiscount && MoneyUtil.greaterThan(remainingBases[i], '0'));
+        const shares = MoneyUtil.allocate(manualAmount, eligible.map((i) => remainingBases[i]));
+        eligible.forEach((lineIndex, k) => {
+          lineItems[lineIndex].discountTotal = MoneyUtil.add(lineItems[lineIndex].discountTotal, shares[k]);
+          remainingBases[lineIndex] = MoneyUtil.subtract(remainingBases[lineIndex], shares[k]);
+        });
+
         discountTotal = MoneyUtil.add(discountTotal, manualAmount);
         consideredDiscounts.push({
           source: 'MANUAL',

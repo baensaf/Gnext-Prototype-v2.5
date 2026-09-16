@@ -210,6 +210,40 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
       expect(result.approvalReason).toContain('exceeds CASHIER limit');
       expect(result.discountTotal).toBe('0.0000');
     });
+
+    // The audit on 2026-09-16 found an approved 30% discount recorded on the order but never
+    // taken off it: the guest was charged 272,500 for a 250,000 burger instead of 190,750.
+    it('takes an allowed manual discount off the grand total and taxes the discounted price', async () => {
+      const result = await evaluationService.evaluateQuote('t-1', {
+        orderDraft: { items: [{ productId: 'p-1', unitPrice: '250000.0000', quantity: '1', taxRate: '0.0900' }] },
+        manualDiscount: { calculation_type: 'PERCENTAGE', value: '30.0000' },
+        userRole: 'MANAGER',
+      } as any);
+
+      expect(result.discountTotal).toBe('75000.0000');
+      expect(result.items[0].discountTotal).toBe('75000.0000');
+      expect(result.taxTotal).toBe('15750.0000');
+      expect(result.grandTotal).toBe('190750.0000');
+    });
+
+    it('spreads a fixed deduction over the discountable lines and leaves NEVER_DISCOUNT lines whole', async () => {
+      const result = await evaluationService.evaluateQuote('t-1', {
+        orderDraft: {
+          items: [
+            { productId: 'p-1', unitPrice: '100000.0000', quantity: '1', taxRate: '0.0900' },
+            { productId: 'p-2', unitPrice: '200000.0000', quantity: '1', taxRate: '0.0900' },
+            { productId: 'p-never', unitPrice: '50000.0000', quantity: '1', taxRate: '0.0900', neverDiscount: true },
+          ],
+        },
+        manualDiscount: { calculation_type: 'FIXED_AMOUNT', value: '30000.0000' },
+      });
+
+      expect(result.discountTotal).toBe('30000.0000');
+      expect(result.items.map((i) => i.discountTotal)).toEqual(['10000.0000', '20000.0000', '0.0000']);
+      // 350,000 - 30,000 = 320,000, plus 9% VAT on it.
+      expect(result.taxTotal).toBe('28800.0000');
+      expect(result.grandTotal).toBe('348800.0000');
+    });
   });
 
   describe('Tax calculation', () => {
