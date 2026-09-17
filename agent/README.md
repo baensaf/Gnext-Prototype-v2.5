@@ -34,7 +34,7 @@ section numbers (§) in the code refer to it.
 | `internal/cloud` | HTTPS calls: enrol, me, releases |
 | `internal/update` | Release check, download, verify, swap |
 | `internal/store` | `config.json`, `identity.json`, DPAPI |
-| `scripts/install.ps1` | Installs the service and enrols |
+| `installer/gnext-agent.iss` | Setup wizard (Inno Setup): server, enrolment code, service |
 
 ## Develop
 
@@ -57,17 +57,26 @@ $env:GNEXT_AGENT_HOME = "$PWD\.dev"
 2. Set up the devices:
    - **Printers** → *Connection: Network (TCP)*, with the printer's IP and port 9100.
    - **Payments → Devices** → the terminal → *Connect to agent*, driver **fake** for now.
-3. Copy `gnext-agent.exe` and `install.ps1` (the `gnext-agent-windows` artifact of the CI run)
-   to the PC. In an elevated PowerShell:
+3. Run `gnext-agent-setup-<version>.exe` (from the `gnext-agent-windows` artifact of the CI run)
+   on the PC. The wizard asks for the server address and the code, checks the code with the
+   server before installing, then installs and starts the `GnextAgent` service.
 
-   ```powershell
-   .\install.ps1 -Server https://<gnext domain> -Code XXXX-XXXX
-   ```
+Running a newer setup over an installed agent upgrades it and keeps its enrolment. Uninstall it
+from **Settings → Apps**; the data folder `%ProgramData%\Gnext\Agent` (identity, journal, logs)
+is kept.
 
-Logs: `%ProgramData%\Gnext\Agent\logs\agent.log`. Remove with `uninstall.ps1`.
+Without the wizard, from an elevated prompt:
+
+```powershell
+gnext-agent.exe enrol --server https://<gnext domain> --code XXXX-XXXX
+gnext-agent.exe service install
+gnext-agent.exe service start
+```
+
+Logs: `%ProgramData%\Gnext\Agent\logs\agent.log`.
 
 ## Release
 
-Bump `VERSION`, merge, download the `gnext-agent-windows` artifact from the CI run, and upload
-`gnext-agent.exe` on the Agents screen with that version. Publishing it tells online agents to
-update.
+Bump `VERSION` and merge. From that CI run's `gnext-agent-windows` artifact, upload
+`gnext-agent.exe` on the Agents screen with the same version; publishing it tells online agents
+to update. Hand `gnext-agent-setup-<version>.exe` to new branches.

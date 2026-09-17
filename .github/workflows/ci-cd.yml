@@ -101,8 +101,37 @@ jobs:
         run: |
           version=$(cat VERSION)
           GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$version" -o dist/gnext-agent.exe ./cmd/gnext-agent
-          cp scripts/install.ps1 scripts/uninstall.ps1 dist/
           sha256sum dist/gnext-agent.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gnext-agent-exe
+          path: agent/dist/gnext-agent.exe
+
+  # Wraps the agent in a setup wizard (Inno Setup). The artifact holds the installer for branch
+  # PCs and the bare .exe to upload as a release on the Branch Agents screen.
+  agent-installer:
+    needs: agent
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: gnext-agent-exe
+          path: agent/dist
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          $version = (Get-Content VERSION -Raw).Trim()
+          & $iscc /Q "/DAppVersion=$version" "/DSourceExe=..\dist\gnext-agent.exe" installer\gnext-agent.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-FileHash dist\* -Algorithm SHA256 | Format-Table -AutoSize
       - uses: actions/upload-artifact@v4
         with:
           name: gnext-agent-windows
@@ -126,7 +155,7 @@ jobs:
 
   deploy:
     if: github.ref == 'refs/heads/main'
-    needs: [backend, frontend, agent]
+    needs: [backend, frontend, agent-installer]
     runs-on: ubuntu-latest
     concurrency:
       group: deploy-production

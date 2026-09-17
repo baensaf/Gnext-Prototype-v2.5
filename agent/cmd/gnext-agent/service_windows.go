@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"golang.org/x/sys/windows/svc"
-	"golang.org/x/sys/windows/svc/mgr"
 )
 
 const serviceName = "GnextAgent"
@@ -56,30 +55,4 @@ func (handler) Execute(_ []string, req <-chan svc.ChangeRequest, status chan<- s
 
 func runService() {
 	_ = svc.Run(serviceName, handler{})
-}
-
-// restartServiceIfInstalled restarts GnextAgent after a fresh enrolment.
-func restartServiceIfInstalled() (bool, error) {
-	m, err := mgr.Connect()
-	if err != nil {
-		return false, nil // not an administrator, or no service manager access
-	}
-	defer m.Disconnect()
-	s, err := m.OpenService(serviceName)
-	if err != nil {
-		return false, nil
-	}
-	defer s.Close()
-	if st, err := s.Query(); err == nil && st.State != svc.Stopped {
-		if _, err := s.Control(svc.Stop); err != nil {
-			return false, err
-		}
-		for i := 0; i < 60; i++ {
-			if st, err := s.Query(); err == nil && st.State == svc.Stopped {
-				break
-			}
-			time.Sleep(500 * time.Millisecond)
-		}
-	}
-	return true, s.Start()
 }
