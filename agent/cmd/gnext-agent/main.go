@@ -1,8 +1,10 @@
 // Command gnext-agent is the Gnext branch agent: a Windows service that connects a branch's
-// printers and card terminals to the Gnext cloud (docs/agent-gateway/agent-protocol.md).
+// printers and card terminals to the Gnext cloud (docs/agent-gateway/agent-protocol.md), with a
+// settings page on http://127.0.0.1:47800.
 //
 //	gnext-agent.exe enrol --code XXXX-XXXX [--server https://…]
 //	gnext-agent.exe run        (console; the service runs the same loop)
+//	gnext-agent.exe open       (opens the settings page)
 //	gnext-agent.exe version
 package main
 
@@ -13,19 +15,14 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math/rand/v2"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"sync/atomic"
 	"time"
 
-	"gnext/agent/internal/agent"
 	"gnext/agent/internal/cloud"
-	"gnext/agent/internal/journal"
-	"gnext/agent/internal/printing"
+	"gnext/agent/internal/localui"
 	"gnext/agent/internal/store"
-	"gnext/agent/internal/update"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -54,6 +51,11 @@ func main() {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
 		os.Exit(run(ctx, os.Stderr))
+	case "open":
+		if err := openBrowser("http://" + uiAddr()); err != nil {
+			fmt.Fprintln(os.Stderr, "open:", err)
+			os.Exit(1)
+		}
 	case "version", "--version", "-v":
 		fmt.Println(version)
 	default:
@@ -67,11 +69,21 @@ func usage() {
 
   gnext-agent enrol --code XXXX-XXXX [--server https://app.example.ir]
   gnext-agent run
+  gnext-agent open
   gnext-agent service install|uninstall|start|stop
   gnext-agent version
 
-Data folder: %s
-`, version, store.Home())
+Data folder:   %s
+Settings page: http://%s
+`, version, store.Home(), uiAddr())
+}
+
+// uiAddr is where the settings page listens; GNEXT_AGENT_UI_ADDR overrides it for development.
+func uiAddr() string {
+	if a := os.Getenv("GNEXT_AGENT_UI_ADDR"); a != "" {
+		return a
+	}
+	return localui.DefaultAddr
 }
 
 func enrol(args []string) int {
@@ -83,33 +95,19 @@ func enrol(args []string) int {
 		fmt.Fprintln(os.Stderr, "enrol: --code is required")
 		return 2
 	}
-	if *server != "" {
-		if err := store.SaveInstallConfig(store.InstallConfig{Server: *server}); err != nil {
-			fmt.Fprintln(os.Stderr, "enrol:", err)
+	if *server == "" {
+		cfg, err := store.LoadInstallConfig()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "enrol: no server configured; pass --server:", err)
 			return 1
 		}
-	}
-	cfg, err := store.LoadInstallConfig()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "enrol: no server configured; pass --server:", err)
-		return 1
+		*server = cfg.Server
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-
-	c := &cloud.Client{Server: cfg.Server, Version: version}
-	id, err := c.Enrol(ctx, *code, cloud.ThisMachine())
+	id, err := enrolWith(ctx, *server, *code)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "enrol failed:", err)
-		return 1
-	}
-	if err := store.SaveIdentity(id); err != nil {
-		fmt.Fprintln(os.Stderr, "enrol: save identity:", err)
-		return 1
-	}
-	c.Key = id.DeviceKey
-	if _, err := c.Me(ctx); err != nil {
-		fmt.Fprintln(os.Stderr, "enrol: the new key does not work:", err)
 		return 1
 	}
 	fmt.Printf("Enrolled as agent %s for branch %s.\n", id.AgentID, id.BranchName)
@@ -121,106 +119,72 @@ func enrol(args []string) int {
 	return 0
 }
 
+// enrolWith redeems a code and, only once the new key is known to work, saves the server and
+// the identity.
+func enrolWith(ctx context.Context, server, code string) (store.Identity, error) {
+	c := &cloud.Client{Server: server, Version: version}
+	id, err := c.Enrol(ctx, code, cloud.ThisMachine())
+	if err != nil {
+		return id, err
+	}
+	c.Key = id.DeviceKey
+	if _, err := c.Me(ctx); err != nil {
+		return id, fmt.Errorf("the new key does not work: %w", err)
+	}
+	if err := store.SaveInstallConfig(store.InstallConfig{Server: server}); err != nil {
+		return id, err
+	}
+	return id, store.SaveIdentity(id)
+}
+
 // run is the agent's main loop, shared by the console and the service. It returns an exit code.
 func run(ctx context.Context, console io.Writer) int {
 	killChildrenOnExit()
 	log := newLogger(console)
 	log.Info("starting", "version", version, "home", store.Home())
-
 	if err := os.MkdirAll(store.Home(), 0o700); err != nil {
 		log.Error("data folder", "err", err)
 		return 1
 	}
-	cfg, err := store.LoadInstallConfig()
+
+	h, err := newHost(log)
 	if err != nil {
-		log.Error("config.json", "err", err)
-		return waitForStop(ctx, 1)
-	}
-	id, err := store.LoadIdentity()
-	if err != nil {
-		log.Error("identity", "err", err)
-		return waitForStop(ctx, 1)
-	}
-	j, err := journal.Open(store.JournalPath())
-	if err != nil {
-		log.Error("journal", "err", err)
+		log.Error("start", "err", err)
 		return 1
 	}
-	defer j.Close()
+	defer h.close()
 
-	renderer := &printing.BrowserRenderer{ProfileDir: store.BrowserDir()}
-	defer renderer.Close()
-	client := &cloud.Client{Server: cfg.Server, Key: id.DeviceKey, Version: version}
+	ui := &localui.Server{Host: h, Version: version, LogFile: logFile(), Log: log, Addr: uiAddr()}
+	go func() {
+		if err := ui.ListenAndServe(ctx); err != nil {
+			log.Error("settings page could not start", "addr", uiAddr(), "err", err)
+		}
+	}()
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	var exitCode atomic.Int32
-
-	a := agent.New(agent.Options{
-		Version:  version,
-		WSURL:    id.WSURL,
-		Headers:  client.Headers(),
-		Journal:  j,
-		Printer:  &printing.Printer{Renderer: renderer},
-		Log:      log,
-		Welcomed: func() { update.Cleanup("") },
-	})
-	up := &update.Updater{
-		Client: client, Version: version, Dir: store.UpdatesDir(), Log: log,
-		Begin: func() { a.Updating(true) },
-		End:   func() { a.Updating(false) },
-		Idle:  a.Idle,
-		Restart: func() {
-			a.Close()
-			exitCode.Store(exitRestart)
-			cancel()
-		},
-	}
-	go updateLoop(ctx, a, up, log)
-
-	err = a.Run(ctx)
-	switch {
-	case exitCode.Load() != 0:
+	code := h.supervise(ctx)
+	if code == exitRestart {
 		log.Info("exiting for update restart")
-		return int(exitCode.Load())
-	case errors.Is(err, agent.ErrStopped):
-		return waitForStop(ctx, 1)
-	case err != nil && ctx.Err() == nil:
-		log.Error("agent stopped", "err", err)
-		return 1
+	} else {
+		log.Info("stopped")
 	}
-	a.Close()
-	log.Info("stopped")
-	return 0
-}
-
-// updateLoop checks for a release on start, hourly (±5 min), and whenever the cloud asks (§9.1).
-func updateLoop(ctx context.Context, a *agent.Agent, up *update.Updater, log *slog.Logger) {
-	next := 10 * time.Second
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(next):
-		case <-a.UpdateRequests():
-		}
-		if err := up.Check(ctx); err != nil && ctx.Err() == nil {
-			log.Warn("update check failed", "err", err)
-		}
-		next = time.Hour + time.Duration(rand.Int64N(int64(10*time.Minute))) - 5*time.Minute
-	}
-}
-
-// waitForStop keeps the process alive without working, so the service manager does not
-// restart it in a loop when the agent needs a technician (not enrolled, key revoked).
-func waitForStop(ctx context.Context, code int) int {
-	<-ctx.Done()
 	return code
 }
 
+// waitOrSignal blocks until ctx ends or sig fires, and reports whether sig fired.
+func waitOrSignal(ctx context.Context, sig <-chan struct{}) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case <-sig:
+		return true
+	}
+}
+
+func logFile() string { return filepath.Join(store.LogsDir(), "agent.log") }
+
 func newLogger(console io.Writer) *slog.Logger {
 	file := &lumberjack.Logger{
-		Filename:   filepath.Join(store.LogsDir(), "agent.log"),
+		Filename:   logFile(),
 		MaxSize:    10, // MB
 		MaxBackups: 5,
 	}
@@ -230,3 +194,5 @@ func newLogger(console io.Writer) *slog.Logger {
 	}
 	return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: slog.LevelInfo}))
 }
+
+var errNotEnrolled = errors.New("not enrolled")

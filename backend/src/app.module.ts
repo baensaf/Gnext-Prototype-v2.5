@@ -45,6 +45,7 @@ import { AgentEnrolmentCode } from './entities/AgentEnrolmentCode.entity';
 import { AgentCommand } from './entities/AgentCommand.entity';
 import { AgentRelease } from './entities/AgentRelease.entity';
 import { AgentGatewayModule } from './modules/agent-gateway/agent-gateway.module';
+import { AgentLocalModule } from './modules/agent-local/agent-local.module';
 import { ImportJob } from './entities/ImportJob.entity';
 import { ImportRow } from './entities/ImportRow.entity';
 
@@ -233,6 +234,7 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
     UsersModule,
     ProfilesModule,
     AgentGatewayModule,
+    AgentLocalModule,
     TypeOrmModule.forFeature([AdminUser, Session, IdempotencyRecord]),
   ],
   controllers: [HealthController],

@@ -126,7 +126,38 @@ func (c *Client) Download(ctx context.Context, url string, w io.Writer) error {
 	return err
 }
 
+// LocalUser is who signed in to the agent's local settings page.
+type LocalUser struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	Role        string `json:"role"`
+}
+
+// sessionHeader carries a signed-in manager's session on local-page calls.
+const sessionHeader = "X-Gnext-User-Session"
+
+// LocalLogin signs a manager in for the local page. Only managers of this agent's branch and
+// head office succeed.
+func (c *Client) LocalLogin(ctx context.Context, username, password string) (string, LocalUser, error) {
+	var out struct {
+		SessionToken string    `json:"session_token"`
+		User         LocalUser `json:"user"`
+	}
+	err := c.do(ctx, http.MethodPost, "/api/v1/agent/local/login", map[string]string{"username": username, "password": password}, &out)
+	return out.SessionToken, out.User, err
+}
+
+// Local calls a device-management route under /api/v1/agent/local as the signed-in user.
+func (c *Client) Local(ctx context.Context, method, path, session string, in, out any) error {
+	return c.doWith(ctx, method, "/api/v1/agent/local"+path, in, out, http.Header{sessionHeader: {session}})
+}
+
 func (c *Client) do(ctx context.Context, method, path string, in, out any) error {
+	return c.doWith(ctx, method, path, in, out, nil)
+}
+
+func (c *Client) doWith(ctx context.Context, method, path string, in, out any, extra http.Header) error {
 	var body io.Reader
 	if in != nil {
 		b, err := json.Marshal(in)
@@ -139,6 +170,9 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 	if err != nil {
 		return err
 	}
+	for k, v := range extra {
+		req.Header[k] = v
+	}
 	resp, err := c.http().Do(req)
 	if err != nil {
 		return err
@@ -149,6 +183,9 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return problem(resp)
+	}
+	if out == nil {
+		return nil
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }

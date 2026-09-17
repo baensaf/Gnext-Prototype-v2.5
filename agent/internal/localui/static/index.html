@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>عامل شعبه جی‌نکست</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo">G</span>
+      <div>
+        <h1>عامل شعبه جی‌نکست</h1>
+        <p id="subtitle" class="muted">در حال بارگذاری…</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span id="conn" class="badge">…</span>
+      <span id="who" class="muted"></span>
+      <button id="signin" class="btn">ورود مدیر</button>
+      <button id="signout" class="btn ghost" hidden>خروج</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="status">وضعیت</button>
+    <button class="tab" data-tab="devices">دستگاه‌ها</button>
+    <button class="tab" data-tab="enrol">اتصال به شعبه</button>
+    <button class="tab" data-tab="logs">گزارش‌ها</button>
+  </nav>
+
+  <main>
+    <section id="tab-status" class="panel">
+      <div id="not-enrolled" class="card warn" hidden>
+        <h2>این رایانه هنوز به شعبه‌ای وصل نشده است</h2>
+        <p>از صفحهٔ «عامل‌های شعبه» در جی‌نکست یک کد ثبت بگیرید و در زبانهٔ «اتصال به شعبه» وارد کنید.</p>
+        <button class="btn primary" data-goto="enrol">اتصال به شعبه</button>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <h2>اتصال</h2>
+          <dl class="facts">
+            <dt>وضعیت</dt><dd id="s-conn">—</dd>
+            <dt>سرور</dt><dd id="s-server" class="ltr">—</dd>
+            <dt>شعبه</dt><dd id="s-branch">—</dd>
+            <dt>متصل از</dt><dd id="s-since">—</dd>
+            <dt>آخرین خطا</dt><dd id="s-error" class="ltr small">—</dd>
+          </dl>
+        </div>
+        <div class="card">
+          <h2>این رایانه</h2>
+          <dl class="facts">
+            <dt>نسخهٔ عامل</dt><dd id="s-version" class="ltr">—</dd>
+            <dt>شناسهٔ عامل</dt><dd id="s-agent" class="ltr small">—</dd>
+            <dt>کار در حال اجرا</dt><dd id="s-running">—</dd>
+            <dt>دستگاه‌ها</dt><dd id="s-devices">—</dd>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-devices" class="panel" hidden>
+      <p id="devices-hint" class="note">مشاهدهٔ دستگاه‌ها و چاپ آزمایشی برای همه آزاد است. برای افزودن، ویرایش یا حذف، مدیر شعبه باید وارد شود. تغییرات در جی‌نکست ذخیره می‌شوند.</p>
+      <div class="card">
+        <div class="card-head">
+          <h2>چاپگرها</h2>
+          <button class="btn primary" id="add-printer">افزودن چاپگر</button>
+        </div>
+        <table>
+          <thead><tr><th>نام</th><th>کد</th><th>نوع</th><th>آدرس</th><th>وضعیت</th><th></th></tr></thead>
+          <tbody id="printers"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>کارت‌خوان‌ها</h2>
+          <button class="btn primary" id="add-terminal">افزودن کارت‌خوان</button>
+        </div>
+        <table>
+          <thead><tr><th>نام</th><th>کد</th><th>درایور</th><th>آدرس</th><th>وضعیت</th><th></th></tr></thead>
+          <tbody id="terminals"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tab-enrol" class="panel" hidden>
+      <div class="card narrow">
+        <h2>اتصال به شعبه</h2>
+        <p class="muted">کد ثبت را مدیر ستاد در صفحهٔ «عامل‌های شعبه» می‌سازد. هر کد یک بار و تا ۲۴ ساعت کار می‌کند.</p>
+        <p id="enrol-replace" class="note warn-text" hidden>این رایانه اکنون به شعبهٔ <b id="enrol-branch"></b> وصل است. ثبت با کد جدید، عامل فعلی را لغو می‌کند.</p>
+        <form id="enrol-form">
+          <label>آدرس سرور<input name="server" class="ltr" required placeholder="https://gnextdev.ir"></label>
+          <label>کد ثبت<input name="code" class="ltr code" required placeholder="XXXX-XXXX" autocomplete="off"></label>
+          <button class="btn primary" type="submit">ثبت و اتصال</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="tab-logs" class="panel" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>گزارش‌های عامل</h2>
+          <button class="btn" id="refresh-logs">تازه‌سازی</button>
+        </div>
+        <pre id="logs" class="logs ltr"></pre>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="dlg-signin">
+    <form method="dialog" id="signin-form">
+      <h2>ورود مدیر</h2>
+      <p class="muted">با حساب جی‌نکست مدیر همین شعبه یا ستاد وارد شوید.</p>
+      <label>نام کاربری<input name="username" class="ltr" required autocomplete="username"></label>
+      <label>رمز عبور<input name="password" type="password" class="ltr" required autocomplete="current-password"></label>
+      <div class="actions">
+        <button class="btn ghost" value="cancel" formnovalidate>انصراف</button>
+        <button class="btn primary" value="ok">ورود</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-printer">
+    <form method="dialog" id="printer-form">
+      <h2 id="printer-title">چاپگر</h2>
+      <label>نام<input name="name" required placeholder="آشپزخانه – گریل"></label>
+      <label>کد<input name="code" class="ltr" required maxlength="32" placeholder="KIT1"></label>
+      <div class="row">
+        <label>نوع
+          <select name="printer_type">
+            <option value="THERMAL_RECEIPT">رسید (حرارتی)</option>
+            <option value="KITCHEN_IMPACT">آشپزخانه</option>
+            <option value="LABEL">برچسب</option>
+          </select>
+        </label>
+        <label>عرض کاغذ
+          <select name="paper_width_mm"><option value="80">۸۰ میلی‌متر</option><option value="58">۵۸ میلی‌متر</option></select>
+        </label>
+      </div>
+      <div class="row">
+        <label class="grow">آدرس IP<input name="host" class="ltr" required placeholder="192.168.1.50" list="found-hosts"></label>
+        <label class="port">درگاه<input name="port" type="number" class="ltr" required value="9100" min="1" max="65535"></label>
+      </div>
+      <datalist id="found-hosts"></datalist>
+      <div class="scan">
+        <button class="btn" type="button" id="scan">جستجوی چاپگر در شبکه</button>
+        <span id="scan-result" class="muted small"></span>
+      </div>
+      <div id="found-list" class="found"></div>
+      <div class="actions">
+        <button class="btn ghost" value="cancel" formnovalidate>انصراف</button>
+        <button class="btn primary" value="ok">ذخیره</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-terminal">
+    <form method="dialog" id="terminal-form">
+      <h2 id="terminal-title">کارت‌خوان</h2>
+      <label>نام<input name="name" required placeholder="صندوق ۱"></label>
+      <label>کد<input name="code" class="ltr" required maxlength="40" placeholder="POS1"></label>
+      <label>درایور
+        <select name="driver">
+          <option value="fake">آزمایشی (fake)</option>
+          <option value="sep">سامان (SEP)</option>
+        </select>
+      </label>
+      <div class="row">
+        <label class="grow">آدرس IP<input name="host" class="ltr" required placeholder="192.168.1.60"></label>
+        <label class="port">درگاه<input name="port" type="number" class="ltr" required value="8888" min="1" max="65535"></label>
+      </div>
+      <div class="actions">
+        <button class="btn ghost" value="cancel" formnovalidate>انصراف</button>
+        <button class="btn primary" value="ok">ذخیره</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

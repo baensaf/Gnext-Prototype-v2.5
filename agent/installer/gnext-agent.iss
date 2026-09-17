@@ -43,11 +43,21 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; Flags: ignoreversion
 
+[Tasks]
+Name: "desktopicon"; Description: "Create a desktop shortcut to the agent settings page"
+
+[Icons]
+Name: "{autoprograms}\Gnext Agent"; Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Comment: "Gnext branch agent settings"
+Name: "{autodesktop}\Gnext Agent"; Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Comment: "Gnext branch agent settings"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Description: "Open the agent settings page"; Flags: postinstall nowait skipifsilent
+
 [UninstallRun]
 Filename: "{app}\gnext-agent.exe"; Parameters: "service uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveService"
 
 [Messages]
-FinishedLabel=The Gnext agent is installed and running. It appears as Online on the Branch Agents screen within a few seconds.%n%nLogs: C:\ProgramData\Gnext\Agent\logs\agent.log
+FinishedLabel=The Gnext agent is installed and running. Its settings page (the Gnext Agent shortcut, or http://127.0.0.1:47800) shows the connection and lets a branch manager add printers and card terminals.%n%nLogs: C:\ProgramData\Gnext\Agent\logs\agent.log
 
 [Code]
 var
@@ -106,7 +116,7 @@ begin
   if Enrolled then
     Hint := 'This PC already has an enrolled agent. Leave the code empty to keep it, or enter a new code to enrol again (the old agent is then revoked).'
   else
-    Hint := 'On the Gnext Branch Agents screen, choose New enrolment code for this branch and type the code here. A code works once and expires after 24 hours.';
+    Hint := 'On the Gnext Branch Agents screen, choose New enrolment code for this branch and type the code here. A code works once and expires after 24 hours. You can also leave it empty and enrol later on the agent settings page.';
   EnrolPage := CreateInputQueryPage(wpWelcome, 'Connect to Gnext',
     'Which Gnext server should this branch agent connect to?', Hint);
   EnrolPage.Add('Server address:', False);
@@ -137,8 +147,8 @@ begin
     Exit;
   if Code = '' then
   begin
-    MsgBox('Enter the enrolment code from the Branch Agents screen.', mbError, MB_OK);
-    Result := False;
+    // The settings page can enrol later, so a missing code is allowed after a warning.
+    Result := MsgBox('No enrolment code was entered. The agent will be installed but will not connect until it is enrolled on its settings page (Gnext Agent shortcut).' + #13#10#13#10 + 'Continue without a code?', mbConfirmation, MB_YESNO) = IDYES;
     Exit;
   end;
 
