@@ -12,6 +12,8 @@ import { PaymentDevice } from '../src/entities/PaymentDevice.entity';
 import { SettlementAccount } from '../src/entities/SettlementAccount.entity';
 import { ShiftService } from '../src/modules/cashier/shift.service';
 import { CreditService } from '../src/modules/customer/credit.service';
+import { AgentPaymentsService } from '../src/modules/payment/agent-payments.service';
+import { AgentConfigService } from '../src/modules/agent-gateway/agent-config.service';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 
 describe('Payments & Split Settlement Suite (R15)', () => {
@@ -112,6 +114,12 @@ describe('Payments & Split Settlement Suite (R15)', () => {
         { provide: CreditService, useValue: creditService },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: DataSource, useValue: dataSource },
+        // No terminal at these branches is driven by an agent: card tenders stay simulated.
+        {
+          provide: AgentPaymentsService,
+          useValue: { terminalFor: jest.fn().mockResolvedValue(null), assertNoChargeInFlight: jest.fn(), flush: jest.fn() },
+        },
+        { provide: AgentConfigService, useValue: { pushToBranch: jest.fn() } },
       ],
     }).compile();
 

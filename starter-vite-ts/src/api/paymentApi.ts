@@ -15,6 +15,9 @@ export interface SettlementAccount {
   iban?: string;
 }
 
+/** How the branch agent reaches a card terminal. */
+export type TerminalConnection = { kind: 'tcp'; host: string; port: number } | { kind: 'serial'; port: string; baud: number };
+
 export interface PaymentDevice {
   id: string;
   code: string;
@@ -25,6 +28,8 @@ export interface PaymentDevice {
   settlement_account_id?: string;
   device_identifier?: string;
   is_active: boolean;
+  agent_connection?: TerminalConnection | null;
+  agent_driver?: string | null;
   // Legacy UI aliases
   device_type?: string;
   serial_number?: string;
@@ -49,6 +54,9 @@ export interface PaymentRecord {
   original_payment_id?: string;
   correction_group_id?: string;
   failure_code?: string;
+  failure_message?: string;
+  /** The card terminal never confirmed this charge; it stays PROCESSING until someone checks. */
+  needs_terminal_check?: boolean;
   initiated_at: string;
   posted_at?: string;
   // Legacy UI aliases
@@ -57,6 +65,42 @@ export interface PaymentRecord {
 }
 
 export type Payment = PaymentRecord;
+
+/** How long the till waits for the customer and the bank at the card terminal. */
+const TERMINAL_WAIT_MS = 150_000;
+const TERMINAL_POLL_MS = 1500;
+
+const withAliases = (p: any): PaymentRecord => ({
+  ...p,
+  recorded_at: p.posted_at || p.initiated_at || new Date().toISOString(),
+  reference_number: p.reference,
+});
+
+/**
+ * A charge sent to a real card terminal comes back PROCESSING and settles when the terminal
+ * answers. Waits for that, then fails loudly unless the money is in.
+ */
+async function awaitTerminal(payment: PaymentRecord): Promise<PaymentRecord> {
+  let current = payment;
+  const deadline = Date.now() + TERMINAL_WAIT_MS;
+  while (current.status === 'PROCESSING' && !current.needs_terminal_check && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, TERMINAL_POLL_MS));
+    const res = await httpClient.get(`/api/v1/payments/${current.id}`);
+    current = withAliases(res.data);
+  }
+  if (current.status === 'FAILED') {
+    throw { code: current.failure_code || 'PAYMENT_FAILED', detail: current.failure_message || 'The card payment failed.' };
+  }
+  if (current.status === 'PROCESSING') {
+    throw {
+      code: 'TERMINAL_UNCONFIRMED',
+      detail: current.needs_terminal_check
+        ? 'The card terminal did not confirm the charge. The customer may have been charged: check the terminal before taking payment again.'
+        : 'Still waiting for the card terminal. Check it before taking payment again.',
+    };
+  }
+  return current;
+}
 
 export interface ReceiptData {
   receipt_header: {
@@ -184,6 +228,34 @@ export const paymentApi = {
     };
   },
 
+  getPayment: async (id: string): Promise<PaymentRecord> => {
+    const res = await httpClient.get(`/api/v1/payments/${id}`);
+    return withAliases(res.data);
+  },
+
+  /** Asks the card terminal how an unconfirmed charge ended. */
+  checkTerminal: async (id: string): Promise<{ queued: boolean }> => {
+    const res = await httpClient.post(`/api/v1/payments/${id}/check-terminal`, {});
+    return { queued: !!res.data?.queued };
+  },
+
+  /** A manager settles an unconfirmed charge from the terminal's own receipt or report. */
+  resolveTerminal: async (
+    id: string,
+    data: { outcome: 'APPROVED' | 'NOT_CHARGED'; rrn?: string; reason: string }
+  ): Promise<PaymentRecord> => {
+    const res = await httpClient.post(`/api/v1/payments/${id}/resolve-terminal`, data);
+    return withAliases(res.data);
+  },
+
+  setDeviceAgent: async (
+    id: string,
+    data: { agentConnection: TerminalConnection | null; agentDriver: string | null }
+  ): Promise<PaymentDevice> => {
+    const res = await httpClient.patch(`/api/v1/payment-devices/${id}/agent`, data);
+    return res.data;
+  },
+
   voidPayment: async (id: string): Promise<PaymentRecord> => {
     const res = await httpClient.post(`/api/v1/payments/${id}/void`, {});
     return {
@@ -206,7 +278,7 @@ export const paymentApi = {
       amount: data.amount,
       reference: data.reference_number,
     });
-    const processed = await paymentApi.processPayment(intent.id, {});
+    const processed = await awaitTerminal(await paymentApi.processPayment(intent.id, {}));
     const resOrder = await httpClient.get(`/api/v1/orders/${data.order_id}`);
     const orderData = resOrder.data ? {
       ...resOrder.data,

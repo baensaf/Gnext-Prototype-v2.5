@@ -38,6 +38,8 @@ import { paymentApi } from 'src/api/paymentApi';
 import { httpClient } from 'src/api/httpClient';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 
+import { TerminalAgentDialog } from 'src/components/payment-terminal/terminal-agent-dialog';
+
 export function PaymentsPage() {
   const { t } = useTranslation();
 
@@ -57,6 +59,7 @@ export function PaymentsPage() {
   const [devType, setDevType] = useState('POS_TERMINAL');
   const [devBranchId, setDevBranchId] = useScopedBranchId();
   const [devAccountId, setDevAccountId] = useState('');
+  const [agentDevice, setAgentDevice] = useState<PaymentDevice | null>(null);
 
   // Account Form Drawer
   const [accDrawerOpen, setAccDrawerOpen] = useState(false);
@@ -257,12 +260,13 @@ export function PaymentsPage() {
                 <TableCell>Assigned Branch</TableCell>
                 <TableCell>Settlement Destination</TableCell>
                 <TableCell>Status</TableCell>
+                <TableCell>{t('payments.terminalAgent.column', 'Branch agent')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {devices.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center">
+                  <TableCell colSpan={8} align="center">
                     <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
                       No payment devices registered yet. Click &quot;Register Device&quot; to add your physical or mobile POS.
                     </Typography>
@@ -293,6 +297,15 @@ export function PaymentsPage() {
                       <TableCell>{accNameStr}</TableCell>
                       <TableCell>
                         <Chip label={d.is_active ? 'Active' : 'Inactive'} color={d.is_active ? 'success' : 'default'} size="small" />
+                      </TableCell>
+                      <TableCell>
+                        {d.kind !== 'MOBILE' && (
+                          <Button size="small" variant={d.agent_connection ? 'soft' : 'text'} onClick={() => setAgentDevice(d)}>
+                            {d.agent_connection
+                              ? `${d.agent_driver?.toUpperCase() || ''} · ${d.agent_connection.kind === 'tcp' ? `${d.agent_connection.host}:${d.agent_connection.port}` : d.agent_connection.port}`
+                              : t('payments.terminalAgent.connect', 'Connect to agent')}
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
@@ -411,6 +424,14 @@ export function PaymentsPage() {
           </Box>
         </Box>
       </Drawer>
+      <TerminalAgentDialog
+        device={agentDevice}
+        onClose={() => setAgentDevice(null)}
+        onSaved={() => {
+          setAgentDevice(null);
+          loadData();
+        }}
+      />
     </Box>
   );
 }

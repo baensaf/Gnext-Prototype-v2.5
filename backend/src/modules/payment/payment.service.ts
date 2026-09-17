@@ -28,6 +28,10 @@ import {
   SettlementAccountCreateDto,
 } from './dtos/payment.dto';
 import * as crypto from 'crypto';
+import { AgentPaymentsService, AGENT_TERMINAL_DRIVERS } from './agent-payments.service';
+import { bookSucceededPayment } from './payment-settlement';
+import { AgentConfigService } from '../agent-gateway/agent-config.service';
+import { parseDeviceConnection } from '../../common/utils/device-connection.util';
 
 @Injectable()
 export class PaymentService {
@@ -43,6 +47,8 @@ export class PaymentService {
     private readonly creditService: CreditService,
     private readonly auditWriter: AuditWriter,
     private readonly dataSource: DataSource,
+    private readonly agentPayments: AgentPaymentsService,
+    private readonly agentConfig: AgentConfigService,
   ) {}
 
   private async generatePaymentNumber(tenantId: string, em: EntityManager): Promise<string> {
@@ -207,7 +213,9 @@ export class PaymentService {
   }
 
   async processPayment(tenantId: string, id: string, dto: PaymentProcessDto, userId?: string, correlationId?: string) {
-    return await this.dataSource.transaction(async (em) => {
+    // Set when the charge went to the branch agent: its command is sent once this commits.
+    let agentBranchId: string | null = null;
+    const result = await this.dataSource.transaction(async (em) => {
       const payment = await em.findOne(Payment, {
         where: { id, tenant_id: tenantId },
         lock: { mode: 'pessimistic_write' },
@@ -219,6 +227,8 @@ export class PaymentService {
       if (payment.status !== 'PENDING' && payment.status !== 'PROCESSING' && payment.status !== 'FAILED') {
         throw new BadRequestException(`Payment ${id} is in status ${payment.status} and cannot be processed`);
       }
+      // Whatever the tender, never start over while a card terminal may still be charging.
+      await this.agentPayments.assertNoChargeInFlight(em, payment);
 
       payment.status = 'PROCESSING';
       await em.save(Payment, payment);
@@ -255,6 +265,13 @@ export class PaymentService {
         );
         payment.status = 'SUCCEEDED';
       } else {
+        // A card tender at a branch whose terminal the agent drives goes to the real terminal.
+        const terminal = await this.agentPayments.terminalFor(em, payment, order);
+        if (terminal) {
+          agentBranchId = order.branch_id;
+          return await this.agentPayments.startCharge(em, payment, order, terminal, { userId, correlationId });
+        }
+
         // External POS / Simulated adapter scenario check
         const scenario = dto.scenarioId || 'SUCCESS';
         const attemptNo = (payment.attempts?.length || 0) + 1;
@@ -309,46 +326,65 @@ export class PaymentService {
       }
 
       if (payment.status === 'SUCCEEDED') {
-        payment.posted_at = new Date();
-
-        // Create PaymentAllocation
-        const alloc = em.create(PaymentAllocation, {
-          tenant_id: tenantId,
-          payment_id: payment.id,
-          order_id: order.id,
-          amount: payment.amount,
-          currency_code: payment.currency_code,
-        });
-        await em.save(PaymentAllocation, alloc);
-
-        // Update Order totals
-        order.paid_total = MoneyUtil.add(order.paid_total, payment.amount);
-        let newOutstanding = MoneyUtil.subtract(order.grand_total, order.paid_total);
-        if (MoneyUtil.lessThan(newOutstanding, '0.0000')) newOutstanding = '0.0000';
-        order.outstanding_total = newOutstanding;
-        order.paid_amount = order.paid_total;
-        order.due_amount = order.outstanding_total;
-
-        await em.save(OrderHeader, order);
-
-        const savedPayment = await em.save(Payment, payment);
-
-        await this.auditWriter.write({
-          tenantId,
-          actorType: userId ? 'ADMIN' : 'SYSTEM',
-          actorId: userId,
-          action: 'PAYMENT_SUCCEEDED',
-          entityType: 'Payment',
-          entityId: savedPayment.id,
-          correlationId: correlationId || 'system',
-          afterData: savedPayment,
-        });
-
-        return savedPayment;
+        return await bookSucceededPayment(em, this.auditWriter, payment, order, { userId, correlationId });
       }
 
       return await em.save(Payment, payment);
     });
+
+    if (agentBranchId) await this.agentPayments.flush(tenantId, agentBranchId);
+    return result;
+  }
+
+  /** "Check with terminal" for a card charge the terminal never confirmed. */
+  async checkTerminal(tenantId: string, id: string, userId?: string, correlationId?: string) {
+    return await this.agentPayments.queryTerminal(tenantId, id, { userId, correlationId });
+  }
+
+  async resolveTerminal(
+    tenantId: string,
+    id: string,
+    dto: { outcome: 'APPROVED' | 'NOT_CHARGED'; rrn?: string; reason: string },
+    userId?: string,
+    correlationId?: string,
+  ) {
+    return await this.agentPayments.resolveByHand(tenantId, id, dto, { userId, correlationId });
+  }
+
+  /** How the branch agent reaches a card terminal, and which driver talks to it. */
+  async setDeviceAgent(
+    tenantId: string,
+    id: string,
+    dto: { agentConnection?: Record<string, any> | null; agentDriver?: string | null },
+    userId?: string,
+  ) {
+    const device = await this.deviceRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!device) throw new NotFoundException(`Payment device ${id} not found`);
+    const connection = parseDeviceConnection(dto.agentConnection, ['tcp', 'serial']);
+    const driver = connection ? String(dto.agentDriver || '').trim().toLowerCase() : null;
+    if (connection && !AGENT_TERMINAL_DRIVERS.includes(driver!)) {
+      throw new BadRequestException(`Terminal driver must be one of: ${AGENT_TERMINAL_DRIVERS.join(', ')}.`);
+    }
+    if (connection && !device.branch_id) {
+      throw new BadRequestException('Assign the terminal to a branch before connecting it to the branch agent.');
+    }
+    const before = { agent_connection: device.agent_connection ?? null, agent_driver: device.agent_driver ?? null };
+    device.agent_connection = connection;
+    device.agent_driver = driver;
+    const saved = await this.deviceRepo.save(device);
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      actorId: userId,
+      action: 'PAYMENT_DEVICE_AGENT_SET',
+      entityType: 'PaymentDevice',
+      entityId: saved.id,
+      branchId: saved.branch_id ?? undefined,
+      beforeData: before,
+      afterData: { agent_connection: saved.agent_connection, agent_driver: saved.agent_driver },
+    });
+    if (saved.branch_id) await this.agentConfig.pushToBranch(tenantId, saved.branch_id).catch(() => undefined);
+    return saved;
   }
 
   // Voids an abandoned PENDING/FAILED payment intent so a new attempt can be made on the

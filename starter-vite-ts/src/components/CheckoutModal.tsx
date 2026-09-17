@@ -48,6 +48,7 @@ import { paymentApi } from 'src/api/paymentApi';
 import { settingsApi } from 'src/api/settingsApi';
 
 import { toast, showErrorToast } from 'src/components/snackbar';
+import { UnconfirmedChargeActions } from 'src/components/payment-terminal/unconfirmed-charge-actions';
 
 interface CheckoutModalProps {
   open: boolean;
@@ -517,6 +518,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                     <TableBody>
                       {payments.map((p) => {
                         const isVoidable = p.status === 'PENDING' || p.status === 'FAILED';
+                        const unconfirmed = p.status === 'PROCESSING' && !!p.needs_terminal_check;
                         const statusColor =
                           p.status === 'SUCCEEDED'
                             ? 'success'
@@ -531,9 +533,14 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                             </TableCell>
                             <TableCell>{p.reference_number || p.reference || '—'}</TableCell>
                             <TableCell>
-                              <Chip label={p.status} color={statusColor} size="small" />
+                              <Chip
+                                label={unconfirmed ? t('payments.unconfirmed.status', 'Check terminal') : p.status}
+                                color={unconfirmed ? 'error' : statusColor}
+                                size="small"
+                              />
                             </TableCell>
                             <TableCell align="right">
+                              {unconfirmed && <UnconfirmedChargeActions payment={p} onChanged={loadData} />}
                               {isVoidable && (
                                 <Button size="small" color="error" onClick={() => handleVoidPayment(p.id)} disabled={loading}>
                                   {t('payments.void', 'Cancel')}

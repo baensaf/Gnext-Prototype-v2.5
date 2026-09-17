@@ -94,6 +94,14 @@ export class Payment {
   @Column({ type: 'text', nullable: true })
   failure_message: string;
 
+  /**
+   * The card terminal never confirmed the outcome (protocol §7.3): the customer may or may
+   * not have been charged. Stays set, with the payment PROCESSING, until the terminal is
+   * queried or a manager resolves it by hand.
+   */
+  @Column({ type: 'boolean', default: false })
+  needs_terminal_check: boolean;
+
   @CreateDateColumn({ type: 'timestamptz' })
   initiated_at: Date;
 

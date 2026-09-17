@@ -191,16 +191,25 @@ export class AgentCommandsService implements OnApplicationBootstrap, OnApplicati
     return !!res.affected;
   }
 
+  /** Whether a command of `type` about `entityId` is still waiting for the agent's answer. */
+  async hasPending(type: string, entityId: string): Promise<boolean> {
+    return (await this.repo.count({ where: { type, entity_id: entityId, status: In(['QUEUED', 'SENT', 'ACKED']) } })) > 0;
+  }
+
   async get(commandId: string): Promise<AgentCommand | null> {
     return await this.repo.findOne({ where: { id: commandId } });
   }
 
-  /** Expires what nobody acked in time and resends what is overdue for an ack. */
-  async tick(now = new Date()): Promise<void> {
+  /**
+   * Expires what nobody acked in time and resends what is overdue for an ack. `tenantId` limits
+   * a run to one tenant (tests that move the clock forward must not touch anyone else).
+   */
+  async tick(now = new Date(), tenantId?: string): Promise<void> {
     if (this.ticking) return;
     this.ticking = true;
     try {
-      const expired = await this.repo.find({ where: { status: In(PENDING), expires_at: LessThanOrEqual(now) } });
+      const scope = tenantId ? { tenant_id: tenantId } : {};
+      const expired = await this.repo.find({ where: { ...scope, status: In(PENDING), expires_at: LessThanOrEqual(now) } });
       for (const command of expired) {
         const res = await this.repo.update(
           { id: command.id, status: In(PENDING) },
@@ -210,7 +219,7 @@ export class AgentCommandsService implements OnApplicationBootstrap, OnApplicati
       }
 
       const overdue = await this.repo.find({
-        where: { status: 'SENT', last_sent_at: LessThanOrEqual(new Date(now.getTime() - RESEND_AFTER_MS)), expires_at: MoreThan(now) },
+        where: { ...scope, status: 'SENT', last_sent_at: LessThanOrEqual(new Date(now.getTime() - RESEND_AFTER_MS)), expires_at: MoreThan(now) },
         order: { created_at: 'ASC' },
       });
       for (const command of overdue) {

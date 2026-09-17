@@ -1,3 +1,4 @@
+import type { DeviceConnection } from '../common/utils/device-connection.util';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -37,6 +38,14 @@ export class PaymentDevice {
 
   @Column({ type: 'boolean', default: true })
   is_active: boolean;
+
+  /** How the branch agent reaches this terminal. Set, and card charges on it go through the agent. */
+  @Column({ type: 'jsonb', nullable: true })
+  agent_connection?: DeviceConnection | null;
+
+  /** The terminal protocol driver inside the agent, e.g. `sep` for Saman (protocol §7.6). */
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  agent_driver?: string | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;

@@ -245,7 +245,7 @@ describe('printing via the branch agent (PostgreSQL)', () => {
     agent.ws.terminate();
     await agent.closed;
     const stale = await reprint(agentPrinterId, 'CUSTOMER_RECEIPT');
-    await commands.tick(new Date(Date.now() + 31 * 60_000));
+    await commands.tick(new Date(Date.now() + 31 * 60_000), tenantId);
     await until(async () => (await job(stale.id)).status === 'FAILED');
     expect((await attemptsOf(stale.id))[0]).toMatchObject({ status: 'FAILED', error_code: 'EXPIRED' });
   });

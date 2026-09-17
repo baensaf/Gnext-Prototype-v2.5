@@ -163,7 +163,7 @@ describe('agent command delivery (PostgreSQL)', () => {
     await until(async () => (await row(command.id)).status === 'SENT');
 
     first.frames.length = 0;
-    await commands.tick(new Date(Date.now() + RESEND_AFTER_MS + 1000));
+    await commands.tick(new Date(Date.now() + RESEND_AFTER_MS + 1000), tenantId);
     await first.next((m) => m.id === command.id);
     expect((await row(command.id)).send_count).toBe(2);
 
@@ -203,7 +203,7 @@ describe('agent command delivery (PostgreSQL)', () => {
 
   it('expires what nobody acked, but still applies a late result: the work may have happened', async () => {
     const command = await enqueue('test.job', {}, { ttlMs: 60_000 });
-    await commands.tick(new Date(Date.now() + 61_000));
+    await commands.tick(new Date(Date.now() + 61_000), tenantId);
     expect(await row(command.id)).toMatchObject({ status: 'EXPIRED', error_code: 'EXPIRED' });
     expect(settled.map((c) => [c.id, c.status])).toEqual([[command.id, 'EXPIRED']]);
 

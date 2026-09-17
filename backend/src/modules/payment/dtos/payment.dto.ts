@@ -6,6 +6,8 @@ import {
   IsNumberString,
   IsIn,
   IsBoolean,
+  IsObject,
+  MaxLength,
 } from 'class-validator';
 
 export class PaymentCreateDto {
@@ -104,6 +106,31 @@ export class PaymentDeviceCreateDto {
   @IsOptional()
   @IsString()
   deviceIdentifier?: string;
+}
+
+export class PaymentDeviceAgentDto {
+  /** `{ kind: 'tcp', host, port }` or `{ kind: 'serial', port, baud }`; null takes the terminal off the agent. */
+  @IsOptional()
+  @IsObject()
+  agentConnection?: Record<string, any> | null;
+
+  @IsOptional()
+  @IsString()
+  agentDriver?: string | null;
+}
+
+export class TerminalResolutionDto {
+  @IsIn(['APPROVED', 'NOT_CHARGED'])
+  outcome: 'APPROVED' | 'NOT_CHARGED';
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  rrn?: string;
+
+  @IsString()
+  @MaxLength(500)
+  reason: string;
 }
 
 export class SettlementAccountCreateDto {
