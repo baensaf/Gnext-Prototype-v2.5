@@ -15,9 +15,18 @@ section numbers (§) in the code refer to it.
   1-bit image and sends it to a **network printer (raw TCP, port 9100)** with ESC/POS `GS v 0`.
   Persian is shaped by Edge, so no printer code page is involved. `windows` and `serial`
   printer connections are not supported yet.
-- **Payments**: the `fake` terminal driver only. Amounts ending in `0` are approved, `1`
-  declined, `2` time out (`UNKNOWN`; a later *Check terminal* finds them approved), `3`
-  cancelled on the terminal. The Saman (`sep`) driver waits for Saman's integration document.
+- **Payments**: two terminal drivers.
+  - `sep` (Saman): the agent runs `saman\gnext-saman-bridge.exe`, a small .NET Framework 4.8
+    program around Saman's own PC-POS SDK (`saman-bridge/vendor/SSP1126.PcPos.dll` 1.4.11.2),
+    once per operation. The terminal is reached over the LAN (connection `tcp`, by IP; the SDK
+    chooses the port) or a COM port (`serial`). Before sending an amount it runs Saman's
+    connection test, so a dead link is `FAILED`; anything after the amount is sent that ends
+    without a response code is `UNKNOWN`. Response `00` is approved; other codes are declined, or
+    cancelled when the description says so. `payment.query` is not supported: Saman's inquiry
+    needs the RRN, which an unknown charge does not have. Status is checked every 5 minutes, never
+    during a charge.
+  - `fake`: amounts ending in `0` are approved, `1` declined, `2` time out (`UNKNOWN`; a later
+    *Check terminal* finds them approved), `3` cancelled on the terminal.
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
   publishes a build, then swaps the binary after checking its SHA-256.
 - **Settings page** on `http://127.0.0.1:47800` (Start-menu and desktop shortcut *Gnext Agent*,
@@ -37,7 +46,8 @@ section numbers (§) in the code refer to it.
 | `internal/agent` | WebSocket session, command handling, device probes |
 | `internal/journal` | Command/result journal |
 | `internal/printing` | Edge renderer, ESC/POS raster, TCP printer |
-| `internal/payment` | Terminal driver interface and the fake driver |
+| `internal/payment` | Terminal driver interface, the `sep` (Saman) and `fake` drivers |
+| `saman-bridge` | .NET Framework bridge to Saman's PC-POS SDK (vendor DLLs), built in CI |
 | `internal/cloud` | HTTPS calls: enrol, me, releases |
 | `internal/localui` | Settings page (embedded HTML/JS) and its local API, LAN scan |
 | `internal/update` | Release check, download, verify, swap |

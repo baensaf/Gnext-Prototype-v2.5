@@ -55,6 +55,8 @@ func NewDriver(t protocol.Terminal) Driver {
 	switch *t.Driver {
 	case "fake":
 		return fakes.get(t.ID)
+	case "sep":
+		return seps.get(t)
 	}
 	return nil
 }

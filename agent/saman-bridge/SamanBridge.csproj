@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    gnext-saman-bridge.exe: runs one Saman PC-POS operation for the Go agent's `sep` driver.
+    It wraps Saman's own SDK (vendor/SSP1126.PcPos.dll, .NET Framework 4.0), which is why it is
+    .NET Framework rather than Go. Build: dotnet build -c Release -o ..\dist\saman
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>gnext-saman-bridge</AssemblyName>
+    <RootNamespace>Gnext.SamanBridge</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <SatelliteResourceLanguages>none</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="SSP1126.PcPos">
+      <HintPath>vendor\SSP1126.PcPos.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Sep.Logger">
+      <HintPath>vendor\Sep.Logger.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>
