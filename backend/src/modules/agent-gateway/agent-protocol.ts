@@ -48,7 +48,7 @@ export interface Envelope<P = Record<string, any>> {
   payload: P;
 }
 
-export function envelope<P extends Record<string, any>>(type: string, payload: P, ref?: string | null, id = randomUUID()): Envelope<P> {
+export function envelope<P extends Record<string, any>>(type: string, payload: P, ref?: string | null, id: string = randomUUID()): Envelope<P> {
   return { v: PROTOCOL_VERSION, id, type, ts: new Date().toISOString(), ref: ref ?? null, payload };
 }
 
