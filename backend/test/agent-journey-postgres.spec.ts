@@ -21,6 +21,7 @@ import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
 import { AgentRegistryService } from '../src/modules/agent-gateway/agent-registry.service';
 import { AgentHealthService, OFFLINE_ALERT_AFTER_MS } from '../src/modules/agent-gateway/agent-health.service';
+import { AgentSessionsService } from '../src/modules/agent-gateway/agent-sessions.service';
 import { OrderService } from '../src/modules/order/order.service';
 import { PaymentService } from '../src/modules/payment/payment.service';
 import { deleteTenantData } from './utils/tenant-teardown';
@@ -179,7 +180,11 @@ describe('branch agent journey (PostgreSQL)', () => {
     const alerts = () =>
       dataSource.getRepository(OperationalAlert).find({ where: { tenant_id: tenantId, type: 'AGENT_OFFLINE', acknowledged: false } });
 
+    // The client sees its socket close before the server's close handler drops the session;
+    // sweeping in between would still find the agent connected.
+    const sessions = moduleRef.get(AgentSessionsService);
     await agent.disconnect();
+    await until(() => !sessions.isConnected(agent.agentId));
     await health.sweep(new Date(Date.now() + OFFLINE_ALERT_AFTER_MS + 1000), tenantId);
     expect(await alerts()).toHaveLength(1);
 
@@ -189,6 +194,7 @@ describe('branch agent journey (PostgreSQL)', () => {
   });
 
   it('7. is cut off the moment head office revokes it', async () => {
+    if (!agent.connection) await agent.connect();
     const socket = agent.connection!;
     await registry.revokeAgent(tenantId, agent.agentId, 'PC replaced', {});
     await expect(socket.closed).resolves.toMatchObject({ code: 4003 });
