@@ -1,5 +1,5 @@
 ; Gnext Branch Agent installer (Inno Setup 6).
-; Build: iscc /DAppVersion=1.0.1 /DSourceExe=..\dist\gnext-agent.exe gnext-agent.iss
+; Build: iscc /DAppVersion=1.0.1 /DSourceExe=..\dist\gnext-agent.exe /DSamanDir=..\dist\saman gnext-agent.iss
 ;
 ; The wizard asks for the Gnext server and an enrolment code, checks the code with the server
 ; before installing anything, then installs the GnextAgent service and starts it. Running a
@@ -42,6 +42,10 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; Flags: ignoreversion
+#ifdef SamanDir
+; The Saman PC-POS bridge and Saman's SDK, used by terminals with the sep driver.
+Source: "{#SamanDir}\*"; DestDir: "{app}\saman"; Flags: ignoreversion recursesubdirs
+#endif
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut to the agent settings page"

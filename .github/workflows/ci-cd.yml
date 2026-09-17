@@ -123,13 +123,20 @@ jobs:
         with:
           name: gnext-agent-exe
           path: agent/dist
+      - name: Build the Saman bridge
+        shell: pwsh
+        run: |
+          dotnet build saman-bridge\SamanBridge.csproj -c Release -o dist\saman --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Remove-Item dist\saman\*.pdb -ErrorAction SilentlyContinue
+          '{"op":"version"}' | & dist\saman\gnext-saman-bridge.exe
       - name: Build the installer
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
           $version = (Get-Content VERSION -Raw).Trim()
-          & $iscc /Q "/DAppVersion=$version" "/DSourceExe=..\dist\gnext-agent.exe" installer\gnext-agent.iss
+          & $iscc /Q "/DAppVersion=$version" "/DSourceExe=..\dist\gnext-agent.exe" "/DSamanDir=..\dist\saman" installer\gnext-agent.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-FileHash dist\* -Algorithm SHA256 | Format-Table -AutoSize
       - uses: actions/upload-artifact@v4

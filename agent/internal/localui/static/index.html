@@ -166,10 +166,23 @@
           <option value="sep">سامان (SEP)</option>
         </select>
       </label>
-      <div class="row">
-        <label class="grow">آدرس IP<input name="host" class="ltr" required placeholder="192.168.1.60"></label>
-        <label class="port">درگاه<input name="port" type="number" class="ltr" required value="8888" min="1" max="65535"></label>
+      <label>نوع اتصال
+        <select name="kind">
+          <option value="tcp">شبکه (LAN)</option>
+          <option value="serial">کابل (پورت COM)</option>
+        </select>
+      </label>
+      <div class="row" id="terminal-lan">
+        <label class="grow">آدرس IP<input name="host" class="ltr" placeholder="192.168.1.60"></label>
+        <label class="port">درگاه<input name="port" type="number" class="ltr" value="8888" min="1" max="65535"></label>
       </div>
+      <div class="row" id="terminal-com" hidden>
+        <label class="grow">پورت<input name="com" class="ltr" placeholder="COM3"></label>
+        <label class="port">سرعت
+          <select name="baud"><option>115200</option><option>57600</option><option>38400</option><option>19200</option><option>9600</option></select>
+        </label>
+      </div>
+      <p class="muted small">کارت‌خوان سامان در حالت شبکه فقط با آدرس IP کار می‌کند؛ درگاه را خود کتابخانهٔ سامان انتخاب می‌کند.</p>
       <div class="actions">
         <button class="btn ghost" value="cancel" formnovalidate>انصراف</button>
         <button class="btn primary" value="ok">ذخیره</button>

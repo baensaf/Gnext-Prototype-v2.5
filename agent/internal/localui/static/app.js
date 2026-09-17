@@ -303,22 +303,34 @@ function editTerminal(t) {
     form.reset();
     $('#terminal-title').textContent = t ? 'ویرایش کارت‌خوان' : 'افزودن کارت‌خوان';
     if (t) {
+      const c = t.connection;
       form.name.value = t.name;
       form.code.value = t.code;
       form.driver.value = t.driver || 'fake';
-      form.host.value = t.connection?.host || '';
-      form.port.value = t.connection?.port || 8888;
+      form.kind.value = c?.kind === 'serial' ? 'serial' : 'tcp';
+      form.host.value = c?.kind === 'tcp' ? c.host : '';
+      form.port.value = c?.kind === 'tcp' ? c.port : 8888;
+      form.com.value = c?.kind === 'serial' ? c.port : '';
+      if (c?.kind === 'serial') form.baud.value = String(c.baud || 115200);
     }
+    showTerminalKind();
     const ok = await new Promise((resolve) => {
       dlg.onclose = () => resolve(dlg.returnValue === 'ok');
       dlg.showModal();
     });
     if (!ok) return;
+    const serial = form.kind.value === 'serial';
+    const connection = serial
+      ? { kind: 'serial', port: form.com.value.trim().toUpperCase(), baud: Number(form.baud.value) }
+      : { kind: 'tcp', host: form.host.value.trim(), port: Number(form.port.value) || 8888 };
+    if (serial ? !connection.port : !connection.host) {
+      throw new Error(serial ? 'پورت COM را وارد کنید.' : 'آدرس IP کارت‌خوان را وارد کنید.');
+    }
     const body = {
       name: form.name.value,
       code: form.code.value,
       driver: form.driver.value,
-      connection: { kind: 'tcp', host: form.host.value.trim(), port: Number(form.port.value) },
+      connection,
     };
     if (t) await api('PATCH', `/api/terminals/${t.id}`, body);
     else await api('POST', '/api/terminals', body);
@@ -326,6 +338,13 @@ function editTerminal(t) {
   });
 }
 $('#add-terminal').addEventListener('click', () => editTerminal(null));
+
+function showTerminalKind() {
+  const serial = $('#terminal-form').kind.value === 'serial';
+  $('#terminal-lan').hidden = serial;
+  $('#terminal-com').hidden = !serial;
+}
+$('#terminal-form').kind.addEventListener('change', showTerminalKind);
 
 function removeDevice(kind, d) {
   const what = kind === 'printers' ? 'چاپگر' : 'کارت‌خوان';
