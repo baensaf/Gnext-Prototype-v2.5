@@ -6,6 +6,8 @@ import {
   IsBoolean,
   IsNumberString,
   IsUUID,
+  IsInt,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -136,9 +138,34 @@ export class CreateOneTimeCouponDto {
   @IsNotEmpty()
   code: string;
 
+  @IsOptional()
+  @IsEnum(['PERCENTAGE', 'FREE_ITEM'])
+  coupon_type?: 'PERCENTAGE' | 'FREE_ITEM';
+
+  /** Required for a PERCENTAGE coupon. */
+  @IsOptional()
   @IsNumberString()
-  @IsNotEmpty()
-  percentage: string;
+  percentage?: string;
+
+  @IsOptional()
+  @IsUUID()
+  buy_product_id?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  buy_quantity?: number;
+
+  @IsOptional()
+  @IsUUID()
+  reward_product_id?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  reward_quantity?: number;
 
   @IsOptional()
   @IsNumberString()

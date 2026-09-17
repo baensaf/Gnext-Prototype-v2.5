@@ -11,9 +11,32 @@ export class Coupon {
   @Column({ type: 'varchar', length: 32 })
   code: string;
 
+  /**
+   * PERCENTAGE takes `percentage` off the order. FREE_ITEM ("buy 2 burgers, get a drink free")
+   * makes reward units already in the basket free once the buy condition is met.
+   */
+  @Column({ type: 'varchar', length: 20, default: 'PERCENTAGE' })
+  coupon_type: 'PERCENTAGE' | 'FREE_ITEM';
+
   /** A coupon carries its own terms; there is no campaign behind it to hold them. */
   @Column({ type: 'numeric', precision: 5, scale: 2 })
   percentage: string;
+
+  /** FREE_ITEM: the product to buy, or any product when empty. */
+  @Column({ type: 'uuid', nullable: true })
+  buy_product_id: string | null;
+
+  /** FREE_ITEM: how many of it to buy (not counting the free units themselves). */
+  @Column({ type: 'integer', default: 1 })
+  buy_quantity: number;
+
+  /** FREE_ITEM: the product given free. */
+  @Column({ type: 'uuid', nullable: true })
+  reward_product_id: string | null;
+
+  /** FREE_ITEM: how many units of it are free. */
+  @Column({ type: 'integer', default: 1 })
+  reward_quantity: number;
 
   @Column({ type: 'numeric', precision: 19, scale: 4, nullable: true })
   minimum_subtotal: string | null;

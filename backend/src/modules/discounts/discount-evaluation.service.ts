@@ -273,7 +273,7 @@ export class DiscountEvaluationService {
       }
     }
 
-    // B. Workflow 4: One-Time Percentage Coupon Code (Second Precedence)
+    // B. Workflow 4: One-Time Coupon Code, percentage or free item (Second Precedence)
     // A presented coupon is a deliberate act at the till, so it wins over the customer's
     // standing rate. The coupon carries its own terms.
     if (!singleDiscountApplied && couponCode && couponCode.trim()) {
@@ -317,12 +317,21 @@ export class DiscountEvaluationService {
           `Coupon ${normalizedCode} needs a subtotal of at least ${coupon.minimum_subtotal}`,
         );
       } else {
+        const freeItem = coupon.coupon_type === 'FREE_ITEM' ? this.freeItemDiscounts(coupon, lineItems, remainingBases, isDiscountableLine) : null;
+        if (freeItem && 'rejection' in freeItem) {
+          reject(freeItem.rejection, `Coupon ${normalizedCode}: ${freeItem.warning}`);
+        }
         const pctDec = MoneyUtil.divide(coupon.percentage, '100', 6);
-        let lineDiscs = lineItems.map((_, i) =>
-          isDiscountableLine[i] && MoneyUtil.greaterThan(remainingBases[i], '0')
-            ? MoneyUtil.multiply(remainingBases[i], pctDec)
-            : '0.0000',
-        );
+        let lineDiscs =
+          freeItem && 'lineDiscs' in freeItem
+            ? freeItem.lineDiscs
+            : freeItem
+              ? lineItems.map(() => '0.0000')
+              : lineItems.map((_, i) =>
+                  isDiscountableLine[i] && MoneyUtil.greaterThan(remainingBases[i], '0')
+                    ? MoneyUtil.multiply(remainingBases[i], pctDec)
+                    : '0.0000',
+                );
         const sum = (values: string[]) => values.reduce((acc, v) => MoneyUtil.add(acc, v), '0.0000');
         const uncapped = sum(lineDiscs);
 
@@ -344,10 +353,10 @@ export class DiscountEvaluationService {
           discountTotal = MoneyUtil.add(discountTotal, couponAmount);
           consideredDiscounts.push({
             source: 'COUPON',
-            name: `${couponName} ${MoneyUtil.format(coupon.percentage, 2)}%`,
+            name: freeItem ? `${couponName} free item` : `${couponName} ${MoneyUtil.format(coupon.percentage, 2)}%`,
             couponId: coupon.id,
             couponCode: normalizedCode,
-            discountType: 'PERCENTAGE',
+            discountType: freeItem ? 'FREE_ITEM' : 'PERCENTAGE',
             status: 'APPLIED',
             amount: couponAmount,
           });
@@ -428,6 +437,55 @@ export class DiscountEvaluationService {
       approvalRequired,
       approvalReason,
     };
+  }
+
+  /**
+   * What a free-item coupon takes off each line, or why it does not apply. The basket must
+   * hold `buy_quantity` of the buy product (any product when none is named) besides the free
+   * units, and the reward product itself: the cashier rings up the free drink, and the coupon
+   * makes up to `reward_quantity` units of it free. When the buy and reward product are the
+   * same ("buy 2, get 1 free") the free units don't count towards the buy.
+   */
+  private freeItemDiscounts(
+    coupon: Coupon,
+    lineItems: QuotedLineItem[],
+    remainingBases: string[],
+    isDiscountableLine: boolean[],
+  ): { lineDiscs: string[] } | { rejection: string; warning: string } {
+    const units = (line: QuotedLineItem) => Math.floor(Number(line.quantity) || 0);
+    const rewardLines = lineItems.map((line, i) => ({ line, i })).filter(({ line }) => line.productId === coupon.reward_product_id);
+    const rewardUnits = rewardLines.reduce((acc, { line }) => acc + units(line), 0);
+    if (rewardUnits === 0) {
+      return { rejection: 'COUPON_REWARD_NOT_IN_ORDER', warning: 'add the free item to the order to use this coupon' };
+    }
+
+    const buyQuantity = coupon.buy_quantity || 1;
+    const rewardQuantity = coupon.reward_quantity || 1;
+    const sameProduct = !!coupon.buy_product_id && coupon.buy_product_id === coupon.reward_product_id;
+    let free: number;
+    if (sameProduct) {
+      free = Math.min(rewardQuantity, rewardUnits - buyQuantity);
+    } else {
+      const bought = lineItems
+        .filter((line) => (coupon.buy_product_id ? line.productId === coupon.buy_product_id : line.productId !== coupon.reward_product_id))
+        .reduce((acc, line) => acc + units(line), 0);
+      free = bought >= buyQuantity ? Math.min(rewardQuantity, rewardUnits) : 0;
+    }
+    if (free <= 0) {
+      return { rejection: 'COUPON_BUY_CONDITION_NOT_MET', warning: `buy ${buyQuantity} to get ${rewardQuantity} free` };
+    }
+
+    const lineDiscs = lineItems.map(() => '0.0000');
+    let left = free;
+    for (const { line, i } of rewardLines) {
+      if (left <= 0) break;
+      if (!isDiscountableLine[i] || MoneyUtil.lessThanOrEqual(remainingBases[i], '0')) continue;
+      const take = Math.min(left, units(line));
+      const amount = MoneyUtil.multiply(line.unitPrice, String(take));
+      lineDiscs[i] = MoneyUtil.greaterThan(amount, remainingBases[i]) ? remainingBases[i] : amount;
+      left -= take;
+    }
+    return { lineDiscs };
   }
 
   /**
