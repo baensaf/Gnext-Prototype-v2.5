@@ -7,6 +7,8 @@ import { PrinterGroup } from '../../entities/PrinterGroup.entity';
 import { PrinterGroupMember } from '../../entities/PrinterGroupMember.entity';
 import { PrintRoute } from '../../entities/PrintRoute.entity';
 import { PrintQueueService } from './print-queue.service';
+import { AgentConfigService } from '../agent-gateway/agent-config.service';
+import { parseDeviceConnection } from '../../common/utils/device-connection.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
@@ -28,7 +30,20 @@ export class PrintersController {
     @InjectRepository(PrintRoute) private readonly routeRepo: Repository<PrintRoute>,
     private readonly queueService: PrintQueueService,
     private readonly auditWriter: AuditWriter,
+    private readonly agentConfig: AgentConfigService,
   ) {}
+
+  /** Printers the agent can reach over the network, through Windows, or on a serial port. */
+  private printerConnection(input: unknown) {
+    return parseDeviceConnection(input, ['tcp', 'windows', 'serial']);
+  }
+
+  /** The branch agent keeps its own copy of the printer list; tell it about the change. */
+  private async pushConfig(tenantId: string, ...branchIds: Array<string | undefined>) {
+    for (const branchId of new Set(branchIds.filter(Boolean) as string[])) {
+      await this.agentConfig.pushToBranch(tenantId, branchId).catch(() => undefined);
+    }
+  }
 
   // 1. Printers CRUD
   @Get('printers')
@@ -55,8 +70,10 @@ export class PrintersController {
       paper_width_mm: body.paper_width_mm || 80,
       is_active: body.is_active !== false,
       fallback_printer_id: body.fallback_printer_id || null,
+      agent_connection: this.printerConnection(body.agent_connection),
     });
     const saved = await this.printerRepo.save(printer);
+    await this.pushConfig(tenantId, saved.branch_id);
 
     await this.auditWriter.write({
       tenantId,
@@ -80,8 +97,12 @@ export class PrintersController {
       throw new BadRequestException('Printer cannot have itself as fallback printer');
     }
 
-    Object.assign(printer, body);
+    const previousBranchId = printer.branch_id;
+    const { agent_connection, ...rest } = body;
+    Object.assign(printer, rest);
+    if (agent_connection !== undefined) printer.agent_connection = this.printerConnection(agent_connection);
     const saved = await this.printerRepo.save(printer);
+    await this.pushConfig(tenantId, previousBranchId, saved.branch_id);
     return saved;
   }
 
@@ -94,6 +115,7 @@ export class PrintersController {
     if (!printer) throw new NotFoundException('Printer not found');
 
     await this.printerRepo.softDelete({ id });
+    await this.pushConfig(tenantId, printer.branch_id);
     return { success: true };
   }
 

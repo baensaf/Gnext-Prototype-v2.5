@@ -29,6 +29,12 @@ export interface KdsRoutingRule {
   priority: number;
 }
 
+/** How the branch agent reaches a printer. None means the printer is simulated. */
+export type PrinterConnection =
+  | { kind: 'tcp'; host: string; port: number }
+  | { kind: 'windows'; printer_name: string }
+  | { kind: 'serial'; port: string; baud: number };
+
 export interface PrinterDevice {
   id: string;
   code: string;
@@ -38,6 +44,7 @@ export interface PrinterDevice {
   paper_width_mm: number;
   is_active: boolean;
   fallback_printer_id?: string;
+  agent_connection?: PrinterConnection | null;
 }
 
 export interface PrinterGroupMember {

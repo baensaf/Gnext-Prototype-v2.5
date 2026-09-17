@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Printer } from '../../entities/Printer.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
+import { AgentCommandsService } from './agent-commands.service';
+import { AgentSessionsService } from './agent-sessions.service';
 
 export interface AgentDeviceConnection {
   kind: 'windows' | 'tcp' | 'serial';
@@ -39,16 +41,27 @@ const DEFAULT_CHARGE_TIMEOUT_S = 90;
 
 /**
  * The branch hardware an agent drives (protocol §6.1), read from the printer and payment
- * device registers. How the agent reaches each device (`connection`, `driver`) is not
- * recorded yet; printing and payments via the agent add it, and until then it is null and
- * the agent reports those devices as not configured.
+ * device registers. A device with no `connection` is not the agent's: it stays on the
+ * simulator, and the agent reports it as not configured.
  */
 @Injectable()
 export class AgentConfigService {
   constructor(
     @InjectRepository(Printer) private readonly printerRepo: Repository<Printer>,
     @InjectRepository(PaymentDevice) private readonly deviceRepo: Repository<PaymentDevice>,
+    private readonly sessions: AgentSessionsService,
+    private readonly commands: AgentCommandsService,
   ) {}
+
+  /**
+   * Sends the branch's agent its current hardware list (`config.updated`, §7.7) after head
+   * office changes a printer or terminal. An agent that is offline gets it in `welcome`.
+   */
+  async pushToBranch(tenantId: string, branchId: string): Promise<void> {
+    if (!this.sessions.forBranch(tenantId, branchId)) return;
+    const config = await this.forBranch(tenantId, branchId);
+    await this.commands.enqueue(tenantId, branchId, 'config.updated', config, { replacePending: true });
+  }
 
   async forBranch(tenantId: string, branchId: string): Promise<AgentConfig> {
     const [printers, devices] = await Promise.all([
@@ -67,7 +80,7 @@ export class AgentConfigService {
         type: p.printer_type,
         paper_width_mm: p.paper_width_mm,
         active: p.is_active,
-        connection: null,
+        connection: p.agent_connection ?? null,
       })),
       terminals: devices.map((d) => ({
         id: d.id,

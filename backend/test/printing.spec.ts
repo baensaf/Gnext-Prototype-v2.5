@@ -15,6 +15,7 @@ import { Product } from '../src/entities/Product.entity';
 import { KdsRoutingRule } from '../src/entities/KdsRoutingRule.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
+import { AgentPrintingService } from '../src/modules/printing/agent-printing.service';
 
 /**
  * An in-memory repository good enough for the routing queries: equality and `In(...)` where
@@ -70,6 +71,7 @@ describe('PrintingModule (Unit & Integration)', () => {
   let kdsRuleRepo: ReturnType<typeof fakeRepo>;
   let alertRepo: ReturnType<typeof fakeRepo>;
   let auditWriter: { write: jest.Mock };
+  let agentPrinting: { send: jest.Mock; pendingAttempt: jest.Mock; withdraw: jest.Mock };
 
   const T = 't-1';
   const BR = 'br-1';
@@ -86,6 +88,14 @@ describe('PrintingModule (Unit & Integration)', () => {
     kdsRuleRepo = fakeRepo();
     alertRepo = fakeRepo();
     auditWriter = { write: jest.fn() };
+    agentPrinting = {
+      send: jest.fn(async (_t: string, job: any, printer: any, attemptNo: number) => {
+        job.status = 'PROCESSING';
+        return { job, attempt: { job_id: job.id, printer_id: printer.id, attempt_no: attemptNo, status: 'PENDING' } };
+      }),
+      pendingAttempt: jest.fn().mockResolvedValue(null),
+      withdraw: jest.fn().mockResolvedValue(false),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -103,6 +113,7 @@ describe('PrintingModule (Unit & Integration)', () => {
         { provide: getRepositoryToken(KdsRoutingRule), useValue: kdsRuleRepo },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: getRepositoryToken(OperationalAlert), useValue: alertRepo },
+        { provide: AgentPrintingService, useValue: agentPrinting },
       ],
     }).compile();
 

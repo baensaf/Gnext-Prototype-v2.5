@@ -2963,6 +2963,21 @@
         "ITEM_LABEL": "Individual Cup / Item Label",
         "DELIVERY_SLIP": "Courier Delivery Manifest",
         "SHIFT_REPORT": "Cashier Shift Closure Report"
+      },
+      "connection": {
+        "kind": "Connection",
+        "none": "Simulated (no branch agent)",
+        "tcp": "Network printer (TCP)",
+        "windows": "Printer installed in Windows",
+        "serial": "Serial port",
+        "host": "IP address",
+        "port": "Port",
+        "printerName": "Windows printer name",
+        "printerNameHelp": "Exactly as it appears in Windows under Printers & scanners.",
+        "serialPort": "Serial port",
+        "baud": "Baud rate",
+        "agentHelp": "Jobs for this printer go to the branch agent. While the agent is offline they wait in the print queue.",
+        "agentChip": "Agent"
       }
     },
     "kds": {
