@@ -80,6 +80,34 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
+  # The Go branch agent (agent/). Tests run on Linux; the shipped binary is built for Windows.
+  agent:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+      - run: go vet ./...
+      - run: GOOS=windows go vet ./...
+      - run: go test -race ./...
+      - name: Build gnext-agent.exe
+        run: |
+          version=$(cat VERSION)
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$version" -o dist/gnext-agent.exe ./cmd/gnext-agent
+          cp scripts/install.ps1 scripts/uninstall.ps1 dist/
+          sha256sum dist/gnext-agent.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gnext-agent-windows
+          path: agent/dist/
+
   # Branches only: proves GitHub can reach the VPS with the deploy key, without deploying.
   deploy-check:
     if: github.ref != 'refs/heads/main'
@@ -98,7 +126,7 @@ jobs:
 
   deploy:
     if: github.ref == 'refs/heads/main'
-    needs: [backend, frontend]
+    needs: [backend, frontend, agent]
     runs-on: ubuntu-latest
     concurrency:
       group: deploy-production

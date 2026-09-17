@@ -126,8 +126,12 @@ live in their own modules.
 
 ### Still open
 
-- Who builds the Go agent, and where its code lives (recommendation unchanged: `agent/` in
-  this repo, with its own CI job).
+- ~~Who builds the Go agent~~ Built in `agent/` (see `agent/README.md`), with an `agent` CI
+  job that tests it and uploads `gnext-agent.exe`. v1 prints to TCP/9100 printers (HTML
+  rendered in headless Edge, sent as an ESC/POS raster) and charges through the `fake`
+  terminal driver. `backend/test/agent-go-binary-postgres.spec.ts` runs this journey against
+  the real binary when `GNEXT_AGENT_BIN` is set. Still to do: the `sep` driver (needs Saman's
+  integration document), `windows`/`serial` printers, the test on the branch PC.
 - Whether Saman's protocol can query a past transaction (contract §14). Until that is known,
   unconfirmed charges are resolved by hand.
 
