@@ -146,11 +146,12 @@ function renderDevices(a, cfg, terminals) {
             el('td', { class: 'ltr' }, p.code),
             el('td', {}, TYPES[p.type] || p.type),
             el('td', { class: 'ltr' }, addr(p.connection)),
-            el('td', {}, badge(statusOf(a, 'printer', p.id))),
+            // A printer without a connection is still printed by the cloud's simulator.
+            el('td', {}, p.connection ? badge(statusOf(a, 'printer', p.id)) : el('span', { class: 'muted' }, 'وصل به عامل نیست')),
             el('td', { class: 'acts' },
-              el('button', { class: 'btn sm', onclick: () => testPrint(p) }, 'چاپ آزمایشی'),
+              p.connection ? el('button', { class: 'btn sm', onclick: () => testPrint(p) }, 'چاپ آزمایشی') : '',
               ' ',
-              el('button', { class: 'btn sm', onclick: () => editPrinter(p) }, 'ویرایش'),
+              el('button', { class: 'btn sm', onclick: () => editPrinter(p) }, p.connection ? 'ویرایش' : 'اتصال'),
               ' ',
               el('button', { class: 'btn sm danger', onclick: () => removeDevice('printers', p) }, 'حذف'),
             ),
@@ -167,7 +168,7 @@ function renderDevices(a, cfg, terminals) {
             el('td', { class: 'ltr' }, t.code),
             el('td', {}, t.driver ? DRIVERS[t.driver] || t.driver : el('span', { class: 'muted' }, 'وصل به عامل نیست')),
             el('td', { class: 'ltr' }, addr(t.connection)),
-            el('td', {}, badge(statusOf(a, 'terminal', t.id))),
+            el('td', {}, t.driver ? badge(statusOf(a, 'terminal', t.id)) : el('span', { class: 'muted' }, '—')),
             el('td', { class: 'acts' },
               el('button', { class: 'btn sm', onclick: () => editTerminal(t) }, t.driver ? 'ویرایش' : 'اتصال'),
               ' ',
@@ -238,7 +239,7 @@ function editPrinter(p) {
     form.reset();
     $('#found-list').replaceChildren();
     $('#scan-result').textContent = '';
-    $('#printer-title').textContent = p ? 'ویرایش چاپگر' : 'افزودن چاپگر';
+    $('#printer-title').textContent = !p ? 'افزودن چاپگر' : p.connection ? 'ویرایش چاپگر' : 'اتصال چاپگر به عامل';
     if (p) {
       form.name.value = p.name;
       form.code.value = p.code;
