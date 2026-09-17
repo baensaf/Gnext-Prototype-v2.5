@@ -6,10 +6,8 @@ import { Branch } from '../../entities/Branch.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { generateDeviceKey, hashSecret, normaliseEnrolmentCode } from './agent-credentials';
 import { enrolmentCodeState } from './agent-registry.service';
-import { AGENT_CLOSE, AgentSessionsService } from './agent-sessions.service';
-
-/** Protocol versions this backend speaks (protocol §4.2). */
-export const SUPPORTED_PROTOCOL_VERSIONS = [1];
+import { AGENT_CLOSE, SUPPORTED_PROTOCOL_VERSIONS } from './agent-protocol';
+import { AgentSessionsService } from './agent-sessions.service';
 
 /** Failed codes allowed per client address in the window (protocol §3.3). */
 const MAX_FAILED_ENROLMENTS = 5;

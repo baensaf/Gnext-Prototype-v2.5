@@ -3061,7 +3061,9 @@
         "USED": "استفاده‌شده",
         "EXPIRED": "منقضی",
         "CANCELLED": "لغوشده"
-      }
+      },
+      "statusOnline": "متصل",
+      "statusOffline": "قطع"
     }
   },
   "tools": {

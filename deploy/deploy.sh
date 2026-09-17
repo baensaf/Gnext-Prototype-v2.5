@@ -44,6 +44,17 @@ if ! docker compose -f docker-compose.prod.yml up -d --build --remove-orphans --
   exit 1
 fi
 curl -fsS -o /dev/null http://127.0.0.1/health/ready
+# Branch agents connect over a WebSocket through nginx. An upgrade without a key has to reach
+# the backend and come back 401; anything else means the proxy is not passing upgrades, and
+# no agent can connect even though the health check is green.
+ws_status=$(curl -sS -o /dev/null -w '%{http_code}' --http1.1 --max-time 10 \
+  -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
+  -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+  http://127.0.0.1/api/v1/agent/ws || true)
+if [ "$ws_status" != "401" ]; then
+  echo "agent WebSocket check failed: HTTP $ws_status from /api/v1/agent/ws, expected 401" >&2
+  exit 1
+fi
 
 echo "$sha" > "$BASE/CURRENT"
 ln -sfn "$release" "$BASE/current"

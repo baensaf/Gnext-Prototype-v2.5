@@ -11,7 +11,8 @@ import {
   generateEnrolmentCode,
   hashSecret,
 } from './agent-credentials';
-import { AGENT_CLOSE, AgentSessionsService } from './agent-sessions.service';
+import { AGENT_CLOSE } from './agent-protocol';
+import { AgentSessionsService } from './agent-sessions.service';
 
 export interface AgentActor {
   userId?: string;
