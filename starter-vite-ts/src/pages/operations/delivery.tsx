@@ -51,6 +51,7 @@ import {
 import { paths } from 'src/routes/paths';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { fDateTime } from 'src/utils/format-time';
 
 import { tenantApi } from 'src/api/tenantApi';
 import { settingsApi } from 'src/api/settingsApi';
@@ -1007,7 +1008,7 @@ export function DeliveryPage() {
             <TableBody>
               {selectedEvents.map((ev) => (
                 <TableRow key={ev.id}>
-                  <TableCell>{new Date(ev.occurred_at).toLocaleString()}</TableCell>
+                  <TableCell>{fDateTime(ev.occurred_at)}</TableCell>
                   <TableCell><Chip label={getDeliveryStateLabel(ev.from_state)} size="small" /></TableCell>
                   <TableCell><Chip label={getDeliveryStateLabel(ev.to_state)} color="primary" size="small" /></TableCell>
                   <TableCell>{ev.reason || t('delivery.audit.stateTransition')}</TableCell>

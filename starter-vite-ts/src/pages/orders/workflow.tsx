@@ -62,6 +62,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { fTime, fDateTime } from 'src/utils/format-time';
 import {
   promisedBy,
   isSnappfoodOrder,
@@ -232,7 +233,7 @@ export function OrdersWorkflowPage() {
     return by ? (
       <Chip
         label={t('orders.snappfood.promisedBy', {
-          time: by.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: fTime(by),
         })}
         size="small"
         variant="outlined"
@@ -718,7 +719,7 @@ export function OrdersWorkflowPage() {
                         </TableCell>
                         <TableCell align="center">
                           <Typography variant="caption">
-                            {new Date(order.placed_at).toLocaleTimeString()}
+                            {fTime(order.placed_at)}
                           </Typography>
                         </TableCell>
                         <TableCell align="center">
@@ -902,7 +903,7 @@ export function OrdersWorkflowPage() {
                           )}
 
                           <Typography color="text.secondary" sx={{ display: 'block', mb: 1.5 }} variant="caption">
-                            {t('orders.kanban.placed', { time: new Date(order.placed_at).toLocaleTimeString() })}
+                            {t('orders.kanban.placed', { time: fTime(order.placed_at) })}
                           </Typography>
 
                           <Box sx={{ bgcolor: 'background.paper', borderRadius: 1, mb: 1.5, p: 1 }}>
@@ -1198,7 +1199,7 @@ export function OrdersWorkflowPage() {
                 {receiptData.receipt_header.branch_name} • {receiptData.receipt_header.branch_phone}
               </Typography>
               <Typography align="center" color="text.secondary" sx={{ display: 'block', mb: 1.5 }} variant="caption">
-                {new Date(receiptData.receipt_header.placed_at).toLocaleString()}
+                {fDateTime(receiptData.receipt_header.placed_at)}
               </Typography>
 
               <Typography sx={{ borderBottom: 1, borderColor: 'divider', display: 'block', fontWeight: 700, mb: 1, pb: 0.5 }} variant="caption">
@@ -1279,7 +1280,7 @@ export function OrdersWorkflowPage() {
               </Stack>
 
               <Typography variant="caption" color="text.secondary">
-                {t('orders.drawer.placedOn', { date: selectedDrawerOrder.placed_at ? new Date(selectedDrawerOrder.placed_at).toLocaleString() : t('orders.drawer.justNow') })}
+                {t('orders.drawer.placedOn', { date: selectedDrawerOrder.placed_at ? fDateTime(selectedDrawerOrder.placed_at) : t('orders.drawer.justNow') })}
                 {selectedDrawerOrder.table_number && ` • ${t('orders.drawer.table', { number: selectedDrawerOrder.table_number })}`}
                 {selectedDrawerOrder.notes && ` • ${t('orders.drawer.note', { note: selectedDrawerOrder.notes })}`}
               </Typography>
@@ -1492,7 +1493,7 @@ export function OrdersWorkflowPage() {
                               </Typography>
                             </Stack>
                             <Typography variant="caption" color="text.secondary">
-                              {evt.occurred_at ? new Date(evt.occurred_at).toLocaleTimeString() : t('orders.drawer.justNow')}
+                              {evt.occurred_at ? fTime(evt.occurred_at) : t('orders.drawer.justNow')}
                             </Typography>
                           </Stack>
 
@@ -1540,7 +1541,7 @@ export function OrdersWorkflowPage() {
                               />
                             </Stack>
                             <Typography variant="caption" color="text.secondary">
-                              {new Date(log.occurred_at).toLocaleString()}
+                              {fDateTime(log.occurred_at)}
                             </Typography>
                           </Stack>
 
@@ -1697,7 +1698,7 @@ export function OrdersWorkflowPage() {
         </DialogTitle>
         <DialogContent>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-            {t('orders.drawer.timestamp')} {inspectingJson && new Date(inspectingJson.occurred_at).toLocaleString()} • {t('orders.drawer.actor')} {inspectingJson?.actor_type}
+            {t('orders.drawer.timestamp')} {inspectingJson && fDateTime(inspectingJson.occurred_at)} • {t('orders.drawer.actor')} {inspectingJson?.actor_type}
           </Typography>
           <Box
             component="pre"

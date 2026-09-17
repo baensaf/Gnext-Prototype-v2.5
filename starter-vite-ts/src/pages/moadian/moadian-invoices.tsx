@@ -38,6 +38,7 @@ import {
 import { RouterLink } from 'src/routes/components';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { fDateTime } from 'src/utils/format-time';
 
 import { settingsApi } from 'src/api/settingsApi';
 import { useIsHeadOffice } from 'src/store/useAuthStore';
@@ -292,7 +293,7 @@ export function MoadianInvoicesPage() {
                 <Typography variant="caption" color="text.secondary">
                   {t('moadian.settings.since', {
                     defaultValue: 'Orders completed since {{date}} are invoiced automatically.',
-                    date: new Date(settings.enabledAt).toLocaleString(),
+                    date: fDateTime(settings.enabledAt),
                   })}
                 </Typography>
               )}

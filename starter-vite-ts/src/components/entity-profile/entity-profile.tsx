@@ -38,11 +38,12 @@ import {
 import { paths } from 'src/routes/paths';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { fDateTime } from 'src/utils/format-time';
 
 // ----------------------------------------------------------------------
 
 export function formatDateTime(value?: string | null): string {
-  return value ? new Date(value).toLocaleString() : '—';
+  return value ? fDateTime(value) : '—';
 }
 
 export function formatMoney(value?: string | null, currency: string = 'IRR'): string {

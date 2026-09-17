@@ -25,10 +25,13 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { fDate } from 'src/utils/format-time';
+
 import { httpClient as axios } from 'src/api/httpClient';
 import { DashboardContent } from 'src/layouts/dashboard';
 
 import { Iconify } from 'src/components/iconify';
+import { CalendarDateField } from 'src/components/calendar-date-field';
 
 interface CustomerOption {
   id: string;
@@ -307,9 +310,9 @@ export default function CustomerDiscountsPage({ isEmbedded = false }: CustomerDi
                     <TableCell>
                       {row.effective_from || row.effective_to ? (
                         <Typography variant="caption">
-                          {row.effective_from ? new Date(row.effective_from).toLocaleDateString() : t('customerClub.start', 'Start')}
+                          {row.effective_from ? fDate(row.effective_from) : t('customerClub.start', 'Start')}
                           {' — '}
-                          {row.effective_to ? new Date(row.effective_to).toLocaleDateString() : t('customerClub.always', 'Always')}
+                          {row.effective_to ? fDate(row.effective_to) : t('customerClub.always', 'Always')}
                         </Typography>
                       ) : (
                         <Typography variant="caption" color="text.secondary">
@@ -376,17 +379,15 @@ export default function CustomerDiscountsPage({ isEmbedded = false }: CustomerDi
             />
 
             <Stack direction="row" spacing={2}>
-              <TextField
+              <CalendarDateField
                 fullWidth
-                type="date"
                 label={t('customerClub.effectiveFrom', 'Effective From (Optional)')}
                 slotProps={{ inputLabel: { shrink: true } }}
                 value={effectiveFrom}
                 onChange={(e) => setEffectiveFrom(e.target.value)}
               />
-              <TextField
+              <CalendarDateField
                 fullWidth
-                type="date"
                 label={t('customerClub.effectiveTo', 'Effective To (Optional)')}
                 slotProps={{ inputLabel: { shrink: true } }}
                 value={effectiveTo}
@@ -435,17 +436,15 @@ export default function CustomerDiscountsPage({ isEmbedded = false }: CustomerDi
                 value={bulkPct}
                 onChange={(e) => setBulkPct(e.target.value)}
               />
-              <TextField
+              <CalendarDateField
                 fullWidth
-                type="date"
                 label={t('customerClub.effectiveFrom', 'Effective From')}
                 slotProps={{ inputLabel: { shrink: true } }}
                 value={bulkFrom}
                 onChange={(e) => setBulkFrom(e.target.value)}
               />
-              <TextField
+              <CalendarDateField
                 fullWidth
-                type="date"
                 label={t('customerClub.effectiveTo', 'Effective To')}
                 slotProps={{ inputLabel: { shrink: true } }}
                 value={bulkTo}

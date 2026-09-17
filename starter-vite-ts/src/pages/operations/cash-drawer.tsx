@@ -35,6 +35,8 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { businessToday } from 'src/utils/calendar';
+import { fDate , fTime } from 'src/utils/format-time';
 
 import { shiftApi } from 'src/api/shiftApi';
 import { tenantApi } from 'src/api/tenantApi';
@@ -51,9 +53,9 @@ import { DeviceTerminalDialog } from 'src/components/shift/device-terminal-dialo
 
 // ----------------------------------------------------------------------
 
-const today = () => new Date().toLocaleDateString('en-CA');
+const today = () => businessToday();
 const time = (value?: string) =>
-  value ? new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  value ? fTime(value) : '';
 
 function Figure({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
@@ -171,7 +173,7 @@ export function CashDrawerPage() {
                 {stale && (
                   <Alert severity="warning" sx={{ py: 0 }}>
                     {t('shift.card.stale', 'Left open since {{date}}. Count it down before closing the day.', {
-                      date: shift.business_date,
+                      date: fDate(shift.business_date),
                     })}
                   </Alert>
                 )}
@@ -330,7 +332,7 @@ export function CashDrawerPage() {
                       <TableRow key={s.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/app/cashier/shifts/${s.id}`)}>
                         <TableCell dir="ltr">#{s.shift_number}</TableCell>
                         <TableCell>{registerName(s.terminal_id)}</TableCell>
-                        <TableCell dir="ltr">{s.business_date}</TableCell>
+                        <TableCell dir="ltr">{fDate(s.business_date)}</TableCell>
                         <TableCell dir="ltr">
                           {time(s.opened_at)} – {time(s.closed_at)}
                         </TableCell>

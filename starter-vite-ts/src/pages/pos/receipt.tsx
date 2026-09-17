@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { fDateTime } from 'src/utils/format-time';
 
 import { paymentApi } from 'src/api/paymentApi';
 
@@ -112,7 +113,7 @@ export function ReceiptPage() {
             Type: {header.order_type} {header.table_number ? `(Table ${header.table_number})` : ''}
           </Typography>
           <Typography variant="caption" sx={{ fontFamily: 'inherit', display: 'block' }}>
-            Date: {new Date(header.placed_at).toLocaleString()}
+            Date: {fDateTime(header.placed_at)}
           </Typography>
         </Box>
 

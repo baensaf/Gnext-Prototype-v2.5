@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import TuneIcon from '@mui/icons-material/Tune';
+import EventIcon from '@mui/icons-material/Event';
 import GavelIcon from '@mui/icons-material/Gavel';
 import PrintIcon from '@mui/icons-material/Print';
 import ShieldIcon from '@mui/icons-material/Shield';
@@ -266,6 +267,15 @@ export function SettingsHubPage() {
           path: '/app/settings/courier-pay',
           icon: <TwoWheelerIcon sx={{ color: 'primary.main' }} />,
           tags: ['courier', 'pay', 'delivery fee', 'zone rate', 'failed delivery', 'سفیر', 'دستمزد', 'پیک', 'کرایه'],
+        },
+        {
+          id: 'calendar',
+          scope: 'ORG',
+          title: t('settings.hub.items.calendar.title'),
+          description: t('settings.hub.items.calendar.description'),
+          path: '/app/settings/calendar',
+          icon: <EventIcon sx={{ color: 'info.main' }} />,
+          tags: ['calendar', 'jalali', 'shamsi', 'gregorian', 'date', 'week', 'تقویم', 'شمسی', 'میلادی', 'تاریخ'],
         },
         {
           id: 'payments',

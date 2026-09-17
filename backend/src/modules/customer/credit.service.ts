@@ -12,6 +12,7 @@ import { CreditEntry, CreditEntryType } from '../../entities/CreditEntry.entity'
 import { Customer } from '../../entities/Customer.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import {
   CreditAccountCreateDto,
   CreditAccountUpdateDto,
@@ -319,7 +320,7 @@ export class CreditService {
       const signedAmount = `-${purchaseAmount}`;
       const newBalance = MoneyUtil.add(acc.current_balance, signedAmount);
 
-      const dateStr = dto.businessDate || new Date().toISOString().slice(0, 10);
+      const dateStr = dto.businessDate || BusinessDateUtil.today();
 
       const entry = em.create(CreditEntry, {
         tenant_id: tenantId,
@@ -400,7 +401,7 @@ export class CreditService {
         related_entry_id: originalEntry.id,
         reason_text: reason || 'Customer credit payment reversed',
         reference: `REVERSAL_${paymentId}`,
-        business_date: new Date().toISOString().slice(0, 10),
+        business_date: BusinessDateUtil.today(),
         posted_by: userId || null,
         balance_after: newBalance,
       });
@@ -462,7 +463,7 @@ export class CreditService {
         }
       }
 
-      const dateStr = new Date().toISOString().slice(0, 10);
+      const dateStr = BusinessDateUtil.today();
 
       const entry = em.create(CreditEntry, {
         tenant_id: tenantId,
@@ -521,7 +522,7 @@ export class CreditService {
       }
 
       const newBalance = MoneyUtil.add(acc.current_balance, signedAmount);
-      const dateStr = new Date().toISOString().slice(0, 10);
+      const dateStr = BusinessDateUtil.today();
 
       const entry = em.create(CreditEntry, {
         tenant_id: tenantId,
@@ -641,7 +642,7 @@ export class CreditService {
       }
 
       const newBalance = MoneyUtil.add(acc.current_balance, signedAmount);
-      const dateStr = new Date().toISOString().slice(0, 10);
+      const dateStr = BusinessDateUtil.today();
 
       const entry = em.create(CreditEntry, {
         tenant_id: tenantId,
@@ -900,7 +901,7 @@ export class CreditService {
       acc.current_balance = newBalance;
       await em.save(CustomerCreditAccount, acc);
 
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayStr = BusinessDateUtil.today();
       const entry = em.create(CreditEntry, {
         tenant_id: tenantId,
         account_id: acc.id,
@@ -990,7 +991,7 @@ export class CreditService {
       acc.current_balance = newBalance;
       await em.save(CustomerCreditAccount, acc);
 
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayStr = BusinessDateUtil.today();
       const entry = em.create(CreditEntry, {
         tenant_id: tenantId,
         account_id: acc.id,

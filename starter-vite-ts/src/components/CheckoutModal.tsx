@@ -40,6 +40,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { orderApi } from 'src/api/orderApi';
@@ -524,7 +525,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                               : 'warning';
                         return (
                           <TableRow key={p.id}>
-                            <TableCell>{new Date(p.recorded_at).toLocaleTimeString()}</TableCell>
+                            <TableCell>{fTime(p.recorded_at)}</TableCell>
                             <TableCell align="right" sx={{ fontWeight: 'bold', color: statusColor === 'success' ? 'success.main' : 'text.secondary' }}>
                               {MoneyUtil.formatCurrency(p.amount)} IRR
                             </TableCell>

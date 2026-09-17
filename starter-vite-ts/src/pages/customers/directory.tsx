@@ -46,6 +46,7 @@ import {
 import { paths } from 'src/routes/paths';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { fDateTime } from 'src/utils/format-time';
 
 import {
   customerApi
@@ -533,7 +534,7 @@ export function CustomersPage() {
               <TableBody>
                 {transactions.map((t) => (
                   <TableRow key={t.id}>
-                    <TableCell>{new Date(t.recorded_at || (t as any).posted_at || Date.now()).toLocaleString()}</TableCell>
+                    <TableCell>{fDateTime(t.recorded_at || (t as any).posted_at || Date.now())}</TableCell>
                     <TableCell>
                       <Chip
                         label={t.transaction_type || (t as any).entry_type || 'ADJUSTMENT'}

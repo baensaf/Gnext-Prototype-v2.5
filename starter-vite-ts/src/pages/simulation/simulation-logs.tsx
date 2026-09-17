@@ -33,6 +33,8 @@ import {
   TablePagination,
 } from '@mui/material';
 
+import { fTime } from 'src/utils/format-time';
+
 import { httpClient as axios } from 'src/api/httpClient';
 
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
@@ -259,7 +261,7 @@ export function SimulationLogsPage() {
                 {paginatedLogs.map((log) => (
                   <TableRow key={log.id} hover>
                     <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>
-                      {new Date(log.created_at || Date.now()).toLocaleTimeString()}
+                      {fTime(log.created_at || Date.now())}
                     </TableCell>
                     <TableCell>
                       <Chip

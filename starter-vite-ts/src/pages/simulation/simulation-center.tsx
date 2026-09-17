@@ -38,6 +38,8 @@ import {
 
 import { RouterLink } from 'src/routes/components';
 
+import { fTime } from 'src/utils/format-time';
+
 import { kdsApi } from 'src/api/kdsApi';
 import { tenantApi } from 'src/api/tenantApi';
 import { httpClient as axios } from 'src/api/httpClient';
@@ -479,7 +481,7 @@ export function SimulationCenterPage() {
                     />
                   </TableCell>
                   <TableCell sx={{ fontSize: '0.8rem' }}>
-                    {new Date(log.created_at || Date.now()).toLocaleTimeString()}
+                    {fTime(log.created_at || Date.now())}
                   </TableCell>
                   <TableCell sx={{ textAlign: 'right' }}>
                     <IconButton size="small" color="primary" onClick={() => setInspectingLog(log)}>

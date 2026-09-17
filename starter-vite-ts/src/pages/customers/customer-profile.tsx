@@ -25,6 +25,7 @@ import {
 import { paths } from 'src/routes/paths';
 import { useParams } from 'src/routes/hooks';
 
+import { fDate } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { profilesApi } from 'src/api/profilesApi';
@@ -127,7 +128,7 @@ export function CustomerProfilePage() {
           { label: t('profile.kpi.averageTicket'), value: formatMoney(stats.average_value) },
           {
             label: t('profile.kpi.lastOrder'),
-            value: stats.last_order_at ? new Date(stats.last_order_at).toLocaleDateString() : t('profile.never'),
+            value: stats.last_order_at ? fDate(stats.last_order_at) : t('profile.never'),
           },
           {
             label: t('profile.customer.creditBalance'),

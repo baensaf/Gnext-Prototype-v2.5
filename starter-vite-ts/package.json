@@ -43,6 +43,7 @@
     "@mui/x-date-pickers": "^9.1.0",
     "autosuggest-highlight": "^3.3.4",
     "axios": "^1.16.0",
+    "date-fns-jalali": "^4.4.0-0",
     "dayjs": "^1.11.20",
     "decimal.js": "^10.6.0",
     "es-toolkit": "^1.46.1",

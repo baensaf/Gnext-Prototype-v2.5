@@ -44,9 +44,12 @@ import {
 import { useParams } from 'src/routes/hooks';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { fDateTime } from 'src/utils/format-time';
 
 import { creditApi } from 'src/api/creditApi';
 import { customerApi } from 'src/api/customerApi';
+
+import { CalendarDateField } from 'src/components/calendar-date-field';
 
 export function CustomerCreditPage() {
   const { t } = useTranslation();
@@ -1090,19 +1093,17 @@ export function CustomerCreditPage() {
 
               {/* Statement Filter Toolbar */}
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
-                <TextField
+                <CalendarDateField
                   size="small"
                   label={t('credit.statementModal.dateFrom', 'From Date')}
-                  type="date"
                   slotProps={{ inputLabel: { shrink: true } }}
                   value={statementDateFrom}
                   onChange={(e) => setStatementDateFrom(e.target.value)}
                   sx={{ width: { xs: '100%', sm: 180 } }}
                 />
-                <TextField
+                <CalendarDateField
                   size="small"
                   label={t('credit.statementModal.dateTo', 'To Date')}
-                  type="date"
                   slotProps={{ inputLabel: { shrink: true } }}
                   value={statementDateTo}
                   onChange={(e) => setStatementDateTo(e.target.value)}
@@ -1156,7 +1157,7 @@ export function CustomerCreditPage() {
                           return (
                             <TableRow key={tx.id} hover>
                               <TableCell sx={{ fontSize: '0.8rem' }}>
-                                {new Date(tx.posted_at || tx.recorded_at).toLocaleString()}
+                                {fDateTime(tx.posted_at || tx.recorded_at)}
                               </TableCell>
                               <TableCell>
                                 <Chip

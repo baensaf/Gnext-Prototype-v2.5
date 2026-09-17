@@ -50,6 +50,7 @@ import { PaymentSettingsPage } from 'src/pages/settings/payments';
 import { UserProfilePage } from 'src/pages/settings/user-profile';
 import { BusinessDaysPage } from 'src/pages/cashier/business-days';
 import { ReportViewerPage } from 'src/pages/reports/report-viewer';
+import { CalendarSettingsPage } from 'src/pages/settings/calendar';
 import { FleetRollupPage } from 'src/pages/operations/fleet-rollup';
 import { OfflineSyncPage } from 'src/pages/simulation/offline-sync';
 import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
@@ -188,6 +189,7 @@ export const routesSection: RouteObject[] = [
       { path: 'settings/order-workflow', element: <OrderWorkflowSettingsPage /> },
       { path: 'settings/shift-policy', element: <ShiftPolicySettingsPage /> },
       { path: 'settings/courier-pay', element: <CourierPaySettingsPage /> },
+      { path: 'settings/calendar', element: <CalendarSettingsPage /> },
       { path: 'settings/branch-overrides', element: <BranchOverridesPage /> },
       { path: 'settings/roles', element: <RolesMatrixPage /> },
       { path: 'settings/discount-authorizations', element: <DiscountAuthorizationsPage /> },

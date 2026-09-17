@@ -31,6 +31,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { fDateTime } from 'src/utils/format-time';
 
 import { orderApi } from 'src/api/orderApi';
 import { refundApi } from 'src/api/refundApi';
@@ -211,7 +212,7 @@ export function RefundsPage() {
                     <Chip label={r.status} color={r.status === 'APPROVED' ? 'success' : 'default'} size="small" />
                   </TableCell>
                   <TableCell>{r.note || '-'}</TableCell>
-                  <TableCell>{new Date(r.created_at).toLocaleString()}</TableCell>
+                  <TableCell>{fDateTime(r.created_at)}</TableCell>
                   <TableCell align="right">
                     <IconButton color="primary" onClick={() => handleViewDetail(r.id)}>
                       <VisibilityIcon fontSize="small" />

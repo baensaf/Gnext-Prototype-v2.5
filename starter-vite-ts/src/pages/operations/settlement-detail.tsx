@@ -29,6 +29,8 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { fDateTime } from 'src/utils/format-time';
+
 import { deliveryApi } from '../../api/deliveryApi';
 
 export function SettlementDetailPage() {
@@ -259,7 +261,7 @@ export function SettlementDetailPage() {
                   </Stack>
                   <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Typography color="text.secondary">{t('settlements.created', 'Created At')}:</Typography>
-                    <Typography dir="ltr">{settlement.created_at ? new Date(settlement.created_at).toLocaleString() : '-'}</Typography>
+                    <Typography dir="ltr">{settlement.created_at ? fDateTime(settlement.created_at) : '-'}</Typography>
                   </Stack>
                   <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Typography color="text.secondary">{t('settlements.notes', 'Notes')}:</Typography>

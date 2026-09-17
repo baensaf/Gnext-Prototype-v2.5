@@ -31,6 +31,8 @@ import {
   FormControlLabel,
 } from '@mui/material';
 
+import { fDateTime } from 'src/utils/format-time';
+
 import { tenantApi } from '../../api/tenantApi';
 import { alertsApi } from '../../api/alertsApi';
 import { useBranchContextOptional } from '../../contexts/branch-context';
@@ -296,7 +298,7 @@ export function MonitoringPage() {
                               {alert.message}
                             </Typography>
                             <Typography variant="caption" color="text.disabled" sx={{ mt: 1, display: 'block' }} dir="ltr">
-                              {new Date(alert.created_at).toLocaleString()} | Type: {alert.type}
+                              {fDateTime(alert.created_at)} | Type: {alert.type}
                               {alertOwner(alert) && <> | {alertOwner(alert)}</>}
                             </Typography>
                           </Box>

@@ -34,6 +34,8 @@ import {
   FormControlLabel,
 } from '@mui/material';
 
+import { fDateTime } from 'src/utils/format-time';
+
 import { tenantApi } from 'src/api/tenantApi';
 import { httpClient as axios } from 'src/api/httpClient';
 import { useScopedBranchId } from 'src/contexts/branch-context';
@@ -320,7 +322,7 @@ export function OfflineSyncPage() {
           {t('simulation.sync.agentVersion', 'Agent Version')}: <strong>{syncStatus?.agent_version || 'v2.0.0-sim'}</strong> | {t('simulation.sync.health', 'Health')}: <strong>{syncStatus?.agent_health || 'HEALTHY'}</strong>
         </Typography>
         <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
-          {t('simulation.sync.lastSync', 'Last Sync')}: {syncStatus?.last_synced_at ? new Date(syncStatus.last_synced_at).toLocaleString() : 'Never'} | {t('simulation.sync.offlineSince', 'Offline Since')}: {syncStatus?.offline_since ? new Date(syncStatus.offline_since).toLocaleString() : 'N/A'}
+          {t('simulation.sync.lastSync', 'Last Sync')}: {syncStatus?.last_synced_at ? fDateTime(syncStatus.last_synced_at) : 'Never'} | {t('simulation.sync.offlineSince', 'Offline Since')}: {syncStatus?.offline_since ? fDateTime(syncStatus.offline_since) : 'N/A'}
         </Typography>
       </Alert>
 
@@ -480,7 +482,7 @@ export function OfflineSyncPage() {
                       size="small"
                     />
                   </TableCell>
-                  <TableCell>{new Date(conf.created_at).toLocaleString()}</TableCell>
+                  <TableCell>{fDateTime(conf.created_at)}</TableCell>
                   <TableCell>
                     <Button
                       size="small"

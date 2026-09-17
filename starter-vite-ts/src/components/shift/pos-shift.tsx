@@ -8,6 +8,8 @@ import LockOpenIcon from '@mui/icons-material/LockOpen';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import { Card, Chip, Paper, Stack, Button, Typography, CircularProgress } from '@mui/material';
 
+import { fTime } from 'src/utils/format-time';
+
 import { RegisterNotice } from './register-notice';
 import { OpenShiftDialog } from './open-shift-dialog';
 import { CloseShiftDialog } from './close-shift-dialog';
@@ -49,7 +51,7 @@ export function PosShiftBar({ register }: { register: RegisterShiftState }) {
         />
         <Typography variant="caption" color="text.secondary">
           {t('shift.bar.since', 'Open since {{time}}', {
-            time: new Date(shift.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            time: fTime(shift.opened_at),
           })}
         </Typography>
         <Button

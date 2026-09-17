@@ -29,6 +29,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { fDateTime } from 'src/utils/format-time';
 
 import { httpClient as axios } from 'src/api/httpClient';
 import { useBranchContext } from 'src/contexts/branch-context';
@@ -690,7 +691,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                   {t('settlements.statementModal.title')}
                 </Typography>
                 <Typography variant="subtitle2" align="center" color="text.secondary" gutterBottom>
-                  {statementData.settlement_number} | {t('settlements.statementModal.date')}: {new Date(statementData.settlement_date).toLocaleString()}
+                  {statementData.settlement_number} | {t('settlements.statementModal.date')}: {fDateTime(statementData.settlement_date)}
                 </Typography>
                 <Divider sx={{ my: 2 }} />
 

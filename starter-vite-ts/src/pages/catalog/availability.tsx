@@ -30,6 +30,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { fDateTime } from 'src/utils/format-time';
 
 import { catalogApi } from 'src/api/catalogApi';
 import { useBranchContext } from 'src/contexts/branch-context';
@@ -200,7 +201,7 @@ export function AvailabilityPage() {
                   <TableCell>
                     {(isSuspended &&
                       (avail?.suspended_until
-                        ? new Date(avail.suspended_until).toLocaleString()
+                        ? fDateTime(avail.suspended_until)
                         : t('catalog.availabilityPage.indefinite'))) ||
                       '-'}
                   </TableCell>
