@@ -905,9 +905,12 @@ test harness (task 9) or a real staging server:
 Decided by the product owner (2026-09-17):
 
 1. **Terminal**: the test branch PC has a **Saman (SEP)** terminal. The one real driver in
-   §7.6 is `sep`. Whether its protocol can query a past transaction is still to be checked
-   against Saman's integration document; until then the driver does not advertise
-   `payment.query`.
+   §7.6 is `sep`, built on Saman's own PC-POS SDK (`SSP1126.PcPos.dll` 1.4.11.2) through a
+   .NET bridge (`agent/saman-bridge`). It reaches the terminal over the LAN (`tcp`, by IP; the
+   SDK chooses the port) or a COM port (`serial`). Saman's SDK can look a transaction up only
+   by RRN (`Inquiry`), which an `UNKNOWN` charge does not have, so a `payment.query` for a `sep`
+   terminal answers `UNKNOWN` with `QUERY_UNSUPPORTED` and a person resolves the payment.
+   (`GetReport` by date may allow a real query later; its format is not documented to us.)
 2. **Printer**: the test printer is on the **LAN, raw TCP port 9100**. The first agent build
    MUST support `connection.kind = tcp` (§6.2 raster over ESC/POS); `windows` and `serial`
    MAY follow later.

@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.Configuration;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using System.Web.Script.Serialization;
 using SSP1126.PcPos.BaseClasses;
@@ -23,29 +26,91 @@ namespace Gnext.SamanBridge
     /// </summary>
     internal static class Program
     {
+        private static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
+        private static readonly object Answered = new object();
+        private static TextWriter _stdout;
+        private static bool _answered;
+
+        /// <summary>"connect" until the amount is handed to the SDK, then "send".</summary>
+        private static volatile string _stage = "connect";
+
         private static int Main()
         {
-            var json = new JavaScriptSerializer();
             Console.OutputEncoding = new UTF8Encoding(false);
-            var stdout = Console.Out;
+            _stdout = Console.Out;
             // The SDK may write to the console; keep stdout for the one response line.
             Console.SetOut(Console.Error);
+
+            // Saman's SDK does work on background threads; if one of them throws, the process dies.
+            // Answer first, with the stage we had reached, so the agent can tell FAILED from UNKNOWN.
+            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+                Answer(Fail(_stage, "Saman SDK crashed: " + ((e.ExceptionObject as Exception)?.Message ?? "unknown error")));
 
             Dictionary<string, object> response;
             try
             {
+                UseWritableLogFolder();
                 var input = Console.In.ReadLine() ?? "";
-                var req = json.Deserialize<Request>(input) ?? new Request();
+                var req = Json.Deserialize<Request>(input) ?? new Request();
                 response = Run(req);
             }
             catch (Exception ex)
             {
-                response = Fail("connect", "bad request: " + ex.Message);
+                response = Fail(_stage, ex.GetType().Name + ": " + ex.Message);
             }
 
-            stdout.WriteLine(json.Serialize(response));
-            stdout.Flush();
+            Answer(response);
             return 0;
+        }
+
+        private static void Answer(Dictionary<string, object> response)
+        {
+            lock (Answered)
+            {
+                if (_answered) return;
+                _answered = true;
+                _stdout.WriteLine(Json.Serialize(response));
+                _stdout.Flush();
+            }
+        }
+
+        /// <summary>
+        /// Saman's logger crashes the process when it cannot create its folder. Point it at
+        /// GNEXT_SAMAN_LOG_DIR (set by the agent), else the configured folder, else %TEMP%,
+        /// whichever can actually be created.
+        /// </summary>
+        private static void UseWritableLogFolder()
+        {
+            var settings = ConfigurationManager.AppSettings;
+            var candidates = new[]
+            {
+                Environment.GetEnvironmentVariable("GNEXT_SAMAN_LOG_DIR"),
+                settings["LogBasePath"],
+                Path.Combine(Path.GetTempPath(), "gnext-saman-logs"),
+            };
+            foreach (var dir in candidates)
+            {
+                if (string.IsNullOrWhiteSpace(dir)) continue;
+                try
+                {
+                    Directory.CreateDirectory(dir);
+                    var probe = Path.Combine(dir, ".write-test");
+                    File.WriteAllText(probe, "");
+                    File.Delete(probe);
+                }
+                catch
+                {
+                    continue;
+                }
+                if (dir == settings["LogBasePath"]) return;
+                // AppSettings is read-only at run time; the SDK only reads it, so unlock it once.
+                var readOnly = typeof(NameObjectCollectionBase).GetField("_readOnly", BindingFlags.NonPublic | BindingFlags.Instance);
+                readOnly?.SetValue(settings, false);
+                settings["LogBasePath"] = dir;
+                settings["LogPath"] = dir.TrimEnd('\\') + "\\";
+                return;
+            }
+            // No writable folder at all: leave the SDK's settings; the crash handler still answers.
         }
 
         private static Dictionary<string, object> Run(Request req)
@@ -88,6 +153,7 @@ namespace Gnext.SamanBridge
                         PosResult r;
                         try
                         {
+                            _stage = "send";
                             r = factory.PcStarterPurchase(req.amount ?? "", string.Empty, string.Empty, string.Empty,
                                 string.Empty, string.Empty, string.Empty, 0, string.Empty, 0);
                         }
@@ -115,9 +181,7 @@ namespace Gnext.SamanBridge
             }
             catch (Exception ex)
             {
-                // An exception before PcStarterPurchase was called is caught above as "connect";
-                // anything left is from set-up.
-                return Fail("connect", ex.GetType().Name + ": " + ex.Message);
+                return Fail(_stage, ex.GetType().Name + ": " + ex.Message);
             }
             finally
             {
