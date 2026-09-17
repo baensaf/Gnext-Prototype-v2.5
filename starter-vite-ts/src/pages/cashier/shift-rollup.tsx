@@ -15,7 +15,6 @@ import {
   Alert,
   Button,
   TableRow,
-  TextField,
   TableBody,
   TableCell,
   TableHead,
@@ -26,17 +25,19 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { businessToday } from 'src/utils/calendar';
 
 import { rollupApi } from 'src/api/rollupApi';
 
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
+import { CalendarDateField } from 'src/components/calendar-date-field';
 import { BranchShiftsDrawer } from 'src/components/shift/branch-shifts-drawer';
 
 // ----------------------------------------------------------------------
 
 /** Local calendar date, not the UTC one: the same rule the server stamps shifts with. */
 function todayLocal(): string {
-  return new Date().toLocaleDateString('en-CA');
+  return businessToday();
 }
 
 /**
@@ -113,9 +114,8 @@ export function ShiftRollupPage() {
         ]}
         action={
           <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-            <TextField
+            <CalendarDateField
               size="small"
-              type="date"
               label={t('rollup.shifts.businessDate', 'Business date')}
               value={businessDate}
               onChange={(e) => setBusinessDate(e.target.value)}

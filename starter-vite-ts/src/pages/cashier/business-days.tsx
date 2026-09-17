@@ -36,7 +36,12 @@ import {
 import { paths } from 'src/routes/paths';
 import { RouterLink } from 'src/routes/components';
 
+import { fDate , fDateTime } from 'src/utils/format-time';
+import { businessDate as businessDayOf } from 'src/utils/calendar';
+
 import { useBranchContext } from 'src/contexts/branch-context';
+
+import { CalendarDateField } from 'src/components/calendar-date-field';
 
 import { shiftApi } from '../../api/shiftApi';
 import { ServerDataGrid } from '../../components/server-data-grid';
@@ -48,8 +53,8 @@ const errorText = (err: any, fallback: string) =>
 const nextBusinessDate = (date: string) => {
   const next = new Date(`${date}T12:00:00`);
   next.setDate(next.getDate() + 1);
-  const nextText = next.toLocaleDateString('en-CA');
-  const today = new Date().toLocaleDateString('en-CA');
+  const nextText = businessDayOf(next);
+  const today = businessDayOf();
   return nextText > today ? today : nextText;
 };
 
@@ -76,7 +81,7 @@ function OpenOrderLine({ order }: { order: DayCloseOpenOrder }) {
       </Link>
       <Typography variant="caption" color="text.secondary">
         {order.tableNumber ? `${order.orderType} · ${order.tableNumber}` : order.orderType} ·{' '}
-        <span dir="ltr">{order.businessDate}</span>
+        <span dir="ltr">{fDate(order.businessDate)}</span>
       </Typography>
       <Box sx={{ flexGrow: 1 }} />
       {order.issue && (
@@ -110,7 +115,7 @@ export function BusinessDaysPage() {
   const { branches, selectedBranchId: branchId, selectedBranch } = useBranchContext();
   const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
   // The local operating day: the UTC one is yesterday in Tehran until 03:30.
-  const [businessDate, setBusinessDate] = useState<string>(new Date().toLocaleDateString('en-CA'));
+  const [businessDate, setBusinessDate] = useState<string>(businessDayOf());
 
   // What the close would do with the branch's open orders, read again whenever the day changes.
   const [openOrders, setOpenOrders] = useState<DayCloseOpenOrders | null>(null);
@@ -208,7 +213,7 @@ export function BusinessDaysPage() {
     if (!selectedDay) return;
     try {
       await shiftApi.reopenBusinessDay(selectedDay.id, { reason: reopenReason.trim() });
-      setSuccess(t('cashier.dayReopened', 'Business day {{date}} reopened', { date: selectedDay.business_date }));
+      setSuccess(t('cashier.dayReopened', 'Business day {{date}} reopened', { date: fDate(selectedDay.business_date) }));
       setSelectedDay(null);
       setReopenReason('');
       fetchBusinessDays();
@@ -227,7 +232,7 @@ export function BusinessDaysPage() {
       width: 140,
       renderCell: (params) => (
         <Typography sx={{ fontWeight: 600 }} dir="ltr">
-          {params.value}
+          {fDate(params.value)}
         </Typography>
       ),
     },
@@ -298,7 +303,7 @@ export function BusinessDaysPage() {
       width: 190,
       renderCell: (params) => (
         <Typography variant="body2" dir="ltr">
-          {params.value ? new Date(params.value).toLocaleString() : '-'}
+          {params.value ? fDateTime(params.value) : '-'}
         </Typography>
       ),
     },
@@ -308,7 +313,7 @@ export function BusinessDaysPage() {
       width: 190,
       renderCell: (params) => (
         <Typography variant="body2" dir="ltr">
-          {params.value ? new Date(params.value).toLocaleString() : '-'}
+          {params.value ? fDateTime(params.value) : '-'}
         </Typography>
       ),
     },
@@ -449,8 +454,7 @@ export function BusinessDaysPage() {
                 {selectedBranch?.name || '-'}
               </Typography>
             </Box>
-            <TextField
-              type="date"
+            <CalendarDateField
               label={t('cashier.businessDate', 'Business Date')}
               value={businessDate}
               onChange={(e) => setBusinessDate(e.target.value)}

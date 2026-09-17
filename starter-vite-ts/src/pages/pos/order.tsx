@@ -75,6 +75,7 @@ import {
   ToggleButtonGroup,
 } from '@mui/material';
 
+import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { orderApi } from 'src/api/orderApi';
@@ -2480,7 +2481,7 @@ export function PosOrderPage() {
 
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5 }}>
                   <AccessTimeIcon sx={{ fontSize: 14 }} />
-                  {new Date(ho.placed_at || (ho as any).created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {fTime(ho.placed_at || (ho as any).created_at)}
                   {ho.items?.length ? ` • ${ho.items.length} items` : ''}
                 </Typography>
 

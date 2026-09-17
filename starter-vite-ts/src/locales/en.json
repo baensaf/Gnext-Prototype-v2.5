@@ -2585,6 +2585,10 @@
         "roles": {
           "title": "Roles & Permissions",
           "description": "What each role may see and do in a branch, and what stays with head office."
+        },
+        "calendar": {
+          "title": "Calendar",
+          "description": "Jalali or Gregorian dates across the chain, and the first day of the week."
         }
       },
       "scopeLegend": "Organization settings are defined once at head office and apply to every branch. Per-branch settings are configured separately at each location.",
@@ -2637,6 +2641,29 @@
       "SYSTEM": "System",
       "DISCOUNTS": "Cashier Discount Caps",
       "DISCOUNT_AUTHORIZATIONS": "Discount Authorizations"
+    },
+    "calendar": {
+      "title": "Calendar",
+      "cardTitle": "Calendar and week",
+      "calendarLabel": "Calendar",
+      "calendarHelp": "Used for every date on screen, in date pickers and on printed bills, in all branches.",
+      "jalali": "Jalali (Solar Hijri)",
+      "gregorian": "Gregorian",
+      "weekStartLabel": "Week starts on",
+      "clockNotice": "Dates follow Tehran time for every branch and browser. Now: {{now}}",
+      "headOfficeOnly": "Head office sets the calendar for the whole chain.",
+      "loadError": "Failed to load the calendar setting",
+      "saveError": "Failed to save the calendar setting",
+      "saveSuccess": "Calendar saved. Dates now show in the chosen calendar.",
+      "days": {
+        "0": "Sunday",
+        "1": "Monday",
+        "2": "Tuesday",
+        "3": "Wednesday",
+        "4": "Thursday",
+        "5": "Friday",
+        "6": "Saturday"
+      }
     }
   },
   "inventory": {

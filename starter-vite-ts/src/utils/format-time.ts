@@ -4,6 +4,8 @@ import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
+import { formatCalendarDate, formatCalendarTime, formatCalendarDateTime } from './calendar';
+
 // ----------------------------------------------------------------------
 
 /**
@@ -57,52 +59,54 @@ export function today(template?: string): string {
 // ----------------------------------------------------------------------
 
 /**
- * Formats a date-time string.
+ * Formats a date-time in the chain's calendar on the business clock (see utils/calendar).
+ * A Day.js template still formats in Gregorian, for the rare caller that needs a fixed layout.
  * @returns Formatted date-time string or 'Invalid'.
  * @example
- * fDateTime('17-04-2022') // '17 Apr 2022 12:00 am'
+ * fDateTime('2026-09-17T10:35:00Z') // '1405/06/26 14:05'
  */
-export function fDateTime(input: DateInput, template = FORMAT_PATTERNS.dateTime): string {
+export function fDateTime(input: DateInput, template?: string): string {
   if (!input) return '';
 
   const date = dayjs(input);
   if (!date.isValid()) return INVALID_DATE;
 
-  return date.format(template);
+  return template ? date.format(template) : formatCalendarDateTime(date.toDate());
 }
 
 // ----------------------------------------------------------------------
 
 /**
- * Formats a date string.
+ * Formats a date in the chain's calendar. A bare YYYY-MM-DD is read as that business day.
  * @returns Formatted date string or 'Invalid'.
  * @example
- * fDate('17-04-2022') // '17 Apr 2022'
+ * fDate('2026-09-17') // '1405/06/26'
  */
-export function fDate(input: DateInput, template = FORMAT_PATTERNS.date): string {
+export function fDate(input: DateInput, template?: string): string {
   if (!input) return '';
 
   const date = dayjs(input);
   if (!date.isValid()) return INVALID_DATE;
 
-  return date.format(template);
+  if (template) return date.format(template);
+  return formatCalendarDate(typeof input === 'string' ? input : date.toDate());
 }
 
 // ----------------------------------------------------------------------
 
 /**
- * Formats a time string.
+ * Formats a time on the business clock.
  * @returns Formatted time string or 'Invalid'.
  * @example
- * fTime('2022-04-17T00:00:00') // '12:00 am'
+ * fTime('2026-09-17T10:35:00Z') // '14:05'
  */
-export function fTime(input: DateInput, template = FORMAT_PATTERNS.time): string {
+export function fTime(input: DateInput, template?: string): string {
   if (!input) return '';
 
   const date = dayjs(input);
   if (!date.isValid()) return INVALID_DATE;
 
-  return date.format(template);
+  return template ? date.format(template) : formatCalendarTime(date.toDate());
 }
 
 // ----------------------------------------------------------------------
@@ -231,24 +235,10 @@ export function fDateRangeShortLabel(start: DateInput, end: DateInput, initial?:
     return INVALID_DATE;
   }
 
-  if (initial) {
-    return `${fDate(startDate)} - ${fDate(endDate)}`;
-  }
-
-  const isSameDay = startDate.isSame(endDate, 'day');
-  const isSameMonth = startDate.isSame(endDate, 'month');
-  const isSameYear = startDate.isSame(endDate, 'year');
-
-  if (isSameDay) {
+  // Shortened ranges ("25 - 26 Apr") only make sense in one calendar's months; a Jalali month
+  // spans two Gregorian ones, so the range names both days in full.
+  if (!initial && startDate.isSame(endDate, 'day')) {
     return fDate(endDate);
-  }
-
-  if (isSameMonth) {
-    return `${fDate(startDate, 'DD')} - ${fDate(endDate)}`;
-  }
-
-  if (isSameYear) {
-    return `${fDate(startDate, 'DD MMM')} - ${fDate(endDate)}`;
   }
 
   return `${fDate(startDate)} - ${fDate(endDate)}`;

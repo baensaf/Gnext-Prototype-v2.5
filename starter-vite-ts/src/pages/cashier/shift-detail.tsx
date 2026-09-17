@@ -34,6 +34,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { fDate , fTime, fDateTime } from 'src/utils/format-time';
 
 import { shiftApi } from 'src/api/shiftApi';
 import { tenantApi } from 'src/api/tenantApi';
@@ -134,7 +135,7 @@ export function ShiftDetailPage() {
   const variance = statement.shortOver || '0';
   const branchName = branches.find((b) => b.id === statement.branchId)?.name || '';
   const registerLabel = terminal ? `${terminal.name} (${terminal.code})` : statement.terminalId.slice(0, 8);
-  const stamp = (value?: string | null) => (value ? new Date(value).toLocaleString() : '—');
+  const stamp = (value?: string | null) => (value ? fDateTime(value) : '—');
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -150,7 +151,7 @@ export function ShiftDetailPage() {
               {t('shift.detail.title', 'Shift statement')} <span dir="ltr">#{statement.shiftNumber}</span>
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {registerLabel} · {branchName} · <span dir="ltr">{statement.businessDate}</span>
+              {registerLabel} · {branchName} · <span dir="ltr">{fDate(statement.businessDate)}</span>
             </Typography>
           </Box>
         </Stack>
@@ -246,7 +247,7 @@ export function ShiftDetailPage() {
                 <TableBody>
                   {statement.movements.map((m) => (
                     <TableRow key={m.id}>
-                      <TableCell dir="ltr">{new Date(m.posted_at).toLocaleTimeString()}</TableCell>
+                      <TableCell dir="ltr">{fTime(m.posted_at)}</TableCell>
                       <TableCell>
                         <Chip size="small" variant="outlined" label={movementLabel(m.type)} />
                       </TableCell>

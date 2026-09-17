@@ -30,6 +30,7 @@ import {
 import { paths } from 'src/routes/paths';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { fDateTime } from 'src/utils/format-time';
 
 import { httpClient as axios } from 'src/api/httpClient';
 import { useWorkspaceScope } from 'src/contexts/branch-context';
@@ -143,7 +144,7 @@ export function OrdersDetailPage() {
               {t('orders.placedAt', 'Placed At')}
             </Typography>
             <Typography variant="body1">
-              {order.placed_at ? new Date(order.placed_at).toLocaleString() : '-'}
+              {order.placed_at ? fDateTime(order.placed_at) : '-'}
             </Typography>
           </Grid>
         </Grid>

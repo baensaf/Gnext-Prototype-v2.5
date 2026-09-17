@@ -10,6 +10,7 @@ import { BranchProvider } from 'src/contexts/branch-context';
 import { Snackbar } from 'src/components/snackbar';
 import { ProgressBar } from 'src/components/progress-bar';
 import { MotionLazy } from 'src/components/animate/motion-lazy';
+import { CalendarSync } from 'src/components/calendar-date-field';
 import { SettingsDrawer, defaultSettings, SettingsProvider } from 'src/components/settings';
 
 // ----------------------------------------------------------------------
@@ -31,6 +32,7 @@ export default function App({ children }: AppProps) {
           <MotionLazy>
             <Snackbar />
             <ProgressBar />
+            <CalendarSync />
             <SettingsDrawer defaultSettings={defaultSettings} />
             {children}
           </MotionLazy>

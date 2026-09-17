@@ -26,12 +26,14 @@ import {
   ToggleButtonGroup,
 } from '@mui/material';
 
+import { fDate } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { httpClient as axios } from 'src/api/httpClient';
 import { catalogApi, type Product } from 'src/api/catalogApi';
 
 import { Iconify } from 'src/components/iconify';
+import { CalendarDateField } from 'src/components/calendar-date-field';
 
 interface Coupon {
   id: string;
@@ -318,9 +320,9 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
                         <TableCell>
                           {coupon.effective_from || coupon.effective_to ? (
                             <Typography variant="caption">
-                              {coupon.effective_from ? new Date(coupon.effective_from).toLocaleDateString() : t('coupons.start', 'Start')}
+                              {coupon.effective_from ? fDate(coupon.effective_from) : t('coupons.start', 'Start')}
                               {' — '}
-                              {coupon.effective_to ? new Date(coupon.effective_to).toLocaleDateString() : t('coupons.expires', 'Expires')}
+                              {coupon.effective_to ? fDate(coupon.effective_to) : t('coupons.expires', 'Expires')}
                             </Typography>
                           ) : (
                             <Typography variant="caption" color="text.secondary">
@@ -459,17 +461,15 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
               />
 
               <Stack direction="row" spacing={2}>
-                <TextField
+                <CalendarDateField
                   fullWidth
-                  type="date"
                   label={t('coupons.startDate', 'Start Date')}
                   slotProps={{ inputLabel: { shrink: true } }}
                   value={effectiveFrom}
                   onChange={(e) => setEffectiveFrom(e.target.value)}
                 />
-                <TextField
+                <CalendarDateField
                   fullWidth
-                  type="date"
                   label={t('coupons.endDate', 'End Date')}
                   slotProps={{ inputLabel: { shrink: true } }}
                   value={effectiveTo}

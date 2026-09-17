@@ -38,6 +38,8 @@ import {
 
 import { RouterLink } from 'src/routes/components';
 
+import { fTime } from 'src/utils/format-time';
+
 import { httpClient as axios } from 'src/api/httpClient';
 import { tenantApi, type Branch } from 'src/api/tenantApi';
 
@@ -810,7 +812,7 @@ export function SimulationSnappfoodPage() {
                       {logs.length > 0 ? (
                         logs.map((log) => (
                           <TableRow key={log.id} hover>
-                            <TableCell>{new Date(log.created_at || Date.now()).toLocaleTimeString()}</TableCell>
+                            <TableCell>{fTime(log.created_at || Date.now())}</TableCell>
                             <TableCell>
                               <Chip label={log.event_type} size="small" variant="outlined" color="primary" />
                             </TableCell>

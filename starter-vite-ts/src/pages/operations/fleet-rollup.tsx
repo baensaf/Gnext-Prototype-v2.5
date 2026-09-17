@@ -24,6 +24,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { fDate } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { rollupApi } from 'src/api/rollupApi';
@@ -206,7 +207,7 @@ export function FleetRollupPage() {
           {t(
             'rollup.fleet.footnote',
             'Late means more than {{minutes}} minutes with a driver without arriving. Business date {{date}}.',
-            { minutes: data.late_after_minutes, date: data.business_date }
+            { minutes: data.late_after_minutes, date: fDate(data.business_date) }
           )}
         </Typography>
       )}

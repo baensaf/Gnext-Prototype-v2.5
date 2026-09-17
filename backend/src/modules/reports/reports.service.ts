@@ -165,21 +165,16 @@ export class ReportsService {
     return branchId ? { branch_id: branchId } : {};
   }
 
+  // A day in a report is a day on the restaurants' clock, from its midnight to the next.
   private applyDateFilter(query: any, dateColumn: string, startDate?: string, endDate?: string) {
     if (startDate && endDate) {
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
+      const start = BusinessDateUtil.startOfDay(startDate);
+      const end = BusinessDateUtil.endOfDay(endDate);
       query.andWhere(`${dateColumn} BETWEEN :startDate AND :endDate`, { startDate: start, endDate: end });
     } else if (startDate) {
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
-      query.andWhere(`${dateColumn} >= :startDate`, { startDate: start });
+      query.andWhere(`${dateColumn} >= :startDate`, { startDate: BusinessDateUtil.startOfDay(startDate) });
     } else if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      query.andWhere(`${dateColumn} <= :endDate`, { endDate: end });
+      query.andWhere(`${dateColumn} <= :endDate`, { endDate: BusinessDateUtil.endOfDay(endDate) });
     }
   }
 
@@ -596,7 +591,7 @@ export class ReportsService {
             return {
               order_id: o.id,
               order_number: o.order_number,
-              date: o.placed_at ? new Date(o.placed_at).toISOString().split('T')[0] : '—',
+              date: o.placed_at ? BusinessDateUtil.fromDate(o.placed_at) : '—',
               branch_id: o.branch_id,
               total_amount: totStr,
               paid_amount: paidStr,
@@ -636,7 +631,7 @@ export class ReportsService {
           return {
             payment_id: p.id,
             order_id: p.order_id,
-            date: p.initiated_at ? new Date(p.initiated_at).toISOString().split('T')[0] : '—',
+            date: p.initiated_at ? BusinessDateUtil.fromDate(p.initiated_at) : '—',
             device_id: p.device_id || 'MOBILE_POS_DEV_1',
             reference_number: p.reference || 'REF-POS-100',
             amount: amtStr,
@@ -674,7 +669,7 @@ export class ReportsService {
             return {
               refund_id: r.id,
               order_id: r.order_id,
-              date: r.initiated_at ? new Date(r.initiated_at).toISOString().split('T')[0] : '—',
+              date: r.initiated_at ? BusinessDateUtil.fromDate(r.initiated_at) : '—',
               original_method: 'CASH',
               target_method: r.method_kind || 'BANK_TRANSFER',
               amount: amtStr,
@@ -845,7 +840,7 @@ export class ReportsService {
 
             return {
               shift_id: s.id,
-              date: s.closed_at ? new Date(s.closed_at).toISOString().split('T')[0] : '—',
+              date: s.closed_at ? BusinessDateUtil.fromDate(s.closed_at) : '—',
               branch_id: s.branch_id,
               cashier_id: s.opened_by || 'CASHIER-1',
               expected_cash: MoneyUtil.format(s.expected_cash || '0', 2),
@@ -887,7 +882,7 @@ export class ReportsService {
 
           return {
             entry_id: e.id,
-            date: e.posted_at ? new Date(e.posted_at).toISOString().split('T')[0] : '—',
+            date: e.posted_at ? BusinessDateUtil.fromDate(e.posted_at) : '—',
             account_id: e.account_id,
             type: e.entry_type || 'PURCHASE',
             order_id: e.order_id || '—',
@@ -924,7 +919,7 @@ export class ReportsService {
           totalUsage = MoneyUtil.add(totalUsage, amtStr, 2);
 
           return {
-            date: e.posted_at ? new Date(e.posted_at).toISOString().split('T')[0] : '—',
+            date: e.posted_at ? BusinessDateUtil.fromDate(e.posted_at) : '—',
             account_id: e.account_id,
             order_id: e.order_id || '—',
             purchase_amount: amtStr,
@@ -1011,8 +1006,8 @@ export class ReportsService {
             phone: c.mobile || '—',
             order_count: cOrders.length,
             gross_sales: grossStr,
-            first_order_date: cOrders.length > 0 ? new Date(cOrders[cOrders.length - 1].placed_at).toISOString().split('T')[0] : '—',
-            last_order_date: cOrders.length > 0 ? new Date(cOrders[0].placed_at).toISOString().split('T')[0] : '—',
+            first_order_date: cOrders.length > 0 ? BusinessDateUtil.fromDate(cOrders[cOrders.length - 1].placed_at) : '—',
+            last_order_date: cOrders.length > 0 ? BusinessDateUtil.fromDate(cOrders[0].placed_at) : '—',
           };
         });
 
@@ -1041,7 +1036,7 @@ export class ReportsService {
             order_id: o.id,
             external_id: (o as any).external_id || `SNAPP-${o.order_number}`,
             order_number: o.order_number,
-            date: o.placed_at ? new Date(o.placed_at).toISOString().split('T')[0] : '—',
+            date: o.placed_at ? BusinessDateUtil.fromDate(o.placed_at) : '—',
             status: o.status,
             total_amount: amtStr,
             reconciliation_status: 'MATCHED',
@@ -1104,7 +1099,7 @@ export class ReportsService {
           return {
             attendance_id: a.id,
             courier_id: a.courier_id,
-            date: a.checked_in_at ? new Date(a.checked_in_at).toISOString().split('T')[0] : '—',
+            date: a.checked_in_at ? BusinessDateUtil.fromDate(a.checked_in_at) : '—',
             check_in: a.checked_in_at ? new Date(a.checked_in_at).toLocaleTimeString() : '—',
             check_out: a.checked_out_at ? new Date(a.checked_out_at).toLocaleTimeString() : '—',
             status: a.status || 'CHECKED_IN',
@@ -1219,7 +1214,7 @@ export class ReportsService {
 
           return {
             order_number: o.order_number,
-            date: o.placed_at ? new Date(o.placed_at).toISOString().split('T')[0] : '—',
+            date: o.placed_at ? BusinessDateUtil.fromDate(o.placed_at) : '—',
             taxable_amount: subStr,
             tax_rate: '9.0%',
             tax_amount: taxStr,
@@ -1598,8 +1593,8 @@ export class ReportsService {
     });
     const alerts = await this.getAlerts(tenantId, branchId);
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const todayOrders = orders.filter((o) => o.placed_at && new Date(o.placed_at).toISOString().startsWith(todayStr));
+    const todayStr = BusinessDateUtil.today();
+    const todayOrders = orders.filter((o) => o.placed_at && BusinessDateUtil.fromDate(o.placed_at) === todayStr);
     const salesToday = todayOrders.reduce((sum, o) => MoneyUtil.add(sum, o.total_amount || '0', 2), '0.00');
     const openOrders = orders.filter((o) => o.status === 'SUBMITTED' || o.status === 'ACCEPTED' || o.status === 'IN_PREPARATION');
     const openAlerts = alerts.filter((a) => !a.acknowledged);

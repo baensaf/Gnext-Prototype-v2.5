@@ -21,6 +21,7 @@ import {
 import { paths } from 'src/routes/paths';
 import { useParams } from 'src/routes/hooks';
 
+import { fDate } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { profilesApi } from 'src/api/profilesApi';
@@ -149,7 +150,7 @@ export function UserProfilePage() {
           },
           {
             label: t('profile.user.lastLogin'),
-            value: user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : t('profile.never'),
+            value: user.last_login_at ? fDate(user.last_login_at) : t('profile.never'),
           },
         ]}
       />
@@ -219,7 +220,7 @@ export function UserProfilePage() {
                     {shift.terminal_name || '—'}
                   </Box>
                 </TableCell>
-                <TableCell dir="ltr">{shift.business_date}</TableCell>
+                <TableCell dir="ltr">{fDate(shift.business_date)}</TableCell>
                 <TableCell dir="ltr" sx={{ whiteSpace: 'nowrap' }}>
                   {formatDateTime(shift.opened_at)}
                   <Box component="span" sx={{ display: 'block', color: 'text.secondary', typography: 'caption' }}>

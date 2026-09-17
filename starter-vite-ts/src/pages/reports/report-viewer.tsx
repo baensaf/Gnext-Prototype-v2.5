@@ -26,6 +26,8 @@ import { useParams, useRouter } from 'src/routes/hooks';
 
 import { httpClient as axios } from 'src/api/httpClient';
 
+import { CalendarDateField } from 'src/components/calendar-date-field';
+
 export function ReportViewerPage() {
   const { reportCode } = useParams();
   const router = useRouter();
@@ -189,9 +191,8 @@ export function ReportViewerPage() {
           </Grid>
 
           <Grid size={{ xs: 12, sm: 3 }}>
-            <TextField
+            <CalendarDateField
               label="Start Date"
-              type="date"
               size="small"
               fullWidth
               slotProps={{ inputLabel: { shrink: true } }}
@@ -201,9 +202,8 @@ export function ReportViewerPage() {
           </Grid>
 
           <Grid size={{ xs: 12, sm: 3 }}>
-            <TextField
+            <CalendarDateField
               label="End Date"
-              type="date"
               size="small"
               fullWidth
               slotProps={{ inputLabel: { shrink: true } }}

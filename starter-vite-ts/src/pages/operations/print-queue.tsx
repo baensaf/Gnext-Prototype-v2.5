@@ -34,6 +34,8 @@ import {
   DialogActions,
 } from '@mui/material';
 
+import { fDateTime } from 'src/utils/format-time';
+
 import { kdsApi } from 'src/api/kdsApi';
 
 export function PrintQueuePage() {
@@ -199,7 +201,7 @@ export function PrintQueuePage() {
                 <TableCell>
                   {job.is_reprint ? <Chip label="REPRINT" color="warning" size="small" /> : <Chip label="ORIGINAL" size="small" variant="outlined" />}
                 </TableCell>
-                <TableCell>{new Date(job.created_at).toLocaleString()}</TableCell>
+                <TableCell>{fDateTime(job.created_at)}</TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
                     <Tooltip title="Preview Rendered HTML">

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { CalendarSystem, formatBusinessDateTime } from '../../common/utils/calendar.util';
 
 export interface RenderDocOptions {
   documentType: 'CUSTOMER_RECEIPT' | 'KITCHEN_TICKET' | 'COURIER_SLIP' | 'GUEST_BILL' | string;
@@ -8,6 +9,8 @@ export interface RenderDocOptions {
   tableNumber?: string;
   customerName?: string;
   placedAt?: Date | string;
+  /** The calendar the date prints in, on the business clock. Jalali unless given. */
+  calendar?: CalendarSystem;
   /**
    * Set on a kitchen ticket that amends one the kitchen already holds. The chit is
    * retitled so a cook cannot mistake it for a fresh order, and each line says whether
@@ -48,7 +51,7 @@ export class PrintRenderService {
 
     const docTitle =
       (opts.kitchenChange && changeTitleMap[opts.kitchenChange]) || titleMap[opts.documentType] || opts.documentType;
-    const dateStr = opts.placedAt ? new Date(opts.placedAt).toLocaleString() : new Date().toLocaleString();
+    const dateStr = formatBusinessDateTime(opts.placedAt || new Date(), opts.calendar);
 
     const changeMarker = (change?: 'VOID' | 'ADD') =>
       change === 'VOID' ? '<strong>VOID</strong> ' : change === 'ADD' ? '<strong>ADD</strong> ' : '';

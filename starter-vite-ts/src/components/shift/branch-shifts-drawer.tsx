@@ -22,6 +22,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { fDate , fTime } from 'src/utils/format-time';
 
 import { shiftApi } from 'src/api/shiftApi';
 import { tenantApi } from 'src/api/tenantApi';
@@ -93,11 +94,11 @@ export function BranchShiftsDrawer({ open, onClose, branchId, branchName, busine
             <Chip size="small" label={s.state} color={stateColor(s.state) as any} />
           </Stack>
           <Typography variant="body2" color="text.secondary">
-            {registerName(s.terminal_id)} · {s.business_date}
+            {registerName(s.terminal_id)} · {fDate(s.business_date)}
           </Typography>
           <Typography variant="caption" color="text.secondary" dir="ltr">
-            {new Date(s.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            {s.closed_at && ` – ${new Date(s.closed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+            {fTime(s.opened_at)}
+            {s.closed_at && ` – ${fTime(s.closed_at)}`}
           </Typography>
         </Box>
         {counted && (
@@ -125,7 +126,7 @@ export function BranchShiftsDrawer({ open, onClose, branchId, branchName, busine
         <Box sx={{ flexGrow: 1 }}>
           <Typography variant="h6">{branchName}</Typography>
           <Typography variant="body2" color="text.secondary">
-            {t('rollup.shifts.drawerSubtitle', 'Drawers on {{date}} · read-only', { date: businessDate })}
+            {t('rollup.shifts.drawerSubtitle', 'Drawers on {{date}} · read-only', { date: fDate(businessDate) })}
           </Typography>
         </Box>
         <IconButton onClick={onClose}>

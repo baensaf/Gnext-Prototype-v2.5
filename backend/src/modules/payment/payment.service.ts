@@ -15,6 +15,7 @@ import { PaymentAttempt } from '../../entities/PaymentAttempt.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { SettlementAccount } from '../../entities/SettlementAccount.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import { isAggregatorOrder } from '../../common/utils/snappfood-order.util';
 import { ShiftService } from '../cashier/shift.service';
 import { CreditService } from '../customer/credit.service';
@@ -184,7 +185,7 @@ export class PaymentService {
         reference: dto.reference || null,
         receipt_number: dto.receiptNumber || null,
         shift_id: currentShiftId,
-        business_date: order.business_date || new Date().toISOString().slice(0, 10),
+        business_date: order.business_date || BusinessDateUtil.today(),
         idempotency_key: dto.idempotencyKey || null,
       });
 

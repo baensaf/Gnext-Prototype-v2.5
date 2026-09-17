@@ -26,6 +26,7 @@ import {
 
 import { paths } from 'src/routes/paths';
 
+import { fDate } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { deliveryApi } from 'src/api/deliveryApi';
@@ -192,7 +193,7 @@ export function CourierDetailPage() {
           {
             label: t('profile.courier.lastDelivery'),
             value: stats.last_delivered_at
-              ? new Date(stats.last_delivered_at).toLocaleDateString()
+              ? fDate(stats.last_delivered_at)
               : t('profile.never'),
           },
         ]}

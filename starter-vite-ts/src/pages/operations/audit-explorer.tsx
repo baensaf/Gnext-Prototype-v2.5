@@ -21,6 +21,8 @@ import {
   DialogActions,
 } from '@mui/material';
 
+import { fDateTime } from 'src/utils/format-time';
+
 import { httpClient as axios } from 'src/api/httpClient';
 
 import { ServerDataGrid } from '../../components/server-data-grid';
@@ -107,7 +109,7 @@ export function AuditExplorerPage() {
       width: 200,
       renderCell: (params) => (
         <Typography variant="body2" dir="ltr">
-          {new Date(params.value).toLocaleString()}
+          {fDateTime(params.value)}
         </Typography>
       ),
     },

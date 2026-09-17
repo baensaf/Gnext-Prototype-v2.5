@@ -30,6 +30,7 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { fDate } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { tenantApi } from 'src/api/tenantApi';
@@ -235,7 +236,7 @@ export function PaymentsPage() {
                         size="small"
                       />
                     </TableCell>
-                    <TableCell>{new Date(tx.business_date).toLocaleString()}</TableCell>
+                    <TableCell>{fDate(tx.business_date)}</TableCell>
                   </TableRow>
                 ))
               )}

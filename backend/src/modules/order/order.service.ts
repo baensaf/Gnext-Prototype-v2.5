@@ -9,7 +9,8 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, EntityManager, In } from 'typeorm';
+import { Repository, DataSource, EntityManager, In, IsNull } from 'typeorm';
+import { CALENDAR_SETTING_KEY, formatBusinessDateTime, readCalendar } from '../../common/utils/calendar.util';
 import { OrderHeader, OrderState } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { OrderItemOption } from '../../entities/OrderItemOption.entity';
@@ -2219,6 +2220,16 @@ export class OrderService {
   async getGuestBill(tenantId: string, id: string, locale: string = 'en') {
     const order = await this.getOrderById(tenantId, id);
     const isFa = locale === 'fa';
+    // The bill is dated in the chain's calendar (head office's CALENDAR setting), Jalali unless changed.
+    let calendarSetting: Record<string, any> | undefined;
+    try {
+      const row = await this.dataSource
+        .getRepository(TenantSetting)
+        .findOne({ where: { tenant_id: tenantId, key: CALENDAR_SETTING_KEY, branch_id: IsNull() } });
+      calendarSetting = row?.value;
+    } catch {
+      calendarSetting = undefined;
+    }
 
     const formattedItems = (order.items || []).filter(isActiveLine)
       .map((i) => {
@@ -2254,7 +2265,7 @@ export class OrderService {
             <h2>${isFa ? 'پیش‌فاکتور میز' : 'Guest Bill'}</h2>
             <p>${isFa ? 'شماره سفارش' : 'Order'}: #${order.order_number}</p>
             ${order.table_number ? `<p>${isFa ? 'شماره میز' : 'Table'}: ${order.table_number}</p>` : ''}
-            <p>${isFa ? 'تاریخ' : 'Date'}: ${new Date().toLocaleString()}</p>
+            <p>${isFa ? 'تاریخ' : 'Date'}: ${formatBusinessDateTime(new Date(), readCalendar(calendarSetting), isFa)}</p>
           </div>
           <table>
             <thead>

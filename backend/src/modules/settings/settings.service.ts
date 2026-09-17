@@ -102,6 +102,18 @@ export class SettingsService {
       if (value.payFailedDeliveries !== undefined && typeof value.payFailedDeliveries !== 'boolean') {
         throw new BadRequestException('COURIER_PAY setting property payFailedDeliveries must be a boolean');
       }
+    } else if (group === 'CALENDAR') {
+      // The chain's calendar for dates on screen, in pickers and on paper. Head office only:
+      // CALENDAR is not a branch-overridable group.
+      if (value.calendar !== undefined && !['JALALI', 'GREGORIAN'].includes(value.calendar)) {
+        throw new BadRequestException('CALENDAR setting property calendar must be JALALI or GREGORIAN');
+      }
+      if (value.weekStartsOn !== undefined) {
+        const day = Number(value.weekStartsOn);
+        if (!Number.isInteger(day) || day < 0 || day > 6) {
+          throw new BadRequestException('CALENDAR setting property weekStartsOn must be 0 (Sunday) to 6 (Saturday)');
+        }
+      }
     } else if (group === 'DISCOUNTS') {
       if (value.cashierMaxDiscountPercent !== undefined) {
         if (

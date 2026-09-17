@@ -18,6 +18,7 @@ import { Payment } from '../../entities/Payment.entity';
 import { Customer } from '../../entities/Customer.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import { normalizePhone } from '../customer/customer.service';
 import { KdsService } from '../kds/kds.service';
 import { PrintQueueService } from '../printing/print-queue.service';
@@ -407,7 +408,7 @@ export class KioskService {
       amount: totalToPayStr,
       status: 'SUCCEEDED',
       reference: refNum,
-      business_date: new Date().toISOString().slice(0, 10),
+      business_date: BusinessDateUtil.today(),
       idempotency_key: data.idempotency_key || null,
     });
 
