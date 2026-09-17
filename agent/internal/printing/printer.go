@@ -71,8 +71,12 @@ func (pr *Printer) Print(ctx context.Context, p protocol.Printer, job protocol.P
 
 // Probe checks that the printer's port accepts a connection.
 func (pr *Printer) Probe(ctx context.Context, p protocol.Printer) (string, string) {
+	if p.Connection == nil {
+		// §6.1 still calls this UNSUPPORTED; the detail says why.
+		return protocol.DeviceUnsupported, "not connected to the agent; the cloud prints it on the simulator"
+	}
 	if !Supported(p) {
-		return protocol.DeviceUnsupported, "connection kind not supported by this agent build"
+		return protocol.DeviceUnsupported, "connection kind " + p.Connection.Kind + " is not supported by this agent build"
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
