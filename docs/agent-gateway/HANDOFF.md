@@ -1,6 +1,6 @@
 # Agent gateway — handoff
 
-Written 2026-09-17. Nothing has been built yet; this file is the whole plan.
+Written 2026-09-17. Task 0 (the protocol contract) is in [`agent-protocol.md`](agent-protocol.md); nothing else is built yet.
 
 ## What you are building
 
