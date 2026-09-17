@@ -20,18 +20,26 @@ section numbers (§) in the code refer to it.
   cancelled on the terminal. The Saman (`sep`) driver waits for Saman's integration document.
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
   publishes a build, then swaps the binary after checking its SHA-256.
+- **Settings page** on `http://127.0.0.1:47800` (Start-menu and desktop shortcut *Gnext Agent*,
+  or `gnext-agent open`), in Persian: connection status, enrol or re-enrol with a server and a
+  code, printers and card terminals with live status, test print, LAN scan for port-9100
+  printers, and logs. Anyone at the PC can look and test-print; adding, editing or removing a
+  device needs a Gnext sign-in by this branch's manager or head office. Changes are made in
+  the cloud (`/api/v1/agent/local`, audited under that user) and pushed back to the agent. The
+  page only listens on 127.0.0.1 and refuses other hosts and cross-site writes.
 - No offline mode (that is v2).
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `cmd/gnext-agent` | `enrol`, `run`, `version`; Windows service wrapper |
+| `cmd/gnext-agent` | `enrol`, `run`, `open`, `service`, `version`; service wrapper; restarts the agent after enrolment |
 | `internal/agent` | WebSocket session, command handling, device probes |
 | `internal/journal` | Command/result journal |
 | `internal/printing` | Edge renderer, ESC/POS raster, TCP printer |
 | `internal/payment` | Terminal driver interface and the fake driver |
 | `internal/cloud` | HTTPS calls: enrol, me, releases |
+| `internal/localui` | Settings page (embedded HTML/JS) and its local API, LAN scan |
 | `internal/update` | Release check, download, verify, swap |
 | `internal/store` | `config.json`, `identity.json`, DPAPI |
 | `installer/gnext-agent.iss` | Setup wizard (Inno Setup): server, enrolment code, service |

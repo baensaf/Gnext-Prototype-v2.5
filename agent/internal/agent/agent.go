@@ -68,6 +68,11 @@ type Agent struct {
 
 	updateCh chan struct{}
 	lastBeat atomic.Int64 // unix nanos of the last heartbeat.ack
+
+	// For the local settings page.
+	connectedAt atomic.Int64 // unix nanos of the current welcome, 0 while disconnected
+	branchName  atomic.Value // string
+	lastError   atomic.Value // string
 }
 
 func New(o Options) *Agent {
@@ -120,6 +125,9 @@ func (a *Agent) Run(ctx context.Context) error {
 		}
 		wait := jitter(backoff)
 		backoff = min(backoff*2, a.o.BackoffMax)
+		if err != nil {
+			a.lastError.Store(err.Error())
+		}
 
 		switch code := websocket.CloseStatus(err); {
 		case errors.Is(err, errRefused), code == protocol.CloseAgentKeyInvalid, code == protocol.CloseAgentRevoked:
@@ -209,6 +217,9 @@ func (a *Agent) session(ctx context.Context) (welcomed bool, err error) {
 	a.lastBeat.Store(time.Now().UnixNano())
 	a.setConn(c)
 	defer a.setConn(nil)
+	a.branchName.Store(welcome.Branch.Name)
+	a.connectedAt.Store(time.Now().UnixNano())
+	a.lastError.Store("")
 	a.o.Log.Info("connected", "branch", welcome.Branch.Name, "session", welcome.SessionID)
 	if a.o.Welcomed != nil {
 		a.o.Welcomed()
@@ -651,6 +662,9 @@ func (a *Agent) setConn(c *websocket.Conn) {
 	a.connMu.Lock()
 	a.conn = c
 	a.connMu.Unlock()
+	if c == nil {
+		a.connectedAt.Store(0)
+	}
 }
 
 func (a *Agent) applyClock(serverTime string) {
