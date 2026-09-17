@@ -49,6 +49,7 @@ import { useScopedBranchId } from 'src/contexts/branch-context';
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
+import { AgentReleasesCard } from './agent-releases-card';
 import { AgentHealthDrawer } from './agent-health-drawer';
 
 const CODE_STATE_COLOR: Record<EnrolmentCodeState, 'info' | 'success' | 'default' | 'warning'> = {
@@ -497,6 +498,8 @@ export function AgentsPage() {
         confirmLabel={t('operations.agents.revoke', 'Revoke')}
         confirmColor="error"
       />
+
+      <AgentReleasesCard />
 
       <AgentHealthDrawer
         agentId={healthAgent?.id ?? null}

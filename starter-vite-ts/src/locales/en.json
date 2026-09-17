@@ -3128,6 +3128,25 @@
           "printer": "Printer",
           "terminal": "Card terminal"
         }
+      },
+      "releases": {
+        "title": "Agent releases",
+        "subtitle": "Agents install the newest published build by themselves, after checking its SHA-256.",
+        "upload": "Upload build",
+        "loadError": "Could not load agent releases",
+        "uploaded": "Build uploaded. Publish it when ready.",
+        "uploadError": "Upload failed",
+        "publishError": "Could not change the release",
+        "size": "Size",
+        "none": "No agent build has been uploaded yet.",
+        "minShort": "needs ≥ {{v}}",
+        "published": "Published",
+        "draft": "Not published",
+        "unpublish": "Withdraw",
+        "publish": "Publish",
+        "minVersion": "Oldest agent still allowed to connect (optional)",
+        "notes": "Notes",
+        "chooseFile": "Choose gnext-agent.exe"
       }
     }
   },

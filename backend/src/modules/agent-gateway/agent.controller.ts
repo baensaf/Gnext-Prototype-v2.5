@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, Post, Req } from '@nestjs/common';
-import { Request } from 'express';
+import { Body, Controller, Get, HttpCode, Param, Post, Req, Res } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { Agent } from '../../entities/Agent.entity';
 import { AgentAuthenticated } from './agent-auth.guard';
 import { AgentEnrolmentService } from './agent-enrolment.service';
+import { AGENT_BINARY_NAME, AgentReleasesService } from './agent-releases.service';
 
 /** Where agents connect. The gateway path sits under /api/ because only that prefix is proxied. */
 export const AGENT_WS_PATH = '/api/v1/agent/ws';
@@ -40,13 +41,41 @@ export function agentWsUrl(req: Request, publicUrl = process.env.AGENT_PUBLIC_UR
 /** The agent's own HTTPS surface (docs/agent-gateway/agent-protocol.md). */
 @Controller('api/v1/agent')
 export class AgentController {
-  constructor(private readonly enrolment: AgentEnrolmentService) {}
+  constructor(
+    private readonly enrolment: AgentEnrolmentService,
+    private readonly releases: AgentReleasesService,
+  ) {}
 
   @Public()
   @Post('enrol')
   @HttpCode(200)
   async enrol(@Body() body: unknown, @Req() req: Request) {
     return await this.enrolment.enrol(body, { clientKey: clientAddress(req), wsUrl: agentWsUrl(req) });
+  }
+
+  /** The newest published agent build (§9.1), or 204 when there is none. */
+  @AgentAuthenticated()
+  @Get('releases/latest')
+  async latestRelease(@Res({ passthrough: true }) res: Response) {
+    const latest = await this.releases.latest();
+    if (!latest) {
+      res.status(204);
+      return undefined;
+    }
+    return latest;
+  }
+
+  /** The build itself. The agent checks its size and SHA-256 before it runs it (§9.2). */
+  @AgentAuthenticated()
+  @Get(`releases/:version/${AGENT_BINARY_NAME}`)
+  async downloadRelease(@Param('version') version: string, @Res() res: Response) {
+    const file = await this.releases.openPublished(version);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Length', String(file.size));
+    res.setHeader('Content-Disposition', `attachment; filename="${AGENT_BINARY_NAME}"`);
+    res.setHeader('X-Content-SHA256', file.sha256);
+    file.stream.on('error', () => res.destroy());
+    file.stream.pipe(res);
   }
 
   /** Who the key belongs to. Lets an installer check a key works before starting the service. */

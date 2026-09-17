@@ -14,6 +14,7 @@ import { AgentConnection } from './agent-connection';
 import { AgentMessageHandlers } from './agent-message-handlers.service';
 import { AGENT_CLOSE, MAX_FRAME_BYTES } from './agent-protocol';
 import { AgentSessionsService } from './agent-sessions.service';
+import { AgentReleasesService } from './agent-releases.service';
 import { AGENT_WS_PATH } from './agent.controller';
 
 /**
@@ -38,6 +39,7 @@ export class AgentWsServer implements OnApplicationBootstrap, OnApplicationShutd
     private readonly sessions: AgentSessionsService,
     private readonly handlers: AgentMessageHandlers,
     private readonly config: AgentConfigService,
+    private readonly releases: AgentReleasesService,
     @InjectRepository(Agent) private readonly agentRepo: Repository<Agent>,
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
   ) {}
@@ -94,6 +96,7 @@ export class AgentWsServer implements OnApplicationBootstrap, OnApplicationShutd
         recordHello: (a, info) => this.recordHello(a, info),
         touch: (a) => this.auth.touch(a),
         minAgentVersion: process.env.AGENT_MIN_VERSION || null,
+        latestRelease: () => this.releases.latest(),
         log: (m) => this.logger.warn(m),
       },
     );
