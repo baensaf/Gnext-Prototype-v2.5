@@ -11,6 +11,7 @@ import {
   generateEnrolmentCode,
   hashSecret,
 } from './agent-credentials';
+import { AGENT_CLOSE, AgentSessionsService } from './agent-sessions.service';
 
 export interface AgentActor {
   userId?: string;
@@ -18,7 +19,7 @@ export interface AgentActor {
 }
 
 /** Fields head office may see. The key hash stays in the database. */
-export type AgentView = Omit<Agent, 'key_hash'> & { branch_name?: string; branch_code?: string };
+export type AgentView = Omit<Agent, 'key_hash'> & { branch_name?: string; branch_code?: string; connected: boolean };
 
 export type EnrolmentCodeState = 'PENDING' | 'USED' | 'EXPIRED' | 'CANCELLED';
 
@@ -33,6 +34,7 @@ export class AgentRegistryService {
     @InjectRepository(AgentEnrolmentCode) private readonly codeRepo: Repository<AgentEnrolmentCode>,
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
     private readonly auditWriter: AuditWriter,
+    private readonly sessions: AgentSessionsService,
   ) {}
 
   async listAgents(tenantId: string, filter: { branchId?: string; includeRevoked?: boolean } = {}): Promise<AgentView[]> {
@@ -137,6 +139,8 @@ export class AgentRegistryService {
     agent.revoked_by = actor.userId ?? null;
     agent.revoke_reason = reason?.trim() || null;
     const saved = await this.agentRepo.save(agent);
+    // Cut the PC off now, not at its next heartbeat (protocol §3.4).
+    this.sessions.closeAgent(saved.id, AGENT_CLOSE.REVOKED, 'AGENT_REVOKED');
 
     await this.auditWriter.write({
       tenantId,
@@ -161,7 +165,12 @@ export class AgentRegistryService {
   private toView(agent: Agent, branches: Map<string, Branch>): AgentView {
     const { key_hash, ...rest } = agent;
     const branch = branches.get(agent.branch_id);
-    return { ...rest, branch_name: branch?.name, branch_code: branch?.code };
+    return {
+      ...rest,
+      branch_name: branch?.name,
+      branch_code: branch?.code,
+      connected: agent.status === 'ACTIVE' && this.sessions.isConnected(agent.id),
+    };
   }
 }
 

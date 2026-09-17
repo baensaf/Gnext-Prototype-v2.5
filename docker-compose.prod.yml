@@ -39,6 +39,8 @@ services:
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin@gnext.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in the deployment .env file}
       APPROVER_DEMO_PIN: ${APPROVER_DEMO_PIN:-2468}
+      # Public base URL agents are told to connect to, e.g. https://app.example.ir.
+      AGENT_PUBLIC_URL: ${AGENT_PUBLIC_URL:-}
       SEED_PROFILE: minimal
       DATA_DIR: /app/data
       UPLOAD_DIR: /app/uploads
