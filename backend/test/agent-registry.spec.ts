@@ -10,6 +10,7 @@ import {
   hashSecret,
   normaliseEnrolmentCode,
 } from '../src/modules/agent-gateway/agent-credentials';
+import { AgentSessionsService } from '../src/modules/agent-gateway/agent-sessions.service';
 
 const tenantId = '11111111-1111-1111-1111-111111111111';
 const branchId = '22222222-2222-2222-2222-222222222222';
@@ -78,13 +79,15 @@ describe('Agent registry', () => {
     let branchRepo: ReturnType<typeof repo>;
     let audit: { write: jest.Mock };
     let service: AgentRegistryService;
+    let sessions: AgentSessionsService;
 
     beforeEach(() => {
       agentRepo = repo();
       codeRepo = repo();
       branchRepo = repo();
       audit = { write: jest.fn() };
-      service = new AgentRegistryService(agentRepo as any, codeRepo as any, branchRepo as any, audit as any);
+      sessions = new AgentSessionsService();
+      service = new AgentRegistryService(agentRepo as any, codeRepo as any, branchRepo as any, audit as any, sessions);
     });
 
     it('hands out a code once and keeps only its hash', async () => {
@@ -156,8 +159,14 @@ describe('Agent registry', () => {
 
     it('revokes an agent once, with who and why', async () => {
       agentRepo.findOne.mockResolvedValue({ id: agentId, tenant_id: tenantId, branch_id: branchId, status: 'ACTIVE', key_hash: 'h' });
+      const close = jest.fn();
+      sessions.register(agentId, close);
 
       const revoked = await service.revokeAgent(tenantId, agentId, '  PC replaced ', { userId });
+
+      expect(close).toHaveBeenCalledWith(4003, 'AGENT_REVOKED');
+      expect(sessions.isConnected(agentId)).toBe(false);
+      expect(revoked.connected).toBe(false);
 
       expect(agentRepo.findOne.mock.calls[0][0].where).toEqual({ id: agentId, tenant_id: tenantId });
       expect(revoked).toMatchObject({ status: 'REVOKED', revoked_by: userId, revoke_reason: 'PC replaced' });

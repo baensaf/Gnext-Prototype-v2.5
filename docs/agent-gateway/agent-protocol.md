@@ -155,6 +155,9 @@ Authorization: Bearer gak_6JzQ…
 User-Agent: gnext-agent/1.0.0 (windows)
 ```
 
+`GET /api/v1/agent/me` returns `{ agent_id, tenant_id, branch_id, status, enrolled_at }` for the
+key. The installer calls it after `enrol` to check the key works.
+
 The key identifies the agent, and through it the tenant and branch. **The agent never sends
 `tenant_id` or `branch_id` to prove who it is**; the cloud ignores them if it does.
 
@@ -170,6 +173,9 @@ On `401`/`403`/`4003` the agent MUST stop reconnecting, log the reason, and wait
 
 Revocation takes effect **immediately**: the cloud closes the agent's socket with `4003` in
 the same request that revokes it, and rejects the key from then on.
+
+The cloud builds `ws_url` from its `AGENT_PUBLIC_URL` setting when set, otherwise from the
+host the agent called. The agent MUST use the `ws_url` it was given.
 
 ## 4. WebSocket session
 
@@ -705,10 +711,19 @@ Empty payload besides `expires_at`. The agent acks and runs the update check (§
 
 ### 8.2 HTTPS errors
 
-Body on every non-2xx response:
+Every non-2xx response has the backend's usual problem-details body. The agent reads
+`status` and `code`; `detail` is a human-readable message for the log.
 
 ```json
-{ "statusCode": 400, "code": "ENROLMENT_CODE_EXPIRED", "message": "…" }
+{
+  "type": "https://gnext.local/problems/internal",
+  "title": "Enrolment Refused",
+  "status": 400,
+  "code": "ENROLMENT_CODE_EXPIRED",
+  "detail": "The enrolment code has expired. Ask head office for a new one.",
+  "instance": "/api/v1/agent/enrol",
+  "correlationId": "…"
+}
 ```
 
 | HTTP | `code` |
@@ -716,9 +731,10 @@ Body on every non-2xx response:
 | 400 | `ENROLMENT_CODE_INVALID`, `ENROLMENT_CODE_EXPIRED`, `ENROLMENT_CODE_USED`, `PROTOCOL_UNSUPPORTED`, `INVALID_PAYLOAD` |
 | 401 | `AGENT_KEY_INVALID` |
 | 403 | `AGENT_REVOKED` |
-| 404 | `NOT_FOUND` |
-| 429 | `RATE_LIMITED` (with `Retry-After`) |
-| 5xx | `INTERNAL` — the agent retries with the §4.7 backoff |
+| 429 | `RATE_LIMITED`; wait `context.retryAfter` seconds |
+
+For any other status (404, 5xx) the agent MUST go by the HTTP status alone, not `code`, and
+retry 5xx with the §4.7 backoff.
 
 ### 8.3 Device error codes (`result.payload.error.code`)
 
