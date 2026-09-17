@@ -42,6 +42,7 @@ import { MoadianModule } from './modules/moadian/moadian.module';
 import { TaxInvoice } from './entities/TaxInvoice.entity';
 import { Agent } from './entities/Agent.entity';
 import { AgentEnrolmentCode } from './entities/AgentEnrolmentCode.entity';
+import { AgentCommand } from './entities/AgentCommand.entity';
 import { AgentGatewayModule } from './modules/agent-gateway/agent-gateway.module';
 import { ImportJob } from './entities/ImportJob.entity';
 import { ImportRow } from './entities/ImportRow.entity';
@@ -196,7 +197,7 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
           ImportJob, ImportRow,
           OperationalAlert, SavedReportView, ReportExportJob,
           TaxInvoice,
-          Agent, AgentEnrolmentCode,
+          Agent, AgentEnrolmentCode, AgentCommand,
         ],
         synchronize: false, // Mandatory AD-02
         logging: config.get<string>('NODE_ENV') === 'development' ? ['error', 'warn'] : false,
