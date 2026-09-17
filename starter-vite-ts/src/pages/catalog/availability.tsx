@@ -1,4 +1,4 @@
-import type { Product, ProductAvailability } from 'src/api/catalogApi';
+import type { Product, Category, ProductAvailability } from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -34,6 +34,8 @@ import { MoneyUtil } from 'src/utils/money.util';
 import { catalogApi } from 'src/api/catalogApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 
+import { AvailabilitySchedulesSection } from './availability-schedules';
+
 /**
  * The one catalogue screen a branch owns.
  *
@@ -49,6 +51,7 @@ export function AvailabilityPage() {
   const { selectedBranchId, selectedBranch, isHeadOffice } = useBranchContext();
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [availabilities, setAvailabilities] = useState<ProductAvailability[]>([]);
   const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,11 +72,13 @@ export function AvailabilityPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [pList, aList] = await Promise.all([
+      const [pList, aList, cList] = await Promise.all([
         catalogApi.getProducts(),
         catalogApi.getAvailabilities(branchParam),
+        catalogApi.getCategories().catch(() => [] as Category[]),
       ]);
       setProducts(pList);
+      setCategories(cList);
       setAvailabilities(aList);
       setError(null);
     } catch (err: any) {
@@ -233,6 +238,8 @@ export function AvailabilityPage() {
           </TableBody>
         </Table>
       </TableContainer>
+
+      <AvailabilitySchedulesSection products={products} categories={categories} scopeName={scopeName} />
 
       {/* Suspend Product Dialog */}
       <Dialog

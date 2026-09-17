@@ -96,6 +96,7 @@ import { Menu } from './entities/Menu.entity';
 import { MenuCategory } from './entities/MenuCategory.entity';
 import { MenuProduct } from './entities/MenuProduct.entity';
 import { ProductAvailability } from './entities/ProductAvailability.entity';
+import { AvailabilitySchedule } from './entities/AvailabilitySchedule.entity';
 import { ApprovalRule } from './entities/ApprovalRule.entity';
 import { ApprovalRequest } from './entities/ApprovalRequest.entity';
 import { ApprovalDecision } from './entities/ApprovalDecision.entity';
@@ -172,7 +173,7 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
           FileAsset, LocalizedString,
           Category, Product, ProductVariant, OptionGroup, OptionItem, ProductOptionGroup, PriceGroup, PriceGroupItem,
           PriceEntry, PriceGroupBranch, PriceBulkJob,
-          Menu, MenuCategory, MenuProduct, ProductAvailability,
+          Menu, MenuCategory, MenuProduct, ProductAvailability, AvailabilitySchedule,
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,
           Coupon, DiscountUsage, CustomerDiscount,
           Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CreditEntry,

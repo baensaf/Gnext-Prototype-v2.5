@@ -1697,6 +1697,13 @@ export class OrderService {
       // the kiosk and the aggregator webhook all land here, so the stop is
       // enforced on the line rather than trusted to each caller's catalog view.
       const suspension = await this.catalogService.getSuspension(tenantId, product.id, order.branch_id);
+      if (suspension.outOfSchedule) {
+        throw new BadRequestException({
+          statusCode: 400,
+          code: 'PRODUCT_OUT_OF_SCHEDULE',
+          message: `${product.name} is not on sale now. ${suspension.reason}`,
+        });
+      }
       if (suspension.isSuspended) {
         throw new BadRequestException({
           statusCode: 400,

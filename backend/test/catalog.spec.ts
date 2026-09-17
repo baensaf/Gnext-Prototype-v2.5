@@ -13,6 +13,8 @@ import { Menu } from '../src/entities/Menu.entity';
 import { MenuCategory } from '../src/entities/MenuCategory.entity';
 import { MenuProduct } from '../src/entities/MenuProduct.entity';
 import { ProductAvailability } from '../src/entities/ProductAvailability.entity';
+import { AvailabilitySchedule } from '../src/entities/AvailabilitySchedule.entity';
+import { Branch } from '../src/entities/Branch.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { PricingService } from '../src/modules/pricing/pricing.service';
 
@@ -26,6 +28,7 @@ describe('CatalogService (Unit)', () => {
   let menuCatRepo: any;
   let menuProdRepo: any;
   let availRepo: any;
+  let scheduleRepo: any;
   let auditWriter: any;
   let pricingService: any;
 
@@ -51,6 +54,7 @@ describe('CatalogService (Unit)', () => {
       create: jest.fn(),
       save: jest.fn(),
     };
+    scheduleRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn(), create: jest.fn((d) => d), save: jest.fn((d) => Promise.resolve(d)), delete: jest.fn() };
     auditWriter = { write: jest.fn() };
     pricingService = {
       resolvePrice: jest.fn().mockResolvedValue({ amount: '1500000.0000', resolutionSource: 'BASE_PRICE', isOverridden: false }),
@@ -72,6 +76,8 @@ describe('CatalogService (Unit)', () => {
         { provide: getRepositoryToken(MenuCategory), useValue: menuCatRepo },
         { provide: getRepositoryToken(MenuProduct), useValue: menuProdRepo },
         { provide: getRepositoryToken(ProductAvailability), useValue: availRepo },
+        { provide: getRepositoryToken(AvailabilitySchedule), useValue: scheduleRepo },
+        { provide: getRepositoryToken(Branch), useValue: { findOne: jest.fn().mockResolvedValue({ id: 'b-1', time_zone: 'Asia/Tehran' }) } },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: PricingService, useValue: pricingService },
       ],
@@ -178,6 +184,74 @@ describe('CatalogService (Unit)', () => {
       const list = await service.getProductVariants('t-1', 'prod-burger');
       expect(list).toHaveLength(2);
       expect(list[0].code).toBe('VAR-CHB-SGL');
+    });
+  });
+
+  // HAMI audit gap: time-of-day menus. Tehran is UTC+03:30, so 05:00Z is 08:30 and 09:00Z is 12:30.
+  describe('Scheduled availability', () => {
+    const breakfast = { is_active: true, branch_id: null, days_of_week: '0,1,2,3,4,5,6', start_time: '07:00', end_time: '11:00' };
+    const at = (iso: string) => new Date(iso);
+
+    beforeEach(() => {
+      prodRepo.findOne.mockResolvedValue({ id: 'p-omelette', category_id: 'cat-breakfast' });
+    });
+
+    it('sells a breakfast item inside its window and not after it', async () => {
+      scheduleRepo.find.mockResolvedValue([{ ...breakfast, category_id: 'cat-breakfast' }]);
+
+      const morning = await service.getSuspension('t-1', 'p-omelette', 'b-1', at('2026-09-16T05:00:00Z'));
+      const noon = await service.getSuspension('t-1', 'p-omelette', 'b-1', at('2026-09-16T09:00:00Z'));
+
+      expect(morning.isSuspended).toBe(false);
+      expect(noon).toEqual(expect.objectContaining({ isSuspended: true, outOfSchedule: true, reason: 'Only on sale 07:00–11:00' }));
+    });
+
+    it("lets a product's own window replace its category's", async () => {
+      scheduleRepo.find.mockResolvedValue([
+        { ...breakfast, category_id: 'cat-breakfast' },
+        { ...breakfast, product_id: 'p-omelette', start_time: '00:00', end_time: '00:00' },
+      ]);
+
+      const noon = await service.getSuspension('t-1', 'p-omelette', 'b-1', at('2026-09-16T09:00:00Z'));
+
+      expect(noon.isSuspended).toBe(false);
+    });
+
+    it('runs a late window past midnight into the next day', async () => {
+      // Wednesday only, 22:00–02:00. 21:00Z Wednesday is 00:30 Thursday in Tehran.
+      scheduleRepo.find.mockResolvedValue([{ ...breakfast, product_id: 'p-omelette', days_of_week: '3', start_time: '22:00', end_time: '02:00' }]);
+
+      const afterMidnight = await service.getSuspension('t-1', 'p-omelette', 'b-1', at('2026-09-16T21:00:00Z'));
+      const nextNight = await service.getSuspension('t-1', 'p-omelette', 'b-1', at('2026-09-17T21:00:00Z'));
+
+      expect(afterMidnight.isSuspended).toBe(false);
+      expect(nextNight.isSuspended).toBe(true);
+    });
+
+    it("ignores another branch's window", async () => {
+      scheduleRepo.find.mockResolvedValue([{ ...breakfast, category_id: 'cat-breakfast', branch_id: 'b-other' }]);
+
+      const noon = await service.getSuspension('t-1', 'p-omelette', 'b-1', at('2026-09-16T09:00:00Z'));
+
+      expect(noon.isSuspended).toBe(false);
+    });
+
+    it('lists the items outside their window for the register', async () => {
+      scheduleRepo.find.mockResolvedValue([{ ...breakfast, category_id: 'cat-breakfast' }]);
+      prodRepo.find.mockResolvedValue([
+        { id: 'p-omelette', category_id: 'cat-breakfast' },
+        { id: 'p-burger', category_id: 'cat-burgers' },
+      ]);
+
+      const off = await service.getOffScheduleProducts('t-1', 'b-1', at('2026-09-16T09:00:00Z'));
+
+      expect(off).toEqual([{ product_id: 'p-omelette', windows: '07:00–11:00' }]);
+    });
+
+    it('refuses a window with no target, no day or a bad time', async () => {
+      await expect(service.createSchedule('t-1', { daysOfWeek: [1], startTime: '07:00', endTime: '11:00' })).rejects.toThrow('one product or one category');
+      await expect(service.createSchedule('t-1', { productId: 'p-omelette', daysOfWeek: [], startTime: '07:00', endTime: '11:00' })).rejects.toThrow('at least one day');
+      await expect(service.createSchedule('t-1', { productId: 'p-omelette', daysOfWeek: [1], startTime: '7:00', endTime: '11:00' })).rejects.toThrow('HH:MM');
     });
   });
 });

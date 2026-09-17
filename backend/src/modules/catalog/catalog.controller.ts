@@ -269,6 +269,35 @@ export class CatalogController {
     );
   }
 
+  // Weekly selling windows. What sells when is a menu decision, so head office sets them;
+  // any register reads which items are outside their window right now.
+  @Get('availability/schedules')
+  async getSchedules(@Query('branchId') branchId: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.catalogService.getSchedules(tenantId, effectiveBranchId((req as any).userBranchId, branchId));
+  }
+
+  @Get('availability/off-schedule')
+  async getOffScheduleProducts(@Query('branchId') branchId: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.catalogService.getOffScheduleProducts(tenantId, effectiveBranchId((req as any).userBranchId, branchId));
+  }
+
+  @HeadOfficeOnly()
+  @Post('availability/schedules')
+  async createSchedule(
+    @Body() body: { productId?: string; categoryId?: string; branchId?: string; daysOfWeek: number[]; startTime: string; endTime: string; label?: string },
+    @Req() req: Request,
+  ) {
+    return await this.catalogService.createSchedule((req as any).tenantId, body, (req as any).correlationId);
+  }
+
+  @HeadOfficeOnly()
+  @Delete('availability/schedules/:id')
+  async deleteSchedule(@Param('id') id: string, @Req() req: Request) {
+    return await this.catalogService.deleteSchedule((req as any).tenantId, id, (req as any).correlationId);
+  }
+
   // `hours` absent or 0 means "off the menu here until somebody puts it back" —
   // the branch does not carry it. A number of hours is today's 86, and the item
   // returns by itself.

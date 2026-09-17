@@ -108,6 +108,24 @@ export interface ProductAvailability {
   reason?: string;
 }
 
+/** A weekly selling window for a product or a category. Days: 0 = Sunday … 6 = Saturday. */
+export interface AvailabilitySchedule {
+  id: string;
+  product_id: string | null;
+  category_id: string | null;
+  branch_id: string | null;
+  days_of_week: string;
+  start_time: string;
+  end_time: string;
+  label: string | null;
+  is_active: boolean;
+}
+
+export interface OffScheduleProduct {
+  product_id: string;
+  windows: string;
+}
+
 export interface PriceDiagnostic {
   product_id: string;
   base_price: string;
@@ -251,6 +269,29 @@ export const catalogApi = {
   resumeProduct: async (productId: string, branchId?: string): Promise<any> => {
     const res = await httpClient.post('/api/v1/availability/resume', { productId, branchId });
     return res.data;
+  },
+  getSchedules: async (branchId?: string): Promise<AvailabilitySchedule[]> => {
+    const res = await httpClient.get('/api/v1/availability/schedules', { params: { branchId } });
+    return res.data;
+  },
+  getOffScheduleProducts: async (branchId?: string): Promise<OffScheduleProduct[]> => {
+    const res = await httpClient.get('/api/v1/availability/off-schedule', { params: { branchId } });
+    return res.data;
+  },
+  createSchedule: async (data: {
+    productId?: string;
+    categoryId?: string;
+    branchId?: string;
+    daysOfWeek: number[];
+    startTime: string;
+    endTime: string;
+    label?: string;
+  }): Promise<AvailabilitySchedule> => {
+    const res = await httpClient.post('/api/v1/availability/schedules', data);
+    return res.data;
+  },
+  deleteSchedule: async (id: string): Promise<void> => {
+    await httpClient.delete(`/api/v1/availability/schedules/${id}`);
   },
 
   // Price Diagnostics
