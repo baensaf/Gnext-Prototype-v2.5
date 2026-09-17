@@ -439,8 +439,9 @@ export function OrdersWorkflowPage() {
     try {
       setReprintSubmitting(true);
       setReprintError(null);
-      const printJob = await kdsApi.reprintOrder(selectedOrder.id, reprintDocumentType, reason);
-      if (!printJob) {
+      // One job per printer: a kitchen ticket comes back as a job for each station.
+      const printJobs = await kdsApi.reprintOrder(selectedOrder.id, reprintDocumentType, reason);
+      if (!Array.isArray(printJobs) || printJobs.length === 0) {
         throw new Error(t('orders.reprintDialog.failed'));
       }
 

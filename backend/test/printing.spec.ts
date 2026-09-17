@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { FindOperator } from 'typeorm';
 import { PrintRenderService } from '../src/modules/printing/print-render.service';
 import { PrintRoutingService } from '../src/modules/printing/print-routing.service';
 import { PrintQueueService } from '../src/modules/printing/print-queue.service';
@@ -10,34 +11,81 @@ import { PrintRoute } from '../src/entities/PrintRoute.entity';
 import { PrintJob } from '../src/entities/PrintJob.entity';
 import { PrintAttempt } from '../src/entities/PrintAttempt.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
+import { Product } from '../src/entities/Product.entity';
+import { KdsRoutingRule } from '../src/entities/KdsRoutingRule.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
+
+/**
+ * An in-memory repository good enough for the routing queries: equality and `In(...)` where
+ * clauses, `take`, and a numeric `order`. Saving assigns an id.
+ */
+const fakeRepo = (rows: any[] = []) => {
+  let seq = 0;
+  const matches = (row: any, where: any = {}) =>
+    Object.entries(where).every(([k, v]) =>
+      v instanceof FindOperator && v.type === 'in' ? (v.value as any[]).includes(row[k]) : row[k] === v,
+    );
+  const find = async (opts: any = {}) => {
+    let found = rows.filter((r) => matches(r, opts.where));
+    if (opts.order) {
+      const [[key, dir]] = Object.entries(opts.order) as [string, string][];
+      found = [...found].sort((a, b) => (dir === 'DESC' ? b[key] - a[key] : a[key] - b[key]));
+    }
+    return opts.take ? found.slice(0, opts.take) : found;
+  };
+  return {
+    rows,
+    find: jest.fn(find),
+    findOne: jest.fn(async (opts: any) => (await find(opts))[0] || null),
+    findAndCount: jest.fn(async (opts: any) => {
+      const found = await find(opts);
+      return [found, found.length];
+    }),
+    count: jest.fn(async (opts: any = {}) => (await find(opts)).length),
+    create: jest.fn((e: any) => ({ ...e })),
+    save: jest.fn(async (e: any) => {
+      if (!e.id) {
+        e.id = `saved-${++seq}`;
+        rows.push(e);
+      }
+      return e;
+    }),
+  };
+};
 
 describe('PrintingModule (Unit & Integration)', () => {
   let renderService: PrintRenderService;
   let routingService: PrintRoutingService;
   let queueService: PrintQueueService;
 
-  let printerRepo: any;
-  let groupRepo: any;
-  let memberRepo: any;
-  let routeRepo: any;
-  let jobRepo: any;
-  let attemptRepo: any;
-  let orderRepo: any;
-  let auditWriter: any;
-  let alertRepo: any;
+  let printerRepo: ReturnType<typeof fakeRepo>;
+  let groupRepo: ReturnType<typeof fakeRepo>;
+  let memberRepo: ReturnType<typeof fakeRepo>;
+  let routeRepo: ReturnType<typeof fakeRepo>;
+  let jobRepo: ReturnType<typeof fakeRepo>;
+  let attemptRepo: ReturnType<typeof fakeRepo>;
+  let orderRepo: ReturnType<typeof fakeRepo>;
+  let productRepo: ReturnType<typeof fakeRepo>;
+  let kdsRuleRepo: ReturnType<typeof fakeRepo>;
+  let alertRepo: ReturnType<typeof fakeRepo>;
+  let auditWriter: { write: jest.Mock };
+
+  const T = 't-1';
+  const BR = 'br-1';
 
   beforeEach(async () => {
-    printerRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
-    groupRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
-    memberRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
-    routeRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
-    jobRepo = { findOne: jest.fn(), findAndCount: jest.fn(), create: jest.fn(), save: jest.fn() };
-    attemptRepo = { findOne: jest.fn(), find: jest.fn(), count: jest.fn().mockResolvedValue(0), create: jest.fn(), save: jest.fn() };
-    orderRepo = { findOne: jest.fn() };
+    printerRepo = fakeRepo();
+    groupRepo = fakeRepo();
+    memberRepo = fakeRepo();
+    routeRepo = fakeRepo();
+    jobRepo = fakeRepo();
+    attemptRepo = fakeRepo();
+    orderRepo = fakeRepo();
+    productRepo = fakeRepo();
+    kdsRuleRepo = fakeRepo();
+    alertRepo = fakeRepo();
     auditWriter = { write: jest.fn() };
-    alertRepo = { findOne: jest.fn().mockResolvedValue(null), create: jest.fn((a) => a), save: jest.fn((a) => Promise.resolve(a)) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -51,24 +99,82 @@ describe('PrintingModule (Unit & Integration)', () => {
         { provide: getRepositoryToken(PrintJob), useValue: jobRepo },
         { provide: getRepositoryToken(PrintAttempt), useValue: attemptRepo },
         { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
+        { provide: getRepositoryToken(Product), useValue: productRepo },
+        { provide: getRepositoryToken(KdsRoutingRule), useValue: kdsRuleRepo },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: getRepositoryToken(OperationalAlert), useValue: alertRepo },
       ],
     }).compile();
 
-    renderService = module.get<PrintRenderService>(PrintRenderService);
-    routingService = module.get<PrintRoutingService>(PrintRoutingService);
-    queueService = module.get<PrintQueueService>(PrintQueueService);
+    renderService = module.get(PrintRenderService);
+    routingService = module.get(PrintRoutingService);
+    queueService = module.get(PrintQueueService);
   });
+
+  // --- fixtures -------------------------------------------------------------------------
+
+  const printer = (id: string, extra: any = {}) =>
+    printerRepo.rows.push({ id, tenant_id: T, branch_id: BR, name: id, is_active: true, ...extra });
+  const group = (id: string, name: string, members: Array<[string, number?]>) => {
+    groupRepo.rows.push({ id, tenant_id: T, branch_id: BR, name });
+    members.forEach(([printerId, copies], i) =>
+      memberRepo.rows.push({ group_id: id, printer_id: printerId, priority: i + 1, copies: copies ?? 1 }),
+    );
+  };
+  const route = (r: any) =>
+    routeRepo.rows.push({ id: `rt-${routeRepo.rows.length + 1}`, tenant_id: T, branch_id: BR, priority: 0, copies: 1, ...r });
+  const product = (id: string, categoryId: string) => productRepo.rows.push({ id, tenant_id: T, category_id: categoryId });
+  const line = (id: string, productId: string, name: string, state = 'ACTIVE') => ({
+    id,
+    product_id: productId,
+    product_name: name,
+    quantity: '1',
+    unit_price: '100000.00',
+    state,
+  });
+  const order = (id: string, items: any[]) =>
+    orderRepo.rows.push({
+      id,
+      tenant_id: T,
+      branch_id: BR,
+      order_number: id.toUpperCase(),
+      order_type: 'DINE_IN',
+      placed_at: new Date(),
+      items,
+      grand_total: '1.00',
+    });
+
+  /** A burger shop: a grill, a fryer and a bar, and a counter printer for receipts. */
+  const burgerShop = () => {
+    printer('prn-counter');
+    printer('prn-grill');
+    printer('prn-fryer');
+    printer('prn-bar');
+    group('grp-counter', 'Counter', [['prn-counter']]);
+    group('grp-grill', 'Grill', [['prn-grill']]);
+    group('grp-fryer', 'Fryer', [['prn-fryer']]);
+    group('grp-bar', 'Bar', [['prn-bar']]);
+    product('p-burger', 'cat-burgers');
+    product('p-cheese', 'cat-burgers');
+    product('p-fries', 'cat-sides');
+    product('p-coke', 'cat-drinks');
+    route({ document_type: 'CUSTOMER_RECEIPT', printer_group_id: 'grp-counter' });
+    route({ document_type: 'KITCHEN_TICKET', printer_group_id: 'grp-counter' }); // catch-all
+    route({ document_type: 'KITCHEN_TICKET', category_id: 'cat-burgers', printer_group_id: 'grp-grill' });
+    route({ document_type: 'KITCHEN_TICKET', category_id: 'cat-sides', printer_group_id: 'grp-fryer' });
+    route({ document_type: 'KITCHEN_TICKET', category_id: 'cat-drinks', printer_group_id: 'grp-bar' });
+  };
+
+  const jobsFor = (jobs: PrintJob[], printerId: string) => jobs.filter((j) => j.printer_id === printerId);
+
+  // --- rendering ------------------------------------------------------------------------
 
   it('should render document with SIMULATED banner and escaped HTML', () => {
     const html = renderService.renderDocument({
       documentType: 'CUSTOMER_RECEIPT',
       orderNumber: 'ORD-101',
       branchName: 'Main Branch <Script>',
-      items: [
-        { product_name: 'Burger & Fries', quantity: 2, total_price: '30.00' },
-      ],
+      items: [{ product_name: 'Burger & Fries', quantity: 2, total_price: '30.00' }],
       grandTotal: '30.00',
     });
 
@@ -79,58 +185,199 @@ describe('PrintingModule (Unit & Integration)', () => {
     expect(html).not.toContain('<Script>');
   });
 
-  it('should resolve print route by product > category > station specificity', async () => {
-    routeRepo.find.mockResolvedValue([
-      { id: 'rt-prod', document_type: 'CUSTOMER_RECEIPT', product_id: 'prod-burger', printer_group_id: 'grp-1', priority: 10, copies: 2 },
-      { id: 'rt-default', document_type: 'CUSTOMER_RECEIPT', printer_group_id: 'grp-2', priority: 1, copies: 1 },
-    ]);
+  // --- route matching -------------------------------------------------------------------
 
-    memberRepo.find.mockResolvedValue([
-      { group_id: 'grp-1', printer_id: 'prn-1', priority: 1, copies: 2 },
-    ]);
+  describe('choosing a route for a line', () => {
+    const routes = [
+      { id: 'rt-default', printer_group_id: 'g', priority: 0 },
+      { id: 'rt-station', station_id: 'st-grill', printer_group_id: 'g', priority: 0 },
+      { id: 'rt-category', category_id: 'cat-burgers', printer_group_id: 'g', priority: 0 },
+      { id: 'rt-product', product_id: 'p-egg-burger', printer_group_id: 'g', priority: 0 },
+    ] as any[];
 
-    printerRepo.findOne.mockResolvedValue({ id: 'prn-1', tenant_id: 't-1', name: 'Front Printer', is_active: true });
-
-    const resolved = await routingService.resolvePrintersForRoute({
-      tenantId: 't-1',
-      branchId: 'br-1',
-      documentType: 'CUSTOMER_RECEIPT',
-      productId: 'prod-burger',
+    it('prefers product, then category, then station, then the catch-all', () => {
+      const match = (l: any) => routingService.matchRoute(routes, l)?.id;
+      expect(match({ productId: 'p-egg-burger', categoryId: 'cat-burgers', stationId: 'st-grill' })).toBe('rt-product');
+      expect(match({ productId: 'p-burger', categoryId: 'cat-burgers', stationId: 'st-grill' })).toBe('rt-category');
+      expect(match({ productId: 'p-tea', categoryId: 'cat-hot', stationId: 'st-grill' })).toBe('rt-station');
+      expect(match({ productId: 'p-tea', categoryId: 'cat-hot' })).toBe('rt-default');
     });
 
-    expect(resolved.copies).toBe(2);
-    expect(resolved.printers.length).toBe(1);
-    expect(resolved.printers[0].name).toBe('Front Printer');
+    it('lets a whole-order document match only the catch-all', () => {
+      expect(routingService.matchRoute(routes, {})?.id).toBe('rt-default');
+      expect(routingService.matchRoute(routes.slice(1), {})).toBeNull();
+    });
+
+    it('breaks a tie between equally specific routes by priority', async () => {
+      route({ id: 'rt-low', document_type: 'KITCHEN_TICKET', category_id: 'cat-burgers', printer_group_id: 'g', priority: 1 });
+      route({ id: 'rt-high', document_type: 'KITCHEN_TICKET', category_id: 'cat-burgers', printer_group_id: 'g', priority: 5 });
+      const loaded = await routingService.loadRoutes(T, BR, 'KITCHEN_TICKET');
+
+      expect(routingService.matchRoute(loaded, { categoryId: 'cat-burgers' })?.id).toBe('rt-high');
+    });
+
+    it('finds each product its kitchen station through the KDS routing rules', async () => {
+      product('p-burger', 'cat-burgers');
+      product('p-egg-burger', 'cat-burgers');
+      product('p-tea', 'cat-hot');
+      kdsRuleRepo.rows.push(
+        { tenant_id: T, branch_id: BR, category_id: 'cat-burgers', station_id: 'st-grill', priority: 0 },
+        { tenant_id: T, branch_id: BR, product_id: 'p-egg-burger', station_id: 'st-fryer', priority: 0 },
+      );
+
+      const ctx = await routingService.lineContexts(T, BR, ['p-burger', 'p-egg-burger', 'p-tea']);
+
+      expect(ctx.get('p-burger')).toEqual({ productId: 'p-burger', categoryId: 'cat-burgers', stationId: 'st-grill' });
+      expect(ctx.get('p-egg-burger')!.stationId).toBe('st-fryer');
+      expect(ctx.get('p-tea')!.stationId).toBeUndefined();
+    });
+
+    it('sends a job to every active printer in the group, multiplying route and member copies', async () => {
+      printer('prn-a');
+      printer('prn-b');
+      printer('prn-off', { is_active: false });
+      group('grp', 'Grill', [['prn-b', 2], ['prn-off'], ['prn-a']]);
+
+      const routed = await routingService.printersForRoute(T, BR, { printer_group_id: 'grp', copies: 3 } as any);
+
+      expect(routed.map((r) => [r.printer.id, r.copies])).toEqual([
+        ['prn-b', 6],
+        ['prn-a', 3],
+      ]);
+    });
+
+    it('falls back to a printer in the branch when the group has none working', async () => {
+      printer('prn-counter');
+      printer('prn-dead', { is_active: false });
+      group('grp', 'Grill', [['prn-dead']]);
+
+      const routed = await routingService.printersForRoute(T, BR, { printer_group_id: 'grp', copies: 1 } as any);
+
+      expect(routed.map((r) => r.printer.id)).toEqual(['prn-counter']);
+    });
   });
 
-  it('should enqueue print job and execute simulation outcome with fallback printer', async () => {
-    orderRepo.findOne.mockResolvedValue({
-      id: 'ord-100',
-      branch_id: 'br-1',
-      order_number: 'ORD-100',
-      order_type: 'DINE_IN',
-      placed_at: new Date(),
-      items: [{ product_name: 'Pizza', quantity: 1, unit_price: '15.00' }],
-      grand_total: '15.00',
+  // --- the split ------------------------------------------------------------------------
+
+  describe('splitting a kitchen ticket by station', () => {
+    beforeEach(() => {
+      burgerShop();
+      order('ord-1', [
+        line('l-burger', 'p-burger', 'Classic Burger'),
+        line('l-cheese', 'p-cheese', 'Cheeseburger'),
+        line('l-fries', 'p-fries', 'Fries'),
+        line('l-coke', 'p-coke', 'Coke'),
+        line('l-voided', 'p-coke', 'Fanta', 'VOID'),
+      ]);
     });
 
-    routeRepo.find.mockResolvedValue([]);
-    printerRepo.find.mockResolvedValue([{ id: 'prn-main', name: 'Main Thermal', fallback_printer_id: 'prn-backup', is_active: true }]);
-    jobRepo.create.mockImplementation((j) => j);
-    jobRepo.save.mockImplementation((j) => Promise.resolve({ ...j, id: 'job-100' }));
-    attemptRepo.create.mockImplementation((a) => a);
+    it('prints one chit per station with only that station its lines', async () => {
+      const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
 
-    const job = await queueService.enqueueOrderPrintJobs('t-1', 'ord-100');
+      expect(jobs).toHaveLength(3);
+      const [grill] = jobsFor(jobs, 'prn-grill');
+      const [fryer] = jobsFor(jobs, 'prn-fryer');
+      const [bar] = jobsFor(jobs, 'prn-bar');
 
-    expect(job).toBeDefined();
-    expect(jobRepo.save).toHaveBeenCalled();
+      expect(grill.rendered_html).toContain('Classic Burger');
+      expect(grill.rendered_html).toContain('Cheeseburger');
+      expect(grill.rendered_html).not.toContain('Fries');
+      expect(fryer.rendered_html).toContain('Fries');
+      expect(fryer.rendered_html).not.toContain('Burger');
+      expect(bar.rendered_html).toContain('Coke');
+      expect(bar.rendered_html).not.toContain('Fanta');
+      expect(jobsFor(jobs, 'prn-counter')).toHaveLength(0);
+    });
 
-    // Simulate failure with fallback
-    jobRepo.findOne.mockResolvedValue({ id: 'job-100', tenant_id: 't-1', printer_id: 'prn-main', status: 'QUEUED' });
-    printerRepo.findOne.mockResolvedValue({ id: 'prn-main', tenant_id: 't-1', fallback_printer_id: 'prn-backup' });
+    it('labels each chit with its station and its part of the order', async () => {
+      const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
 
-    const outcomeRes = await queueService.processSimulationOutcome('t-1', {
-      printJobId: 'job-100',
+      expect(jobs.map((j) => j.label)).toEqual(['Grill (1/3)', 'Fryer (2/3)', 'Bar (3/3)']);
+      expect(jobsFor(jobs, 'prn-grill')[0].rendered_html).toContain('&gt;&gt; Grill (1/3) &lt;&lt;');
+      expect(jobsFor(jobs, 'prn-grill')[0].printer_group_id).toBe('grp-grill');
+      expect(jobs.every((j) => j.status === 'SUCCESS')).toBe(true);
+      expect(attemptRepo.rows).toHaveLength(3);
+    });
+
+    it('lets a product route pull one burger off the grill', async () => {
+      route({ document_type: 'KITCHEN_TICKET', product_id: 'p-cheese', printer_group_id: 'grp-fryer' });
+
+      const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
+
+      expect(jobsFor(jobs, 'prn-grill')[0].rendered_html).not.toContain('Cheeseburger');
+      expect(jobsFor(jobs, 'prn-fryer')[0].rendered_html).toContain('Cheeseburger');
+      expect(jobsFor(jobs, 'prn-fryer')[0].rendered_html).toContain('Fries');
+    });
+
+    it('routes by kitchen station when that is what the route names', async () => {
+      routeRepo.rows.splice(0, routeRepo.rows.length);
+      route({ document_type: 'KITCHEN_TICKET', printer_group_id: 'grp-counter' });
+      route({ document_type: 'KITCHEN_TICKET', station_id: 'st-hot', printer_group_id: 'grp-grill' });
+      kdsRuleRepo.rows.push({ tenant_id: T, branch_id: BR, category_id: 'cat-burgers', station_id: 'st-hot', priority: 0 });
+
+      const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
+
+      expect(jobsFor(jobs, 'prn-grill')[0].rendered_html).toContain('Cheeseburger');
+      expect(jobsFor(jobs, 'prn-counter')[0].rendered_html).toContain('Fries');
+      expect(jobsFor(jobs, 'prn-counter')[0].rendered_html).toContain('Coke');
+    });
+
+    it('sends lines no route claims to the catch-all, and keeps one chit when nothing splits', async () => {
+      order('ord-2', [line('l-tea', 'p-tea', 'Tea'), line('l-cake', 'p-cake', 'Cake')]);
+
+      const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-2', 'KITCHEN_TICKET');
+
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0].printer_id).toBe('prn-counter');
+      expect(jobs[0].label).toBe('Counter');
+    });
+
+    it('still prints a single receipt for the whole order on the receipt route', async () => {
+      const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'CUSTOMER_RECEIPT');
+
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0].printer_id).toBe('prn-counter');
+      expect(jobs[0].label).toBeUndefined();
+      expect(jobs[0].rendered_html).toContain('Classic Burger');
+      expect(jobs[0].rendered_html).toContain('Coke');
+    });
+
+    it('prints nothing for a kitchen ticket with no live lines', async () => {
+      order('ord-3', [line('l-x', 'p-burger', 'Burger', 'VOID')]);
+
+      expect(await queueService.enqueueOrderPrintJobs(T, 'ord-3', 'KITCHEN_TICKET')).toEqual([]);
+      expect(jobRepo.rows).toHaveLength(0);
+    });
+
+    it('reprints one job on its own printer, not the whole order', async () => {
+      const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
+      const [grill] = jobsFor(jobs, 'prn-grill');
+
+      const [reprint] = await queueService.reprintJob(T, grill.id, 'Paper jam', 'user-1');
+
+      expect(jobRepo.rows).toHaveLength(4);
+      expect(reprint.is_reprint).toBe(true);
+      expect(reprint.printer_id).toBe('prn-grill');
+      expect(reprint.label).toBe('Grill (1/3)');
+      expect(reprint.rendered_html).toBe(grill.rendered_html);
+      expect(reprint.status).toBe('SUCCESS');
+      expect(auditWriter.write).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'PRINT_JOB_REPRINTED', entityId: reprint.id }),
+      );
+    });
+  });
+
+  // --- failure --------------------------------------------------------------------------
+
+  it('should enqueue print job and execute simulation outcome with fallback printer', async () => {
+    order('ord-100', [line('l-1', 'p-pizza', 'Pizza')]);
+    printer('prn-main', { fallback_printer_id: 'prn-backup' });
+
+    const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-100');
+    expect(job.printer_id).toBe('prn-main');
+
+    const outcomeRes = await queueService.processSimulationOutcome(T, {
+      printJobId: job.id,
       outcome: 'FAILED',
       useFallback: true,
     });
@@ -144,129 +391,116 @@ describe('PrintingModule (Unit & Integration)', () => {
   // exactly like one that printed.
   describe('a document with no printer to go to', () => {
     beforeEach(() => {
-      orderRepo.findOne.mockResolvedValue({
-        id: 'ord-300',
-        branch_id: 'br-1',
-        order_number: 'ORD-300',
-        order_type: 'DINE_IN',
-        placed_at: new Date(),
-        items: [{ product_name: 'Burger', quantity: 1, unit_price: '250000.00' }],
-        grand_total: '272500.00',
-      });
-      routeRepo.find.mockResolvedValue([]);
-      printerRepo.find.mockResolvedValue([]);
-      jobRepo.create.mockImplementation((j: any) => j);
-      jobRepo.save.mockImplementation((j: any) => Promise.resolve({ ...j, id: 'job-300' }));
-      alertRepo.findOne.mockResolvedValue(null);
+      order('ord-300', [line('l-1', 'p-burger', 'Burger')]);
     });
 
     it('fails the job, records why, and raises a critical alert for a kitchen ticket', async () => {
-      const job = await queueService.enqueueOrderPrintJobs('t-1', 'ord-300', 'KITCHEN_TICKET');
+      const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-300', 'KITCHEN_TICKET');
 
       expect(job.status).toBe('FAILED');
       expect(attemptRepo.save).not.toHaveBeenCalled();
       expect(alertRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ branch_id: 'br-1', type: 'PRINT_UNROUTED', severity: 'CRITICAL', acknowledged: false }),
+        expect.objectContaining({ branch_id: BR, type: 'PRINT_UNROUTED', severity: 'CRITICAL', acknowledged: false }),
       );
       expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'PRINT_JOB_UNROUTED' }));
       expect(auditWriter.write).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'PRINT_JOB_ENQUEUED' }));
     });
 
     it('raises one open alert per branch and document, not one per order', async () => {
-      alertRepo.findOne.mockResolvedValue({ id: 'alert-open', type: 'PRINT_UNROUTED', acknowledged: false });
+      alertRepo.rows.push({
+        id: 'alert-open',
+        tenant_id: T,
+        branch_id: BR,
+        type: 'PRINT_UNROUTED',
+        title: 'No printer for CUSTOMER_RECEIPT',
+        acknowledged: false,
+      });
 
-      const job = await queueService.enqueueOrderPrintJobs('t-1', 'ord-300', 'CUSTOMER_RECEIPT');
+      const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-300', 'CUSTOMER_RECEIPT');
 
       expect(job.status).toBe('FAILED');
       expect(alertRepo.save).not.toHaveBeenCalled();
     });
 
     it('says what is missing when retried before a printer exists', async () => {
-      jobRepo.findOne.mockResolvedValue({ id: 'job-300', tenant_id: 't-1', branch_id: 'br-1', document_type: 'KITCHEN_TICKET', printer_id: null, status: 'FAILED' });
+      const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-300', 'KITCHEN_TICKET');
 
-      await expect(queueService.retryJob('t-1', 'job-300', {})).rejects.toThrow(/No printer is routed for KITCHEN_TICKET/);
+      await expect(queueService.retryJob(T, job.id, {})).rejects.toThrow(/No printer is routed for KITCHEN_TICKET/);
     });
 
     it('prints on retry once the branch has a printer', async () => {
-      jobRepo.findOne.mockResolvedValue({ id: 'job-300', tenant_id: 't-1', branch_id: 'br-1', document_type: 'KITCHEN_TICKET', printer_id: null, status: 'FAILED' });
-      printerRepo.find.mockResolvedValue([{ id: 'prn-kitchen', name: 'Kitchen', is_active: true }]);
-      attemptRepo.create.mockImplementation((a: any) => a);
+      const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-300', 'KITCHEN_TICKET');
+      printer('prn-kitchen');
 
-      const res = await queueService.retryJob('t-1', 'job-300', {});
+      const res = await queueService.retryJob(T, job.id, {});
 
       expect(res.attempt.printer_id).toBe('prn-kitchen');
       expect(res.job.status).toBe('SUCCESS');
     });
   });
 
+  // --- changes after the kitchen has the order ------------------------------------------
+
   describe('kitchen change tickets', () => {
-    const editedOrder = () => ({
-      id: 'ord-200',
-      branch_id: 'br-1',
-      order_number: 'ORD-200',
-      order_type: 'DINE_IN',
-      placed_at: new Date(),
-      items: [
-        { id: 'l-1', product_name: 'Kebab', quantity: '1', unit_price: '50.00', state: 'VOID' },
-        { id: 'l-2', product_name: 'Doogh', quantity: '2', unit_price: '5.00', state: 'ACTIVE' },
-        { id: 'l-3', product_name: 'Baklava', quantity: '1', unit_price: '8.00', state: 'ACTIVE' },
-      ],
-      grand_total: '18.00',
-    });
-
     beforeEach(() => {
-      orderRepo.findOne.mockResolvedValue(editedOrder());
-      routeRepo.find.mockResolvedValue([]);
-      printerRepo.find.mockResolvedValue([{ id: 'prn-kitchen', name: 'Kitchen', is_active: true }]);
-      jobRepo.create.mockImplementation((j: any) => j);
-      jobRepo.save.mockImplementation((j: any) => Promise.resolve({ ...j, id: 'job-200' }));
-      attemptRepo.create.mockImplementation((a: any) => a);
+      burgerShop();
+      order('ord-200', [
+        line('l-1', 'p-burger', 'Kebab Burger', 'VOID'),
+        line('l-2', 'p-coke', 'Doogh'),
+        line('l-3', 'p-fries', 'Baklava Fries'),
+        line('l-4', 'p-cheese', 'Cheeseburger'),
+      ]);
     });
 
-    it('prints only the delta, marking struck lines VOID and new lines ADD', async () => {
-      const job = await queueService.enqueueKitchenChangeTicket('t-1', 'ord-200', {
+    it('prints only the delta, each station getting its own lines', async () => {
+      const jobs = await queueService.enqueueKitchenChangeTicket(T, 'ord-200', {
         kind: 'AMENDED',
         voidedItemIds: ['l-1'],
         addedItemIds: ['l-3'],
         reason: 'Swapped main for dessert',
       });
 
-      expect(job!.document_type).toBe('KITCHEN_TICKET');
-      expect(job!.rendered_html).toContain('KITCHEN CHANGE - ORDER AMENDED');
-      expect(job!.rendered_html).toMatch(/VOID<\/strong> <span[^>]*line-through[^>]*><strong>1x<\/strong> Kebab/);
-      expect(job!.rendered_html).toMatch(/ADD<\/strong> <span><strong>1x<\/strong> Baklava/);
-      expect(job!.rendered_html).not.toContain('Doogh');
-      expect(job!.rendered_html).toContain('Swapped main for dessert');
-      expect(job!.reason).toBe('Order amended: Swapped main for dessert');
+      expect(jobs).toHaveLength(2);
+      const [grill] = jobsFor(jobs, 'prn-grill');
+      const [fryer] = jobsFor(jobs, 'prn-fryer');
+      expect(grill.document_type).toBe('KITCHEN_TICKET');
+      expect(grill.rendered_html).toContain('KITCHEN CHANGE - ORDER AMENDED');
+      expect(grill.rendered_html).toMatch(/VOID<\/strong> <span[^>]*line-through[^>]*><strong>1x<\/strong> Kebab Burger/);
+      expect(grill.rendered_html).not.toContain('Baklava');
+      expect(fryer.rendered_html).toMatch(/ADD<\/strong> <span><strong>1x<\/strong> Baklava Fries/);
+      expect(jobs.some((j) => j.rendered_html.includes('Doogh'))).toBe(false);
+      expect(jobsFor(jobs, 'prn-bar')).toHaveLength(0);
+      expect(grill.rendered_html).toContain('Swapped main for dessert');
+      expect(grill.reason).toBe('Order amended: Swapped main for dessert');
     });
 
-    it('prints every live line under a STOP heading when the order is cancelled', async () => {
-      const job = await queueService.enqueueKitchenChangeTicket('t-1', 'ord-200', { kind: 'CANCELLED' });
+    it('tells every station holding live lines to stop when the order is cancelled', async () => {
+      const jobs = await queueService.enqueueKitchenChangeTicket(T, 'ord-200', { kind: 'CANCELLED' });
 
-      expect(job!.rendered_html).toContain('ORDER CANCELLED - STOP');
-      expect(job!.rendered_html).toContain('Doogh');
-      expect(job!.rendered_html).toContain('Baklava');
+      expect(jobs.map((j) => j.printer_id).sort()).toEqual(['prn-bar', 'prn-fryer', 'prn-grill']);
+      expect(jobs.every((j) => j.rendered_html.includes('ORDER CANCELLED - STOP'))).toBe(true);
+      expect(jobsFor(jobs, 'prn-grill')[0].rendered_html).toContain('Cheeseburger');
       // Already struck off by an earlier edit, and already told to the kitchen then.
-      expect(job!.rendered_html).not.toContain('Kebab');
+      expect(jobs.some((j) => j.rendered_html.includes('Kebab'))).toBe(false);
     });
 
     it('prints nothing when the change touches no line on the order', async () => {
-      const job = await queueService.enqueueKitchenChangeTicket('t-1', 'ord-200', {
+      const jobs = await queueService.enqueueKitchenChangeTicket(T, 'ord-200', {
         kind: 'AMENDED',
         voidedItemIds: ['not-on-this-order'],
         addedItemIds: [],
       });
 
-      expect(job).toBeNull();
+      expect(jobs).toEqual([]);
       expect(jobRepo.save).not.toHaveBeenCalled();
     });
 
-    it('leaves voided lines off a kitchen reprint', async () => {
-      const job = await queueService.enqueueOrderPrintJobs('t-1', 'ord-200', 'KITCHEN_TICKET', true, 'Paper jam');
+    it('leaves voided lines off a kitchen reprint of the order', async () => {
+      const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-200', 'KITCHEN_TICKET', true, 'Paper jam');
 
-      expect(job!.rendered_html).not.toContain('Kebab');
-      expect(job!.rendered_html).toContain('Doogh');
-      expect(job!.rendered_html).toContain('KITCHEN DISPATCH CHIT');
+      expect(jobs.some((j) => j.rendered_html.includes('Kebab'))).toBe(false);
+      expect(jobsFor(jobs, 'prn-bar')[0].rendered_html).toContain('Doogh');
+      expect(jobs.every((j) => j.is_reprint && j.rendered_html.includes('KITCHEN DISPATCH CHIT'))).toBe(true);
     });
   });
 });

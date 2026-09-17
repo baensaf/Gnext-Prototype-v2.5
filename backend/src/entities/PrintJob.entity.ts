@@ -23,6 +23,14 @@ export class PrintJob {
   @Column({ type: 'uuid', nullable: true })
   printer_id?: string;
 
+  /** The printer group the route sent this job to; empty when no route matched. */
+  @Column({ type: 'uuid', nullable: true })
+  printer_group_id?: string;
+
+  /** The station a kitchen chit is for, e.g. "Grill (1/3)". Other documents leave it empty. */
+  @Column({ type: 'varchar', length: 160, nullable: true })
+  label?: string;
+
   @Column({ type: 'varchar', length: 32, default: 'QUEUED' }) // QUEUED, PROCESSING, SUCCESS, FAILED, CANCELLED
   status: string;
 

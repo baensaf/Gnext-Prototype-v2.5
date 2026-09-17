@@ -192,7 +192,17 @@ export function PrintQueuePage() {
             {jobs.map((job) => (
               <TableRow key={job.id}>
                 <TableCell><code>{job.id.slice(0, 8)}...</code></TableCell>
-                <TableCell><strong>{job.document_type}</strong></TableCell>
+                <TableCell>
+                  <strong>{job.document_type}</strong>
+                  {job.label && (
+                    <Chip
+                      label={`${t('printQueue.station', 'Station')}: ${job.label}`}
+                      size="small"
+                      variant="outlined"
+                      sx={{ ms: 1 }}
+                    />
+                  )}
+                </TableCell>
                 <TableCell>{job.entity_type} #{job.entity_id.slice(0, 8)}</TableCell>
                 <TableCell>
                   <Chip label={job.status} color={getStatusColor(job.status) as any} size="small" />

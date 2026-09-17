@@ -11,6 +11,8 @@ export interface RenderDocOptions {
   placedAt?: Date | string;
   /** The calendar the date prints in, on the business clock. Jalali unless given. */
   calendar?: CalendarSystem;
+  /** On a kitchen chit: the station it is for, e.g. "Grill (1/3)" when the order is split. */
+  stationLabel?: string;
   /**
    * Set on a kitchen ticket that amends one the kitchen already holds. The chit is
    * retitled so a cook cannot mistake it for a fresh order, and each line says whether
@@ -103,6 +105,7 @@ export class PrintRenderService {
         <div class="header">
           <div style="font-weight: bold; font-size: 16px;">${this.escapeHtml(opts.branchName || 'MAIN BRANCH')}</div>
           <div class="title">${docTitle}</div>
+          ${opts.stationLabel ? `<div class="title">&gt;&gt; ${this.escapeHtml(opts.stationLabel)} &lt;&lt;</div>` : ''}
         </div>
         <div class="info">
           <div><strong>ORDER #:</strong> ${this.escapeHtml(opts.orderNumber)}</div>
