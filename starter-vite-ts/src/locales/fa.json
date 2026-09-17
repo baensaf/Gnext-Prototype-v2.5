@@ -3113,7 +3113,22 @@
         "CANCELLED": "لغوشده"
       },
       "statusOnline": "متصل",
-      "statusOffline": "قطع"
+      "statusOffline": "قطع",
+      "health": {
+        "title": "سلامت ایجنت",
+        "loadError": "بارگذاری ایجنت ناموفق بود",
+        "connectedSince": "متصل از",
+        "devices": "دستگاه‌ها",
+        "noDevices": "ایجنت هنوز وضعیت هیچ دستگاهی را گزارش نکرده است.",
+        "devicesOffline": "وضعیت دستگاه‌ها فقط وقتی ایجنت متصل است معلوم است.",
+        "commands": "فرمان‌های اخیر",
+        "noCommands": "هنوز فرمانی فرستاده نشده است.",
+        "colType": "فرمان",
+        "kind": {
+          "printer": "چاپگر",
+          "terminal": "کارتخوان"
+        }
+      }
     }
   },
   "tools": {

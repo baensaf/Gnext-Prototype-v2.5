@@ -1,0 +1,150 @@
+import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Agent } from '../../entities/Agent.entity';
+import { Branch } from '../../entities/Branch.entity';
+import { OperationalAlert } from '../../entities/OperationalAlert.entity';
+import { AgentCommandsService } from './agent-commands.service';
+import { AgentRegistryService } from './agent-registry.service';
+import { AgentSessionsService } from './agent-sessions.service';
+import { LiveAgentConnectionHandle } from './agent-connection';
+
+/** How long an agent may be away before head office is told. A reconnect blip is not news. */
+export const OFFLINE_ALERT_AFTER_MS = 90_000;
+const SWEEP_INTERVAL_MS = 30_000;
+export const AGENT_OFFLINE_ALERT = 'AGENT_OFFLINE';
+
+/**
+ * Whether each branch agent is there, and what it last said about its devices (task 7).
+ *
+ * Offline alerts come from a sweep rather than from socket close events: a deploy closes every
+ * socket at once, and after a restart an agent that never comes back produces no event at all.
+ * The sweep only asks "active, not connected, and not seen for a while".
+ */
+@Injectable()
+export class AgentHealthService implements OnApplicationBootstrap, OnApplicationShutdown {
+  private readonly logger = new Logger('AgentHealth');
+  private timer: NodeJS.Timeout | null = null;
+  private stopPresence: (() => void) | null = null;
+  private sweeping = false;
+
+  constructor(
+    @InjectRepository(Agent) private readonly agentRepo: Repository<Agent>,
+    @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
+    @InjectRepository(OperationalAlert) private readonly alertRepo: Repository<OperationalAlert>,
+    private readonly sessions: AgentSessionsService,
+    private readonly commands: AgentCommandsService,
+    private readonly registry: AgentRegistryService,
+  ) {}
+
+  onApplicationBootstrap() {
+    // last_seen_at is written at most once a minute while connected; stamp the moment it left,
+    // so the grace period is counted from the disconnect.
+    this.stopPresence = this.sessions.onPresence((event, handle) => {
+      if (event !== 'offline') return;
+      this.agentRepo.update({ id: handle.agentId }, { last_seen_at: new Date() }).catch(() => undefined);
+    });
+    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
+    this.timer.unref?.();
+  }
+
+  onApplicationShutdown() {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    this.stopPresence?.();
+  }
+
+  /** Opens an alert for every active agent away too long, and closes the alerts of those back. */
+  async sweep(now = new Date(), tenantId?: string): Promise<void> {
+    if (this.sweeping) return;
+    this.sweeping = true;
+    try {
+      const agents = await this.agentRepo.find({ where: { status: 'ACTIVE', ...(tenantId ? { tenant_id: tenantId } : {}) } });
+      for (const agent of agents) {
+        if (this.sessions.isConnected(agent.id)) {
+          await this.closeAlert(agent, now);
+          continue;
+        }
+        const lastSign = new Date(agent.last_seen_at ?? agent.enrolled_at).getTime();
+        if (now.getTime() - lastSign >= OFFLINE_ALERT_AFTER_MS) await this.openAlert(agent, lastSign);
+      }
+      // A revoked agent is not missing; it is gone on purpose.
+      const orphaned = this.alertRepo
+        .createQueryBuilder()
+        .update(OperationalAlert)
+        .set({ acknowledged: true, acknowledged_at: now, acknowledged_by: 'SYSTEM' })
+        .where('type = :type AND acknowledged = false', { type: AGENT_OFFLINE_ALERT })
+        .andWhere(
+          `NOT EXISTS (SELECT 1 FROM agent a WHERE a.status = 'ACTIVE' AND a.tenant_id = operational_alert.tenant_id AND a.branch_id = operational_alert.branch_id)`,
+        );
+      if (tenantId) orphaned.andWhere('tenant_id = :tenantId', { tenantId });
+      await orphaned.execute();
+    } catch (err: any) {
+      this.logger.error(`agent health sweep failed: ${err?.message || err}`);
+    } finally {
+      this.sweeping = false;
+    }
+  }
+
+  /** Everything the health screen shows for one agent. */
+  async health(tenantId: string, agentId: string) {
+    const agent = await this.registry.getAgent(tenantId, agentId);
+    const live = this.sessions.get(agentId) as LiveAgentConnectionHandle | undefined;
+    const commands = await this.commands.recentForAgentBranch(tenantId, agent.branch_id, 25);
+    return {
+      agent,
+      connection: live
+        ? {
+            connected: true,
+            session_id: live.sessionId,
+            connected_at: live.connectedAt,
+            last_frame_at: live.lastFrameAt ?? null,
+            agent_version: live.agentVersion,
+            capabilities: live.capabilities,
+            devices: live.devices ? [...live.devices.values()] : [],
+          }
+        : { connected: false, devices: [] },
+      recent_commands: commands.map((c) => ({
+        id: c.id,
+        type: c.type,
+        status: c.status,
+        send_count: c.send_count,
+        created_at: c.created_at,
+        acked_at: c.acked_at,
+        completed_at: c.completed_at,
+        error_code: c.error_code,
+        error_message: c.error_message,
+        entity_type: c.entity_type,
+        entity_id: c.entity_id,
+      })),
+    };
+  }
+
+  private async openAlert(agent: Agent, lastSign: number) {
+    const open = await this.alertRepo.findOne({
+      where: { tenant_id: agent.tenant_id, branch_id: agent.branch_id, type: AGENT_OFFLINE_ALERT, acknowledged: false },
+    });
+    if (open) return;
+    const branch = await this.branchRepo.findOne({ where: { id: agent.branch_id, tenant_id: agent.tenant_id }, withDeleted: true });
+    await this.alertRepo.save(
+      this.alertRepo.create({
+        tenant_id: agent.tenant_id,
+        branch_id: agent.branch_id,
+        type: AGENT_OFFLINE_ALERT,
+        // Printers and card terminals the agent drives stop working while it is away.
+        severity: 'CRITICAL',
+        title: `Branch agent offline: ${branch?.name ?? agent.branch_id}`.slice(0, 150),
+        message: `The branch agent on ${agent.hostname || 'the branch PC'} has not been connected since ${new Date(lastSign).toISOString()}. Print jobs and card payments for its devices wait until it is back. Check that the PC is on and online, and that the Gnext Agent service is running.`,
+        acknowledged: false,
+      }),
+    );
+    this.logger.warn(`agent ${agent.id} (branch ${agent.branch_id}) is offline`);
+  }
+
+  private async closeAlert(agent: Agent, now: Date) {
+    await this.alertRepo.update(
+      { tenant_id: agent.tenant_id, branch_id: agent.branch_id, type: AGENT_OFFLINE_ALERT, acknowledged: false },
+      { acknowledged: true, acknowledged_at: now, acknowledged_by: 'SYSTEM' },
+    );
+  }
+}
