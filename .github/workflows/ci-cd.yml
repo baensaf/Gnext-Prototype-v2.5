@@ -138,7 +138,7 @@ jobs:
           $version = (Get-Content VERSION -Raw).Trim()
           & $iscc /Q "/DAppVersion=$version" "/DSourceExe=..\dist\gnext-agent.exe" "/DSamanDir=..\dist\saman" installer\gnext-agent.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Get-FileHash dist\* -Algorithm SHA256 | Format-Table -AutoSize
+          Get-ChildItem dist -File -Recurse | Get-FileHash -Algorithm SHA256 | Format-Table -AutoSize
       - uses: actions/upload-artifact@v4
         with:
           name: gnext-agent-windows
