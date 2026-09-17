@@ -13,7 +13,10 @@ import { Menu } from '../../entities/Menu.entity';
 import { MenuCategory } from '../../entities/MenuCategory.entity';
 import { MenuProduct } from '../../entities/MenuProduct.entity';
 import { ProductAvailability } from '../../entities/ProductAvailability.entity';
+import { AvailabilitySchedule } from '../../entities/AvailabilitySchedule.entity';
+import { Branch } from '../../entities/Branch.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { describeWindows, isOnSchedule, isValidTime, parseDays } from '../../common/utils/availability-schedule.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
 import { PricingService } from '../pricing/pricing.service';
@@ -33,6 +36,8 @@ export class CatalogService {
     @InjectRepository(MenuCategory) private readonly menuCatRepo: Repository<MenuCategory>,
     @InjectRepository(MenuProduct) private readonly menuProdRepo: Repository<MenuProduct>,
     @InjectRepository(ProductAvailability) private readonly availRepo: Repository<ProductAvailability>,
+    @InjectRepository(AvailabilitySchedule) private readonly scheduleRepo: Repository<AvailabilitySchedule>,
+    @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
     private readonly auditWriter: AuditWriter,
     @Inject(forwardRef(() => PricingService)) private readonly pricingService: PricingService,
   ) {}
@@ -736,20 +741,117 @@ export class CatalogService {
     tenantId: string,
     productId: string,
     branchId?: string,
-  ): Promise<{ isSuspended: boolean; reason: string | null; suspendedUntil: Date | null }> {
+    at: Date = new Date(),
+  ): Promise<{ isSuspended: boolean; outOfSchedule: boolean; reason: string | null; suspendedUntil: Date | null }> {
     const rows = await this.availRepo.find({ where: { tenant_id: tenantId, product_id: productId } });
-    const now = new Date();
     const active = rows.find(
       (row) =>
         (!row.branch_id || !branchId || row.branch_id === branchId) &&
         row.is_suspended &&
-        (!row.suspended_until || new Date(row.suspended_until) > now),
+        (!row.suspended_until || new Date(row.suspended_until) > at),
     );
-    return {
-      isSuspended: !!active,
-      reason: active?.reason || null,
-      suspendedUntil: active?.suspended_until || null,
-    };
+    if (active) {
+      return { isSuspended: true, outOfSchedule: false, reason: active.reason || null, suspendedUntil: active.suspended_until || null };
+    }
+
+    // Outside its selling window (breakfast after 11:00) is off sale too, on the branch's clock.
+    const product = await this.prodRepo.findOne({ where: { id: productId, tenant_id: tenantId } });
+    const windows = product ? await this.windowsFor(tenantId, product, branchId) : [];
+    if (!isOnSchedule(windows, at, await this.branchTimeZone(tenantId, branchId))) {
+      return { isSuspended: true, outOfSchedule: true, reason: `Only on sale ${describeWindows(windows)}`, suspendedUntil: null };
+    }
+    return { isSuspended: false, outOfSchedule: false, reason: null, suspendedUntil: null };
+  }
+
+  // Scheduled availability: weekly selling windows
+
+  /** The active windows that govern a product at a branch: its own, else its category's. */
+  private async windowsFor(tenantId: string, product: Product, branchId?: string, all?: AvailabilitySchedule[]) {
+    const schedules = all ?? (await this.scheduleRepo.find({ where: { tenant_id: tenantId, is_active: true } }));
+    const here = schedules.filter((s) => s.is_active && (!s.branch_id || !branchId || s.branch_id === branchId));
+    // A window set on the product itself replaces its category's: a breakfast category can
+    // still hold one all-day item.
+    const own = here.filter((s) => s.product_id === product.id);
+    return own.length ? own : here.filter((s) => !!product.category_id && s.category_id === product.category_id);
+  }
+
+  private async branchTimeZone(tenantId: string, branchId?: string): Promise<string> {
+    const branch = branchId ? await this.branchRepo.findOne({ where: { id: branchId, tenant_id: tenantId } }) : null;
+    return branch?.time_zone || 'Asia/Tehran';
+  }
+
+  async getSchedules(tenantId: string, branchId?: string) {
+    const schedules = await this.scheduleRepo.find({ where: { tenant_id: tenantId }, order: { created_at: 'ASC' } });
+    return branchId ? schedules.filter((s) => !s.branch_id || s.branch_id === branchId) : schedules;
+  }
+
+  async createSchedule(
+    tenantId: string,
+    body: { productId?: string; categoryId?: string; branchId?: string; daysOfWeek: number[]; startTime: string; endTime: string; label?: string },
+    correlationId?: string,
+  ) {
+    if (!!body.productId === !!body.categoryId) {
+      throw new BadRequestException('A selling window is for one product or one category');
+    }
+    const days = parseDays((body.daysOfWeek || []).join(','));
+    if (!days.length) throw new BadRequestException('Pick at least one day');
+    if (!isValidTime(body.startTime) || !isValidTime(body.endTime)) {
+      throw new BadRequestException('Times are HH:MM, 00:00 to 23:59');
+    }
+    if (body.productId) await this.getProductById(tenantId, body.productId);
+    if (body.categoryId && !(await this.catRepo.findOne({ where: { id: body.categoryId, tenant_id: tenantId } }))) {
+      throw new NotFoundException(`Category ${body.categoryId} not found`);
+    }
+
+    const saved = await this.scheduleRepo.save(
+      this.scheduleRepo.create({
+        tenant_id: tenantId,
+        product_id: body.productId || null,
+        category_id: body.categoryId || null,
+        branch_id: body.branchId || null,
+        days_of_week: [...new Set(days)].sort().join(','),
+        start_time: body.startTime,
+        end_time: body.endTime,
+        label: body.label?.trim() || null,
+        is_active: true,
+      }),
+    );
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'AVAILABILITY_SCHEDULE_CREATED',
+      correlationId: correlationId || '00000000-0000-0000-0000-000000000000',
+      afterData: saved,
+    });
+    return saved;
+  }
+
+  async deleteSchedule(tenantId: string, id: string, correlationId?: string) {
+    const schedule = await this.scheduleRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!schedule) throw new NotFoundException('Selling window not found');
+    await this.scheduleRepo.delete({ id, tenant_id: tenantId });
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'AVAILABILITY_SCHEDULE_DELETED',
+      correlationId: correlationId || '00000000-0000-0000-0000-000000000000',
+      beforeData: schedule,
+    });
+    return { success: true };
+  }
+
+  /** Products outside their selling window at a branch right now, for the register to grey out. */
+  async getOffScheduleProducts(tenantId: string, branchId?: string, at: Date = new Date()) {
+    const schedules = await this.scheduleRepo.find({ where: { tenant_id: tenantId, is_active: true } });
+    if (!schedules.length) return [];
+    const timeZone = await this.branchTimeZone(tenantId, branchId);
+    const products = await this.prodRepo.find({ where: { tenant_id: tenantId } });
+    const off: Array<{ product_id: string; windows: string }> = [];
+    for (const product of products) {
+      const windows = await this.windowsFor(tenantId, product, branchId, schedules);
+      if (!isOnSchedule(windows, at, timeZone)) off.push({ product_id: product.id, windows: describeWindows(windows) });
+    }
+    return off;
   }
 
   async getAvailabilities(tenantId: string, branchId?: string) {

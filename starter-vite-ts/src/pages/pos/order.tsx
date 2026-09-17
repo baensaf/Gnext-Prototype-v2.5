@@ -140,6 +140,8 @@ export function PosOrderPage() {
   const [activeTab, setActiveTab] = useState<string>('');
   const [products, setProducts] = useState<Product[]>([]);
   const [availabilities, setAvailabilities] = useState<ProductAvailability[]>([]);
+  // Items outside their selling window right now (breakfast after 11:00), with the window.
+  const [offSchedule, setOffSchedule] = useState<Map<string, string>>(new Map());
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [customerAddresses, setCustomerAddresses] = useState<CustomerAddress[]>([]);
@@ -304,6 +306,18 @@ export function PosOrderPage() {
     loadInitialData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Selling windows open and close while the register sits open, so the grid checks each minute.
+  useEffect(() => {
+    const refresh = () =>
+      catalogApi
+        .getOffScheduleProducts(selectedBranchId || undefined)
+        .then((list) => setOffSchedule(new Map(list.map((o) => [o.product_id, o.windows]))))
+        .catch(() => setOffSchedule(new Map()));
+    refresh();
+    const timer = window.setInterval(refresh, 60_000);
+    return () => window.clearInterval(timer);
+  }, [selectedBranchId]);
 
   useEffect(() => {
     if (selectedBranchId) {
@@ -1433,7 +1447,8 @@ export function PosOrderPage() {
                 ) : (
                   <Grid container spacing={1.5}>
                     {filteredProducts.map((p) => {
-                      const isSuspended = suspendedProductIds.has(p.id);
+                      const offWindow = offSchedule.get(p.id);
+                      const isSuspended = suspendedProductIds.has(p.id) || offWindow !== undefined;
                       return (
                       <Grid size={{ xs: 6, sm: 6, md: 4, lg: 3 }} key={p.id}>
                         <Paper
@@ -1460,6 +1475,10 @@ export function PosOrderPage() {
                                 }),
                           }}
                           onClick={() => {
+                            if (offWindow !== undefined && !suspendedProductIds.has(p.id)) {
+                              setError(t('pos.itemOffScheduleNotice', { name: p.name, windows: offWindow }));
+                              return;
+                            }
                             if (isSuspended) {
                               setError(t('pos.itemSuspendedNotice', { name: p.name }));
                               return;
@@ -1470,7 +1489,11 @@ export function PosOrderPage() {
                           <Box>
                             {isSuspended && (
                               <Chip
-                                label={t('pos.itemSuspended')}
+                                label={
+                                  suspendedProductIds.has(p.id)
+                                    ? t('pos.itemSuspended')
+                                    : t('pos.itemOffSchedule', { windows: offWindow })
+                                }
                                 size="small"
                                 color="error"
                                 sx={{ fontSize: '0.625rem', height: 18, mb: 0.75, fontWeight: 700 }}

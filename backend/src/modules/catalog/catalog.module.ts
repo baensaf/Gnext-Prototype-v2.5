@@ -12,6 +12,8 @@ import { Menu } from '../../entities/Menu.entity';
 import { MenuCategory } from '../../entities/MenuCategory.entity';
 import { MenuProduct } from '../../entities/MenuProduct.entity';
 import { ProductAvailability } from '../../entities/ProductAvailability.entity';
+import { AvailabilitySchedule } from '../../entities/AvailabilitySchedule.entity';
+import { Branch } from '../../entities/Branch.entity';
 import { CatalogService } from './catalog.service';
 import { CatalogController } from './catalog.controller';
 import { AuditModule } from '../audit/audit.module';
@@ -32,6 +34,8 @@ import { PricingModule } from '../pricing/pricing.module';
       MenuCategory,
       MenuProduct,
       ProductAvailability,
+      AvailabilitySchedule,
+      Branch,
     ]),
     AuditModule,
     forwardRef(() => PricingModule),

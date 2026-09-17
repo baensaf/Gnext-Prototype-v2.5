@@ -207,6 +207,8 @@
     "directTerminalPay": "Direct Terminal Pay (PC-POS)",
     "itemSuspended": "86'd",
     "itemSuspendedNotice": "{{name}} is 86'd and cannot be ordered.",
+    "itemOffSchedule": "Only {{windows}}",
+    "itemOffScheduleNotice": "{{name}} is only sold {{windows}}.",
     "customer": "Customer",
     "walkInCustomer": "Walk-In Customer",
     "selectCustomer": "Select customer",
@@ -1617,6 +1619,39 @@
       "notCarried": "Not carried here (until resumed)",
       "delistHelp": "The item stays off the menu here until somebody puts it back.",
       "suspendHelp": "The item comes back on sale by itself when the time is up."
+    },
+    "schedules": {
+      "title": "Selling windows",
+      "subtitle": "Items that sell only at certain times, like breakfast. Items with no window sell all day.",
+      "add": "Add selling window",
+      "target": "Item",
+      "product": "Product",
+      "category": "Category",
+      "daysLabel": "Days",
+      "hours": "Hours",
+      "scope": "Applies to",
+      "start": "From",
+      "end": "Until",
+      "allDay": "All day",
+      "save": "Save window",
+      "empty": "No selling windows. Every item sells whenever the shop is open.",
+      "allDayHelp": "Equal times mean the whole day.",
+      "overnightHelp": "Ends after midnight, on the following day.",
+      "replaceHelp": "A window set on a product replaces its category's windows.",
+      "days": {
+        "0": "Sun",
+        "1": "Mon",
+        "2": "Tue",
+        "3": "Wed",
+        "4": "Thu",
+        "5": "Fri",
+        "6": "Sat"
+      },
+      "errors": {
+        "loadFailed": "Failed to load selling windows",
+        "saveFailed": "Failed to save the selling window",
+        "deleteFailed": "Failed to remove the selling window"
+      }
     }
   },
   "pricing": {
