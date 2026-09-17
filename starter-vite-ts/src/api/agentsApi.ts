@@ -58,6 +58,19 @@ export interface AgentHealth {
   recent_commands: AgentCommandSummary[];
 }
 
+export interface AgentReleaseRow {
+  id: string;
+  version: string;
+  sha256: string;
+  size_bytes: number;
+  notes?: string | null;
+  min_agent_version?: string | null;
+  published: boolean;
+  published_at?: string | null;
+  created_at: string;
+  url: string;
+}
+
 export type EnrolmentCodeState = 'PENDING' | 'USED' | 'EXPIRED' | 'CANCELLED';
 
 export interface EnrolmentCode {
@@ -101,6 +114,30 @@ export const agentsApi = {
   },
   createCode: async (branchId: string): Promise<NewEnrolmentCode> => {
     const res = await httpClient.post('/api/v1/agents/enrolment-codes', { branch_id: branchId });
+    return res.data;
+  },
+  listReleases: async (): Promise<AgentReleaseRow[]> => {
+    const res = await httpClient.get('/api/v1/agent-releases');
+    return res.data;
+  },
+  uploadRelease: async (data: { version: string; minAgentVersion?: string; notes?: string; file: File }): Promise<AgentReleaseRow> => {
+    const form = new FormData();
+    form.append('version', data.version);
+    if (data.minAgentVersion) form.append('min_agent_version', data.minAgentVersion);
+    if (data.notes) form.append('notes', data.notes);
+    form.append('file', data.file);
+    const res = await httpClient.post('/api/v1/agent-releases', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 10 * 60_000,
+    });
+    return res.data;
+  },
+  publishRelease: async (id: string): Promise<AgentReleaseRow> => {
+    const res = await httpClient.post(`/api/v1/agent-releases/${id}/publish`, {});
+    return res.data;
+  },
+  unpublishRelease: async (id: string): Promise<AgentReleaseRow> => {
+    const res = await httpClient.post(`/api/v1/agent-releases/${id}/unpublish`, {});
     return res.data;
   },
   cancelCode: async (id: string): Promise<void> => {

@@ -43,6 +43,8 @@ export interface AgentConnectionDeps {
   /** Stamps last_seen_at (throttled by the caller). */
   touch(agent: Agent): Promise<void>;
   minAgentVersion?: string | null;
+  /** The newest published build, for `welcome.update` and the minimum version it demands. */
+  latestRelease?: () => Promise<{ version: string; min_agent_version: string | null } | null>;
   heartbeatIntervalS?: number;
   handshakeTimeoutMs?: number;
   log?: (message: string) => void;
@@ -143,7 +145,10 @@ export class AgentConnection {
       return;
     }
     const agentVersion = typeof p.agent_version === 'string' ? p.agent_version.slice(0, 32) : null;
-    const min = this.deps.minAgentVersion;
+    const latest = (await this.deps.latestRelease?.().catch(() => null)) ?? null;
+    const min = [this.deps.minAgentVersion, latest?.min_agent_version]
+      .filter((v): v is string => !!v)
+      .sort((a, b) => compareVersions(b, a))[0];
     if (min && (!agentVersion || compareVersions(agentVersion, min) < 0)) {
       this.close(AGENT_CLOSE.UPGRADE_REQUIRED, 'UPGRADE_REQUIRED');
       return;
@@ -188,7 +193,10 @@ export class AgentConnection {
           heartbeat_interval_s: this.heartbeatIntervalS,
           branch: { id: this.agent.branch_id, name: branchName },
           config,
-          update: { available: false },
+          update:
+            latest && (!agentVersion || compareVersions(latest.version, agentVersion) > 0)
+              ? { available: true, version: latest.version }
+              : { available: false },
         },
         message.id,
       ),

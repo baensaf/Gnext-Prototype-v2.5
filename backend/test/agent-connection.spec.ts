@@ -162,6 +162,34 @@ describe('agent connection (protocol §4)', () => {
     });
   });
 
+  describe('updates', () => {
+    const latestRelease = jest.fn();
+
+    it('tells an older agent a newer build is out', async () => {
+      latestRelease.mockResolvedValue({ version: '1.2.0', min_agent_version: null });
+      await open({ latestRelease });
+      expect(socket.last().payload.update).toEqual({ available: true, version: '1.2.0' });
+    });
+
+    it('says nothing to an agent that is up to date', async () => {
+      latestRelease.mockResolvedValue({ version: '1.0.0', min_agent_version: null });
+      await open({ latestRelease });
+      expect(socket.last().payload.update).toEqual({ available: false });
+    });
+
+    it('turns away an agent below the minimum the newest build demands', async () => {
+      latestRelease.mockResolvedValue({ version: '2.0.0', min_agent_version: '1.5.0' });
+      await open({ latestRelease, minAgentVersion: '0.9.0' });
+      expect(socket.closed?.code).toBe(4011);
+    });
+
+    it('still welcomes an agent when the release lookup fails', async () => {
+      latestRelease.mockRejectedValue(new Error('db'));
+      await open({ latestRelease });
+      expect(socket.last()).toMatchObject({ type: 'welcome', payload: { update: { available: false } } });
+    });
+  });
+
   describe('after welcome', () => {
     it('answers each heartbeat and stamps last seen', async () => {
       const conn = await open();

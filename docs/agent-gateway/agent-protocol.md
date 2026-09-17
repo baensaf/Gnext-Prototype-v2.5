@@ -795,7 +795,12 @@ Auth required. The agent calls it on start, every hour (with ±5 min jitter), on
 `204 No Content` when no release has been published.
 
 `url` is relative to the server. The download needs the same auth header and returns
-`application/octet-stream`.
+`application/octet-stream` with `Content-Length` and an `X-Content-SHA256` header. An unknown or
+unpublished version is `404`.
+
+Head office uploads builds on the Branch Agents screen and publishes them there. Publishing
+sends `agent.check_update` to every online agent older than the build. A release may set
+`min_agent_version`; agents below it are closed with `4011` (§4.2).
 
 ### 9.2 Update procedure
 
