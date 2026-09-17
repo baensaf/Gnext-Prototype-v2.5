@@ -26,7 +26,7 @@ export class AgentHealthService implements OnApplicationBootstrap, OnApplication
   private readonly logger = new Logger('AgentHealth');
   private timer: NodeJS.Timeout | null = null;
   private stopPresence: (() => void) | null = null;
-  private sweeping = false;
+  private running: Promise<void> | null = null;
 
   constructor(
     @InjectRepository(Agent) private readonly agentRepo: Repository<Agent>,
@@ -44,7 +44,10 @@ export class AgentHealthService implements OnApplicationBootstrap, OnApplication
       if (event !== 'offline') return;
       this.agentRepo.update({ id: handle.agentId }, { last_seen_at: new Date() }).catch(() => undefined);
     });
-    this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
+    // The timer skips a beat rather than queue behind a slow sweep.
+    this.timer = setInterval(() => {
+      if (!this.running) void this.sweep();
+    }, SWEEP_INTERVAL_MS);
     this.timer.unref?.();
   }
 
@@ -54,10 +57,22 @@ export class AgentHealthService implements OnApplicationBootstrap, OnApplication
     this.stopPresence?.();
   }
 
-  /** Opens an alert for every active agent away too long, and closes the alerts of those back. */
+  /**
+   * Opens an alert for every active agent away too long, and closes the alerts of those back.
+   * Runs one at a time; a caller that arrives mid-sweep waits for it and then sweeps itself,
+   * so what it asked for is always done.
+   */
   async sweep(now = new Date(), tenantId?: string): Promise<void> {
-    if (this.sweeping) return;
-    this.sweeping = true;
+    while (this.running) await this.running;
+    this.running = this.runSweep(now, tenantId);
+    try {
+      await this.running;
+    } finally {
+      this.running = null;
+    }
+  }
+
+  private async runSweep(now: Date, tenantId?: string): Promise<void> {
     try {
       const agents = await this.agentRepo.find({ where: { status: 'ACTIVE', ...(tenantId ? { tenant_id: tenantId } : {}) } });
       for (const agent of agents) {
@@ -81,8 +96,6 @@ export class AgentHealthService implements OnApplicationBootstrap, OnApplication
       await orphaned.execute();
     } catch (err: any) {
       this.logger.error(`agent health sweep failed: ${err?.message || err}`);
-    } finally {
-      this.sweeping = false;
     }
   }
 
