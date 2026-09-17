@@ -392,7 +392,13 @@ export function PosOrderPage() {
     try {
       const [vList, groups] = await Promise.all([
         catalogApi.getProductVariants(p.id).catch(() => [] as ProductVariant[]),
-        catalogApi.getOptionGroups().catch(() => [] as OptionGroup[]),
+        // A combo offers only its own slots; the register refuses any other choice.
+        p.product_type === 'COMBO'
+          ? catalogApi
+              .getProductById(p.id)
+              .then((full) => full.optionGroups || [])
+              .catch(() => [] as OptionGroup[])
+          : catalogApi.getOptionGroups().catch(() => [] as OptionGroup[]),
       ]);
 
       setProductVariants(vList || []);
@@ -450,6 +456,16 @@ export function PosOrderPage() {
       ];
     });
   };
+
+  // A combo cannot go to the kitchen with a slot empty (no drink chosen) or overfilled.
+  const isCombo = selectedProduct?.product_type === 'COMBO';
+  const unfilledComboSlot = isCombo
+    ? optionGroups.find((g) => {
+        const count = (g.items || []).filter((i) => checkedOptionIds.includes(i.id)).length;
+        const min = Math.max(g.min_selection || 0, g.is_required ? 1 : 0);
+        return count < min || (!!g.max_selection && count > g.max_selection);
+      })
+    : undefined;
 
   const handleConfirmAddWithOptions = () => {
     if (!selectedProduct) return;
@@ -2585,7 +2601,13 @@ export function PosOrderPage() {
                           checked={checkedOptionIds.includes(item.id)}
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setCheckedOptionIds((prev) => [...prev, item.id]);
+                              // A one-choice combo slot swaps its choice rather than adding a second.
+                              const inGroup = new Set(g.items?.map((i) => i.id));
+                              setCheckedOptionIds((prev) =>
+                                isCombo && g.max_selection === 1
+                                  ? [...prev.filter((id) => !inGroup.has(id)), item.id]
+                                  : [...prev, item.id]
+                              );
                             } else {
                               setCheckedOptionIds((prev) => prev.filter((id) => id !== item.id));
                             }
@@ -2603,7 +2625,17 @@ export function PosOrderPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOptionDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleConfirmAddWithOptions} sx={{ fontWeight: 'bold', px: 3 }}>
+          {unfilledComboSlot && (
+            <Typography variant="caption" color="warning.main" sx={{ mr: 'auto', ml: 2 }}>
+              {t('pos.comboChooseSlot', { slot: unfilledComboSlot.name })}
+            </Typography>
+          )}
+          <Button
+            variant="contained"
+            onClick={handleConfirmAddWithOptions}
+            disabled={!!unfilledComboSlot}
+            sx={{ fontWeight: 'bold', px: 3 }}
+          >
             Add to Cart
           </Button>
         </DialogActions>

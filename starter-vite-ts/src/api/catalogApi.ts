@@ -37,6 +37,8 @@ export interface Product {
   image_asset_id?: string;
   is_active: boolean;
   base_price: string;
+  /** COMBO: a meal deal sold as one line; its option groups are slots that must be filled. */
+  product_type?: 'STANDARD' | 'COMBO';
   optionGroups?: OptionGroup[];
   variants?: ProductVariant[];
 }
@@ -47,6 +49,8 @@ export interface OptionItem {
   code: string;
   name: string;
   price_delta: string;
+  /** The dish this choice gives, for a combo slot. */
+  product_id?: string | null;
   is_default: boolean;
   sort_order: number;
 }

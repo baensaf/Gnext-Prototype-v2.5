@@ -20,6 +20,8 @@ import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
 import { Product } from '../../entities/Product.entity';
 import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { OptionItem } from '../../entities/OptionItem.entity';
+import { OptionGroup } from '../../entities/OptionGroup.entity';
+import { ProductOptionGroup } from '../../entities/ProductOptionGroup.entity';
 import { PricingService } from '../pricing/pricing.service';
 import { DiscountEvaluationService } from '../discounts/discount-evaluation.service';
 import { OrderSequenceService } from './order-sequence.service';
@@ -1740,23 +1742,38 @@ export class OrderService {
       let modifierUnitDelta = '0.0000';
       const optionsToSave: { itemOpt: OrderItemOption }[] = [];
 
-      if (itemDto.options && itemDto.options.length > 0) {
-        for (const optDto of itemDto.options) {
-          const optItem = await this.optionItemRepo.findOne({ where: { id: optDto.option_item_id } });
-          if (optItem) {
-            const delta = optItem.price_delta ? MoneyUtil.format(optItem.price_delta) : '0.0000';
-            modifierUnitDelta = MoneyUtil.add(modifierUnitDelta, delta);
-            const itemOpt = em.create(OrderItemOption, {
-              tenant_id: tenantId,
-              order_item_id: '',
-              option_item_id: optItem.id,
-              option_group_name: optDto.option_group_name || '',
-              option_item_name: optItem.name,
-              price_delta: delta,
+      const chosen: Array<{ optItem: OptionItem; optDto: any }> = [];
+      for (const optDto of itemDto.options || []) {
+        const optItem = await this.optionItemRepo.findOne({ where: { id: optDto.option_item_id } });
+        if (optItem) chosen.push({ optItem, optDto });
+      }
+      const groupNames = product.product_type === 'COMBO' ? await this.checkComboChoices(tenantId, product, chosen.map((c) => c.optItem), em) : new Map<string, string>();
+
+      for (const { optItem, optDto } of chosen) {
+        // A choice that is a dish of its own (a combo's drink) is off sale when that dish is.
+        if (optItem.product_id) {
+          const component = await this.productRepo.findOne({ where: { id: optItem.product_id, tenant_id: tenantId } });
+          const componentStop = component ? await this.catalogService.getSuspension(tenantId, component.id, order.branch_id) : null;
+          if (componentStop?.isSuspended) {
+            throw new BadRequestException({
+              statusCode: 400,
+              // outOfSchedule arrives with selling windows (feat/scheduled-availability).
+              code: (componentStop as { outOfSchedule?: boolean }).outOfSchedule ? 'PRODUCT_OUT_OF_SCHEDULE' : 'PRODUCT_SUSPENDED',
+              message: `${component!.name} in ${product.name} is not on sale now${componentStop.reason ? ` (${componentStop.reason})` : ''}`,
             });
-            optionsToSave.push({ itemOpt });
           }
         }
+        const delta = optItem.price_delta ? MoneyUtil.format(optItem.price_delta) : '0.0000';
+        modifierUnitDelta = MoneyUtil.add(modifierUnitDelta, delta);
+        const itemOpt = em.create(OrderItemOption, {
+          tenant_id: tenantId,
+          order_item_id: '',
+          option_item_id: optItem.id,
+          option_group_name: groupNames.get(optItem.option_group_id) || optDto.option_group_name || '',
+          option_item_name: optItem.name,
+          price_delta: delta,
+        });
+        optionsToSave.push({ itemOpt });
       }
 
       const modifierTotal = MoneyUtil.multiply(modifierUnitDelta, qty);
@@ -1788,6 +1805,33 @@ export class OrderService {
         await em.save(OrderItemOption, itemOpt);
       }
     }
+  }
+
+  /**
+   * A combo is sold as one line whose slots (burger, side, drink) are the option groups on the
+   * product. Each choice must belong to one of its slots, and each slot must be filled within
+   * its limits: a combo that reaches the kitchen without its drink cannot be made. Answers the
+   * slot names, which the order line keeps with each choice.
+   */
+  private async checkComboChoices(tenantId: string, product: Product, choices: OptionItem[], em: EntityManager) {
+    const links = await em.find(ProductOptionGroup, { where: { tenant_id: tenantId, product_id: product.id } });
+    const groups = links.length
+      ? await em.find(OptionGroup, { where: { tenant_id: tenantId, id: In(links.map((l) => l.option_group_id)) } })
+      : [];
+    const refuse = (message: string) => new BadRequestException({ statusCode: 400, code: 'COMBO_CHOICES_INVALID', message });
+
+    const stray = choices.find((c) => !groups.some((g) => g.id === c.option_group_id));
+    if (stray) throw refuse(`${stray.name} is not a choice in ${product.name}`);
+
+    for (const group of groups) {
+      const count = choices.filter((c) => c.option_group_id === group.id).length;
+      const min = Math.max(group.min_selection || 0, group.is_required ? 1 : 0);
+      if (count < min) throw refuse(`${product.name} needs ${min === 1 ? 'a' : min} ${group.name} choice${min === 1 ? '' : 's'}`);
+      if (group.max_selection && count > group.max_selection) {
+        throw refuse(`${product.name} takes at most ${group.max_selection} ${group.name} choice${group.max_selection === 1 ? '' : 's'}`);
+      }
+    }
+    return new Map(groups.map((g) => [g.id, g.name]));
   }
 
   private mapActionToTargetState(action: string): OrderState {

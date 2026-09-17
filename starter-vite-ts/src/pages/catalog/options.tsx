@@ -1,4 +1,4 @@
-import type { OptionGroup } from 'src/api/catalogApi';
+import type { Product, OptionGroup } from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
@@ -18,6 +18,7 @@ import {
   Dialog,
   TableRow,
   Checkbox,
+  MenuItem,
   TableBody,
   TableCell,
   TableHead,
@@ -56,12 +57,19 @@ export function OptionsPage() {
   const [itemCode, setItemCode] = useState('');
   const [itemName, setItemName] = useState('');
   const [priceDelta, setPriceDelta] = useState('150000');
+  // A combo slot's choice can be a dish of its own, so it follows that dish's availability.
+  const [itemProductId, setItemProductId] = useState('');
+  const [products, setProducts] = useState<Product[]>([]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await catalogApi.getOptionGroups();
+      const [data, productList] = await Promise.all([
+        catalogApi.getOptionGroups(),
+        catalogApi.getProducts().catch(() => [] as Product[]),
+      ]);
       setOptionGroups(data);
+      setProducts(productList);
       setError(null);
     } catch (err: any) {
       setError(err.detail || t('catalog.optionsPage.errors.loadFailed'));
@@ -97,17 +105,19 @@ export function OptionsPage() {
   };
 
   const handleAddItem = async () => {
-    if (!selectedGroupId || !itemCode || !itemName) return;
+    if (!selectedGroupId || !itemCode || (!itemName && !itemProductId)) return;
     try {
       await catalogApi.createOptionItem(selectedGroupId, {
         code: itemCode,
-        name: itemName,
+        name: itemName || undefined,
         price_delta: priceDelta,
+        product_id: itemProductId || undefined,
       });
       setItemDialogOpen(false);
       setSelectedGroupId(null);
       setItemCode('');
       setItemName('');
+      setItemProductId('');
       setPriceDelta('150000');
       loadData();
     } catch (err: any) {
@@ -292,9 +302,24 @@ export function OptionsPage() {
               onChange={(e) => setItemCode(e.target.value.toUpperCase())}
             />
             <TextField
+              select
+              label={t('catalog.optionsPage.itemProduct')}
+              helperText={t('catalog.optionsPage.itemProductHelp')}
+              fullWidth
+              value={itemProductId}
+              onChange={(e) => setItemProductId(e.target.value)}
+            >
+              <MenuItem value="">{t('catalog.optionsPage.noProduct')}</MenuItem>
+              {products.map((p) => (
+                <MenuItem key={p.id} value={p.id}>
+                  {p.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
               label={t('catalog.optionsPage.itemName')}
               placeholder="e.g. Extra Mozzarella Cheese"
-              required
+              required={!itemProductId}
               fullWidth
               value={itemName}
               onChange={(e) => setItemName(e.target.value)}
