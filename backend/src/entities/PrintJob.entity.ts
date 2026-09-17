@@ -31,7 +31,7 @@ export class PrintJob {
   @Column({ type: 'varchar', length: 160, nullable: true })
   label?: string;
 
-  @Column({ type: 'varchar', length: 32, default: 'QUEUED' }) // QUEUED, PROCESSING, SUCCESS, FAILED, CANCELLED
+  @Column({ type: 'varchar', length: 32, default: 'QUEUED' }) // QUEUED, PROCESSING (with the agent), SUCCESS, FAILED, CANCELLED
   status: string;
 
   @Column({ type: 'int', default: 1 })

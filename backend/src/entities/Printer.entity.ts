@@ -1,3 +1,4 @@
+import type { DeviceConnection } from '../common/utils/device-connection.util';
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from 'typeorm';
 
 @Entity('printer')
@@ -25,6 +26,13 @@ export class Printer {
 
   @Column({ type: 'int', default: 80 })
   paper_width_mm: number;
+
+  /**
+   * How the branch agent reaches this printer. Set, and every job for it goes through the
+   * agent; empty, and the printer stays on the simulator.
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  agent_connection?: DeviceConnection | null;
 
   @Column({ type: 'boolean', default: true })
   is_active: boolean;

@@ -4,6 +4,7 @@ import {
   IsBoolean,
   IsInt,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -45,6 +46,11 @@ export class CreatePrinterDto {
   @IsString()
   simulated_address?: string;
 
+  /** How the branch agent reaches the printer; empty for the simulator. Checked by parseDeviceConnection. */
+  @IsOptional()
+  @IsObject()
+  agent_connection?: Record<string, any> | null;
+
   @IsOptional()
   @IsInt()
   @Min(1)
@@ -82,6 +88,11 @@ export class UpdatePrinterDto {
   @IsOptional()
   @IsString()
   simulated_address?: string;
+
+  /** How the branch agent reaches the printer; empty for the simulator. Checked by parseDeviceConnection. */
+  @IsOptional()
+  @IsObject()
+  agent_connection?: Record<string, any> | null;
 
   @IsOptional()
   @IsInt()

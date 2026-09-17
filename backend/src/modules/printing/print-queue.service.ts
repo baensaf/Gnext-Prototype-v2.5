@@ -11,6 +11,7 @@ import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { PrintRenderService } from './print-render.service';
 import { PrintRoutingService } from './print-routing.service';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { AgentPrintingService } from './agent-printing.service';
 
 /** What changed on an order the kitchen has already been sent. */
 export type KitchenChange =
@@ -45,6 +46,7 @@ export class PrintQueueService {
     private readonly routingService: PrintRoutingService,
     private readonly auditWriter: AuditWriter,
     @InjectRepository(OperationalAlert) private readonly alertRepo: Repository<OperationalAlert>,
+    private readonly agentPrinting: AgentPrintingService,
   ) {}
 
   /**
@@ -309,8 +311,19 @@ export class PrintQueueService {
     return jobs;
   }
 
-  /** The simulated printer takes the job at once: one successful attempt, then the audit entry. */
+  /**
+   * A printer the branch agent drives gets the job through the agent, and the job waits for its
+   * answer. Any other printer is the simulator's, which takes the job at once: one successful
+   * attempt. Either way, then the audit entry.
+   */
   private async printOn(tenantId: string, job: PrintJob, printerId: string, opts: Pick<JobOptions, 'isReprint' | 'userId'>) {
+    const printer = await this.printerRepo.findOne({ where: { id: printerId, tenant_id: tenantId } });
+    if (printer?.agent_connection) {
+      const { job: sent } = await this.agentPrinting.send(tenantId, job, printer, 1);
+      await this.auditPrint(tenantId, sent, opts, { via: 'AGENT' });
+      return sent;
+    }
+
     await this.attemptRepo.save(
       this.attemptRepo.create({
         tenant_id: tenantId,
@@ -325,17 +338,21 @@ export class PrintQueueService {
     job.status = 'SUCCESS';
     job.completed_at = new Date();
     const saved = await this.jobRepo.save(job);
+    await this.auditPrint(tenantId, saved, opts);
+    return saved;
+  }
 
+  private async auditPrint(tenantId: string, job: PrintJob, opts: Pick<JobOptions, 'isReprint' | 'userId'>, details?: Record<string, any>) {
     await this.auditWriter.write({
       tenantId,
       actorType: opts.userId ? 'ADMIN' : 'SYSTEM',
       actorId: opts.userId,
       action: opts.isReprint ? 'PRINT_JOB_REPRINTED' : 'PRINT_JOB_ENQUEUED',
       entityType: 'PrintJob',
-      entityId: saved.id,
+      entityId: job.id,
       correlationId: 'corr-print-enqueue',
+      details,
     });
-    return saved;
   }
 
   /**
@@ -437,6 +454,39 @@ export class PrintQueueService {
       }
       job.printer_id = printers[0].id;
       await this.jobRepo.save(job);
+    }
+
+    // A printer the agent drives is retried for real: a new attempt goes to the agent.
+    let targetId = job.printer_id;
+    if (data.useFallback) {
+      const current = await this.printerRepo.findOne({ where: { id: job.printer_id, tenant_id: tenantId } });
+      if (current?.fallback_printer_id) targetId = current.fallback_printer_id;
+    }
+    const target = await this.printerRepo.findOne({ where: { id: targetId, tenant_id: tenantId } });
+    if (target?.agent_connection) {
+      const pending = await this.agentPrinting.pendingAttempt(tenantId, job.id);
+      if (pending) {
+        // Still waiting. Only a job that never reached the agent can be taken back and resent;
+        // otherwise a retry could print the chit twice.
+        const withdrawn = pending.agent_command_id
+          ? await this.agentPrinting.withdraw(pending, 'Retried from the print queue')
+          : false;
+        if (!withdrawn) {
+          throw new BadRequestException('This job is still with the branch agent. Wait for it to finish or fail, then retry.');
+        }
+      }
+      const attemptNo = (await this.attemptRepo.count({ where: { job_id: job.id } })) + 1;
+      const { job: sent, attempt } = await this.agentPrinting.send(tenantId, job, target, attemptNo);
+      await this.auditWriter.write({
+        tenantId,
+        actorType: 'ADMIN',
+        action: 'PRINT_JOB_RETRIED',
+        entityType: 'PrintJob',
+        entityId: job.id,
+        correlationId: 'corr-print-retry',
+        details: { attemptNo, printerId: target.id, via: 'AGENT', reason: data.reason },
+      });
+      return { job: sent, attempt };
     }
 
     return await this.processSimulationOutcome(tenantId, {

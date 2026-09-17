@@ -822,9 +822,10 @@ No code signing in v1; the SHA-256 comes over the authenticated TLS channel.
 
 Not part of the wire contract, but it explains the behaviour the agent will see.
 
-- A branch is **agent-online** while its agent has a live socket past `welcome`. The cloud
-  sends print jobs and card charges to the agent only then. Otherwise the branch uses the
-  in-process simulator, as today.
+- A branch is **agent-online** while its agent has a live socket past `welcome`.
+- A printer or terminal with a `connection` belongs to the agent: its jobs always go through
+  the agent. While the agent is offline they wait (until `expires_at`), and then fail with
+  an alert. A device without a `connection` stays on the in-process simulator, as today.
 - A charge started while the agent is online stays with the agent even if it disconnects:
   the cloud waits for the result on reconnect and never retries it through the simulator.
 - The cloud raises an `OperationalAlert` when an agent goes offline, and closes it when the

@@ -16,6 +16,8 @@ import { PrintRoutingService } from './print-routing.service';
 import { PrintQueueService } from './print-queue.service';
 import { PrintersController } from './printers.controller';
 import { AuditModule } from '../audit/audit.module';
+import { AgentGatewayModule } from '../agent-gateway/agent-gateway.module';
+import { AgentPrintingService } from './agent-printing.service';
 
 @Module({
   imports: [
@@ -33,8 +35,9 @@ import { AuditModule } from '../audit/audit.module';
       KdsRoutingRule,
     ]),
     AuditModule,
+    AgentGatewayModule,
   ],
-  providers: [PrintRenderService, PrintRoutingService, PrintQueueService],
+  providers: [PrintRenderService, PrintRoutingService, PrintQueueService, AgentPrintingService],
   controllers: [PrintersController],
   exports: [PrintQueueService, PrintRenderService, PrintRoutingService],
 })

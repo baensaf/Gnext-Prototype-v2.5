@@ -1,6 +1,6 @@
 import type { Branch } from 'src/api/tenantApi';
 import type { Product, Category } from 'src/api/catalogApi';
-import type { PrintRoute, PrinterGroup, PrinterDevice, KitchenStation } from 'src/api/kdsApi';
+import type { PrintRoute, PrinterGroup, PrinterDevice, KitchenStation, PrinterConnection } from 'src/api/kdsApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -109,6 +109,9 @@ export function PrintersPage() {
     branch_id: '',
   });
 
+  // How the branch agent reaches the printer, kept apart from the form the API takes as is.
+  const [connForm, setConnForm] = useState<ConnectionForm>(EMPTY_CONNECTION);
+
   // Group Modals (Add / Edit)
   const [groupModalOpen, setGroupModalOpen] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -181,6 +184,7 @@ export function PrintersPage() {
       is_active: true,
       branch_id: getActiveBranchId(),
     });
+    setConnForm(EMPTY_CONNECTION);
     setPrinterModalOpen(true);
   };
 
@@ -196,6 +200,7 @@ export function PrintersPage() {
       is_active: pr.is_active !== false,
       branch_id: (pr as any).branch_id || getActiveBranchId(),
     });
+    setConnForm(toConnectionForm(pr.agent_connection));
     setPrinterModalOpen(true);
   };
 
@@ -210,12 +215,14 @@ export function PrintersPage() {
       return;
     }
 
+    const agent_connection = fromConnectionForm(connForm);
     try {
       if (editingPrinterId) {
-        await kdsApi.updatePrinter(editingPrinterId, printerForm as any);
+        await kdsApi.updatePrinter(editingPrinterId, { ...printerForm, agent_connection } as any);
       } else {
         await kdsApi.createPrinter({
           ...printerForm,
+          agent_connection,
           branch_id: printerForm.branch_id || getActiveBranchId(),
         } as any);
       }
@@ -539,7 +546,16 @@ export function PrintersPage() {
                             size="small"
                           />
                         </TableCell>
-                        <TableCell><code>{pr.simulated_address || '192.168.1.100:9100'}</code></TableCell>
+                        <TableCell>
+                          {pr.agent_connection ? (
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                              <Chip label={t('operations.printers.connection.agentChip', 'Agent')} color="info" size="small" />
+                              <code dir="ltr">{describeConnection(pr.agent_connection)}</code>
+                            </Stack>
+                          ) : (
+                            <code>{pr.simulated_address || '192.168.1.100:9100'}</code>
+                          )}
+                        </TableCell>
                         <TableCell>{pr.paper_width_mm}mm</TableCell>
                         <TableCell>
                           {fb ? (
@@ -812,12 +828,94 @@ export function PrintersPage() {
                 <MenuItem value="LABEL_STICKER">{t('operations.printers.types.LABEL_STICKER', 'Cup / Item Label Sticker')}</MenuItem>
               </Select>
             </FormControl>
-            <TextField
-              label={t('operations.printers.formAddress', 'Simulated Address / IP Port')}
-              value={printerForm.simulated_address}
-              onChange={(e) => setPrinterForm({ ...printerForm, simulated_address: e.target.value })}
-              fullWidth
-            />
+            <FormControl fullWidth>
+              <InputLabel>{t('operations.printers.connection.kind', 'Connection')}</InputLabel>
+              <Select
+                value={connForm.kind}
+                label={t('operations.printers.connection.kind', 'Connection')}
+                onChange={(e) => setConnForm({ ...connForm, kind: e.target.value as ConnectionForm['kind'] })}
+              >
+                <MenuItem value="none">{t('operations.printers.connection.none', 'Simulated (no branch agent)')}</MenuItem>
+                <MenuItem value="tcp">{t('operations.printers.connection.tcp', 'Network printer (TCP)')}</MenuItem>
+                <MenuItem value="windows">{t('operations.printers.connection.windows', 'Printer installed in Windows')}</MenuItem>
+                <MenuItem value="serial">{t('operations.printers.connection.serial', 'Serial port')}</MenuItem>
+              </Select>
+            </FormControl>
+            {connForm.kind === 'none' && (
+              <TextField
+                label={t('operations.printers.formAddress', 'Simulated Address / IP Port')}
+                value={printerForm.simulated_address}
+                onChange={(e) => setPrinterForm({ ...printerForm, simulated_address: e.target.value })}
+                fullWidth
+              />
+            )}
+            {connForm.kind === 'tcp' && (
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  label={t('operations.printers.connection.host', 'IP address')}
+                  value={connForm.host}
+                  onChange={(e) => setConnForm({ ...connForm, host: e.target.value })}
+                  placeholder="192.168.1.50"
+                  slotProps={{ htmlInput: { dir: 'ltr' } }}
+                  fullWidth
+                  required
+                />
+                <TextField
+                  label={t('operations.printers.connection.port', 'Port')}
+                  type="number"
+                  value={connForm.port}
+                  onChange={(e) => setConnForm({ ...connForm, port: e.target.value })}
+                  sx={{ width: 140 }}
+                  required
+                />
+              </Stack>
+            )}
+            {connForm.kind === 'windows' && (
+              <TextField
+                label={t('operations.printers.connection.printerName', 'Windows printer name')}
+                helperText={t('operations.printers.connection.printerNameHelp', 'Exactly as it appears in Windows under Printers & scanners.')}
+                value={connForm.printerName}
+                onChange={(e) => setConnForm({ ...connForm, printerName: e.target.value })}
+                slotProps={{ htmlInput: { dir: 'ltr' } }}
+                fullWidth
+                required
+              />
+            )}
+            {connForm.kind === 'serial' && (
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  label={t('operations.printers.connection.serialPort', 'Serial port')}
+                  value={connForm.serialPort}
+                  onChange={(e) => setConnForm({ ...connForm, serialPort: e.target.value.toUpperCase() })}
+                  placeholder="COM3"
+                  slotProps={{ htmlInput: { dir: 'ltr' } }}
+                  fullWidth
+                  required
+                />
+                <FormControl sx={{ width: 160 }}>
+                  <InputLabel>{t('operations.printers.connection.baud', 'Baud rate')}</InputLabel>
+                  <Select
+                    value={connForm.baud}
+                    label={t('operations.printers.connection.baud', 'Baud rate')}
+                    onChange={(e) => setConnForm({ ...connForm, baud: String(e.target.value) })}
+                  >
+                    {BAUD_RATES.map((b) => (
+                      <MenuItem key={b} value={b}>
+                        {b}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Stack>
+            )}
+            {connForm.kind !== 'none' && (
+              <Alert severity="info">
+                {t(
+                  'operations.printers.connection.agentHelp',
+                  'Jobs for this printer go to the branch agent. While the agent is offline they wait in the print queue.'
+                )}
+              </Alert>
+            )}
             <TextField
               label={t('operations.printers.formPaper', 'Paper Width (mm)')}
               type="number"
@@ -1114,3 +1212,66 @@ export function PrintersPage() {
 }
 
 export default PrintersPage;
+
+// ----------------------------------------------------------------------
+
+type ConnectionForm = {
+  kind: 'none' | 'tcp' | 'windows' | 'serial';
+  host: string;
+  port: string;
+  printerName: string;
+  serialPort: string;
+  baud: string;
+};
+
+const BAUD_RATES = ['9600', '19200', '38400', '57600', '115200'];
+
+const EMPTY_CONNECTION: ConnectionForm = {
+  kind: 'none',
+  host: '',
+  port: '9100',
+  printerName: '',
+  serialPort: '',
+  baud: '9600',
+};
+
+function toConnectionForm(c?: PrinterConnection | null): ConnectionForm {
+  if (!c) return EMPTY_CONNECTION;
+  switch (c.kind) {
+    case 'tcp':
+      return { ...EMPTY_CONNECTION, kind: 'tcp', host: c.host, port: String(c.port) };
+    case 'windows':
+      return { ...EMPTY_CONNECTION, kind: 'windows', printerName: c.printer_name };
+    case 'serial':
+      return { ...EMPTY_CONNECTION, kind: 'serial', serialPort: c.port, baud: String(c.baud) };
+    default:
+      return EMPTY_CONNECTION;
+  }
+}
+
+/** What the API takes; the server checks that it is complete. */
+function fromConnectionForm(f: ConnectionForm): PrinterConnection | null {
+  switch (f.kind) {
+    case 'tcp':
+      return { kind: 'tcp', host: f.host.trim(), port: Number(f.port) };
+    case 'windows':
+      return { kind: 'windows', printer_name: f.printerName.trim() };
+    case 'serial':
+      return { kind: 'serial', port: f.serialPort.trim(), baud: Number(f.baud) };
+    default:
+      return null;
+  }
+}
+
+function describeConnection(c: PrinterConnection): string {
+  switch (c.kind) {
+    case 'tcp':
+      return `${c.host}:${c.port}`;
+    case 'windows':
+      return c.printer_name;
+    case 'serial':
+      return `${c.port} @ ${c.baud}`;
+    default:
+      return '';
+  }
+}

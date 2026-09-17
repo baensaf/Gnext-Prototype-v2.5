@@ -34,6 +34,8 @@ export interface EnqueueOptions {
   entityId?: string;
   /** Defaults by type: config.updated and agent.check_update expect none. */
   expectsResult?: boolean;
+  /** Withdraw commands of the same type still waiting for this branch (e.g. an older config). */
+  replacePending?: boolean;
 }
 
 export interface ResultOutcome {
@@ -113,6 +115,12 @@ export class AgentCommandsService implements OnApplicationBootstrap, OnApplicati
 
   /** Stores a command and sends it at once if the branch's agent is online. */
   async enqueue(tenantId: string, branchId: string, type: string, payload: Record<string, any>, options: EnqueueOptions = {}) {
+    if (options.replacePending) {
+      await this.repo.update(
+        { tenant_id: tenantId, branch_id: branchId, type, status: In(PENDING) },
+        { status: 'EXPIRED', completed_at: new Date(), error_code: 'SUPERSEDED', error_message: 'Replaced by a newer command.' },
+      );
+    }
     const command = await this.repo.save(this.build(tenantId, branchId, type, payload, options));
     await this.flush(tenantId, branchId);
     return command;
@@ -169,6 +177,22 @@ export class AgentCommandsService implements OnApplicationBootstrap, OnApplicati
       this.flushing.delete(key);
       this.flushAgain.delete(key);
     }
+  }
+
+  /**
+   * Withdraws a command that has not reached the agent yet. Returns false once it has been
+   * sent: from then on only the agent's answer settles it.
+   */
+  async withdrawIfQueued(commandId: string, reason: string): Promise<boolean> {
+    const res = await this.repo.update(
+      { id: commandId, status: 'QUEUED' },
+      { status: 'EXPIRED', completed_at: new Date(), error_code: 'WITHDRAWN', error_message: reason },
+    );
+    return !!res.affected;
+  }
+
+  async get(commandId: string): Promise<AgentCommand | null> {
+    return await this.repo.findOne({ where: { id: commandId } });
   }
 
   /** Expires what nobody acked in time and resends what is overdue for an ack. */
