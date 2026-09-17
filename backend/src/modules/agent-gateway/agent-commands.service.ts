@@ -75,7 +75,7 @@ export class AgentCommandsService implements OnApplicationBootstrap, OnApplicati
   private readonly flushAgain = new Map<string, boolean>();
   private loop: NodeJS.Timeout | null = null;
   private stopPresence: (() => void) | null = null;
-  private ticking = false;
+  private ticking: Promise<void> | null = null;
 
   constructor(
     @InjectRepository(AgentCommand) private readonly repo: Repository<AgentCommand>,
@@ -90,7 +90,9 @@ export class AgentCommandsService implements OnApplicationBootstrap, OnApplicati
       // A reconnect replays everything not yet acked, SENT included: the old socket may have lost it.
       if (event === 'online') void this.flush(handle.tenantId, handle.branchId, true);
     });
-    this.loop = setInterval(() => void this.tick(), LOOP_INTERVAL_MS);
+    this.loop = setInterval(() => {
+      if (!this.ticking) void this.tick();
+    }, LOOP_INTERVAL_MS);
     this.loop.unref?.();
   }
 
@@ -205,8 +207,17 @@ export class AgentCommandsService implements OnApplicationBootstrap, OnApplicati
    * a run to one tenant (tests that move the clock forward must not touch anyone else).
    */
   async tick(now = new Date(), tenantId?: string): Promise<void> {
-    if (this.ticking) return;
-    this.ticking = true;
+    // One run at a time; a caller that arrives mid-run waits and then runs, so it is never skipped.
+    while (this.ticking) await this.ticking;
+    this.ticking = this.runTick(now, tenantId);
+    try {
+      await this.ticking;
+    } finally {
+      this.ticking = null;
+    }
+  }
+
+  private async runTick(now: Date, tenantId?: string): Promise<void> {
     try {
       const scope = tenantId ? { tenant_id: tenantId } : {};
       const expired = await this.repo.find({ where: { ...scope, status: In(PENDING), expires_at: LessThanOrEqual(now) } });
@@ -228,8 +239,6 @@ export class AgentCommandsService implements OnApplicationBootstrap, OnApplicati
       }
     } catch (err: any) {
       this.logger.error(`delivery loop failed: ${err?.message || err}`);
-    } finally {
-      this.ticking = false;
     }
   }
 
