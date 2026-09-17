@@ -1,6 +1,6 @@
 # Gnext branch agent — protocol v1
 
-Status: **draft for review** (task 0 of `HANDOFF.md`). Protocol version: **1**.
+Status: **agreed** (task 0 of `HANDOFF.md`). Protocol version: **1**.
 
 This document is the whole contract between the **cloud** (the Gnext backend, NestJS, on the
 VPS) and the **agent** (a Windows service written in Go that runs on one PC in each branch).
@@ -463,7 +463,7 @@ used for logging; the cloud is the source of truth.
       "code": "POS1",
       "name": "Till 1 card reader",
       "active": true,
-      "driver": "pec",
+      "driver": "sep",
       "connection": { "kind": "tcp", "host": "192.168.1.60", "port": 8888 },
       "charge_timeout_s": 90
     }
@@ -675,8 +675,8 @@ type TerminalDriver interface {
 }
 ```
 
-`config.terminals[].driver` selects the driver. v1 needs exactly one real driver, for the
-terminal on the test branch PC, plus a `fake` driver (approves amounts ending in `0`,
+`config.terminals[].driver` selects the driver. v1 needs exactly one real driver, `sep`, for
+the Saman terminal on the test branch PC (§14), plus a `fake` driver (approves amounts ending in `0`,
 declines amounts ending in `1`, times out on `2`) for development.
 
 ### 7.7 `config.updated`
@@ -865,16 +865,20 @@ test harness (task 9) or a real staging server:
       comes back on the new version.
 - [ ] No device key, full PAN or PIN data in any log file.
 
-## 14. Open questions
+## 14. Decisions and open questions
 
-These need an answer from the product owner before or during tasks 5–6:
+Decided by the product owner (2026-09-17):
 
-1. **Terminal model and PSP** on the test branch PC (e.g. PAX with PEC, Sepehr, Behpardakht)
-   and whether its protocol supports querying a transaction. This decides the one real driver
-   in §7.6.
-2. **Printer connection** on the test PC: Windows driver, raw TCP 9100, or USB-serial. §6.2
-   supports all three; the first build can support only the one that exists.
-3. **Replacing an agent** (§3.3): redeeming a new code revokes the branch's old agent. The
-   alternative is to refuse the code until HQ revokes the old agent by hand.
+1. **Terminal**: the test branch PC has a **Saman (SEP)** terminal. The one real driver in
+   §7.6 is `sep`. Whether its protocol can query a past transaction is still to be checked
+   against Saman's integration document; until then the driver does not advertise
+   `payment.query`.
+2. **Printer**: the test printer is on the **LAN, raw TCP port 9100**. The first agent build
+   MUST support `connection.kind = tcp` (§6.2 raster over ESC/POS); `windows` and `serial`
+   MAY follow later.
+3. **Replacing an agent** (§3.3): redeeming a new code **revokes** the branch's old agent.
+
+Still open:
+
 4. **Arvan WebSocket**: WebSocket must be enabled for the domain in the Arvan panel, and its
    idle timeout must exceed 20 s. nginx already forwards upgrade headers on `/api/`.
