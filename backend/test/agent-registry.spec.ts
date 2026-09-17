@@ -11,6 +11,7 @@ import {
   normaliseEnrolmentCode,
 } from '../src/modules/agent-gateway/agent-credentials';
 import { AgentSessionsService } from '../src/modules/agent-gateway/agent-sessions.service';
+import { fakeHandle } from './utils/agent-fakes';
 
 const tenantId = '11111111-1111-1111-1111-111111111111';
 const branchId = '22222222-2222-2222-2222-222222222222';
@@ -160,7 +161,7 @@ describe('Agent registry', () => {
     it('revokes an agent once, with who and why', async () => {
       agentRepo.findOne.mockResolvedValue({ id: agentId, tenant_id: tenantId, branch_id: branchId, status: 'ACTIVE', key_hash: 'h' });
       const close = jest.fn();
-      sessions.register(agentId, close);
+      sessions.register(fakeHandle(agentId, close));
 
       const revoked = await service.revokeAgent(tenantId, agentId, '  PC replaced ', { userId });
 

@@ -10,6 +10,7 @@ import { Agent } from '../src/entities/Agent.entity';
 import { AgentRegistryService } from '../src/modules/agent-gateway/agent-registry.service';
 import { AgentSessionsService } from '../src/modules/agent-gateway/agent-sessions.service';
 import { deleteTenantData } from './utils/tenant-teardown';
+import { fakeHandle } from './utils/agent-fakes';
 
 // Enrolment over real HTTP and a real database: head office makes a code, the agent trades
 // it for a key, the key opens agent routes, and a replacement PC cuts the old one off.
@@ -100,7 +101,7 @@ describe('agent enrolment and device-key auth (PostgreSQL)', () => {
 
   it('replaces the old agent when the branch enrols a new PC', async () => {
     const close = jest.fn();
-    sessions.register(firstAgentId, close);
+    sessions.register(fakeHandle(firstAgentId, close));
     const { code } = await registry.createEnrolmentCode(tenantId, branchId, {});
 
     const res = await enrol(code).expect(200);

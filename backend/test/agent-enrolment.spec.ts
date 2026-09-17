@@ -13,6 +13,7 @@ import { AgentSessionsService } from '../src/modules/agent-gateway/agent-session
 import { Agent } from '../src/entities/Agent.entity';
 import { AgentEnrolmentCode } from '../src/entities/AgentEnrolmentCode.entity';
 import { Branch } from '../src/entities/Branch.entity';
+import { fakeHandle } from './utils/agent-fakes';
 
 const tenantId = '11111111-1111-1111-1111-111111111111';
 const branchId = '22222222-2222-2222-2222-222222222222';
@@ -111,7 +112,7 @@ describe('Agent enrolment and auth', () => {
         active: { id: oldAgentId, tenant_id: tenantId, branch_id: branchId, status: 'ACTIVE', hostname: 'OLD-PC' },
       });
       const close = jest.fn();
-      sessions.register(oldAgentId, close);
+      sessions.register(fakeHandle(oldAgentId, close));
       db.dataSource.transaction.mockImplementation(async (fn: any) => {
         const out = await fn(db.em);
         // Nothing may be closed before the transaction has committed.

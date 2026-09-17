@@ -3,6 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Agent } from '../../entities/Agent.entity';
 import { AgentEnrolmentCode } from '../../entities/AgentEnrolmentCode.entity';
 import { Branch } from '../../entities/Branch.entity';
+import { PaymentDevice } from '../../entities/PaymentDevice.entity';
+import { Printer } from '../../entities/Printer.entity';
 import { AuditModule } from '../audit/audit.module';
 import { AgentAuthGuard } from './agent-auth.guard';
 import { AgentAuthService } from './agent-auth.service';
@@ -11,12 +13,24 @@ import { AgentEnrolmentService } from './agent-enrolment.service';
 import { AgentRegistryController } from './agent-registry.controller';
 import { AgentRegistryService } from './agent-registry.service';
 import { AgentSessionsService } from './agent-sessions.service';
+import { AgentConfigService } from './agent-config.service';
+import { AgentMessageHandlers } from './agent-message-handlers.service';
+import { AgentWsServer } from './agent-ws.server';
 
 /** The cloud side of the branch agent (docs/agent-gateway/agent-protocol.md). */
 @Module({
-  imports: [TypeOrmModule.forFeature([Agent, AgentEnrolmentCode, Branch]), AuditModule],
+  imports: [TypeOrmModule.forFeature([Agent, AgentEnrolmentCode, Branch, Printer, PaymentDevice]), AuditModule],
   controllers: [AgentRegistryController, AgentController],
-  providers: [AgentRegistryService, AgentSessionsService, AgentAuthService, AgentAuthGuard, AgentEnrolmentService],
-  exports: [AgentRegistryService, AgentSessionsService, AgentAuthService],
+  providers: [
+    AgentRegistryService,
+    AgentSessionsService,
+    AgentAuthService,
+    AgentAuthGuard,
+    AgentEnrolmentService,
+    AgentConfigService,
+    AgentMessageHandlers,
+    AgentWsServer,
+  ],
+  exports: [AgentRegistryService, AgentSessionsService, AgentAuthService, AgentConfigService, AgentMessageHandlers],
 })
 export class AgentGatewayModule {}

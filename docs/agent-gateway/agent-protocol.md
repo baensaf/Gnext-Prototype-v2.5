@@ -270,7 +270,8 @@ message (§4.8) and otherwise dropped. The connection stays open.
 - The cloud answers each with `heartbeat.ack` (`ref` = heartbeat id,
   `payload: { "server_time": "…" }`). The agent refreshes its clock offset from it.
 - The cloud marks the agent **offline** when it has received no frame for
-  `3 × heartbeat_interval_s`, closes the socket if it is still open, and raises an alert.
+  `3 × heartbeat_interval_s`, closes the socket with `1001` (reason `HEARTBEAT_TIMEOUT`),
+  and raises an alert.
 - The agent treats the connection as dead when it has had no `heartbeat.ack` for
   `2 × heartbeat_interval_s`; it closes the socket and reconnects.
 - Both sides MAY also use WebSocket ping/pong; it does not replace `heartbeat`.
@@ -379,7 +380,9 @@ An `error` is never acked.
 |---|---|---|---|
 | `1000` | normal | either | reconnects (unless it is shutting down) |
 | `1001` | going away | either | reconnects |
+| `1003` | binary frame | cloud | reconnects; the agent sent a binary frame (a bug) |
 | `1009` | message too big | either | reconnects; logs the offending type |
+| `1011` | internal error | cloud | reconnects |
 | `1012` | service restart | cloud (deploy) | reconnects |
 | `4000` | `HANDSHAKE_TIMEOUT` | cloud | reconnects |
 | `4001` | `AGENT_KEY_INVALID` | cloud | stops; needs `enrol` |
@@ -477,6 +480,9 @@ used for logging; the cloud is the source of truth.
 }
 ```
 
+- Until the printer and terminal registers record how the agent reaches each device,
+  `connection` and `driver` are `null`. The agent reports such a device as `UNSUPPORTED` and
+  refuses commands for it with `DEVICE_NOT_CONFIGURED`.
 - `printers[].id` is the cloud `Printer` id. `terminals[].id` is the cloud `PaymentDevice` id.
 - `connection.kind`: `windows` (a printer installed in Windows, by its exact name), `tcp`
   (raw socket), or `serial` (`{ "kind": "serial", "port": "COM3", "baud": 115200 }`).

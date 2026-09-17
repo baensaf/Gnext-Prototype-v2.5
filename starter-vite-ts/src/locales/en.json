@@ -3061,7 +3061,9 @@
         "USED": "Used",
         "EXPIRED": "Expired",
         "CANCELLED": "Cancelled"
-      }
+      },
+      "statusOnline": "Online",
+      "statusOffline": "Offline"
     }
   },
   "tools": {

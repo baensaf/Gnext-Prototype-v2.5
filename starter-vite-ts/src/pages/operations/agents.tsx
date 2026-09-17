@@ -285,7 +285,11 @@ export function AgentsPage() {
                     <TableCell>{a.agent_version ? <code>{a.agent_version}</code> : '—'}</TableCell>
                     <TableCell>
                       {a.status === 'ACTIVE' ? (
-                        <Chip size="small" color="success" label={t('operations.agents.statusActive', 'Active')} />
+                        a.connected ? (
+                          <Chip size="small" color="success" label={t('operations.agents.statusOnline', 'Online')} />
+                        ) : (
+                          <Chip size="small" color="warning" label={t('operations.agents.statusOffline', 'Offline')} />
+                        )
                       ) : (
                         <Tooltip title={a.revoke_reason || ''}>
                           <Chip size="small" label={t('operations.agents.statusRevoked', 'Revoked')} />

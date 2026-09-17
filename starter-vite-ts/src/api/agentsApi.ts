@@ -20,6 +20,8 @@ export interface BranchAgent {
   revoked_at?: string | null;
   revoked_by?: string | null;
   revoke_reason?: string | null;
+  /** Whether the agent holds a live connection to the cloud right now. */
+  connected?: boolean;
 }
 
 export type EnrolmentCodeState = 'PENDING' | 'USED' | 'EXPIRED' | 'CANCELLED';
