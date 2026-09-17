@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"gnext/agent/internal/protocol"
+	"gnext/agent/internal/store"
 )
 
 // Sep drives a Saman (SEP) terminal through gnext-saman-bridge.exe, which wraps Saman's own
@@ -227,6 +228,8 @@ func runBridge(ctx context.Context, req bridgeRequest) (bridgeResponse, error) {
 	in, _ := json.Marshal(req)
 	cmd := exec.CommandContext(ctx, path)
 	cmd.Dir = filepath.Dir(path)
+	// Saman's SDK logs (which may include terminal details) go to the agent's locked log folder.
+	cmd.Env = append(os.Environ(), "GNEXT_SAMAN_LOG_DIR="+filepath.Join(store.LogsDir(), "saman"))
 	cmd.Stdin = bytes.NewReader(append(in, '\n'))
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr

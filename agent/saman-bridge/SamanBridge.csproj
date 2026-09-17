@@ -23,6 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="System.Configuration" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="SSP1126.PcPos">
       <HintPath>vendor\SSP1126.PcPos.dll</HintPath>
