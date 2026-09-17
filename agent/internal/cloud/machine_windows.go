@@ -19,7 +19,7 @@ func ThisMachine() Machine {
 		major, _, _ := k.GetIntegerValue("CurrentMajorVersionNumber")
 		minor, _, _ := k.GetIntegerValue("CurrentMinorVersionNumber")
 		k.Close()
-		m.OS = fmt.Sprintf("%s %d.%d.%s", name, major, minor, build)
+		m.OS = fmt.Sprintf("%s %d.%d.%s", WindowsName(name, build), major, minor, build)
 	}
 	if k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Cryptography`, registry.QUERY_VALUE|registry.WOW64_64KEY); err == nil {
 		m.MachineID, _, _ = k.GetStringValue("MachineGuid")

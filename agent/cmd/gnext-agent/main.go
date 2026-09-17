@@ -48,6 +48,8 @@ func main() {
 	switch os.Args[1] {
 	case "enrol", "enroll":
 		os.Exit(enrol(os.Args[2:]))
+	case "service":
+		os.Exit(serviceCommand(os.Args[2:]))
 	case "run":
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
@@ -65,6 +67,7 @@ func usage() {
 
   gnext-agent enrol --code XXXX-XXXX [--server https://app.example.ir]
   gnext-agent run
+  gnext-agent service install|uninstall|start|stop
   gnext-agent version
 
 Data folder: %s
