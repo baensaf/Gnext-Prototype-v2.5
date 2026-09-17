@@ -77,6 +77,9 @@ const CHAIN_ONLY_PATHS = [
   '/app/settings/reasons',
   '/app/settings/localization',
   '/app/operations/branches',
+  // Which PC may speak for a branch is decided centrally; a branch account could otherwise
+  // enrol a machine for the shop next door.
+  '/app/operations/agents',
   '/app/reports/branch-comparison',
   // Reading every branch at once is head office's job by definition. A branch manager has
   // the live screens for their own site and no business reading the shop next door's

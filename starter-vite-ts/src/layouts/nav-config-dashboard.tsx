@@ -241,6 +241,11 @@ export function useNavData(): NavSectionProps['data'] {
           path: '/app/operations/monitoring',
           icon: ICONS.dashboard,
         },
+        {
+          title: t('nav.branchAgents', 'Branch Agents'),
+          path: '/app/operations/agents',
+          icon: ICONS.terminal,
+        },
         // Head office reads the branches; the branches run themselves. These two are the
         // read-only halves of screens that stay operational at the shop — a fleet you can
         // see but not dispatch, tills you can see but not close.

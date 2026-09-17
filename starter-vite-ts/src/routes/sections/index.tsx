@@ -19,6 +19,7 @@ import { OptionsPage } from 'src/pages/catalog/options';
 import { PricingPage } from 'src/pages/catalog/pricing';
 import { homePathForRole } from 'src/config/role-access';
 import { SettingsHubPage } from 'src/pages/settings/hub';
+import { AgentsPage } from 'src/pages/operations/agents';
 import { ProductsPage } from 'src/pages/catalog/products';
 import { DineInPage } from 'src/pages/operations/dine-in';
 import { DataResetPage } from 'src/pages/tools/data-reset';
@@ -173,6 +174,7 @@ export const routesSection: RouteObject[] = [
       { path: 'operations/printers', element: <PrintersPage /> },
       { path: 'operations/print-queue', element: <PrintQueuePage /> },
       { path: 'operations/monitoring', element: <MonitoringPage /> },
+      { path: 'operations/agents', element: <AgentsPage /> },
       { path: 'simulation', element: <SimulationCenterPage /> },
       { path: 'simulation/snappfood', element: <SimulationSnappfoodPage /> },
       { path: 'simulation/payments-printers', element: <SimulationPaymentsPrintersPage /> },
