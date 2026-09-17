@@ -705,6 +705,10 @@ export function PrintersPage() {
                 </Button>
               </Stack>
 
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {t('operations.printers.routingHint')}
+              </Alert>
+
               <Table>
                 <TableHead>
                   <TableRow>

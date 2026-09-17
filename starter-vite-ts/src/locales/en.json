@@ -2724,6 +2724,7 @@
     }
   },
   "printQueue": {
+    "station": "Station",
     "title": "Print Queue & Spooler",
     "columnJobId": "Job ID",
     "columnType": "Document Type",
@@ -2888,6 +2889,7 @@
       "addGroup": "Add Printer Group",
       "editGroup": "Edit Printer Group",
       "addRoute": "Add Print Route",
+      "routingHint": "Receipts and bills print once on the route with no selector. Kitchen tickets are split: each item goes to its most specific route (product, then category, then kitchen station, then the route with no selector), and every printer group gets its own ticket with only its items. A good setup is one route per category, e.g. Burgers to the Grill group and Drinks to the Bar group, plus one route with no selector to catch everything else.",
       "editRoute": "Edit Print Route",
       "colCode": "Code",
       "colName": "Printer Name",

@@ -509,7 +509,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     expect(['READY', 'BUMPED', 'COMPLETED']).toContain(bumpedTicket.state || (bumpedTicket as any).status);
 
     // Step 6: Print Failure & Fallback Printer Retry Simulation
-    const printJob = await printQueueService.enqueueOrderPrintJobs(tenantId, submittedOrder.id);
+    const [printJob] = await printQueueService.enqueueOrderPrintJobs(tenantId, submittedOrder.id);
     expect(printJob).toBeDefined();
 
     // Simulate Failure on Primary Printer
@@ -1355,7 +1355,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     expect(createdCustomer?.first_name).toBe('حمیدرضا رضایی');
 
     // Step 3: Simulated POS & Receipt Failure & Retry
-    const printJob = await printQueueService.enqueueOrderPrintJobs(tenantId, identifiedOrder.id);
+    const [printJob] = await printQueueService.enqueueOrderPrintJobs(tenantId, identifiedOrder.id);
     expect(printJob).toBeDefined();
 
     // Simulate failure on primary thermal printer

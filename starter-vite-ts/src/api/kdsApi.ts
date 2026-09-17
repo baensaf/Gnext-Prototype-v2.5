@@ -73,6 +73,9 @@ export interface PrintJob {
   entity_type: string;
   entity_id: string;
   printer_id?: string;
+  printer_group_id?: string;
+  /** The station a kitchen chit is for, e.g. "Grill (1/3)" when the order was split. */
+  label?: string;
   status: 'QUEUED' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'CANCELLED';
   copies: number;
   rendered_html: string;

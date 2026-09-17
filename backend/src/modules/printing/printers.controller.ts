@@ -267,17 +267,7 @@ export class PrintersController {
   async reprintJob(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).userId;
-    const job = await this.queueService.getPrintJobById(tenantId, id);
-    if (!job) throw new NotFoundException('Job not found');
-
-    return await this.queueService.enqueueOrderPrintJobs(
-      tenantId,
-      job.entity_id,
-      job.document_type,
-      true,
-      body.reason || 'Manual Reprint Request',
-      userId,
-    );
+    return await this.queueService.reprintJob(tenantId, id, body?.reason || 'Manual Reprint Request', userId);
   }
 
   @Post('orders/:id/reprint')
