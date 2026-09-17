@@ -1734,7 +1734,15 @@
     "oneTimeNotice": "کوپن‌های یک‌بارمصرف دقیقاً به ۱ بار مصرف کل و ۱ بار مصرف برای هر مشتری محدود شده‌اند.",
     "failedToLoad": "خطا در بارگذاری کوپن‌ها",
     "failedToCreate": "خطا در ایجاد کوپن یک‌بارمصرف",
-    "validationFailed": "اعتبارسنجی کوپن ناموفق بود"
+    "validationFailed": "اعتبارسنجی کوپن ناموفق بود",
+    "freeItemRule": "خرید {{buyQty}} × {{buy}}، {{rewardQty}} × {{reward}} رایگان",
+    "anyProduct": "هر کالا",
+    "typePercentage": "تخفیف درصدی",
+    "typeFreeItem": "کالای رایگان",
+    "buyProduct": "خرید",
+    "rewardProduct": "رایگان",
+    "quantity": "تعداد",
+    "freeItemNotice": "صندوق‌دار کالای رایگان را مثل همیشه ثبت می‌کند؛ وقتی سفارش شرط خرید کوپن را داشته باشد، کوپن قیمت آن را کم می‌کند."
   },
   "authPolicy": {
     "title": "اختیارات تخفیف دستی صندوق‌داران",

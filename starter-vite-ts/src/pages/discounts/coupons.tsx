@@ -12,6 +12,7 @@ import {
   Button,
   Drawer,
   TableRow,
+  MenuItem,
   TableBody,
   TableCell,
   TableHead,
@@ -19,13 +20,16 @@ import {
   Typography,
   CardContent,
   DialogTitle,
+  ToggleButton,
   TableContainer,
   CircularProgress,
+  ToggleButtonGroup,
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { httpClient as axios } from 'src/api/httpClient';
+import { catalogApi, type Product } from 'src/api/catalogApi';
 
 import { Iconify } from 'src/components/iconify';
 
@@ -38,6 +42,11 @@ interface Coupon {
   effective_to?: string | null;
   is_active: boolean;
   percentage: string;
+  coupon_type?: 'PERCENTAGE' | 'FREE_ITEM';
+  buy_product_id?: string | null;
+  buy_quantity?: number;
+  reward_product_id?: string | null;
+  reward_quantity?: number;
 }
 
 interface CouponsPageProps {
@@ -54,7 +63,14 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
   // Form state for 1-time coupon
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [code, setCode] = useState('');
+  const [couponType, setCouponType] = useState<'PERCENTAGE' | 'FREE_ITEM'>('PERCENTAGE');
   const [percentage, setPercentage] = useState('15');
+  // Free item: buy `buyQuantity` of the buy product (any product when empty), get the reward free.
+  const [products, setProducts] = useState<Product[]>([]);
+  const [buyProductId, setBuyProductId] = useState('');
+  const [buyQuantity, setBuyQuantity] = useState('1');
+  const [rewardProductId, setRewardProductId] = useState('');
+  const [rewardQuantity, setRewardQuantity] = useState('1');
   const [minSubtotal, setMinSubtotal] = useState('');
   const [maxCap, setMaxCap] = useState('');
   const [effectiveFrom, setEffectiveFrom] = useState('');
@@ -83,17 +99,39 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
 
   useEffect(() => {
     loadData();
+    catalogApi
+      .getProducts()
+      .then(setProducts)
+      .catch(() => setProducts([]));
   }, []);
+
+  const productName = (id?: string | null) => products.find((p) => p.id === id)?.name || '—';
+
+  const describeCoupon = (coupon: Coupon) =>
+    coupon.coupon_type === 'FREE_ITEM'
+      ? t('coupons.freeItemRule', 'Buy {{buyQty}} × {{buy}}, get {{rewardQty}} × {{reward}} free', {
+          buyQty: coupon.buy_quantity || 1,
+          buy: coupon.buy_product_id ? productName(coupon.buy_product_id) : t('coupons.anyProduct', 'any item'),
+          rewardQty: coupon.reward_quantity || 1,
+          reward: productName(coupon.reward_product_id),
+        })
+      : `${Number(coupon.percentage)}%`;
 
   const handleCreateOneTimeCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code || !percentage) return;
+    const isFreeItem = couponType === 'FREE_ITEM';
+    if (!code || (isFreeItem ? !rewardProductId : !percentage)) return;
     setSaving(true);
     setError(null);
     try {
       await axios.post('/api/v1/coupons/one-time', {
         code: code.trim().toUpperCase(),
-        percentage,
+        coupon_type: couponType,
+        percentage: isFreeItem ? undefined : percentage,
+        buy_product_id: isFreeItem ? buyProductId || undefined : undefined,
+        buy_quantity: isFreeItem ? Number(buyQuantity) || 1 : undefined,
+        reward_product_id: isFreeItem ? rewardProductId : undefined,
+        reward_quantity: isFreeItem ? Number(rewardQuantity) || 1 : undefined,
         minimum_subtotal: minSubtotal || undefined,
         maximum_discount_amount: maxCap || undefined,
         effective_from: effectiveFrom || undefined,
@@ -127,7 +165,12 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
 
   const resetForm = () => {
     setCode('');
+    setCouponType('PERCENTAGE');
     setPercentage('15');
+    setBuyProductId('');
+    setBuyQuantity('1');
+    setRewardProductId('');
+    setRewardQuantity('1');
     setMinSubtotal('');
     setMaxCap('');
     setEffectiveFrom('');
@@ -257,7 +300,7 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
                             {coupon.code}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {Number(coupon.percentage)}%
+                            {describeCoupon(coupon)}
                           </Typography>
                         </TableCell>
                         <TableCell>
@@ -317,15 +360,85 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
                 placeholder={t('coupons.codePlaceholder', 'e.g. WELCOME15')}
               />
 
-              <TextField
-                required
+              <ToggleButtonGroup
+                exclusive
                 fullWidth
-                type="number"
-                label={t('coupons.percentageLabel', 'Discount Percentage (%)')}
-                value={percentage}
-                onChange={(e) => setPercentage(e.target.value)}
-                placeholder="15"
-              />
+                size="small"
+                value={couponType}
+                onChange={(_, v) => v && setCouponType(v)}
+              >
+                <ToggleButton value="PERCENTAGE">{t('coupons.typePercentage', 'Percentage off')}</ToggleButton>
+                <ToggleButton value="FREE_ITEM">{t('coupons.typeFreeItem', 'Free item')}</ToggleButton>
+              </ToggleButtonGroup>
+
+              {couponType === 'PERCENTAGE' ? (
+                <TextField
+                  required
+                  fullWidth
+                  type="number"
+                  label={t('coupons.percentageLabel', 'Discount Percentage (%)')}
+                  value={percentage}
+                  onChange={(e) => setPercentage(e.target.value)}
+                  placeholder="15"
+                />
+              ) : (
+                <>
+                  <Stack direction="row" spacing={2}>
+                    <TextField
+                      select
+                      fullWidth
+                      label={t('coupons.buyProduct', 'Buy')}
+                      value={buyProductId}
+                      onChange={(e) => setBuyProductId(e.target.value)}
+                    >
+                      <MenuItem value="">{t('coupons.anyProduct', 'any item')}</MenuItem>
+                      {products.map((p) => (
+                        <MenuItem key={p.id} value={p.id}>
+                          {p.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
+                      type="number"
+                      label={t('coupons.quantity', 'Qty')}
+                      value={buyQuantity}
+                      onChange={(e) => setBuyQuantity(e.target.value)}
+                      sx={{ width: 100 }}
+                      slotProps={{ htmlInput: { min: 1 } }}
+                    />
+                  </Stack>
+                  <Stack direction="row" spacing={2}>
+                    <TextField
+                      select
+                      required
+                      fullWidth
+                      label={t('coupons.rewardProduct', 'Get free')}
+                      value={rewardProductId}
+                      onChange={(e) => setRewardProductId(e.target.value)}
+                    >
+                      {products.map((p) => (
+                        <MenuItem key={p.id} value={p.id}>
+                          {p.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
+                      type="number"
+                      label={t('coupons.quantity', 'Qty')}
+                      value={rewardQuantity}
+                      onChange={(e) => setRewardQuantity(e.target.value)}
+                      sx={{ width: 100 }}
+                      slotProps={{ htmlInput: { min: 1 } }}
+                    />
+                  </Stack>
+                  <Alert severity="info">
+                    {t(
+                      'coupons.freeItemNotice',
+                      'The cashier rings up the free item as usual; the coupon takes its price off once the order has what the coupon asks to buy.'
+                    )}
+                  </Alert>
+                </>
+              )}
 
               <TextField
                 fullWidth

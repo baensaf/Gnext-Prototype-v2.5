@@ -1734,7 +1734,15 @@
     "oneTimeNotice": "One-Time Coupons are locked to exactly 1 total redemption and 1 redemption per customer.",
     "failedToLoad": "Failed to load coupons",
     "failedToCreate": "Failed to create one-time coupon",
-    "validationFailed": "Coupon validation failed"
+    "validationFailed": "Coupon validation failed",
+    "freeItemRule": "Buy {{buyQty}} × {{buy}}, get {{rewardQty}} × {{reward}} free",
+    "anyProduct": "any item",
+    "typePercentage": "Percentage off",
+    "typeFreeItem": "Free item",
+    "buyProduct": "Buy",
+    "rewardProduct": "Get free",
+    "quantity": "Qty",
+    "freeItemNotice": "The cashier rings up the free item as usual; the coupon takes its price off once the order has what the coupon asks to buy."
   },
   "authPolicy": {
     "title": "Cashier Manual Discount Authorizations",

@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Coupon } from '../../entities/Coupon.entity';
 import { CustomerDiscount } from '../../entities/CustomerDiscount.entity';
 import { Customer } from '../../entities/Customer.entity';
+import { Product } from '../../entities/Product.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { DiscountEvaluationService, DiscountQuoteResult } from './discount-evaluation.service';
@@ -20,6 +21,7 @@ export class DiscountsService {
     @InjectRepository(Coupon) private readonly couponRepo: Repository<Coupon>,
     @InjectRepository(CustomerDiscount) private readonly customerDiscountRepo: Repository<CustomerDiscount>,
     @InjectRepository(Customer) private readonly customerRepo: Repository<Customer>,
+    @InjectRepository(Product) private readonly productRepo: Repository<Product>,
     private readonly evaluationService: DiscountEvaluationService,
     private readonly auditWriter: AuditWriter,
   ) {}
@@ -207,9 +209,22 @@ export class DiscountsService {
     const existing = await this.couponRepo.findOne({ where: { tenant_id: tenantId, code } });
     if (existing) throw new ConflictException(`Coupon code ${code} already exists`);
 
-    const percentage = MoneyUtil.format(dto.percentage);
-    if (MoneyUtil.lessThanOrEqual(percentage, '0') || MoneyUtil.greaterThan(percentage, '100')) {
-      throw new BadRequestException('Coupon percentage must be greater than 0 and less than or equal to 100');
+    const couponType = dto.coupon_type || 'PERCENTAGE';
+    let percentage: string;
+    if (couponType === 'FREE_ITEM') {
+      if (!dto.reward_product_id) throw new BadRequestException('A free-item coupon names the product it gives free');
+      for (const productId of [dto.reward_product_id, dto.buy_product_id].filter(Boolean) as string[]) {
+        if (!(await this.productRepo.findOne({ where: { id: productId, tenant_id: tenantId } }))) {
+          throw new BadRequestException(`Product ${productId} not found`);
+        }
+      }
+      // The reward units are free: all of their price comes off.
+      percentage = '100.00';
+    } else {
+      percentage = MoneyUtil.format(dto.percentage || '0');
+      if (MoneyUtil.lessThanOrEqual(percentage, '0') || MoneyUtil.greaterThan(percentage, '100')) {
+        throw new BadRequestException('Coupon percentage must be greater than 0 and less than or equal to 100');
+      }
     }
 
     // The coupon holds its own terms. It used to be a pointer to a hidden campaign that held
@@ -217,7 +232,12 @@ export class DiscountsService {
     const coupon = this.couponRepo.create({
       tenant_id: tenantId,
       code,
+      coupon_type: couponType,
       percentage,
+      buy_product_id: couponType === 'FREE_ITEM' ? dto.buy_product_id || null : null,
+      buy_quantity: couponType === 'FREE_ITEM' ? dto.buy_quantity || 1 : 1,
+      reward_product_id: couponType === 'FREE_ITEM' ? dto.reward_product_id! : null,
+      reward_quantity: couponType === 'FREE_ITEM' ? dto.reward_quantity || 1 : 1,
       minimum_subtotal: dto.minimum_subtotal ? MoneyUtil.format(dto.minimum_subtotal) : null,
       maximum_discount_amount: dto.maximum_discount_amount ? MoneyUtil.format(dto.maximum_discount_amount) : null,
       max_uses: 1,

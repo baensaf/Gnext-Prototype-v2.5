@@ -15,6 +15,7 @@ import { CustomerCreditAccount } from '../src/entities/CustomerCreditAccount.ent
 import { CreditEntry } from '../src/entities/CreditEntry.entity';
 import { TenantSetting } from '../src/entities/TenantSetting.entity';
 import { ApprovalRequest } from '../src/entities/ApprovalRequest.entity';
+import { Product } from '../src/entities/Product.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 
 describe('Phase 1 Customer Club, Discounts & Coupons Workflows (Spec)', () => {
@@ -104,6 +105,7 @@ describe('Phase 1 Customer Club, Discounts & Coupons Workflows (Spec)', () => {
         CreditService,
         { provide: getRepositoryToken(CustomerDiscount), useValue: customerDiscountRepo },
         { provide: getRepositoryToken(Customer), useValue: customerRepo },
+        { provide: getRepositoryToken(Product), useValue: { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() } },
         { provide: getRepositoryToken(Coupon), useValue: couponRepo },
         { provide: getRepositoryToken(DiscountUsage), useValue: usageRepo },
         { provide: getRepositoryToken(TenantSetting), useValue: settingRepo },

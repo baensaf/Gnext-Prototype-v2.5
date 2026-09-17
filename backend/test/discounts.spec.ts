@@ -78,6 +78,89 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
     expect(result.consideredDiscounts).toEqual([]);
   });
 
+  // HAMI audit gap: free-item promotions, as a coupon type.
+  describe('Free-item coupons', () => {
+    const burger = (quantity: string) => ({ productId: 'p-burger', unitPrice: '300000.0000', quantity });
+    const drink = (quantity: string) => ({ productId: 'p-drink', unitPrice: '50000.0000', quantity });
+    const freeDrink = (overrides: Partial<Coupon> = {}) =>
+      coupon({
+        code: 'DRINK',
+        coupon_type: 'FREE_ITEM',
+        percentage: '100.00',
+        buy_product_id: 'p-burger',
+        buy_quantity: 2,
+        reward_product_id: 'p-drink',
+        reward_quantity: 1,
+        ...overrides,
+      });
+    const quote = (items: any[]) => evaluationService.evaluateQuote('t-1', { orderDraft: { items }, couponCode: 'DRINK' });
+
+    it('makes one drink free when two burgers are bought', async () => {
+      couponRepo.findOne.mockResolvedValue(freeDrink());
+
+      const result = await quote([burger('2'), drink('2')]);
+
+      expect(result.discountTotal).toBe('50000.0000');
+      expect(result.items.map((i) => i.discountTotal)).toEqual(['0.0000', '50000.0000']);
+      expect(result.consideredDiscounts).toEqual([
+        expect.objectContaining({ source: 'COUPON', status: 'APPLIED', discountType: 'FREE_ITEM', couponId: 'cp-1' }),
+      ]);
+    });
+
+    it('does not apply until enough burgers are bought', async () => {
+      couponRepo.findOne.mockResolvedValue(freeDrink());
+
+      const result = await quote([burger('1'), drink('1')]);
+
+      expect(result.discountTotal).toBe('0.0000');
+      expect(result.consideredDiscounts).toEqual([
+        expect.objectContaining({ status: 'REJECTED', rejectionReason: 'COUPON_BUY_CONDITION_NOT_MET' }),
+      ]);
+    });
+
+    it('asks for the free item to be rung up when it is not in the order', async () => {
+      couponRepo.findOne.mockResolvedValue(freeDrink());
+
+      const result = await quote([burger('2')]);
+
+      expect(result.consideredDiscounts).toEqual([
+        expect.objectContaining({ status: 'REJECTED', rejectionReason: 'COUPON_REWARD_NOT_IN_ORDER' }),
+      ]);
+    });
+
+    it('buy 2 get 1 free on one product does not count the free unit towards the buy', async () => {
+      couponRepo.findOne.mockResolvedValue(freeDrink({ buy_product_id: 'p-burger', reward_product_id: 'p-burger' }));
+
+      expect((await quote([burger('2')])).discountTotal).toBe('0.0000');
+      expect((await quote([burger('3')])).discountTotal).toBe('300000.0000');
+    });
+
+    it('with no buy product, any other item qualifies', async () => {
+      couponRepo.findOne.mockResolvedValue(freeDrink({ buy_product_id: null, buy_quantity: 1 }));
+
+      expect((await quote([burger('1'), drink('1')])).discountTotal).toBe('50000.0000');
+      expect((await quote([drink('3')])).discountTotal).toBe('0.0000');
+    });
+
+    it('creates a free-item coupon at 100% of the reward, checking its products exist', async () => {
+      const productFind = jest.fn().mockResolvedValue({ id: 'p' });
+      (service as any).productRepo.findOne = productFind;
+
+      const saved = await service.createOneTimeCoupon('t-1', {
+        code: 'drink',
+        coupon_type: 'FREE_ITEM',
+        buy_product_id: 'p-burger',
+        buy_quantity: 2,
+        reward_product_id: 'p-drink',
+      });
+
+      expect(saved).toEqual(
+        expect.objectContaining({ code: 'DRINK', coupon_type: 'FREE_ITEM', percentage: '100.00', buy_quantity: 2, reward_product_id: 'p-drink', reward_quantity: 1 }),
+      );
+      await expect(service.createOneTimeCoupon('t-1', { code: 'nope', coupon_type: 'FREE_ITEM' })).rejects.toThrow('names the product');
+    });
+  });
+
   describe('Coupons', () => {
     it("applies the coupon's own percentage and names the coupon it came from", async () => {
       couponRepo.findOne.mockResolvedValue(coupon());
