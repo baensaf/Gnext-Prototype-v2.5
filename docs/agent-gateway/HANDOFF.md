@@ -1,6 +1,8 @@
 # Agent gateway — handoff
 
-Written 2026-09-17. Task 0 (the protocol contract) is in [`agent-protocol.md`](agent-protocol.md); nothing else is built yet.
+Written 2026-09-17. **v1 (tasks 0–9) is built, merged and deployed**; see [Status](#status-2026-09-17).
+The contract is [`agent-protocol.md`](agent-protocol.md). Next: the Go agent, then the
+end-to-end test on the branch PC.
 
 ## What you are building
 
@@ -72,6 +74,62 @@ Most of the cost sits in tasks 3, 4, 6, 11, 12.
   of v1.
 - **Locales.** Any new UI strings go into both `starter-vite-ts/src/locales/en.json` and
   `fa.json` with identical keys, or `r27-e2e.spec.ts` fails and blocks deploys.
+
+## Status (2026-09-17)
+
+| # | Task | PR | Where |
+|---|---|---|---|
+| 0 | Protocol contract | #31 | `docs/agent-gateway/agent-protocol.md` |
+| 1 | Agent registry + HQ screen | #32 | `agent`, `agent_enrolment_code`; `/app/operations/agents` |
+| 2 | Enrolment + device-key auth | #33 | `POST /api/v1/agent/enrol`, `AgentAuthGuard`, `GET /api/v1/agent/me` |
+| 3 | WebSocket gateway | #34 | `agent-ws.server.ts`, `agent-connection.ts` (`ws` package, not `@nestjs/websockets`) |
+| 4 | Command delivery | #35 | `agent_command`, `AgentCommandsService` (own table, not the outbox) |
+| 5 | Printing via agent | #36 | `printer.agent_connection`, `AgentPrintingService` |
+| 6 | Card payments via agent | #37 | `payment_device.agent_connection/agent_driver`, `AgentPaymentsService` |
+| 7 | Health screen + offline alerts | #38 | `AgentHealthService`, drawer on the Agents screen |
+| 8 | Releases | #39 | `agent_release`, `/api/v1/agent-releases`, `/api/v1/agent/releases/*` |
+| 9 | Test harness | this PR | `backend/test/utils/fake-agent.ts`, `agent-journey-postgres.spec.ts` |
+
+All modules live in `backend/src/modules/agent-gateway`, except printing and payments, which
+live in their own modules.
+
+### Decisions taken while building (beyond the table above)
+
+- **A device with an agent connection always goes through the agent.** If the agent is
+  offline, its jobs wait (print 30 min, charge 60 s) and then fail with an alert. A device
+  without a connection stays on the simulator. There is no silent fallback to the simulator.
+- **Card payments.** A charge is failed only when the cloud knows it never reached the
+  terminal. Otherwise the payment stays `PROCESSING` with `needs_terminal_check` until
+  `payment.query` answers or a manager resolves it by hand (Checkout → *Check terminal* /
+  *Resolve*).
+- **One terminal per branch in v1** (the first by code that the agent drives), unless the
+  payment intent names a device.
+- **Presence is in memory.** `AgentSessionsService`, the delivery loop and the automatic query
+  timers assume a single backend container. That is the case today.
+
+### Before the end-to-end test on the branch PC (for the user)
+
+1. **Arvan:** enable WebSocket for the domain (idle timeout above 20 s), and allow request
+   bodies up to 64 MB on `/api/v1/agent-releases`.
+2. **VPS `.env`:** set `AGENT_PUBLIC_URL=https://<public domain>`. Without it, `ws_url` is
+   derived from the request host.
+3. **VPS deploy script:** copy `deploy/deploy.sh` over `~/gnext-deploy/deploy.sh`. The new
+   copy fails a deploy whose nginx does not pass WebSocket upgrades (it expects a 401 from
+   `/api/v1/agent/ws`).
+4. **Configure the branch in the app:**
+   - Printer → *Connection: Network (TCP)*, with its IP and port 9100.
+   - Payments → Devices → the Saman terminal → *Connect to agent*, with its IP, port and
+     protocol *Saman (SEP)*.
+   - Agents → *New enrolment code*.
+5. **Build the Go agent** from the contract. Check it against `fake-agent.ts`, which behaves
+   the way the contract requires, and the conformance list in contract §13.
+
+### Still open
+
+- Who builds the Go agent, and where its code lives (recommendation unchanged: `agent/` in
+  this repo, with its own CI job).
+- Whether Saman's protocol can query a past transaction (contract §14). Until that is known,
+  unconfirmed charges are resolved by hand.
 
 ## How to start
 
