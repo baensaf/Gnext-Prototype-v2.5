@@ -24,6 +24,40 @@ export interface BranchAgent {
   connected?: boolean;
 }
 
+export interface AgentDeviceStatus {
+  kind: 'printer' | 'terminal';
+  id: string;
+  status: 'ONLINE' | 'OFFLINE' | 'ERROR' | 'UNSUPPORTED' | 'UNKNOWN' | string;
+  detail?: string | null;
+  checked_at?: string | null;
+}
+
+export interface AgentCommandSummary {
+  id: string;
+  type: string;
+  status: 'QUEUED' | 'SENT' | 'ACKED' | 'DONE' | 'FAILED' | 'EXPIRED';
+  send_count: number;
+  created_at: string;
+  acked_at?: string | null;
+  completed_at?: string | null;
+  error_code?: string | null;
+  error_message?: string | null;
+}
+
+export interface AgentHealth {
+  agent: BranchAgent;
+  connection: {
+    connected: boolean;
+    session_id?: string;
+    connected_at?: string;
+    last_frame_at?: string | null;
+    agent_version?: string | null;
+    capabilities?: string[];
+    devices: AgentDeviceStatus[];
+  };
+  recent_commands: AgentCommandSummary[];
+}
+
 export type EnrolmentCodeState = 'PENDING' | 'USED' | 'EXPIRED' | 'CANCELLED';
 
 export interface EnrolmentCode {
@@ -51,6 +85,10 @@ export const agentsApi = {
     const res = await httpClient.get('/api/v1/agents', {
       params: { branchId: params.branchId || undefined, includeRevoked: params.includeRevoked ? 'true' : undefined },
     });
+    return res.data;
+  },
+  health: async (id: string): Promise<AgentHealth> => {
+    const res = await httpClient.get(`/api/v1/agents/${id}/health`);
     return res.data;
   },
   revoke: async (id: string, reason?: string): Promise<BranchAgent> => {

@@ -3,6 +3,7 @@ import { Request } from 'express';
 import { IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { AgentRegistryService } from './agent-registry.service';
+import { AgentHealthService } from './agent-health.service';
 
 export class CreateEnrolmentCodeDto {
   @IsUUID()
@@ -24,7 +25,10 @@ export class RevokeAgentDto {
 @Roles(...MANAGER_AND_ABOVE)
 @Controller('api/v1/agents')
 export class AgentRegistryController {
-  constructor(private readonly registry: AgentRegistryService) {}
+  constructor(
+    private readonly registry: AgentRegistryService,
+    private readonly health: AgentHealthService,
+  ) {}
 
   @Get()
   async list(
@@ -56,6 +60,12 @@ export class AgentRegistryController {
   @Get(':id')
   async get(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
     return await this.registry.getAgent((req as any).tenantId, id);
+  }
+
+  /** Connection, devices and recent commands, for the health screen. */
+  @Get(':id/health')
+  async agentHealth(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
+    return await this.health.health((req as any).tenantId, id);
   }
 
   @Post(':id/revoke')

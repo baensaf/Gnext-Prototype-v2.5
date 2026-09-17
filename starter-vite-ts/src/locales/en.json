@@ -3113,7 +3113,22 @@
         "CANCELLED": "Cancelled"
       },
       "statusOnline": "Online",
-      "statusOffline": "Offline"
+      "statusOffline": "Offline",
+      "health": {
+        "title": "Agent health",
+        "loadError": "Could not load the agent",
+        "connectedSince": "Connected since",
+        "devices": "Devices",
+        "noDevices": "The agent has not reported any device.",
+        "devicesOffline": "Device status is known only while the agent is online.",
+        "commands": "Recent commands",
+        "noCommands": "No commands yet.",
+        "colType": "Command",
+        "kind": {
+          "printer": "Printer",
+          "terminal": "Card terminal"
+        }
+      }
     }
   },
   "tools": {

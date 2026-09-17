@@ -49,6 +49,8 @@ import { useScopedBranchId } from 'src/contexts/branch-context';
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
+import { AgentHealthDrawer } from './agent-health-drawer';
+
 const CODE_STATE_COLOR: Record<EnrolmentCodeState, 'info' | 'success' | 'default' | 'warning'> = {
   PENDING: 'info',
   USED: 'success',
@@ -80,6 +82,7 @@ export function AgentsPage() {
   const [revokeTarget, setRevokeTarget] = useState<BranchAgent | null>(null);
   const [revokeReason, setRevokeReason] = useState('');
   const [cancelTarget, setCancelTarget] = useState<EnrolmentCode | null>(null);
+  const [healthAgent, setHealthAgent] = useState<BranchAgent | null>(null);
 
   const errorText = useCallback(
     (err: any, fallbackKey: string, fallback: string) => err?.detail || err?.message || t(fallbackKey, fallback),
@@ -108,6 +111,18 @@ export function AgentsPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Online / offline changes on its own; keep the list current without a manual refresh.
+  useEffect(() => {
+    const timer = window.setInterval(async () => {
+      try {
+        setAgents(await agentsApi.list({ branchId: branchId || undefined, includeRevoked }));
+      } catch {
+        // The next tick, or the refresh button, tries again.
+      }
+    }, 20_000);
+    return () => window.clearInterval(timer);
+  }, [branchId, includeRevoked]);
 
   const branchLabel = (id: string) => {
     const b = branches.find((x) => x.id === id);
@@ -270,7 +285,7 @@ export function AgentsPage() {
                 </TableRow>
               ) : (
                 agents.map((a) => (
-                  <TableRow key={a.id} hover>
+                  <TableRow key={a.id} hover sx={{ cursor: 'pointer' }} onClick={() => setHealthAgent(a)}>
                     <TableCell>{a.branch_name ? `${a.branch_name} (${a.branch_code})` : branchLabel(a.branch_id)}</TableCell>
                     <TableCell>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -303,7 +318,13 @@ export function AgentsPage() {
                     <TableCell align="right">
                       {a.status === 'ACTIVE' && (
                         <Tooltip title={t('operations.agents.revoke', 'Revoke')}>
-                          <IconButton color="error" onClick={() => setRevokeTarget(a)}>
+                          <IconButton
+                            color="error"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRevokeTarget(a);
+                            }}
+                          >
                             <BlockIcon />
                           </IconButton>
                         </Tooltip>
@@ -475,6 +496,12 @@ export function AgentsPage() {
         }
         confirmLabel={t('operations.agents.revoke', 'Revoke')}
         confirmColor="error"
+      />
+
+      <AgentHealthDrawer
+        agentId={healthAgent?.id ?? null}
+        branchId={healthAgent?.branch_id ?? null}
+        onClose={() => setHealthAgent(null)}
       />
 
       <ConfirmDialog
