@@ -1208,7 +1208,42 @@
     "filterMethod": "Payment Method",
     "statusSucceeded": "Successful",
     "statusFailed": "Failed",
-    "statusPending": "Pending"
+    "statusPending": "Pending",
+    "terminalAgent": {
+      "title": "Branch agent connection",
+      "needsBranch": "This terminal is not assigned to a branch, so no branch agent can drive it.",
+      "kind": "Connection",
+      "none": "Simulated (no branch agent)",
+      "tcp": "Network (TCP)",
+      "serial": "Serial port",
+      "host": "IP address",
+      "port": "Port",
+      "serialPort": "Serial port",
+      "baud": "Baud rate",
+      "driver": "Terminal protocol",
+      "help": "Card payments at this branch are charged on this terminal through the branch agent.",
+      "saveError": "Could not save the terminal connection",
+      "column": "Branch agent",
+      "connect": "Connect to agent"
+    },
+    "unconfirmed": {
+      "status": "Check terminal",
+      "check": "Check terminal",
+      "resolve": "Resolve",
+      "checkSent": "Asked the card terminal. The result appears here in a moment.",
+      "checkPending": "The terminal has already been asked; waiting for its answer.",
+      "checkError": "Could not ask the terminal",
+      "resolved": "Payment settled",
+      "resolveError": "Could not settle the payment",
+      "resolveTitle": "Settle unconfirmed card charge",
+      "resolveHelp": "Check the terminal's receipt or its transaction report first. Mark it charged only if the terminal shows this charge.",
+      "outcome": "What the terminal shows",
+      "approved": "The card was charged",
+      "notCharged": "The card was not charged",
+      "rrn": "Reference number (RRN)",
+      "reason": "How you checked",
+      "confirm": "Settle payment"
+    }
   },
   "refunds": {
     "title": "Refunds & Returns",

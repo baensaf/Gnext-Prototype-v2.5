@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, Query, Req, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, Query, Req, Logger } from '@nestjs/common';
 import { Request } from 'express';
 import { PaymentService } from './payment.service';
 import { OrderService } from '../order/order.service';
@@ -8,6 +8,8 @@ import {
   PaymentCorrectionDto,
   PaymentDeviceCreateDto,
   SettlementAccountCreateDto,
+  PaymentDeviceAgentDto,
+  TerminalResolutionDto,
 } from './dtos/payment.dto';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 
@@ -65,6 +67,23 @@ export class PaymentController {
     return payment;
   }
 
+  /** Asks the card terminal how a charge it never confirmed ended. */
+  @Post('payments/:id/check-terminal')
+  async checkTerminal(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    return await this.paymentService.checkTerminal(tenantId, id, userId, (req as any).correlationId);
+  }
+
+  /** A manager settles an unconfirmed card charge from the terminal's own report. */
+  @Roles(...MANAGER_AND_ABOVE)
+  @Post('payments/:id/resolve-terminal')
+  async resolveTerminal(@Param('id') id: string, @Body() body: TerminalResolutionDto, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    return await this.paymentService.resolveTerminal(tenantId, id, body, userId, (req as any).correlationId);
+  }
+
   @Post('payments/:id/void')
   async voidPayment(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -108,6 +127,14 @@ export class PaymentController {
   async createDevice(@Body() body: PaymentDeviceCreateDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.paymentService.createDevice(tenantId, body);
+  }
+
+  @Roles(...MANAGER_AND_ABOVE)
+  @Patch('payment-devices/:id/agent')
+  async setDeviceAgent(@Param('id') id: string, @Body() body: PaymentDeviceAgentDto, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    return await this.paymentService.setDeviceAgent(tenantId, id, body, userId);
   }
 
   @Get('settlement-accounts')

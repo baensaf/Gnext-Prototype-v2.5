@@ -45,6 +45,10 @@ export class PaymentAttempt {
   @Column({ type: 'varchar', length: 80, nullable: true })
   error_code: string;
 
+  /** The agent command that carried this attempt; empty for the simulator. */
+  @Column({ type: 'uuid', nullable: true })
+  agent_command_id: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   started_at: Date;
 

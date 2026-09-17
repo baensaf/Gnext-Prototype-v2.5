@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Printer } from '../../entities/Printer.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { AgentCommandsService } from './agent-commands.service';
@@ -66,7 +66,7 @@ export class AgentConfigService {
   async forBranch(tenantId: string, branchId: string): Promise<AgentConfig> {
     const [printers, devices] = await Promise.all([
       this.printerRepo.find({ where: { tenant_id: tenantId, branch_id: branchId }, order: { code: 'ASC' } }),
-      this.deviceRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, kind: 'POS' }, order: { code: 'ASC' } }),
+      this.deviceRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, kind: In(['POS', 'NETWORK']) }, order: { code: 'ASC' } }),
     ]);
 
     const stamps = [...printers, ...devices].map((row) => new Date(row.updated_at).getTime() || 0);
@@ -87,8 +87,9 @@ export class AgentConfigService {
         code: d.code,
         name: d.name,
         active: d.is_active,
-        driver: null,
-        connection: null,
+        // A terminal is the agent's only with both: where it is, and how to talk to it.
+        driver: d.agent_connection ? d.agent_driver ?? null : null,
+        connection: d.agent_driver ? d.agent_connection ?? null : null,
         charge_timeout_s: DEFAULT_CHARGE_TIMEOUT_S,
       })),
     };

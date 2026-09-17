@@ -828,6 +828,13 @@ Not part of the wire contract, but it explains the behaviour the agent will see.
   an alert. A device without a `connection` stays on the in-process simulator, as today.
 - A charge started while the agent is online stays with the agent even if it disconnects:
   the cloud waits for the result on reconnect and never retries it through the simulator.
+- A `payment.charge` that expires is failed only if it was never written to the socket. One
+  that was sent but never acked is treated as `UNKNOWN`: the payment stays `PROCESSING`, flagged
+  for a terminal check, and the cloud sends `payment.query` 30 s later if the agent advertises
+  it. A manager can also settle it by hand from the terminal's report (charged, with its RRN,
+  or not charged).
+- An `APPROVED` result without an `rrn`, or for a different amount, is held for a check, not
+  booked.
 - The cloud raises an `OperationalAlert` when an agent goes offline, and closes it when the
   agent comes back.
 - HQ sees on the Agents screen: status, version, last seen, devices and their status, and

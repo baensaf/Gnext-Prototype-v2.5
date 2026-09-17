@@ -15,6 +15,9 @@ import { CustomerModule } from '../customer/customer.module';
 import { CashierModule } from '../cashier/cashier.module';
 import { AuditModule } from '../audit/audit.module';
 import { OrderModule } from '../order/order.module';
+import { AgentGatewayModule } from '../agent-gateway/agent-gateway.module';
+import { OperationalAlert } from '../../entities/OperationalAlert.entity';
+import { AgentPaymentsService } from './agent-payments.service';
 
 @Module({
   imports: [
@@ -28,14 +31,16 @@ import { OrderModule } from '../order/order.module';
       PaymentDevice,
       PaymentAllocation,
       PaymentAttempt,
+      OperationalAlert,
     ]),
     CustomerModule,
     CashierModule,
     AuditModule,
     // A paid takeaway order completes once its payment lands.
     OrderModule,
+    AgentGatewayModule,
   ],
-  providers: [PaymentService],
+  providers: [PaymentService, AgentPaymentsService],
   controllers: [PaymentController],
   exports: [PaymentService],
 })
