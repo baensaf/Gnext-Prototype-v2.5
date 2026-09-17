@@ -80,6 +80,7 @@ export const paths = {
       printers: `${ROOTS.APP}/operations/printers`,
       printQueue: `${ROOTS.APP}/operations/print-queue`,
       monitoring: `${ROOTS.APP}/operations/monitoring`,
+      agents: `${ROOTS.APP}/operations/agents`,
     },
     simulation: {
       root: `${ROOTS.APP}/simulation`,
