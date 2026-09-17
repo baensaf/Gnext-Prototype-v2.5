@@ -190,6 +190,9 @@ export class PrintQueueService {
       relations: ['items', 'items.options'],
     });
     if (!order) throw new NotFoundException(`Order ${orderId} not found`);
+    // Postgres returns the lines in no set order. Chits print in the order their first line
+    // appears, so without this the same order could number its stations differently each time.
+    order.items = [...(order.items || [])].sort((a, b) => (a.line_number || 0) - (b.line_number || 0));
     return order;
   }
 
