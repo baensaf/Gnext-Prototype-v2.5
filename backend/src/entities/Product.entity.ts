@@ -41,6 +41,14 @@ export class Product {
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
   base_price: string;
 
+  /**
+   * COMBO is a meal deal sold as one line at its own price: its option groups are the slots
+   * (side, drink) and every slot must be filled when it is ordered. Choices may name the
+   * product they give, and carry an upcharge.
+   */
+  @Column({ type: 'varchar', length: 20, default: 'STANDARD' })
+  product_type: 'STANDARD' | 'COMBO';
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

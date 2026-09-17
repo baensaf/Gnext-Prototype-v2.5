@@ -182,15 +182,17 @@ export class CatalogService {
     return { ...prod, optionGroups, variants };
   }
 
-  async createProduct(tenantId: string, data: { code: string; name: string; category_id: string; base_price: string; sku?: string; barcode?: string; description?: string; tax_rate?: string; image_asset_id?: string }, correlationId: string) {
+  async createProduct(tenantId: string, data: { code: string; name: string; category_id: string; base_price: string; sku?: string; barcode?: string; description?: string; tax_rate?: string; image_asset_id?: string; product_type?: 'STANDARD' | 'COMBO' }, correlationId: string) {
     const code = data.code.toUpperCase();
     const existing = await this.prodRepo.findOne({ where: { tenant_id: tenantId, code } });
     if (existing) throw new ConflictException(`Product code ${code} already exists`);
+    this.assertProductType(data.product_type);
 
     const prod = this.prodRepo.create({
       tenant_id: tenantId,
       code,
       name: data.name,
+      product_type: data.product_type || 'STANDARD',
       category_id: data.category_id,
       base_price: MoneyUtil.format(data.base_price || '0'),
       sku: data.sku || null,
@@ -220,6 +222,7 @@ export class CatalogService {
     const prod = await this.prodRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!prod) throw new NotFoundException('Product not found');
     const before = { ...prod };
+    this.assertProductType(data.product_type);
 
     if (data.base_price) {
       data.base_price = MoneyUtil.format(data.base_price);
@@ -496,15 +499,25 @@ export class CatalogService {
     return saved;
   }
 
-  async createOptionItem(tenantId: string, groupId: string, data: { code: string; name: string; price_delta?: string; is_default?: boolean; sort_order?: number }, correlationId: string) {
+  private assertProductType(type?: string) {
+    if (type !== undefined && type !== 'STANDARD' && type !== 'COMBO') {
+      throw new BadRequestException('product_type is STANDARD or COMBO');
+    }
+  }
+
+  async createOptionItem(tenantId: string, groupId: string, data: { code: string; name?: string; price_delta?: string; is_default?: boolean; sort_order?: number; product_id?: string }, correlationId: string) {
     const group = await this.groupRepo.findOne({ where: { id: groupId, tenant_id: tenantId } });
     if (!group) throw new NotFoundException('Option group not found');
+    // A combo slot's choice can be a dish of its own; it takes the dish's name unless given one.
+    const component = data.product_id ? await this.getProductById(tenantId, data.product_id) : null;
+    if (!data.name && !component) throw new BadRequestException('An option needs a name or a product');
 
     const item = this.itemRepo.create({
       tenant_id: tenantId,
       option_group_id: groupId,
+      product_id: component?.id || null,
       code: data.code.toUpperCase(),
-      name: data.name,
+      name: data.name || component!.name,
       price_delta: MoneyUtil.format(data.price_delta || '0'),
       is_default: data.is_default ?? false,
       sort_order: data.sort_order ?? 0,

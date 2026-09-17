@@ -238,7 +238,8 @@
       "setDefault": "Set as default address",
       "saveAddress": "Save address",
       "savingAddress": "Saving…"
-    }
+    },
+    "comboChooseSlot": "Choose the {{slot}}"
   },
   "kiosk": {
     "title": "SELF-SERVICE KIOSK",
@@ -1519,7 +1520,12 @@
       "nameHint": "e.g. Double Beef Burger",
       "viewDetails": "View details",
       "manageAvailability": "Manage availability",
-      "readOnlyNotice": "Head office sets the menu for the whole chain, so these products are read-only here. What your branch decides is whether it can serve them today — that lives on Availability."
+      "readOnlyNotice": "Head office sets the menu for the whole chain, so these products are read-only here. What your branch decides is whether it can serve them today — that lives on Availability.",
+      "comboBadge": "Combo",
+      "productType": "Product type",
+      "typeStandard": "Standard item",
+      "typeCombo": "Combo (meal deal)",
+      "comboHelp": "A combo sells as one line at this price. Attach option groups as its slots (side, drink), each with a minimum of 1; the cashier must fill every slot. A choice can add an upcharge."
     },
     "categoriesPage": {
       "title": "Catalog Categories",
@@ -1567,7 +1573,10 @@
         "loadFailed": "Failed to load option groups",
         "createGroupFailed": "Failed to create option group",
         "addItemFailed": "Failed to add option item"
-      }
+      },
+      "itemProduct": "Gives product (for combo slots)",
+      "itemProductHelp": "Link a menu item so the choice follows its availability. Leave empty for a plain modifier.",
+      "noProduct": "None (plain modifier)"
     },
     "availabilityPage": {
       "title": "Product Availability & Suspensions (86'd)",
