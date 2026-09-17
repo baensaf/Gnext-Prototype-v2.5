@@ -28,6 +28,9 @@ or in the source. Nothing here is inferred from a code read alone.
 | 14 | Credit sale within limit, then a second sale over the limit | ✅ works (minor, F15) |
 | 15 | Moadian: refuse unpaid/uncompleted, issue for a completed discounted order | ⚠️ guards right, invoice wrong — F1 addendum |
 
+This walk records the state on 2026-09-16. F1, F2, F3, F8, F10, F11, F12, F13 and F14 have
+since been fixed and merged; see the fix tracker in [README](README.md).
+
 All flows in the plan are now walked. Rows 10–15 were added in a second pass the same day,
 driven through the same HTTP API the screens call and checked against the database;
 the incoming-orders screen, the Snappfood simulator and the kiosk were driven in the browser.

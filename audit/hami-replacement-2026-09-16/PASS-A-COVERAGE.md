@@ -78,8 +78,10 @@ module and `tools/import-wizard`. Aggregator mapping via the Snappfood catalog-s
 
 *Gaps vs scope:*
 - **Combo products** — no entity, no endpoint (only a string mention in the importer and simulator).
+  *Closed by #26 (2026-09-17).*
 - **Scheduled availability** — `ProductAvailability` supports branch, channel and
   `suspended_until`, but there is no recurring schedule (e.g. breakfast 07:00–11:00 daily).
+  *Closed by #24 (2026-09-17).*
 - Packaging charges exist on the order, not as per-product configuration.
 - Product-level / non-stackable discount configuration: see area 6.
 
@@ -106,6 +108,7 @@ Pages `discounts/hub`, `discounts/coupons`, `customer-club/customer-discounts`,
 *Gaps vs scope:*
 - **Discount campaigns were deliberately cut** — coupons carry their own terms instead.
 - **Free-item and free-delivery promotions** — no implementation found.
+  *Free-item closed by #25 (2026-09-17) as a coupon type; free delivery still open.*
 - Discount funding / source tracking is not modelled.
 
 ### 7. Customer Credit — Built
