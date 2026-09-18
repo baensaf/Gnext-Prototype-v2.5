@@ -95,6 +95,8 @@ Logs: `%ProgramData%\Gnext\Agent\logs\agent.log`.
 
 ## Release
 
-Bump `VERSION` and merge. From that CI run's `gnext-agent-windows` artifact, upload
-`gnext-agent.exe` on the Agents screen with the same version; publishing it tells online agents
-to update. Hand `gnext-agent-setup-<version>.exe` to new branches.
+Bump `VERSION` and merge. After the deploy, CI uploads that `gnext-agent.exe` to the cloud as
+an unpublished release; press **Publish** on the Agents screen to tell online agents to update
+(setup: `docs/agent-gateway/HANDOFF.md`, "Agent releases from CI"). Hand
+`gnext-agent-setup-<version>.exe`, from the run's `gnext-agent-windows` artifact, to new
+branches.

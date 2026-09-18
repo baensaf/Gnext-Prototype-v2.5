@@ -20,6 +20,7 @@ env:
   DEPLOY_PORT: '20481'
   DEPLOY_USER: baensaf
   DEPLOY_KNOWN_HOST: '[195.234.80.33]:20481 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK+Zrt2kVT+8saVUy3+QcJE5pcza3Vo5YV1Un3fCSZaK'
+  AGENT_RELEASE_URL: https://gnextdev.ir
 
 jobs:
   backend:
@@ -100,7 +101,7 @@ jobs:
       - name: Build gnext-agent.exe
         run: |
           version=$(cat VERSION)
-          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$version" -o dist/gnext-agent.exe ./cmd/gnext-agent
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "-s -w -X main.version=$version" -o dist/gnext-agent.exe ./cmd/gnext-agent
           sha256sum dist/gnext-agent.exe
       - uses: actions/upload-artifact@v4
         with:
@@ -108,7 +109,7 @@ jobs:
           path: agent/dist/gnext-agent.exe
 
   # Wraps the agent in a setup wizard (Inno Setup). The artifact holds the installer for branch
-  # PCs and the bare .exe to upload as a release on the Branch Agents screen.
+  # PCs and the bare .exe (agent-release offers that one to the cloud after deploy).
   agent-installer:
     needs: agent
     runs-on: windows-latest
@@ -185,3 +186,48 @@ jobs:
           git archive --format=tar.gz "$sha" \
             | ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" -o ConnectTimeout=20 -o ServerAliveInterval=30 \
                 "$DEPLOY_USER@$DEPLOY_HOST" "deploy $sha"
+
+  # Offers the agent this run built to the cloud, unpublished; head office publishes it on the
+  # Branch Agents screen. Only a new agent/VERSION makes a new release; the same version again
+  # is a no-op. Runs after deploy because the backend that takes the upload is the one deployed.
+  agent-release:
+    if: github.ref == 'refs/heads/main'
+    needs: deploy
+    runs-on: ubuntu-latest
+    concurrency:
+      group: agent-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          sparse-checkout: agent/VERSION
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: gnext-agent-exe
+          path: dist
+      - name: Upload to the cloud
+        env:
+          TOKEN: ${{ secrets.AGENT_RELEASE_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::AGENT_RELEASE_TOKEN is not set; the agent build was not uploaded. See docs/agent-gateway/HANDOFF.md."
+            exit 0
+          fi
+          version=$(tr -d '[:space:]' < agent/VERSION)
+          sha256sum dist/gnext-agent.exe
+          code=$(curl -sS -o response.json -w '%{http_code}' --max-time 300 --retry 3 --retry-all-errors \
+            -H "Authorization: Bearer $TOKEN" \
+            -F "version=$version" -F "commit=$(git rev-parse HEAD)" \
+            -F "file=@dist/gnext-agent.exe;type=application/octet-stream" \
+            "$AGENT_RELEASE_URL/api/v1/agent-releases/ci") || code=000
+          cat response.json 2>/dev/null; echo
+          [ "$code" = "200" ] || { echo "::error::Upload of agent $version failed: HTTP $code"; exit 1; }
+          if [ "$(jq -r .created response.json)" = "true" ]; then
+            echo "::notice::Agent $version uploaded. Publish it on the Branch Agents screen to roll it out."
+          elif [ "$(jq -r .sha256_matches response.json)" = "true" ]; then
+            echo "Agent $version is already uploaded; nothing to do."
+          else
+            echo "::warning::Agent $version is already uploaded with a different build. Bump agent/VERSION to ship agent changes."
+          fi

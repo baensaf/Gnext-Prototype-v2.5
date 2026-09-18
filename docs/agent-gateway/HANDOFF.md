@@ -124,6 +124,23 @@ live in their own modules.
 5. **Build the Go agent** from the contract. Check it against `fake-agent.ts`, which behaves
    the way the contract requires, and the conformance list in contract §13.
 
+### Agent releases from CI
+
+After a deploy of `main`, the `agent-release` job uploads the `gnext-agent.exe` that run built,
+unpublished. To ship an agent change: bump `agent/VERSION` in the PR, merge, then press
+**Publish** on the Branch Agents screen. Nobody downloads or uploads a file by hand.
+
+One-time setup (until it is done the job warns and skips):
+
+1. Make a token: `openssl rand -hex 32`.
+2. VPS `~/gnext-deploy/.env`: `AGENT_RELEASE_CI_TOKEN=<token>`, then redeploy (Actions → CI/CD
+   → Run workflow) so the backend picks it up.
+3. GitHub → Settings → Secrets and variables → Actions: repository secret
+   `AGENT_RELEASE_TOKEN` = the same token.
+
+The build is reproducible (`-trimpath -buildvcs=false`), so the job's warning that a version is
+already uploaded "with a different build" means the agent changed without a version bump.
+
 ### Still open
 
 - ~~Who builds the Go agent~~ Built in `agent/` (see `agent/README.md`), with an `agent` CI
