@@ -146,6 +146,12 @@ func run(ctx context.Context, console io.Writer) int {
 		log.Error("data folder", "err", err)
 		return 1
 	}
+	release, err := store.Lock()
+	if err != nil {
+		log.Error("not starting", "home", store.Home(), "err", err)
+		return 1
+	}
+	defer release()
 
 	h, err := newHost(log)
 	if err != nil {
