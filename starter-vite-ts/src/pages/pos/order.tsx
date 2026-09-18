@@ -8,6 +8,7 @@ import type {
   Category,
   OptionItem,
   OptionGroup,
+  DailyStockLine,
   ProductVariant,
   ProductAvailability,
 } from 'src/api/catalogApi';
@@ -143,6 +144,8 @@ export function PosOrderPage() {
   const [availabilities, setAvailabilities] = useState<ProductAvailability[]>([]);
   // Items outside their selling window right now (breakfast after 11:00), with the window.
   const [offSchedule, setOffSchedule] = useState<Map<string, string>>(new Map());
+  // Today's stock counts at this branch; a product at zero is sold out until tomorrow's count.
+  const [dailyStock, setDailyStock] = useState<DailyStockLine[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [customerAddresses, setCustomerAddresses] = useState<CustomerAddress[]>([]);
@@ -315,9 +318,19 @@ export function PosOrderPage() {
         .getOffScheduleProducts(selectedBranchId || undefined)
         .then((list) => setOffSchedule(new Map(list.map((o) => [o.product_id, o.windows]))))
         .catch(() => setOffSchedule(new Map()));
+    const refreshStock = () =>
+      catalogApi
+        .getDailyStock(selectedBranchId || undefined)
+        .then(setDailyStock)
+        .catch(() => setDailyStock([]));
     refresh();
+    refreshStock();
+    const stockTimer = window.setInterval(refreshStock, 60_000);
     const timer = window.setInterval(refresh, 60_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      window.clearInterval(stockTimer);
+    };
   }, [selectedBranchId]);
 
   useEffect(() => {
@@ -393,22 +406,47 @@ export function PosOrderPage() {
     try {
       const [vList, groups] = await Promise.all([
         catalogApi.getProductVariants(p.id).catch(() => [] as ProductVariant[]),
-        // A combo offers only its own slots; the register refuses any other choice.
-        p.product_type === 'COMBO'
-          ? catalogApi
-              .getProductById(p.id)
-              .then((full) => full.optionGroups || [])
-              .catch(() => [] as OptionGroup[])
-          : catalogApi.getOptionGroups().catch(() => [] as OptionGroup[]),
+        // A combo offers only its own slots; the register refuses any other choice. Any other
+        // product offers its own groups when it has some, else every group as before.
+        catalogApi
+          .getProductById(p.id)
+          .then((full) =>
+            p.product_type === 'COMBO' || (full.optionGroups || []).length > 0
+              ? full.optionGroups || []
+              : catalogApi.getOptionGroups()
+          )
+          .catch(() => [] as OptionGroup[]),
       ]);
 
-      setProductVariants(vList || []);
-      setOptionGroups(groups || []);
+      // A variant or add-on taken off sale today is not offered; nor is an add-on this
+      // product leaves out of its group.
+      const live = availabilities.filter(
+        (a) => a.is_suspended && (!a.suspended_until || new Date(a.suspended_until) > new Date())
+      );
+      const stoppedVariants = new Set(live.filter((a) => a.product_id === p.id && a.variant_id).map((a) => a.variant_id));
+      const stoppedAddons = new Set(live.filter((a) => a.option_item_id).map((a) => a.option_item_id));
+      const soldOutVariants = new Set(
+        dailyStock.filter((s) => s.product_id === p.id && s.variant_id && s.remaining <= 0).map((s) => s.variant_id)
+      );
+      const onSale = (vList || []).filter((v) => !stoppedVariants.has(v.id) && !soldOutVariants.has(v.id));
+      if ((vList || []).length > 0 && onSale.length === 0) {
+        setError(t('pos.itemSuspendedNotice', { name: p.name }));
+        return;
+      }
+      const offered = (groups || []).map((g) => ({
+        ...g,
+        items: (g.items || []).filter(
+          (i) => !(g.excluded_item_ids || []).includes(i.id) && !stoppedAddons.has(i.id)
+        ),
+      }));
 
-      const defaultVariant = vList?.find((v) => v.is_default) || vList?.[0];
+      setProductVariants(onSale);
+      setOptionGroups(offered);
+
+      const defaultVariant = onSale.find((v) => v.is_default) || onSale[0];
       setSelectedVariantId(defaultVariant?.id || '');
 
-      if ((vList && vList.length > 1) || (groups && groups.length > 0)) {
+      if (onSale.length > 1 || offered.length > 0) {
         setOptionDialogOpen(true);
       } else {
         addToCart(p, defaultVariant, []);
@@ -1255,8 +1293,14 @@ export function PosOrderPage() {
   // A suspension row whose timer has run out is history, not a stop.
   const suspendedProductIds = new Set(
     availabilities
+      // Only whole-product stops grey the tile; a stop on one variant or on an add-on
+      // leaves the rest of the product on sale.
+      .filter((a) => !a.variant_id && !a.option_item_id && !!a.product_id)
       .filter((a) => a.is_suspended && (!a.suspended_until || new Date(a.suspended_until) > new Date()))
-      .map((a) => a.product_id),
+      .map((a) => a.product_id as string),
+  );
+  const soldOutProductIds = new Set(
+    dailyStock.filter((s) => !s.variant_id && s.remaining <= 0).map((s) => s.product_id)
   );
 
   return (
@@ -1465,7 +1509,8 @@ export function PosOrderPage() {
                   <Grid container spacing={1.5}>
                     {filteredProducts.map((p) => {
                       const offWindow = offSchedule.get(p.id);
-                      const isSuspended = suspendedProductIds.has(p.id) || offWindow !== undefined;
+                      const soldOut = soldOutProductIds.has(p.id);
+                      const isSuspended = suspendedProductIds.has(p.id) || offWindow !== undefined || soldOut;
                       return (
                       <Grid size={{ xs: 6, sm: 6, md: 4, lg: 3 }} key={p.id}>
                         <Paper
@@ -1492,6 +1537,10 @@ export function PosOrderPage() {
                                 }),
                           }}
                           onClick={() => {
+                            if (soldOut && !suspendedProductIds.has(p.id)) {
+                              setError(t('pos.itemSoldOutNotice', { defaultValue: '{{name}} is sold out today.', name: p.name }));
+                              return;
+                            }
                             if (offWindow !== undefined && !suspendedProductIds.has(p.id)) {
                               setError(t('pos.itemOffScheduleNotice', { name: p.name, windows: offWindow }));
                               return;
@@ -1509,7 +1558,9 @@ export function PosOrderPage() {
                                 label={
                                   suspendedProductIds.has(p.id)
                                     ? t('pos.itemSuspended')
-                                    : t('pos.itemOffSchedule', { windows: offWindow })
+                                    : soldOut
+                                      ? t('pos.itemSoldOut', 'Sold out')
+                                      : t('pos.itemOffSchedule', { windows: offWindow })
                                 }
                                 size="small"
                                 color="error"

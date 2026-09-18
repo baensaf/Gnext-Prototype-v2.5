@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Put, Delete, Param, Query, Body, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { CatalogService } from './catalog.service';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
@@ -98,6 +98,24 @@ export class CatalogController {
     return await this.catalogService.attachOptionGroupToProduct(tenantId, id, body.optionGroupId, body.sortOrder, correlationId);
   }
 
+  @HeadOfficeOnly()
+  @Delete('products/:id/option-groups/:groupId')
+  async detachOptionGroup(@Param('id') id: string, @Param('groupId') groupId: string, @Req() req: Request) {
+    return await this.catalogService.detachOptionGroupFromProduct((req as any).tenantId, id, groupId, (req as any).correlationId);
+  }
+
+  // Which items of an attached group this product leaves out.
+  @HeadOfficeOnly()
+  @Put('products/:id/option-groups/:groupId/excluded-items')
+  async setExcludedOptionItems(
+    @Param('id') id: string,
+    @Param('groupId') groupId: string,
+    @Body() body: { excludedItemIds: string[] },
+    @Req() req: Request,
+  ) {
+    return await this.catalogService.setExcludedOptionItems((req as any).tenantId, id, groupId, body.excludedItemIds, (req as any).correlationId);
+  }
+
   // Product Variants Endpoints
   @Get('products/:id/variants')
   async getProductVariants(@Param('id') id: string, @Req() req: Request) {
@@ -171,6 +189,30 @@ export class CatalogController {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.catalogService.createOptionItem(tenantId, id, body, correlationId);
+  }
+
+  @HeadOfficeOnly()
+  @Patch('option-groups/:id')
+  async updateOptionGroup(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+    return await this.catalogService.updateOptionGroup((req as any).tenantId, id, body, (req as any).correlationId);
+  }
+
+  @HeadOfficeOnly()
+  @Delete('option-groups/:id')
+  async archiveOptionGroup(@Param('id') id: string, @Req() req: Request) {
+    return await this.catalogService.archiveOptionGroup((req as any).tenantId, id, (req as any).correlationId);
+  }
+
+  @HeadOfficeOnly()
+  @Patch('option-groups/:id/items/:itemId')
+  async updateOptionItem(@Param('id') id: string, @Param('itemId') itemId: string, @Body() body: any, @Req() req: Request) {
+    return await this.catalogService.updateOptionItem((req as any).tenantId, id, itemId, body, (req as any).correlationId);
+  }
+
+  @HeadOfficeOnly()
+  @Delete('option-groups/:id/items/:itemId')
+  async archiveOptionItem(@Param('id') id: string, @Param('itemId') itemId: string, @Req() req: Request) {
+    return await this.catalogService.archiveOptionItem((req as any).tenantId, id, itemId, (req as any).correlationId);
   }
 
   // Price Groups & Bulk Updates
@@ -300,10 +342,14 @@ export class CatalogController {
 
   // `hours` absent or 0 means "off the menu here until somebody puts it back" —
   // the branch does not carry it. A number of hours is today's 86, and the item
-  // returns by itself.
+  // returns by itself; `until: 'NEXT_SHIFT'` brings it back when the branch next opens.
+  // The stop is on the product, or on one variant of it, or on an add-on item.
   @Roles(...MANAGER_AND_ABOVE)
   @Post('availability/suspend')
-  async suspendProduct(@Body() body: { productId: string; branchId?: string; hours?: number; reason?: string }, @Req() req: Request) {
+  async suspendProduct(
+    @Body() body: { productId?: string; variantId?: string; optionItemId?: string; branchId?: string; hours?: number; until?: 'NEXT_SHIFT'; reason?: string },
+    @Req() req: Request,
+  ) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.catalogService.suspendProduct(
@@ -313,12 +359,13 @@ export class CatalogController {
       body.hours,
       body.reason,
       correlationId,
+      { variantId: body.variantId, optionItemId: body.optionItemId, untilNextShift: body.until === 'NEXT_SHIFT' },
     );
   }
 
   @Roles(...MANAGER_AND_ABOVE)
   @Post('availability/resume')
-  async resumeProduct(@Body() body: { productId: string; branchId?: string }, @Req() req: Request) {
+  async resumeProduct(@Body() body: { productId?: string; variantId?: string; optionItemId?: string; branchId?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.catalogService.resumeProduct(
@@ -326,6 +373,35 @@ export class CatalogController {
       body.productId,
       effectiveBranchId((req as any).userBranchId, body.branchId),
       correlationId,
+      { variantId: body.variantId, optionItemId: body.optionItemId },
+    );
+  }
+
+  @Get('availability/next-shift')
+  async getNextShift(@Query('branchId') branchId: string, @Req() req: Request) {
+    const at = await this.catalogService.nextShiftStart((req as any).tenantId, effectiveBranchId((req as any).userBranchId, branchId));
+    return { next_shift_start: at };
+  }
+
+  // Today's stock: a branch's own count, like the 86, so branch managers set it.
+  @Get('availability/daily-stock')
+  async getDailyStock(@Query('branchId') branchId: string, @Req() req: Request) {
+    const scoped = effectiveBranchId((req as any).userBranchId, branchId);
+    if (!scoped) return [];
+    return await this.catalogService.getDailyStock((req as any).tenantId, scoped);
+  }
+
+  @Roles(...MANAGER_AND_ABOVE)
+  @Put('availability/daily-stock')
+  async setDailyStock(
+    @Body() body: { branchId?: string; entries: Array<{ productId: string; variantId?: string | null; quantity: number | null }> },
+    @Req() req: Request,
+  ) {
+    return await this.catalogService.setDailyStock(
+      (req as any).tenantId,
+      effectiveBranchId((req as any).userBranchId, body.branchId),
+      body.entries,
+      (req as any).correlationId,
     );
   }
 }

@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate } from 'react-router';
 import React, { useState, useEffect, useCallback } from 'react';
 
+import AddIcon from '@mui/icons-material/Add';
 import SaveIcon from '@mui/icons-material/Save';
+import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import {
   Box,
@@ -21,6 +23,7 @@ import {
   TableCell,
   TableHead,
   TextField,
+  IconButton,
   Typography,
   CardContent,
   TableContainer,
@@ -31,7 +34,26 @@ import { tenantApi } from 'src/api/tenantApi';
 
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
-const DAY_KEYS = ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const;
+// Iran's week, Saturday first. day_of_week is JavaScript's day number (0 = Sunday), the
+// same as the selling windows and the server's next-shift clock use.
+const WEEK = [
+  { key: 'saturday', day: 6 },
+  { key: 'sunday', day: 0 },
+  { key: 'monday', day: 1 },
+  { key: 'tuesday', day: 2 },
+  { key: 'wednesday', day: 3 },
+  { key: 'thursday', day: 4 },
+  { key: 'friday', day: 5 },
+] as const;
+
+/** One opening window of a day. A day with several (lunch, dinner) has several shifts. */
+type Shift = Pick<BranchOperatingHour, 'open_time' | 'close_time' | 'spans_midnight'>;
+interface DayHours {
+  closed: boolean;
+  shifts: Shift[];
+}
+
+const DEFAULT_SHIFT: Shift = { open_time: '08:00:00', close_time: '23:00:00', spans_midnight: false };
 
 export function BranchDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -40,7 +62,7 @@ export function BranchDetailPage() {
   const theme = useTheme();
 
   const [branch, setBranch] = useState<Branch | null>(null);
-  const [hours, setHours] = useState<BranchOperatingHour[]>([]);
+  const [week, setWeek] = useState<Record<number, DayHours>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -52,7 +74,16 @@ export function BranchDetailPage() {
       const b = await tenantApi.getBranchById(id);
       const h = await tenantApi.getBranchHours(id);
       setBranch(b);
-      setHours(h || []);
+      const byDay: Record<number, DayHours> = {};
+      for (const { day } of WEEK) {
+        const rows = (h || []).filter((r) => r.day_of_week === day);
+        const open = rows.filter((r) => !r.is_closed).sort((x, y) => x.open_time.localeCompare(y.open_time));
+        byDay[day] = {
+          closed: rows.length > 0 && open.length === 0,
+          shifts: open.length ? open.map(({ open_time, close_time, spans_midnight }) => ({ open_time, close_time, spans_midnight })) : [DEFAULT_SHIFT],
+        };
+      }
+      setWeek(byDay);
     } catch (err: any) {
       setError(err.detail || err.message || t('operations.branchDetail.loadError', 'Failed to load branch details'));
     } finally {
@@ -64,16 +95,22 @@ export function BranchDetailPage() {
     loadData();
   }, [loadData]);
 
-  const handleHourChange = (dayIndex: number, field: keyof BranchOperatingHour, value: any) => {
-    setHours((prev) =>
-      prev.map((item) => (item.day_of_week === dayIndex ? { ...item, [field]: value } : item))
-    );
-  };
+  const setDay = (day: number, change: (d: DayHours) => DayHours) =>
+    setWeek((prev) => ({ ...prev, [day]: change(prev[day] || { closed: false, shifts: [DEFAULT_SHIFT] }) }));
+
+  const setShift = (day: number, index: number, change: Partial<Shift>) =>
+    setDay(day, (d) => ({ ...d, shifts: d.shifts.map((s, i) => (i === index ? { ...s, ...change } : s)) }));
 
   const handleSaveHours = async () => {
     if (!id) return;
     try {
-      await tenantApi.updateBranchHours(id, hours);
+      const rows = WEEK.flatMap(({ day }) => {
+        const d = week[day] || { closed: false, shifts: [DEFAULT_SHIFT] };
+        return d.closed
+          ? [{ day_of_week: day, is_closed: true } as BranchOperatingHour]
+          : d.shifts.map((s) => ({ day_of_week: day, is_closed: false, ...s }) as BranchOperatingHour);
+      });
+      await tenantApi.updateBranchHours(id, rows);
       setSuccess(t('operations.branchDetail.saveSuccess', 'Branch operating hours schedule saved successfully'));
       setError(null);
     } catch (err: any) {
@@ -155,6 +192,12 @@ export function BranchDetailPage() {
               {t('operations.branchDetail.saveSchedule', 'Save Schedule')}
             </Button>
           </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t(
+              'operations.branchDetail.shiftsHelp',
+              'Open all day in one stretch, or in shifts (lunch and dinner). An item taken off until the next shift comes back when the next shift here starts.'
+            )}
+          </Typography>
 
           <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
             <Table>
@@ -168,54 +211,83 @@ export function BranchDetailPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {DAY_KEYS.map((dayKey, index) => {
-                  const hourRow = hours.find((h) => h.day_of_week === index) || {
-                    day_of_week: index,
-                    open_time: '08:00:00',
-                    close_time: '23:00:00',
-                    is_closed: false,
-                    spans_midnight: false,
-                  };
-
-                  return (
-                    <TableRow key={dayKey} hover>
-                      <TableCell sx={{ fontWeight: 'bold' }}>
-                        {t(`operations.branchDetail.days.${dayKey}`, dayKey)}
-                      </TableCell>
-                      <TableCell align="center">
-                        <Switch
-                          checked={hourRow.is_closed}
-                          onChange={(e) => handleHourChange(index, 'is_closed', e.target.checked)}
-                          color="error"
-                        />
+                {WEEK.map(({ key, day }) => {
+                  const d = week[day] || { closed: false, shifts: [DEFAULT_SHIFT] };
+                  return d.shifts.map((shift, index) => (
+                    <TableRow key={`${key}-${index}`} hover>
+                      {index === 0 && (
+                        <>
+                          <TableCell rowSpan={d.shifts.length} sx={{ fontWeight: 'bold', verticalAlign: 'top' }}>
+                            {t(`operations.branchDetail.days.${key}`, key)}
+                            {!d.closed && (
+                              <Box>
+                                <Button
+                                  size="small"
+                                  startIcon={<AddIcon />}
+                                  onClick={() =>
+                                    setDay(day, (x) => ({
+                                      ...x,
+                                      shifts: [...x.shifts, { open_time: '19:00:00', close_time: '23:00:00', spans_midnight: false }],
+                                    }))
+                                  }
+                                >
+                                  {t('operations.branchDetail.addShift', 'Add shift')}
+                                </Button>
+                              </Box>
+                            )}
+                          </TableCell>
+                          <TableCell rowSpan={d.shifts.length} align="center" sx={{ verticalAlign: 'top' }}>
+                            <Switch
+                              checked={d.closed}
+                              onChange={(e) => setDay(day, (x) => ({ ...x, closed: e.target.checked }))}
+                              color="error"
+                            />
+                          </TableCell>
+                        </>
+                      )}
+                      <TableCell>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ minWidth: 48 }}>
+                            {t('operations.branchDetail.shiftN', { defaultValue: 'Shift {{n}}', n: index + 1 })}
+                          </Typography>
+                          <TextField
+                            type="time"
+                            size="small"
+                            disabled={d.closed}
+                            value={shift.open_time.substring(0, 5)}
+                            onChange={(e) => setShift(day, index, { open_time: `${e.target.value}:00` })}
+                          />
+                        </Stack>
                       </TableCell>
                       <TableCell>
                         <TextField
                           type="time"
                           size="small"
-                          disabled={hourRow.is_closed}
-                          value={hourRow.open_time ? hourRow.open_time.substring(0, 5) : '08:00'}
-                          onChange={(e) => handleHourChange(index, 'open_time', `${e.target.value}:00`)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          type="time"
-                          size="small"
-                          disabled={hourRow.is_closed}
-                          value={hourRow.close_time ? hourRow.close_time.substring(0, 5) : '23:00'}
-                          onChange={(e) => handleHourChange(index, 'close_time', `${e.target.value}:00`)}
+                          disabled={d.closed}
+                          value={shift.close_time.substring(0, 5)}
+                          onChange={(e) => setShift(day, index, { close_time: `${e.target.value}:00` })}
                         />
                       </TableCell>
                       <TableCell align="center">
-                        <Switch
-                          checked={hourRow.spans_midnight}
-                          disabled={hourRow.is_closed}
-                          onChange={(e) => handleHourChange(index, 'spans_midnight', e.target.checked)}
-                        />
+                        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'center' }}>
+                          <Switch
+                            checked={shift.spans_midnight}
+                            disabled={d.closed}
+                            onChange={(e) => setShift(day, index, { spans_midnight: e.target.checked })}
+                          />
+                          {d.shifts.length > 1 && !d.closed && (
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => setDay(day, (x) => ({ ...x, shifts: x.shifts.filter((_, i) => i !== index) }))}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                        </Stack>
                       </TableCell>
                     </TableRow>
-                  );
+                  ));
                 })}
               </TableBody>
             </Table>

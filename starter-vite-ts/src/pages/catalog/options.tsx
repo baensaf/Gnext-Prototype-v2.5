@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import {
   Box,
   Card,
@@ -36,6 +38,8 @@ import { MoneyUtil } from 'src/utils/money.util';
 
 import { catalogApi } from 'src/api/catalogApi';
 
+import { OptionGroupEditDialog } from './option-group-edit-dialog';
+
 export function OptionsPage() {
   const { t } = useTranslation();
 
@@ -60,6 +64,7 @@ export function OptionsPage() {
   // A combo slot's choice can be a dish of its own, so it follows that dish's availability.
   const [itemProductId, setItemProductId] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
+  const [editingGroup, setEditingGroup] = useState<OptionGroup | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -133,7 +138,6 @@ export function OptionsPage() {
             <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
               {t('catalog.optionsPage.title')}
             </Typography>
-            <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             {t('catalog.optionsPage.subtitle')}
@@ -177,17 +181,46 @@ export function OptionsPage() {
                     </Stack>
                   </Box>
 
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<AddIcon />}
-                    onClick={() => {
-                      setSelectedGroupId(group.id);
-                      setItemDialogOpen(true);
-                    }}
-                  >
-                    {t('catalog.optionsPage.addItem')}
-                  </Button>
+                  <Stack direction="row" spacing={1}>
+                    <Button size="small" startIcon={<EditIcon />} onClick={() => setEditingGroup(group)}>
+                      {t('catalog.optionsPage.edit', 'Edit')}
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      startIcon={<DeleteIcon />}
+                      onClick={async () => {
+                        if (
+                          !window.confirm(
+                            t(
+                              'catalog.optionsPage.deleteGroupConfirm',
+                              'Delete this add-on group? It comes off every product that has it.'
+                            )
+                          )
+                        )
+                          return;
+                        try {
+                          await catalogApi.deleteOptionGroup(group.id);
+                          loadData();
+                        } catch (err: any) {
+                          setError(err.detail || t('catalog.optionsPage.errors.saveGroupFailed', 'Could not save the add-on group'));
+                        }
+                      }}
+                    >
+                      {t('catalog.optionsPage.delete', 'Delete')}
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<AddIcon />}
+                      onClick={() => {
+                        setSelectedGroupId(group.id);
+                        setItemDialogOpen(true);
+                      }}
+                    >
+                      {t('catalog.optionsPage.addItem')}
+                    </Button>
+                  </Stack>
                 </Stack>
 
                 <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
@@ -228,6 +261,15 @@ export function OptionsPage() {
           </Grid>
         ))}
       </Grid>
+
+      <OptionGroupEditDialog
+        group={editingGroup}
+        onClose={() => setEditingGroup(null)}
+        onSaved={() => {
+          setEditingGroup(null);
+          loadData();
+        }}
+      />
 
       {/* Create Option Group Drawer */}
       <Drawer anchor="right" open={groupDrawerOpen} onClose={() => setGroupDrawerOpen(false)}>

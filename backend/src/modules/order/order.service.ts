@@ -1699,7 +1699,7 @@ export class OrderService {
       // Spec 4.7: an 86'd item is off sale everywhere it can be ordered. The POS,
       // the kiosk and the aggregator webhook all land here, so the stop is
       // enforced on the line rather than trusted to each caller's catalog view.
-      const suspension = await this.catalogService.getSuspension(tenantId, product.id, order.branch_id);
+      const suspension = await this.catalogService.getSuspension(tenantId, product.id, order.branch_id, new Date(), itemDto.variant_id || null);
       if (suspension.outOfSchedule) {
         throw new BadRequestException({
           statusCode: 400,
@@ -1749,6 +1749,7 @@ export class OrderService {
         if (optItem) chosen.push({ optItem, optDto });
       }
       const groupNames = product.product_type === 'COMBO' ? await this.checkComboChoices(tenantId, product, chosen.map((c) => c.optItem), em) : new Map<string, string>();
+      await this.catalogService.assertLineSellable(em, tenantId, order, product, variant?.id || null, qty, chosen.map((c) => c.optItem));
 
       for (const { optItem, optDto } of chosen) {
         // A choice that is a dish of its own (a combo's drink) is off sale when that dish is.

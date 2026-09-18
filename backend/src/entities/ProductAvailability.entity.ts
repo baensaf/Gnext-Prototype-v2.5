@@ -8,8 +8,17 @@ export class ProductAvailability {
   @Column({ type: 'uuid' })
   tenant_id: string;
 
-  @Column({ type: 'uuid' })
-  product_id: string;
+  /** Null for a stop on an add-on (option_item_id), which belongs to no one product. */
+  @Column({ type: 'uuid', nullable: true })
+  product_id: string | null;
+
+  /** Set when only this variant is off sale (the cold one, not the hot one). */
+  @Column({ type: 'uuid', nullable: true })
+  variant_id: string | null;
+
+  /** Set when the stop is on an add-on item, which goes off sale on every product it is on. */
+  @Column({ type: 'uuid', nullable: true })
+  option_item_id: string | null;
 
   @Column({ type: 'uuid', nullable: true })
   branch_id: string;

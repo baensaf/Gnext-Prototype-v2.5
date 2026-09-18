@@ -14,6 +14,8 @@ import { MenuProduct } from '../../entities/MenuProduct.entity';
 import { ProductAvailability } from '../../entities/ProductAvailability.entity';
 import { AvailabilitySchedule } from '../../entities/AvailabilitySchedule.entity';
 import { Branch } from '../../entities/Branch.entity';
+import { BranchOperatingHour } from '../../entities/BranchOperatingHour.entity';
+import { DailyStock } from '../../entities/DailyStock.entity';
 import { CatalogService } from './catalog.service';
 import { CatalogController } from './catalog.controller';
 import { AuditModule } from '../audit/audit.module';
@@ -36,6 +38,8 @@ import { PricingModule } from '../pricing/pricing.module';
       ProductAvailability,
       AvailabilitySchedule,
       Branch,
+      BranchOperatingHour,
+      DailyStock,
     ]),
     AuditModule,
     forwardRef(() => PricingModule),
