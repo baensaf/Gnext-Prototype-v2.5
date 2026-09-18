@@ -248,7 +248,36 @@
     },
     "comboChooseSlot": "{{slot}} را انتخاب کنید",
     "itemSoldOut": "تمام شد",
-    "itemSoldOutNotice": "موجودی امروز {{name}} تمام شده است."
+    "itemSoldOutNotice": "موجودی امروز {{name}} تمام شده است.",
+    "stop": {
+      "open": "توقف فروش {{name}}",
+      "title": "توقف فروش {{name}}",
+      "what": "چه چیزی",
+      "allSizes": "همهٔ اندازه‌ها",
+      "why": "دلیل",
+      "reasons": {
+        "SOLD_OUT": "تمام شده",
+        "INGREDIENT_MISSING": "کمبود مواد",
+        "EQUIPMENT_DOWN": "خرابی دستگاه",
+        "QUALITY": "مشکل کیفیت",
+        "OTHER": "دیگر"
+      },
+      "otherReason": "دلیل",
+      "untilNextShift": "تا شیفت بعد",
+      "untilFurtherNotice": "تا اطلاع ثانوی",
+      "needsManager": "نیاز به مدیر",
+      "approverPin": "رمز مدیر",
+      "approverPinHelp": "مدیر یا سرپرست رمز خود را وارد کند",
+      "takeOff": "توقف فروش",
+      "putBack": "فروش دوباره",
+      "isOff": "فروش این کالا در این شعبه متوقف است",
+      "chainWide": "دفتر مرکزی فروش این کالا را در همهٔ شعبه‌ها متوقف کرده است؛ فقط دفتر مرکزی می‌تواند آن را برگرداند",
+      "backAt": "بازگشت {{at}}",
+      "stoppedNextShift": "فروش {{name}} تا شیفت بعد متوقف شد",
+      "stoppedFurtherNotice": "فروش {{name}} تا اطلاع ثانوی متوقف شد",
+      "resumed": "{{name}} دوباره فروخته می‌شود",
+      "failed": "این کالا تغییر نکرد"
+    }
   },
   "kiosk": {
     "title": "کیوسک خودسفارش‌دهی",

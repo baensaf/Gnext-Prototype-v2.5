@@ -36,6 +36,14 @@ export interface StopTarget {
   untilNextShift?: boolean;
 }
 
+/** Who stopped or resumed an item, for the log: the signed-in user and whoever's pin released it. */
+export interface StopActor {
+  userId?: string | null;
+  approverId?: string | null;
+  /** Where it was done, e.g. POS for the register's tile. */
+  source?: string;
+}
+
 @Injectable()
 export class CatalogService {
   constructor(
@@ -874,6 +882,7 @@ export class CatalogService {
     reason?: string,
     correlationId?: string,
     target: StopTarget = {},
+    by: StopActor = {},
   ) {
     const key = this.stopKey(productId, target);
     let avail = await this.availRepo.findOne({ where: this.stopWhere(tenantId, key, branchId) });
@@ -905,15 +914,17 @@ export class CatalogService {
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
+      actorId: by.userId || undefined,
       action: 'PRODUCT_SUSPENDED',
+      branchId,
       correlationId: correlationId || '00000000-0000-0000-0000-000000000000',
-      details: { ...key, branchId, hours, untilNextShift: !!target.untilNextShift, reason, suspendedUntil },
+      details: { ...key, branchId, hours, untilNextShift: !!target.untilNextShift, reason, suspendedUntil, approverId: by.approverId || null, source: by.source || 'ADMIN' },
     });
 
     return saved;
   }
 
-  async resumeProduct(tenantId: string, productId: string | undefined, branchId?: string, correlationId?: string, target: StopTarget = {}) {
+  async resumeProduct(tenantId: string, productId: string | undefined, branchId?: string, correlationId?: string, target: StopTarget = {}, by: StopActor = {}) {
     const key = this.stopKey(productId, target);
     const avail = await this.availRepo.findOne({ where: this.stopWhere(tenantId, key, branchId) });
     if (avail) {
@@ -934,9 +945,11 @@ export class CatalogService {
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
+      actorId: by.userId || undefined,
       action: 'PRODUCT_RESUMED',
+      branchId,
       correlationId: correlationId || '00000000-0000-0000-0000-000000000000',
-      details: { ...key, branchId },
+      details: { ...key, branchId, approverId: by.approverId || null, source: by.source || 'ADMIN' },
     });
 
     return { success: true };

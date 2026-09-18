@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Patch, Put, Delete, Param, Query, Body, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Put, Delete, Param, Query, Body, Req, BadRequestException } from '@nestjs/common';
 import { Request } from 'express';
 import { CatalogService } from './catalog.service';
 import { PriceListService } from './price-lists.service';
+import { ApprovalService } from '../approval/approval.service';
 import { PriceChangeInput, PriceChangeService } from './price-changes.service';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { HeadOfficeOnly, Roles, MANAGER_AND_ABOVE } from '../../common/decorators/roles.decorator';
@@ -21,6 +22,7 @@ export class CatalogController {
   constructor(
     private readonly catalogService: CatalogService,
     private readonly priceLists: PriceListService,
+    private readonly approvals: ApprovalService,
     private readonly priceChanges: PriceChangeService,
   ) {}
 
@@ -466,6 +468,64 @@ export class CatalogController {
       effectiveBranchId((req as any).userBranchId, body.branchId),
       correlationId,
       { variantId: body.variantId, optionItemId: body.optionItemId },
+    );
+  }
+
+  // 86 from the register's tile. Any register user can take an item off until the next shift,
+  // with a reason. Until further notice, and putting an item back, need an approver: someone
+  // whose role can approve, or anyone with an approver's pin. The branch is the session's
+  // (or, for head office at a register, the one it is working in).
+  @Post('availability/pos-stop')
+  async posStop(
+    @Body() body: { productId: string; variantId?: string; until: 'NEXT_SHIFT' | 'FURTHER_NOTICE'; reason: string; branchId?: string; approverPin?: string },
+    @Req() req: Request,
+  ) {
+    const branchId = this.registerBranch(req, body.branchId);
+    const reason = (body.reason || '').trim();
+    if (!reason) throw new BadRequestException({ statusCode: 400, code: 'REASON_REQUIRED', message: 'Pick why the item is off' });
+    if (reason.length > 200) throw new BadRequestException('A reason is at most 200 characters');
+    if (body.until !== 'NEXT_SHIFT' && body.until !== 'FURTHER_NOTICE') throw new BadRequestException('Stop it until the next shift or until further notice');
+    const approverId =
+      body.until === 'FURTHER_NOTICE' ? await this.authorizeStop(req, 'ITEM_STOP_UNTIL_FURTHER_NOTICE', body.approverPin) : null;
+    return await this.catalogService.suspendProduct(
+      (req as any).tenantId,
+      body.productId,
+      branchId,
+      undefined,
+      reason,
+      (req as any).correlationId,
+      { variantId: body.variantId, untilNextShift: body.until === 'NEXT_SHIFT' },
+      { userId: (req as any).userId, approverId, source: 'POS' },
+    );
+  }
+
+  @Post('availability/pos-resume')
+  async posResume(@Body() body: { productId: string; variantId?: string; branchId?: string; approverPin?: string }, @Req() req: Request) {
+    const branchId = this.registerBranch(req, body.branchId);
+    const approverId = await this.authorizeStop(req, 'ITEM_RESUME', body.approverPin);
+    return await this.catalogService.resumeProduct(
+      (req as any).tenantId,
+      body.productId,
+      branchId,
+      (req as any).correlationId,
+      { variantId: body.variantId },
+      { userId: (req as any).userId, approverId, source: 'POS' },
+    );
+  }
+
+  private registerBranch(req: Request, requested?: string) {
+    const branchId = effectiveBranchId((req as any).userBranchId, requested);
+    if (!branchId) throw new BadRequestException({ statusCode: 400, code: 'BRANCH_REQUIRED', message: 'Pick the branch this register is in' });
+    return branchId;
+  }
+
+  /** An approver acts alone; anyone else needs an approver's pin. Answers whose pin it was. */
+  private authorizeStop(req: Request, action: string, pin?: string) {
+    return this.approvals.authorizeMoneyOut(
+      (req as any).tenantId,
+      action,
+      { id: (req as any).userId, role: (req as any).userRole, branchId: (req as any).userBranchId ?? null },
+      pin,
     );
   }
 

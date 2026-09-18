@@ -472,6 +472,25 @@ export const catalogApi = {
     const res = await httpClient.post('/api/v1/availability/resume', { productId, branchId });
     return res.data;
   },
+  /**
+   * The register's own 86. Until the next shift needs only a reason; until further notice
+   * needs an approver, or an approver's pin from anyone else.
+   */
+  posStop: async (body: {
+    productId: string;
+    variantId?: string | null;
+    until: 'NEXT_SHIFT' | 'FURTHER_NOTICE';
+    reason: string;
+    branchId?: string | null;
+    approverPin?: string;
+  }): Promise<ProductAvailability> => {
+    const res = await httpClient.post('/api/v1/availability/pos-stop', { ...body, variantId: body.variantId || undefined, branchId: body.branchId || undefined });
+    return res.data;
+  },
+  /** Put an item back on sale from the register: an approver, or an approver's pin. */
+  posResume: async (body: { productId: string; variantId?: string | null; branchId?: string | null; approverPin?: string }): Promise<void> => {
+    await httpClient.post('/api/v1/availability/pos-resume', { ...body, variantId: body.variantId || undefined, branchId: body.branchId || undefined });
+  },
   /** Take a product, one variant or an add-on off sale, Snappfood-style. */
   stopItem: async ({ until, hours, ...target }: StopRequest): Promise<ProductAvailability> => {
     const res = await httpClient.post('/api/v1/availability/suspend', {
