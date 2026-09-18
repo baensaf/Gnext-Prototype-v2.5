@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Put, Delete, Param, Query, Body, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { CatalogService } from './catalog.service';
+import { PriceListService } from './price-lists.service';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { HeadOfficeOnly, Roles, MANAGER_AND_ABOVE } from '../../common/decorators/roles.decorator';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
@@ -16,7 +17,10 @@ import { effectiveBranchId } from '../../common/utils/user-scope.util';
  */
 @Controller('api/v1')
 export class CatalogController {
-  constructor(private readonly catalogService: CatalogService) {}
+  constructor(
+    private readonly catalogService: CatalogService,
+    private readonly priceLists: PriceListService,
+  ) {}
 
   // Categories
   @Get('categories')
@@ -215,27 +219,63 @@ export class CatalogController {
     return await this.catalogService.archiveOptionItem((req as any).tenantId, id, itemId, (req as any).correlationId);
   }
 
-  // Price Groups & Bulk Updates
-  @Get('price-groups')
-  async getPriceGroups(@Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.catalogService.getPriceGroups(tenantId);
+  // Branch price lists. A branch on a list sells at the list's prices, everything else at base.
+  // Reading a branch's prices is open (a register has to show them); a branch account is
+  // answered about its own branch.
+  @Get('catalog/prices')
+  async getBranchPrices(@Query('branchId') branchId: string, @Req() req: Request) {
+    return await this.priceLists.getBranchPrices((req as any).tenantId, effectiveBranchId((req as any).userBranchId, branchId) || null);
+  }
+
+  @Get('catalog/price-lists')
+  async getPriceLists(@Req() req: Request) {
+    return await this.priceLists.getPriceLists((req as any).tenantId);
   }
 
   @HeadOfficeOnly()
-  @Post('price-groups')
-  async createPriceGroup(@Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.catalogService.createPriceGroup(tenantId, body, correlationId);
+  @Post('catalog/price-lists')
+  async createPriceList(@Body() body: { name: string; code?: string }, @Req() req: Request) {
+    return await this.priceLists.createPriceList((req as any).tenantId, body, (req as any).correlationId);
   }
 
   @HeadOfficeOnly()
-  @Post('price-groups/:id/overrides')
-  async setPriceOverride(@Param('id') id: string, @Body() body: { productId: string; overridePrice: string }, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.catalogService.setPriceOverride(tenantId, id, body.productId, body.overridePrice, correlationId);
+  @Patch('catalog/price-lists/:id')
+  async updatePriceList(@Param('id') id: string, @Body() body: { name?: string; is_active?: boolean }, @Req() req: Request) {
+    return await this.priceLists.updatePriceList((req as any).tenantId, id, body, (req as any).correlationId);
+  }
+
+  @HeadOfficeOnly()
+  @Delete('catalog/price-lists/:id')
+  async archivePriceList(@Param('id') id: string, @Req() req: Request) {
+    return await this.priceLists.archivePriceList((req as any).tenantId, id, (req as any).correlationId);
+  }
+
+  @Get('catalog/price-lists/:id/prices')
+  async getPriceListSheet(@Param('id') id: string, @Req() req: Request) {
+    return await this.priceLists.getPriceListSheet((req as any).tenantId, id);
+  }
+
+  @HeadOfficeOnly()
+  @Put('catalog/price-lists/:id/prices')
+  async setListPrice(
+    @Param('id') id: string,
+    @Body() body: { productId: string; variantId?: string | null; amount: string | null },
+    @Req() req: Request,
+  ) {
+    return await this.priceLists.setListPrice(
+      (req as any).tenantId,
+      id,
+      body.productId,
+      body.variantId || null,
+      body.amount === '' || body.amount === undefined ? null : body.amount,
+      (req as any).correlationId,
+    );
+  }
+
+  @HeadOfficeOnly()
+  @Put('catalog/branch-price-list')
+  async assignBranchPriceList(@Body() body: { branchId: string; priceListId: string | null }, @Req() req: Request) {
+    return await this.priceLists.assignBranch((req as any).tenantId, body.branchId, body.priceListId || null, (req as any).correlationId);
   }
 
   @HeadOfficeOnly()
@@ -248,14 +288,18 @@ export class CatalogController {
 
   // Aggregator price sheet. The markup rule itself is the CHANNEL_PRICING setting.
   @Get('catalog/channel-prices')
-  async getChannelPriceSheet(@Query('channel') channel: string, @Req() req: Request) {
-    return await this.catalogService.getChannelPriceSheet((req as any).tenantId, (channel || 'SNAPPFOOD').toUpperCase());
+  async getChannelPriceSheet(@Query('channel') channel: string, @Query('branchId') branchId: string, @Req() req: Request) {
+    return await this.catalogService.getChannelPriceSheet(
+      (req as any).tenantId,
+      (channel || 'SNAPPFOOD').toUpperCase(),
+      effectiveBranchId((req as any).userBranchId, branchId) || null,
+    );
   }
 
   @HeadOfficeOnly()
   @Put('catalog/channel-prices')
   async setChannelFixedPrice(
-    @Body() body: { channel?: string; productId: string; variantId?: string | null; amount: string | null },
+    @Body() body: { channel?: string; productId: string; variantId?: string | null; amount: string | null; branchId?: string | null },
     @Req() req: Request,
   ) {
     return await this.catalogService.setChannelFixedPrice(
@@ -265,6 +309,8 @@ export class CatalogController {
       body.variantId || null,
       body.amount === '' || body.amount === undefined ? null : body.amount,
       (req as any).correlationId,
+      // Only which branch's sheet comes back; the fixed price itself is chain-wide.
+      body.branchId || null,
     );
   }
 

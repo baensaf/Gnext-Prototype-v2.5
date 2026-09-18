@@ -146,6 +146,14 @@ export function PosOrderPage() {
   const [offSchedule, setOffSchedule] = useState<Map<string, string>>(new Map());
   // Today's stock counts at this branch; a product at zero is sold out until tomorrow's count.
   const [dailyStock, setDailyStock] = useState<DailyStockLine[]>([]);
+  // This branch's in-store prices (its price list's, else base), keyed `product:variant`. The
+  // server charges these, so the grid and cart show them too.
+  const [branchPrices, setBranchPrices] = useState<Map<string, string>>(new Map());
+  const priceOf = useCallback(
+    (product: Product, variant?: ProductVariant | null) =>
+      branchPrices.get(`${product.id}:${variant?.id || ''}`) ?? (variant ? variant.base_price : product.base_price || '0'),
+    [branchPrices]
+  );
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [customerAddresses, setCustomerAddresses] = useState<CustomerAddress[]>([]);
@@ -323,6 +331,10 @@ export function PosOrderPage() {
         .getAvailabilities(selectedBranchId || undefined)
         .then(setAvailabilities)
         .catch(() => undefined);
+      catalogApi
+        .getBranchPrices(selectedBranchId || undefined)
+        .then((sheet) => setBranchPrices(new Map(sheet.items.map((i) => [`${i.product_id}:${i.variant_id || ''}`, i.price]))))
+        .catch(() => undefined);
     };
     const refreshStock = () =>
       catalogApi
@@ -461,7 +473,7 @@ export function PosOrderPage() {
     if (placedOrder) setPlacedOrder(null);
     if (holdSuccessMessage) setHoldSuccessMessage(null);
 
-    const basePrice = variant ? variant.base_price : (product.base_price || '0');
+    const basePrice = priceOf(product, variant);
     const optionsSum = options.reduce((sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2), '0');
     const itemUnitPrice = MoneyUtil.add(basePrice, optionsSum, 2);
 
@@ -541,9 +553,7 @@ export function PosOrderPage() {
         (sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2),
         '0',
       );
-      const basePrice = copy[index].selectedVariant
-        ? copy[index].selectedVariant!.base_price
-        : copy[index].product.base_price || '0';
+      const basePrice = priceOf(copy[index].product, copy[index].selectedVariant);
       const unitPrice = MoneyUtil.add(basePrice, optionsSum, 2);
 
       copy[index] = {
@@ -817,7 +827,7 @@ export function PosOrderPage() {
           items: cart.map((ci) => ({
             productId: ci.product.id,
             variantId: ci.selectedVariant?.id || undefined,
-            unitPrice: (ci.selectedVariant?.base_price || ci.product.base_price || (ci.product as any).price || '0').toString(),
+            unitPrice: priceOf(ci.product, ci.selectedVariant).toString(),
             quantity: ci.quantity.toString(),
           })),
         },
@@ -873,7 +883,7 @@ export function PosOrderPage() {
         setAppliedCouponCode('');
       }
     }
-  }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType, selectedDeliveryZoneId, deliveryZones]);
+  }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType, selectedDeliveryZoneId, deliveryZones, priceOf]);
 
   useEffect(() => {
     evaluateQuote();
@@ -1595,7 +1605,7 @@ export function PosOrderPage() {
                             </Typography>
                           </Box>
                           <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main', mt: 1 }}>
-                            {MoneyUtil.formatCurrency(p.base_price)} IRR
+                            {MoneyUtil.formatCurrency(priceOf(p))} IRR
                           </Typography>
                         </Paper>
                       </Grid>
@@ -2619,7 +2629,7 @@ export function PosOrderPage() {
                           sx={{ m: 0 }}
                         />
                         <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                          {MoneyUtil.formatCurrency(v.base_price)} IRR
+                          {MoneyUtil.formatCurrency(selectedProduct ? priceOf(selectedProduct, v) : v.base_price)} IRR
                         </Typography>
                       </Paper>
                     </Grid>

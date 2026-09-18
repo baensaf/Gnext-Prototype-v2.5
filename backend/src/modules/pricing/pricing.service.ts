@@ -278,14 +278,25 @@ export class PricingService {
       const entryRepoTx = manager.getRepository(PriceEntry);
 
       for (const item of preview.items) {
-        await entryRepoTx.createQueryBuilder()
+        // Close only the price this row replaces: the same product at the same level (this
+        // list, this branch, or base), product-wide, with no channel, order type or add-on.
+        // Other branches', lists', sizes' and channels' prices stay as they are.
+        const close = entryRepoTx.createQueryBuilder()
           .update(PriceEntry)
           .set({ effective_to: effectiveFrom })
           .where('tenant_id = :tenantId', { tenantId })
           .andWhere('product_id = :productId', { productId: item.product_id })
+          .andWhere('variant_id IS NULL')
+          .andWhere('channel IS NULL')
+          .andWhere('order_type IS NULL')
+          .andWhere('modifier_option_id IS NULL')
           .andWhere('(effective_to IS NULL OR effective_to > :effectiveFrom)', { effectiveFrom })
-          .andWhere('effective_from < :effectiveFrom', { effectiveFrom })
-          .execute();
+          .andWhere('effective_from < :effectiveFrom', { effectiveFrom });
+        if (params.price_group_id) close.andWhere('price_group_id = :listId', { listId: params.price_group_id });
+        else close.andWhere('price_group_id IS NULL');
+        if (params.branch_id) close.andWhere('branch_id = :branchId', { branchId: params.branch_id });
+        else close.andWhere('branch_id IS NULL');
+        await close.execute();
 
         const newEntry = entryRepoTx.create({
           tenant_id: tenantId,

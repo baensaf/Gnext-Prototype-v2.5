@@ -7,7 +7,8 @@ import { OptionGroup } from '../../entities/OptionGroup.entity';
 import { OptionItem } from '../../entities/OptionItem.entity';
 import { ProductOptionGroup } from '../../entities/ProductOptionGroup.entity';
 import { PriceGroup } from '../../entities/PriceGroup.entity';
-import { PriceGroupItem } from '../../entities/PriceGroupItem.entity';
+import { PriceGroupBranch } from '../../entities/PriceGroupBranch.entity';
+import { PriceEntry } from '../../entities/PriceEntry.entity';
 import { Menu } from '../../entities/Menu.entity';
 import { MenuCategory } from '../../entities/MenuCategory.entity';
 import { MenuProduct } from '../../entities/MenuProduct.entity';
@@ -18,6 +19,7 @@ import { BranchOperatingHour } from '../../entities/BranchOperatingHour.entity';
 import { DailyStock } from '../../entities/DailyStock.entity';
 import { CatalogService } from './catalog.service';
 import { CatalogController } from './catalog.controller';
+import { PriceListService } from './price-lists.service';
 import { AuditModule } from '../audit/audit.module';
 import { PricingModule } from '../pricing/pricing.module';
 
@@ -31,7 +33,8 @@ import { PricingModule } from '../pricing/pricing.module';
       OptionItem,
       ProductOptionGroup,
       PriceGroup,
-      PriceGroupItem,
+      PriceGroupBranch,
+      PriceEntry,
       Menu,
       MenuCategory,
       MenuProduct,
@@ -44,8 +47,8 @@ import { PricingModule } from '../pricing/pricing.module';
     AuditModule,
     forwardRef(() => PricingModule),
   ],
-  providers: [CatalogService],
+  providers: [CatalogService, PriceListService],
   controllers: [CatalogController],
-  exports: [CatalogService],
+  exports: [CatalogService, PriceListService],
 })
 export class CatalogModule {}

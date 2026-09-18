@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { basePriceLists } from './utils/price-list-fakes';
 import { KioskService } from '../src/modules/kiosk/kiosk.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Category } from '../src/entities/Category.entity';
@@ -86,6 +87,7 @@ describe('KioskService (Unit)', () => {
         { provide: PrintQueueService, useValue: printQueueService },
         { provide: getRepositoryToken(ProductVariant), useValue: variantRepo },
         { provide: CatalogService, useValue: catalogService },
+        basePriceLists(),
       ],
     }).compile();
 
@@ -357,6 +359,7 @@ describe('KioskService selling rules', () => {
         { provide: getRepositoryToken(ProductVariant), useValue: variantRepo },
         { provide: AuditWriter, useValue: { write: jest.fn() } },
         { provide: CatalogService, useValue: catalogService },
+        basePriceLists(),
       ],
     }).compile();
     return { service: module.get<KioskService>(KioskService), catalogService };

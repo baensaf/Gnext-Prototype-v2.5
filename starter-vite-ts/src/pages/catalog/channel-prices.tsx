@@ -1,3 +1,4 @@
+import type { Branch } from 'src/api/tenantApi';
 import type { ChannelPriceSheet } from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
@@ -13,19 +14,24 @@ import {
   Alert,
   Table,
   Button,
+  Select,
   TableRow,
+  MenuItem,
   TableBody,
   TableCell,
   TableHead,
   TextField,
   Typography,
+  InputLabel,
   CardContent,
+  FormControl,
   TableContainer,
   InputAdornment,
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
 
+import { tenantApi } from 'src/api/tenantApi';
 import { catalogApi } from 'src/api/catalogApi';
 import { settingsApi } from 'src/api/settingsApi';
 
@@ -43,12 +49,15 @@ export function ChannelPricesPage() {
   const [roundTo, setRoundTo] = useState('0');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [search, setSearch] = useState('');
+  const [branches, setBranches] = useState<Branch[]>([]);
+  // Whose in-store prices the markup starts from; none means base prices.
+  const [branchId, setBranchId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const data = await catalogApi.getChannelPriceSheet(CHANNEL);
+      const data = await catalogApi.getChannelPriceSheet(CHANNEL, branchId || null);
       setSheet(data);
       setMarkup(String(data.rule.markup_percent));
       setRoundTo(String(data.rule.round_to));
@@ -56,11 +65,18 @@ export function ChannelPricesPage() {
     } catch (err: any) {
       setError(err.detail || err.message || t('pricing.channelPrices.loadFailed'));
     }
-  }, [t]);
+  }, [t, branchId]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    tenantApi
+      .getBranches()
+      .then((bs) => setBranches(bs.filter((b) => b.is_active && (!b.branch_type || b.branch_type === 'RESTAURANT'))))
+      .catch(() => setBranches([]));
+  }, []);
 
   const saveRule = async () => {
     try {
@@ -81,7 +97,7 @@ export function ChannelPricesPage() {
   const saveFixed = async (productId: string, variantId: string | null) => {
     const value = (drafts[key(productId, variantId)] ?? '').trim();
     try {
-      setSheet(await catalogApi.setChannelFixedPrice(CHANNEL, productId, variantId, value === '' ? null : value));
+      setSheet(await catalogApi.setChannelFixedPrice(CHANNEL, productId, variantId, value === '' ? null : value, branchId || null));
       setDrafts((prev) => {
         const next = { ...prev };
         delete next[key(productId, variantId)];
@@ -146,15 +162,35 @@ export function ChannelPricesPage() {
         </CardContent>
       </Card>
 
-      <TextField
-        size="small"
-        placeholder={t('pricing.channelPrices.search')}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        sx={{ mb: 2, maxWidth: 360 }}
-        fullWidth
-        slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
-      />
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2, alignItems: { sm: 'center' } }}>
+        <FormControl size="small" sx={{ minWidth: 240 }}>
+          <InputLabel shrink>{t('pricing.channelPrices.branch')}</InputLabel>
+          <Select value={branchId} displayEmpty label={t('pricing.channelPrices.branch')} onChange={(e) => setBranchId(e.target.value)}>
+            <MenuItem value="">{t('pricing.channelPrices.basePrices')}</MenuItem>
+            {branches.map((b) => (
+              <MenuItem key={b.id} value={b.id}>
+                {b.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <TextField
+          size="small"
+          placeholder={t('pricing.channelPrices.search')}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          sx={{ maxWidth: 360 }}
+          fullWidth
+          slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
+        />
+        {branchId && (
+          <Typography variant="body2" color="text.secondary">
+            {sheet?.price_list
+              ? t('pricing.channelPrices.fromList', { name: sheet.price_list.name })
+              : t('pricing.channelPrices.noList')}
+          </Typography>
+        )}
+      </Stack>
 
       <TableContainer component={Card}>
         <Table size="small">

@@ -33,6 +33,7 @@ import { KdsService } from '../kds/kds.service';
 import { PrintQueueService } from '../printing/print-queue.service';
 import { SimulationService } from '../simulation/simulation.service';
 import { CatalogService } from '../catalog/catalog.service';
+import { PriceListService } from '../catalog/price-lists.service';
 import { checkOptionChoices } from '../catalog/option-choices.util';
 import { CreditService } from '../customer/credit.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
@@ -136,6 +137,7 @@ export class OrderService {
     @InjectRepository(ProductVariant) private readonly variantRepo: Repository<ProductVariant>,
     @InjectRepository(OptionItem) private readonly optionItemRepo: Repository<OptionItem>,
     private readonly catalogService: CatalogService,
+    private readonly priceLists: PriceListService,
     private readonly priceService: PricingService,
     private readonly discountEngine: DiscountEvaluationService,
     private readonly sequenceService: OrderSequenceService,
@@ -1740,13 +1742,10 @@ export class OrderService {
         throw new BadRequestException({ statusCode: 400, code: 'VARIANT_REQUIRED', message: `Pick a size or type of ${product.name}` });
       }
 
-      // Variant pricing is resolved from the catalog so a held order cannot silently
-      // fall back to the product's base price when it is resumed.
-      const uPrice = variant
-        ? MoneyUtil.format(variant.base_price)
-        : itemDto.unit_price
-          ? MoneyUtil.format(itemDto.unit_price)
-          : MoneyUtil.format(product.base_price);
+      // The price is the branch's in-store price (its price list's, else base), never one the
+      // caller sent: any register token could otherwise set its own price. Orders that keep
+      // the price a channel charged (Snappfood) are written by the simulator, not here.
+      const uPrice = await this.priceLists.resolveInStorePrice(tenantId, order.branch_id, product, variant);
       const sub = MoneyUtil.multiply(uPrice, qty);
 
       let modifierUnitDelta = '0.0000';

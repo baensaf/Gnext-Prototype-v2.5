@@ -75,7 +75,7 @@
     "menus": "Menus Composer",
     "availability": "Availability & Suspensions",
     "importExport": "Import & Export",
-    "pricing": "Price Book",
+    "pricing": "Branch Prices",
     "priceGroups": "Price Groups",
     "bulkUpdate": "Bulk Price Update",
     "coupons": "One-Time Coupons Studio",
@@ -1761,10 +1761,35 @@
     }
   },
   "pricing": {
-    "title": "Price Book & Groups",
-    "priceBook": "Price Book",
-    "priceGroups": "Price Groups",
-    "bulkUpdate": "Bulk Price Update",
+    "priceLists": {
+      "title": "Branch prices",
+      "subtitle": "Each branch sells at the prices of its price list. An item the list does not price, and every item at a branch with no list, sells at the base price from the product page. Snappfood prices start from these.",
+      "listsTitle": "Price lists",
+      "newList": "New price list",
+      "noLists": "No price lists yet. Every branch sells at base prices.",
+      "name": "Name",
+      "nameHelp": "For example \"Airport\" or \"Tier 2\". A branch with its own prices gets a list of its own.",
+      "branches": "Branches",
+      "noBranches": "No branch yet",
+      "pricedItems": "Priced items",
+      "rename": "Rename",
+      "archive": "Archive",
+      "archiveTitle": "Archive {{name}}?",
+      "archiveBody": "Its branches go back to base prices. Its prices are kept in the history.",
+      "archived": "{{name}} archived. Its branches sell at base prices.",
+      "branchesTitle": "Which list each branch uses",
+      "basePrices": "Base prices",
+      "pricesOf": "Prices on",
+      "search": "Search items",
+      "item": "Item",
+      "basePrice": "Base price",
+      "listPrice": "List price",
+      "usesBase": "Base price",
+      "charged": "Charged",
+      "onList": "List",
+      "loadFailed": "Could not load the price lists",
+      "saveFailed": "Could not save"
+    },
     "channelPrices": {
       "title": "Snappfood prices",
       "subtitle": "Snappfood price for every item: the in-store price plus the markup, rounded up, unless an item has a fixed price. Copy these into the Snappfood vendor panel.",
@@ -1783,7 +1808,11 @@
       "fixed": "Fixed Snappfood price",
       "followsRule": "Follows the rule",
       "onChannel": "On Snappfood",
-      "fixedChip": "Fixed"
+      "fixedChip": "Fixed",
+      "branch": "In-store prices of",
+      "basePrices": "Base prices",
+      "fromList": "In-store prices from the {{name}} list",
+      "noList": "This branch has no price list, so it uses base prices"
     }
   },
   "discounts": {

@@ -73,12 +73,35 @@ export interface OptionGroup {
   excluded_item_ids?: string[];
 }
 
-export interface PriceGroup {
+/** A branch price list. Branches on it sell at its prices, everything else at base. */
+export interface PriceList {
   id: string;
   code: string;
   name: string;
-  currency_code: string;
   is_active: boolean;
+  branch_ids: string[];
+  /** How many items the list prices itself. */
+  price_count: number;
+}
+
+export interface PriceListSheet {
+  price_list: { id: string; name: string; is_active: boolean };
+  items: Array<{
+    product_id: string;
+    variant_id: string | null;
+    category_id: string;
+    name: string;
+    base_price: string;
+    list_price: string | null;
+    price: string;
+  }>;
+}
+
+/** What each item costs in store at one branch: one row per product and one per size. */
+export interface BranchPrices {
+  branch_id: string | null;
+  price_list: { id: string; name: string } | null;
+  items: Array<{ product_id: string; variant_id: string | null; price: string }>;
 }
 
 export interface MenuCategory {
@@ -182,6 +205,9 @@ export interface PriceDiagnostic {
 export interface ChannelPriceSheet {
   channel: string;
   rule: { markup_percent: number; round_to: number };
+  branch_id: string | null;
+  /** The list the branch's in-store prices come from, when it is on one. */
+  price_list: { id: string; name: string } | null;
   items: Array<{
     product_id: string;
     variant_id: string | null;
@@ -289,31 +315,52 @@ export const catalogApi = {
     return res.data;
   },
 
-  getPriceGroups: async (): Promise<PriceGroup[]> => {
-    const res = await httpClient.get('/api/v1/price-groups');
+  // Branch price lists
+  getBranchPrices: async (branchId?: string | null): Promise<BranchPrices> => {
+    const res = await httpClient.get('/api/v1/catalog/prices', { params: { branchId: branchId || undefined } });
     return res.data;
   },
-  createPriceGroup: async (data: Partial<PriceGroup>): Promise<PriceGroup> => {
-    const res = await httpClient.post('/api/v1/price-groups', data);
+  getPriceLists: async (): Promise<PriceList[]> => {
+    const res = await httpClient.get('/api/v1/catalog/price-lists');
     return res.data;
   },
-  setPriceOverride: async (priceGroupId: string, productId: string, overridePrice: string): Promise<any> => {
-    const res = await httpClient.post(`/api/v1/price-groups/${priceGroupId}/overrides`, { productId, overridePrice });
+  createPriceList: async (name: string): Promise<PriceList> => {
+    const res = await httpClient.post('/api/v1/catalog/price-lists', { name });
     return res.data;
+  },
+  updatePriceList: async (id: string, data: { name?: string; is_active?: boolean }): Promise<PriceList> => {
+    const res = await httpClient.patch(`/api/v1/catalog/price-lists/${id}`, data);
+    return res.data;
+  },
+  archivePriceList: async (id: string): Promise<void> => {
+    await httpClient.delete(`/api/v1/catalog/price-lists/${id}`);
+  },
+  getPriceListSheet: async (id: string): Promise<PriceListSheet> => {
+    const res = await httpClient.get(`/api/v1/catalog/price-lists/${id}/prices`);
+    return res.data;
+  },
+  setListPrice: async (id: string, productId: string, variantId: string | null, amount: string | null): Promise<PriceListSheet> => {
+    const res = await httpClient.put(`/api/v1/catalog/price-lists/${id}/prices`, { productId, variantId, amount });
+    return res.data;
+  },
+  assignBranchPriceList: async (branchId: string, priceListId: string | null): Promise<void> => {
+    await httpClient.put('/api/v1/catalog/branch-price-list', { branchId, priceListId });
   },
 
-  bulkUpdatePrices: async (data: { price_group_id?: string; category_id?: string; adjustment_type: 'PERCENTAGE' | 'FIXED'; amount: string }): Promise<any> => {
-    const res = await httpClient.post('/api/v1/catalog/prices/bulk-update', data);
+  // Aggregator price sheet (Snappfood): the markup rule applied to every item, plus fixed
+  // prices. With a branch, the markup starts from that branch's in-store price.
+  getChannelPriceSheet: async (channel: string, branchId?: string | null): Promise<ChannelPriceSheet> => {
+    const res = await httpClient.get('/api/v1/catalog/channel-prices', { params: { channel, branchId: branchId || undefined } });
     return res.data;
   },
-
-  // Aggregator price sheet (Snappfood): the markup rule applied to every item, plus fixed prices.
-  getChannelPriceSheet: async (channel: string): Promise<ChannelPriceSheet> => {
-    const res = await httpClient.get('/api/v1/catalog/channel-prices', { params: { channel } });
-    return res.data;
-  },
-  setChannelFixedPrice: async (channel: string, productId: string, variantId: string | null, amount: string | null): Promise<ChannelPriceSheet> => {
-    const res = await httpClient.put('/api/v1/catalog/channel-prices', { channel, productId, variantId, amount });
+  setChannelFixedPrice: async (
+    channel: string,
+    productId: string,
+    variantId: string | null,
+    amount: string | null,
+    branchId?: string | null
+  ): Promise<ChannelPriceSheet> => {
+    const res = await httpClient.put('/api/v1/catalog/channel-prices', { channel, productId, variantId, amount, branchId: branchId || null });
     return res.data;
   },
 

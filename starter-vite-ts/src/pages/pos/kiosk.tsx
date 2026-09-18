@@ -29,17 +29,22 @@ import { MoneyUtil } from 'src/utils/money.util';
 import { useAuthStore } from 'src/store/useAuthStore';
 import { httpClient as axios } from 'src/api/httpClient';
 
+/** What this branch charges for a product or size: the price the kiosk bootstrap sends, else base. */
+const shownPrice = (item: { price?: string; base_price: string }) => item.price ?? item.base_price;
+
 interface KioskProduct {
   id: string;
   name: string;
   category_id: string;
   base_price: string;
+  /** What this branch charges: its price list's price, else base. */
+  price?: string;
   tax_rate?: string;
   image_url?: string;
   // Off today at this branch (86'd, out of its hours or sold out): shown, not sold.
   is_available?: boolean;
   // The sizes on sale today; a product with any is sold as one of them.
-  variants?: Array<{ id: string; name: string; base_price: string; is_default?: boolean }>;
+  variants?: Array<{ id: string; name: string; base_price: string; price?: string; is_default?: boolean }>;
   option_groups?: Array<{
     id: string;
     name: string;
@@ -175,7 +180,7 @@ export function KioskPage() {
     if (!customizingProduct) return;
 
     const variant = (customizingProduct.variants || []).find((v) => v.id === selectedVariantId);
-    const basePrice = MoneyUtil.format(variant?.base_price || customizingProduct.base_price || '0', 2);
+    const basePrice = MoneyUtil.format(shownPrice(variant || customizingProduct) || '0', 2);
     const optionList = Object.values(selectedOptionsMap) as any[];
     const optionsTotal = optionList.reduce(
       (acc, opt) => MoneyUtil.add(acc, opt.additional_price || '0', 2),
@@ -549,7 +554,7 @@ export function KioskPage() {
                       </Typography>
                       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
                         <Typography variant="h6" color="primary.main" sx={{ fontWeight: 'bold' }}>
-                          {MoneyUtil.formatCurrency(product.base_price)} IRR
+                          {MoneyUtil.formatCurrency(shownPrice(product))} IRR
                         </Typography>
                         {product.is_available === false ? (
                           <Chip size="small" label="Sold out" />
@@ -578,8 +583,7 @@ export function KioskPage() {
                 <Typography variant="h6" color="primary.main" sx={{ fontWeight: 'bold' }}>
                   Base Price:{' '}
                   {MoneyUtil.formatCurrency(
-                    (customizingProduct.variants || []).find((v) => v.id === selectedVariantId)?.base_price ||
-                      customizingProduct.base_price
+                    shownPrice((customizingProduct.variants || []).find((v) => v.id === selectedVariantId) || customizingProduct)
                   )}{' '}
                   IRR
                 </Typography>
@@ -593,7 +597,7 @@ export function KioskPage() {
                       {(customizingProduct.variants || []).map((v) => (
                         <Chip
                           key={v.id}
-                          label={`${v.name} — ${MoneyUtil.formatCurrency(v.base_price)} IRR`}
+                          label={`${v.name} — ${MoneyUtil.formatCurrency(shownPrice(v))} IRR`}
                           color={v.id === selectedVariantId ? 'primary' : 'default'}
                           variant={v.id === selectedVariantId ? 'filled' : 'outlined'}
                           onClick={() => setSelectedVariantId(v.id)}

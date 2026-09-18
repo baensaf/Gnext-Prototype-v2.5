@@ -155,7 +155,7 @@ const GROUPS: { titleKey: string; title: string; rows: Capability[] }[] = [
         note: 'A branch sees the catalogue and decides what it can serve today. It does not author it.',
       },
       {
-        path: '/app/pricing/price-book',
+        path: '/app/pricing/price-lists',
         labelKey: 'rolesPage.caps.pricing',
         label: 'Set prices',
         write: { CASHIER: 'NONE', MANAGER: 'NONE', HEAD_OFFICE: 'FULL' },

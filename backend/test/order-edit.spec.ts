@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { basePriceLists } from './utils/price-list-fakes';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
@@ -167,6 +168,7 @@ describe('Order edit command (spec 7.9)', () => {
         { provide: getRepositoryToken(ProductVariant), useValue: { findOne: jest.fn(), count: jest.fn().mockResolvedValue(0) } },
         { provide: getRepositoryToken(OptionItem), useValue: { findOne: jest.fn() } },
         { provide: PricingService, useValue: {} },
+        basePriceLists(),
         { provide: DiscountEvaluationService, useValue: {} },
         { provide: AuditWriter, useValue: { write: jest.fn() } },
         { provide: OutboxWriter, useValue: { enqueueInTransaction: jest.fn() } },
