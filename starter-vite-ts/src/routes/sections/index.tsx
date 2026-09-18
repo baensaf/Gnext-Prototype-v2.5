@@ -16,7 +16,6 @@ import { UsersPage } from 'src/pages/settings/users';
 import { useAuthStore } from 'src/store/useAuthStore';
 import { RefundsPage } from 'src/pages/orders/refunds';
 import { OptionsPage } from 'src/pages/catalog/options';
-import { PricingPage } from 'src/pages/catalog/pricing';
 import { homePathForRole } from 'src/config/role-access';
 import { SettingsHubPage } from 'src/pages/settings/hub';
 import { AgentsPage } from 'src/pages/operations/agents';
@@ -33,6 +32,7 @@ import { ReasonCodesPage } from 'src/pages/settings/reasons';
 import { PrintersPage } from 'src/pages/operations/printers';
 import { CategoriesPage } from 'src/pages/catalog/categories';
 import { CustomersPage } from 'src/pages/customers/directory';
+import { PriceListsPage } from 'src/pages/catalog/price-lists';
 import { TerminalsPage } from 'src/pages/operations/terminals';
 import { OrdersWorkflowPage } from 'src/pages/orders/workflow';
 import { IncomingOrdersPage } from 'src/pages/orders/incoming';
@@ -161,10 +161,12 @@ export const routesSection: RouteObject[] = [
       { path: 'catalog/availability', element: <AvailabilityPage /> },
       { path: 'catalog/stock', element: <DailyStockPage /> },
       { path: 'catalog/import-export', element: <ImportWizardPage /> },
-      { path: 'pricing/price-book', element: <PricingPage /> },
+      { path: 'pricing/price-lists', element: <PriceListsPage /> },
       { path: 'pricing/snappfood', element: <ChannelPricesPage /> },
-      { path: 'pricing/price-groups', element: <PricingPage /> },
-      { path: 'pricing/bulk-update', element: <PricingPage /> },
+      // The old Price Book addresses, kept so bookmarks land on the lists.
+      { path: 'pricing/price-book', element: <Navigate to="/app/pricing/price-lists" replace /> },
+      { path: 'pricing/price-groups', element: <Navigate to="/app/pricing/price-lists" replace /> },
+      { path: 'pricing/bulk-update', element: <Navigate to="/app/pricing/price-lists" replace /> },
       { path: 'discounts', element: <Navigate to="/app/discounts/customer-rates" replace /> },
       { path: 'discounts/customer-rates', element: <DiscountsHubPage defaultTab={0} /> },
       { path: 'discounts/coupons', element: <DiscountsHubPage defaultTab={1} /> },

@@ -7,8 +7,6 @@ import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { OptionGroup } from '../../entities/OptionGroup.entity';
 import { OptionItem } from '../../entities/OptionItem.entity';
 import { ProductOptionGroup } from '../../entities/ProductOptionGroup.entity';
-import { PriceGroup } from '../../entities/PriceGroup.entity';
-import { PriceGroupItem } from '../../entities/PriceGroupItem.entity';
 import { Menu } from '../../entities/Menu.entity';
 import { MenuCategory } from '../../entities/MenuCategory.entity';
 import { MenuProduct } from '../../entities/MenuProduct.entity';
@@ -23,10 +21,12 @@ import { BUSINESS_TIME_ZONE, BusinessDateUtil, ORDER_BUSINESS_DATE_EXPR } from '
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
 import { PricingService } from '../pricing/pricing.service';
+import { PriceListService } from './price-lists.service';
 import { PriceEntry } from '../../entities/PriceEntry.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { CHANNEL_PRICING_KEY, applyChannelRule, readChannelRule } from '../../common/utils/channel-price.util';
+import { inStorePrice } from '../../common/utils/price-list.util';
 
 /** What besides a whole product a stop can be on, and how long it lasts. */
 export interface StopTarget {
@@ -45,8 +45,6 @@ export class CatalogService {
     @InjectRepository(OptionGroup) private readonly groupRepo: Repository<OptionGroup>,
     @InjectRepository(OptionItem) private readonly itemRepo: Repository<OptionItem>,
     @InjectRepository(ProductOptionGroup) private readonly prodGroupRepo: Repository<ProductOptionGroup>,
-    @InjectRepository(PriceGroup) private readonly priceGroupRepo: Repository<PriceGroup>,
-    @InjectRepository(PriceGroupItem) private readonly priceItemRepo: Repository<PriceGroupItem>,
     @InjectRepository(Menu) private readonly menuRepo: Repository<Menu>,
     @InjectRepository(MenuCategory) private readonly menuCatRepo: Repository<MenuCategory>,
     @InjectRepository(MenuProduct) private readonly menuProdRepo: Repository<MenuProduct>,
@@ -57,6 +55,7 @@ export class CatalogService {
     @InjectRepository(DailyStock) private readonly stockRepo: Repository<DailyStock>,
     private readonly auditWriter: AuditWriter,
     @Inject(forwardRef(() => PricingService)) private readonly pricingService: PricingService,
+    private readonly priceLists: PriceListService,
   ) {}
 
   // Categories
@@ -583,65 +582,6 @@ export class CatalogService {
       await this.prodGroupRepo.save(link);
     }
     return link;
-  }
-
-  // Price Groups & Overrides
-  async getPriceGroups(tenantId: string) {
-    return await this.priceGroupRepo.find({ where: { tenant_id: tenantId }, order: { code: 'ASC' } });
-  }
-
-  async createPriceGroup(tenantId: string, data: { code: string; name: string; currency_code?: string }, correlationId: string) {
-    const code = data.code.toUpperCase();
-    const existing = await this.priceGroupRepo.findOne({ where: { tenant_id: tenantId, code } });
-    if (existing) throw new ConflictException(`Price group ${code} already exists`);
-
-    const pg = this.priceGroupRepo.create({
-      tenant_id: tenantId,
-      code,
-      name: data.name,
-      currency_code: data.currency_code || 'IRR',
-      is_active: true,
-    });
-
-    const saved = await this.priceGroupRepo.save(pg);
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'PRICE_GROUP_CREATED',
-      entityType: 'PriceGroup',
-      entityId: saved.id,
-      correlationId,
-      afterData: saved,
-    });
-
-    return saved;
-  }
-
-  async setPriceOverride(tenantId: string, priceGroupId: string, productId: string, overridePrice: string, correlationId: string) {
-    let item = await this.priceItemRepo.findOne({ where: { tenant_id: tenantId, price_group_id: priceGroupId, product_id: productId } });
-    if (!item) {
-      item = this.priceItemRepo.create({
-        tenant_id: tenantId,
-        price_group_id: priceGroupId,
-        product_id: productId,
-        override_price: MoneyUtil.format(overridePrice),
-      });
-    } else {
-      item.override_price = MoneyUtil.format(overridePrice);
-    }
-
-    const saved = await this.priceItemRepo.save(item);
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'PRICE_GROUP_OVERRIDE_SET',
-      correlationId,
-      details: { priceGroupId, productId, overridePrice },
-    });
-
-    return saved;
   }
 
   // Bulk Price Update
@@ -1368,18 +1308,22 @@ export class CatalogService {
   /**
    * One row per product, or per size of a product sold in sizes, and one per add-on: the
    * in-store price, what the channel's markup rule makes of it, any fixed price set for the
-   * item on the channel, and the price that applies. Add-ons follow the rule only.
+   * item on the channel, and the price that applies. Add-ons follow the rule only. With a
+   * branch, the in-store price is that branch's (its price list's, else base); a fixed
+   * channel price is the same at every branch.
    */
-  async getChannelPriceSheet(tenantId: string, channel: string) {
+  async getChannelPriceSheet(tenantId: string, channel: string, branchId: string | null = null) {
     const rule = await this.channelRule(tenantId, channel);
     const products = await this.prodRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { code: 'ASC' } });
     const variants = await this.variantRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { sort_order: 'ASC', code: 'ASC' } });
     const now = new Date();
+    const list = await this.priceLists.listForBranch(tenantId, branchId);
+    const listed = await this.priceLists.listPricesForBranch(tenantId, branchId, now);
     const fixed = (await this.prodRepo.manager.find(PriceEntry, { where: { tenant_id: tenantId, channel } })).filter(
       (e) => !e.branch_id && !e.price_group_id && !e.modifier_option_id && new Date(e.effective_from) <= now && (!e.effective_to || new Date(e.effective_to) > now),
     );
     const row = (product: Product, variant: ProductVariant | null) => {
-      const base = variant ? variant.base_price : product.base_price;
+      const base = inStorePrice(listed, product, variant);
       const rulePrice = applyChannelRule(base, rule);
       const own = fixed.find((e) => e.product_id === product.id && (e.variant_id || null) === (variant?.id || null));
       return {
@@ -1400,11 +1344,19 @@ export class CatalogService {
     const addOns = (await this.itemRepo.find({ where: { tenant_id: tenantId }, order: { name: 'ASC' } }))
       .filter((i) => MoneyUtil.greaterThan(i.price_delta || '0', '0'))
       .map((i) => ({ option_item_id: i.id, name: i.name, base_price: MoneyUtil.format(i.price_delta), price: applyChannelRule(i.price_delta, rule) }));
-    return { channel, rule, items, add_ons: addOns };
+    return { channel, rule, branch_id: branchId, price_list: list ? { id: list.id, name: list.name } : null, items, add_ons: addOns };
   }
 
   /** Fix one item's price on a channel, or clear it (amount null) so it follows the rule again. */
-  async setChannelFixedPrice(tenantId: string, channel: string, productId: string, variantId: string | null, amount: string | null, correlationId: string) {
+  async setChannelFixedPrice(
+    tenantId: string,
+    channel: string,
+    productId: string,
+    variantId: string | null,
+    amount: string | null,
+    correlationId: string,
+    branchId: string | null = null,
+  ) {
     const product = await this.prodRepo.findOne({ where: { id: productId, tenant_id: tenantId } });
     if (!product) throw new NotFoundException('Product not found');
     if (amount !== null && (!MoneyUtil.isValid(amount) || MoneyUtil.lessThan(amount, '0'))) {
@@ -1442,6 +1394,6 @@ export class CatalogService {
       correlationId,
       details: { channel, variantId, amount },
     });
-    return this.getChannelPriceSheet(tenantId, channel);
+    return this.getChannelPriceSheet(tenantId, channel, branchId);
   }
 }

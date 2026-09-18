@@ -135,13 +135,11 @@ export function useNavData(): NavSectionProps['data'] {
       items: [
         {
           title: t('nav.catalogSubmenu', 'Catalog'),
-          path: '/app/catalog/menus',
+          path: '/app/catalog/products',
           icon: ICONS.catalog,
+          // Menus Composer (/app/catalog/menus) is left out: no register, kiosk or channel
+          // reads menus yet, so a menu built there changes nothing.
           children: [
-            {
-              title: t('nav.menus', 'Menus Composer'),
-              path: '/app/catalog/menus',
-            },
             {
               title: t('nav.products', 'Products Catalog'),
               path: '/app/catalog/products',
@@ -165,8 +163,8 @@ export function useNavData(): NavSectionProps['data'] {
           ],
         },
         {
-          title: t('nav.pricing', 'Price Book & Groups'),
-          path: '/app/pricing/price-book',
+          title: t('nav.pricing', 'Branch Prices'),
+          path: '/app/pricing/price-lists',
           icon: ICONS.pricing,
         },
         {
@@ -350,9 +348,9 @@ export function useNavData(): NavSectionProps['data'] {
           if (children.length === 1) {
             return { ...item, children: undefined, title: children[0].title, path: children[0].path };
           }
-          // A group survives on its children. Catalog is headed by Menus, which is head
-          // office's, but a branch manager still needs the Availability entry underneath
-          // it — judging the group by its heading alone would take the whole menu away.
+          // A group survives on its children. When its heading is head office's, a branch
+          // manager still needs the entries they can open underneath it (Availability under
+          // Catalog) — judging the group by its heading alone would take the whole menu away.
           return {
             ...item,
             children,

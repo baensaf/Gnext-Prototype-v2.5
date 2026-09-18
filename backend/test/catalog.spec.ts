@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { basePriceLists } from './utils/price-list-fakes';
 import { CatalogService } from '../src/modules/catalog/catalog.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Category } from '../src/entities/Category.entity';
@@ -8,7 +9,6 @@ import { OptionGroup } from '../src/entities/OptionGroup.entity';
 import { OptionItem } from '../src/entities/OptionItem.entity';
 import { ProductOptionGroup } from '../src/entities/ProductOptionGroup.entity';
 import { PriceGroup } from '../src/entities/PriceGroup.entity';
-import { PriceGroupItem } from '../src/entities/PriceGroupItem.entity';
 import { Menu } from '../src/entities/Menu.entity';
 import { MenuCategory } from '../src/entities/MenuCategory.entity';
 import { MenuProduct } from '../src/entities/MenuProduct.entity';
@@ -78,7 +78,6 @@ describe('CatalogService (Unit)', () => {
         { provide: getRepositoryToken(OptionItem), useValue: { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() } },
         { provide: getRepositoryToken(ProductOptionGroup), useValue: prodGroupRepo },
         { provide: getRepositoryToken(PriceGroup), useValue: { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() } },
-        { provide: getRepositoryToken(PriceGroupItem), useValue: priceItemRepo },
         { provide: getRepositoryToken(Menu), useValue: menuRepo },
         { provide: getRepositoryToken(MenuCategory), useValue: menuCatRepo },
         { provide: getRepositoryToken(MenuProduct), useValue: menuProdRepo },
@@ -89,6 +88,7 @@ describe('CatalogService (Unit)', () => {
         { provide: getRepositoryToken(DailyStock), useValue: stockRepo },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: PricingService, useValue: pricingService },
+        basePriceLists(),
       ],
     }).compile();
 

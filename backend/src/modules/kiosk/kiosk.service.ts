@@ -24,6 +24,8 @@ import { KdsService } from '../kds/kds.service';
 import { PrintQueueService } from '../printing/print-queue.service';
 import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { CatalogService } from '../catalog/catalog.service';
+import { PriceListService } from '../catalog/price-lists.service';
+import { inStorePrice } from '../../common/utils/price-list.util';
 import { checkOptionChoices } from '../catalog/option-choices.util';
 
 /** Tenders a kiosk's card terminal can take. The seeded card method is CARD_POS. */
@@ -48,6 +50,7 @@ export class KioskService {
     @InjectRepository(ProductVariant) private readonly variantRepo: Repository<ProductVariant>,
     private readonly auditWriter: AuditWriter,
     private readonly catalogService: CatalogService,
+    private readonly priceLists: PriceListService,
     @Optional() private readonly kdsService?: KdsService,
     @Optional() private readonly printQueueService?: PrintQueueService,
   ) {}
@@ -103,6 +106,10 @@ export class KioskService {
       order: { sort_order: 'ASC', code: 'ASC' },
     });
 
+    // The price this branch charges (its price list's, else base), so the screen shows what
+    // the order will cost.
+    const listed = await this.priceLists.listPricesForBranch(tenantId, branch?.id);
+
     const catalogProducts = products.map((p) => {
       const pLinks = productOptionGroups.filter((pog) => pog.product_id === p.id);
       const groups = pLinks.map((link) => {
@@ -122,8 +129,9 @@ export class KioskService {
       const onSale = own.filter((v) => !off.products.has(p.id) && !off.variants.has(v.id));
       return {
         ...p,
+        price: inStorePrice(listed, p, null),
         option_groups: groups,
-        variants: onSale,
+        variants: onSale.map((v) => ({ ...v, price: inStorePrice(listed, p, v) })),
         // Stays on the screen greyed out, so a guest sees it exists but is off today.
         is_available: !off.products.has(p.id) && (own.length === 0 || onSale.length > 0),
       };
@@ -193,7 +201,7 @@ export class KioskService {
         : [];
       const groupNames = checkOptionChoices(product, links, groups, optionItems);
 
-      const unitPrice = MoneyUtil.format(variant ? variant.base_price : product.base_price || '0', 4);
+      const unitPrice = await this.priceLists.resolveInStorePrice(tenantId, branchId, product, variant);
       const quantityStr = MoneyUtil.format(quantity, 4);
       const delta = optionItems.reduce((sum, i) => MoneyUtil.add(sum, i.price_delta || '0', 4), '0.0000');
       lines.push({

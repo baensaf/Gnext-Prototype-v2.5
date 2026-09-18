@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { basePriceLists } from './utils/price-list-fakes';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
@@ -92,6 +93,7 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
         { provide: getRepositoryToken(ProductVariant), useValue: {} },
         { provide: getRepositoryToken(OptionItem), useValue: {} },
         { provide: PricingService, useValue: {} },
+        basePriceLists(),
         { provide: DiscountEvaluationService, useValue: {} },
         { provide: AuditWriter, useValue: { write: jest.fn() } },
         { provide: OutboxWriter, useValue: { enqueueInTransaction: jest.fn(), enqueue: jest.fn() } },

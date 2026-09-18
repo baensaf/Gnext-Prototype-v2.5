@@ -64,9 +64,8 @@ export const paths = {
       importExport: `${ROOTS.APP}/catalog/import-export`,
     },
     pricing: {
-      priceBook: `${ROOTS.APP}/pricing/price-book`,
-      priceGroups: `${ROOTS.APP}/pricing/price-groups`,
-      bulkUpdate: `${ROOTS.APP}/pricing/bulk-update`,
+      priceLists: `${ROOTS.APP}/pricing/price-lists`,
+      snappfood: `${ROOTS.APP}/pricing/snappfood`,
     },
     discounts: {
       customerRates: `${ROOTS.APP}/discounts/customer-rates`,

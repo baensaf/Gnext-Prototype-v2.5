@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { basePriceLists } from './utils/price-list-fakes';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
@@ -121,6 +122,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
         { provide: getRepositoryToken(ProductVariant), useValue: variantRepo },
         { provide: getRepositoryToken(OptionItem), useValue: optionItemRepo },
         { provide: PricingService, useValue: priceService },
+        basePriceLists(),
         { provide: DiscountEvaluationService, useValue: discountEngine },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: OutboxWriter, useValue: outboxWriter },
