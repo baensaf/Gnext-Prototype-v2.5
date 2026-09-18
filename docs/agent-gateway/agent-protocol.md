@@ -798,8 +798,11 @@ Auth required. The agent calls it on start, every hour (with ±5 min jitter), on
 `application/octet-stream` with `Content-Length` and an `X-Content-SHA256` header. An unknown or
 unpublished version is `404`.
 
-Head office uploads builds on the Branch Agents screen and publishes them there. Publishing
-sends `agent.check_update` to every online agent older than the build. A release may set
+Every green push to `main` offers the agent CI built to the cloud (`POST
+/api/v1/agent-releases/ci`, bearer `AGENT_RELEASE_CI_TOKEN`) once the deploy is done. It is
+stored unpublished, and only a new `agent/VERSION` makes a new release; the same version again
+is a no-op. Head office can still upload a build by hand on the Branch Agents screen, and
+publishes either kind there. Publishing sends `agent.check_update` to every online agent older than the build. A release may set
 `min_agent_version`; agents below it are closed with `4011` (§4.2).
 
 ### 9.2 Update procedure

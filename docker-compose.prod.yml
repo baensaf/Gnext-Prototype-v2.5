@@ -41,6 +41,8 @@ services:
       APPROVER_DEMO_PIN: ${APPROVER_DEMO_PIN:-2468}
       # Public base URL agents are told to connect to, e.g. https://app.example.ir.
       AGENT_PUBLIC_URL: ${AGENT_PUBLIC_URL:-}
+      # Shared with the AGENT_RELEASE_TOKEN repository secret; lets CI add unpublished agent builds.
+      AGENT_RELEASE_CI_TOKEN: ${AGENT_RELEASE_CI_TOKEN:-}
       SEED_PROFILE: minimal
       DATA_DIR: /app/data
       UPLOAD_DIR: /app/uploads

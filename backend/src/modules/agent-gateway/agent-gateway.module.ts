@@ -22,12 +22,12 @@ import { AgentWsServer } from './agent-ws.server';
 import { AgentCommandsService } from './agent-commands.service';
 import { AgentHealthService } from './agent-health.service';
 import { AgentReleasesService } from './agent-releases.service';
-import { AgentReleasesController } from './agent-releases.controller';
+import { AgentReleasesCiController, AgentReleasesController } from './agent-releases.controller';
 
 /** The cloud side of the branch agent (docs/agent-gateway/agent-protocol.md). */
 @Module({
   imports: [TypeOrmModule.forFeature([Agent, AgentEnrolmentCode, AgentCommand, AgentRelease, Branch, Printer, PaymentDevice, OperationalAlert]), AuditModule],
-  controllers: [AgentRegistryController, AgentController, AgentReleasesController],
+  controllers: [AgentRegistryController, AgentController, AgentReleasesCiController, AgentReleasesController],
   providers: [
     AgentRegistryService,
     AgentSessionsService,

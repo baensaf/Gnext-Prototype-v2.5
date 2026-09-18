@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { promises as fs, createReadStream, ReadStream } from 'fs';
 import * as path from 'path';
 import { IsNull, Not, Repository } from 'typeorm';
@@ -29,6 +29,13 @@ export interface LatestRelease {
   size: number;
   released_at: string;
   min_agent_version: string | null;
+}
+
+interface CheckedBuild {
+  version: string;
+  min: string | null;
+  file: ReleaseUpload['file'];
+  sha256: string;
 }
 
 export function releaseUrl(version: string) {
@@ -61,6 +68,45 @@ export class AgentReleasesService {
   }
 
   async upload(input: ReleaseUpload, actor: { tenantId: string; userId?: string }) {
+    const build = this.check(input);
+    if (await this.repo.findOne({ where: { version: build.version } })) {
+      throw new ConflictException(`Version ${build.version} already exists.`);
+    }
+    const saved = await this.store(build, input.notes?.trim() || null, actor.userId ?? null);
+    if (!saved) throw new ConflictException(`Version ${build.version} already exists.`);
+    await this.auditWriter.write({
+      tenantId: actor.tenantId,
+      actorType: 'ADMIN',
+      actorId: actor.userId,
+      action: 'AGENT_RELEASE_UPLOADED',
+      entityType: 'AgentRelease',
+      entityId: saved.id,
+      details: { version: saved.version, sha256: saved.sha256, size: build.file.size },
+    });
+    return this.view(saved);
+  }
+
+  /**
+   * A build CI made from main, stored unpublished: head office still decides when it reaches
+   * the branches. CI offers the build after every deploy, so a version that is already here is
+   * not an error. `sha256_matches` false means the agent changed without a bump of
+   * agent/VERSION, and the stored build is kept: agents running that version must not be
+   * told it is something else. Releases belong to no tenant, so this logs instead of auditing.
+   */
+  async uploadFromCi(input: { version: string; commit?: string; file: ReleaseUpload['file'] }) {
+    const build = this.check({ version: input.version, file: input.file });
+    const commit = /^[0-9a-f]{7,40}$/i.test(input.commit || '') ? input.commit!.toLowerCase() : null;
+    const notes = commit ? `Built by CI from commit ${commit.slice(0, 12)}.` : 'Built by CI.';
+    const saved = (await this.repo.findOne({ where: { version: build.version } })) ? null : await this.store(build, notes, null);
+    if (!saved) {
+      const existing = await this.repo.findOneOrFail({ where: { version: build.version } });
+      return { created: false, sha256_matches: existing.sha256 === build.sha256, release: this.view(existing) };
+    }
+    this.logger.log(`CI uploaded agent ${saved.version} (${saved.sha256})${commit ? ` from ${commit}` : ''}`);
+    return { created: true, sha256_matches: true, release: this.view(saved) };
+  }
+
+  private check(input: { version: string; minAgentVersion?: string; file: ReleaseUpload['file'] }): CheckedBuild {
     const version = String(input.version || '').trim();
     if (!VERSION.test(version)) throw new BadRequestException('Version must look like 1.0.3.');
     const min = input.minAgentVersion?.trim() || null;
@@ -71,34 +117,39 @@ export class AgentReleasesService {
     if (file.size > MAX_RELEASE_BYTES) throw new BadRequestException('The file is too large for an agent build.');
     // Every Windows executable starts with "MZ".
     if (file.buffer[0] !== 0x4d || file.buffer[1] !== 0x5a) throw new BadRequestException('That is not a Windows executable.');
-    if (await this.repo.findOne({ where: { version } })) throw new ConflictException(`Version ${version} already exists.`);
+    return { version, min, file, sha256: createHash('sha256').update(file.buffer).digest('hex') };
+  }
 
-    const relative = path.posix.join('agent-releases', version, AGENT_BINARY_NAME);
+  /**
+   * Saves the row, then moves the file into place. When another upload of the same version
+   * got there first, the unique version refuses the row, this returns null, and the file
+   * behind the release that won is left alone.
+   */
+  private async store(build: CheckedBuild, notes: string | null, uploadedBy: string | null): Promise<AgentRelease | null> {
+    const relative = path.posix.join('agent-releases', build.version, AGENT_BINARY_NAME);
     const absolute = path.join(AgentReleasesService.dataDir(), relative);
+    const pending = `${absolute}.${randomUUID()}.part`;
     await fs.mkdir(path.dirname(absolute), { recursive: true });
-    await fs.writeFile(absolute, file.buffer);
-
-    const saved = await this.repo.save(
-      this.repo.create({
-        version,
-        sha256: createHash('sha256').update(file.buffer).digest('hex'),
-        size_bytes: String(file.size),
-        file_path: relative,
-        notes: input.notes?.trim() || null,
-        min_agent_version: min,
-        uploaded_by: actor.userId ?? null,
-      }),
-    );
-    await this.auditWriter.write({
-      tenantId: actor.tenantId,
-      actorType: 'ADMIN',
-      actorId: actor.userId,
-      action: 'AGENT_RELEASE_UPLOADED',
-      entityType: 'AgentRelease',
-      entityId: saved.id,
-      details: { version, sha256: saved.sha256, size: file.size },
-    });
-    return this.view(saved);
+    await fs.writeFile(pending, build.file.buffer);
+    try {
+      const saved = await this.repo.save(
+        this.repo.create({
+          version: build.version,
+          sha256: build.sha256,
+          size_bytes: String(build.file.size),
+          file_path: relative,
+          notes,
+          min_agent_version: build.min,
+          uploaded_by: uploadedBy,
+        }),
+      );
+      await fs.rename(pending, absolute);
+      return saved;
+    } catch (err: any) {
+      await fs.rm(pending, { force: true });
+      if (err?.code === '23505') return null;
+      throw err;
+    }
   }
 
   /** Makes a release available, and tells every agent online to look now (§7.8). */
