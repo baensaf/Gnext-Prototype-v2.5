@@ -11,6 +11,7 @@ import { ROLES_KEY, MANAGER_AND_ABOVE } from '../src/common/decorators/roles.dec
 import { runWithTill } from '../src/common/utils/till-context';
 import { ApprovalService } from '../src/modules/approval/approval.service';
 import { SHIFT_POLICY_DEFAULTS } from '../src/modules/cashier/shift-policy';
+import { BusinessDateUtil } from '../src/common/utils/business-date.util';
 import { CashierShift } from '../src/entities/CashierShift.entity';
 import { CashMovement } from '../src/entities/CashMovement.entity';
 import { BusinessDayClose } from '../src/entities/BusinessDayClose.entity';
@@ -524,7 +525,9 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
 
       await shiftService.openShift('t-1', { terminalId: 'term-1' });
       const created = auditWriter.write.mock.calls[0][0].afterData;
-      expect(created.business_date).toBe(new Date().toLocaleDateString('en-CA'));
+      // The business clock (Tehran), not the machine's: CI runs in UTC, where the two dates
+      // differ every evening from 20:30 until midnight UTC.
+      expect(created.business_date).toBe(BusinessDateUtil.today());
     });
   });
 
