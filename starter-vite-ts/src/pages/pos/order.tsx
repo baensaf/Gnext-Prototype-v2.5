@@ -1599,6 +1599,8 @@ export function PosOrderPage() {
                             <DoNotDisturbOnOutlinedIcon sx={{ fontSize: 18 }} />
                           </IconButton>
                           <Box>
+                            {/* Room for the stop button, so the chips never sit under it. */}
+                            <Box sx={{ paddingInlineEnd: '24px' }}>
                             {isSuspended && (
                               <Chip
                                 label={
@@ -1625,6 +1627,7 @@ export function PosOrderPage() {
                                 letterSpacing: 0.5,
                               }}
                             />
+                            </Box>
                             <Typography
                               variant="subtitle2"
                               sx={{
