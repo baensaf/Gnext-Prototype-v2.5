@@ -55,6 +55,7 @@ import { ReportViewerPage } from 'src/pages/reports/report-viewer';
 import { CalendarSettingsPage } from 'src/pages/settings/calendar';
 import { FleetRollupPage } from 'src/pages/operations/fleet-rollup';
 import { OfflineSyncPage } from 'src/pages/simulation/offline-sync';
+import { ChannelPricesPage } from 'src/pages/catalog/channel-prices';
 import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
 import { ProductDetailPage } from 'src/pages/catalog/product-detail';
 import { BranchDetailPage } from 'src/pages/operations/branch-detail';
@@ -161,6 +162,7 @@ export const routesSection: RouteObject[] = [
       { path: 'catalog/stock', element: <DailyStockPage /> },
       { path: 'catalog/import-export', element: <ImportWizardPage /> },
       { path: 'pricing/price-book', element: <PricingPage /> },
+      { path: 'pricing/snappfood', element: <ChannelPricesPage /> },
       { path: 'pricing/price-groups', element: <PricingPage /> },
       { path: 'pricing/bulk-update', element: <PricingPage /> },
       { path: 'discounts', element: <Navigate to="/app/discounts/customer-rates" replace /> },

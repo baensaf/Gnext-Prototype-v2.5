@@ -23,6 +23,10 @@ import { BUSINESS_TIME_ZONE, BusinessDateUtil, ORDER_BUSINESS_DATE_EXPR } from '
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
 import { PricingService } from '../pricing/pricing.service';
+import { PriceEntry } from '../../entities/PriceEntry.entity';
+import { TenantSetting } from '../../entities/TenantSetting.entity';
+import { pickSettingValue } from '../../common/utils/setting-scope.util';
+import { CHANNEL_PRICING_KEY, applyChannelRule, readChannelRule } from '../../common/utils/channel-price.util';
 
 /** What besides a whole product a stop can be on, and how long it lasts. */
 export interface StopTarget {
@@ -1349,5 +1353,95 @@ export class CatalogService {
       is_suspended: suspension.isSuspended,
       suspension_reason: suspension.reason,
     };
+  }
+
+  // Aggregator price sheet: what each item costs on a delivery channel (Snappfood). The
+  // prototype does not push a menu to Snappfood, so this is the list someone types into the
+  // vendor panel; the real product syncs the same prices. Orders from the channel keep the
+  // prices the channel charged.
+
+  private async channelRule(tenantId: string, channel: string) {
+    const rows = await this.prodRepo.manager.find(TenantSetting, { where: { tenant_id: tenantId, key: CHANNEL_PRICING_KEY } });
+    return readChannelRule(pickSettingValue(rows, null), channel);
+  }
+
+  /**
+   * One row per product, or per size of a product sold in sizes, and one per add-on: the
+   * in-store price, what the channel's markup rule makes of it, any fixed price set for the
+   * item on the channel, and the price that applies. Add-ons follow the rule only.
+   */
+  async getChannelPriceSheet(tenantId: string, channel: string) {
+    const rule = await this.channelRule(tenantId, channel);
+    const products = await this.prodRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { code: 'ASC' } });
+    const variants = await this.variantRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { sort_order: 'ASC', code: 'ASC' } });
+    const now = new Date();
+    const fixed = (await this.prodRepo.manager.find(PriceEntry, { where: { tenant_id: tenantId, channel } })).filter(
+      (e) => !e.branch_id && !e.price_group_id && !e.modifier_option_id && new Date(e.effective_from) <= now && (!e.effective_to || new Date(e.effective_to) > now),
+    );
+    const row = (product: Product, variant: ProductVariant | null) => {
+      const base = variant ? variant.base_price : product.base_price;
+      const rulePrice = applyChannelRule(base, rule);
+      const own = fixed.find((e) => e.product_id === product.id && (e.variant_id || null) === (variant?.id || null));
+      return {
+        product_id: product.id,
+        variant_id: variant?.id || null,
+        category_id: product.category_id,
+        name: variant ? `${product.name} — ${variant.name}` : product.name,
+        base_price: MoneyUtil.format(base),
+        rule_price: rulePrice,
+        fixed_price: own ? MoneyUtil.format(own.amount) : null,
+        price: own ? MoneyUtil.format(own.amount) : rulePrice,
+      };
+    };
+    const items = products.flatMap((p) => {
+      const sizes = variants.filter((v) => v.product_id === p.id);
+      return sizes.length ? sizes.map((v) => row(p, v)) : [row(p, null)];
+    });
+    const addOns = (await this.itemRepo.find({ where: { tenant_id: tenantId }, order: { name: 'ASC' } }))
+      .filter((i) => MoneyUtil.greaterThan(i.price_delta || '0', '0'))
+      .map((i) => ({ option_item_id: i.id, name: i.name, base_price: MoneyUtil.format(i.price_delta), price: applyChannelRule(i.price_delta, rule) }));
+    return { channel, rule, items, add_ons: addOns };
+  }
+
+  /** Fix one item's price on a channel, or clear it (amount null) so it follows the rule again. */
+  async setChannelFixedPrice(tenantId: string, channel: string, productId: string, variantId: string | null, amount: string | null, correlationId: string) {
+    const product = await this.prodRepo.findOne({ where: { id: productId, tenant_id: tenantId } });
+    if (!product) throw new NotFoundException('Product not found');
+    if (amount !== null && (!MoneyUtil.isValid(amount) || MoneyUtil.lessThan(amount, '0'))) {
+      throw new BadRequestException('A price is a number, 0 or more');
+    }
+    const em = this.prodRepo.manager;
+    await em.delete(PriceEntry, {
+      tenant_id: tenantId,
+      channel,
+      product_id: productId,
+      variant_id: variantId || IsNull(),
+      branch_id: IsNull(),
+      price_group_id: IsNull(),
+      modifier_option_id: IsNull(),
+    });
+    if (amount !== null) {
+      await em.save(
+        em.create(PriceEntry, {
+          tenant_id: tenantId,
+          product_id: productId,
+          variant_id: variantId || null,
+          channel,
+          price_type: 'CHANNEL',
+          currency_code: 'IRR',
+          amount: MoneyUtil.format(amount),
+        }),
+      );
+    }
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'CHANNEL_PRICE_SET',
+      entityType: 'Product',
+      entityId: productId,
+      correlationId,
+      details: { channel, variantId, amount },
+    });
+    return this.getChannelPriceSheet(tenantId, channel);
   }
 }
