@@ -30,6 +30,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { fDateTime } from 'src/utils/format-time';
 
 import { tenantApi } from 'src/api/tenantApi';
 import { catalogApi } from 'src/api/catalogApi';
@@ -231,6 +232,20 @@ export function ChannelPricesPage() {
                   <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                     {MoneyUtil.formatCurrency(r.price)}
                     {r.fixed_price && <Chip size="small" label={t('pricing.channelPrices.fixedChip')} sx={{ ml: 1 }} />}
+                    {/* Off on Snappfood right now: switch it off in the vendor panel too. */}
+                    {r.off && (
+                      <Chip
+                        size="small"
+                        color="warning"
+                        sx={{ ml: 1 }}
+                        title={r.off.reason || undefined}
+                        label={
+                          r.off.until
+                            ? t('pricing.channelPrices.offUntil', { time: fDateTime(r.off.until) })
+                            : t('pricing.channelPrices.off')
+                        }
+                      />
+                    )}
                   </TableCell>
                 </TableRow>
               );

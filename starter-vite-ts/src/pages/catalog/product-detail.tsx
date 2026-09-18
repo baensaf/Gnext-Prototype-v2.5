@@ -152,7 +152,8 @@ export function ProductDetailPage() {
         catalogApi.getAvailabilities(selectedBranchId || undefined).catch(() => [] as ProductAvailability[]),
         catalogApi.getSchedules(selectedBranchId || undefined).catch(() => [] as AvailabilitySchedule[]),
       ]);
-      setStops(aList.filter((a) => a.product_id === prod.id && !a.variant_id));
+      // The item's own stops here; a Snappfood-only stop does not take it off at the counter.
+      setStops(aList.filter((a) => a.product_id === prod.id && !a.variant_id && !a.channel));
       const own = sList.filter((s) => s.is_active && s.product_id === prod.id);
       setWindows(
         own.length

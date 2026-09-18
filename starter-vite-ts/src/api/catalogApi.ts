@@ -227,6 +227,8 @@ export interface StopRequest {
   until: 'NEXT_SHIFT' | 'MANUAL' | 'HOURS';
   hours?: number;
   reason?: string;
+  /** Off on this channel only (SNAPPFOOD); empty for everywhere. */
+  channel?: string;
 }
 
 export interface OffScheduleProduct {
@@ -262,6 +264,8 @@ export interface ChannelPriceSheet {
     rule_price: string;
     fixed_price: string | null;
     price: string;
+    /** Off on the channel right now: a stop on it or everywhere. */
+    off: { reason: string | null; until: string | null; everywhere: boolean; chain_wide: boolean } | null;
   }>;
   add_ons: Array<{ option_item_id: string; name: string; base_price: string; price: string }>;
 }
@@ -505,6 +509,7 @@ export const catalogApi = {
     variantId?: string;
     optionItemId?: string;
     branchId?: string;
+    channel?: string;
   }): Promise<any> => {
     const res = await httpClient.post('/api/v1/availability/resume', target);
     return res.data;
