@@ -18,6 +18,8 @@ import { KioskController } from './kiosk.controller';
 import { AuditModule } from '../audit/audit.module';
 import { KdsModule } from '../kds/kds.module';
 import { PrintingModule } from '../printing/printing.module';
+import { CatalogModule } from '../catalog/catalog.module';
+import { ProductVariant } from '../../entities/ProductVariant.entity';
 
 @Module({
   imports: [
@@ -35,10 +37,12 @@ import { PrintingModule } from '../printing/printing.module';
       OrderItemOption,
       Payment,
       Customer,
+      ProductVariant,
     ]),
     AuditModule,
     KdsModule,
     PrintingModule,
+    CatalogModule,
   ],
   providers: [KioskService],
   controllers: [KioskController],

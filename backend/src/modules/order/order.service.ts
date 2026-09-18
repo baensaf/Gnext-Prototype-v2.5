@@ -33,6 +33,7 @@ import { KdsService } from '../kds/kds.service';
 import { PrintQueueService } from '../printing/print-queue.service';
 import { SimulationService } from '../simulation/simulation.service';
 import { CatalogService } from '../catalog/catalog.service';
+import { checkOptionChoices } from '../catalog/option-choices.util';
 import { CreditService } from '../customer/credit.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import Decimal from 'decimal.js';
@@ -1695,10 +1696,14 @@ export class OrderService {
     for (const itemDto of itemsDto) {
       const product = await this.productRepo.findOne({ where: { id: itemDto.product_id, tenant_id: tenantId } });
       if (!product) throw new NotFoundException(`Product ${itemDto.product_id} not found`);
+      if (product.is_active === false) {
+        throw new BadRequestException({ statusCode: 400, code: 'PRODUCT_INACTIVE', message: `${product.name} is not on the menu` });
+      }
 
-      // Spec 4.7: an 86'd item is off sale everywhere it can be ordered. The POS,
-      // the kiosk and the aggregator webhook all land here, so the stop is
-      // enforced on the line rather than trusted to each caller's catalog view.
+      // Spec 4.7: an 86'd item is off sale everywhere it can be ordered. Register
+      // orders land here, so the stop is enforced on the line rather than trusted to
+      // the caller's catalog view; the kiosk runs the same rules through
+      // CatalogService.assertBasketSellable.
       const suspension = await this.catalogService.getSuspension(tenantId, product.id, order.branch_id, new Date(), itemDto.variant_id || null);
       if (suspension.outOfSchedule) {
         throw new BadRequestException({
@@ -1729,6 +1734,10 @@ export class OrderService {
         if (!variant) {
           throw new BadRequestException(`Variant ${itemDto.variant_id} is not available for product ${product.id}`);
         }
+      } else if ((await this.variantRepo.count({ where: { tenant_id: tenantId, product_id: product.id, is_active: true } })) > 0) {
+        // A product sold in sizes is sold as one of them. Without this, a line with no size
+        // went out at the product's own price, and stopping every size did not stop the product.
+        throw new BadRequestException({ statusCode: 400, code: 'VARIANT_REQUIRED', message: `Pick a size or type of ${product.name}` });
       }
 
       // Variant pricing is resolved from the catalog so a held order cannot silently
@@ -1745,10 +1754,10 @@ export class OrderService {
 
       const chosen: Array<{ optItem: OptionItem; optDto: any }> = [];
       for (const optDto of itemDto.options || []) {
-        const optItem = await this.optionItemRepo.findOne({ where: { id: optDto.option_item_id } });
+        const optItem = await this.optionItemRepo.findOne({ where: { id: optDto.option_item_id, tenant_id: tenantId } });
         if (optItem) chosen.push({ optItem, optDto });
       }
-      const groupNames = product.product_type === 'COMBO' ? await this.checkComboChoices(tenantId, product, chosen.map((c) => c.optItem), em) : new Map<string, string>();
+      const groupNames = await this.checkChoices(tenantId, product, chosen.map((c) => c.optItem), em);
       await this.catalogService.assertLineSellable(em, tenantId, order, product, variant?.id || null, qty, chosen.map((c) => c.optItem));
 
       for (const { optItem, optDto } of chosen) {
@@ -1810,30 +1819,16 @@ export class OrderService {
   }
 
   /**
-   * A combo is sold as one line whose slots (burger, side, drink) are the option groups on the
-   * product. Each choice must belong to one of its slots, and each slot must be filled within
-   * its limits: a combo that reaches the kitchen without its drink cannot be made. Answers the
-   * slot names, which the order line keeps with each choice.
+   * A line's add-on choices against the groups on its product (a combo's slots are groups
+   * too): each choice from one of them, each group filled within its limits. Answers the
+   * group names, which the order line keeps with each choice.
    */
-  private async checkComboChoices(tenantId: string, product: Product, choices: OptionItem[], em: EntityManager) {
-    const links = await em.find(ProductOptionGroup, { where: { tenant_id: tenantId, product_id: product.id } });
+  private async checkChoices(tenantId: string, product: Product, choices: OptionItem[], em: EntityManager) {
+    const links = (await em.find(ProductOptionGroup, { where: { tenant_id: tenantId, product_id: product.id } })) || [];
     const groups = links.length
-      ? await em.find(OptionGroup, { where: { tenant_id: tenantId, id: In(links.map((l) => l.option_group_id)) } })
+      ? (await em.find(OptionGroup, { where: { tenant_id: tenantId, id: In(links.map((l) => l.option_group_id)) } })) || []
       : [];
-    const refuse = (message: string) => new BadRequestException({ statusCode: 400, code: 'COMBO_CHOICES_INVALID', message });
-
-    const stray = choices.find((c) => !groups.some((g) => g.id === c.option_group_id));
-    if (stray) throw refuse(`${stray.name} is not a choice in ${product.name}`);
-
-    for (const group of groups) {
-      const count = choices.filter((c) => c.option_group_id === group.id).length;
-      const min = Math.max(group.min_selection || 0, group.is_required ? 1 : 0);
-      if (count < min) throw refuse(`${product.name} needs ${min === 1 ? 'a' : min} ${group.name} choice${min === 1 ? '' : 's'}`);
-      if (group.max_selection && count > group.max_selection) {
-        throw refuse(`${product.name} takes at most ${group.max_selection} ${group.name} choice${group.max_selection === 1 ? '' : 's'}`);
-      }
-    }
-    return new Map(groups.map((g) => [g.id, g.name]));
+    return checkOptionChoices(product, links, groups, choices);
   }
 
   private mapActionToTargetState(action: string): OrderState {

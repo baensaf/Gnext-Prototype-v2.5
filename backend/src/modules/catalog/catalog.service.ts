@@ -898,8 +898,10 @@ export class CatalogService {
   }
 
   async getAvailabilities(tenantId: string, branchId?: string) {
-    const where: any = { tenant_id: tenantId };
-    if (branchId) where.branch_id = branchId;
+    // A branch's list includes the chain-wide stops (no branch), which apply to it too.
+    const where: any = branchId
+      ? [{ tenant_id: tenantId, branch_id: branchId }, { tenant_id: tenantId, branch_id: IsNull() }]
+      : { tenant_id: tenantId };
     return await this.availRepo.find({ where });
   }
 
@@ -964,6 +966,14 @@ export class CatalogService {
       avail.suspended_until = null;
       avail.reason = null;
       await this.availRepo.save(avail);
+    }
+    // A branch cannot lift a stop head office put on the whole chain; say so rather than
+    // answer success while the item stays off.
+    if (branchId) {
+      const chainWide = await this.availRepo.findOne({ where: this.stopWhere(tenantId, key, undefined) });
+      if (chainWide && this.stopIsLive(chainWide, branchId, new Date())) {
+        throw new BadRequestException({ statusCode: 400, code: 'CHAIN_WIDE_STOP', message: 'Head office took this off sale at every branch; only head office can put it back' });
+      }
     }
 
     await this.auditWriter.write({
@@ -1176,6 +1186,83 @@ export class CatalogService {
       params,
     );
     return Math.floor(Number(rows[0]?.sold || 0));
+  }
+
+  /**
+   * Every rule on what may be sold, for a whole basket checked before anything is saved: the
+   * kiosk builds its order in one go rather than line by line. Stops on the product, its size
+   * or an add-on, selling windows, a combo's chosen dishes, the per-order cap and today's
+   * stock, with lines of the same item added together.
+   */
+  async assertBasketSellable(
+    tenantId: string,
+    branchId: string | undefined,
+    lines: Array<{ product: Product; variantId: string | null; quantity: number; optionItems: OptionItem[] }>,
+    at: Date = new Date(),
+  ) {
+    const refuse = (code: string, message: string) => new BadRequestException({ statusCode: 400, code, message });
+
+    for (const line of lines) {
+      const stop = await this.getSuspension(tenantId, line.product.id, branchId, at, line.variantId);
+      if (stop.outOfSchedule) throw refuse('PRODUCT_OUT_OF_SCHEDULE', `${line.product.name} is not on sale now. ${stop.reason}`);
+      if (stop.isSuspended) throw refuse('PRODUCT_SUSPENDED', `${line.product.name} is not available now${stop.reason ? ` (${stop.reason})` : ''}`);
+      for (const item of line.optionItems) {
+        const itemStop = await this.getOptionItemStop(tenantId, item.id, branchId, at);
+        if (itemStop.isSuspended) throw refuse('OPTION_SUSPENDED', `${item.name} is not available now`);
+        if (item.product_id) {
+          const dishStop = await this.getSuspension(tenantId, item.product_id, branchId, at);
+          if (dishStop.isSuspended) throw refuse('PRODUCT_SUSPENDED', `${item.name} in ${line.product.name} is not available now`);
+        }
+      }
+    }
+
+    const byProduct = new Map<string, { product: Product; quantity: number }>();
+    for (const line of lines) {
+      const entry = byProduct.get(line.product.id) || { product: line.product, quantity: 0 };
+      entry.quantity += line.quantity;
+      byProduct.set(line.product.id, entry);
+    }
+    for (const { product, quantity } of byProduct.values()) {
+      if (product.max_per_order && quantity > product.max_per_order) {
+        throw refuse('PRODUCT_MAX_PER_ORDER', `At most ${product.max_per_order} × ${product.name} per order`);
+      }
+    }
+
+    if (!branchId) return;
+    const date = BusinessDateUtil.today(at);
+    for (const { product } of byProduct.values()) {
+      const counts = await this.stockRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, business_date: date, product_id: product.id } });
+      for (const count of counts) {
+        const wanted = lines
+          .filter((l) => l.product.id === product.id && (!count.variant_id || l.variantId === count.variant_id))
+          .reduce((sum, l) => sum + l.quantity, 0);
+        if (!wanted) continue;
+        const left = count.quantity - (await this.soldOn(this.stockRepo.manager, tenantId, branchId, date, product.id, count.variant_id));
+        if (wanted > left) {
+          throw refuse('PRODUCT_OUT_OF_STOCK', left > 0 ? `Only ${left} × ${product.name} left today` : `${product.name} is sold out today`);
+        }
+      }
+    }
+  }
+
+  /**
+   * What a self-service menu should not offer right now at a branch: whole products that are
+   * stopped, out of their window or sold out, and the sizes and add-ons that are.
+   */
+  async getUnavailableNow(tenantId: string, branchId?: string, at: Date = new Date()) {
+    const live = (await this.getAvailabilities(tenantId, branchId)).filter((row) => this.stopIsLive(row, branchId, at));
+    const products = new Set(live.filter((r) => r.product_id && !r.variant_id).map((r) => r.product_id as string));
+    const variants = new Set(live.filter((r) => r.variant_id).map((r) => r.variant_id as string));
+    const optionItems = new Set(live.filter((r) => r.option_item_id).map((r) => r.option_item_id as string));
+    for (const off of await this.getOffScheduleProducts(tenantId, branchId, at)) products.add(off.product_id);
+    if (branchId) {
+      for (const row of await this.getDailyStock(tenantId, branchId, BusinessDateUtil.today(at))) {
+        if (row.remaining > 0) continue;
+        if (row.variant_id) variants.add(row.variant_id);
+        else products.add(row.product_id);
+      }
+    }
+    return { products, variants, optionItems };
   }
 
   /**

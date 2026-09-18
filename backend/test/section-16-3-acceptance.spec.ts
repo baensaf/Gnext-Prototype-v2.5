@@ -1301,8 +1301,9 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     expect(guestOrder.id).toBeDefined();
     expect(guestOrder.channel).toBe('KIOSK');
     expect(MoneyUtil.format(guestOrder.subtotal_amount)).toBe('400000.0000');
-    expect(MoneyUtil.format(guestOrder.tax_amount)).toBe('36000.0000'); // 9% tax
-    expect(MoneyUtil.format(guestOrder.total_amount)).toBe('436000.0000');
+    // VAT at the product's own rate, as on the register; this burger's is the column default, 0.
+    expect(MoneyUtil.format(guestOrder.tax_amount)).toBe('0.0000');
+    expect(MoneyUtil.format(guestOrder.total_amount)).toBe('400000.0000');
 
     // Process Kiosk POS Payment
     const guestPaymentRes = await kioskService.processKioskPayment(tenantId, {

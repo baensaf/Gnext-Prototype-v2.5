@@ -35,6 +35,7 @@ describe('CatalogService (Unit)', () => {
   let auditWriter: any;
   let pricingService: any;
   let hoursRepo: any;
+  let stockRepo: any;
 
   beforeEach(async () => {
     prodRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), softRemove: jest.fn() };
@@ -61,6 +62,7 @@ describe('CatalogService (Unit)', () => {
     scheduleRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn(), create: jest.fn((d) => d), save: jest.fn((d) => Promise.resolve(d)), delete: jest.fn() };
     auditWriter = { write: jest.fn() };
     hoursRepo = { find: jest.fn().mockResolvedValue([]) };
+    stockRepo = { find: jest.fn().mockResolvedValue([]), manager: { query: jest.fn().mockResolvedValue([{ sold: 0 }]) } };
     pricingService = {
       resolvePrice: jest.fn().mockResolvedValue({ amount: '1500000.0000', resolutionSource: 'BASE_PRICE', isOverridden: false }),
       bulkCommit: jest.fn().mockResolvedValue({ success: true, updated_count: 2, affected_rows: 2, job_id: 'job-1' }),
@@ -84,7 +86,7 @@ describe('CatalogService (Unit)', () => {
         { provide: getRepositoryToken(AvailabilitySchedule), useValue: scheduleRepo },
         { provide: getRepositoryToken(Branch), useValue: { findOne: jest.fn().mockResolvedValue({ id: 'b-1', time_zone: 'Asia/Tehran' }) } },
         { provide: getRepositoryToken(BranchOperatingHour), useValue: hoursRepo },
-        { provide: getRepositoryToken(DailyStock), useValue: { find: jest.fn().mockResolvedValue([]), manager: {} } },
+        { provide: getRepositoryToken(DailyStock), useValue: stockRepo },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: PricingService, useValue: pricingService },
       ],
@@ -317,5 +319,33 @@ describe('CatalogService (Unit)', () => {
         await expect(service.assertLineSellable(em() as any, 't-1', order, { id: 'p-1', name: 'Sandwich' } as any, null, '1', [chili])).rejects.toThrow('not available');
       });
     });
+  });
+
+  describe('whole-basket checks (kiosk)', () => {
+    const fries = { id: 'p-fr', name: 'Fries', max_per_order: 3 } as any;
+    const line = (quantity: number, variantId: string | null = null) => ({ product: fries, variantId, quantity, optionItems: [] });
+
+    it('adds lines of the same item together against the per-order cap', async () => {
+      await expect(service.assertBasketSellable('t-1', 'b-1', [line(2), line(2)])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'PRODUCT_MAX_PER_ORDER' }) });
+      await expect(service.assertBasketSellable('t-1', 'b-1', [line(1), line(2)])).resolves.toBeUndefined();
+    });
+
+    it("adds lines together against today's stock, less what is already sold", async () => {
+      stockRepo.find.mockResolvedValue([{ product_id: 'p-fr', variant_id: null, quantity: 5 }]);
+      stockRepo.manager.query.mockResolvedValue([{ sold: 3 }]);
+      await expect(service.assertBasketSellable('t-1', 'b-1', [line(1), line(2)])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'PRODUCT_OUT_OF_STOCK', message: 'Only 2 × Fries left today' }) });
+    });
+
+    it('refuses a stopped size', async () => {
+      availRepo.find.mockResolvedValue([{ product_id: 'p-fr', variant_id: 'v-l', branch_id: 'b-1', is_suspended: true, suspended_until: null, reason: 'No large boxes' }]);
+      await expect(service.assertBasketSellable('t-1', 'b-1', [line(1, 'v-l')])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'PRODUCT_SUSPENDED' }) });
+      await expect(service.assertBasketSellable('t-1', 'b-1', [line(1, 'v-s')])).resolves.toBeUndefined();
+    });
+  });
+
+  it("will not let a branch lift head office's chain-wide stop", async () => {
+    const chainWide = { product_id: 'p-1', variant_id: null, option_item_id: null, branch_id: null, is_suspended: true, suspended_until: null };
+    availRepo.findOne.mockImplementation(({ where }: any) => Promise.resolve(where.branch_id === 'b-1' ? null : chainWide));
+    await expect(service.resumeProduct('t-1', 'p-1', 'b-1')).rejects.toMatchObject({ response: expect.objectContaining({ code: 'CHAIN_WIDE_STOP' }) });
   });
 });

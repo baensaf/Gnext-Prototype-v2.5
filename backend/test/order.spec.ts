@@ -57,7 +57,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
     stateEventRepo = { find: jest.fn().mockResolvedValue([]), create: jest.fn(), save: jest.fn() };
     sequenceRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
     productRepo = { findOne: jest.fn() };
-    variantRepo = { findOne: jest.fn() };
+    variantRepo = { findOne: jest.fn(), count: jest.fn().mockResolvedValue(0) };
     optionItemRepo = { findOne: jest.fn() };
     priceService = { resolvePrice: jest.fn() };
     discountEngine = {
@@ -430,12 +430,26 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       await expect(add(['opt-cola', 'opt-fries'])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'PRODUCT_SUSPENDED', message: 'Cola in Burger Meal is not on sale now (Out of stock)' }) });
     });
 
-    it('leaves the choices on an ordinary product unchecked, as before', async () => {
+    it('holds an ordinary product to its required add-on groups too', async () => {
       productRepo.findOne.mockResolvedValue({ ...combo, product_type: 'STANDARD' });
 
-      await add(['opt-bacon']);
+      await expect(add(['opt-shake'])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'OPTION_CHOICES_INVALID', message: 'Burger Meal needs a Side choice' }) });
+      await expect(add(['opt-shake', 'opt-fries', 'opt-bacon'])).rejects.toMatchObject({ response: expect.objectContaining({ message: 'Bacon is not a choice in Burger Meal' }) });
+      await add(['opt-shake', 'opt-fries']);
+      expect(mockEntityManager.save).toHaveBeenCalledWith(OrderItem, expect.objectContaining({ modifier_total: '60000.0000' }));
+    });
 
-      expect(mockEntityManager.save).toHaveBeenCalledWith(OrderItem, expect.objectContaining({ modifier_total: '50000.0000' }));
+    it('refuses a product sold in sizes when no size is picked', async () => {
+      productRepo.findOne.mockResolvedValue({ ...combo, product_type: 'STANDARD' });
+      variantRepo.count.mockResolvedValueOnce(2);
+
+      await expect(add(['opt-shake', 'opt-fries'])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'VARIANT_REQUIRED' }) });
+    });
+
+    it('refuses a product taken off the menu', async () => {
+      productRepo.findOne.mockResolvedValue({ ...combo, is_active: false });
+
+      await expect(add(['opt-shake', 'opt-fries'])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'PRODUCT_INACTIVE' }) });
     });
   });
 });
