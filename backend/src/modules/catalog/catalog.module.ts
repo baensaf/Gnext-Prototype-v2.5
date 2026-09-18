@@ -24,6 +24,7 @@ import { PriceChangeService } from './price-changes.service';
 import { PriceBulkJob } from '../../entities/PriceBulkJob.entity';
 import { AuditEvent } from '../../entities/AuditEvent.entity';
 import { AuditModule } from '../audit/audit.module';
+import { ApprovalModule } from '../approval/approval.module';
 import { PricingModule } from '../pricing/pricing.module';
 
 @Module({
@@ -50,6 +51,7 @@ import { PricingModule } from '../pricing/pricing.module';
       DailyStock,
     ]),
     AuditModule,
+    ApprovalModule,
     forwardRef(() => PricingModule),
   ],
   providers: [CatalogService, PriceListService, PriceChangeService],

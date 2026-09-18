@@ -248,7 +248,36 @@
     },
     "comboChooseSlot": "Choose the {{slot}}",
     "itemSoldOut": "Sold out",
-    "itemSoldOutNotice": "{{name}} is sold out today."
+    "itemSoldOutNotice": "{{name}} is sold out today.",
+    "stop": {
+      "open": "Take {{name}} off sale",
+      "title": "Take {{name}} off sale",
+      "what": "What",
+      "allSizes": "All sizes",
+      "why": "Why",
+      "reasons": {
+        "SOLD_OUT": "Sold out",
+        "INGREDIENT_MISSING": "Ingredient missing",
+        "EQUIPMENT_DOWN": "Equipment down",
+        "QUALITY": "Quality problem",
+        "OTHER": "Other"
+      },
+      "otherReason": "Reason",
+      "untilNextShift": "Until the next shift",
+      "untilFurtherNotice": "Until further notice",
+      "needsManager": "needs a manager",
+      "approverPin": "Manager PIN",
+      "approverPinHelp": "A manager or supervisor enters their PIN",
+      "takeOff": "Take off sale",
+      "putBack": "Put back on sale",
+      "isOff": "Off sale at this branch",
+      "chainWide": "Head office took this off sale at every branch; only head office can put it back",
+      "backAt": "back {{at}}",
+      "stoppedNextShift": "{{name}} is off sale until the next shift",
+      "stoppedFurtherNotice": "{{name}} is off sale until further notice",
+      "resumed": "{{name}} is back on sale",
+      "failed": "Could not change this item"
+    }
   },
   "kiosk": {
     "title": "SELF-SERVICE KIOSK",

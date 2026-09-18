@@ -37,6 +37,7 @@ import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import TakeoutDiningIcon from '@mui/icons-material/TakeoutDining';
 import DeliveryDiningIcon from '@mui/icons-material/DeliveryDining';
+import DoNotDisturbOnOutlinedIcon from '@mui/icons-material/DoNotDisturbOnOutlined';
 import {
   Box,
   Tab,
@@ -95,6 +96,8 @@ import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 import { useRegisterShift } from 'src/components/shift/use-register-shift';
 import { PosShiftBar, PosShiftGate } from 'src/components/shift/pos-shift';
 
+import { PosStopDialog } from './pos-stop-dialog';
+
 interface CartItem {
   product: Product;
   selectedVariant?: ProductVariant;
@@ -142,6 +145,9 @@ export function PosOrderPage() {
   const [activeTab, setActiveTab] = useState<string>('');
   const [products, setProducts] = useState<Product[]>([]);
   const [availabilities, setAvailabilities] = useState<ProductAvailability[]>([]);
+  // 86 from the tile: long-press, right-click or the tile's stop button opens it.
+  const [stopProduct, setStopProduct] = useState<Product | null>(null);
+  const longPress = React.useRef<{ timer?: number; fired: boolean }>({ fired: false });
   // Items outside their selling window right now (breakfast after 11:00), with the window.
   const [offSchedule, setOffSchedule] = useState<Map<string, string>>(new Map());
   // Today's stock counts at this branch; a product at zero is sold out until tomorrow's count.
@@ -1525,7 +1531,21 @@ export function PosOrderPage() {
                         <Paper
                           variant="outlined"
                           aria-disabled={isSuspended}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setStopProduct(p);
+                          }}
+                          onPointerDown={() => {
+                            longPress.current.fired = false;
+                            longPress.current.timer = window.setTimeout(() => {
+                              longPress.current.fired = true;
+                              setStopProduct(p);
+                            }, 600);
+                          }}
+                          onPointerUp={() => window.clearTimeout(longPress.current.timer)}
+                          onPointerLeave={() => window.clearTimeout(longPress.current.timer)}
                           sx={{
+                            position: 'relative',
                             p: 1.5,
                             borderRadius: 2.5,
                             cursor: isSuspended ? 'not-allowed' : 'pointer',
@@ -1546,6 +1566,11 @@ export function PosOrderPage() {
                                 }),
                           }}
                           onClick={() => {
+                            // The press that opened the stop dialog is not also a sale.
+                            if (longPress.current.fired) {
+                              longPress.current.fired = false;
+                              return;
+                            }
                             if (soldOut && !suspendedProductIds.has(p.id)) {
                               setError(t('pos.itemSoldOutNotice', { defaultValue: '{{name}} is sold out today.', name: p.name }));
                               return;
@@ -1561,6 +1586,18 @@ export function PosOrderPage() {
                             handleOpenProductOptions(p);
                           }}
                         >
+                          <IconButton
+                            size="small"
+                            aria-label={t('pos.stop.open', { name: p.name })}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setStopProduct(p);
+                            }}
+                            sx={{ position: 'absolute', top: 4, insetInlineEnd: 4, p: 0.5, color: 'text.disabled', '&:hover': { color: 'error.main' } }}
+                          >
+                            <DoNotDisturbOnOutlinedIcon sx={{ fontSize: 18 }} />
+                          </IconButton>
                           <Box>
                             {isSuspended && (
                               <Chip
@@ -2890,6 +2927,21 @@ export function PosOrderPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <PosStopDialog
+        product={stopProduct}
+        branchId={selectedBranchId || null}
+        availabilities={availabilities}
+        onClose={() => setStopProduct(null)}
+        onDone={(message) => {
+          setStopProduct(null);
+          toast.success(message);
+          catalogApi
+            .getAvailabilities(selectedBranchId || undefined)
+            .then(setAvailabilities)
+            .catch(() => undefined);
+        }}
+      />
 
       {/* Checkout / Payment Modal */}
       <CheckoutModal
