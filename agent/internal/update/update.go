@@ -70,12 +70,18 @@ func (u *Updater) Check(ctx context.Context) error {
 			return err
 		}
 	}
+	staged, err := stageBeside(path, exe)
+	if err != nil {
+		return fmt.Errorf("stage new binary: %w", err)
+	}
 	old := OldPath(exe)
 	_ = os.Remove(old)
 	if err := os.Rename(exe, old); err != nil {
+		_ = os.Remove(staged)
 		return fmt.Errorf("move running binary aside: %w", err)
 	}
-	if err := moveFile(path, exe); err != nil {
+	if err := os.Rename(staged, exe); err != nil {
+		_ = os.Remove(staged)
 		_ = os.Rename(old, exe)
 		return fmt.Errorf("install new binary: %w", err)
 	}
@@ -126,28 +132,36 @@ func Cleanup(exe string) {
 	}
 }
 
-func moveFile(from, to string) error {
-	if err := os.Rename(from, to); err == nil {
-		return nil
-	}
+// stageBeside copies the download to "<exe>.new" and removes the download. The copy is a new
+// file in the install folder, so on Windows it takes that folder's permissions. Renaming the
+// download instead would carry over the data folder's, which only SYSTEM and Administrators may
+// read: the service would still run, but the Start-menu shortcut could not.
+func stageBeside(from, exe string) (string, error) {
+	staged := exe + ".new"
+	_ = os.Remove(staged)
 	in, err := os.Open(from)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(to, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
+	out, err := os.OpenFile(staged, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o755)
 	if err != nil {
-		return err
+		return "", err
 	}
-	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		return err
+	_, err = io.Copy(out, in)
+	if err == nil {
+		err = out.Sync()
 	}
-	if err := out.Close(); err != nil {
-		return err
+	if cerr := out.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(staged)
+		return "", err
 	}
 	in.Close()
-	return os.Remove(from)
+	_ = os.Remove(from)
+	return staged, nil
 }
 
 // Newer reports whether version a is greater than b (major.minor.patch; a pre-release suffix

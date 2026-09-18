@@ -5,6 +5,8 @@ package main
 import (
 	"context"
 	"os"
+	"os/exec"
+	"syscall"
 	"time"
 
 	"golang.org/x/sys/windows/svc"
@@ -54,5 +56,20 @@ func (handler) Execute(_ []string, req <-chan svc.ChangeRequest, status chan<- s
 }
 
 func runService() {
+	repairBinaryPermissions()
 	_ = svc.Run(serviceName, handler{})
+}
+
+// repairBinaryPermissions gives the running exe its folder's permissions again. Agents up to
+// 1.0.4 installed an update by renaming it out of the data folder, which kept that folder's
+// SYSTEM-and-Administrators-only permissions, so users could no longer start `gnext-agent open`.
+// The service runs as SYSTEM and may fix that; any failure leaves things as they were.
+func repairBinaryPermissions() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	cmd := exec.Command("icacls", exe, "/reset")
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	_ = cmd.Run()
 }
