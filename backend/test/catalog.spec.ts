@@ -65,7 +65,6 @@ describe('CatalogService (Unit)', () => {
     stockRepo = { find: jest.fn().mockResolvedValue([]), manager: { query: jest.fn().mockResolvedValue([{ sold: 0 }]) } };
     pricingService = {
       resolvePrice: jest.fn().mockResolvedValue({ amount: '1500000.0000', resolutionSource: 'BASE_PRICE', isOverridden: false }),
-      bulkCommit: jest.fn().mockResolvedValue({ success: true, updated_count: 2, affected_rows: 2, job_id: 'job-1' }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -140,17 +139,6 @@ describe('CatalogService (Unit)', () => {
     const result = await service.getEffectivePrice('t-1', 'p-1');
     expect(result.is_suspended).toBe(true);
     expect(result.suspension_reason).toBe('Out of stock');
-  });
-
-  it('should perform bulk price updates on products', async () => {
-    const result = await service.bulkUpdatePrices(
-      't-1',
-      { adjustment_type: 'PERCENTAGE', amount: '10' },
-      'corr-1',
-    );
-
-    expect(result.success).toBe(true);
-    expect(result.updated_count).toBe(2);
   });
 
   describe('Product Variants', () => {

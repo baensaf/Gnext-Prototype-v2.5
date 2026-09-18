@@ -17,6 +17,17 @@ export class PriceBulkJob {
   @Column({ type: 'integer', default: 0 })
   affected_rows: number;
 
+  /** The price list the change is on; null for base prices. */
+  @Column({ type: 'uuid', nullable: true })
+  price_group_id: string | null;
+
+  /** When the new prices start. */
+  @Column({ type: 'timestamptz', nullable: true })
+  effective_from: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  cancelled_at: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

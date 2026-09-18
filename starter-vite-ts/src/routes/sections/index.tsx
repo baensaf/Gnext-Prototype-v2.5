@@ -50,6 +50,7 @@ import { PrintQueuePage } from 'src/pages/operations/print-queue';
 import { OrdersDetailPage } from 'src/pages/orders/orders-detail';
 import { PaymentSettingsPage } from 'src/pages/settings/payments';
 import { UserProfilePage } from 'src/pages/settings/user-profile';
+import { PriceChangesPage } from 'src/pages/catalog/price-changes';
 import { BusinessDaysPage } from 'src/pages/cashier/business-days';
 import { ReportViewerPage } from 'src/pages/reports/report-viewer';
 import { CalendarSettingsPage } from 'src/pages/settings/calendar';
@@ -162,11 +163,12 @@ export const routesSection: RouteObject[] = [
       { path: 'catalog/stock', element: <DailyStockPage /> },
       { path: 'catalog/import-export', element: <ImportWizardPage /> },
       { path: 'pricing/price-lists', element: <PriceListsPage /> },
+      { path: 'pricing/changes', element: <PriceChangesPage /> },
       { path: 'pricing/snappfood', element: <ChannelPricesPage /> },
       // The old Price Book addresses, kept so bookmarks land on the lists.
       { path: 'pricing/price-book', element: <Navigate to="/app/pricing/price-lists" replace /> },
       { path: 'pricing/price-groups', element: <Navigate to="/app/pricing/price-lists" replace /> },
-      { path: 'pricing/bulk-update', element: <Navigate to="/app/pricing/price-lists" replace /> },
+      { path: 'pricing/bulk-update', element: <Navigate to="/app/pricing/changes" replace /> },
       { path: 'discounts', element: <Navigate to="/app/discounts/customer-rates" replace /> },
       { path: 'discounts/customer-rates', element: <DiscountsHubPage defaultTab={0} /> },
       { path: 'discounts/coupons', element: <DiscountsHubPage defaultTab={1} /> },

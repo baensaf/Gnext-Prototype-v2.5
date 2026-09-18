@@ -267,6 +267,7 @@ export class CatalogService {
 
     Object.assign(prod, data);
     const saved = await this.prodRepo.save(prod);
+    if (data.base_price && !MoneyUtil.equals(before.base_price, saved.base_price)) await this.endDatedBasePrice(tenantId, id, null);
 
     await this.auditWriter.write({
       tenantId,
@@ -280,6 +281,24 @@ export class CatalogService {
     });
 
     return saved;
+  }
+
+  /**
+   * A base price typed on the product page is the price from now on, so a dated base price in
+   * force (from a price change) ends here; otherwise it would keep winning, and the sweep that
+   * copies it into the product would put the old figure back. Changes dated later still apply.
+   */
+  private async endDatedBasePrice(tenantId: string, productId: string, variantId: string | null) {
+    const now = new Date();
+    await this.prodRepo.manager
+      .createQueryBuilder()
+      .update(PriceEntry)
+      .set({ effective_to: now })
+      .where('tenant_id = :tenantId AND product_id = :productId', { tenantId, productId })
+      .andWhere(variantId ? 'variant_id = :variantId' : 'variant_id IS NULL', { variantId })
+      .andWhere('price_group_id IS NULL AND branch_id IS NULL AND channel IS NULL AND order_type IS NULL AND modifier_option_id IS NULL')
+      .andWhere('effective_from <= :now AND (effective_to IS NULL OR effective_to > :now)', { now })
+      .execute();
   }
 
   async archiveProduct(tenantId: string, id: string, correlationId: string) {
@@ -412,6 +431,7 @@ export class CatalogService {
 
     Object.assign(variant, data);
     const saved = await this.variantRepo.save(variant);
+    if (data.base_price && !MoneyUtil.equals(before.base_price, saved.base_price)) await this.endDatedBasePrice(tenantId, productId, variantId);
 
     await this.auditWriter.write({
       tenantId,
@@ -582,15 +602,6 @@ export class CatalogService {
       await this.prodGroupRepo.save(link);
     }
     return link;
-  }
-
-  // Bulk Price Update
-  async bulkUpdatePrices(
-    tenantId: string,
-    params: { price_group_id?: string; category_id?: string; adjustment_type: 'PERCENTAGE' | 'FIXED'; amount: string },
-    correlationId: string,
-  ) {
-    return await this.pricingService.bulkCommit(tenantId, params as any, correlationId);
   }
 
   // Menus Management
@@ -1318,7 +1329,7 @@ export class CatalogService {
     const variants = await this.variantRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { sort_order: 'ASC', code: 'ASC' } });
     const now = new Date();
     const list = await this.priceLists.listForBranch(tenantId, branchId);
-    const listed = await this.priceLists.listPricesForBranch(tenantId, branchId, now);
+    const listed = await this.priceLists.pricesForBranch(tenantId, branchId, now);
     const fixed = (await this.prodRepo.manager.find(PriceEntry, { where: { tenant_id: tenantId, channel } })).filter(
       (e) => !e.branch_id && !e.price_group_id && !e.modifier_option_id && new Date(e.effective_from) <= now && (!e.effective_to || new Date(e.effective_to) > now),
     );

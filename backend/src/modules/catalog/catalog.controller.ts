@@ -2,6 +2,7 @@ import { Controller, Get, Post, Patch, Put, Delete, Param, Query, Body, Req } fr
 import { Request } from 'express';
 import { CatalogService } from './catalog.service';
 import { PriceListService } from './price-lists.service';
+import { PriceChangeInput, PriceChangeService } from './price-changes.service';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { HeadOfficeOnly, Roles, MANAGER_AND_ABOVE } from '../../common/decorators/roles.decorator';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
@@ -20,6 +21,7 @@ export class CatalogController {
   constructor(
     private readonly catalogService: CatalogService,
     private readonly priceLists: PriceListService,
+    private readonly priceChanges: PriceChangeService,
   ) {}
 
   // Categories
@@ -278,12 +280,34 @@ export class CatalogController {
     return await this.priceLists.assignBranch((req as any).tenantId, body.branchId, body.priceListId || null, (req as any).correlationId);
   }
 
+  // Dated price changes ("+10% from Saturday"), on base prices or one list.
   @HeadOfficeOnly()
-  @Post('catalog/prices/bulk-update')
-  async bulkUpdatePrices(@Body() body: { price_group_id?: string; category_id?: string; adjustment_type: 'PERCENTAGE' | 'FIXED'; amount: string }, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.catalogService.bulkUpdatePrices(tenantId, body, correlationId);
+  @Post('catalog/price-changes/preview')
+  async previewPriceChange(@Body() body: PriceChangeInput, @Req() req: Request) {
+    return await this.priceChanges.preview((req as any).tenantId, body);
+  }
+
+  @HeadOfficeOnly()
+  @Post('catalog/price-changes')
+  async commitPriceChange(@Body() body: PriceChangeInput, @Req() req: Request) {
+    return await this.priceChanges.commit((req as any).tenantId, body, (req as any).userId || null, (req as any).correlationId);
+  }
+
+  @HeadOfficeOnly()
+  @Get('catalog/price-changes')
+  async getPriceChanges(@Req() req: Request) {
+    return await this.priceChanges.list((req as any).tenantId);
+  }
+
+  @HeadOfficeOnly()
+  @Delete('catalog/price-changes/:id')
+  async cancelPriceChange(@Param('id') id: string, @Req() req: Request) {
+    return await this.priceChanges.cancel((req as any).tenantId, id, (req as any).userId || null, (req as any).correlationId);
+  }
+
+  @Get('products/:id/price-history')
+  async getPriceHistory(@Param('id') id: string, @Req() req: Request) {
+    return await this.priceChanges.getPriceHistory((req as any).tenantId, id);
   }
 
   // Aggregator price sheet. The markup rule itself is the CHANNEL_PRICING setting.

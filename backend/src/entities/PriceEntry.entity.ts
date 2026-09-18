@@ -50,4 +50,8 @@ export class PriceEntry {
 
   @Column({ type: 'uuid', nullable: true })
   created_by: string;
+
+  /** The dated price change (price_bulk_job) this row belongs to, if any. */
+  @Column({ type: 'uuid', nullable: true })
+  bulk_job_id: string | null;
 }

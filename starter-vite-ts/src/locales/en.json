@@ -115,7 +115,8 @@
     "reportsAll": "All Reports",
     "branchAgents": "Branch Agents",
     "dailyStock": "Today’s Stock",
-    "snappfoodPrices": "Snappfood Prices"
+    "snappfoodPrices": "Snappfood Prices",
+    "priceChanges": "Price Changes"
   },
   "common": {
     "languages": "Languages",
@@ -1404,7 +1405,8 @@
       "tabs": {
         "general": "General Info & Pricing",
         "variants": "Variants ({{count}})",
-        "modifiers": "Modifiers & Options ({{count}})"
+        "modifiers": "Modifiers & Options ({{count}})",
+        "priceHistory": "Price history"
       },
       "general": {
         "title": "Basic Product Information",
@@ -1498,6 +1500,25 @@
         "status": "Availability",
         "menuTime": "Menu time",
         "allDay": "All day"
+      },
+      "priceHistory": {
+        "loadFailed": "Could not load the price history",
+        "empty": "No price changes yet.",
+        "when": "From",
+        "what": "Change",
+        "size": "Size",
+        "price": "Price",
+        "kinds": {
+          "CHANGE": "Price change",
+          "LIST_PRICE": "Price list",
+          "BASE": "Base price",
+          "EDIT": "Edited on this page"
+        },
+        "statuses": {
+          "UPCOMING": "Upcoming",
+          "CURRENT": "Current",
+          "ENDED": "Ended"
+        }
       }
     },
     "menusPage": {
@@ -1813,6 +1834,52 @@
       "basePrices": "Base prices",
       "fromList": "In-store prices from the {{name}} list",
       "noList": "This branch has no price list, so it uses base prices"
+    },
+    "changes": {
+      "title": "Price changes",
+      "subtitle": "Raise or lower base prices, or one price list, by a percentage or an amount, from today or a later day. Check every new price before saving. A change that has not started yet can be cancelled.",
+      "newChange": "New price change",
+      "prices": "Prices",
+      "basePrices": "Base prices",
+      "listPrices": "{{name}} list",
+      "category": "Category",
+      "allCategories": "All categories",
+      "from": "From",
+      "fromHelp": "Leave empty to change prices now",
+      "byPercent": "Percent",
+      "byAmount": "Amount",
+      "change": "Change",
+      "changeHelp": "Negative lowers prices",
+      "rial": "Rial",
+      "roundTo": "Round up to (Rial)",
+      "roundToHelp": "e.g. 1000; 0 for no rounding",
+      "preview": "Preview",
+      "previewSummary": "{{count}} prices change from {{date}}",
+      "schedule": "Schedule change",
+      "applyNow": "Change prices now",
+      "empty": "No items match.",
+      "emptyList": "This list has no prices of its own for these items; its branches follow base prices.",
+      "item": "Item",
+      "current": "Current price",
+      "new": "New price",
+      "history": "Recent changes",
+      "none": "No price changes yet.",
+      "items": "Items",
+      "status": "Status",
+      "statuses": {
+        "SCHEDULED": "Scheduled",
+        "APPLIED": "Applied",
+        "CANCELLED": "Cancelled"
+      },
+      "cancel": "Cancel change",
+      "cancelTitle": "Cancel this price change?",
+      "cancelBody": "The prices stay as they are now. Nothing has been charged at the new prices yet.",
+      "cancelled": "Price change cancelled.",
+      "scheduled": "{{count}} prices will change on {{date}}.",
+      "applied": "{{count}} prices changed.",
+      "loadFailed": "Could not load price changes",
+      "previewFailed": "Could not preview the change",
+      "saveFailed": "Could not save"
     }
   },
   "discounts": {

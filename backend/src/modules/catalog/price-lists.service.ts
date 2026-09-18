@@ -39,12 +39,15 @@ export class PriceListService {
     return (await this.listRepo.findOne({ where: { id: link.price_group_id, tenant_id: tenantId, is_active: true } })) || null;
   }
 
-  /** A list's own price rows (not a branch's, a channel's or an add-on's). */
-  private entriesOf(tenantId: string, listId: string, productIds?: string[]) {
+  /**
+   * A list's own price rows, or with `listId` null the dated base prices: rows with no list,
+   * branch, channel, order type or add-on.
+   */
+  entriesOf(tenantId: string, listId: string | null, productIds?: string[]) {
     return this.entryRepo.find({
       where: {
         tenant_id: tenantId,
-        price_group_id: listId,
+        price_group_id: listId ?? IsNull(),
         branch_id: IsNull(),
         channel: IsNull(),
         order_type: IsNull(),
@@ -54,11 +57,18 @@ export class PriceListService {
     });
   }
 
-  /** The prices a branch's list sets at `at`, keyed by product and size. Empty when it has no list. */
-  async listPricesForBranch(tenantId: string, branchId: string | null | undefined, at = new Date(), productIds?: string[]) {
+  /**
+   * The dated prices that apply at a branch at `at`, keyed by product and size: base prices
+   * dated by a price change, overridden by the branch list's own prices. An item with neither
+   * sells at the base price on its product or size (see `inStorePrice`).
+   */
+  async pricesForBranch(tenantId: string, branchId: string | null | undefined, at = new Date(), productIds?: string[]) {
+    const prices = listPricesAt(await this.entriesOf(tenantId, null, productIds), at);
     const list = await this.listForBranch(tenantId, branchId);
-    if (!list) return new Map<string, string>();
-    return listPricesAt(await this.entriesOf(tenantId, list.id, productIds), at);
+    if (list) {
+      for (const [key, amount] of listPricesAt(await this.entriesOf(tenantId, list.id, productIds), at)) prices.set(key, amount);
+    }
+    return prices;
   }
 
   /** What one product, or one size of it, costs in store at a branch. Add-ons are extra. */
@@ -69,7 +79,7 @@ export class PriceListService {
     variant: ProductVariant | null,
     at = new Date(),
   ): Promise<string> {
-    return inStorePrice(await this.listPricesForBranch(tenantId, branchId, at, [product.id]), product, variant);
+    return inStorePrice(await this.pricesForBranch(tenantId, branchId, at, [product.id]), product, variant);
   }
 
   /**
@@ -78,7 +88,7 @@ export class PriceListService {
    */
   async getBranchPrices(tenantId: string, branchId?: string | null) {
     const list = await this.listForBranch(tenantId, branchId);
-    const listed = list ? listPricesAt(await this.entriesOf(tenantId, list.id), new Date()) : new Map<string, string>();
+    const listed = await this.pricesForBranch(tenantId, branchId);
     const products = await this.productRepo.find({ where: { tenant_id: tenantId, is_active: true } });
     const variants = await this.variantRepo.find({ where: { tenant_id: tenantId, is_active: true } });
     const items = [
@@ -214,19 +224,22 @@ export class PriceListService {
    */
   async getPriceListSheet(tenantId: string, listId: string) {
     const list = await this.getList(tenantId, listId);
-    const listed = listPricesAt(await this.entriesOf(tenantId, listId), new Date());
+    const now = new Date();
+    const listed = listPricesAt(await this.entriesOf(tenantId, listId), now);
+    const based = listPricesAt(await this.entriesOf(tenantId, null), now);
     const products = await this.productRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { code: 'ASC' } });
     const variants = await this.variantRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { sort_order: 'ASC', code: 'ASC' } });
     const row = (product: Product, variant: ProductVariant | null) => {
       const own = listed.get(priceKey(product.id, variant?.id));
+      const base = inStorePrice(based, product, variant);
       return {
         product_id: product.id,
         variant_id: variant?.id || null,
         category_id: product.category_id,
         name: variant ? `${product.name} — ${variant.name}` : product.name,
-        base_price: MoneyUtil.format(variant ? variant.base_price : product.base_price),
+        base_price: base,
         list_price: own ?? null,
-        price: inStorePrice(listed, product, variant),
+        price: own ?? base,
       };
     };
     const items = products.flatMap((p) => {
