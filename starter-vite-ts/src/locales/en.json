@@ -114,7 +114,8 @@
     "cashierShifts": "Shifts & Drawer",
     "reportsAll": "All Reports",
     "branchAgents": "Branch Agents",
-    "dailyStock": "Today’s Stock"
+    "dailyStock": "Today’s Stock",
+    "snappfoodPrices": "Snappfood Prices"
   },
   "common": {
     "languages": "Languages",
@@ -1763,7 +1764,27 @@
     "title": "Price Book & Groups",
     "priceBook": "Price Book",
     "priceGroups": "Price Groups",
-    "bulkUpdate": "Bulk Price Update"
+    "bulkUpdate": "Bulk Price Update",
+    "channelPrices": {
+      "title": "Snappfood prices",
+      "subtitle": "Snappfood price for every item: the in-store price plus the markup, rounded up, unless an item has a fixed price. Copy these into the Snappfood vendor panel.",
+      "ruleTitle": "Markup rule",
+      "markup": "Markup",
+      "roundTo": "Round up to (Rial)",
+      "roundToHelp": "e.g. 10000 rounds 172,500 up to 180,000. 0 means no rounding.",
+      "ruleSaved": "Markup rule saved; prices recalculated.",
+      "saveFailed": "Could not save",
+      "loadFailed": "Could not load the price sheet",
+      "search": "Search items",
+      "item": "Item",
+      "addOn": "Add-on",
+      "inStore": "In store",
+      "byRule": "By the rule",
+      "fixed": "Fixed Snappfood price",
+      "followsRule": "Follows the rule",
+      "onChannel": "On Snappfood",
+      "fixedChip": "Fixed"
+    }
   },
   "discounts": {
     "hubTitle": "Discounts & Coupons",

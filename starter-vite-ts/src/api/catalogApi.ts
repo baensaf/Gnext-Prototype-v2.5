@@ -179,6 +179,22 @@ export interface PriceDiagnostic {
   suspension_reason?: string;
 }
 
+export interface ChannelPriceSheet {
+  channel: string;
+  rule: { markup_percent: number; round_to: number };
+  items: Array<{
+    product_id: string;
+    variant_id: string | null;
+    category_id: string;
+    name: string;
+    base_price: string;
+    rule_price: string;
+    fixed_price: string | null;
+    price: string;
+  }>;
+  add_ons: Array<{ option_item_id: string; name: string; base_price: string; price: string }>;
+}
+
 export const catalogApi = {
   getCategories: async (): Promise<Category[]> => {
     const res = await httpClient.get('/api/v1/categories');
@@ -288,6 +304,16 @@ export const catalogApi = {
 
   bulkUpdatePrices: async (data: { price_group_id?: string; category_id?: string; adjustment_type: 'PERCENTAGE' | 'FIXED'; amount: string }): Promise<any> => {
     const res = await httpClient.post('/api/v1/catalog/prices/bulk-update', data);
+    return res.data;
+  },
+
+  // Aggregator price sheet (Snappfood): the markup rule applied to every item, plus fixed prices.
+  getChannelPriceSheet: async (channel: string): Promise<ChannelPriceSheet> => {
+    const res = await httpClient.get('/api/v1/catalog/channel-prices', { params: { channel } });
+    return res.data;
+  },
+  setChannelFixedPrice: async (channel: string, productId: string, variantId: string | null, amount: string | null): Promise<ChannelPriceSheet> => {
+    const res = await httpClient.put('/api/v1/catalog/channel-prices', { channel, productId, variantId, amount });
     return res.data;
   },
 

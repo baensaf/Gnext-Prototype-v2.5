@@ -246,6 +246,28 @@ export class CatalogController {
     return await this.catalogService.bulkUpdatePrices(tenantId, body, correlationId);
   }
 
+  // Aggregator price sheet. The markup rule itself is the CHANNEL_PRICING setting.
+  @Get('catalog/channel-prices')
+  async getChannelPriceSheet(@Query('channel') channel: string, @Req() req: Request) {
+    return await this.catalogService.getChannelPriceSheet((req as any).tenantId, (channel || 'SNAPPFOOD').toUpperCase());
+  }
+
+  @HeadOfficeOnly()
+  @Put('catalog/channel-prices')
+  async setChannelFixedPrice(
+    @Body() body: { channel?: string; productId: string; variantId?: string | null; amount: string | null },
+    @Req() req: Request,
+  ) {
+    return await this.catalogService.setChannelFixedPrice(
+      (req as any).tenantId,
+      (body.channel || 'SNAPPFOOD').toUpperCase(),
+      body.productId,
+      body.variantId || null,
+      body.amount === '' || body.amount === undefined ? null : body.amount,
+      (req as any).correlationId,
+    );
+  }
+
   // Menus
   @Get('menus')
   async getMenus(@Query('branchId') branchId: string, @Query('channel') channel: string, @Req() req: Request) {
