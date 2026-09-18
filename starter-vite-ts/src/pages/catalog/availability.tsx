@@ -34,11 +34,13 @@ import {
   RadioGroup,
   Typography,
   DialogTitle,
+  ToggleButton,
   DialogContent,
   DialogActions,
   InputAdornment,
   TableContainer,
   FormControlLabel,
+  ToggleButtonGroup,
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
@@ -87,6 +89,8 @@ export function AvailabilityPage() {
   const [mode, setMode] = useState<StopMode>('NEXT_SHIFT');
   const [hours, setHours] = useState('2');
   const [reason, setReason] = useState('');
+  // Where the change applies: everywhere (''), or Snappfood only while the counter keeps selling.
+  const [channel, setChannel] = useState<'' | 'SNAPPFOOD'>('');
   const [saving, setSaving] = useState(false);
 
   const branchParam = selectedBranchId || undefined;
@@ -122,9 +126,10 @@ export function AvailabilityPage() {
     loadData();
   }, [loadData]);
 
-  const stopFor = (tg: StopTarget) =>
+  /** The live stop on a target, everywhere ('') or on one channel. */
+  const stopFor = (tg: StopTarget, ch: '' | 'SNAPPFOOD' = '') =>
     availabilities.find((a) => {
-      if (!isLive(a)) return false;
+      if (!isLive(a) || (a.channel || '') !== ch) return false;
       if (tg.kind === 'addon') return a.option_item_id === tg.itemId;
       if (a.option_item_id || a.product_id !== tg.product.id) return false;
       return tg.kind === 'variant' ? a.variant_id === tg.variant.id : !a.variant_id;
@@ -144,12 +149,17 @@ export function AvailabilityPage() {
     );
   }, [products, search, categoryTab]);
 
-  const openDialog = (tg: StopTarget) => {
-    const current = stopFor(tg);
-    setTarget(tg);
+  const showStop = (tg: StopTarget, ch: '' | 'SNAPPFOOD') => {
+    const current = stopFor(tg, ch);
+    setChannel(ch);
     setMode(current ? (current.suspended_until ? 'NEXT_SHIFT' : 'MANUAL') : 'NEXT_SHIFT');
     setHours('2');
     setReason(current?.reason || '');
+  };
+
+  const openDialog = (tg: StopTarget) => {
+    setTarget(tg);
+    showStop(tg, '');
   };
 
   const targetKey = (tg: StopTarget) => {
@@ -163,11 +173,12 @@ export function AvailabilityPage() {
     setSaving(true);
     try {
       if (mode === 'AVAILABLE') {
-        await catalogApi.resumeItem({ ...targetKey(target), branchId: branchParam });
+        await catalogApi.resumeItem({ ...targetKey(target), branchId: branchParam, channel: channel || undefined });
       } else {
         await catalogApi.stopItem({
           ...targetKey(target),
           branchId: branchParam,
+          channel: channel || undefined,
           until: mode,
           hours: parseFloat(hours),
           reason: reason || t('catalog.availabilityPage.reasons.outOfStock'),
@@ -203,6 +214,24 @@ export function AvailabilityPage() {
       return <Chip size="small" color="error" label={t('catalog.availabilityPage.statusSoldOut', 'Sold out today')} />;
     }
     return <Chip size="small" color="success" label={t('catalog.availabilityPage.statusAvailable')} />;
+  };
+
+  /** A stop on Snappfood only, shown beside the item's own status: the counter still sells it. */
+  const snappfoodChip = (tg: StopTarget) => {
+    const stop = stopFor(tg, 'SNAPPFOOD');
+    if (!stop) return null;
+    return (
+      <Chip
+        size="small"
+        variant="outlined"
+        color="warning"
+        label={
+          stop.suspended_until
+            ? t('catalog.availabilityPage.snappfoodOffUntil', { time: fDateTime(stop.suspended_until) })
+            : t('catalog.availabilityPage.snappfoodOff')
+        }
+      />
+    );
   };
 
   const changeButton = (tg: StopTarget) => (
@@ -311,7 +340,12 @@ export function AvailabilityPage() {
                     <TableCell>
                       <span dir="ltr">{MoneyUtil.formatCurrency(p.base_price)} IRR</span>
                     </TableCell>
-                    <TableCell>{statusChip(productStop, soldOut(p.id))}</TableCell>
+                    <TableCell>
+                      <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
+                        {statusChip(productStop, soldOut(p.id))}
+                        {snappfoodChip({ kind: 'product', product: p })}
+                      </Stack>
+                    </TableCell>
                     <TableCell>{productStop?.reason || '-'}</TableCell>
                     <TableCell align="right">{changeButton({ kind: 'product', product: p })}</TableCell>
                   </TableRow>
@@ -328,7 +362,12 @@ export function AvailabilityPage() {
                           <span dir="ltr">{MoneyUtil.formatCurrency(v.base_price)} IRR</span>
                         </TableCell>
                         {/* A stop on the whole product covers its variants; they have no state of their own then. */}
-                        <TableCell>{productStop ? '—' : statusChip(variantStop, soldOut(p.id, v.id))}</TableCell>
+                        <TableCell>
+                          <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
+                            {productStop ? '—' : statusChip(variantStop, soldOut(p.id, v.id))}
+                            {snappfoodChip({ kind: 'variant', product: p, variant: v })}
+                          </Stack>
+                        </TableCell>
                         <TableCell>{variantStop?.reason || '-'}</TableCell>
                         <TableCell align="right">
                           {!productStop && changeButton({ kind: 'variant', product: p, variant: v })}
@@ -400,6 +439,24 @@ export function AvailabilityPage() {
                 scope: scopeName,
               })}
             </Alert>
+
+            {/* Add-ons are stopped everywhere only; the Snappfood sheet lists dishes. */}
+            {target && target.kind !== 'addon' && (
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={channel}
+                onChange={(_, next) => next !== null && showStop(target, next)}
+              >
+                <ToggleButton value="">{t('catalog.availabilityPage.whereEverywhere')}</ToggleButton>
+                <ToggleButton value="SNAPPFOOD">{t('catalog.availabilityPage.whereSnappfood')}</ToggleButton>
+              </ToggleButtonGroup>
+            )}
+            {channel === 'SNAPPFOOD' && (
+              <Typography variant="body2" color="text.secondary">
+                {t('catalog.availabilityPage.whereSnappfoodHelp')}
+              </Typography>
+            )}
 
             <RadioGroup value={mode} onChange={(e) => setMode(e.target.value as StopMode)}>
               <FormControlLabel

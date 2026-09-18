@@ -335,7 +335,8 @@ export function PosOrderPage() {
         .catch(() => setOffSchedule(new Map()));
       catalogApi
         .getAvailabilities(selectedBranchId || undefined)
-        .then(setAvailabilities)
+        // A stop on one channel (Snappfood only) leaves the item on sale at the counter.
+        .then((list) => setAvailabilities(list.filter((a) => !a.channel)))
         .catch(() => undefined);
       catalogApi
         .getBranchPrices(selectedBranchId || undefined)
@@ -2941,7 +2942,7 @@ export function PosOrderPage() {
           toast.success(message);
           catalogApi
             .getAvailabilities(selectedBranchId || undefined)
-            .then(setAvailabilities)
+            .then((list) => setAvailabilities(list.filter((a) => !a.channel)))
             .catch(() => undefined);
         }}
       />

@@ -441,7 +441,7 @@ export class CatalogController {
   @Roles(...MANAGER_AND_ABOVE)
   @Post('availability/suspend')
   async suspendProduct(
-    @Body() body: { productId?: string; variantId?: string; optionItemId?: string; branchId?: string; hours?: number; until?: 'NEXT_SHIFT'; reason?: string },
+    @Body() body: { productId?: string; variantId?: string; optionItemId?: string; branchId?: string; hours?: number; until?: 'NEXT_SHIFT'; reason?: string; channel?: string },
     @Req() req: Request,
   ) {
     const tenantId = (req as any).tenantId;
@@ -453,13 +453,13 @@ export class CatalogController {
       body.hours,
       body.reason,
       correlationId,
-      { variantId: body.variantId, optionItemId: body.optionItemId, untilNextShift: body.until === 'NEXT_SHIFT' },
+      { variantId: body.variantId, optionItemId: body.optionItemId, untilNextShift: body.until === 'NEXT_SHIFT', channel: body.channel || null },
     );
   }
 
   @Roles(...MANAGER_AND_ABOVE)
   @Post('availability/resume')
-  async resumeProduct(@Body() body: { productId?: string; variantId?: string; optionItemId?: string; branchId?: string }, @Req() req: Request) {
+  async resumeProduct(@Body() body: { productId?: string; variantId?: string; optionItemId?: string; branchId?: string; channel?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.catalogService.resumeProduct(
@@ -467,7 +467,7 @@ export class CatalogController {
       body.productId,
       effectiveBranchId((req as any).userBranchId, body.branchId),
       correlationId,
-      { variantId: body.variantId, optionItemId: body.optionItemId },
+      { variantId: body.variantId, optionItemId: body.optionItemId, channel: body.channel || null },
     );
   }
 

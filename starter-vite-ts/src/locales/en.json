@@ -1762,7 +1762,12 @@
       "modeManual": "Unavailable until further notice",
       "modeManualHelp": "Stays off until someone puts it back here.",
       "modeHours": "Unavailable for a set time",
-      "save": "Save"
+      "save": "Save",
+      "whereEverywhere": "Everywhere",
+      "whereSnappfood": "Snappfood only",
+      "whereSnappfoodHelp": "Off on Snappfood while the counter and the kiosk keep selling it. The Snappfood Prices sheet marks it off, so switch it off in the vendor panel too.",
+      "snappfoodOff": "Off on Snappfood",
+      "snappfoodOffUntil": "Off on Snappfood until {{time}}"
     },
     "schedules": {
       "title": "Selling windows",
@@ -1862,7 +1867,9 @@
       "branch": "In-store prices of",
       "basePrices": "Base prices",
       "fromList": "In-store prices from the {{name}} list",
-      "noList": "This branch has no price list, so it uses base prices"
+      "noList": "This branch has no price list, so it uses base prices",
+      "off": "Off on Snappfood",
+      "offUntil": "Off until {{time}}"
     },
     "changes": {
       "title": "Price changes",

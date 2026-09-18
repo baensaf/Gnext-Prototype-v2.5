@@ -34,7 +34,15 @@ export interface StopTarget {
   optionItemId?: string;
   /** Back on sale when the branch next opens, rather than after a number of hours. */
   untilNextShift?: boolean;
+  /**
+   * Off on one sales channel only (e.g. SNAPPFOOD: stopped on Snappfood, still sold in
+   * store). Empty means off everywhere.
+   */
+  channel?: string | null;
 }
+
+/** The channels an item can be stopped on by itself. */
+export const STOP_CHANNELS = ['SNAPPFOOD'];
 
 /** Who stopped or resumed an item, for the log: the signed-in user and whoever's pin released it. */
 export interface StopActor {
@@ -937,7 +945,7 @@ export class CatalogService {
     // answer success while the item stays off.
     if (branchId) {
       const chainWide = await this.availRepo.findOne({ where: this.stopWhere(tenantId, key, undefined) });
-      if (chainWide && this.stopIsLive(chainWide, branchId, new Date())) {
+      if (chainWide && this.stopIsLive(chainWide, branchId, new Date(), key.channel || undefined)) {
         throw new BadRequestException({ statusCode: 400, code: 'CHAIN_WIDE_STOP', message: 'Head office took this off sale at every branch; only head office can put it back' });
       }
     }
@@ -955,11 +963,15 @@ export class CatalogService {
     return { success: true };
   }
 
-  /** What a stop is on: a whole product, one of its variants, or an add-on item. */
+  /** What a stop is on: a whole product, one of its variants, or an add-on item; everywhere or on one channel. */
   private stopKey(productId: string | undefined, target: StopTarget) {
-    if (target.optionItemId) return { product_id: null, variant_id: null, option_item_id: target.optionItemId };
+    const channel = target.channel ? String(target.channel).toUpperCase() : null;
+    if (channel && !STOP_CHANNELS.includes(channel)) {
+      throw new BadRequestException(`An item can be stopped everywhere or on ${STOP_CHANNELS.join(', ')} only`);
+    }
+    if (target.optionItemId) return { product_id: null, variant_id: null, option_item_id: target.optionItemId, channel };
     if (!productId) throw new BadRequestException('Say which product, variant or add-on to take off sale');
-    return { product_id: productId, variant_id: target.variantId || null, option_item_id: null };
+    return { product_id: productId, variant_id: target.variantId || null, option_item_id: null, channel };
   }
 
   // A null in a TypeORM where is ignored, not matched, so each empty key is IsNull() explicitly.
@@ -970,11 +982,18 @@ export class CatalogService {
       variant_id: key.variant_id ?? IsNull(),
       option_item_id: key.option_item_id ?? IsNull(),
       branch_id: branchId || IsNull(),
+      channel: key.channel ?? IsNull(),
     };
   }
 
-  private stopIsLive(row: ProductAvailability, branchId: string | undefined, at: Date) {
+  /**
+   * Whether a stop row takes the item off sale for a sale at `branchId` on `channel`. A stop on
+   * one channel (Snappfood) does not reach any other: the register and the kiosk pass no channel,
+   * so a Snappfood-only stop never stops a sale in store.
+   */
+  private stopIsLive(row: ProductAvailability, branchId: string | undefined, at: Date, channel?: string) {
     return (
+      (!row.channel || row.channel === channel) &&
       (!row.branch_id || !branchId || row.branch_id === branchId) &&
       row.is_suspended &&
       (!row.suspended_until || new Date(row.suspended_until) > at)
@@ -1346,6 +1365,15 @@ export class CatalogService {
     const fixed = (await this.prodRepo.manager.find(PriceEntry, { where: { tenant_id: tenantId, channel } })).filter(
       (e) => !e.branch_id && !e.price_group_id && !e.modifier_option_id && new Date(e.effective_from) <= now && (!e.effective_to || new Date(e.effective_to) > now),
     );
+    // What is off on the channel: stops on it and stops everywhere. With no branch, only the
+    // chain-wide ones, since a branch's own stop says nothing about the others.
+    const stops = (await this.getAvailabilities(tenantId, branchId || undefined)).filter(
+      (s) => s.product_id && !s.option_item_id && (branchId || !s.branch_id) && this.stopIsLive(s, branchId || undefined, now, channel),
+    );
+    const offOf = (product: Product, variant: ProductVariant | null) => {
+      const stop = stops.find((s) => s.product_id === product.id && (!s.variant_id || s.variant_id === variant?.id));
+      return stop ? { reason: stop.reason || null, until: stop.suspended_until || null, everywhere: !stop.channel, chain_wide: !stop.branch_id } : null;
+    };
     const row = (product: Product, variant: ProductVariant | null) => {
       const base = inStorePrice(listed, product, variant);
       const rulePrice = applyChannelRule(base, rule);
@@ -1359,6 +1387,7 @@ export class CatalogService {
         rule_price: rulePrice,
         fixed_price: own ? MoneyUtil.format(own.amount) : null,
         price: own ? MoneyUtil.format(own.amount) : rulePrice,
+        off: offOf(product, variant),
       };
     };
     const items = products.flatMap((p) => {
