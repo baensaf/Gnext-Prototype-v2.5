@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, IsNull, Repository } from 'typeorm';
 import { Category } from '../../entities/Category.entity';
 import { Product } from '../../entities/Product.entity';
 import { ProductVariant } from '../../entities/ProductVariant.entity';
@@ -15,11 +15,22 @@ import { MenuProduct } from '../../entities/MenuProduct.entity';
 import { ProductAvailability } from '../../entities/ProductAvailability.entity';
 import { AvailabilitySchedule } from '../../entities/AvailabilitySchedule.entity';
 import { Branch } from '../../entities/Branch.entity';
+import { BranchOperatingHour } from '../../entities/BranchOperatingHour.entity';
+import { DailyStock } from '../../entities/DailyStock.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
-import { describeWindows, isOnSchedule, isValidTime, parseDays } from '../../common/utils/availability-schedule.util';
+import { describeWindows, isOnSchedule, isValidTime, localClock, parseDays } from '../../common/utils/availability-schedule.util';
+import { BUSINESS_TIME_ZONE, BusinessDateUtil, ORDER_BUSINESS_DATE_EXPR } from '../../common/utils/business-date.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
 import { PricingService } from '../pricing/pricing.service';
+
+/** What besides a whole product a stop can be on, and how long it lasts. */
+export interface StopTarget {
+  variantId?: string;
+  optionItemId?: string;
+  /** Back on sale when the branch next opens, rather than after a number of hours. */
+  untilNextShift?: boolean;
+}
 
 @Injectable()
 export class CatalogService {
@@ -38,6 +49,8 @@ export class CatalogService {
     @InjectRepository(ProductAvailability) private readonly availRepo: Repository<ProductAvailability>,
     @InjectRepository(AvailabilitySchedule) private readonly scheduleRepo: Repository<AvailabilitySchedule>,
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
+    @InjectRepository(BranchOperatingHour) private readonly hoursRepo: Repository<BranchOperatingHour>,
+    @InjectRepository(DailyStock) private readonly stockRepo: Repository<DailyStock>,
     private readonly auditWriter: AuditWriter,
     @Inject(forwardRef(() => PricingService)) private readonly pricingService: PricingService,
   ) {}
@@ -138,7 +151,10 @@ export class CatalogService {
     if (!query || (!query.page && !query.limit && !query.search)) {
       const where: any = { tenant_id: tenantId };
       if (categoryId) where.category_id = categoryId;
-      return await this.prodRepo.find({ where, order: { code: 'ASC' } });
+      const products = await this.prodRepo.find({ where, order: { code: 'ASC' } });
+      // Variants ride along so a list can show the hot and the cold sandwich as rows of their own.
+      const variants = await this.variantRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { sort_order: 'ASC', code: 'ASC' } });
+      return products.map((p) => Object.assign(p, { variants: (variants || []).filter((v) => v.product_id === p.id) }));
     }
 
     const page = query.page || 1;
@@ -175,7 +191,7 @@ export class CatalogService {
       const group = await this.groupRepo.findOne({ where: { id: link.option_group_id, tenant_id: tenantId } });
       if (group) {
         const items = await this.itemRepo.find({ where: { option_group_id: group.id, tenant_id: tenantId }, order: { sort_order: 'ASC' } });
-        optionGroups.push({ ...group, items });
+        optionGroups.push({ ...group, items, excluded_item_ids: link.excluded_item_ids || [] });
       }
     }
 
@@ -231,6 +247,19 @@ export class CatalogService {
 
     if (data.base_price) {
       data.base_price = MoneyUtil.format(data.base_price);
+    }
+    if (data.container_price !== undefined) {
+      data.container_price = MoneyUtil.format(data.container_price || '0');
+    }
+    if (data.max_per_order !== undefined) {
+      const cap = data.max_per_order === null || (data.max_per_order as unknown) === '' ? null : Number(data.max_per_order);
+      if (cap !== null && (!Number.isInteger(cap) || cap < 1)) {
+        throw new BadRequestException('The per-order cap is a whole number, 1 or more, or empty for none');
+      }
+      data.max_per_order = cap;
+    }
+    if (data.gallery_asset_ids !== undefined && !Array.isArray(data.gallery_asset_ids)) {
+      throw new BadRequestException('gallery_asset_ids is a list of image ids');
     }
 
     Object.assign(prod, data);
@@ -755,13 +784,14 @@ export class CatalogService {
     productId: string,
     branchId?: string,
     at: Date = new Date(),
+    variantId?: string | null,
   ): Promise<{ isSuspended: boolean; outOfSchedule: boolean; reason: string | null; suspendedUntil: Date | null }> {
     const rows = await this.availRepo.find({ where: { tenant_id: tenantId, product_id: productId } });
+    // A stop on one variant (the cold sandwich) leaves the others on sale.
     const active = rows.find(
       (row) =>
-        (!row.branch_id || !branchId || row.branch_id === branchId) &&
-        row.is_suspended &&
-        (!row.suspended_until || new Date(row.suspended_until) > at),
+        (!row.variant_id || row.variant_id === variantId) &&
+        this.stopIsLive(row, branchId, at),
     );
     if (active) {
       return { isSuspended: true, outOfSchedule: false, reason: active.reason || null, suspendedUntil: active.suspended_until || null };
@@ -879,14 +909,29 @@ export class CatalogService {
    * does not carry the item at all. Anything else is today's 86 and expires on
    * its own, because nobody remembers to un-86 the fish at closing time.
    */
-  async suspendProduct(tenantId: string, productId: string, branchId?: string, hours?: number, reason?: string, correlationId?: string) {
-    let avail = await this.availRepo.findOne({ where: { tenant_id: tenantId, product_id: productId, branch_id: branchId || null } });
-    const suspendedUntil = hours && hours > 0 ? new Date(Date.now() + hours * 3600 * 1000) : null;
+  async suspendProduct(
+    tenantId: string,
+    productId: string | undefined,
+    branchId?: string,
+    hours?: number,
+    reason?: string,
+    correlationId?: string,
+    target: StopTarget = {},
+  ) {
+    const key = this.stopKey(productId, target);
+    let avail = await this.availRepo.findOne({ where: this.stopWhere(tenantId, key, branchId) });
+    // Snappfood's two ways off: "until the next shift" comes back when the branch next
+    // opens, "until further notice" (no hours) only when someone puts it back.
+    const suspendedUntil = target.untilNextShift
+      ? await this.nextShiftStart(tenantId, branchId)
+      : hours && hours > 0
+        ? new Date(Date.now() + hours * 3600 * 1000)
+        : null;
 
     if (!avail) {
       avail = this.availRepo.create({
         tenant_id: tenantId,
-        product_id: productId,
+        ...key,
         branch_id: branchId || null,
         is_suspended: true,
         suspended_until: suspendedUntil,
@@ -905,14 +950,15 @@ export class CatalogService {
       actorType: 'ADMIN',
       action: 'PRODUCT_SUSPENDED',
       correlationId: correlationId || '00000000-0000-0000-0000-000000000000',
-      details: { productId, branchId, hours, reason, suspendedUntil },
+      details: { ...key, branchId, hours, untilNextShift: !!target.untilNextShift, reason, suspendedUntil },
     });
 
     return saved;
   }
 
-  async resumeProduct(tenantId: string, productId: string, branchId?: string, correlationId?: string) {
-    const avail = await this.availRepo.findOne({ where: { tenant_id: tenantId, product_id: productId, branch_id: branchId || null } });
+  async resumeProduct(tenantId: string, productId: string | undefined, branchId?: string, correlationId?: string, target: StopTarget = {}) {
+    const key = this.stopKey(productId, target);
+    const avail = await this.availRepo.findOne({ where: this.stopWhere(tenantId, key, branchId) });
     if (avail) {
       avail.is_suspended = false;
       avail.suspended_until = null;
@@ -925,10 +971,271 @@ export class CatalogService {
       actorType: 'ADMIN',
       action: 'PRODUCT_RESUMED',
       correlationId: correlationId || '00000000-0000-0000-0000-000000000000',
-      details: { productId, branchId },
+      details: { ...key, branchId },
     });
 
     return { success: true };
+  }
+
+  /** What a stop is on: a whole product, one of its variants, or an add-on item. */
+  private stopKey(productId: string | undefined, target: StopTarget) {
+    if (target.optionItemId) return { product_id: null, variant_id: null, option_item_id: target.optionItemId };
+    if (!productId) throw new BadRequestException('Say which product, variant or add-on to take off sale');
+    return { product_id: productId, variant_id: target.variantId || null, option_item_id: null };
+  }
+
+  // A null in a TypeORM where is ignored, not matched, so each empty key is IsNull() explicitly.
+  private stopWhere(tenantId: string, key: ReturnType<CatalogService['stopKey']>, branchId?: string) {
+    return {
+      tenant_id: tenantId,
+      product_id: key.product_id ?? IsNull(),
+      variant_id: key.variant_id ?? IsNull(),
+      option_item_id: key.option_item_id ?? IsNull(),
+      branch_id: branchId || IsNull(),
+    };
+  }
+
+  private stopIsLive(row: ProductAvailability, branchId: string | undefined, at: Date) {
+    return (
+      (!row.branch_id || !branchId || row.branch_id === branchId) &&
+      row.is_suspended &&
+      (!row.suspended_until || new Date(row.suspended_until) > at)
+    );
+  }
+
+  /** Whether an add-on is off sale at a branch. An add-on stop covers every product it is on. */
+  async getOptionItemStop(tenantId: string, optionItemId: string, branchId?: string, at: Date = new Date()) {
+    const rows = await this.availRepo.find({ where: { tenant_id: tenantId, option_item_id: optionItemId } });
+    const active = rows.find((row) => this.stopIsLive(row, branchId, at));
+    return { isSuspended: !!active, reason: active?.reason || null, suspendedUntil: active?.suspended_until || null };
+  }
+
+  /**
+   * When the branch next opens after `at`: the next shift's start in its weekly hours, on
+   * the business clock. A branch with no hours set (or a chain-wide stop) comes back at the
+   * start of tomorrow, which is what Snappfood does when no date is given.
+   */
+  async nextShiftStart(tenantId: string, branchId?: string, at: Date = new Date()): Promise<Date> {
+    const today = BusinessDateUtil.today(at);
+    const dayStart = (offset: number) => {
+      const [y, m, d] = today.split('-').map(Number);
+      return BusinessDateUtil.startOfDay(new Date(Date.UTC(y, m - 1, d + offset)).toISOString());
+    };
+    const hours = branchId ? await this.hoursRepo.find({ where: { tenant_id: tenantId, branch_id: branchId } }) : [];
+    const { day } = localClock(at, BUSINESS_TIME_ZONE);
+    for (let offset = 0; offset <= 7; offset++) {
+      const weekday = (day + offset) % 7;
+      const starts = hours
+        .filter((h) => h.day_of_week === weekday && !h.is_closed)
+        .map((h) => {
+          const [hh, mm] = String(h.open_time).split(':').map(Number);
+          return new Date(dayStart(offset).getTime() + (hh * 60 + mm) * 60000);
+        })
+        .filter((start) => start > at)
+        .sort((a, b) => a.getTime() - b.getTime());
+      if (starts.length) return starts[0];
+    }
+    return dayStart(1);
+  }
+
+  // Add-on groups: editing what the group and its items are
+
+  async updateOptionGroup(tenantId: string, id: string, data: { name?: string; min_selection?: number; max_selection?: number; is_required?: boolean }, correlationId: string) {
+    const group = await this.groupRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!group) throw new NotFoundException('Option group not found');
+    const min = data.min_selection ?? group.min_selection;
+    const max = data.max_selection ?? group.max_selection;
+    if (min < 0 || max < min) {
+      throw new BadRequestException(`Invalid modifier selections. min_selection (${min}) must be >= 0 and <= max_selection (${max}).`);
+    }
+    const before = { ...group };
+    if (data.name !== undefined) group.name = data.name;
+    group.min_selection = min;
+    group.max_selection = max;
+    // Snappfood has only min/max; a minimum above zero is what "required" means.
+    group.is_required = data.is_required ?? min > 0;
+    const saved = await this.groupRepo.save(group);
+    await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'OPTION_GROUP_UPDATED', entityType: 'OptionGroup', entityId: id, correlationId, beforeData: before, afterData: saved });
+    return saved;
+  }
+
+  async archiveOptionGroup(tenantId: string, id: string, correlationId: string) {
+    const group = await this.groupRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!group) throw new NotFoundException('Option group not found');
+    await this.prodGroupRepo.delete({ tenant_id: tenantId, option_group_id: id });
+    await this.groupRepo.softRemove(group);
+    await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'OPTION_GROUP_ARCHIVED', entityType: 'OptionGroup', entityId: id, correlationId });
+    return { success: true };
+  }
+
+  async updateOptionItem(tenantId: string, groupId: string, itemId: string, data: { name?: string; price_delta?: string; is_default?: boolean; sort_order?: number }, correlationId: string) {
+    const item = await this.itemRepo.findOne({ where: { id: itemId, option_group_id: groupId, tenant_id: tenantId } });
+    if (!item) throw new NotFoundException('Option item not found');
+    const before = { ...item };
+    if (data.name !== undefined) item.name = data.name;
+    if (data.price_delta !== undefined) item.price_delta = MoneyUtil.format(data.price_delta || '0');
+    if (data.is_default !== undefined) item.is_default = data.is_default;
+    if (data.sort_order !== undefined) item.sort_order = data.sort_order;
+    const saved = await this.itemRepo.save(item);
+    await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'OPTION_ITEM_UPDATED', entityType: 'OptionItem', entityId: itemId, correlationId, beforeData: before, afterData: saved });
+    return saved;
+  }
+
+  async archiveOptionItem(tenantId: string, groupId: string, itemId: string, correlationId: string) {
+    const item = await this.itemRepo.findOne({ where: { id: itemId, option_group_id: groupId, tenant_id: tenantId } });
+    if (!item) throw new NotFoundException('Option item not found');
+    await this.itemRepo.softRemove(item);
+    await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'OPTION_ITEM_ARCHIVED', entityType: 'OptionItem', entityId: itemId, correlationId });
+    return { success: true };
+  }
+
+  async detachOptionGroupFromProduct(tenantId: string, productId: string, optionGroupId: string, correlationId: string) {
+    await this.prodGroupRepo.delete({ tenant_id: tenantId, product_id: productId, option_group_id: optionGroupId });
+    await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'OPTION_GROUP_DETACHED', entityType: 'Product', entityId: productId, correlationId, details: { optionGroupId } });
+    return { success: true };
+  }
+
+  /** Which items of an attached group this product leaves out (Snappfood's per-product topping switch). */
+  async setExcludedOptionItems(tenantId: string, productId: string, optionGroupId: string, excludedItemIds: string[], correlationId: string) {
+    const link = await this.prodGroupRepo.findOne({ where: { tenant_id: tenantId, product_id: productId, option_group_id: optionGroupId } });
+    if (!link) throw new NotFoundException('That add-on group is not on this product');
+    const items = await this.itemRepo.find({ where: { tenant_id: tenantId, option_group_id: optionGroupId } });
+    const known = new Set(items.map((i) => i.id));
+    link.excluded_item_ids = [...new Set(excludedItemIds || [])].filter((id) => known.has(id));
+    const saved = await this.prodGroupRepo.save(link);
+    await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'PRODUCT_OPTION_ITEMS_SET', entityType: 'Product', entityId: productId, correlationId, details: { optionGroupId, excluded: link.excluded_item_ids } });
+    return saved;
+  }
+
+  // Today's stock: how many of an item a branch has left to sell
+
+  async getDailyStock(tenantId: string, branchId: string, date: string = BusinessDateUtil.today()) {
+    const rows = await this.stockRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, business_date: date } });
+    const out = [];
+    for (const row of rows) {
+      const sold = await this.soldOn(this.stockRepo.manager, tenantId, branchId, date, row.product_id, row.variant_id);
+      out.push({ ...row, sold, remaining: Math.max(0, row.quantity - sold) });
+    }
+    return out;
+  }
+
+  /** Set today's counts. A null or empty quantity clears the line: no limit again. */
+  async setDailyStock(
+    tenantId: string,
+    branchId: string,
+    entries: Array<{ productId: string; variantId?: string | null; quantity: number | null }>,
+    correlationId: string,
+  ) {
+    if (!branchId) throw new BadRequestException("Stock is a branch's count; pick a branch first");
+    const date = BusinessDateUtil.today();
+    for (const entry of entries || []) {
+      const where = {
+        tenant_id: tenantId,
+        branch_id: branchId,
+        business_date: date,
+        product_id: entry.productId,
+        variant_id: entry.variantId || IsNull(),
+      };
+      const existing = await this.stockRepo.findOne({ where });
+      const qty = entry.quantity === null || entry.quantity === undefined || (entry.quantity as unknown) === '' ? null : Number(entry.quantity);
+      if (qty === null) {
+        if (existing) await this.stockRepo.delete({ id: existing.id });
+        continue;
+      }
+      if (!Number.isInteger(qty) || qty < 0) throw new BadRequestException('A stock count is a whole number, 0 or more');
+      if (existing) {
+        existing.quantity = qty;
+        await this.stockRepo.save(existing);
+      } else {
+        await this.stockRepo.save(
+          this.stockRepo.create({ tenant_id: tenantId, branch_id: branchId, business_date: date, product_id: entry.productId, variant_id: entry.variantId || null, quantity: qty }),
+        );
+      }
+    }
+    await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'DAILY_STOCK_SET', correlationId, details: { branchId, date, entries } });
+    return this.getDailyStock(tenantId, branchId, date);
+  }
+
+  /** Units of a product (or one variant of it) on today's live orders at a branch. */
+  private async soldOn(em: EntityManager, tenantId: string, branchId: string, date: string, productId: string, variantId?: string | null) {
+    const params: unknown[] = [tenantId, branchId, date, productId];
+    let variantClause = '';
+    if (variantId) {
+      params.push(variantId);
+      variantClause = `AND i.variant_id = $5`;
+    }
+    const rows = await em.query(
+      `SELECT COALESCE(SUM(i.quantity), 0) AS sold
+         FROM order_item i
+         JOIN order_header h ON h.id = i.order_id
+        WHERE h.tenant_id = $1 AND h.branch_id = $2
+          AND ${ORDER_BUSINESS_DATE_EXPR('h')} = $3
+          AND h.state NOT IN ('CANCELLED', 'REJECTED')
+          AND h.deleted_at IS NULL
+          AND i.state = 'ACTIVE' AND i.product_id = $4 ${variantClause}`,
+      params,
+    );
+    return Math.floor(Number(rows[0]?.sold || 0));
+  }
+
+  /**
+   * The checks on one order line that come from how the item is sold rather than what it
+   * is: the per-order cap, today's stock count, and whether each add-on is offered on this
+   * product and on sale. Run before the line is saved, inside the order's transaction, so
+   * earlier lines of the same order already count against the stock.
+   */
+  async assertLineSellable(
+    em: EntityManager,
+    tenantId: string,
+    order: { id: string; branch_id: string },
+    product: Product,
+    variantId: string | null,
+    quantity: string,
+    optionItems: OptionItem[],
+  ) {
+    const qty = Number(quantity);
+    if (product.max_per_order) {
+      const onOrder = await em.query(
+        `SELECT COALESCE(SUM(quantity), 0) AS n FROM order_item WHERE order_id = $1 AND product_id = $2 AND state = 'ACTIVE'`,
+        [order.id, product.id],
+      );
+      if (Number(onOrder[0]?.n || 0) + qty > product.max_per_order) {
+        throw new BadRequestException({
+          statusCode: 400,
+          code: 'PRODUCT_MAX_PER_ORDER',
+          message: `At most ${product.max_per_order} × ${product.name} per order`,
+        });
+      }
+    }
+
+    if (order.branch_id) {
+      const date = BusinessDateUtil.today();
+      const counts = await em.find(DailyStock, { where: { tenant_id: tenantId, branch_id: order.branch_id, business_date: date, product_id: product.id } });
+      for (const count of counts.filter((c) => !c.variant_id || c.variant_id === variantId)) {
+        const left = count.quantity - (await this.soldOn(em, tenantId, order.branch_id, date, product.id, count.variant_id));
+        if (qty > left) {
+          throw new BadRequestException({
+            statusCode: 400,
+            code: 'PRODUCT_OUT_OF_STOCK',
+            message: left > 0 ? `Only ${left} × ${product.name} left today` : `${product.name} is sold out today`,
+          });
+        }
+      }
+    }
+
+    if (optionItems.length) {
+      const links = await em.find(ProductOptionGroup, { where: { tenant_id: tenantId, product_id: product.id } });
+      const excluded = new Set(links.flatMap((l) => l.excluded_item_ids || []));
+      for (const item of optionItems) {
+        if (excluded.has(item.id)) {
+          throw new BadRequestException({ statusCode: 400, code: 'OPTION_NOT_OFFERED', message: `${item.name} is not offered on ${product.name}` });
+        }
+        const stop = await this.getOptionItemStop(tenantId, item.id, order.branch_id);
+        if (stop.isSuspended) {
+          throw new BadRequestException({ statusCode: 400, code: 'OPTION_SUSPENDED', message: `${item.name} is not available now${stop.reason ? ` (${stop.reason})` : ''}` });
+        }
+      }
+    }
   }
 
   // Enhanced Price Resolution via PricingService

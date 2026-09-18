@@ -113,7 +113,8 @@
     "userAccounts": "User Accounts",
     "cashierShifts": "Shifts & Drawer",
     "reportsAll": "All Reports",
-    "branchAgents": "Branch Agents"
+    "branchAgents": "Branch Agents",
+    "dailyStock": "Today’s Stock"
   },
   "common": {
     "languages": "Languages",
@@ -164,7 +165,8 @@
       "confirmArchiveContent": "Are you sure you want to archive this item?",
       "delete": "Delete",
       "archive": "Archive"
-    }
+    },
+    "amountInWords": "{{words}} rials"
   },
   "dashboard": {
     "title": "Operations Dashboard",
@@ -242,7 +244,9 @@
       "saveAddress": "Save address",
       "savingAddress": "Saving…"
     },
-    "comboChooseSlot": "Choose the {{slot}}"
+    "comboChooseSlot": "Choose the {{slot}}",
+    "itemSoldOut": "Sold out",
+    "itemSoldOutNotice": "{{name}} is sold out today."
   },
   "kiosk": {
     "title": "SELF-SERVICE KIOSK",
@@ -1413,7 +1417,11 @@
         "description": "Description",
         "imageTitle": "Product Image",
         "save": "Save Product",
-        "saving": "Saving..."
+        "saving": "Saving...",
+        "containerPrice": "Packaging price",
+        "containerPriceHelp": "Per unit, for delivery apps. Recorded for the Snappfood menu; not charged on orders here yet.",
+        "maxPerOrder": "Most per order",
+        "maxPerOrderHelp": "Empty for no limit"
       },
       "variants": {
         "title": "Product Variants",
@@ -1457,7 +1465,9 @@
         "selectGroup": "Select Option Group",
         "cancel": "Cancel",
         "attachButton": "Attach Group",
-        "attachingButton": "Attaching..."
+        "attachingButton": "Attaching...",
+        "detach": "Remove from this product",
+        "detachConfirm": "Take this add-on group off this product?"
       },
       "messages": {
         "saved": "Product details saved successfully",
@@ -1475,7 +1485,19 @@
         "setDefaultFailed": "Failed to set default variant",
         "attachGroupFailed": "Failed to attach modifier group"
       },
-      "readOnlyNotice": "This product is set by head office for the whole chain. Your branch decides whether it can serve it today."
+      "readOnlyNotice": "This product is set by head office for the whole chain. Your branch decides whether it can serve it today.",
+      "photos": {
+        "help": "The starred photo is the main one. Save to keep changes.",
+        "makeMain": "Main photo",
+        "notImage": "Choose an image file (PNG, JPEG, WebP)",
+        "uploadFailed": "Could not upload the photo"
+      },
+      "onSale": {
+        "title": "On sale",
+        "status": "Availability",
+        "menuTime": "Menu time",
+        "allDay": "All day"
+      }
     },
     "menusPage": {
       "title": "Menus Composer",
@@ -1610,11 +1632,20 @@
       "errors": {
         "loadFailed": "Failed to load option groups",
         "createGroupFailed": "Failed to create option group",
-        "addItemFailed": "Failed to add option item"
+        "addItemFailed": "Failed to add option item",
+        "saveGroupFailed": "Could not save the add-on group"
       },
       "itemProduct": "Gives product (for combo slots)",
       "itemProductHelp": "Link a menu item so the choice follows its availability. Leave empty for a plain modifier.",
-      "noProduct": "None (plain modifier)"
+      "noProduct": "None (plain modifier)",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteGroupConfirm": "Delete this add-on group? It comes off every product that has it.",
+      "editGroupTitle": "Edit add-on",
+      "minHelp": "Above 0 makes the choice required",
+      "itemsTitle": "Items",
+      "newItem": "New add-on",
+      "saveChanges": "Save changes"
     },
     "availabilityPage": {
       "title": "Product Availability & Suspensions (86'd)",
@@ -1663,7 +1694,24 @@
       "statusNotCarried": "Not carried here",
       "notCarried": "Not carried here (until resumed)",
       "delistHelp": "The item stays off the menu here until somebody puts it back.",
-      "suspendHelp": "The item comes back on sale by itself when the time is up."
+      "suspendHelp": "The item comes back on sale by itself when the time is up.",
+      "statusOffUntil": "Unavailable until {{time}}",
+      "statusOffManual": "Unavailable until further notice",
+      "statusSoldOut": "Sold out today",
+      "change": "Change",
+      "nextShiftNotice": "The next shift starts {{time}}; items off until the next shift come back then.",
+      "searchPlaceholder": "Product name",
+      "allCategories": "All",
+      "addonsTitle": "Add-ons",
+      "addonsSubtitle": "An add-on taken off here is off on every product that offers it.",
+      "changeTitle": "Change availability — {{name}}",
+      "modeAvailable": "Available",
+      "modeNextShift": "Unavailable until the next shift",
+      "modeNextShiftHelp": "Comes back on sale by itself when the branch next opens.",
+      "modeManual": "Unavailable until further notice",
+      "modeManualHelp": "Stays off until someone puts it back here.",
+      "modeHours": "Unavailable for a set time",
+      "save": "Save"
     },
     "schedules": {
       "title": "Selling windows",
@@ -1697,6 +1745,18 @@
         "saveFailed": "Failed to save the selling window",
         "deleteFailed": "Failed to remove the selling window"
       }
+    },
+    "stockPage": {
+      "title": "Today’s stock",
+      "save": "Save stock",
+      "todayOnly": "The stock set here is for today only.",
+      "help": "If an item is limited, enter exactly how many you have. Orders stop when it reaches zero, instead of being taken and rejected. Leave the box empty for no limit.",
+      "pickBranch": "Stock is counted per branch. Pick a branch in the header first.",
+      "quantity": "Quantity",
+      "left": "{{count}} left",
+      "saved": "Today’s stock saved",
+      "loadFailed": "Could not load today’s stock",
+      "saveFailed": "Could not save the stock"
     }
   },
   "pricing": {
@@ -2871,7 +2931,15 @@
         "wednesday": "Wednesday",
         "thursday": "Thursday",
         "friday": "Friday"
-      }
+      },
+      "loadError": "Failed to load branch details",
+      "saveError": "Failed to update operating hours",
+      "notFound": "Branch not found",
+      "noAddress": "No address specified",
+      "noPhone": "No phone",
+      "shiftsHelp": "Open all day in one stretch, or in shifts (lunch and dinner). An item taken off until the next shift comes back when the next shift here starts.",
+      "addShift": "Add shift",
+      "shiftN": "Shift {{n}}"
     },
     "terminals": {
       "title": "Terminal Registry",

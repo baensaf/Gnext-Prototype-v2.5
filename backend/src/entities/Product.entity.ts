@@ -41,6 +41,18 @@ export class Product {
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
   base_price: string;
 
+  /** Packaging per unit on delivery channels (Snappfood's containerPrice). Stored, not yet billed. */
+  @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
+  container_price: string;
+
+  /** Most units of this item one order may hold (Snappfood's capacity); null means no cap. */
+  @Column({ type: 'integer', nullable: true })
+  max_per_order: number | null;
+
+  /** Photos after the main one (image_asset_id), in display order. */
+  @Column({ type: 'jsonb', default: () => "'[]'" })
+  gallery_asset_ids: string[];
+
   /**
    * COMBO is a meal deal sold as one line at its own price: its option groups are the slots
    * (side, drink) and every slot must be filled when it is ordered. Choices may name the

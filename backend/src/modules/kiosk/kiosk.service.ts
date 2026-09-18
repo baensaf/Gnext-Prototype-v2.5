@@ -96,7 +96,8 @@ export class KioskService {
       const groups = pLinks.map((link) => {
         const og = optionGroups.find((g) => g.id === link.option_group_id);
         const items = optionItems
-          .filter((i) => i.option_group_id === link.option_group_id)
+          // Items this product leaves out of the group are not offered on it.
+          .filter((i) => i.option_group_id === link.option_group_id && !(link.excluded_item_ids || []).includes(i.id))
           .map((i) => ({ ...i, price: i.price_delta }));
         return {
           ...og,

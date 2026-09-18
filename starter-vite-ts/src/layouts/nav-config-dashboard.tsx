@@ -158,6 +158,10 @@ export function useNavData(): NavSectionProps['data'] {
               title: t('nav.availability', 'Availability & Suspensions'),
               path: '/app/catalog/availability',
             },
+            {
+              title: t('nav.dailyStock', 'Today’s Stock'),
+              path: '/app/catalog/stock',
+            },
           ],
         },
         {

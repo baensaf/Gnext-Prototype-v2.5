@@ -20,6 +20,7 @@ import { PricingPage } from 'src/pages/catalog/pricing';
 import { homePathForRole } from 'src/config/role-access';
 import { SettingsHubPage } from 'src/pages/settings/hub';
 import { AgentsPage } from 'src/pages/operations/agents';
+import { DailyStockPage } from 'src/pages/catalog/stock';
 import { ProductsPage } from 'src/pages/catalog/products';
 import { DineInPage } from 'src/pages/operations/dine-in';
 import { DataResetPage } from 'src/pages/tools/data-reset';
@@ -157,6 +158,7 @@ export const routesSection: RouteObject[] = [
       { path: 'catalog/menus', element: <MenusPage /> },
       { path: 'catalog/menus/:id', element: <MenusPage /> },
       { path: 'catalog/availability', element: <AvailabilityPage /> },
+      { path: 'catalog/stock', element: <DailyStockPage /> },
       { path: 'catalog/import-export', element: <ImportWizardPage /> },
       { path: 'pricing/price-book', element: <PricingPage /> },
       { path: 'pricing/price-groups', element: <PricingPage /> },

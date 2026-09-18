@@ -15,6 +15,9 @@ import { MenuProduct } from '../src/entities/MenuProduct.entity';
 import { ProductAvailability } from '../src/entities/ProductAvailability.entity';
 import { AvailabilitySchedule } from '../src/entities/AvailabilitySchedule.entity';
 import { Branch } from '../src/entities/Branch.entity';
+import { BranchOperatingHour } from '../src/entities/BranchOperatingHour.entity';
+import { DailyStock } from '../src/entities/DailyStock.entity';
+import { ProductOptionGroup as ProductOptionGroupEntity } from '../src/entities/ProductOptionGroup.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { PricingService } from '../src/modules/pricing/pricing.service';
 
@@ -31,6 +34,7 @@ describe('CatalogService (Unit)', () => {
   let scheduleRepo: any;
   let auditWriter: any;
   let pricingService: any;
+  let hoursRepo: any;
 
   beforeEach(async () => {
     prodRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), softRemove: jest.fn() };
@@ -56,6 +60,7 @@ describe('CatalogService (Unit)', () => {
     };
     scheduleRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn(), create: jest.fn((d) => d), save: jest.fn((d) => Promise.resolve(d)), delete: jest.fn() };
     auditWriter = { write: jest.fn() };
+    hoursRepo = { find: jest.fn().mockResolvedValue([]) };
     pricingService = {
       resolvePrice: jest.fn().mockResolvedValue({ amount: '1500000.0000', resolutionSource: 'BASE_PRICE', isOverridden: false }),
       bulkCommit: jest.fn().mockResolvedValue({ success: true, updated_count: 2, affected_rows: 2, job_id: 'job-1' }),
@@ -78,6 +83,8 @@ describe('CatalogService (Unit)', () => {
         { provide: getRepositoryToken(ProductAvailability), useValue: availRepo },
         { provide: getRepositoryToken(AvailabilitySchedule), useValue: scheduleRepo },
         { provide: getRepositoryToken(Branch), useValue: { findOne: jest.fn().mockResolvedValue({ id: 'b-1', time_zone: 'Asia/Tehran' }) } },
+        { provide: getRepositoryToken(BranchOperatingHour), useValue: hoursRepo },
+        { provide: getRepositoryToken(DailyStock), useValue: { find: jest.fn().mockResolvedValue([]), manager: {} } },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: PricingService, useValue: pricingService },
       ],
@@ -252,6 +259,63 @@ describe('CatalogService (Unit)', () => {
       await expect(service.createSchedule('t-1', { daysOfWeek: [1], startTime: '07:00', endTime: '11:00' })).rejects.toThrow('one product or one category');
       await expect(service.createSchedule('t-1', { productId: 'p-omelette', daysOfWeek: [], startTime: '07:00', endTime: '11:00' })).rejects.toThrow('at least one day');
       await expect(service.createSchedule('t-1', { productId: 'p-omelette', daysOfWeek: [1], startTime: '7:00', endTime: '11:00' })).rejects.toThrow('HH:MM');
+    });
+  });
+
+  describe('Snappfood-style availability', () => {
+    const at = (iso: string) => new Date(iso);
+    const shift = (day: number, open: string, close: string) => ({ day_of_week: day, open_time: open, close_time: close, is_closed: false });
+
+    it('brings an item back at the next shift, later today or on the next open day', async () => {
+      // Wednesday lunch and dinner, Thursday lunch. 10:00Z Wednesday is 13:30 in Tehran.
+      hoursRepo.find.mockResolvedValue([shift(3, '12:00:00', '16:00:00'), shift(3, '19:00:00', '23:00:00'), shift(4, '12:00:00', '16:00:00')]);
+
+      expect((await service.nextShiftStart('t-1', 'b-1', at('2026-09-16T10:00:00Z'))).toISOString()).toBe('2026-09-16T15:30:00.000Z');
+      expect((await service.nextShiftStart('t-1', 'b-1', at('2026-09-16T20:00:00Z'))).toISOString()).toBe('2026-09-17T08:30:00.000Z');
+    });
+
+    it('falls back to the start of tomorrow when the branch has no hours', async () => {
+      expect((await service.nextShiftStart('t-1', 'b-1', at('2026-09-16T10:00:00Z'))).toISOString()).toBe('2026-09-16T20:30:00.000Z');
+    });
+
+    it('takes one variant off sale and leaves the others', async () => {
+      prodRepo.findOne.mockResolvedValue({ id: 'p-sandwich' });
+      availRepo.find.mockResolvedValue([{ product_id: 'p-sandwich', variant_id: 'v-cold', is_suspended: true, suspended_until: null }]);
+
+      expect((await service.getSuspension('t-1', 'p-sandwich', 'b-1', new Date(), 'v-cold')).isSuspended).toBe(true);
+      expect((await service.getSuspension('t-1', 'p-sandwich', 'b-1', new Date(), 'v-hot')).isSuspended).toBe(false);
+    });
+
+    describe('order line checks', () => {
+      const order = { id: 'o-1', branch_id: 'b-1' };
+      const em = (over: any = {}) => ({
+        query: jest.fn().mockResolvedValue([{ sold: '0', n: '0' }]),
+        find: jest.fn(async (entity: any) => (entity === DailyStock ? over.stock || [] : entity === ProductOptionGroupEntity ? over.links || [] : [])),
+      });
+
+      it("refuses more than is left of today's stock", async () => {
+        const manager: any = em({ stock: [{ product_id: 'p-1', variant_id: null, quantity: 3 }] });
+        manager.query.mockResolvedValue([{ sold: '2' }]);
+
+        await expect(service.assertLineSellable(manager, 't-1', order, { id: 'p-1', name: 'Lasagne' } as any, null, '2', [])).rejects.toThrow('Only 1');
+        await expect(service.assertLineSellable(manager, 't-1', order, { id: 'p-1', name: 'Lasagne' } as any, null, '1', [])).resolves.toBeUndefined();
+      });
+
+      it('refuses more than the per-order cap', async () => {
+        const manager: any = em();
+        manager.query.mockResolvedValue([{ n: '9' }]);
+
+        await expect(service.assertLineSellable(manager, 't-1', order, { id: 'p-1', name: 'Soda', max_per_order: 10 } as any, null, '2', [])).rejects.toThrow('At most 10');
+      });
+
+      it('refuses an add-on this product leaves out, or one that is off sale', async () => {
+        const chili = { id: 'opt-chili', name: 'Chili shot' } as any;
+        const leftOut: any = em({ links: [{ excluded_item_ids: ['opt-chili'] }] });
+        await expect(service.assertLineSellable(leftOut, 't-1', order, { id: 'p-1', name: 'Sandwich' } as any, null, '1', [chili])).rejects.toThrow('not offered');
+
+        availRepo.find.mockResolvedValue([{ option_item_id: 'opt-chili', is_suspended: true, suspended_until: null, reason: 'Out' }]);
+        await expect(service.assertLineSellable(em() as any, 't-1', order, { id: 'p-1', name: 'Sandwich' } as any, null, '1', [chili])).rejects.toThrow('not available');
+      });
     });
   });
 });

@@ -1,4 +1,11 @@
-import type { Product, Category, OptionGroup, ProductVariant } from 'src/api/catalogApi';
+import type {
+  Product,
+  Category,
+  OptionGroup,
+  ProductVariant,
+  ProductAvailability,
+  AvailabilitySchedule,
+} from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate } from 'react-router';
@@ -47,11 +54,15 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { fDateTime } from 'src/utils/format-time';
 
 import { catalogApi } from 'src/api/catalogApi';
 import { useAuthStore } from 'src/store/useAuthStore';
+import { useBranchContext } from 'src/contexts/branch-context';
 
-import { ImageUploader } from 'src/components/ImageUploader';
+import { AmountInWords } from 'src/components/amount-in-words';
+
+import { ProductPhotos } from './product-photos';
 
 export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -80,8 +91,15 @@ export function ProductDetailPage() {
   const [sku, setSku] = useState('');
   const [barcode, setBarcode] = useState('');
   const [description, setDescription] = useState('');
-  const [imageAssetId, setImageAssetId] = useState<string | undefined>(undefined);
+  const [photoIds, setPhotoIds] = useState<string[]>([]);
+  const [containerPrice, setContainerPrice] = useState('0');
+  const [maxPerOrder, setMaxPerOrder] = useState('');
   const [savingGeneral, setSavingGeneral] = useState(false);
+
+  // What the branch side says about this item right now, shown beside what head office set.
+  const { selectedBranchId } = useBranchContext();
+  const [stops, setStops] = useState<ProductAvailability[]>([]);
+  const [windows, setWindows] = useState<AvailabilitySchedule[]>([]);
 
   // Variant Modal State
   const [variantDialogOpen, setVariantDialogOpen] = useState(false);
@@ -124,18 +142,71 @@ export function ProductDetailPage() {
       setSku(prod.sku || '');
       setBarcode(prod.barcode || '');
       setDescription(prod.description || '');
-      setImageAssetId(prod.image_asset_id);
+      setPhotoIds([prod.image_asset_id, ...(prod.gallery_asset_ids || [])].filter(Boolean) as string[]);
+      setContainerPrice(String(Number(prod.container_price || 0)));
+      setMaxPerOrder(prod.max_per_order ? String(prod.max_per_order) : '');
       setError(null);
+
+      const [aList, sList] = await Promise.all([
+        catalogApi.getAvailabilities(selectedBranchId || undefined).catch(() => [] as ProductAvailability[]),
+        catalogApi.getSchedules(selectedBranchId || undefined).catch(() => [] as AvailabilitySchedule[]),
+      ]);
+      setStops(aList.filter((a) => a.product_id === prod.id && !a.variant_id));
+      const own = sList.filter((s) => s.is_active && s.product_id === prod.id);
+      setWindows(
+        own.length
+          ? own
+          : sList.filter((s) => s.is_active && !!prod.category_id && s.category_id === prod.category_id)
+      );
     } catch (err: any) {
       setError(err.detail || err.message || t('catalog.productDetailPage.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [id, t]);
+  }, [id, t, selectedBranchId]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const liveStop = stops.find(
+    (a) => a.is_suspended && (!a.suspended_until || new Date(a.suspended_until) > new Date())
+  );
+
+  /** Items of a group this product offers, as Snappfood's per-product add-on switch. */
+  const handleToggleOptionItem = async (group: OptionGroup, itemId: string, offered: boolean) => {
+    if (!id) return;
+    const excluded = new Set(group.excluded_item_ids || []);
+    if (offered) excluded.delete(itemId);
+    else excluded.add(itemId);
+    try {
+      await catalogApi.setExcludedOptionItems(id, group.id, [...excluded]);
+      setProduct((p) =>
+        p
+          ? {
+              ...p,
+              optionGroups: (p.optionGroups || []).map((g) =>
+                g.id === group.id ? { ...g, excluded_item_ids: [...excluded] } : g
+              ),
+            }
+          : p
+      );
+    } catch (err: any) {
+      setError(err.detail || err.message || t('catalog.productDetailPage.errors.saveFailed'));
+    }
+  };
+
+  const handleDetachGroup = async (groupId: string) => {
+    if (!id) return;
+    if (!window.confirm(t('catalog.productDetailPage.modifiers.detachConfirm', 'Take this add-on group off this product?')))
+      return;
+    try {
+      await catalogApi.detachOptionGroup(id, groupId);
+      setProduct(await catalogApi.getProductById(id));
+    } catch (err: any) {
+      setError(err.detail || err.message || t('catalog.productDetailPage.errors.saveFailed'));
+    }
+  };
 
   const handleSaveGeneral = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,7 +224,10 @@ export function ProductDetailPage() {
         sku: sku || undefined,
         barcode: barcode || undefined,
         description: description || undefined,
-        image_asset_id: imageAssetId,
+        image_asset_id: photoIds[0] || undefined,
+        gallery_asset_ids: photoIds.slice(1),
+        container_price: containerPrice || '0',
+        max_per_order: maxPerOrder ? parseInt(maxPerOrder, 10) : null,
       });
       setProduct(updated);
       setSuccessMsg(t('catalog.productDetailPage.messages.saved'));
@@ -324,22 +398,8 @@ export function ProductDetailPage() {
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={currentTab} onChange={(_, val) => setCurrentTab(val)}>
           <Tab label={t('catalog.productDetailPage.tabs.general')} />
-          <Tab
-            label={
-              <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 0.75 }}>
-                <span>{t('catalog.productDetailPage.tabs.variants', { count: variants.length })}</span>
-                <Chip label="V5" size="small" color="info" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 'bold' }} />
-              </Stack>
-            }
-          />
-          <Tab
-            label={
-              <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 0.75 }}>
-                <span>{t('catalog.productDetailPage.tabs.modifiers', { count: product?.optionGroups?.length || 0 })}</span>
-                <Chip label="V5" size="small" color="info" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 'bold' }} />
-              </Stack>
-            }
-          />
+          <Tab label={t('catalog.productDetailPage.tabs.variants', { count: variants.length })} />
+          <Tab label={t('catalog.productDetailPage.tabs.modifiers', { count: product?.optionGroups?.length || 0 })} />
         </Tabs>
       </Box>
 
@@ -396,6 +456,32 @@ export function ProductDetailPage() {
                       fullWidth
                       required
                     />
+                    <AmountInWords amount={basePrice} />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label={t('catalog.productDetailPage.general.containerPrice', 'Packaging price')}
+                      type="number"
+                      value={containerPrice}
+                      onChange={(e) => setContainerPrice(e.target.value)}
+                      helperText={t(
+                        'catalog.productDetailPage.general.containerPriceHelp',
+                        'Per unit, for delivery apps. Recorded for the Snappfood menu; not charged on orders here yet.'
+                      )}
+                      fullWidth
+                    />
+                    <AmountInWords amount={containerPrice} />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label={t('catalog.productDetailPage.general.maxPerOrder', 'Most per order')}
+                      type="number"
+                      value={maxPerOrder}
+                      onChange={(e) => setMaxPerOrder(e.target.value)}
+                      helperText={t('catalog.productDetailPage.general.maxPerOrderHelp', 'Empty for no limit')}
+                      slotProps={{ htmlInput: { min: 1, step: 1 } }}
+                      fullWidth
+                    />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
@@ -449,14 +535,58 @@ export function ProductDetailPage() {
             </Grid>
 
             <Grid size={{ xs: 12, md: 4 }}>
-              <Card sx={{ p: 3 }}>
+              <Card sx={{ p: 3, mb: 3 }}>
                 <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                   {t('catalog.productDetailPage.general.imageTitle')}
                 </Typography>
-                <ImageUploader
-                  value={imageAssetId}
-                  onUploadSuccess={(asset) => setImageAssetId(asset.id)}
-                />
+                <ProductPhotos ids={photoIds} onChange={setPhotoIds} disabled={!canAuthor} />
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                  {t('catalog.productDetailPage.photos.help', 'The starred photo is the main one. Save to keep changes.')}
+                </Typography>
+              </Card>
+
+              <Card sx={{ p: 3 }}>
+                <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+                  {t('catalog.productDetailPage.onSale.title', 'On sale')}
+                </Typography>
+                <Stack spacing={1.5}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('catalog.productDetailPage.onSale.status', 'Availability')}
+                    </Typography>
+                    <Box>
+                      {liveStop ? (
+                        <Chip
+                          size="small"
+                          color={liveStop.suspended_until ? 'warning' : 'default'}
+                          label={
+                            liveStop.suspended_until
+                              ? t('catalog.availabilityPage.statusOffUntil', {
+                                  defaultValue: 'Unavailable until {{time}}',
+                                  time: fDateTime(liveStop.suspended_until),
+                                })
+                              : t('catalog.availabilityPage.statusOffManual', 'Unavailable until further notice')
+                          }
+                        />
+                      ) : (
+                        <Chip size="small" color="success" label={t('catalog.availabilityPage.statusAvailable')} />
+                      )}
+                    </Box>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('catalog.productDetailPage.onSale.menuTime', 'Menu time')}
+                    </Typography>
+                    <Typography variant="body2">
+                      {windows.length
+                        ? windows.map((w) => `${w.label ? `${w.label} ` : ''}${w.start_time}–${w.end_time}`).join('، ')
+                        : t('catalog.productDetailPage.onSale.allDay', 'All day')}
+                    </Typography>
+                  </Box>
+                  <Button size="small" variant="outlined" onClick={() => navigate('/app/catalog/availability')}>
+                    {t('catalog.productsPage.manageAvailability', 'Manage availability')}
+                  </Button>
+                </Stack>
               </Card>
             </Grid>
           </Grid>
@@ -472,7 +602,6 @@ export function ProductDetailPage() {
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                   {t('catalog.productDetailPage.variants.title')}
                 </Typography>
-                <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                 {t('catalog.productDetailPage.variants.subtitle')}
@@ -563,7 +692,6 @@ export function ProductDetailPage() {
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                   {t('catalog.productDetailPage.modifiers.title')}
                 </Typography>
-                <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                 {t('catalog.productDetailPage.modifiers.subtitle')}
@@ -600,7 +728,21 @@ export function ProductDetailPage() {
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                         {group.name}
                       </Typography>
-                      {group.is_required && <Chip label={t('catalog.productDetailPage.modifiers.requiredBadge')} color="error" size="small" />}
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                        {group.is_required && (
+                          <Chip label={t('catalog.productDetailPage.modifiers.requiredBadge')} color="error" size="small" />
+                        )}
+                        {canAuthor && (
+                          <IconButton
+                            size="small"
+                            color="error"
+                            title={t('catalog.productDetailPage.modifiers.detach', 'Remove from this product')}
+                            onClick={() => handleDetachGroup(group.id)}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        )}
+                      </Stack>
                     </Stack>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
                       {t('catalog.productDetailPage.modifiers.code')}: {group.code} • {t('catalog.productDetailPage.modifiers.min')}: {group.min_selection} • {t('catalog.productDetailPage.modifiers.max')}: {group.max_selection}
@@ -613,16 +755,34 @@ export function ProductDetailPage() {
                           sx={{
                             flexDirection: 'row',
                             justifyContent: 'space-between',
+                            alignItems: 'center',
                             py: 0.5,
-                            borderBottom: '1px dashed #eee',
+                            borderBottom: 1,
+                            borderColor: 'divider',
                           }}
                         >
-                          <Typography variant="body2">{item.name}</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                            <span dir="ltr">
-                              {Number(item.price_delta) > 0 ? `+${MoneyUtil.formatCurrency(item.price_delta)} IRR` : t('catalog.productDetailPage.modifiers.free')}
-                            </span>
+                          <Typography
+                            variant="body2"
+                            color={(group.excluded_item_ids || []).includes(item.id) ? 'text.disabled' : 'text.primary'}
+                          >
+                            {item.name}
                           </Typography>
+                          <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                              <span dir="ltr">
+                                {Number(item.price_delta) > 0
+                                  ? `+${MoneyUtil.formatCurrency(item.price_delta)} IRR`
+                                  : t('catalog.productDetailPage.modifiers.free')}
+                              </span>
+                            </Typography>
+                            {/* Offered on this product, as Snappfood's per-product add-on switch. */}
+                            <Switch
+                              size="small"
+                              checked={!(group.excluded_item_ids || []).includes(item.id)}
+                              disabled={!canAuthor}
+                              onChange={(e) => handleToggleOptionItem(group, item.id, e.target.checked)}
+                            />
+                          </Stack>
                         </Stack>
                       ))}
                     </Stack>

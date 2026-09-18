@@ -37,6 +37,12 @@ export interface Product {
   image_asset_id?: string;
   is_active: boolean;
   base_price: string;
+  /** Packaging per unit, as Snappfood's containerPrice. Stored for the channel, not billed here. */
+  container_price?: string;
+  /** Most units one order may hold; null for no cap. */
+  max_per_order?: number | null;
+  /** Photos after the main one, in order. */
+  gallery_asset_ids?: string[];
   /** COMBO: a meal deal sold as one line; its option groups are slots that must be filled. */
   product_type?: 'STANDARD' | 'COMBO';
   optionGroups?: OptionGroup[];
@@ -63,6 +69,8 @@ export interface OptionGroup {
   max_selection: number;
   is_required: boolean;
   items?: OptionItem[];
+  /** On a product's own groups: the items this product leaves out. */
+  excluded_item_ids?: string[];
 }
 
 export interface PriceGroup {
@@ -104,7 +112,12 @@ export interface Menu {
 
 export interface ProductAvailability {
   id: string;
-  product_id: string;
+  /** Null on an add-on stop. */
+  product_id: string | null;
+  /** Set when only this variant is off. */
+  variant_id?: string | null;
+  /** Set when the stop is on an add-on item. */
+  option_item_id?: string | null;
   branch_id?: string;
   channel?: string;
   is_suspended: boolean;
@@ -123,6 +136,29 @@ export interface AvailabilitySchedule {
   end_time: string;
   label: string | null;
   is_active: boolean;
+}
+
+/** Today's count for an item at a branch, with what live orders already hold. */
+export interface DailyStockLine {
+  id: string;
+  product_id: string;
+  variant_id: string | null;
+  business_date: string;
+  quantity: number;
+  sold: number;
+  remaining: number;
+}
+
+/** What a stop is on and how long it lasts. */
+export interface StopRequest {
+  productId?: string;
+  variantId?: string;
+  optionItemId?: string;
+  branchId?: string;
+  /** NEXT_SHIFT: back when the branch next opens. MANUAL: until someone puts it back. */
+  until: 'NEXT_SHIFT' | 'MANUAL' | 'HOURS';
+  hours?: number;
+  reason?: string;
 }
 
 export interface OffScheduleProduct {
@@ -213,6 +249,29 @@ export const catalogApi = {
     const res = await httpClient.post(`/api/v1/option-groups/${groupId}/items`, data);
     return res.data;
   },
+  updateOptionGroup: async (id: string, data: Partial<OptionGroup>): Promise<OptionGroup> => {
+    const res = await httpClient.patch(`/api/v1/option-groups/${id}`, data);
+    return res.data;
+  },
+  deleteOptionGroup: async (id: string): Promise<void> => {
+    await httpClient.delete(`/api/v1/option-groups/${id}`);
+  },
+  updateOptionItem: async (groupId: string, itemId: string, data: Partial<OptionItem>): Promise<OptionItem> => {
+    const res = await httpClient.patch(`/api/v1/option-groups/${groupId}/items/${itemId}`, data);
+    return res.data;
+  },
+  deleteOptionItem: async (groupId: string, itemId: string): Promise<void> => {
+    await httpClient.delete(`/api/v1/option-groups/${groupId}/items/${itemId}`);
+  },
+  detachOptionGroup: async (productId: string, groupId: string): Promise<void> => {
+    await httpClient.delete(`/api/v1/products/${productId}/option-groups/${groupId}`);
+  },
+  setExcludedOptionItems: async (productId: string, groupId: string, excludedItemIds: string[]): Promise<any> => {
+    const res = await httpClient.put(`/api/v1/products/${productId}/option-groups/${groupId}/excluded-items`, {
+      excludedItemIds,
+    });
+    return res.data;
+  },
 
   getPriceGroups: async (): Promise<PriceGroup[]> => {
     const res = await httpClient.get('/api/v1/price-groups');
@@ -272,6 +331,39 @@ export const catalogApi = {
   },
   resumeProduct: async (productId: string, branchId?: string): Promise<any> => {
     const res = await httpClient.post('/api/v1/availability/resume', { productId, branchId });
+    return res.data;
+  },
+  /** Take a product, one variant or an add-on off sale, Snappfood-style. */
+  stopItem: async ({ until, hours, ...target }: StopRequest): Promise<ProductAvailability> => {
+    const res = await httpClient.post('/api/v1/availability/suspend', {
+      ...target,
+      until: until === 'NEXT_SHIFT' ? 'NEXT_SHIFT' : undefined,
+      hours: until === 'HOURS' ? hours : 0,
+    });
+    return res.data;
+  },
+  resumeItem: async (target: {
+    productId?: string;
+    variantId?: string;
+    optionItemId?: string;
+    branchId?: string;
+  }): Promise<any> => {
+    const res = await httpClient.post('/api/v1/availability/resume', target);
+    return res.data;
+  },
+  getNextShift: async (branchId?: string): Promise<{ next_shift_start: string }> => {
+    const res = await httpClient.get('/api/v1/availability/next-shift', { params: { branchId } });
+    return res.data;
+  },
+  getDailyStock: async (branchId?: string): Promise<DailyStockLine[]> => {
+    const res = await httpClient.get('/api/v1/availability/daily-stock', { params: { branchId } });
+    return res.data;
+  },
+  setDailyStock: async (
+    entries: Array<{ productId: string; variantId?: string | null; quantity: number | null }>,
+    branchId?: string
+  ): Promise<DailyStockLine[]> => {
+    const res = await httpClient.put('/api/v1/availability/daily-stock', { branchId, entries });
     return res.data;
   },
   getSchedules: async (branchId?: string): Promise<AvailabilitySchedule[]> => {

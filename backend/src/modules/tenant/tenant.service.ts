@@ -169,13 +169,19 @@ export class TenantService {
   async getBranchHours(tenantId: string, branchId: string) {
     return await this.hoursRepo.find({
       where: { tenant_id: tenantId, branch_id: branchId },
-      order: { day_of_week: 'ASC' },
+      order: { day_of_week: 'ASC', open_time: 'ASC' },
     });
   }
 
+  /**
+   * Replace the hours of every day the list mentions. A day can have several shifts
+   * (lunch 12–16, dinner 19–23): each is its own row. A closed day is one row marked
+   * closed. Days the list leaves out keep what they had.
+   */
   async updateBranchHours(tenantId: string, branchId: string, hours: Array<{ day_of_week: number; open_time?: string; close_time?: string; is_closed?: boolean; spans_midnight?: boolean }>, correlationId: string) {
     await this.getBranchById(tenantId, branchId);
 
+    const byDay = new Map<number, typeof hours>();
     for (const h of hours) {
       if (h.day_of_week < 0 || h.day_of_week > 6) {
         throw new BadRequestException(`Invalid day_of_week ${h.day_of_week}. Must be 0-6.`);
@@ -186,16 +192,35 @@ export class TenantService {
           throw new BadRequestException(`Operating open_time (${h.open_time}) must be earlier than close_time (${h.close_time}) unless spans_midnight is true.`);
         }
       }
+      byDay.set(h.day_of_week, [...(byDay.get(h.day_of_week) || []), h]);
+    }
 
-      let hourRow = await this.hoursRepo.findOne({ where: { tenant_id: tenantId, branch_id: branchId, day_of_week: h.day_of_week } });
-      if (!hourRow) {
-        hourRow = this.hoursRepo.create({ tenant_id: tenantId, branch_id: branchId, day_of_week: h.day_of_week });
+    for (const [day, rows] of byDay) {
+      const open = rows.filter((r) => !r.is_closed);
+      const shifts = open
+        .map((r) => ({ open: (r.open_time || '08:00:00').slice(0, 5), close: (r.close_time || '23:00:00').slice(0, 5), spans: !!r.spans_midnight }))
+        .sort((a, b) => a.open.localeCompare(b.open));
+      for (let i = 1; i < shifts.length; i++) {
+        if (shifts[i - 1].spans || shifts[i].open < shifts[i - 1].close) {
+          throw new BadRequestException(`Shifts on day ${day} overlap (${shifts[i - 1].open}–${shifts[i - 1].close} and ${shifts[i].open}–${shifts[i].close}).`);
+        }
       }
-      hourRow.open_time = h.open_time || '08:00:00';
-      hourRow.close_time = h.close_time || '23:00:00';
-      hourRow.is_closed = h.is_closed ?? false;
-      hourRow.spans_midnight = h.spans_midnight ?? false;
-      await this.hoursRepo.save(hourRow);
+
+      await this.hoursRepo.delete({ tenant_id: tenantId, branch_id: branchId, day_of_week: day });
+      const toSave = open.length ? open : [{ day_of_week: day, is_closed: true }];
+      for (const h of toSave) {
+        await this.hoursRepo.save(
+          this.hoursRepo.create({
+            tenant_id: tenantId,
+            branch_id: branchId,
+            day_of_week: day,
+            open_time: h.open_time || '08:00:00',
+            close_time: h.close_time || '23:00:00',
+            is_closed: h.is_closed ?? false,
+            spans_midnight: h.spans_midnight ?? false,
+          }),
+        );
+      }
     }
 
     await this.auditWriter.write({
