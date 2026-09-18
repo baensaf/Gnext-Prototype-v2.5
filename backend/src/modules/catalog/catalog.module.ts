@@ -20,6 +20,9 @@ import { DailyStock } from '../../entities/DailyStock.entity';
 import { CatalogService } from './catalog.service';
 import { CatalogController } from './catalog.controller';
 import { PriceListService } from './price-lists.service';
+import { PriceChangeService } from './price-changes.service';
+import { PriceBulkJob } from '../../entities/PriceBulkJob.entity';
+import { AuditEvent } from '../../entities/AuditEvent.entity';
 import { AuditModule } from '../audit/audit.module';
 import { PricingModule } from '../pricing/pricing.module';
 
@@ -35,6 +38,8 @@ import { PricingModule } from '../pricing/pricing.module';
       PriceGroup,
       PriceGroupBranch,
       PriceEntry,
+      PriceBulkJob,
+      AuditEvent,
       Menu,
       MenuCategory,
       MenuProduct,
@@ -47,8 +52,8 @@ import { PricingModule } from '../pricing/pricing.module';
     AuditModule,
     forwardRef(() => PricingModule),
   ],
-  providers: [CatalogService, PriceListService],
+  providers: [CatalogService, PriceListService, PriceChangeService],
   controllers: [CatalogController],
-  exports: [CatalogService, PriceListService],
+  exports: [CatalogService, PriceListService, PriceChangeService],
 })
 export class CatalogModule {}

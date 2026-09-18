@@ -10,7 +10,7 @@ export function basePriceLists() {
     provide: PriceListService,
     useValue: {
       listForBranch: jest.fn().mockResolvedValue(null),
-      listPricesForBranch: jest.fn().mockResolvedValue(new Map()),
+      pricesForBranch: jest.fn().mockResolvedValue(new Map()),
       resolveInStorePrice: jest.fn(async (_tenantId: string, _branchId: string, product: any, variant: any) =>
         inStorePrice(new Map(), product, variant),
       ),

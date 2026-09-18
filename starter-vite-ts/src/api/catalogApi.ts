@@ -104,6 +104,51 @@ export interface BranchPrices {
   items: Array<{ product_id: string; variant_id: string | null; price: string }>;
 }
 
+/** A dated price change: base prices or one list, by a percentage or an amount, from a day. */
+export interface PriceChangeInput {
+  price_list_id?: string | null;
+  category_id?: string | null;
+  adjustment: 'PERCENT' | 'AMOUNT';
+  value: string;
+  round_to?: number | null;
+  /** YYYY-MM-DD business day; empty for now. */
+  effective_date?: string | null;
+}
+
+export interface PriceChangePreview {
+  effective_from: string;
+  price_list: { id: string; name: string } | null;
+  items: Array<{ product_id: string; variant_id: string | null; name: string; current: string; new: string }>;
+  changed: number;
+}
+
+export interface PriceChange {
+  id: string;
+  status: 'SCHEDULED' | 'APPLIED' | 'CANCELLED';
+  price_list: { id: string; name: string | null } | null;
+  effective_from: string;
+  items: number;
+  adjustment: 'PERCENT' | 'AMOUNT';
+  value: string;
+  round_to: number;
+  category_id: string | null;
+  created_at: string;
+  cancelled_at: string | null;
+  can_cancel: boolean;
+}
+
+export interface PriceHistoryRow {
+  at: string;
+  until: string | null;
+  /** CHANGE: a dated price change; LIST_PRICE: set on a price list; EDIT: typed on the product page. */
+  kind: 'CHANGE' | 'LIST_PRICE' | 'BASE' | 'EDIT';
+  price_list: string | null;
+  size: string | null;
+  from: string | null;
+  to: string;
+  status: 'UPCOMING' | 'CURRENT' | 'ENDED' | null;
+}
+
 export interface MenuCategory {
   id: string;
   menu_id: string;
@@ -345,6 +390,27 @@ export const catalogApi = {
   },
   assignBranchPriceList: async (branchId: string, priceListId: string | null): Promise<void> => {
     await httpClient.put('/api/v1/catalog/branch-price-list', { branchId, priceListId });
+  },
+
+  // Dated price changes
+  previewPriceChange: async (input: PriceChangeInput): Promise<PriceChangePreview> => {
+    const res = await httpClient.post('/api/v1/catalog/price-changes/preview', input);
+    return res.data;
+  },
+  commitPriceChange: async (input: PriceChangeInput): Promise<PriceChange> => {
+    const res = await httpClient.post('/api/v1/catalog/price-changes', input);
+    return res.data;
+  },
+  getPriceChanges: async (): Promise<PriceChange[]> => {
+    const res = await httpClient.get('/api/v1/catalog/price-changes');
+    return res.data;
+  },
+  cancelPriceChange: async (id: string): Promise<void> => {
+    await httpClient.delete(`/api/v1/catalog/price-changes/${id}`);
+  },
+  getPriceHistory: async (productId: string): Promise<PriceHistoryRow[]> => {
+    const res = await httpClient.get(`/api/v1/products/${productId}/price-history`);
+    return res.data;
   },
 
   // Aggregator price sheet (Snappfood): the markup rule applied to every item, plus fixed

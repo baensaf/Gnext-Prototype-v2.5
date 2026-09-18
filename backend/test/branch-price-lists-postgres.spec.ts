@@ -6,7 +6,7 @@ import { OrderService } from '../src/modules/order/order.service';
 import { CatalogService } from '../src/modules/catalog/catalog.service';
 import { PriceListService } from '../src/modules/catalog/price-lists.service';
 import { KioskService } from '../src/modules/kiosk/kiosk.service';
-import { PricingService } from '../src/modules/pricing/pricing.service';
+import { PriceChangeService } from '../src/modules/catalog/price-changes.service';
 import { Tenant } from '../src/entities/Tenant.entity';
 import { Branch } from '../src/entities/Branch.entity';
 import { Category } from '../src/entities/Category.entity';
@@ -26,7 +26,7 @@ describe('Branch price lists (PostgreSQL)', () => {
   let catalog: CatalogService;
   let priceLists: PriceListService;
   let kiosk: KioskService;
-  let pricing: PricingService;
+  let priceChanges: PriceChangeService;
   let tenantId: string;
   let uptown: string;
   let downtown: string;
@@ -45,7 +45,7 @@ describe('Branch price lists (PostgreSQL)', () => {
     catalog = moduleRef.get(CatalogService);
     priceLists = moduleRef.get(PriceListService);
     kiosk = moduleRef.get(KioskService);
-    pricing = moduleRef.get(PricingService);
+    priceChanges = moduleRef.get(PriceChangeService);
 
     const save = <T>(entity: any, data: Partial<T>) =>
       dataSource.getRepository<T>(entity).save(dataSource.getRepository<T>(entity).create(data as any) as any) as Promise<any>;
@@ -144,16 +144,19 @@ describe('Branch price lists (PostgreSQL)', () => {
     await priceLists.setListPrice(tenantId, listId, tea, null, '65000', 'test');
   });
 
-  it("closes only the list's own price in a bulk change", async () => {
-    await pricing.bulkCommit(tenantId, { price_group_id: listId, product_ids: [tea], adjustment_type: 'SET', amount: '66000' }, 'test');
+  it("changes only the list's own prices in a list price change", async () => {
+    await priceChanges.commit(tenantId, { price_list_id: listId, adjustment: 'AMOUNT', value: '1000' }, null, 'test');
     expect(await linePrices(uptown, [{ product_id: tea, quantity: '1' }])).toEqual(['66000.0000']);
-    // Another product's list price, on a size, is untouched.
-    expect(await linePrices(uptown, [{ product_id: pizza, variant_id: large, quantity: '1' }])).toEqual(['450000.0000']);
+    expect(await linePrices(uptown, [{ product_id: pizza, variant_id: large, quantity: '1' }])).toEqual(['451000.0000']);
+    // Small is not on the list, so it keeps selling at base.
+    expect(await linePrices(uptown, [{ product_id: pizza, variant_id: small, quantity: '1' }])).toEqual(['250000.0000']);
+    // And a branch with no list is untouched.
+    expect(await linePrices(downtown, [{ product_id: tea, quantity: '1' }])).toEqual(['50000.0000']);
   });
 
   it('sends a branch back to base when it leaves the list or the list is archived', async () => {
     await priceLists.assignBranch(tenantId, downtown, listId, 'test');
-    expect(await linePrices(downtown, [{ product_id: pizza, variant_id: large, quantity: '1' }])).toEqual(['450000.0000']);
+    expect(await linePrices(downtown, [{ product_id: pizza, variant_id: large, quantity: '1' }])).toEqual(['451000.0000']);
     await priceLists.assignBranch(tenantId, downtown, null, 'test');
     expect(await linePrices(downtown, [{ product_id: pizza, variant_id: large, quantity: '1' }])).toEqual(['400000.0000']);
 

@@ -63,6 +63,7 @@ import { useBranchContext } from 'src/contexts/branch-context';
 import { AmountInWords } from 'src/components/amount-in-words';
 
 import { ProductPhotos } from './product-photos';
+import { ProductPriceHistory } from './product-price-history';
 
 export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -400,6 +401,7 @@ export function ProductDetailPage() {
           <Tab label={t('catalog.productDetailPage.tabs.general')} />
           <Tab label={t('catalog.productDetailPage.tabs.variants', { count: variants.length })} />
           <Tab label={t('catalog.productDetailPage.tabs.modifiers', { count: product?.optionGroups?.length || 0 })} />
+          <Tab label={t('catalog.productDetailPage.tabs.priceHistory')} />
         </Tabs>
       </Box>
 
@@ -682,6 +684,8 @@ export function ProductDetailPage() {
           )}
         </Card>
       )}
+
+      {currentTab === 3 && id && <ProductPriceHistory productId={id} />}
 
       {/* TAB 2: Modifiers & Option Groups */}
       {currentTab === 2 && (

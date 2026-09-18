@@ -65,6 +65,7 @@ export const paths = {
     },
     pricing: {
       priceLists: `${ROOTS.APP}/pricing/price-lists`,
+      changes: `${ROOTS.APP}/pricing/changes`,
       snappfood: `${ROOTS.APP}/pricing/snappfood`,
     },
     discounts: {

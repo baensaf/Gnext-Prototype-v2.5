@@ -108,7 +108,7 @@ export class KioskService {
 
     // The price this branch charges (its price list's, else base), so the screen shows what
     // the order will cost.
-    const listed = await this.priceLists.listPricesForBranch(tenantId, branch?.id);
+    const listed = await this.priceLists.pricesForBranch(tenantId, branch?.id);
 
     const catalogProducts = products.map((p) => {
       const pLinks = productOptionGroups.filter((pog) => pog.product_id === p.id);
