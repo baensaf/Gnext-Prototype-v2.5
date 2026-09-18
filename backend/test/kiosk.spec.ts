@@ -17,6 +17,8 @@ import { Customer } from '../src/entities/Customer.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { KdsService } from '../src/modules/kds/kds.service';
 import { PrintQueueService } from '../src/modules/printing/print-queue.service';
+import { ProductVariant } from '../src/entities/ProductVariant.entity';
+import { CatalogService } from '../src/modules/catalog/catalog.service';
 import { ForbiddenException, BadRequestException } from '@nestjs/common';
 
 describe('KioskService (Unit)', () => {
@@ -37,6 +39,8 @@ describe('KioskService (Unit)', () => {
   let auditWriter: any;
   let kdsService: any;
   let printQueueService: any;
+  let variantRepo: any;
+  let catalogService: any;
 
   beforeEach(async () => {
     categoryRepo = { find: jest.fn() };
@@ -55,6 +59,11 @@ describe('KioskService (Unit)', () => {
     auditWriter = { write: jest.fn() };
     kdsService = { generateTicketsForOrder: jest.fn().mockResolvedValue([]) };
     printQueueService = { enqueueOrderPrintJobs: jest.fn().mockResolvedValue([]) };
+    variantRepo = { find: jest.fn().mockResolvedValue([]) };
+    catalogService = {
+      getUnavailableNow: jest.fn().mockResolvedValue({ products: new Set(), variants: new Set(), optionItems: new Set() }),
+      assertBasketSellable: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -75,6 +84,8 @@ describe('KioskService (Unit)', () => {
         { provide: AuditWriter, useValue: auditWriter },
         { provide: KdsService, useValue: kdsService },
         { provide: PrintQueueService, useValue: printQueueService },
+        { provide: getRepositoryToken(ProductVariant), useValue: variantRepo },
+        { provide: CatalogService, useValue: catalogService },
       ],
     }).compile();
 
@@ -126,7 +137,7 @@ describe('KioskService (Unit)', () => {
       { key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'OPTIONAL', branch_id: null },
       { key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'REQUIRED', branch_id: 'br-strict' },
     ]);
-    productRepo.findOne.mockResolvedValue({ id: 'prod-1', name: 'Burger', base_price: '10.00' });
+    productRepo.findOne.mockResolvedValue({ id: 'prod-1', name: 'Burger', base_price: '10.00', tax_rate: '0.0900' });
     orderRepo.create.mockImplementation((dto: any) => dto);
     orderRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'ord-kiosk-3' }));
     orderItemRepo.create.mockImplementation((dto: any) => dto);
@@ -152,7 +163,7 @@ describe('KioskService (Unit)', () => {
     settingRepo.find.mockResolvedValue([
       { key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'OPTIONAL', branch_id: null },
     ]);
-    productRepo.findOne.mockResolvedValue({ id: 'prod-1', name: 'Burger', base_price: '10.00' });
+    productRepo.findOne.mockResolvedValue({ id: 'prod-1', name: 'Burger', base_price: '10.00', tax_rate: '0.0900' });
 
     orderRepo.create.mockImplementation((dto: any) => dto);
     orderRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'ord-kiosk-1' }));
@@ -179,7 +190,7 @@ describe('KioskService (Unit)', () => {
     const kioskOrder = { branch_id: 'br-1', order_type: 'TAKEAWAY' as const, items: [{ product_id: 'prod-1', quantity: 1 }] };
 
     beforeEach(() => {
-      productRepo.findOne.mockResolvedValue({ id: 'prod-1', name: 'Burger', base_price: '10.00' });
+      productRepo.findOne.mockResolvedValue({ id: 'prod-1', name: 'Burger', base_price: '10.00', tax_rate: '0.0900' });
       orderRepo.create.mockImplementation((dto: any) => dto);
       orderRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'ord-kiosk-9' }));
       orderItemRepo.create.mockImplementation((dto: any) => dto);
@@ -284,7 +295,7 @@ describe('KioskService (Unit)', () => {
     settingRepo.find.mockResolvedValue([
       { key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'OPTIONAL', branch_id: null },
     ]);
-    productRepo.findOne.mockResolvedValue({ id: 'prod-1', name: 'Burger', base_price: '15.00' });
+    productRepo.findOne.mockResolvedValue({ id: 'prod-1', name: 'Burger', base_price: '15.00', tax_rate: '0.0900' });
 
     orderRepo.create.mockImplementation((dto: any) => dto);
     orderRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'ord-kiosk-2' }));
@@ -315,5 +326,70 @@ describe('KioskService (Unit)', () => {
     });
 
     expect(result.id).toBe('ord-existing');
+  });
+});
+
+describe('KioskService selling rules', () => {
+  const build = async (overrides: { product?: any; variants?: any[]; basket?: jest.Mock; unavailable?: any }) => {
+    const productRepo = { find: jest.fn().mockResolvedValue([overrides.product]), findOne: jest.fn().mockResolvedValue(overrides.product) };
+    const variantRepo = { find: jest.fn().mockResolvedValue(overrides.variants || []) };
+    const catalogService = {
+      getUnavailableNow: jest.fn().mockResolvedValue(overrides.unavailable || { products: new Set(), variants: new Set(), optionItems: new Set() }),
+      assertBasketSellable: overrides.basket || jest.fn().mockResolvedValue(undefined),
+    };
+    const passthrough = { create: jest.fn((dto: any) => dto), save: jest.fn((dto: any) => Promise.resolve({ ...dto, id: 'x' })), findOne: jest.fn(), find: jest.fn().mockResolvedValue([]) };
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        KioskService,
+        { provide: getRepositoryToken(Category), useValue: { find: jest.fn().mockResolvedValue([]) } },
+        { provide: getRepositoryToken(Product), useValue: productRepo },
+        { provide: getRepositoryToken(OptionGroup), useValue: { find: jest.fn().mockResolvedValue([]) } },
+        { provide: getRepositoryToken(OptionItem), useValue: { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() } },
+        { provide: getRepositoryToken(ProductOptionGroup), useValue: { find: jest.fn().mockResolvedValue([]) } },
+        { provide: getRepositoryToken(Branch), useValue: { find: jest.fn().mockResolvedValue([{ id: 'br-1' }]), findOne: jest.fn().mockResolvedValue({ id: 'br-1' }) } },
+        { provide: getRepositoryToken(TenantSetting), useValue: { find: jest.fn().mockResolvedValue([]) } },
+        { provide: getRepositoryToken(PaymentMethod), useValue: { find: jest.fn().mockResolvedValue([]) } },
+        { provide: getRepositoryToken(OrderHeader), useValue: passthrough },
+        { provide: getRepositoryToken(OrderItem), useValue: passthrough },
+        { provide: getRepositoryToken(OrderItemOption), useValue: passthrough },
+        { provide: getRepositoryToken(Payment), useValue: passthrough },
+        { provide: getRepositoryToken(Customer), useValue: passthrough },
+        { provide: getRepositoryToken(ProductVariant), useValue: variantRepo },
+        { provide: AuditWriter, useValue: { write: jest.fn() } },
+        { provide: CatalogService, useValue: catalogService },
+      ],
+    }).compile();
+    return { service: module.get<KioskService>(KioskService), catalogService };
+  };
+  const burger = { id: 'p-1', code: 'BRG', name: 'Burger', base_price: '100.0000', tax_rate: '0.1000', is_active: true };
+  const order = (item: any) => ({ branch_id: 'br-1', order_type: 'TAKEAWAY' as const, items: [item] });
+
+  it("charges VAT at the product's own rate, not a flat 9%", async () => {
+    const { service } = await build({ product: burger });
+    const placed = await service.createKioskOrder('t-1', order({ product_id: 'p-1', quantity: 2 }));
+    expect(placed.subtotal_amount).toBe('200.0000');
+    expect(placed.tax_amount).toBe('20.0000');
+  });
+
+  it('sells a product with sizes at the chosen size, and refuses it with none', async () => {
+    const sizes = [{ id: 'v-l', product_id: 'p-1', name: 'Large', base_price: '150.0000' }];
+    const { service } = await build({ product: burger, variants: sizes });
+    await expect(service.createKioskOrder('t-1', order({ product_id: 'p-1', quantity: 1 }))).rejects.toMatchObject({ response: expect.objectContaining({ code: 'VARIANT_REQUIRED' }) });
+    const placed = await service.createKioskOrder('t-1', order({ product_id: 'p-1', variant_id: 'v-l', quantity: 1 }));
+    expect(placed.subtotal_amount).toBe('150.0000');
+    expect(placed.items[0]).toEqual(expect.objectContaining({ variant_id: 'v-l', variant_name: 'Large' }));
+  });
+
+  it('refuses the basket when the catalog says an item is off, before saving anything', async () => {
+    const basket = jest.fn().mockRejectedValue(new BadRequestException({ code: 'PRODUCT_SUSPENDED' }));
+    const { service } = await build({ product: burger, basket });
+    await expect(service.createKioskOrder('t-1', order({ product_id: 'p-1', quantity: 1 }))).rejects.toMatchObject({ response: expect.objectContaining({ code: 'PRODUCT_SUSPENDED' }) });
+    expect(basket).toHaveBeenCalledWith('t-1', 'br-1', [expect.objectContaining({ variantId: null, quantity: 1 })]);
+  });
+
+  it('shows an 86d item on the menu as unavailable', async () => {
+    const { service } = await build({ product: burger, unavailable: { products: new Set(['p-1']), variants: new Set(), optionItems: new Set() } });
+    const menu = await service.getBootstrapContext('t-1', 'br-1');
+    expect(menu.products[0]).toEqual(expect.objectContaining({ id: 'p-1', is_available: false }));
   });
 });

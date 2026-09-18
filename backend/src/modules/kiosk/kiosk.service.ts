@@ -22,6 +22,9 @@ import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import { normalizePhone } from '../customer/customer.service';
 import { KdsService } from '../kds/kds.service';
 import { PrintQueueService } from '../printing/print-queue.service';
+import { ProductVariant } from '../../entities/ProductVariant.entity';
+import { CatalogService } from '../catalog/catalog.service';
+import { checkOptionChoices } from '../catalog/option-choices.util';
 
 /** Tenders a kiosk's card terminal can take. The seeded card method is CARD_POS. */
 const KIOSK_CARD_KINDS = ['CARD_POS', 'NETWORK_POS', 'CARD', 'MOBILE_POS'];
@@ -42,7 +45,9 @@ export class KioskService {
     @InjectRepository(OrderItemOption) private readonly orderItemOptionRepo: Repository<OrderItemOption>,
     @InjectRepository(Payment) private readonly paymentRepo: Repository<Payment>,
     @InjectRepository(Customer) private readonly customerRepo: Repository<Customer>,
+    @InjectRepository(ProductVariant) private readonly variantRepo: Repository<ProductVariant>,
     private readonly auditWriter: AuditWriter,
+    private readonly catalogService: CatalogService,
     @Optional() private readonly kdsService?: KdsService,
     @Optional() private readonly printQueueService?: PrintQueueService,
   ) {}
@@ -74,7 +79,7 @@ export class KioskService {
       where: { tenant_id: tenantId },
     });
 
-    const productOptionGroups = await this.productOptionGroupRepo.find();
+    const productOptionGroups = await this.productOptionGroupRepo.find({ where: { tenant_id: tenantId } });
 
     const paymentMethods = await this.paymentMethodRepo.find({
       where: { tenant_id: tenantId, is_active: true },
@@ -91,13 +96,21 @@ export class KioskService {
     const customerIdentityPolicy =
       identityPolicyValue !== undefined ? String(identityPolicyValue) : 'OPTIONAL';
 
+    // What is off at this branch right now: 86'd, outside its selling window or sold out.
+    const off = await this.catalogService.getUnavailableNow(tenantId, branch?.id);
+    const variants = await this.variantRepo.find({
+      where: { tenant_id: tenantId, is_active: true },
+      order: { sort_order: 'ASC', code: 'ASC' },
+    });
+
     const catalogProducts = products.map((p) => {
       const pLinks = productOptionGroups.filter((pog) => pog.product_id === p.id);
       const groups = pLinks.map((link) => {
         const og = optionGroups.find((g) => g.id === link.option_group_id);
         const items = optionItems
-          // Items this product leaves out of the group are not offered on it.
+          // Items this product leaves out of the group, and add-ons off today, are not offered.
           .filter((i) => i.option_group_id === link.option_group_id && !(link.excluded_item_ids || []).includes(i.id))
+          .filter((i) => !off.optionItems.has(i.id) && !(i.product_id && off.products.has(i.product_id)))
           .map((i) => ({ ...i, price: i.price_delta }));
         return {
           ...og,
@@ -105,9 +118,14 @@ export class KioskService {
         };
       }).filter((g) => g.id);
 
+      const own = variants.filter((v) => v.product_id === p.id);
+      const onSale = own.filter((v) => !off.products.has(p.id) && !off.variants.has(v.id));
       return {
         ...p,
         option_groups: groups,
+        variants: onSale,
+        // Stays on the screen greyed out, so a guest sees it exists but is off today.
+        is_available: !off.products.has(p.id) && (own.length === 0 || onSale.length > 0),
       };
     });
 
@@ -133,6 +151,78 @@ export class KioskService {
     };
   }
 
+  /**
+   * The basket, checked and priced from the catalog. A client-sent price is ignored: the line
+   * costs its size's price (else the product's) plus each add-on's. Refuses anything the
+   * register would refuse — an item off sale or sold out, a missing size, an add-on that is
+   * not offered or a required choice left empty.
+   */
+  private async priceKioskLines(
+    tenantId: string,
+    branchId: string,
+    items: Array<{ product_id: string; variant_id?: string; quantity: number; notes?: string; options?: Array<{ option_item_id: string }> }>,
+  ) {
+    const refuse = (code: string, message: string) => new BadRequestException({ statusCode: 400, code, message });
+    const lines = [];
+    for (const input of items) {
+      const product = await this.productRepo.findOne({ where: { id: input.product_id, tenant_id: tenantId } });
+      if (!product) throw new NotFoundException(`Product ${input.product_id} not found`);
+      if (product.is_active === false) throw refuse('PRODUCT_INACTIVE', `${product.name} is not on the menu`);
+
+      const quantity = Number(input.quantity);
+      if (!Number.isInteger(quantity) || quantity < 1) throw refuse('INVALID_QUANTITY', 'A quantity is a whole number, 1 or more');
+
+      const sizes = (await this.variantRepo.find({ where: { tenant_id: tenantId, product_id: product.id, is_active: true } })) || [];
+      let variant: ProductVariant | null = null;
+      if (input.variant_id) {
+        variant = sizes.find((v) => v.id === input.variant_id) || null;
+        if (!variant) throw refuse('VARIANT_NOT_FOUND', `That size of ${product.name} is not available`);
+      } else if (sizes.length > 0) {
+        throw refuse('VARIANT_REQUIRED', `Pick a size or type of ${product.name}`);
+      }
+
+      const optionItems: OptionItem[] = [];
+      for (const opt of input.options || []) {
+        const item = await this.optionItemRepo.findOne({ where: { id: opt.option_item_id, tenant_id: tenantId } });
+        if (!item) throw refuse('OPTION_NOT_FOUND', `An add-on on ${product.name} is no longer offered`);
+        optionItems.push(item);
+      }
+      const links = (await this.productOptionGroupRepo.find({ where: { tenant_id: tenantId, product_id: product.id } })) || [];
+      const groups = links.length
+        ? ((await this.optionGroupRepo.find({ where: { tenant_id: tenantId } })) || []).filter((g) => links.some((l) => l.option_group_id === g.id))
+        : [];
+      const groupNames = checkOptionChoices(product, links, groups, optionItems);
+
+      const unitPrice = MoneyUtil.format(variant ? variant.base_price : product.base_price || '0', 4);
+      const quantityStr = MoneyUtil.format(quantity, 4);
+      const delta = optionItems.reduce((sum, i) => MoneyUtil.add(sum, i.price_delta || '0', 4), '0.0000');
+      lines.push({
+        product,
+        variant,
+        quantity: quantityStr,
+        count: quantity,
+        unitPrice,
+        baseTotal: MoneyUtil.multiply(unitPrice, quantityStr, 4),
+        modifierTotal: MoneyUtil.multiply(delta, quantityStr, 4),
+        notes: input.notes,
+        optionItems,
+        options: optionItems.map((i) => ({
+          option_item_id: i.id,
+          option_group_name: groupNames.get(i.option_group_id) || '',
+          option_item_name: i.name,
+          price_delta: MoneyUtil.format(i.price_delta || '0', 4),
+        })),
+      });
+    }
+
+    await this.catalogService.assertBasketSellable(
+      tenantId,
+      branchId,
+      lines.map((l) => ({ product: l.product, variantId: l.variant?.id || null, quantity: l.count, optionItems: l.optionItems })),
+    );
+    return lines;
+  }
+
   async createKioskOrder(
     tenantId: string,
     data: {
@@ -144,6 +234,7 @@ export class KioskService {
       idempotency_key?: string;
       items: Array<{
         product_id: string;
+        variant_id?: string;
         quantity: number;
         unit_price?: number;
         notes?: string;
@@ -186,6 +277,11 @@ export class KioskService {
     if (policy === 'REQUIRED' && (!data.customer_phone || data.customer_phone.trim() === '')) {
       throw new ForbiddenException('Customer phone number is required by kiosk policy');
     }
+
+    // Everything the guest picked is checked, and priced from the catalog, before anything is
+    // saved: the same rules as the register, so a stopped, sold-out or incomplete item cannot
+    // reach the kitchen from the kiosk either.
+    const lines = await this.priceKioskLines(tenantId, data.branch_id, data.items);
 
     let customerId = null;
     if (data.customer_phone && data.customer_phone.trim() !== '') {
@@ -253,52 +349,41 @@ export class KioskService {
     const orderItems: OrderItem[] = [];
     let subtotalStr = '0.0000';
 
-    for (const itemInput of data.items) {
-      const product = await this.productRepo.findOne({ where: { id: itemInput.product_id, tenant_id: tenantId } });
-      if (!product) throw new NotFoundException(`Product ${itemInput.product_id} not found`);
+    let taxAmountStr = '0.0000';
+    let lineNumber = 1;
 
-      // Authoritative pricing: Ignore any client-supplied unit_price or additional_price
-      const basePriceStr = product.base_price || '0.0000';
-      let itemOptionsPriceStr = '0.0000';
-      const optionsToSave = [];
-
-      if (itemInput.options && itemInput.options.length > 0) {
-        for (const opt of itemInput.options) {
-          const optionItem = await this.optionItemRepo.findOne({ where: { id: opt.option_item_id } });
-          const optPriceStr = optionItem ? MoneyUtil.format(optionItem.price_delta || '0', 4) : '0.0000';
-          itemOptionsPriceStr = MoneyUtil.add(itemOptionsPriceStr, optPriceStr, 4);
-
-          optionsToSave.push({
-            option_group_id: opt.option_group_id,
-            option_item_id: opt.option_item_id,
-            option_group_name: 'Option Group',
-            option_item_name: optionItem ? optionItem.name : 'Option Item',
-            price_delta: optPriceStr,
-          });
-        }
-      }
-
-      const unitPriceStr = MoneyUtil.add(basePriceStr, itemOptionsPriceStr, 4);
-      const lineTotalStr = MoneyUtil.multiply(unitPriceStr, itemInput.quantity, 4);
+    for (const line of lines) {
+      const lineTotalStr = MoneyUtil.add(line.baseTotal, line.modifierTotal, 4);
+      // VAT at the product's own rate, as on the register.
+      const lineTaxStr = MoneyUtil.multiply(lineTotalStr, line.product.tax_rate || '0.0000', 4);
       subtotalStr = MoneyUtil.add(subtotalStr, lineTotalStr, 4);
+      taxAmountStr = MoneyUtil.add(taxAmountStr, lineTaxStr, 4);
 
       const orderItem = this.orderItemRepo.create({
         tenant_id: tenantId,
         order_id: savedHeader.id,
-        product_id: product.id,
-        product_name: product.name,
-        unit_price: unitPriceStr,
-        quantity: MoneyUtil.format(itemInput.quantity, 4),
+        line_number: lineNumber++,
+        product_id: line.product.id,
+        product_code: line.product.code,
+        product_name: line.product.name,
+        variant_id: line.variant?.id || null,
+        variant_name: line.variant?.name || null,
+        unit_price: line.unitPrice,
+        quantity: line.quantity,
+        base_total: line.baseTotal,
+        modifier_total: line.modifierTotal,
         subtotal: lineTotalStr,
-        tax_amount: MoneyUtil.multiply(lineTotalStr, '0.09', 4),
+        line_total: lineTotalStr,
+        tax_amount: lineTaxStr,
         discount_amount: '0.0000',
-        total_amount: MoneyUtil.multiply(lineTotalStr, '1.09', 4),
-        special_instructions: itemInput.notes || null,
+        total_amount: MoneyUtil.add(lineTotalStr, lineTaxStr, 4),
+        notes: line.notes || null,
+        special_instructions: line.notes || null,
       });
 
       const savedItem = await this.orderItemRepo.save(orderItem);
 
-      for (const optData of optionsToSave) {
+      for (const optData of line.options) {
         const itemOption = this.orderItemOptionRepo.create({
           tenant_id: tenantId,
           order_item_id: savedItem.id,
@@ -310,7 +395,6 @@ export class KioskService {
       orderItems.push(savedItem);
     }
 
-    const taxAmountStr = MoneyUtil.multiply(subtotalStr, '0.09', 4);
     const totalAmountStr = MoneyUtil.add(subtotalStr, taxAmountStr, 4);
 
     savedHeader.subtotal = subtotalStr;

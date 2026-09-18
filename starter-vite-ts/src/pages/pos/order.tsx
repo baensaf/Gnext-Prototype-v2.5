@@ -282,19 +282,19 @@ export function PosOrderPage() {
   const loadInitialData = async () => {
     try {
       setLoadingInitialData(true);
-      const [cList, pList, custs, tList, availList] = await Promise.all([
+      // Today's stops load with the stock counts below, for the selected branch.
+      const [cList, pList, custs, tList] = await Promise.all([
         catalogApi.getCategories(),
         catalogApi.getProducts(),
         customerApi.getCustomers(),
         dineInApi.getTables(undefined, selectedBranchId).catch(() => [] as DiningTable[]),
-        catalogApi.getAvailabilities().catch(() => [] as ProductAvailability[]),
       ]);
       setCategories(cList);
       if (cList.length > 0) setActiveTab(cList[0].id);
-      setProducts(pList);
+      // A product taken off the menu is not sold; the register refuses it too.
+      setProducts(pList.filter((p) => p.is_active !== false));
       setCustomers(custs);
       setDiningTables(tList);
-      setAvailabilities(availList);
       if (tList.length > 0 && (!tableNumber || tableNumber === 'T-01')) {
         setTableNumber(tList[0].code || tList[0].table_number || 'T-01');
         setSelectedTableId(tList[0].id);
@@ -311,13 +311,19 @@ export function PosOrderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Selling windows open and close while the register sits open, so the grid checks each minute.
+  // Selling windows open and close, and items get 86'd from other screens, while the register
+  // sits open, so the grid checks each minute. Stops are this branch's plus chain-wide ones.
   useEffect(() => {
-    const refresh = () =>
+    const refresh = () => {
       catalogApi
         .getOffScheduleProducts(selectedBranchId || undefined)
         .then((list) => setOffSchedule(new Map(list.map((o) => [o.product_id, o.windows]))))
         .catch(() => setOffSchedule(new Map()));
+      catalogApi
+        .getAvailabilities(selectedBranchId || undefined)
+        .then(setAvailabilities)
+        .catch(() => undefined);
+    };
     const refreshStock = () =>
       catalogApi
         .getDailyStock(selectedBranchId || undefined)
@@ -406,15 +412,10 @@ export function PosOrderPage() {
     try {
       const [vList, groups] = await Promise.all([
         catalogApi.getProductVariants(p.id).catch(() => [] as ProductVariant[]),
-        // A combo offers only its own slots; the register refuses any other choice. Any other
-        // product offers its own groups when it has some, else every group as before.
+        // A product offers only the add-on groups attached to it; the register refuses any other choice.
         catalogApi
           .getProductById(p.id)
-          .then((full) =>
-            p.product_type === 'COMBO' || (full.optionGroups || []).length > 0
-              ? full.optionGroups || []
-              : catalogApi.getOptionGroups()
-          )
+          .then((full) => (full.optionGroups || []) as OptionGroup[])
           .catch(() => [] as OptionGroup[]),
       ]);
 
@@ -496,15 +497,13 @@ export function PosOrderPage() {
     });
   };
 
-  // A combo cannot go to the kitchen with a slot empty (no drink chosen) or overfilled.
-  const isCombo = selectedProduct?.product_type === 'COMBO';
-  const unfilledComboSlot = isCombo
-    ? optionGroups.find((g) => {
-        const count = (g.items || []).filter((i) => checkedOptionIds.includes(i.id)).length;
-        const min = Math.max(g.min_selection || 0, g.is_required ? 1 : 0);
-        return count < min || (!!g.max_selection && count > g.max_selection);
-      })
-    : undefined;
+  // No line goes to the kitchen with a required group empty (a combo's drink, a burger's
+  // bread) or a group overfilled; the register refuses the same.
+  const unfilledSlot = optionGroups.find((g) => {
+    const count = (g.items || []).filter((i) => checkedOptionIds.includes(i.id)).length;
+    const min = Math.max(g.min_selection || 0, g.is_required ? 1 : 0);
+    return count < min || (!!g.max_selection && count > g.max_selection);
+  });
 
   const handleConfirmAddWithOptions = () => {
     if (!selectedProduct) return;
@@ -2653,10 +2652,10 @@ export function PosOrderPage() {
                           checked={checkedOptionIds.includes(item.id)}
                           onChange={(e) => {
                             if (e.target.checked) {
-                              // A one-choice combo slot swaps its choice rather than adding a second.
+                              // A one-choice group swaps its choice rather than adding a second.
                               const inGroup = new Set(g.items?.map((i) => i.id));
                               setCheckedOptionIds((prev) =>
-                                isCombo && g.max_selection === 1
+                                g.max_selection === 1
                                   ? [...prev.filter((id) => !inGroup.has(id)), item.id]
                                   : [...prev, item.id]
                               );
@@ -2677,15 +2676,15 @@ export function PosOrderPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOptionDialogOpen(false)}>Cancel</Button>
-          {unfilledComboSlot && (
+          {unfilledSlot && (
             <Typography variant="caption" color="warning.main" sx={{ mr: 'auto', ml: 2 }}>
-              {t('pos.comboChooseSlot', { slot: unfilledComboSlot.name })}
+              {t('pos.comboChooseSlot', { slot: unfilledSlot.name })}
             </Typography>
           )}
           <Button
             variant="contained"
             onClick={handleConfirmAddWithOptions}
-            disabled={!!unfilledComboSlot}
+            disabled={!!unfilledSlot}
             sx={{ fontWeight: 'bold', px: 3 }}
           >
             Add to Cart

@@ -34,12 +34,18 @@ interface KioskProduct {
   name: string;
   category_id: string;
   base_price: string;
+  tax_rate?: string;
   image_url?: string;
+  // Off today at this branch (86'd, out of its hours or sold out): shown, not sold.
+  is_available?: boolean;
+  // The sizes on sale today; a product with any is sold as one of them.
+  variants?: Array<{ id: string; name: string; base_price: string; is_default?: boolean }>;
   option_groups?: Array<{
     id: string;
     name: string;
     min_selection?: number;
     max_selection?: number;
+    is_required?: boolean;
     items: Array<{
       id: string;
       name: string;
@@ -52,6 +58,9 @@ interface CartItem {
   cart_id: string;
   product_id: string;
   product_name: string;
+  variant_id?: string;
+  variant_name?: string;
+  tax_rate: string;
   quantity: number;
   unit_price: string;
   line_total: string;
@@ -84,6 +93,7 @@ export function KioskPage() {
   // Item customization modal
   const [customizingProduct, setCustomizingProduct] = useState<KioskProduct | null>(null);
   const [customQuantity, setCustomQuantity] = useState(1);
+  const [selectedVariantId, setSelectedVariantId] = useState('');
   const [selectedOptionsMap, setSelectedOptionsMap] = useState<Record<string, any>>({});
   const [itemNotes, setItemNotes] = useState('');
 
@@ -121,6 +131,8 @@ export function KioskPage() {
 
   const handleStartOrder = (type: 'DINE_IN' | 'TAKEAWAY') => {
     setOrderType(type);
+    // Each new guest sees what is on sale now, not what was when the kiosk last loaded.
+    fetchBootstrap();
     if (bootstrapData?.customer_identity_policy === 'REQUIRED') {
       setIdentityDialogOpen(true);
     } else {
@@ -138,7 +150,10 @@ export function KioskPage() {
   };
 
   const handleOpenProductCustomizer = (product: KioskProduct) => {
+    if (product.is_available === false) return;
     setCustomizingProduct(product);
+    const sizes = product.variants || [];
+    setSelectedVariantId((sizes.find((v) => v.is_default) || sizes[0])?.id || '');
     setCustomQuantity(1);
     setSelectedOptionsMap({});
     setItemNotes('');
@@ -159,7 +174,8 @@ export function KioskPage() {
   const handleAddToCart = () => {
     if (!customizingProduct) return;
 
-    const basePrice = MoneyUtil.format(customizingProduct.base_price || '0', 2);
+    const variant = (customizingProduct.variants || []).find((v) => v.id === selectedVariantId);
+    const basePrice = MoneyUtil.format(variant?.base_price || customizingProduct.base_price || '0', 2);
     const optionList = Object.values(selectedOptionsMap) as any[];
     const optionsTotal = optionList.reduce(
       (acc, opt) => MoneyUtil.add(acc, opt.additional_price || '0', 2),
@@ -172,7 +188,10 @@ export function KioskPage() {
     const newCartItem: CartItem = {
       cart_id: `cart-${Date.now()}-${Math.random().toString().slice(-4)}`,
       product_id: customizingProduct.id,
-      product_name: customizingProduct.name,
+      product_name: variant ? `${customizingProduct.name} (${variant.name})` : customizingProduct.name,
+      variant_id: variant?.id,
+      variant_name: variant?.name,
+      tax_rate: customizingProduct.tax_rate || '0',
       quantity: customQuantity,
       unit_price: unitPrice,
       line_total: lineTotal,
@@ -184,13 +203,22 @@ export function KioskPage() {
     setCustomizingProduct(null);
   };
 
+  // A group the guest must choose from (a burger's bread), as the order is checked.
+  const isRequiredGroup = (group: { min_selection?: number; is_required?: boolean }) =>
+    (group.min_selection || 0) > 0 || !!group.is_required;
+  const missingGroup = customizingProduct?.option_groups?.find(
+    (g) => isRequiredGroup(g) && g.items.length > 0 && !selectedOptionsMap[g.id]
+  );
+
   const handleRemoveCartItem = (cartId: string) => {
     setCart((prev) => prev.filter((i) => i.cart_id !== cartId));
   };
 
   const calculateSubtotal = () =>
     cart.reduce((acc, item) => MoneyUtil.add(acc, item.line_total, 2), '0');
-  const calculateTax = () => MoneyUtil.multiply(calculateSubtotal(), '0.09', 2); // 9% tax
+  // VAT at each product's own rate, as the order is charged.
+  const calculateTax = () =>
+    cart.reduce((acc, item) => MoneyUtil.add(acc, MoneyUtil.multiply(item.line_total, item.tax_rate || '0', 2), 2), '0');
   const calculateTotal = () => MoneyUtil.add(calculateSubtotal(), calculateTax(), 2);
 
   const handleProceedToPayment = async () => {
@@ -204,6 +232,7 @@ export function KioskPage() {
         customer_phone: customerPhone || undefined,
         items: cart.map((c) => ({
           product_id: c.product_id,
+          variant_id: c.variant_id,
           quantity: c.quantity,
           notes: c.notes,
           options: c.options.map((o) => ({
@@ -492,12 +521,13 @@ export function KioskPage() {
                     sx={{
                       borderRadius: 3,
                       boxShadow: 3,
-                      cursor: 'pointer',
+                      cursor: product.is_available === false ? 'not-allowed' : 'pointer',
+                      opacity: product.is_available === false ? 0.5 : 1,
                       height: '100%',
                       display: 'flex',
                       flexDirection: 'column',
                       transition: 'all 0.2s ease',
-                      '&:hover': { transform: 'scale(1.02)' },
+                      '&:hover': product.is_available === false ? {} : { transform: 'scale(1.02)' },
                     }}
                     onClick={() => handleOpenProductCustomizer(product)}
                   >
@@ -521,9 +551,13 @@ export function KioskPage() {
                         <Typography variant="h6" color="primary.main" sx={{ fontWeight: 'bold' }}>
                           {MoneyUtil.formatCurrency(product.base_price)} IRR
                         </Typography>
-                        <Button size="small" variant="contained">
-                          Add +
-                        </Button>
+                        {product.is_available === false ? (
+                          <Chip size="small" label="Sold out" />
+                        ) : (
+                          <Button size="small" variant="contained">
+                            Add +
+                          </Button>
+                        )}
                       </Stack>
                     </CardContent>
                   </Card>
@@ -542,14 +576,38 @@ export function KioskPage() {
             <DialogContent dividers>
               <Stack spacing={3}>
                 <Typography variant="h6" color="primary.main" sx={{ fontWeight: 'bold' }}>
-                  Base Price: {MoneyUtil.formatCurrency(customizingProduct.base_price)} IRR
+                  Base Price:{' '}
+                  {MoneyUtil.formatCurrency(
+                    (customizingProduct.variants || []).find((v) => v.id === selectedVariantId)?.base_price ||
+                      customizingProduct.base_price
+                  )}{' '}
+                  IRR
                 </Typography>
+
+                {(customizingProduct.variants || []).length > 0 && (
+                  <Box>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                      Size
+                    </Typography>
+                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+                      {(customizingProduct.variants || []).map((v) => (
+                        <Chip
+                          key={v.id}
+                          label={`${v.name} — ${MoneyUtil.formatCurrency(v.base_price)} IRR`}
+                          color={v.id === selectedVariantId ? 'primary' : 'default'}
+                          variant={v.id === selectedVariantId ? 'filled' : 'outlined'}
+                          onClick={() => setSelectedVariantId(v.id)}
+                        />
+                      ))}
+                    </Stack>
+                  </Box>
+                )}
 
                 {/* Option Groups */}
                 {customizingProduct.option_groups?.map((group) => (
                   <Box key={group.id}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                      {group.name}
+                      {group.name} {isRequiredGroup(group) ? '(Required)' : ''}
                     </Typography>
                     <Grid container spacing={1}>
                       {group.items.map((item) => {
@@ -597,7 +655,12 @@ export function KioskPage() {
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setCustomizingProduct(null)}>Cancel</Button>
-              <Button variant="contained" size="large" onClick={handleAddToCart}>
+              {missingGroup && (
+                <Typography variant="caption" color="warning.main" sx={{ mr: 'auto', ml: 2 }}>
+                  Choose the {missingGroup.name}
+                </Typography>
+              )}
+              <Button variant="contained" size="large" onClick={handleAddToCart} disabled={!!missingGroup}>
                 Add to Cart
               </Button>
             </DialogActions>
