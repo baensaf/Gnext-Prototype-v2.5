@@ -36,9 +36,6 @@ export class Branch {
   @Column({ type: 'varchar', length: 64, nullable: true })
   time_zone: string;
 
-  @Column({ type: 'uuid', nullable: true })
-  price_group_id: string;
-
   @Column({ type: 'boolean', default: true })
   is_active: boolean;
 

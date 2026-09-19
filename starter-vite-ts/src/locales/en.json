@@ -1894,7 +1894,7 @@
     },
     "changes": {
       "title": "Price changes",
-      "subtitle": "Raise or lower base prices, or one price list, by a percentage or an amount, from today or a later day. Check every new price before saving. A change that has not started yet can be cancelled.",
+      "subtitle": "Raise or lower base prices, one price list, or add-on prices, by a percentage or an amount, from today or a later day. Check every new price before saving. A change that has not started yet can be cancelled.",
       "newChange": "New price change",
       "prices": "Prices",
       "basePrices": "Base prices",
@@ -1936,7 +1936,12 @@
       "applied": "{{count}} prices changed.",
       "loadFailed": "Could not load price changes",
       "previewFailed": "Could not preview the change",
-      "saveFailed": "Could not save"
+      "saveFailed": "Could not save",
+      "targetItems": "Menu items",
+      "targetAddons": "Add-ons",
+      "addonGroup": "Add-on group",
+      "allAddonGroups": "All add-on groups",
+      "addonPrices": "Add-on prices"
     }
   },
   "discounts": {

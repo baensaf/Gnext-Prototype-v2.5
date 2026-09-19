@@ -5,7 +5,6 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { DataSource } from 'typeorm';
 import { OrderService } from '../src/modules/order/order.service';
 import { OrderSequenceService } from '../src/modules/order/order-sequence.service';
-import { PricingService } from '../src/modules/pricing/pricing.service';
 import { DiscountEvaluationService } from '../src/modules/discounts/discount-evaluation.service';
 import { OrderHeader, OrderState } from '../src/entities/OrderHeader.entity';
 import { OrderItem } from '../src/entities/OrderItem.entity';
@@ -40,7 +39,6 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
   let productRepo: any;
   let variantRepo: any;
   let optionItemRepo: any;
-  let priceService: any;
   let discountEngine: any;
   let auditWriter: any;
   let outboxWriter: any;
@@ -60,7 +58,6 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
     productRepo = { findOne: jest.fn() };
     variantRepo = { findOne: jest.fn(), count: jest.fn().mockResolvedValue(0) };
     optionItemRepo = { findOne: jest.fn() };
-    priceService = { resolvePrice: jest.fn() };
     discountEngine = {
       evaluateQuote: jest.fn().mockResolvedValue({
         subtotal: '100000.0000',
@@ -122,7 +119,6 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
         { provide: getRepositoryToken(Product), useValue: productRepo },
         { provide: getRepositoryToken(ProductVariant), useValue: variantRepo },
         { provide: getRepositoryToken(OptionItem), useValue: optionItemRepo },
-        { provide: PricingService, useValue: priceService },
         basePriceLists(),
         { provide: DiscountEvaluationService, useValue: discountEngine },
         { provide: AuditWriter, useValue: auditWriter },
@@ -334,7 +330,6 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
         base_price: '85000.0000',
         is_active: true,
       });
-      priceService.resolvePrice.mockResolvedValue('85000.0000');
 
       const updated = await service.updateDraft('t-1', 'ord-draft-1', {
         branch_id: 'b2222222-2222-2222-2222-222222222222',

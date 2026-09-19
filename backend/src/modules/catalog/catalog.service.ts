@@ -22,7 +22,6 @@ import { describeWindows, isOnSchedule, isValidTime, localClock, parseDays } fro
 import { BUSINESS_TIME_ZONE, BusinessDateUtil, ORDER_BUSINESS_DATE_EXPR } from '../../common/utils/business-date.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
-import { PricingService } from '../pricing/pricing.service';
 import { PriceListService } from './price-lists.service';
 import { PriceEntry } from '../../entities/PriceEntry.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
@@ -73,7 +72,6 @@ export class CatalogService {
     @InjectRepository(BranchOperatingHour) private readonly hoursRepo: Repository<BranchOperatingHour>,
     @InjectRepository(DailyStock) private readonly stockRepo: Repository<DailyStock>,
     private readonly auditWriter: AuditWriter,
-    @Inject(forwardRef(() => PricingService)) private readonly pricingService: PricingService,
     private readonly priceLists: PriceListService,
   ) {}
 
@@ -1183,6 +1181,18 @@ export class CatalogService {
     if (data.is_default !== undefined) item.is_default = data.is_default;
     if (data.sort_order !== undefined) item.sort_order = data.sort_order;
     const saved = await this.itemRepo.save(item);
+    // As for a product's price: a price typed here is the price from now on, so a dated add-on
+    // price in force (from a price change) ends, or the sweep would put its figure back.
+    if (data.price_delta !== undefined && !MoneyUtil.equals(before.price_delta || '0', saved.price_delta || '0')) {
+      await this.prodRepo.manager
+        .createQueryBuilder()
+        .update(PriceEntry)
+        .set({ effective_to: new Date() })
+        .where('tenant_id = :tenantId AND modifier_option_id = :itemId AND product_id IS NULL', { tenantId, itemId })
+        .andWhere('price_group_id IS NULL AND branch_id IS NULL AND channel IS NULL AND order_type IS NULL')
+        .andWhere('effective_from <= :now AND (effective_to IS NULL OR effective_to > :now)', { now: new Date() })
+        .execute();
+    }
     await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'OPTION_ITEM_UPDATED', entityType: 'OptionItem', entityId: itemId, correlationId, beforeData: before, afterData: saved });
     return saved;
   }
@@ -1444,32 +1454,6 @@ export class CatalogService {
         }
       }
     }
-  }
-
-  // Enhanced Price Resolution via PricingService
-  async getEffectivePrice(tenantId: string, productId: string, priceGroupId?: string, branchId?: string, channel?: string) {
-    const resolved = await this.pricingService.resolvePrice(tenantId, {
-      productId,
-      priceGroupId,
-      branchId,
-      channel,
-    });
-
-    const product = await this.getProductById(tenantId, productId);
-    const suspension = await this.getSuspension(tenantId, productId, branchId);
-
-    return {
-      product_id: productId,
-      base_price: product.base_price,
-      effective_price: resolved.amount,
-      resolution_source: resolved.resolutionSource,
-      is_overridden: resolved.isOverridden,
-      price_group_id: priceGroupId || null,
-      branch_id: branchId || null,
-      channel: channel || null,
-      is_suspended: suspension.isSuspended,
-      suspension_reason: suspension.reason,
-    };
   }
 
   // Aggregator price sheet: what each item costs on a delivery channel (Snappfood). The

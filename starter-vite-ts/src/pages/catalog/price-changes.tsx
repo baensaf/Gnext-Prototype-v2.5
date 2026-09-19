@@ -1,4 +1,4 @@
-import type { Category, PriceList, PriceChange, PriceChangeInput, PriceChangePreview } from 'src/api/catalogApi';
+import type { Category, PriceList, OptionGroup, PriceChange, PriceChangeInput, PriceChangePreview } from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -50,6 +50,10 @@ export function PriceChangesPage() {
   const { t } = useTranslation();
   const [lists, setLists] = useState<PriceList[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [addonGroups, setAddonGroups] = useState<OptionGroup[]>([]);
+  // Menu items (base or one list's prices) or add-ons (chain-wide).
+  const [target, setTarget] = useState<'ITEMS' | 'ADDONS'>('ITEMS');
+  const [groupId, setGroupId] = useState(ALL);
   const [changes, setChanges] = useState<PriceChange[]>([]);
   const [listId, setListId] = useState(BASE);
   const [categoryId, setCategoryId] = useState(ALL);
@@ -75,21 +79,25 @@ export function PriceChangesPage() {
   );
 
   useEffect(() => {
-    Promise.all([catalogApi.getPriceLists(), catalogApi.getCategories()])
-      .then(([ls, cs]) => {
+    Promise.all([catalogApi.getPriceLists(), catalogApi.getCategories(), catalogApi.getOptionGroups()])
+      .then(([ls, cs, gs]) => {
         setLists(ls);
         setCategories(cs);
+        setAddonGroups(gs);
       })
       .catch((err) => fail(err, t('pricing.changes.loadFailed')));
     loadChanges();
   }, [fail, loadChanges, t]);
 
   // Any edit to the form makes the preview stale.
-  useEffect(() => setPreview(null), [listId, categoryId, adjustment, value, roundTo, date]);
+  useEffect(() => setPreview(null), [target, groupId, listId, categoryId, adjustment, value, roundTo, date]);
 
+  const addons = target === 'ADDONS';
   const input = (): PriceChangeInput => ({
-    price_list_id: listId || null,
-    category_id: categoryId || null,
+    target,
+    option_group_id: addons ? groupId || null : null,
+    price_list_id: addons ? null : listId || null,
+    category_id: addons ? null : categoryId || null,
     adjustment,
     value: value.trim(),
     round_to: Number(roundTo) || 0,
@@ -140,6 +148,10 @@ export function PriceChangesPage() {
 
   const describe = (c: PriceChange) => {
     const amount = c.adjustment === 'PERCENT' ? `${Number(c.value) > 0 ? '+' : ''}${Number(c.value)}%` : `${Number(c.value) > 0 ? '+' : ''}${MoneyUtil.formatCurrency(c.value)}`;
+    if (c.target === 'ADDONS') {
+      const group = c.option_group_id ? addonGroups.find((g) => g.id === c.option_group_id)?.name : null;
+      return [amount, group || t('pricing.changes.allAddonGroups')].join(' · ');
+    }
     const category = c.category_id ? categories.find((x) => x.id === c.category_id)?.name : null;
     return [amount, category || t('pricing.changes.allCategories')].join(' · ');
   };
@@ -172,7 +184,31 @@ export function PriceChangesPage() {
           <Typography variant="h6" sx={{ mb: 2 }}>
             {t('pricing.changes.newChange')}
           </Typography>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={target}
+            onChange={(_, next) => next && setTarget(next)}
+            sx={{ mb: 2 }}
+          >
+            <ToggleButton value="ITEMS">{t('pricing.changes.targetItems')}</ToggleButton>
+            <ToggleButton value="ADDONS">{t('pricing.changes.targetAddons')}</ToggleButton>
+          </ToggleButtonGroup>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
+            {addons ? (
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <InputLabel shrink>{t('pricing.changes.addonGroup')}</InputLabel>
+                <Select value={groupId} displayEmpty label={t('pricing.changes.addonGroup')} onChange={(e) => setGroupId(e.target.value)}>
+                  <MenuItem value={ALL}>{t('pricing.changes.allAddonGroups')}</MenuItem>
+                  {addonGroups.map((g) => (
+                    <MenuItem key={g.id} value={g.id}>
+                      {g.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : (
+            <>
             <FormControl size="small" sx={{ minWidth: 200 }}>
               <InputLabel shrink>{t('pricing.changes.prices')}</InputLabel>
               <Select value={listId} displayEmpty label={t('pricing.changes.prices')} onChange={(e) => setListId(e.target.value)}>
@@ -195,6 +231,8 @@ export function PriceChangesPage() {
                 ))}
               </Select>
             </FormControl>
+            </>
+            )}
             <CalendarDateField
               size="small"
               label={t('pricing.changes.from')}
@@ -259,7 +297,7 @@ export function PriceChangesPage() {
                   </TableHead>
                   <TableBody>
                     {preview.items.map((i) => (
-                      <TableRow key={`${i.product_id}:${i.variant_id || ''}`} sx={{ opacity: i.current === i.new ? 0.5 : 1 }}>
+                      <TableRow key={i.option_item_id || `${i.product_id}:${i.variant_id || ''}`} sx={{ opacity: i.current === i.new ? 0.5 : 1 }}>
                         <TableCell>{i.name}</TableCell>
                         <TableCell align="right">{MoneyUtil.formatCurrency(i.current)}</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold' }}>
@@ -299,7 +337,13 @@ export function PriceChangesPage() {
               {changes.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell>{fDateTime(c.effective_from)}</TableCell>
-                  <TableCell>{c.price_list ? t('pricing.changes.listPrices', { name: c.price_list.name || '—' }) : t('pricing.changes.basePrices')}</TableCell>
+                  <TableCell>
+                    {c.target === 'ADDONS'
+                      ? t('pricing.changes.addonPrices')
+                      : c.price_list
+                        ? t('pricing.changes.listPrices', { name: c.price_list.name || '—' })
+                        : t('pricing.changes.basePrices')}
+                  </TableCell>
                   <TableCell>{describe(c)}</TableCell>
                   <TableCell align="right">{c.items}</TableCell>
                   <TableCell>

@@ -9,7 +9,8 @@ export class PriceEntry {
   @Column({ type: 'uuid' })
   tenant_id: string;
 
-  @Column({ type: 'uuid' })
+  /** Empty on an add-on's price, which is keyed by modifier_option_id. */
+  @Column({ type: 'uuid', nullable: true })
   product_id: string;
 
   @Column({ type: 'uuid', nullable: true })

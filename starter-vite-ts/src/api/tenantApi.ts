@@ -12,7 +12,6 @@ export interface Branch {
   phone?: string;
   address?: string;
   time_zone?: string;
-  price_group_id?: string;
   is_active: boolean;
   created_at: string;
 }

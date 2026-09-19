@@ -171,18 +171,6 @@ export class CatalogController {
     return await this.catalogService.archiveProductVariant(tenantId, id, variantId, correlationId);
   }
 
-  @Get('products/:id/effective-price')
-  async getEffectivePrice(
-    @Param('id') id: string,
-    @Query('priceGroupId') priceGroupId?: string,
-    @Query('branchId') branchId?: string,
-    @Query('channel') channel?: string,
-    @Req() req?: Request,
-  ) {
-    const tenantId = (req as any).tenantId;
-    return await this.catalogService.getEffectivePrice(tenantId, id, priceGroupId, branchId, channel);
-  }
-
   // Option Groups & Items
   @Get('option-groups')
   async getOptionGroups(@Query() query: PaginationQueryDto & { search?: string }, @Req() req: Request) {

@@ -5,7 +5,6 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { OrderService } from '../src/modules/order/order.service';
 import { OrderSequenceService } from '../src/modules/order/order-sequence.service';
-import { PricingService } from '../src/modules/pricing/pricing.service';
 import { DiscountEvaluationService } from '../src/modules/discounts/discount-evaluation.service';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { OrderItem } from '../src/entities/OrderItem.entity';
@@ -92,7 +91,6 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
         { provide: getRepositoryToken(Product), useValue: {} },
         { provide: getRepositoryToken(ProductVariant), useValue: {} },
         { provide: getRepositoryToken(OptionItem), useValue: {} },
-        { provide: PricingService, useValue: {} },
         basePriceLists(),
         { provide: DiscountEvaluationService, useValue: {} },
         { provide: AuditWriter, useValue: { write: jest.fn() } },

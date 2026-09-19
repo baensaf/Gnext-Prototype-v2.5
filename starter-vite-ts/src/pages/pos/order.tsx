@@ -239,6 +239,23 @@ export function PosOrderPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeDraftOrderId, setActiveDraftOrderId] = useState<string | null>(null);
 
+  // Cart lines follow this branch's prices as they refresh: a list price changed mid-order
+  // shows on the lines already in the cart, as the server prices them when the order is saved.
+  useEffect(() => {
+    setCart((prev) => {
+      let changed = false;
+      const next = prev.map((ci) => {
+        const optionsSum = ci.selectedOptions.reduce((sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2), '0');
+        const unitPrice = MoneyUtil.add(priceOf(ci.product, ci.selectedVariant), optionsSum, 2);
+        const lineSubtotal = MoneyUtil.multiply(unitPrice, ci.quantity.toString(), 2);
+        if (MoneyUtil.equals(lineSubtotal, ci.lineSubtotal)) return ci;
+        changed = true;
+        return { ...ci, lineSubtotal };
+      });
+      return changed ? next : prev;
+    });
+  }, [priceOf]);
+
   // Held Orders Drawer state
   const [heldOrdersDrawerOpen, setHeldOrdersDrawerOpen] = useState(false);
   const [heldOrders, setHeldOrders] = useState<OrderHeader[]>([]);

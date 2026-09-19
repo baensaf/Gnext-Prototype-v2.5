@@ -19,7 +19,6 @@ import { BranchOperatingHour } from '../src/entities/BranchOperatingHour.entity'
 import { DailyStock } from '../src/entities/DailyStock.entity';
 import { ProductOptionGroup as ProductOptionGroupEntity } from '../src/entities/ProductOptionGroup.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
-import { PricingService } from '../src/modules/pricing/pricing.service';
 
 describe('CatalogService (Unit)', () => {
   let service: CatalogService;
@@ -33,7 +32,6 @@ describe('CatalogService (Unit)', () => {
   let availRepo: any;
   let scheduleRepo: any;
   let auditWriter: any;
-  let pricingService: any;
   let hoursRepo: any;
   let stockRepo: any;
 
@@ -63,9 +61,6 @@ describe('CatalogService (Unit)', () => {
     auditWriter = { write: jest.fn() };
     hoursRepo = { find: jest.fn().mockResolvedValue([]) };
     stockRepo = { find: jest.fn().mockResolvedValue([]), manager: { query: jest.fn().mockResolvedValue([{ sold: 0 }]) } };
-    pricingService = {
-      resolvePrice: jest.fn().mockResolvedValue({ amount: '1500000.0000', resolutionSource: 'BASE_PRICE', isOverridden: false }),
-    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -86,7 +81,6 @@ describe('CatalogService (Unit)', () => {
         { provide: getRepositoryToken(BranchOperatingHour), useValue: hoursRepo },
         { provide: getRepositoryToken(DailyStock), useValue: stockRepo },
         { provide: AuditWriter, useValue: auditWriter },
-        { provide: PricingService, useValue: pricingService },
         basePriceLists(),
       ],
     }).compile();
@@ -94,39 +88,8 @@ describe('CatalogService (Unit)', () => {
     service = module.get<CatalogService>(CatalogService);
   });
 
-  it('should return base_price when no priceGroup or menu override exists', async () => {
-    prodRepo.findOne.mockResolvedValue({ id: 'p-1', base_price: '1500000.0000' });
-    pricingService.resolvePrice.mockResolvedValue({ amount: '1500000.0000', resolutionSource: 'BASE_PRICE', isOverridden: false });
-
-    const result = await service.getEffectivePrice('t-1', 'p-1', 'pg-1');
-    expect(result.effective_price).toBe('1500000.0000');
-    expect(result.is_overridden).toBe(false);
-    expect(result.resolution_source).toBe('BASE_PRICE');
-  });
-
-  it('should return override_price when priceGroup override exists', async () => {
-    prodRepo.findOne.mockResolvedValue({ id: 'p-1', base_price: '1500000.0000' });
-    pricingService.resolvePrice.mockResolvedValue({ amount: '1300000.0000', resolutionSource: 'PRICE_GROUP', isOverridden: true });
-
-    const result = await service.getEffectivePrice('t-1', 'p-1', 'pg-vip');
-    expect(result.effective_price).toBe('1300000.0000');
-    expect(result.is_overridden).toBe(true);
-    expect(result.resolution_source).toBe('PRICE_GROUP');
-  });
-
-  it('should prioritize menu override over priceGroup override', async () => {
-    prodRepo.findOne.mockResolvedValue({ id: 'p-1', base_price: '1500000.0000' });
-    pricingService.resolvePrice.mockResolvedValue({ amount: '1100000.0000', resolutionSource: 'MENU_OVERRIDE', isOverridden: true });
-
-    const result = await service.getEffectivePrice('t-1', 'p-1', 'pg-vip', 'b-1', 'DELIVERY');
-    expect(result.effective_price).toBe('1100000.0000');
-    expect(result.is_overridden).toBe(true);
-    expect(result.resolution_source).toBe('MENU_OVERRIDE');
-  });
-
   it('should indicate item suspension when ProductAvailability is suspended', async () => {
     prodRepo.findOne.mockResolvedValue({ id: 'p-1', base_price: '1500000.0000' });
-    pricingService.resolvePrice.mockResolvedValue({ amount: '1500000.0000', resolutionSource: 'BASE_PRICE', isOverridden: false });
     availRepo.find.mockResolvedValue([
       {
         branch_id: null,
@@ -136,9 +99,9 @@ describe('CatalogService (Unit)', () => {
       },
     ]);
 
-    const result = await service.getEffectivePrice('t-1', 'p-1');
-    expect(result.is_suspended).toBe(true);
-    expect(result.suspension_reason).toBe('Out of stock');
+    const result = await service.getSuspension('t-1', 'p-1');
+    expect(result.isSuspended).toBe(true);
+    expect(result.reason).toBe('Out of stock');
   });
 
   describe('Product Variants', () => {

@@ -25,7 +25,6 @@ import { PriceBulkJob } from '../../entities/PriceBulkJob.entity';
 import { AuditEvent } from '../../entities/AuditEvent.entity';
 import { AuditModule } from '../audit/audit.module';
 import { ApprovalModule } from '../approval/approval.module';
-import { PricingModule } from '../pricing/pricing.module';
 
 @Module({
   imports: [
@@ -52,7 +51,6 @@ import { PricingModule } from '../pricing/pricing.module';
     ]),
     AuditModule,
     ApprovalModule,
-    forwardRef(() => PricingModule),
   ],
   providers: [CatalogService, PriceListService, PriceChangeService],
   controllers: [CatalogController],

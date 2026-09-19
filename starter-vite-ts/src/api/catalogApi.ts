@@ -111,6 +111,10 @@ export interface BranchPrices {
 
 /** A dated price change: base prices or one list, by a percentage or an amount, from a day. */
 export interface PriceChangeInput {
+  /** Menu items (default) or add-ons; add-on prices are chain-wide, so no list or category. */
+  target?: 'ITEMS' | 'ADDONS';
+  /** With add-ons: one add-on group, or empty for all. */
+  option_group_id?: string | null;
   price_list_id?: string | null;
   category_id?: string | null;
   adjustment: 'PERCENT' | 'AMOUNT';
@@ -123,7 +127,7 @@ export interface PriceChangeInput {
 export interface PriceChangePreview {
   effective_from: string;
   price_list: { id: string; name: string } | null;
-  items: Array<{ product_id: string; variant_id: string | null; name: string; current: string; new: string }>;
+  items: Array<{ product_id: string | null; variant_id: string | null; option_item_id: string | null; name: string; current: string; new: string }>;
   changed: number;
 }
 
@@ -137,6 +141,8 @@ export interface PriceChange {
   value: string;
   round_to: number;
   category_id: string | null;
+  target: 'ITEMS' | 'ADDONS';
+  option_group_id: string | null;
   created_at: string;
   cancelled_at: string | null;
   can_cancel: boolean;
@@ -239,19 +245,6 @@ export interface StopRequest {
 export interface OffScheduleProduct {
   product_id: string;
   windows: string;
-}
-
-export interface PriceDiagnostic {
-  product_id: string;
-  base_price: string;
-  effective_price: string;
-  resolution_source: 'MENU_OVERRIDE' | 'PRICE_GROUP' | 'BASE_PRICE';
-  is_overridden: boolean;
-  price_group_id?: string;
-  branch_id?: string;
-  channel?: string;
-  is_suspended: boolean;
-  suspension_reason?: string;
 }
 
 export interface ChannelPriceSheet {
@@ -562,11 +555,5 @@ export const catalogApi = {
   },
   deleteSchedule: async (id: string): Promise<void> => {
     await httpClient.delete(`/api/v1/availability/schedules/${id}`);
-  },
-
-  // Price Diagnostics
-  getEffectivePriceDiagnostic: async (productId: string, priceGroupId?: string, branchId?: string, channel?: string): Promise<PriceDiagnostic> => {
-    const res = await httpClient.get(`/api/v1/products/${productId}/effective-price`, { params: { priceGroupId, branchId, channel } });
-    return res.data;
   },
 };
