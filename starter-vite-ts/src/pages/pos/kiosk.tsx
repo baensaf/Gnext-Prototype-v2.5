@@ -59,6 +59,14 @@ interface KioskProduct {
   }>;
 }
 
+type ChosenOption = CartItem['options'][number];
+
+/** How many of a group the guest must pick, and at most may: max 0 means no limit, as on the server. */
+const groupLimits = (group: { min_selection?: number; max_selection?: number; is_required?: boolean }) => ({
+  min: Math.max(group.min_selection || 0, group.is_required ? 1 : 0),
+  max: group.max_selection || 0,
+});
+
 interface CartItem {
   cart_id: string;
   product_id: string;
@@ -99,7 +107,8 @@ export function KioskPage() {
   const [customizingProduct, setCustomizingProduct] = useState<KioskProduct | null>(null);
   const [customQuantity, setCustomQuantity] = useState(1);
   const [selectedVariantId, setSelectedVariantId] = useState('');
-  const [selectedOptionsMap, setSelectedOptionsMap] = useState<Record<string, any>>({});
+  // The guest's picks in each add-on group, by group id. A group may allow several.
+  const [selectedOptionsMap, setSelectedOptionsMap] = useState<Record<string, ChosenOption[]>>({});
   const [itemNotes, setItemNotes] = useState('');
 
   // Cart
@@ -164,16 +173,27 @@ export function KioskPage() {
     setItemNotes('');
   };
 
-  const handleToggleOptionItem = (group: any, item: any) => {
-    setSelectedOptionsMap((prev) => ({
-      ...prev,
-      [group.id]: {
-        option_group_id: group.id,
-        option_item_id: item.id,
-        option_item_name: item.name,
-        additional_price: MoneyUtil.format(item.price || '0', 2),
-      },
-    }));
+  /**
+   * A group that takes one choice works like a radio button: a tap replaces the pick. One that
+   * takes several toggles each item, up to its maximum; tapping a picked item drops it.
+   */
+  const handleToggleOptionItem = (group: NonNullable<KioskProduct['option_groups']>[number], item: { id: string; name: string; price: string }) => {
+    const { max } = groupLimits(group);
+    const choice: ChosenOption = {
+      option_group_id: group.id,
+      option_item_id: item.id,
+      option_item_name: item.name,
+      additional_price: MoneyUtil.format(item.price || '0', 2),
+    };
+    setSelectedOptionsMap((prev) => {
+      const picked = prev[group.id] || [];
+      if (picked.some((o) => o.option_item_id === item.id)) {
+        return { ...prev, [group.id]: picked.filter((o) => o.option_item_id !== item.id) };
+      }
+      if (max === 1) return { ...prev, [group.id]: [choice] };
+      if (max && picked.length >= max) return prev;
+      return { ...prev, [group.id]: [...picked, choice] };
+    });
   };
 
   const handleAddToCart = () => {
@@ -181,7 +201,7 @@ export function KioskPage() {
 
     const variant = (customizingProduct.variants || []).find((v) => v.id === selectedVariantId);
     const basePrice = MoneyUtil.format(shownPrice(variant || customizingProduct) || '0', 2);
-    const optionList = Object.values(selectedOptionsMap) as any[];
+    const optionList = Object.values(selectedOptionsMap).flat();
     const optionsTotal = optionList.reduce(
       (acc, opt) => MoneyUtil.add(acc, opt.additional_price || '0', 2),
       '0',
@@ -209,11 +229,18 @@ export function KioskPage() {
   };
 
   // A group the guest must choose from (a burger's bread), as the order is checked.
-  const isRequiredGroup = (group: { min_selection?: number; is_required?: boolean }) =>
-    (group.min_selection || 0) > 0 || !!group.is_required;
+  const isRequiredGroup = (group: { min_selection?: number; is_required?: boolean }) => groupLimits(group).min > 0;
   const missingGroup = customizingProduct?.option_groups?.find(
-    (g) => isRequiredGroup(g) && g.items.length > 0 && !selectedOptionsMap[g.id]
+    (g) => g.items.length > 0 && (selectedOptionsMap[g.id]?.length || 0) < Math.min(groupLimits(g).min, g.items.length)
   );
+  /** "Pick up to 3", "Pick 2", "Pick 1 to 3": shown when a group takes more than one. */
+  const pickHint = (group: { min_selection?: number; max_selection?: number; is_required?: boolean }) => {
+    const { min, max } = groupLimits(group);
+    if (max === 1) return '';
+    if (!max) return min > 1 ? `Pick at least ${min}` : 'Pick any';
+    if (min === max) return `Pick ${max}`;
+    return min > 0 ? `Pick ${min} to ${max}` : `Pick up to ${max}`;
+  };
 
   const handleRemoveCartItem = (cartId: string) => {
     setCart((prev) => prev.filter((i) => i.cart_id !== cartId));
@@ -612,10 +639,16 @@ export function KioskPage() {
                   <Box key={group.id}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
                       {group.name} {isRequiredGroup(group) ? '(Required)' : ''}
+                      {pickHint(group) && (
+                        <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                          {pickHint(group)}
+                          {groupLimits(group).max > 1 && ` · ${selectedOptionsMap[group.id]?.length || 0}/${groupLimits(group).max}`}
+                        </Typography>
+                      )}
                     </Typography>
                     <Grid container spacing={1}>
                       {group.items.map((item) => {
-                        const isSelected = selectedOptionsMap[group.id]?.option_item_id === item.id;
+                        const isSelected = (selectedOptionsMap[group.id] || []).some((o) => o.option_item_id === item.id);
                         return (
                           <Grid size={{ xs: 6 }} key={item.id}>
                             <Paper
