@@ -67,6 +67,7 @@ describe('KioskService (Unit)', () => {
     catalogService = {
       getUnavailableNow: jest.fn().mockResolvedValue({ products: new Set(), variants: new Set(), optionItems: new Set() }),
       assertBasketSellable: jest.fn().mockResolvedValue(undefined),
+      recordRefusedSale: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -341,6 +342,7 @@ describe('KioskService selling rules', () => {
     const catalogService = {
       getUnavailableNow: jest.fn().mockResolvedValue(overrides.unavailable || { products: new Set(), variants: new Set(), optionItems: new Set() }),
       assertBasketSellable: overrides.basket || jest.fn().mockResolvedValue(undefined),
+      recordRefusedSale: jest.fn(),
     };
     const passthrough: any = { create: jest.fn((dto: any) => dto), save: jest.fn((dto: any) => Promise.resolve({ ...dto, id: 'x' })), findOne: jest.fn(), find: jest.fn().mockResolvedValue([]) };
     passthrough.manager = { transaction: async (fn: any) => fn({ getRepository: () => passthrough }) };

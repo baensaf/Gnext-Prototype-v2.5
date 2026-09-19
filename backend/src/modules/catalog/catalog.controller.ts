@@ -4,6 +4,7 @@ import { CatalogService } from './catalog.service';
 import { PriceListService } from './price-lists.service';
 import { ApprovalService } from '../approval/approval.service';
 import { PriceChangeInput, PriceChangeService } from './price-changes.service';
+import { StopReportService } from './stop-report.service';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { HeadOfficeOnly, Roles, MANAGER_AND_ABOVE } from '../../common/decorators/roles.decorator';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
@@ -24,6 +25,7 @@ export class CatalogController {
     private readonly priceLists: PriceListService,
     private readonly approvals: ApprovalService,
     private readonly priceChanges: PriceChangeService,
+    private readonly stopReports: StopReportService,
   ) {}
 
   // Categories
@@ -449,6 +451,7 @@ export class CatalogController {
       body.reason,
       correlationId,
       { variantId: body.variantId, optionItemId: body.optionItemId, untilNextShift: body.until === 'NEXT_SHIFT', channel: body.channel || null },
+      { userId: (req as any).userId, source: 'ADMIN' },
     );
   }
 
@@ -463,7 +466,54 @@ export class CatalogController {
       effectiveBranchId((req as any).userBranchId, body.branchId),
       correlationId,
       { variantId: body.variantId, optionItemId: body.optionItemId, channel: body.channel || null },
+      { userId: (req as any).userId, source: 'ADMIN' },
     );
+  }
+
+  // A stop on a whole category ("the grill is down") or on items at several branches at once.
+  // A branch acts at its own branch; head office at the branches it names, or chain-wide.
+  @Roles(...MANAGER_AND_ABOVE)
+  @Post('availability/bulk-stop')
+  async bulkStop(
+    @Body() body: { categoryId?: string; productIds?: string[]; branchIds?: string[]; hours?: number; until?: 'NEXT_SHIFT'; reason: string; channel?: string },
+    @Req() req: Request,
+  ) {
+    const reason = (body.reason || '').trim();
+    if (!reason) throw new BadRequestException({ statusCode: 400, code: 'REASON_REQUIRED', message: 'Pick why the items are off' });
+    return await this.catalogService.bulkStop(
+      (req as any).tenantId,
+      { categoryId: body.categoryId, productIds: body.productIds, branchIds: this.stopBranches(req, body.branchIds) },
+      { hours: body.hours, untilNextShift: body.until === 'NEXT_SHIFT', reason, channel: body.channel || null },
+      (req as any).correlationId,
+      { userId: (req as any).userId, source: 'BULK' },
+    );
+  }
+
+  @Roles(...MANAGER_AND_ABOVE)
+  @Post('availability/bulk-resume')
+  async bulkResume(@Body() body: { categoryId?: string; productIds?: string[]; branchIds?: string[]; channel?: string }, @Req() req: Request) {
+    return await this.catalogService.bulkResume(
+      (req as any).tenantId,
+      { categoryId: body.categoryId, productIds: body.productIds, branchIds: this.stopBranches(req, body.branchIds) },
+      body.channel || null,
+      (req as any).correlationId,
+      { userId: (req as any).userId, source: 'BULK' },
+    );
+  }
+
+  /** Where a bulk stop acts: a branch user's own branch; for head office the branches named, else the chain. */
+  private stopBranches(req: Request, requested?: string[]): Array<string | null> {
+    const own = (req as any).userBranchId;
+    if (own) return [own];
+    const named = [...new Set((requested || []).filter(Boolean))];
+    return named.length ? named : [null];
+  }
+
+  // Who took what off sale, for how long, and the sales refused while it was off.
+  @Roles(...MANAGER_AND_ABOVE)
+  @Get('availability/report')
+  async stopReport(@Query('from') from: string, @Query('to') to: string, @Query('branchId') branchId: string, @Req() req: Request) {
+    return await this.stopReports.report((req as any).tenantId, { from, to, branchId: effectiveBranchId((req as any).userBranchId, branchId) });
   }
 
   // 86 from the register's tile. Any register user can take an item off until the next shift,

@@ -189,6 +189,46 @@ export interface Menu {
   products?: MenuProduct[];
 }
 
+/** A stop on many items or branches: a category (with sub-categories) or products; branches empty = chain-wide (head office). */
+export interface BulkStopRequest {
+  categoryId?: string;
+  productIds?: string[];
+  branchIds?: string[];
+  channel?: string;
+}
+
+export interface StopReport {
+  from: string;
+  to: string;
+  branch_id: string | null;
+  items: Array<{
+    name: string;
+    kind: 'PRODUCT' | 'SIZE' | 'ADDON';
+    stops: number;
+    hours: number;
+    refused: number;
+    refused_quantity: number;
+    estimated_lost: string;
+  }>;
+  totals: { stops: number; hours: number; refused: number; estimated_lost: string };
+  stops: Array<{
+    item: string;
+    branch: string | null;
+    chain_wide: boolean;
+    channel: string | null;
+    reason: string | null;
+    source: string;
+    by: string | null;
+    approver: string | null;
+    from: string;
+    to: string | null;
+    planned_until: string | null;
+    ended: 'RESUMED' | 'EXPIRED' | 'CHANGED' | 'ONGOING';
+    resumed_by: string | null;
+    hours: number;
+  }>;
+}
+
 export interface ProductAvailability {
   id: string;
   /** Null on an add-on stop. */
@@ -498,6 +538,21 @@ export const catalogApi = {
   /** Put an item back on sale from the register: an approver, or an approver's pin. */
   posResume: async (body: { productId: string; variantId?: string | null; branchId?: string | null; approverPin?: string }): Promise<void> => {
     await httpClient.post('/api/v1/availability/pos-resume', { ...body, variantId: body.variantId || undefined, branchId: body.branchId || undefined });
+  },
+  bulkStop: async (
+    body: BulkStopRequest & { until?: 'NEXT_SHIFT'; hours?: number; reason: string }
+  ): Promise<{ products: number; branches: number; stopped: number }> => {
+    const res = await httpClient.post('/api/v1/availability/bulk-stop', body);
+    return res.data;
+  },
+  bulkResume: async (body: BulkStopRequest): Promise<{ resumed: number; chain_wide: number }> => {
+    const res = await httpClient.post('/api/v1/availability/bulk-resume', body);
+    return res.data;
+  },
+  /** Who took what off sale, for how long, and the sales refused meanwhile. Dates are YYYY-MM-DD. */
+  getStopReport: async (params: { from?: string; to?: string; branchId?: string }): Promise<StopReport> => {
+    const res = await httpClient.get('/api/v1/availability/report', { params });
+    return res.data;
   },
   /** Take a product, one variant or an add-on off sale, Snappfood-style. */
   stopItem: async ({ until, hours, ...target }: StopRequest): Promise<ProductAvailability> => {

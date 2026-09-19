@@ -61,6 +61,7 @@ export const paths = {
       menuDetail: (id: string) => `${ROOTS.APP}/catalog/menus/${id}`,
       availability: `${ROOTS.APP}/catalog/availability`,
       stock: `${ROOTS.APP}/catalog/stock`,
+      stopReport: `${ROOTS.APP}/catalog/availability/report`,
       importExport: `${ROOTS.APP}/catalog/import-export`,
     },
     pricing: {

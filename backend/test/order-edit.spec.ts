@@ -151,6 +151,7 @@ describe('Order edit command (spec 7.9)', () => {
           useValue: {
             assertLineSellable: jest.fn(),
             lockStockCounts: jest.fn().mockResolvedValue([]),
+            recordRefusedSale: jest.fn(),
             getSuspension: jest
               .fn()
               .mockResolvedValue({ isSuspended: false, reason: null, suspendedUntil: null }),
