@@ -30,6 +30,10 @@ const cssWidth = 332
 // BrowserRenderer renders HTML in headless Microsoft Edge (installed on every Windows 10/11
 // PC), or Chrome if Edge is missing. It shapes Persian text with the system fonts, which is
 // why the agent prints images rather than ESC/POS text (§6.2).
+//
+// Edge refuses to run as LocalSystem (it exits with code 1002 and says nothing), so when the
+// agent runs as the Windows service the browser is started in the signed-in user's session
+// with its own profile, and ProfileDir is only used when the agent runs as a normal user.
 type BrowserRenderer struct {
 	ProfileDir string
 
@@ -78,6 +82,19 @@ func (r *BrowserRenderer) Render(ctx context.Context, html string, widthDots int
 
 func awaitPromise(p *runtime.EvaluateParams) *runtime.EvaluateParams { return p.WithAwaitPromise(true) }
 
+// execBrowser starts the browser as a child of the agent, under the agent's own account.
+func execBrowser(exe, profileDir string) (context.Context, context.CancelFunc, error) {
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.ExecPath(exe),
+		chromedp.UserDataDir(profileDir),
+		chromedp.NoSandbox,
+		chromedp.Flag("hide-scrollbars", true),
+		chromedp.Flag("force-color-profile", "srgb"),
+	)
+	alloc, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
+	return alloc, cancel, nil
+}
+
 func (r *BrowserRenderer) start() error {
 	if r.browser != nil && r.browser.Err() == nil {
 		return nil
@@ -86,14 +103,10 @@ func (r *BrowserRenderer) start() error {
 	if err != nil {
 		return err
 	}
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(exe),
-		chromedp.UserDataDir(r.ProfileDir),
-		chromedp.NoSandbox, // the service runs as LocalSystem
-		chromedp.Flag("hide-scrollbars", true),
-		chromedp.Flag("force-color-profile", "srgb"),
-	)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
+	alloc, cancelAlloc, err := launchBrowser(exe, r.ProfileDir)
+	if err != nil {
+		return fmt.Errorf("start %s: %w", exe, err)
+	}
 	browser, cancelBrowser := chromedp.NewContext(alloc)
 	if err := chromedp.Run(browser); err != nil {
 		cancelBrowser()
