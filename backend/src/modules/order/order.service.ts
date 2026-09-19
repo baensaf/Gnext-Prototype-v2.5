@@ -31,7 +31,7 @@ import { OrderTransitionRecorder } from '../order-lifecycle/order-transition-rec
 import { KdsService } from '../kds/kds.service';
 import { PrintQueueService } from '../printing/print-queue.service';
 import { SimulationService } from '../simulation/simulation.service';
-import { CatalogService } from '../catalog/catalog.service';
+import { CatalogService, REFUSED_SALE_CODES } from '../catalog/catalog.service';
 import { PriceListService } from '../catalog/price-lists.service';
 import { checkOptionChoices } from '../catalog/option-choices.util';
 import { CreditService } from '../customer/credit.service';
@@ -1700,123 +1700,140 @@ export class OrderService {
       await this.catalogService.lockStockCounts(em, tenantId, order.branch_id, BusinessDateUtil.today(), productIds);
     }
     for (const itemDto of itemsDto) {
-      const product = await this.productRepo.findOne({ where: { id: itemDto.product_id, tenant_id: tenantId } });
-      if (!product) throw new NotFoundException(`Product ${itemDto.product_id} not found`);
-      if (product.is_active === false) {
-        throw new BadRequestException({ statusCode: 400, code: 'PRODUCT_INACTIVE', message: `${product.name} is not on the menu` });
-      }
-
-      // Spec 4.7: an 86'd item is off sale everywhere it can be ordered. Register
-      // orders land here, so the stop is enforced on the line rather than trusted to
-      // the caller's catalog view; the kiosk runs the same rules through
-      // CatalogService.assertBasketSellable.
-      const suspension = await this.catalogService.getSuspension(tenantId, product.id, order.branch_id, new Date(), itemDto.variant_id || null);
-      if (suspension.outOfSchedule) {
-        throw new BadRequestException({
-          statusCode: 400,
-          code: 'PRODUCT_OUT_OF_SCHEDULE',
-          message: `${product.name} is not on sale now. ${suspension.reason}`,
-        });
-      }
-      if (suspension.isSuspended) {
-        throw new BadRequestException({
-          statusCode: 400,
-          code: 'PRODUCT_SUSPENDED',
-          message: `${product.name} is suspended from sale${suspension.reason ? ` (${suspension.reason})` : ''}`,
-        });
-      }
-
-      const qty = itemDto.quantity || '1.0000';
-      let variant: ProductVariant | null = null;
-      if (itemDto.variant_id) {
-        variant = await this.variantRepo.findOne({
-          where: {
-            id: itemDto.variant_id,
-            tenant_id: tenantId,
-            product_id: product.id,
-            is_active: true,
-          },
-        });
-        if (!variant) {
-          throw new BadRequestException(`Variant ${itemDto.variant_id} is not available for product ${product.id}`);
+      try {
+        const product = await this.productRepo.findOne({ where: { id: itemDto.product_id, tenant_id: tenantId } });
+        if (!product) throw new NotFoundException(`Product ${itemDto.product_id} not found`);
+        if (product.is_active === false) {
+          throw new BadRequestException({ statusCode: 400, code: 'PRODUCT_INACTIVE', message: `${product.name} is not on the menu` });
         }
-      } else if ((await this.variantRepo.count({ where: { tenant_id: tenantId, product_id: product.id, is_active: true } })) > 0) {
-        // A product sold in sizes is sold as one of them. Without this, a line with no size
-        // went out at the product's own price, and stopping every size did not stop the product.
-        throw new BadRequestException({ statusCode: 400, code: 'VARIANT_REQUIRED', message: `Pick a size or type of ${product.name}` });
-      }
 
-      // The price is the branch's in-store price (its price list's, else base), never one the
-      // caller sent: any register token could otherwise set its own price. Orders that keep
-      // the price a channel charged (Snappfood) are written by the simulator, not here.
-      const uPrice = await this.priceLists.resolveInStorePrice(tenantId, order.branch_id, product, variant);
-      const sub = MoneyUtil.multiply(uPrice, qty);
+        // Spec 4.7: an 86'd item is off sale everywhere it can be ordered. Register
+        // orders land here, so the stop is enforced on the line rather than trusted to
+        // the caller's catalog view; the kiosk runs the same rules through
+        // CatalogService.assertBasketSellable.
+        const suspension = await this.catalogService.getSuspension(tenantId, product.id, order.branch_id, new Date(), itemDto.variant_id || null);
+        if (suspension.outOfSchedule) {
+          throw new BadRequestException({
+            statusCode: 400,
+            code: 'PRODUCT_OUT_OF_SCHEDULE',
+            message: `${product.name} is not on sale now. ${suspension.reason}`,
+          });
+        }
+        if (suspension.isSuspended) {
+          throw new BadRequestException({
+            statusCode: 400,
+            code: 'PRODUCT_SUSPENDED',
+            message: `${product.name} is suspended from sale${suspension.reason ? ` (${suspension.reason})` : ''}`,
+          });
+        }
 
-      let modifierUnitDelta = '0.0000';
-      const optionsToSave: { itemOpt: OrderItemOption }[] = [];
-
-      const chosen: Array<{ optItem: OptionItem; optDto: any }> = [];
-      for (const optDto of itemDto.options || []) {
-        const optItem = await this.optionItemRepo.findOne({ where: { id: optDto.option_item_id, tenant_id: tenantId } });
-        if (optItem) chosen.push({ optItem, optDto });
-      }
-      const groupNames = await this.checkChoices(tenantId, product, chosen.map((c) => c.optItem), em);
-      await this.catalogService.assertLineSellable(em, tenantId, order, product, variant?.id || null, qty, chosen.map((c) => c.optItem));
-
-      for (const { optItem, optDto } of chosen) {
-        // A choice that is a dish of its own (a combo's drink) is off sale when that dish is.
-        if (optItem.product_id) {
-          const component = await this.productRepo.findOne({ where: { id: optItem.product_id, tenant_id: tenantId } });
-          const componentStop = component ? await this.catalogService.getSuspension(tenantId, component.id, order.branch_id) : null;
-          if (componentStop?.isSuspended) {
-            throw new BadRequestException({
-              statusCode: 400,
-              // outOfSchedule arrives with selling windows (feat/scheduled-availability).
-              code: (componentStop as { outOfSchedule?: boolean }).outOfSchedule ? 'PRODUCT_OUT_OF_SCHEDULE' : 'PRODUCT_SUSPENDED',
-              message: `${component!.name} in ${product.name} is not on sale now${componentStop.reason ? ` (${componentStop.reason})` : ''}`,
-            });
+        const qty = itemDto.quantity || '1.0000';
+        let variant: ProductVariant | null = null;
+        if (itemDto.variant_id) {
+          variant = await this.variantRepo.findOne({
+            where: {
+              id: itemDto.variant_id,
+              tenant_id: tenantId,
+              product_id: product.id,
+              is_active: true,
+            },
+          });
+          if (!variant) {
+            throw new BadRequestException(`Variant ${itemDto.variant_id} is not available for product ${product.id}`);
           }
+        } else if ((await this.variantRepo.count({ where: { tenant_id: tenantId, product_id: product.id, is_active: true } })) > 0) {
+          // A product sold in sizes is sold as one of them. Without this, a line with no size
+          // went out at the product's own price, and stopping every size did not stop the product.
+          throw new BadRequestException({ statusCode: 400, code: 'VARIANT_REQUIRED', message: `Pick a size or type of ${product.name}` });
         }
-        const delta = optItem.price_delta ? MoneyUtil.format(optItem.price_delta) : '0.0000';
-        modifierUnitDelta = MoneyUtil.add(modifierUnitDelta, delta);
-        const itemOpt = em.create(OrderItemOption, {
+
+        // The price is the branch's in-store price (its price list's, else base), never one the
+        // caller sent: any register token could otherwise set its own price. Orders that keep
+        // the price a channel charged (Snappfood) are written by the simulator, not here.
+        const uPrice = await this.priceLists.resolveInStorePrice(tenantId, order.branch_id, product, variant);
+        const sub = MoneyUtil.multiply(uPrice, qty);
+
+        let modifierUnitDelta = '0.0000';
+        const optionsToSave: { itemOpt: OrderItemOption }[] = [];
+
+        const chosen: Array<{ optItem: OptionItem; optDto: any }> = [];
+        for (const optDto of itemDto.options || []) {
+          const optItem = await this.optionItemRepo.findOne({ where: { id: optDto.option_item_id, tenant_id: tenantId } });
+          if (optItem) chosen.push({ optItem, optDto });
+        }
+        const groupNames = await this.checkChoices(tenantId, product, chosen.map((c) => c.optItem), em);
+        await this.catalogService.assertLineSellable(em, tenantId, order, product, variant?.id || null, qty, chosen.map((c) => c.optItem));
+
+        for (const { optItem, optDto } of chosen) {
+          // A choice that is a dish of its own (a combo's drink) is off sale when that dish is.
+          if (optItem.product_id) {
+            const component = await this.productRepo.findOne({ where: { id: optItem.product_id, tenant_id: tenantId } });
+            const componentStop = component ? await this.catalogService.getSuspension(tenantId, component.id, order.branch_id) : null;
+            if (componentStop?.isSuspended) {
+              throw new BadRequestException({
+                statusCode: 400,
+                // outOfSchedule arrives with selling windows (feat/scheduled-availability).
+                code: (componentStop as { outOfSchedule?: boolean }).outOfSchedule ? 'PRODUCT_OUT_OF_SCHEDULE' : 'PRODUCT_SUSPENDED',
+                message: `${component!.name} in ${product.name} is not on sale now${componentStop.reason ? ` (${componentStop.reason})` : ''}`,
+              });
+            }
+          }
+          const delta = optItem.price_delta ? MoneyUtil.format(optItem.price_delta) : '0.0000';
+          modifierUnitDelta = MoneyUtil.add(modifierUnitDelta, delta);
+          const itemOpt = em.create(OrderItemOption, {
+            tenant_id: tenantId,
+            order_item_id: '',
+            option_item_id: optItem.id,
+            option_group_name: groupNames.get(optItem.option_group_id) || optDto.option_group_name || '',
+            option_item_name: optItem.name,
+            price_delta: delta,
+          });
+          optionsToSave.push({ itemOpt });
+        }
+
+        const modifierTotal = MoneyUtil.multiply(modifierUnitDelta, qty);
+        const totalLine = MoneyUtil.add(sub, modifierTotal);
+
+        const orderItem = em.create(OrderItem, {
           tenant_id: tenantId,
-          order_item_id: '',
-          option_item_id: optItem.id,
-          option_group_name: groupNames.get(optItem.option_group_id) || optDto.option_group_name || '',
-          option_item_name: optItem.name,
-          price_delta: delta,
+          order_id: order.id,
+          line_number: lineNo++,
+          product_id: product.id,
+          product_code: product.code,
+          product_name: product.name,
+          variant_id: variant?.id || null,
+          variant_name: variant?.name || null,
+          quantity: qty,
+          unit_price: uPrice,
+          base_total: sub,
+          modifier_total: modifierTotal,
+          subtotal: totalLine,
+          line_total: totalLine,
+          total_amount: totalLine,
+          notes: itemDto.notes || null,
+          state: 'ACTIVE',
         });
-        optionsToSave.push({ itemOpt });
-      }
+        const savedItem = await em.save(OrderItem, orderItem);
 
-      const modifierTotal = MoneyUtil.multiply(modifierUnitDelta, qty);
-      const totalLine = MoneyUtil.add(sub, modifierTotal);
-
-      const orderItem = em.create(OrderItem, {
-        tenant_id: tenantId,
-        order_id: order.id,
-        line_number: lineNo++,
-        product_id: product.id,
-        product_code: product.code,
-        product_name: product.name,
-        variant_id: variant?.id || null,
-        variant_name: variant?.name || null,
-        quantity: qty,
-        unit_price: uPrice,
-        base_total: sub,
-        modifier_total: modifierTotal,
-        subtotal: totalLine,
-        line_total: totalLine,
-        total_amount: totalLine,
-        notes: itemDto.notes || null,
-        state: 'ACTIVE',
-      });
-      const savedItem = await em.save(OrderItem, orderItem);
-
-      for (const { itemOpt } of optionsToSave) {
-        itemOpt.order_item_id = savedItem.id;
-        await em.save(OrderItemOption, itemOpt);
+        for (const { itemOpt } of optionsToSave) {
+          itemOpt.order_item_id = savedItem.id;
+          await em.save(OrderItemOption, itemOpt);
+        }
+      } catch (err) {
+        // A line refused because the item was off (86'd, outside its hours or sold out) is a
+        // lost sale; the stop report counts them.
+        const code = (err as { response?: { code?: string } })?.response?.code;
+        if (code && REFUSED_SALE_CODES.includes(code) && itemDto?.product_id) {
+          await this.catalogService.recordRefusedSale(tenantId, {
+            branchId: order.branch_id,
+            productId: itemDto.product_id,
+            variantId: itemDto.variant_id || null,
+            quantity: Number(itemDto.quantity || 1),
+            code,
+            channel: order.channel,
+          });
+        }
+        throw err;
       }
     }
   }

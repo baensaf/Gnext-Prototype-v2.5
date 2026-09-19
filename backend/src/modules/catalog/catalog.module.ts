@@ -21,6 +21,7 @@ import { CatalogService } from './catalog.service';
 import { CatalogController } from './catalog.controller';
 import { PriceListService } from './price-lists.service';
 import { PriceChangeService } from './price-changes.service';
+import { StopReportService } from './stop-report.service';
 import { PriceBulkJob } from '../../entities/PriceBulkJob.entity';
 import { AuditEvent } from '../../entities/AuditEvent.entity';
 import { AuditModule } from '../audit/audit.module';
@@ -52,7 +53,7 @@ import { ApprovalModule } from '../approval/approval.module';
     AuditModule,
     ApprovalModule,
   ],
-  providers: [CatalogService, PriceListService, PriceChangeService],
+  providers: [CatalogService, PriceListService, PriceChangeService, StopReportService],
   controllers: [CatalogController],
   exports: [CatalogService, PriceListService, PriceChangeService],
 })

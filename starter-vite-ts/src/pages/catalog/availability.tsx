@@ -7,12 +7,15 @@ import type {
   ProductAvailability,
 } from 'src/api/catalogApi';
 
+import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 
 import SearchIcon from '@mui/icons-material/Search';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import AssessmentIcon from '@mui/icons-material/Assessment';
+import PlaylistRemoveIcon from '@mui/icons-material/PlaylistRemove';
 import {
   Box,
   Tab,
@@ -43,12 +46,15 @@ import {
   ToggleButtonGroup,
 } from '@mui/material';
 
+import { paths } from 'src/routes/paths';
+
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
 
 import { catalogApi } from 'src/api/catalogApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 
+import { BulkStopDialog } from './bulk-stop-dialog';
 import { AvailabilitySchedulesSection } from './availability-schedules';
 
 /** One thing that can be taken off sale: a product, one of its variants, or an add-on. */
@@ -82,6 +88,9 @@ export function AvailabilityPage() {
   const [stock, setStock] = useState<DailyStockLine[]>([]);
   const [nextShift, setNextShift] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [categoryTab, setCategoryTab] = useState('ALL');
 
@@ -279,10 +288,36 @@ export function AvailabilityPage() {
             {t('catalog.availabilityPage.subtitle')}
           </Typography>
         </Box>
-        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
-          {t('catalog.availabilityPage.refresh')}
-        </Button>
+        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <Button variant="contained" color="error" startIcon={<PlaylistRemoveIcon />} onClick={() => setBulkOpen(true)}>
+            {t('catalog.bulkStop.open')}
+          </Button>
+          <Button variant="outlined" startIcon={<AssessmentIcon />} onClick={() => navigate(paths.app.catalog.stopReport)}>
+            {t('catalog.stopReport.title')}
+          </Button>
+          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
+            {t('catalog.availabilityPage.refresh')}
+          </Button>
+        </Stack>
       </Stack>
+
+      {notice && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
+
+      <BulkStopDialog
+        open={bulkOpen}
+        products={products}
+        categories={categories}
+        onClose={() => setBulkOpen(false)}
+        onDone={(message) => {
+          setBulkOpen(false);
+          setNotice(message);
+          loadData();
+        }}
+      />
 
       <Alert severity="info" icon={<StorefrontIcon />} sx={{ mb: 2 }}>
         {t('catalog.availabilityPage.ownershipNotice', {

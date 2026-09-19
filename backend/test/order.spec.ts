@@ -103,6 +103,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
           useValue: {
             assertLineSellable: jest.fn(),
             lockStockCounts: jest.fn().mockResolvedValue([]),
+            recordRefusedSale: jest.fn(),
             getSuspension: jest
               .fn()
               .mockResolvedValue({ isSuspended: false, reason: null, suspendedUntil: null }),

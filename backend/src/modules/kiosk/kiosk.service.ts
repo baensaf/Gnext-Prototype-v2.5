@@ -23,7 +23,7 @@ import { normalizePhone } from '../customer/customer.service';
 import { KdsService } from '../kds/kds.service';
 import { PrintQueueService } from '../printing/print-queue.service';
 import { ProductVariant } from '../../entities/ProductVariant.entity';
-import { CatalogService } from '../catalog/catalog.service';
+import { CatalogService, REFUSED_SALE_CODES } from '../catalog/catalog.service';
 import { PriceListService } from '../catalog/price-lists.service';
 import { inStorePrice } from '../../common/utils/price-list.util';
 import { checkOptionChoices } from '../catalog/option-choices.util';
@@ -294,13 +294,23 @@ export class KioskService {
     // Checked again, and saved, in one transaction: the day's stock counts stay locked until
     // the order is in, so two kiosks (or a kiosk and a register) cannot both sell the last unit.
     const { finalOrder, orderItems } = await this.orderRepo.manager.transaction(async (em) => {
-      await this.catalogService.assertBasketSellable(
-        tenantId,
-        data.branch_id,
-        lines.map((l) => ({ product: l.product, variantId: l.variant?.id || null, quantity: l.count, optionItems: l.optionItems })),
-        new Date(),
-        em,
-      );
+      await this.catalogService
+        .assertBasketSellable(
+          tenantId,
+          data.branch_id,
+          lines.map((l) => ({ product: l.product, variantId: l.variant?.id || null, quantity: l.count, optionItems: l.optionItems })),
+          new Date(),
+          em,
+        )
+        .catch(async (err) => {
+          // The item was off: a lost sale, for the stop report.
+          const refused = err?.response;
+          if (REFUSED_SALE_CODES.includes(refused?.code) && refused.productId) {
+            const quantity = lines.filter((l) => l.product.id === refused.productId).reduce((sum, l) => sum + l.count, 0);
+            await this.catalogService.recordRefusedSale(tenantId, { branchId: data.branch_id, productId: refused.productId, quantity, code: refused.code, channel: 'KIOSK' });
+          }
+          throw err;
+        });
       const orderRepo = em.getRepository(OrderHeader);
       const orderItemRepo = em.getRepository(OrderItem);
       const orderItemOptionRepo = em.getRepository(OrderItemOption);

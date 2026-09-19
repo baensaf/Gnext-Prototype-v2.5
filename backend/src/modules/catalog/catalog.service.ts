@@ -46,6 +46,17 @@ export interface StopTarget {
 /** The channels an item can be stopped on by itself. */
 export const STOP_CHANNELS = ['SNAPPFOOD'];
 
+/** Refusals that are a lost sale: the item was off (86'd, outside its hours or sold out). */
+export const REFUSED_SALE_CODES = ['PRODUCT_SUSPENDED', 'PRODUCT_OUT_OF_SCHEDULE', 'PRODUCT_OUT_OF_STOCK'];
+
+/** Which items a bulk stop is on: a category (with its sub-categories), or a list of products. */
+export interface BulkStopTargets {
+  categoryId?: string | null;
+  productIds?: string[] | null;
+  /** Each branch to act at; null is the whole chain (head office). */
+  branchIds: Array<string | null>;
+}
+
 /** Who stopped or resumed an item, for the log: the signed-in user and whoever's pin released it. */
 export interface StopActor {
   userId?: string | null;
@@ -1070,6 +1081,87 @@ export class CatalogService {
     return { success: true };
   }
 
+  /** The products a bulk stop covers: a category's (and its sub-categories'), or the ones named. */
+  private async bulkProducts(tenantId: string, targets: BulkStopTargets) {
+    let products: Product[];
+    if (targets.categoryId) {
+      const category = await this.catRepo.findOne({ where: { id: targets.categoryId, tenant_id: tenantId } });
+      if (!category) throw new NotFoundException('Category not found');
+      const children = await this.catRepo.find({ where: { tenant_id: tenantId, parent_id: category.id } });
+      products = await this.prodRepo.find({ where: { tenant_id: tenantId, is_active: true, category_id: In([category.id, ...children.map((c) => c.id)]) } });
+    } else {
+      const ids = [...new Set(targets.productIds || [])];
+      products = ids.length ? await this.prodRepo.find({ where: { tenant_id: tenantId, id: In(ids) } }) : [];
+      if (products.length !== ids.length) throw new NotFoundException('Product not found');
+    }
+    if (!products.length) throw new BadRequestException({ statusCode: 400, code: 'NOTHING_TO_STOP', message: 'Pick a category with products in it, or the products to stop' });
+    const branchIds = [...new Set(targets.branchIds)];
+    const named = branchIds.filter((b): b is string => !!b);
+    if (named.length && (await this.branchRepo.count({ where: { tenant_id: tenantId, id: In(named) } })) !== named.length) {
+      throw new NotFoundException('Branch not found');
+    }
+    return { products, branchIds: branchIds.length ? branchIds : [null] };
+  }
+
+  /**
+   * One stop on many items or branches: a whole category ("the grill is down"), or one item at
+   * several branches. Each item gets a stop of its own, logged as usual, so each can be put
+   * back by itself.
+   */
+  async bulkStop(
+    tenantId: string,
+    targets: BulkStopTargets,
+    stop: { hours?: number; untilNextShift?: boolean; reason: string; channel?: string | null },
+    correlationId: string,
+    by: StopActor = {},
+  ) {
+    const { products, branchIds } = await this.bulkProducts(tenantId, targets);
+    for (const branchId of branchIds) {
+      for (const product of products) {
+        await this.suspendProduct(tenantId, product.id, branchId || undefined, stop.hours, stop.reason, correlationId, { untilNextShift: stop.untilNextShift, channel: stop.channel || null }, by);
+      }
+    }
+    return { products: products.length, branches: branchIds.length, stopped: products.length * branchIds.length };
+  }
+
+  /** Put the items of a bulk stop back. A branch can't lift head office's chain-wide stops; those are counted, not failed. */
+  async bulkResume(tenantId: string, targets: BulkStopTargets, channel: string | null, correlationId: string, by: StopActor = {}) {
+    const { products, branchIds } = await this.bulkProducts(tenantId, targets);
+    let resumed = 0;
+    let chainWide = 0;
+    for (const branchId of branchIds) {
+      for (const product of products) {
+        try {
+          await this.resumeProduct(tenantId, product.id, branchId || undefined, correlationId, { channel }, by);
+          resumed++;
+        } catch (err: any) {
+          if (err?.response?.code !== 'CHAIN_WIDE_STOP') throw err;
+          chainWide++;
+        }
+      }
+    }
+    return { resumed, chain_wide: chainWide };
+  }
+
+  /**
+   * A sale refused because the item was off: the register or kiosk tried to sell it while it
+   * was stopped, outside its hours or sold out. The stop report counts these as lost sales.
+   */
+  async recordRefusedSale(
+    tenantId: string,
+    sale: { branchId?: string | null; productId: string; variantId?: string | null; quantity: number; code: string; channel?: string | null },
+  ) {
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'SYSTEM',
+      action: 'SALE_REFUSED',
+      entityType: 'Product',
+      entityId: sale.productId,
+      branchId: sale.branchId || undefined,
+      details: { productId: sale.productId, variantId: sale.variantId || null, quantity: sale.quantity, code: sale.code, channel: sale.channel || null },
+    });
+  }
+
   /** What a stop is on: a whole product, one of its variants, or an add-on item; everywhere or on one channel. */
   private stopKey(productId: string | undefined, target: StopTarget) {
     const channel = target.channel ? String(target.channel).toUpperCase() : null;
@@ -1325,18 +1417,18 @@ export class CatalogService {
     at: Date = new Date(),
     em?: EntityManager,
   ) {
-    const refuse = (code: string, message: string) => new BadRequestException({ statusCode: 400, code, message });
+    const refuse = (code: string, message: string, productId?: string) => new BadRequestException({ statusCode: 400, code, message, productId });
 
     for (const line of lines) {
       const stop = await this.getSuspension(tenantId, line.product.id, branchId, at, line.variantId);
-      if (stop.outOfSchedule) throw refuse('PRODUCT_OUT_OF_SCHEDULE', `${line.product.name} is not on sale now. ${stop.reason}`);
-      if (stop.isSuspended) throw refuse('PRODUCT_SUSPENDED', `${line.product.name} is not available now${stop.reason ? ` (${stop.reason})` : ''}`);
+      if (stop.outOfSchedule) throw refuse('PRODUCT_OUT_OF_SCHEDULE', `${line.product.name} is not on sale now. ${stop.reason}`, line.product.id);
+      if (stop.isSuspended) throw refuse('PRODUCT_SUSPENDED', `${line.product.name} is not available now${stop.reason ? ` (${stop.reason})` : ''}`, line.product.id);
       for (const item of line.optionItems) {
         const itemStop = await this.getOptionItemStop(tenantId, item.id, branchId, at);
         if (itemStop.isSuspended) throw refuse('OPTION_SUSPENDED', `${item.name} is not available now`);
         if (item.product_id) {
           const dishStop = await this.getSuspension(tenantId, item.product_id, branchId, at);
-          if (dishStop.isSuspended) throw refuse('PRODUCT_SUSPENDED', `${item.name} in ${line.product.name} is not available now`);
+          if (dishStop.isSuspended) throw refuse('PRODUCT_SUSPENDED', `${item.name} in ${line.product.name} is not available now`, line.product.id);
         }
       }
     }
@@ -1368,7 +1460,7 @@ export class CatalogService {
         if (!wanted) continue;
         const left = count.quantity - (await this.soldOn(reader, tenantId, branchId, date, product.id, count.variant_id));
         if (wanted > left) {
-          throw refuse('PRODUCT_OUT_OF_STOCK', left > 0 ? `Only ${left} × ${product.name} left today` : `${product.name} is sold out today`);
+          throw refuse('PRODUCT_OUT_OF_STOCK', left > 0 ? `Only ${left} × ${product.name} left today` : `${product.name} is sold out today`, product.id);
         }
       }
     }

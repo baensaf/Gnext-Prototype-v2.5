@@ -32,6 +32,7 @@ import { ReasonCodesPage } from 'src/pages/settings/reasons';
 import { PrintersPage } from 'src/pages/operations/printers';
 import { CategoriesPage } from 'src/pages/catalog/categories';
 import { CustomersPage } from 'src/pages/customers/directory';
+import { StopReportPage } from 'src/pages/catalog/stop-report';
 import { PriceListsPage } from 'src/pages/catalog/price-lists';
 import { TerminalsPage } from 'src/pages/operations/terminals';
 import { OrdersWorkflowPage } from 'src/pages/orders/workflow';
@@ -161,6 +162,7 @@ export const routesSection: RouteObject[] = [
       { path: 'catalog/menus/:id', element: <MenusPage /> },
       { path: 'catalog/availability', element: <AvailabilityPage /> },
       { path: 'catalog/stock', element: <DailyStockPage /> },
+      { path: 'catalog/availability/report', element: <StopReportPage /> },
       { path: 'catalog/import-export', element: <ImportWizardPage /> },
       { path: 'pricing/price-lists', element: <PriceListsPage /> },
       { path: 'pricing/changes', element: <PriceChangesPage /> },
