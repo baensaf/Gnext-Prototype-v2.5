@@ -27,6 +27,7 @@ import { CatalogService } from '../catalog/catalog.service';
 import { PriceListService } from '../catalog/price-lists.service';
 import { inStorePrice } from '../../common/utils/price-list.util';
 import { checkOptionChoices } from '../catalog/option-choices.util';
+import { inTreeOrder } from '../../common/utils/category-tree.util';
 
 /** Tenders a kiosk's card terminal can take. The seeded card method is CARD_POS. */
 const KIOSK_CARD_KINDS = ['CARD_POS', 'NETWORK_POS', 'CARD', 'MOBILE_POS'];
@@ -64,10 +65,13 @@ export class KioskService {
       branch = branches[0] || null;
     }
 
-    const categories = await this.categoryRepo.find({
-      where: { tenant_id: tenantId, is_active: true },
-      order: { sort_order: 'ASC', name: 'ASC' },
-    });
+    // Tree order, as on the register: each category followed by its sub-categories.
+    const categories = inTreeOrder(
+      await this.categoryRepo.find({
+        where: { tenant_id: tenantId, is_active: true },
+        order: { sort_order: 'ASC', name: 'ASC' },
+      }),
+    );
 
     const products = await this.productRepo.find({
       where: { tenant_id: tenantId, is_active: true },

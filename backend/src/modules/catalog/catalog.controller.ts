@@ -41,6 +41,13 @@ export class CatalogController {
     return await this.catalogService.createCategory(tenantId, body, correlationId);
   }
 
+  /** Body: the ids of sibling categories in their new order. */
+  @HeadOfficeOnly()
+  @Put('categories/order')
+  async reorderCategories(@Body() body: { ids: string[] }, @Req() req: Request) {
+    return await this.catalogService.reorderCategories((req as any).tenantId, body?.ids, (req as any).correlationId);
+  }
+
   @HeadOfficeOnly()
   @Patch('categories/:id')
   async updateCategory(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
@@ -51,10 +58,10 @@ export class CatalogController {
 
   @HeadOfficeOnly()
   @Delete('categories/:id')
-  async archiveCategory(@Param('id') id: string, @Req() req: Request) {
+  async archiveCategory(@Param('id') id: string, @Query('moveTo') moveTo: string | undefined, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
-    return await this.catalogService.archiveCategory(tenantId, id, correlationId);
+    return await this.catalogService.archiveCategory(tenantId, id, correlationId, moveTo);
   }
 
   // Products
