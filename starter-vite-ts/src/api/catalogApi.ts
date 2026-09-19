@@ -37,7 +37,8 @@ export interface Product {
   category_id: string;
   unit_of_measure: string;
   tax_rate: string;
-  image_asset_id?: string;
+  /** The main photo; null once every photo is removed. */
+  image_asset_id?: string | null;
   is_active: boolean;
   base_price: string;
   /** Packaging per unit, as Snappfood's containerPrice. Stored for the channel, not billed here. */

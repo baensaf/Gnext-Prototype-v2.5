@@ -228,7 +228,7 @@ export function ProductDetailPage() {
         sku: sku || undefined,
         barcode: barcode || undefined,
         description: description || undefined,
-        image_asset_id: photoIds[0] || undefined,
+        image_asset_id: photoIds[0] || null,
         gallery_asset_ids: photoIds.slice(1),
         container_price: containerPrice || '0',
         max_per_order: maxPerOrder ? parseInt(maxPerOrder, 10) : null,
