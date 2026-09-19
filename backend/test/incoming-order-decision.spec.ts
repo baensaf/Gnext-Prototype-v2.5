@@ -80,7 +80,7 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
         OrderService,
         OrderSequenceService,
         { provide: RefundService, useValue: { cancelPaidOrder: jest.fn() } },
-        { provide: CatalogService, useValue: { getSuspension: jest.fn(), assertLineSellable: jest.fn() } },
+        { provide: CatalogService, useValue: { getSuspension: jest.fn(), assertLineSellable: jest.fn(), lockStockCounts: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
         { provide: getRepositoryToken(OrderItem), useValue: {} },
         { provide: getRepositoryToken(OrderItemOption), useValue: {} },

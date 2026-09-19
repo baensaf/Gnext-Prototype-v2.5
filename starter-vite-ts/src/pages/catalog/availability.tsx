@@ -140,6 +140,28 @@ export function AvailabilityPage() {
       (s) => s.product_id === productId && (!s.variant_id || s.variant_id === variantId) && s.remaining <= 0
     );
 
+  /** A product sold in sizes is off when every size is sold out, as the register and kiosk treat it. */
+  const everySizeSoldOut = (p: Product) =>
+    (p.variants || []).length > 0 && (p.variants || []).every((v) => soldOut(p.id, v.id));
+
+  /** How many are left of today's count on this row (the product's own, or the size's), or null with no count. */
+  const leftToday = (productId: string, variantId?: string) => {
+    const counts = stock.filter(
+      (s) => s.product_id === productId && (variantId ? !s.variant_id || s.variant_id === variantId : !s.variant_id)
+    );
+    return counts.length ? Math.min(...counts.map((s) => s.remaining)) : null;
+  };
+
+  const leftChip = (left: number | null) =>
+    left !== null && left > 0 ? (
+      <Chip
+        size="small"
+        variant="outlined"
+        color={left <= 3 ? 'warning' : 'default'}
+        label={t('catalog.availabilityPage.leftToday', { count: left })}
+      />
+    ) : null;
+
   const visibleProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
     return products.filter(
@@ -342,7 +364,8 @@ export function AvailabilityPage() {
                     </TableCell>
                     <TableCell>
                       <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
-                        {statusChip(productStop, soldOut(p.id))}
+                        {statusChip(productStop, soldOut(p.id) || everySizeSoldOut(p))}
+                        {!productStop && leftChip(leftToday(p.id))}
                         {snappfoodChip({ kind: 'product', product: p })}
                       </Stack>
                     </TableCell>
@@ -365,6 +388,7 @@ export function AvailabilityPage() {
                         <TableCell>
                           <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
                             {productStop ? '—' : statusChip(variantStop, soldOut(p.id, v.id))}
+                            {!productStop && !variantStop && leftChip(leftToday(p.id, v.id))}
                             {snappfoodChip({ kind: 'variant', product: p, variant: v })}
                           </Stack>
                         </TableCell>

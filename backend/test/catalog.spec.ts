@@ -281,6 +281,11 @@ describe('CatalogService (Unit)', () => {
       const em = (over: any = {}) => ({
         query: jest.fn().mockResolvedValue([{ sold: '0', n: '0' }]),
         find: jest.fn(async (entity: any) => (entity === DailyStock ? over.stock || [] : entity === ProductOptionGroupEntity ? over.links || [] : [])),
+        // lockStockCounts: SELECT … FOR UPDATE on today's counts.
+        createQueryBuilder: jest.fn(() => {
+          const qb: any = { where: () => qb, orderBy: () => qb, setLock: () => qb, getMany: async () => over.stock || [] };
+          return qb;
+        }),
       });
 
       it("refuses more than is left of today's stock", async () => {
