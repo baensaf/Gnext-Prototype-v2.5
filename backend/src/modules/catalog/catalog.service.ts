@@ -15,6 +15,8 @@ import { AvailabilitySchedule } from '../../entities/AvailabilitySchedule.entity
 import { Branch } from '../../entities/Branch.entity';
 import { BranchOperatingHour } from '../../entities/BranchOperatingHour.entity';
 import { DailyStock } from '../../entities/DailyStock.entity';
+import { FileAsset } from '../../entities/FileAsset.entity';
+import { assetUrl } from '../../common/utils/asset-url.util';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { describeWindows, isOnSchedule, isValidTime, localClock, parseDays } from '../../common/utils/availability-schedule.util';
 import { BUSINESS_TIME_ZONE, BusinessDateUtil, ORDER_BUSINESS_DATE_EXPR } from '../../common/utils/business-date.util';
@@ -271,7 +273,16 @@ export class CatalogService {
       const products = await this.prodRepo.find({ where, order: { code: 'ASC' } });
       // Variants ride along so a list can show the hot and the cold sandwich as rows of their own.
       const variants = await this.variantRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { sort_order: 'ASC', code: 'ASC' } });
-      return products.map((p) => Object.assign(p, { variants: (variants || []).filter((v) => v.product_id === p.id) }));
+      // The main photo's address, so a list can show a thumbnail without a request per product.
+      const imageIds = [...new Set(products.map((p) => p.image_asset_id).filter(Boolean))];
+      const images = imageIds.length ? await this.prodRepo.manager.find(FileAsset, { where: { tenant_id: tenantId, id: In(imageIds) } }) : [];
+      const urlOf = new Map(images.map((a) => [a.id, assetUrl(a.file_path)]));
+      return products.map((p) =>
+        Object.assign(p, {
+          variants: (variants || []).filter((v) => v.product_id === p.id),
+          image_url: (p.image_asset_id && urlOf.get(p.image_asset_id)) || null,
+        }),
+      );
     }
 
     const page = query.page || 1;

@@ -2,6 +2,7 @@ import { Controller, Post, Get, Param, UseInterceptors, UploadedFile, Req, Res }
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request, Response } from 'express';
 import { MediaService } from './media.service';
+import { Public } from '../../common/decorators/public.decorator';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -23,10 +24,16 @@ export class MediaController {
     return await this.mediaService.getFileById(tenantId, id);
   }
 
+  /**
+   * An uploaded file. Open, because an <img> sends no token, and the menu's photos are shown
+   * to guests at the kiosk; names are random, so a file can't be found without its link.
+   * Read from the folder uploads are written to (UPLOAD_DIR).
+   */
+  @Public()
   @Get('uploads/:filename')
   async getUploadedFile(@Param('filename') filename: string, @Res() res: Response) {
     const safeFilename = path.basename(filename);
-    const filePath = path.join(process.cwd(), 'uploads', safeFilename);
+    const filePath = path.join(this.mediaService.uploadDir, safeFilename);
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ message: 'File not found' });
     }

@@ -50,11 +50,13 @@ import {
   DialogContent,
   DialogActions,
   TableContainer,
+  InputAdornment,
   FormControlLabel,
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
+import { wholeRials, percentToTaxRate, taxRateToPercent } from 'src/utils/tax-rate';
 
 import { catalogApi } from 'src/api/catalogApi';
 import { useAuthStore } from 'src/store/useAuthStore';
@@ -138,8 +140,8 @@ export function ProductDetailPage() {
       setCode(prod.code);
       setName(prod.name);
       setCategoryId(prod.category_id);
-      setBasePrice(prod.base_price || '0');
-      setTaxRate(prod.tax_rate || '0.1000');
+      setBasePrice(wholeRials(prod.base_price));
+      setTaxRate(taxRateToPercent(prod.tax_rate ?? '0.0900'));
       setSku(prod.sku || '');
       setBarcode(prod.barcode || '');
       setDescription(prod.description || '');
@@ -222,7 +224,7 @@ export function ProductDetailPage() {
         name,
         category_id: categoryId,
         base_price: basePrice,
-        tax_rate: taxRate,
+        tax_rate: percentToTaxRate(taxRate),
         sku: sku || undefined,
         barcode: barcode || undefined,
         description: description || undefined,
@@ -258,7 +260,7 @@ export function ProductDetailPage() {
     setVarName(v.name);
     setVarSku(v.sku || '');
     setVarBarcode(v.barcode || '');
-    setVarPrice(v.base_price || '0');
+    setVarPrice(wholeRials(v.base_price));
     setVarIsDefault(v.is_default);
     setVarSortOrder(v.sort_order.toString());
     setVariantDialogOpen(true);
@@ -456,6 +458,10 @@ export function ProductDetailPage() {
                       type="number"
                       value={basePrice}
                       onChange={(e) => setBasePrice(e.target.value)}
+                      slotProps={{
+                        htmlInput: { min: 0, step: 1 },
+                        input: { endAdornment: <InputAdornment position="end">IRR</InputAdornment> },
+                      }}
                       fullWidth
                       required
                     />
@@ -467,6 +473,10 @@ export function ProductDetailPage() {
                       type="number"
                       value={containerPrice}
                       onChange={(e) => setContainerPrice(e.target.value)}
+                      slotProps={{
+                        htmlInput: { min: 0, step: 1 },
+                        input: { endAdornment: <InputAdornment position="end">IRR</InputAdornment> },
+                      }}
                       helperText={t(
                         'catalog.productDetailPage.general.containerPriceHelp',
                         'Per unit, for delivery apps. Recorded for the Snappfood menu; not charged on orders here yet.'
@@ -492,6 +502,10 @@ export function ProductDetailPage() {
                       type="number"
                       value={taxRate}
                       onChange={(e) => setTaxRate(e.target.value)}
+                      slotProps={{
+                        htmlInput: { min: 0, max: 100, step: 0.01 },
+                        input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
+                      }}
                       fullWidth
                     />
                   </Grid>
@@ -850,6 +864,10 @@ export function ProductDetailPage() {
                   type="number"
                   value={varPrice}
                   onChange={(e) => setVarPrice(e.target.value)}
+                  slotProps={{
+                    htmlInput: { min: 0, step: 1 },
+                    input: { endAdornment: <InputAdornment position="end">IRR</InputAdornment> },
+                  }}
                   fullWidth
                   required
                 />

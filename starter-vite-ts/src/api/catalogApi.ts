@@ -50,6 +50,8 @@ export interface Product {
   product_type?: 'STANDARD' | 'COMBO';
   optionGroups?: OptionGroup[];
   variants?: ProductVariant[];
+  /** The main photo's address; on the product list only. */
+  image_url?: string | null;
 }
 
 export interface OptionItem {
