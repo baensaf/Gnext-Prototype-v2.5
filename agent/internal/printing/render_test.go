@@ -20,7 +20,7 @@ func TestBrowserRendererPersianTicket(t *testing.T) {
 	if _, err := findBrowser(); err != nil {
 		t.Skip(err)
 	}
-	r := &BrowserRenderer{ProfileDir: t.TempDir()}
+	r := &BrowserRenderer{ProfileDir: profileDir(t)}
 	defer r.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -45,6 +45,21 @@ func TestBrowserRendererPersianTicket(t *testing.T) {
 	if out := os.Getenv("GNEXT_RENDER_OUT"); out != "" {
 		save(t, out, m)
 	}
+}
+
+// profileDir is a temp browser profile. Unlike t.TempDir, its cleanup waits for the browser's
+// helper processes, which can still be writing to it for a moment after the browser exits.
+func profileDir(t *testing.T) string {
+	dir, err := os.MkdirTemp("", "gnext-render-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		for i := 0; i < 20 && os.RemoveAll(dir) != nil; i++ {
+			time.Sleep(250 * time.Millisecond)
+		}
+	})
+	return dir
 }
 
 func save(t *testing.T, path string, m *Mono) {
