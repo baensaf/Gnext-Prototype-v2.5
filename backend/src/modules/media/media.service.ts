@@ -5,6 +5,7 @@ import { FileAsset } from '../../entities/FileAsset.entity';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { assetUrl } from '../../common/utils/asset-url.util';
 
 export interface UploadedFileDto {
   originalname: string;
@@ -15,7 +16,7 @@ export interface UploadedFileDto {
 
 @Injectable()
 export class MediaService {
-  private get uploadDir(): string {
+  get uploadDir(): string {
     const dir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -90,7 +91,7 @@ export class MediaService {
 
     return {
       id: saved.id,
-      url: relativeUrlPath,
+      url: assetUrl(relativeUrlPath),
       mime_type: saved.mime_type,
       size_bytes: Number(saved.size_bytes),
       checksum_sha256: saved.checksum_sha256,
@@ -103,7 +104,7 @@ export class MediaService {
     if (!asset) throw new NotFoundException('File asset not found or unauthorized cross-tenant access');
     return {
       id: asset.id,
-      url: asset.file_path,
+      url: assetUrl(asset.file_path),
       mime_type: asset.mime_type,
       size_bytes: Number(asset.size_bytes),
       checksum_sha256: asset.checksum_sha256,

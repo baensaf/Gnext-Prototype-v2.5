@@ -44,7 +44,7 @@ describe('MediaService (Unit)', () => {
     expect(result.id).toBe('asset-1');
     expect(result.mime_type).toBe('image/png');
     expect(result.checksum_sha256).toBeDefined();
-    expect(result.url).toContain('/uploads/');
+    expect(result.url).toContain('/api/v1/media/uploads/');
   });
 
   it('should reject file with invalid magic header signature', async () => {

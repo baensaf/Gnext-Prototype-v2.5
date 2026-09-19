@@ -1626,7 +1626,6 @@
         "archiveFailed": "Failed to archive product",
         "attachFailed": "Failed to attach option group"
       },
-      "taxRateHint": "e.g. 0.0900 for 9%",
       "codeHint": "e.g. PROD-DOUBLEBURGER",
       "nameHint": "e.g. Double Beef Burger",
       "viewDetails": "View details",
@@ -1636,7 +1635,13 @@
       "productType": "Product type",
       "typeStandard": "Standard item",
       "typeCombo": "Combo (meal deal)",
-      "comboHelp": "A combo sells as one line at this price. Attach option groups as its slots (side, drink), each with a minimum of 1; the cashier must fill every slot. A choice can add an upcharge."
+      "comboHelp": "A combo sells as one line at this price. Attach option groups as its slots (side, drink), each with a minimum of 1; the cashier must fill every slot. A choice can add an upcharge.",
+      "searchPlaceholder": "Search by name, code, SKU or barcode",
+      "sizes": "Sizes",
+      "statusAll": "All",
+      "onMenu": "On the menu",
+      "offMenu": "Off the menu",
+      "noMatches": "No products match."
     },
     "categoriesPage": {
       "title": "Catalog Categories",
