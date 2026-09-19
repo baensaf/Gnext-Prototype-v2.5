@@ -30,8 +30,10 @@ func runningAsSystem() bool {
 }
 
 // launchInUserSession starts headless Edge as the user signed in at the console and connects
-// to it over its DevTools port. The browser stays in the agent's job object, so it still ends
-// when the agent does.
+// to it over its DevTools port. A job object cannot span sessions, so the browser breaks away
+// from the agent's job (without that Windows refuses the start with "Access is denied") and
+// goes into a job of its own whose handle only the agent holds, so it still ends when the
+// agent does.
 func launchInUserSession(exe string) (context.Context, context.CancelFunc, error) {
 	session := windows.WTSGetActiveConsoleSessionId()
 	var token windows.Token
@@ -72,14 +74,19 @@ func launchInUserSession(exe string) (context.Context, context.CancelFunc, error
 	si.Cb = uint32(unsafe.Sizeof(si))
 	var pi windows.ProcessInformation
 	if err := windows.CreateProcessAsUser(token, nil, windows.StringToUTF16Ptr(cmdLine), nil, nil, false,
-		windows.CREATE_UNICODE_ENVIRONMENT|windows.CREATE_NO_WINDOW, envBlock(env),
-		windows.StringToUTF16Ptr(dir), &si, &pi); err != nil {
+		windows.CREATE_UNICODE_ENVIRONMENT|windows.CREATE_NO_WINDOW|windows.CREATE_SUSPENDED|windows.CREATE_BREAKAWAY_FROM_JOB,
+		envBlock(env), windows.StringToUTF16Ptr(dir), &si, &pi); err != nil {
 		return nil, nil, fmt.Errorf("start in the signed-in user's session: %w", err)
 	}
+	job := killOnCloseJob(pi.Process)
+	windows.ResumeThread(pi.Thread)
 	windows.CloseHandle(pi.Thread)
 	kill := func() {
 		windows.TerminateProcess(pi.Process, 1)
 		windows.CloseHandle(pi.Process)
+		if job != 0 {
+			windows.CloseHandle(job)
+		}
 	}
 
 	wsURL, err := waitForDevTools(pi.Process, portFile, 20*time.Second)
@@ -89,6 +96,31 @@ func launchInUserSession(exe string) (context.Context, context.CancelFunc, error
 	}
 	alloc, cancelAlloc := chromedp.NewRemoteAllocator(context.Background(), wsURL, chromedp.NoModifyURL)
 	return alloc, func() { cancelAlloc(); kill() }, nil
+}
+
+// killOnCloseJob puts proc, still suspended and so without children yet, in a new job that ends
+// it and everything it starts when the handle closes, including when the agent crashes. It
+// returns 0 if Windows refuses; the browser then ends only when the agent stops it.
+func killOnCloseJob(proc windows.Handle) windows.Handle {
+	job, err := windows.CreateJobObject(nil, nil)
+	if err != nil {
+		return 0
+	}
+	info := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{
+		BasicLimitInformation: windows.JOBOBJECT_BASIC_LIMIT_INFORMATION{
+			LimitFlags: windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+		},
+	}
+	if _, err := windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation,
+		uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info))); err != nil {
+		windows.CloseHandle(job)
+		return 0
+	}
+	if err := windows.AssignProcessToJobObject(job, proc); err != nil {
+		windows.CloseHandle(job)
+		return 0
+	}
+	return job
 }
 
 // waitForDevTools reads the browser's DevTools address from the file it writes on startup.

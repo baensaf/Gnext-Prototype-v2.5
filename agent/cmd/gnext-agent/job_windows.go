@@ -10,6 +10,8 @@ import (
 
 // killChildrenOnExit puts the agent in a job object that ends every child process (the
 // headless browser that renders tickets) when the agent exits, even if it crashes or is killed.
+// Breakaway is allowed because a job cannot span sessions: the browser the service starts in
+// the signed-in user's session leaves this job for one of its own (see printing).
 func killChildrenOnExit() {
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
@@ -17,7 +19,7 @@ func killChildrenOnExit() {
 	}
 	info := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{
 		BasicLimitInformation: windows.JOBOBJECT_BASIC_LIMIT_INFORMATION{
-			LimitFlags: windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+			LimitFlags: windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | windows.JOB_OBJECT_LIMIT_BREAKAWAY_OK,
 		},
 	}
 	if _, err := windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation,
