@@ -1695,6 +1695,12 @@ export class OrderService {
     // restart it. Line numbers are never reused, including by voided lines, so
     // a reprint of an old ticket still refers to the same line.
     let lineNo = startLineNumber;
+    // Every item's stock count is locked up front, in one ordered statement, so two registers
+    // adding the same items in a different order cannot deadlock on them line by line.
+    if (order.branch_id) {
+      const productIds = itemsDto.map((i) => i.product_id).filter(Boolean);
+      await this.catalogService.lockStockCounts(em, tenantId, order.branch_id, BusinessDateUtil.today(), productIds);
+    }
     for (const itemDto of itemsDto) {
       const product = await this.productRepo.findOne({ where: { id: itemDto.product_id, tenant_id: tenantId } });
       if (!product) throw new NotFoundException(`Product ${itemDto.product_id} not found`);

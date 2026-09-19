@@ -1749,6 +1749,7 @@
       "statusOffUntil": "Unavailable until {{time}}",
       "statusOffManual": "Unavailable until further notice",
       "statusSoldOut": "Sold out today",
+      "leftToday": "{{count}} left today",
       "change": "Change",
       "nextShiftNotice": "The next shift starts {{time}}; items off until the next shift come back then.",
       "searchPlaceholder": "Product name",

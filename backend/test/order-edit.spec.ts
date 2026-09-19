@@ -151,6 +151,7 @@ describe('Order edit command (spec 7.9)', () => {
           provide: CatalogService,
           useValue: {
             assertLineSellable: jest.fn(),
+            lockStockCounts: jest.fn().mockResolvedValue([]),
             getSuspension: jest
               .fn()
               .mockResolvedValue({ isSuspended: false, reason: null, suspendedUntil: null }),

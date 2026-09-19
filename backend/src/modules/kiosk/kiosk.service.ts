@@ -163,7 +163,8 @@ export class KioskService {
    * The basket, checked and priced from the catalog. A client-sent price is ignored: the line
    * costs its size's price (else the product's) plus each add-on's. Refuses anything the
    * register would refuse — an item off sale or sold out, a missing size, an add-on that is
-   * not offered or a required choice left empty.
+   * not offered or a required choice left empty. The selling rules (stops, windows, stock)
+   * run in `createKioskOrder`, inside the transaction that saves the order.
    */
   private async priceKioskLines(
     tenantId: string,
@@ -223,11 +224,6 @@ export class KioskService {
       });
     }
 
-    await this.catalogService.assertBasketSellable(
-      tenantId,
-      branchId,
-      lines.map((l) => ({ product: l.product, variantId: l.variant?.id || null, quantity: l.count, optionItems: l.optionItems })),
-    );
     return lines;
   }
 
@@ -291,134 +287,151 @@ export class KioskService {
     // reach the kitchen from the kiosk either.
     const lines = await this.priceKioskLines(tenantId, data.branch_id, data.items);
 
-    let customerId = null;
-    if (data.customer_phone && data.customer_phone.trim() !== '') {
-      const rawPhone = data.customer_phone.trim();
-      const normPhone = normalizePhone(rawPhone) || rawPhone;
-      let customer = await this.customerRepo.findOne({
-        where: [
-          { tenant_id: tenantId, mobile: rawPhone },
-          { tenant_id: tenantId, mobile: normPhone },
-          { tenant_id: tenantId, code: normPhone },
-        ],
-      });
-      if (!customer) {
-        customer = this.customerRepo.create({
-          tenant_id: tenantId,
-          code: normPhone,
-          first_name: data.customer_name || 'Kiosk',
-          last_name: 'Guest',
-          mobile: normPhone,
-          is_active: true,
+    // Checked again, and saved, in one transaction: the day's stock counts stay locked until
+    // the order is in, so two kiosks (or a kiosk and a register) cannot both sell the last unit.
+    const { finalOrder, orderItems } = await this.orderRepo.manager.transaction(async (em) => {
+      await this.catalogService.assertBasketSellable(
+        tenantId,
+        data.branch_id,
+        lines.map((l) => ({ product: l.product, variantId: l.variant?.id || null, quantity: l.count, optionItems: l.optionItems })),
+        new Date(),
+        em,
+      );
+      const orderRepo = em.getRepository(OrderHeader);
+      const orderItemRepo = em.getRepository(OrderItem);
+      const orderItemOptionRepo = em.getRepository(OrderItemOption);
+      const customerRepo = em.getRepository(Customer);
+
+      let customerId = null;
+      if (data.customer_phone && data.customer_phone.trim() !== '') {
+        const rawPhone = data.customer_phone.trim();
+        const normPhone = normalizePhone(rawPhone) || rawPhone;
+        let customer = await customerRepo.findOne({
+          where: [
+            { tenant_id: tenantId, mobile: rawPhone },
+            { tenant_id: tenantId, mobile: normPhone },
+            { tenant_id: tenantId, code: normPhone },
+          ],
         });
-        customer = await this.customerRepo.save(customer);
+        if (!customer) {
+          customer = customerRepo.create({
+            tenant_id: tenantId,
+            code: normPhone,
+            first_name: data.customer_name || 'Kiosk',
+            last_name: 'Guest',
+            mobile: normPhone,
+            is_active: true,
+          });
+          customer = await customerRepo.save(customer);
+        }
+        customerId = customer.id;
       }
-      customerId = customer.id;
-    }
 
-    // A branch may make kiosk orders wait for staff like Snappfood ones. By default they go
-    // straight into the kitchen queue, as they always have.
-    const workflowRows = await this.settingRepo.find({
-      where: { tenant_id: tenantId, key: 'ORDER_WORKFLOW' },
-    });
-    const incomingPolicy = resolveIncomingOrderPolicy(pickSettingValue(workflowRows, data.branch_id));
-    const initialState = acceptanceFor(incomingPolicy, 'KIOSK') === 'MANUAL' ? 'PENDING_ACCEPTANCE' : 'SUBMITTED';
+      // A branch may make kiosk orders wait for staff like Snappfood ones. By default they go
+      // straight into the kitchen queue, as they always have.
+      const workflowRows = await this.settingRepo.find({
+        where: { tenant_id: tenantId, key: 'ORDER_WORKFLOW' },
+      });
+      const incomingPolicy = resolveIncomingOrderPolicy(pickSettingValue(workflowRows, data.branch_id));
+      const initialState = acceptanceFor(incomingPolicy, 'KIOSK') === 'MANUAL' ? 'PENDING_ACCEPTANCE' : 'SUBMITTED';
 
-    const orderNum = `KOS-${Date.now().toString().slice(-6)}`;
-    let subtotal = 0;
+      const orderNum = `KOS-${Date.now().toString().slice(-6)}`;
+      let subtotal = 0;
 
-    const orderHeader = this.orderRepo.create({
-      tenant_id: tenantId,
-      branch_id: data.branch_id,
-      terminal_id: data.terminal_id || null,
-      order_number: orderNum,
-      channel: 'KIOSK',
-      order_type: data.order_type || 'TAKEAWAY',
-      state: initialState as any,
-      status: initialState,
-      fulfillment_status: 'PENDING',
-      customer_id: customerId,
-      notes: data.idempotency_key ? `IDEM:${data.idempotency_key}` : (data.notes || 'Kiosk Self-Service Order'),
-      subtotal: '0.0000',
-      subtotal_amount: '0.0000',
-      tax_total: '0.0000',
-      tax_amount: '0.0000',
-      discount_total: '0.0000',
-      discount_amount: '0.0000',
-      grand_total: '0.0000',
-      total_amount: '0.0000',
-      paid_total: '0.0000',
-      paid_amount: '0.0000',
-      outstanding_total: '0.0000',
-      due_amount: '0.0000',
-    });
-
-    const savedHeader = await this.orderRepo.save(orderHeader);
-    const orderItems: OrderItem[] = [];
-    let subtotalStr = '0.0000';
-
-    let taxAmountStr = '0.0000';
-    let lineNumber = 1;
-
-    for (const line of lines) {
-      const lineTotalStr = MoneyUtil.add(line.baseTotal, line.modifierTotal, 4);
-      // VAT at the product's own rate, as on the register.
-      const lineTaxStr = MoneyUtil.multiply(lineTotalStr, line.product.tax_rate || '0.0000', 4);
-      subtotalStr = MoneyUtil.add(subtotalStr, lineTotalStr, 4);
-      taxAmountStr = MoneyUtil.add(taxAmountStr, lineTaxStr, 4);
-
-      const orderItem = this.orderItemRepo.create({
+      const orderHeader = orderRepo.create({
         tenant_id: tenantId,
-        order_id: savedHeader.id,
-        line_number: lineNumber++,
-        product_id: line.product.id,
-        product_code: line.product.code,
-        product_name: line.product.name,
-        variant_id: line.variant?.id || null,
-        variant_name: line.variant?.name || null,
-        unit_price: line.unitPrice,
-        quantity: line.quantity,
-        base_total: line.baseTotal,
-        modifier_total: line.modifierTotal,
-        subtotal: lineTotalStr,
-        line_total: lineTotalStr,
-        tax_amount: lineTaxStr,
+        branch_id: data.branch_id,
+        terminal_id: data.terminal_id || null,
+        order_number: orderNum,
+        channel: 'KIOSK',
+        order_type: data.order_type || 'TAKEAWAY',
+        state: initialState as any,
+        status: initialState,
+        fulfillment_status: 'PENDING',
+        customer_id: customerId,
+        notes: data.idempotency_key ? `IDEM:${data.idempotency_key}` : (data.notes || 'Kiosk Self-Service Order'),
+        subtotal: '0.0000',
+        subtotal_amount: '0.0000',
+        tax_total: '0.0000',
+        tax_amount: '0.0000',
+        discount_total: '0.0000',
         discount_amount: '0.0000',
-        total_amount: MoneyUtil.add(lineTotalStr, lineTaxStr, 4),
-        notes: line.notes || null,
-        special_instructions: line.notes || null,
+        grand_total: '0.0000',
+        total_amount: '0.0000',
+        paid_total: '0.0000',
+        paid_amount: '0.0000',
+        outstanding_total: '0.0000',
+        due_amount: '0.0000',
       });
 
-      const savedItem = await this.orderItemRepo.save(orderItem);
+      const savedHeader = await orderRepo.save(orderHeader);
+      const orderItems: OrderItem[] = [];
+      let subtotalStr = '0.0000';
 
-      for (const optData of line.options) {
-        const itemOption = this.orderItemOptionRepo.create({
+      let taxAmountStr = '0.0000';
+      let lineNumber = 1;
+
+      for (const line of lines) {
+        const lineTotalStr = MoneyUtil.add(line.baseTotal, line.modifierTotal, 4);
+        // VAT at the product's own rate, as on the register.
+        const lineTaxStr = MoneyUtil.multiply(lineTotalStr, line.product.tax_rate || '0.0000', 4);
+        subtotalStr = MoneyUtil.add(subtotalStr, lineTotalStr, 4);
+        taxAmountStr = MoneyUtil.add(taxAmountStr, lineTaxStr, 4);
+
+        const orderItem = orderItemRepo.create({
           tenant_id: tenantId,
-          order_item_id: savedItem.id,
-          ...optData,
+          order_id: savedHeader.id,
+          line_number: lineNumber++,
+          product_id: line.product.id,
+          product_code: line.product.code,
+          product_name: line.product.name,
+          variant_id: line.variant?.id || null,
+          variant_name: line.variant?.name || null,
+          unit_price: line.unitPrice,
+          quantity: line.quantity,
+          base_total: line.baseTotal,
+          modifier_total: line.modifierTotal,
+          subtotal: lineTotalStr,
+          line_total: lineTotalStr,
+          tax_amount: lineTaxStr,
+          discount_amount: '0.0000',
+          total_amount: MoneyUtil.add(lineTotalStr, lineTaxStr, 4),
+          notes: line.notes || null,
+          special_instructions: line.notes || null,
         });
-        await this.orderItemOptionRepo.save(itemOption);
+
+        const savedItem = await orderItemRepo.save(orderItem);
+
+        for (const optData of line.options) {
+          const itemOption = orderItemOptionRepo.create({
+            tenant_id: tenantId,
+            order_item_id: savedItem.id,
+            ...optData,
+          });
+          await orderItemOptionRepo.save(itemOption);
+        }
+
+        orderItems.push(savedItem);
       }
 
-      orderItems.push(savedItem);
-    }
+      const totalAmountStr = MoneyUtil.add(subtotalStr, taxAmountStr, 4);
 
-    const totalAmountStr = MoneyUtil.add(subtotalStr, taxAmountStr, 4);
+      savedHeader.subtotal = subtotalStr;
+      savedHeader.subtotal_amount = subtotalStr;
+      savedHeader.tax_total = taxAmountStr;
+      savedHeader.tax_amount = taxAmountStr;
+      savedHeader.discount_total = '0.0000';
+      savedHeader.discount_amount = '0.0000';
+      savedHeader.grand_total = totalAmountStr;
+      savedHeader.total_amount = totalAmountStr;
+      savedHeader.outstanding_total = totalAmountStr;
+      savedHeader.due_amount = totalAmountStr;
+      savedHeader.paid_total = '0.0000';
+      savedHeader.paid_amount = '0.0000';
 
-    savedHeader.subtotal = subtotalStr;
-    savedHeader.subtotal_amount = subtotalStr;
-    savedHeader.tax_total = taxAmountStr;
-    savedHeader.tax_amount = taxAmountStr;
-    savedHeader.discount_total = '0.0000';
-    savedHeader.discount_amount = '0.0000';
-    savedHeader.grand_total = totalAmountStr;
-    savedHeader.total_amount = totalAmountStr;
-    savedHeader.outstanding_total = totalAmountStr;
-    savedHeader.due_amount = totalAmountStr;
-    savedHeader.paid_total = '0.0000';
-    savedHeader.paid_amount = '0.0000';
-
-    const finalOrder = await this.orderRepo.save(savedHeader);
+      const finalOrder = await orderRepo.save(savedHeader);
+      return { finalOrder, orderItems };
+    });
 
     await this.auditWriter.write({
       tenantId,

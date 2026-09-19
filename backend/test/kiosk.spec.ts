@@ -57,6 +57,9 @@ describe('KioskService (Unit)', () => {
     orderItemOptionRepo = { create: jest.fn(), save: jest.fn() };
     paymentRepo = { create: jest.fn(), save: jest.fn() };
     customerRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
+    // The order is saved in one transaction; its repositories are these same fakes.
+    const txRepos = new Map<any, any>([[OrderHeader, orderRepo], [OrderItem, orderItemRepo], [OrderItemOption, orderItemOptionRepo], [Customer, customerRepo]]);
+    orderRepo.manager = { transaction: async (fn: any) => fn({ getRepository: (entity: any) => txRepos.get(entity) }) };
     auditWriter = { write: jest.fn() };
     kdsService = { generateTicketsForOrder: jest.fn().mockResolvedValue([]) };
     printQueueService = { enqueueOrderPrintJobs: jest.fn().mockResolvedValue([]) };
@@ -339,7 +342,8 @@ describe('KioskService selling rules', () => {
       getUnavailableNow: jest.fn().mockResolvedValue(overrides.unavailable || { products: new Set(), variants: new Set(), optionItems: new Set() }),
       assertBasketSellable: overrides.basket || jest.fn().mockResolvedValue(undefined),
     };
-    const passthrough = { create: jest.fn((dto: any) => dto), save: jest.fn((dto: any) => Promise.resolve({ ...dto, id: 'x' })), findOne: jest.fn(), find: jest.fn().mockResolvedValue([]) };
+    const passthrough: any = { create: jest.fn((dto: any) => dto), save: jest.fn((dto: any) => Promise.resolve({ ...dto, id: 'x' })), findOne: jest.fn(), find: jest.fn().mockResolvedValue([]) };
+    passthrough.manager = { transaction: async (fn: any) => fn({ getRepository: () => passthrough }) };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         KioskService,
@@ -387,7 +391,7 @@ describe('KioskService selling rules', () => {
     const basket = jest.fn().mockRejectedValue(new BadRequestException({ code: 'PRODUCT_SUSPENDED' }));
     const { service } = await build({ product: burger, basket });
     await expect(service.createKioskOrder('t-1', order({ product_id: 'p-1', quantity: 1 }))).rejects.toMatchObject({ response: expect.objectContaining({ code: 'PRODUCT_SUSPENDED' }) });
-    expect(basket).toHaveBeenCalledWith('t-1', 'br-1', [expect.objectContaining({ variantId: null, quantity: 1 })]);
+    expect(basket).toHaveBeenCalledWith('t-1', 'br-1', [expect.objectContaining({ variantId: null, quantity: 1 })], expect.any(Date), expect.anything());
   });
 
   it('shows an 86d item on the menu as unavailable', async () => {

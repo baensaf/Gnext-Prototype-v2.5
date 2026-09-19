@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, IsNull, Repository } from 'typeorm';
+import { EntityManager, In, IsNull, Repository } from 'typeorm';
 import { Category } from '../../entities/Category.entity';
 import { Product } from '../../entities/Product.entity';
 import { ProductVariant } from '../../entities/ProductVariant.entity';
@@ -1153,6 +1153,23 @@ export class CatalogService {
     return this.getDailyStock(tenantId, branchId, date);
   }
 
+  /**
+   * Today's counts for some products at a branch, locked until the caller's transaction ends.
+   * Two registers selling the last unit both read "1 left" without it; with it the second
+   * waits for the first to commit, and then counts the first one's line as sold. Rows are
+   * locked in id order so two baskets of the same items cannot deadlock.
+   */
+  async lockStockCounts(em: EntityManager, tenantId: string, branchId: string, date: string, productIds: string[]): Promise<DailyStock[]> {
+    const ids = [...new Set(productIds)];
+    if (!ids.length) return [];
+    return em
+      .createQueryBuilder(DailyStock, 's')
+      .where('s.tenant_id = :tenantId AND s.branch_id = :branchId AND s.business_date = :date AND s.product_id IN (:...ids)', { tenantId, branchId, date, ids })
+      .orderBy('s.id')
+      .setLock('pessimistic_write')
+      .getMany();
+  }
+
   /** Units of a product (or one variant of it) on today's live orders at a branch. */
   private async soldOn(em: EntityManager, tenantId: string, branchId: string, date: string, productId: string, variantId?: string | null) {
     const params: unknown[] = [tenantId, branchId, date, productId];
@@ -1179,13 +1196,15 @@ export class CatalogService {
    * Every rule on what may be sold, for a whole basket checked before anything is saved: the
    * kiosk builds its order in one go rather than line by line. Stops on the product, its size
    * or an add-on, selling windows, a combo's chosen dishes, the per-order cap and today's
-   * stock, with lines of the same item added together.
+   * stock, with lines of the same item added together. Given the transaction that will save
+   * the order, the stock counts stay locked until it commits (see `lockStockCounts`).
    */
   async assertBasketSellable(
     tenantId: string,
     branchId: string | undefined,
     lines: Array<{ product: Product; variantId: string | null; quantity: number; optionItems: OptionItem[] }>,
     at: Date = new Date(),
+    em?: EntityManager,
   ) {
     const refuse = (code: string, message: string) => new BadRequestException({ statusCode: 400, code, message });
 
@@ -1217,14 +1236,18 @@ export class CatalogService {
 
     if (!branchId) return;
     const date = BusinessDateUtil.today(at);
+    const reader = em || this.stockRepo.manager;
+    const allCounts = em
+      ? await this.lockStockCounts(em, tenantId, branchId, date, [...byProduct.keys()])
+      : await this.stockRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, business_date: date, product_id: In([...byProduct.keys()]) } });
     for (const { product } of byProduct.values()) {
-      const counts = await this.stockRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, business_date: date, product_id: product.id } });
+      const counts = allCounts.filter((c) => c.product_id === product.id);
       for (const count of counts) {
         const wanted = lines
           .filter((l) => l.product.id === product.id && (!count.variant_id || l.variantId === count.variant_id))
           .reduce((sum, l) => sum + l.quantity, 0);
         if (!wanted) continue;
-        const left = count.quantity - (await this.soldOn(this.stockRepo.manager, tenantId, branchId, date, product.id, count.variant_id));
+        const left = count.quantity - (await this.soldOn(reader, tenantId, branchId, date, product.id, count.variant_id));
         if (wanted > left) {
           throw refuse('PRODUCT_OUT_OF_STOCK', left > 0 ? `Only ${left} × ${product.name} left today` : `${product.name} is sold out today`);
         }
@@ -1284,7 +1307,9 @@ export class CatalogService {
 
     if (order.branch_id) {
       const date = BusinessDateUtil.today();
-      const counts = await em.find(DailyStock, { where: { tenant_id: tenantId, branch_id: order.branch_id, business_date: date, product_id: product.id } });
+      // Locked until the order's transaction commits, so a second register selling the same
+      // item waits here and then sees this line as sold (audit C11).
+      const counts = await this.lockStockCounts(em, tenantId, order.branch_id, date, [product.id]);
       for (const count of counts.filter((c) => !c.variant_id || c.variant_id === variantId)) {
         const left = count.quantity - (await this.soldOn(em, tenantId, order.branch_id, date, product.id, count.variant_id));
         if (qty > left) {

@@ -1749,6 +1749,7 @@
       "statusOffUntil": "ناموجود تا {{time}}",
       "statusOffManual": "ناموجود تا اطلاع بعدی",
       "statusSoldOut": "موجودی امروز تمام شد",
+      "leftToday": "امروز {{count}} عدد مانده",
       "change": "تغییر",
       "nextShiftNotice": "شیفت بعد {{time}} شروع می‌شود؛ محصولاتی که تا شیفت بعد ناموجودند در آن زمان خودکار موجود می‌شوند.",
       "searchPlaceholder": "نام محصول",
