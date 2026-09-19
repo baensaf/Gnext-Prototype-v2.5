@@ -4,17 +4,21 @@ import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import {
   Box,
   Card,
-  Chip,
   Stack,
   Table,
   Paper,
   Alert,
   Button,
+  Dialog,
   Drawer,
+  MenuItem,
   TableRow,
   TableBody,
   TableCell,
@@ -23,68 +27,121 @@ import {
   Typography,
   IconButton,
   CardContent,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   TableContainer,
 } from '@mui/material';
 
 import { catalogApi } from 'src/api/catalogApi';
 
+/**
+ * Categories nest one level: a top-level category may hold sub-categories, which hold none.
+ * The server returns them in tree order (each category followed by its sub-categories), which
+ * is also the order the register and kiosk show them in.
+ */
 export function CategoriesPage() {
   const { t } = useTranslation();
 
   const [categories, setCategories] = useState<Category[]>([]);
-  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // The drawer creates a category, or edits `editing`.
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editing, setEditing] = useState<Category | null>(null);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
-  const [sortOrder, setSortOrder] = useState(1);
+  const [parentId, setParentId] = useState('');
+
+  const [archiving, setArchiving] = useState<Category | null>(null);
+  const [moveTo, setMoveTo] = useState('');
 
   const loadData = async () => {
-    setLoading(true);
     try {
-      const data = await catalogApi.getCategories();
-      setCategories(data);
+      setCategories(await catalogApi.getCategories());
       setError(null);
     } catch (err: any) {
       setError(err.detail || t('catalog.categoriesPage.errors.loadFailed'));
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const siblingsOf = (c: Category) => categories.filter((o) => (o.parent_id || '') === (c.parent_id || ''));
+  const hasChildren = (c: Category) => categories.some((o) => o.parent_id === c.id);
+  // A parent must be top level, and not the category itself.
+  const parentChoices = categories.filter((c) => !c.parent_id && c.id !== editing?.id);
+
+  const openCreate = () => {
+    setEditing(null);
+    setCode('');
+    setName('');
+    setParentId('');
+    setDrawerOpen(true);
+  };
+
+  const openEdit = (c: Category) => {
+    setEditing(c);
+    setCode(c.code);
+    setName(c.name);
+    setParentId(c.parent_id || '');
+    setDrawerOpen(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await catalogApi.createCategory({ code, name, sort_order: sortOrder });
+      if (editing) {
+        await catalogApi.updateCategory(editing.id, { name, parent_id: parentId || null });
+      } else {
+        await catalogApi.createCategory({ code, name, parent_id: parentId || null });
+      }
       setDrawerOpen(false);
-      setCode('');
-      setName('');
-      setSortOrder(1);
       loadData();
     } catch (err: any) {
-      setError(err.detail || t('catalog.categoriesPage.errors.createFailed'));
+      setError(err.detail || t('catalog.categoriesPage.errors.saveFailed'));
     }
   };
 
-  const handleArchive = async (id: string, catName: string) => {
-    if (window.confirm(t('catalog.categoriesPage.archiveConfirm', { name: catName }))) {
-      try {
-        await catalogApi.archiveCategory(id);
-        loadData();
-      } catch (err: any) {
-        setError(err.detail || t('catalog.categoriesPage.errors.archiveFailed'));
-      }
+  const move = async (c: Category, step: -1 | 1) => {
+    const ids = siblingsOf(c).map((o) => o.id);
+    const from = ids.indexOf(c.id);
+    const to = from + step;
+    if (to < 0 || to >= ids.length) return;
+    [ids[from], ids[to]] = [ids[to], ids[from]];
+    try {
+      setCategories(await catalogApi.reorderCategories(ids));
+    } catch (err: any) {
+      setError(err.detail || t('catalog.categoriesPage.errors.reorderFailed'));
     }
   };
+
+  const openArchive = (c: Category) => {
+    setArchiving(c);
+    setMoveTo('');
+  };
+
+  const handleArchive = async () => {
+    if (!archiving) return;
+    try {
+      await catalogApi.archiveCategory(archiving.id, moveTo || undefined);
+      setArchiving(null);
+      loadData();
+    } catch (err: any) {
+      setArchiving(null);
+      setError(err.detail || t('catalog.categoriesPage.errors.archiveFailed'));
+    }
+  };
+
+  const archiveCount = archiving?.product_count || 0;
+  const archiveBlocked = !!archiving && hasChildren(archiving);
 
   return (
     <Box>
-      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
             {t('catalog.categoriesPage.title')}
@@ -93,12 +150,7 @@ export function CategoriesPage() {
             {t('catalog.categoriesPage.subtitle')}
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setDrawerOpen(true)}
-          sx={{ fontWeight: 'bold' }}
-        >
+        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate} sx={{ fontWeight: 'bold' }}>
           {t('catalog.categoriesPage.newCategory')}
         </Button>
       </Stack>
@@ -115,56 +167,76 @@ export function CategoriesPage() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>{t('catalog.categoriesPage.code')}</TableCell>
                   <TableCell>{t('catalog.categoriesPage.name')}</TableCell>
-                  <TableCell align="center">{t('catalog.categoriesPage.sortOrder')}</TableCell>
-                  <TableCell>{t('catalog.categoriesPage.status')}</TableCell>
+                  <TableCell align="center">{t('catalog.categoriesPage.products')}</TableCell>
+                  <TableCell align="center">{t('catalog.categoriesPage.order')}</TableCell>
                   <TableCell align="center">{t('catalog.categoriesPage.actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {categories.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell><code>{c.code}</code></TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>{c.name}</TableCell>
-                    <TableCell align="center">{c.sort_order}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={c.is_active ? t('catalog.categoriesPage.active') : t('common.archived', 'Archived')}
-                        color={c.is_active ? 'success' : 'default'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell align="center">
-                      <IconButton
-                        title={t('catalog.categoriesPage.archive')}
-                        color="error"
-                        onClick={() => handleArchive(c.id, c.name)}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {categories.map((c) => {
+                  const siblings = siblingsOf(c);
+                  const index = siblings.findIndex((o) => o.id === c.id);
+                  return (
+                    <TableRow key={c.id}>
+                      <TableCell sx={{ ps: c.parent_id ? 5 : 2 }}>
+                        <Typography variant={c.parent_id ? 'body2' : 'subtitle2'}>
+                          {c.parent_id ? `└ ${c.name}` : c.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" component="code">
+                          {c.code}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="center">{c.product_count ?? 0}</TableCell>
+                      <TableCell align="center">
+                        <IconButton
+                          size="small"
+                          title={t('catalog.categoriesPage.moveUp')}
+                          disabled={index <= 0}
+                          onClick={() => move(c, -1)}
+                        >
+                          <ArrowUpwardIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          title={t('catalog.categoriesPage.moveDown')}
+                          disabled={index >= siblings.length - 1}
+                          onClick={() => move(c, 1)}
+                        >
+                          <ArrowDownwardIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                      <TableCell align="center">
+                        <IconButton title={t('catalog.categoriesPage.edit')} onClick={() => openEdit(c)}>
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton title={t('catalog.categoriesPage.archive')} color="error" onClick={() => openArchive(c)}>
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
         </CardContent>
       </Card>
 
-      {/* Create Category Drawer */}
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <Box sx={{ width: 400, p: 3 }}>
+        <Box sx={{ width: { xs: '100vw', sm: 400 }, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            {t('catalog.categoriesPage.createDrawerTitle')}
+            {editing ? t('catalog.categoriesPage.editDrawerTitle') : t('catalog.categoriesPage.createDrawerTitle')}
           </Typography>
-          <form onSubmit={handleCreate}>
+          <form onSubmit={handleSave}>
             <Stack spacing={2.5}>
               <TextField
                 label={t('catalog.categoriesPage.code')}
                 placeholder="e.g. CAT-DESSERTS"
                 required
                 fullWidth
+                disabled={!!editing}
+                helperText={editing ? t('catalog.categoriesPage.codeLocked') : undefined}
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
               />
@@ -177,19 +249,69 @@ export function CategoriesPage() {
                 onChange={(e) => setName(e.target.value)}
               />
               <TextField
-                label={t('catalog.categoriesPage.sortOrder')}
-                type="number"
+                select
+                label={t('catalog.categoriesPage.parent')}
                 fullWidth
-                value={sortOrder}
-                onChange={(e) => setSortOrder(parseInt(e.target.value, 10) || 0)}
-              />
+                value={parentId}
+                disabled={!!editing && hasChildren(editing)}
+                helperText={
+                  editing && hasChildren(editing)
+                    ? t('catalog.categoriesPage.parentLocked')
+                    : t('catalog.categoriesPage.nestHint')
+                }
+                onChange={(e) => setParentId(e.target.value)}
+              >
+                <MenuItem value="">{t('catalog.categoriesPage.noParent')}</MenuItem>
+                {parentChoices.map((p) => (
+                  <MenuItem key={p.id} value={p.id}>
+                    {p.name}
+                  </MenuItem>
+                ))}
+              </TextField>
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>
-                {t('catalog.categoriesPage.submitCreate')}
+                {editing ? t('catalog.categoriesPage.submitSave') : t('catalog.categoriesPage.submitCreate')}
               </Button>
             </Stack>
           </form>
         </Box>
       </Drawer>
+
+      <Dialog open={!!archiving} onClose={() => setArchiving(null)} fullWidth maxWidth="xs">
+        <DialogTitle>{t('catalog.categoriesPage.archiveTitle', { name: archiving?.name })}</DialogTitle>
+        <DialogContent>
+          {archiveBlocked ? (
+            <Alert severity="warning">{t('catalog.categoriesPage.archiveHasChildren', { name: archiving?.name })}</Alert>
+          ) : archiveCount > 0 ? (
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <Typography variant="body2">
+                {t('catalog.categoriesPage.archiveMove', { name: archiving?.name, count: archiveCount })}
+              </Typography>
+              <TextField select label={t('catalog.categoriesPage.moveTo')} fullWidth value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
+                {categories
+                  .filter((c) => c.id !== archiving?.id)
+                  .map((c) => (
+                    <MenuItem key={c.id} value={c.id}>
+                      {c.parent_id ? `└ ${c.name}` : c.name}
+                    </MenuItem>
+                  ))}
+              </TextField>
+            </Stack>
+          ) : (
+            <Typography variant="body2">{t('catalog.categoriesPage.archiveEmpty', { name: archiving?.name })}</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setArchiving(null)}>{t('catalog.categoriesPage.cancel')}</Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={archiveBlocked || (archiveCount > 0 && !moveTo)}
+            onClick={handleArchive}
+          >
+            {t('catalog.categoriesPage.archive')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

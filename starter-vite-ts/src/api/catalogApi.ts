@@ -4,10 +4,13 @@ export interface Category {
   id: string;
   code: string;
   name: string;
-  parent_id?: string;
+  /** A sub-category's parent; categories nest one level. */
+  parent_id?: string | null;
   sort_order: number;
   is_active: boolean;
   image_asset_id?: string;
+  /** How many products are in it; on the full list only. */
+  product_count?: number;
 }
 
 export interface ProductVariant {
@@ -283,8 +286,14 @@ export const catalogApi = {
     const res = await httpClient.patch(`/api/v1/categories/${id}`, data);
     return res.data;
   },
-  archiveCategory: async (id: string): Promise<void> => {
-    await httpClient.delete(`/api/v1/categories/${id}`);
+  /** A category that still holds products archives only with somewhere to move them. */
+  archiveCategory: async (id: string, moveTo?: string): Promise<void> => {
+    await httpClient.delete(`/api/v1/categories/${id}`, { params: moveTo ? { moveTo } : undefined });
+  },
+  /** Sibling categories, in their new order. */
+  reorderCategories: async (ids: string[]): Promise<Category[]> => {
+    const res = await httpClient.put('/api/v1/categories/order', { ids });
+    return res.data;
   },
 
   getProducts: async (categoryId?: string): Promise<Product[]> => {
