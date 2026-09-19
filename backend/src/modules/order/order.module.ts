@@ -19,7 +19,6 @@ import { OrderSequenceService } from './order-sequence.service';
 import { IncomingOrderPolicyService } from './incoming-order-policy.service';
 import { OrdersController } from './order.controller';
 import { CatalogModule } from '../catalog/catalog.module';
-import { PricingModule } from '../pricing/pricing.module';
 import { DiscountsModule } from '../discounts/discounts.module';
 import { CustomerModule } from '../customer/customer.module';
 import { AuditModule } from '../audit/audit.module';
@@ -51,7 +50,6 @@ import { OrderLifecycleModule } from '../order-lifecycle/order-lifecycle.module'
       OperationalAlert,
     ]),
     CatalogModule,
-    PricingModule,
     DiscountsModule,
     CustomerModule,
     AuditModule,

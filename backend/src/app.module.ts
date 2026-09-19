@@ -19,7 +19,6 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { MediaModule } from './modules/media/media.module';
 import { LocalizationModule } from './modules/localization/localization.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
-import { PricingModule } from './modules/pricing/pricing.module';
 import { DiscountsModule } from './modules/discounts/discounts.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { OrderModule } from './modules/order/order.module';
@@ -214,7 +213,6 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
     MediaModule,
     LocalizationModule,
     CatalogModule,
-    PricingModule,
     DiscountsModule,
     CustomerModule,
     OrderModule,

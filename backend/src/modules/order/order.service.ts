@@ -23,7 +23,6 @@ import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { OptionItem } from '../../entities/OptionItem.entity';
 import { OptionGroup } from '../../entities/OptionGroup.entity';
 import { ProductOptionGroup } from '../../entities/ProductOptionGroup.entity';
-import { PricingService } from '../pricing/pricing.service';
 import { DiscountEvaluationService } from '../discounts/discount-evaluation.service';
 import { OrderSequenceService } from './order-sequence.service';
 import { AuditWriter } from '../audit/audit-writer.service';
@@ -138,7 +137,6 @@ export class OrderService {
     @InjectRepository(OptionItem) private readonly optionItemRepo: Repository<OptionItem>,
     private readonly catalogService: CatalogService,
     private readonly priceLists: PriceListService,
-    private readonly priceService: PricingService,
     private readonly discountEngine: DiscountEvaluationService,
     private readonly sequenceService: OrderSequenceService,
     private readonly auditWriter: AuditWriter,

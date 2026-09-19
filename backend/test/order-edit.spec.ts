@@ -5,7 +5,6 @@ import { BadRequestException, ConflictException, ForbiddenException } from '@nes
 import { DataSource } from 'typeorm';
 import { OrderService } from '../src/modules/order/order.service';
 import { OrderSequenceService } from '../src/modules/order/order-sequence.service';
-import { PricingService } from '../src/modules/pricing/pricing.service';
 import { DiscountEvaluationService } from '../src/modules/discounts/discount-evaluation.service';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { OrderItem } from '../src/entities/OrderItem.entity';
@@ -168,7 +167,6 @@ describe('Order edit command (spec 7.9)', () => {
         { provide: getRepositoryToken(Product), useValue: productRepo },
         { provide: getRepositoryToken(ProductVariant), useValue: { findOne: jest.fn(), count: jest.fn().mockResolvedValue(0) } },
         { provide: getRepositoryToken(OptionItem), useValue: { findOne: jest.fn() } },
-        { provide: PricingService, useValue: {} },
         basePriceLists(),
         { provide: DiscountEvaluationService, useValue: {} },
         { provide: AuditWriter, useValue: { write: jest.fn() } },
