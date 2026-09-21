@@ -73,9 +73,6 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
   const activeName = isHeadOffice
     ? headOfficeName
     : selectedBranch?.name || data?.[0]?.name || 'Active Branch';
-  const activeCode = isHeadOffice
-    ? t('branchScope.headOfficeCode', 'ORG')
-    : selectedBranch?.code || data?.[0]?.plan || 'BRANCH';
 
   const buttonBg: SxProps<Theme> = {
     height: 1,
@@ -138,17 +135,19 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
         {activeName}
       </Box>
 
-      <Label
-        color="info"
-        sx={{
-          height: 22,
-          cursor: 'inherit',
-          fontWeight: 700,
-          display: { xs: 'none', [mediaQuery]: 'inline-flex' },
-        }}
-      >
-        {activeCode}
-      </Label>
+      {isHeadOffice && (
+        <Label
+          color="info"
+          sx={{
+            height: 22,
+            cursor: 'inherit',
+            fontWeight: 700,
+            display: { xs: 'none', [mediaQuery]: 'inline-flex' },
+          }}
+        >
+          {t('branchScope.headOfficeCode', 'ORG')}
+        </Label>
+      )}
 
       <Iconify width={16} icon="carbon:chevron-sort" sx={{ color: 'text.disabled' }} />
     </ButtonBase>
@@ -249,10 +248,6 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
                       : t('branchScope.type.restaurant', 'Restaurant')}
                 </Typography>
               </Box>
-
-              <Label color={branch.id === selectedBranchId ? 'primary' : 'default'} sx={{ height: 20, fontSize: '0.65rem' }}>
-                {branch.code}
-              </Label>
             </MenuItem>
           ))}
         </MenuList>
