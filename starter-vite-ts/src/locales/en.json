@@ -409,7 +409,8 @@
       "cancelOrder": "Cancel Order",
       "detailsAudit": "Details & Audit Log",
       "editOrder": "Edit lines",
-      "reportToSnappfood": "Report to Snappfood"
+      "reportToSnappfood": "Report to Snappfood",
+      "changeType": "Change type"
     },
     "snappfood": {
       "withSupport": "With Snappfood support",
@@ -509,7 +510,8 @@
       "loadFailed": "Failed to load active orders",
       "updateStatusFailed": "Failed to update order status",
       "cancelFailed": "Failed to cancel order",
-      "receiptFailed": "Failed to load receipt details"
+      "receiptFailed": "Failed to load receipt details",
+      "typeChangeFailed": "Could not change the order type"
     },
     "detailTitle": "Order Detail",
     "itemsTitle": "Order Items",
@@ -551,6 +553,22 @@
       "failed": "Could not apply the edit",
       "approvalNeeded": "A manager must authorize this change.",
       "approvalDetails": "Line changes outside the cashier edit window"
+    },
+    "typeDialog": {
+      "title": "Change order type",
+      "help": "The delivery fee follows the order type, so this changes the total. A manager is asked for once money has been taken.",
+      "newType": "New type",
+      "addressId": "Delivery address",
+      "addressPlaceholder": "Leave blank to keep the order's address",
+      "zoneId": "Delivery zone",
+      "zonePlaceholder": "Leave blank to keep the order's zone",
+      "tableId": "Table",
+      "tablePlaceholder": "Optional — can be seated later",
+      "reason": "Reason",
+      "reasonPlaceholder": "e.g. guest will collect",
+      "confirm": "Change type",
+      "approvalDetails": "Order type change outside the cashier window",
+      "approvalDetailsPaid": "Changing the type of an order that has been paid"
     }
   },
   "dineIn": {

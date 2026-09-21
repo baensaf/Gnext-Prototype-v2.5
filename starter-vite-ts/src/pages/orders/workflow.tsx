@@ -20,6 +20,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import PaymentIcon from '@mui/icons-material/Payment';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import SecurityIcon from '@mui/icons-material/Security';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -161,6 +162,18 @@ export function OrdersWorkflowPage() {
   // Order Details & Audit Drawer State
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  // Converting an order to a different kind
+  const [typeDialogOpen, setTypeDialogOpen] = useState(false);
+  const [typeOrder, setTypeOrder] = useState<OrderHeader | null>(null);
+  const [typeTarget, setTypeTarget] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>('TAKEAWAY');
+  const [typeAddressId, setTypeAddressId] = useState('');
+  const [typeZoneId, setTypeZoneId] = useState('');
+  const [typeTableId, setTypeTableId] = useState('');
+  const [typeReason, setTypeReason] = useState('');
+  const [typeError, setTypeError] = useState<string | null>(null);
+  const [typeSubmitting, setTypeSubmitting] = useState(false);
+  const [typeApprovalOpen, setTypeApprovalOpen] = useState(false);
+  const [typeEscalation, setTypeEscalation] = useState('');
   const [cancelApprovalOpen, setCancelApprovalOpen] = useState(false);
   // Why the server escalated, so the approver reads the actual reason rather
   // than the one that used to be the only possibility.
@@ -260,6 +273,15 @@ export function OrdersWorkflowPage() {
     !readOnly && !isSnappfoodOrder(order) && order.status !== 'CANCELLED' && MoneyUtil.greaterThan(order.due_amount, '0');
 
   const canReport = (order: OrderHeader) => !readOnly && reportMinutesLeft(order, Date.now()) > 0;
+
+  // Rung up as the wrong kind of order. Not a Snappfood order — that one is theirs — and not
+  // once a courier has it, which the server refuses anyway; hiding the button just saves the
+  // cashier a pointless error.
+  const canChangeType = (order: OrderHeader) =>
+    !readOnly &&
+    !isSnappfoodOrder(order) &&
+    order.status !== 'OUT_FOR_DELIVERY' &&
+    (lifecycleOf(order.status) === 'OPEN' || order.status === 'DRAFT');
 
   const handleOpenReport = (order: OrderHeader) => {
     setReportOrder(order);
@@ -402,6 +424,48 @@ export function OrdersWorkflowPage() {
         return;
       }
       setError(err.detail || t('orders.errors.cancelFailed'));
+    }
+  };
+
+  const handleOpenTypeDialog = (order: OrderHeader) => {
+    setTypeOrder(order);
+    // Offer something other than what it already is, so the dialog opens on a real choice.
+    setTypeTarget(order.order_type === 'DELIVERY' ? 'TAKEAWAY' : 'DELIVERY');
+    setTypeAddressId('');
+    setTypeZoneId('');
+    setTypeTableId('');
+    setTypeReason('');
+    setTypeError(null);
+    setTypeDialogOpen(true);
+  };
+
+  const handleConfirmTypeChange = async (approvalRequestId?: string) => {
+    if (!typeOrder) return;
+    setTypeSubmitting(true);
+    setTypeError(null);
+    try {
+      await orderApi.changeOrderType(typeOrder.id, typeTarget, {
+        deliveryAddressId: typeAddressId || undefined,
+        deliveryZoneId: typeZoneId || undefined,
+        tableId: typeTableId || undefined,
+        reason: typeReason || undefined,
+        approvalRequestId,
+      });
+      setTypeDialogOpen(false);
+      setTypeOrder(null);
+      await loadData();
+    } catch (err: any) {
+      // Past the cashier's window, or once money has landed, the server wants a manager.
+      // Same shape as the cancel flow: collect a PIN and retry the identical change.
+      if (err?.code === 'APPROVAL_REQUIRED') {
+        const escalation: string = err?.escalations?.[0] || '';
+        setTypeEscalation(escalation.split(':')[1] || '');
+        setTypeApprovalOpen(true);
+        return;
+      }
+      setTypeError(err.detail || err.message || t('orders.errors.typeChangeFailed', 'Could not change the order type'));
+    } finally {
+      setTypeSubmitting(false);
     }
   };
 
@@ -1638,6 +1702,19 @@ export function OrdersWorkflowPage() {
                     {t('orders.actions.reportToSnappfood')}
                   </Button>
                 )}
+                {canChangeType(selectedDrawerOrder) && (
+                  <Button
+                    color="info"
+                    variant="outlined"
+                    startIcon={<SwapHorizIcon />}
+                    onClick={() => {
+                      setDrawerOpen(false);
+                      handleOpenTypeDialog(selectedDrawerOrder);
+                    }}
+                  >
+                    {t('orders.actions.changeType', 'Change type')}
+                  </Button>
+                )}
                 {canCancel(selectedDrawerOrder) && (
                   <Button
                     color="error"
@@ -1682,6 +1759,119 @@ export function OrdersWorkflowPage() {
           cancelEscalation === 'CANCEL_AGAINST_PAID_ORDER'
             ? t('orders.cancelDialog.approvalDetailsPaid')
             : t('orders.cancelDialog.approvalDetails', 'Cancellation outside the cashier window')
+        }
+        createRequest
+      />
+
+      {/* Convert the order to a different kind */}
+      <Dialog
+        open={typeDialogOpen}
+        onClose={() => !typeSubmitting && setTypeDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 'bold' }}>
+          {t('orders.typeDialog.title', 'Change order type')}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t(
+              'orders.typeDialog.help',
+              'The delivery fee follows the order type, so this changes the total. A manager is asked for once money has been taken.'
+            )}
+          </Typography>
+
+          {typeError && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setTypeError(null)}>
+              {typeError}
+            </Alert>
+          )}
+
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel>{t('orders.typeDialog.newType', 'New type')}</InputLabel>
+            <Select
+              value={typeTarget}
+              label={t('orders.typeDialog.newType', 'New type')}
+              onChange={(e) => setTypeTarget(e.target.value as typeof typeTarget)}
+            >
+              {(['DINE_IN', 'TAKEAWAY', 'DELIVERY'] as const)
+                .filter((option) => option !== typeOrder?.order_type)
+                .map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {getOrderTypeLabel(option)}
+                  </MenuItem>
+                ))}
+            </Select>
+          </FormControl>
+
+          {/* Becoming a delivery needs somewhere to deliver to. The server refuses without
+              them and names the missing piece; these fields are how the cashier supplies it. */}
+          {typeTarget === 'DELIVERY' && (
+            <>
+              <TextField
+                fullWidth
+                sx={{ mb: 2 }}
+                label={t('orders.typeDialog.addressId', 'Delivery address')}
+                placeholder={t('orders.typeDialog.addressPlaceholder', "Leave blank to keep the order's address")}
+                value={typeAddressId}
+                onChange={(e) => setTypeAddressId(e.target.value)}
+              />
+              <TextField
+                fullWidth
+                sx={{ mb: 2 }}
+                label={t('orders.typeDialog.zoneId', 'Delivery zone')}
+                placeholder={t('orders.typeDialog.zonePlaceholder', "Leave blank to keep the order's zone")}
+                value={typeZoneId}
+                onChange={(e) => setTypeZoneId(e.target.value)}
+              />
+            </>
+          )}
+
+          {typeTarget === 'DINE_IN' && (
+            <TextField
+              fullWidth
+              sx={{ mb: 2 }}
+              label={t('orders.typeDialog.tableId', 'Table')}
+              placeholder={t('orders.typeDialog.tablePlaceholder', 'Optional — can be seated later')}
+              value={typeTableId}
+              onChange={(e) => setTypeTableId(e.target.value)}
+            />
+          )}
+
+          <TextField
+            fullWidth
+            multiline
+            rows={2}
+            label={t('orders.typeDialog.reason', 'Reason')}
+            placeholder={t('orders.typeDialog.reasonPlaceholder', 'e.g. guest will collect')}
+            value={typeReason}
+            onChange={(e) => setTypeReason(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button disabled={typeSubmitting} onClick={() => setTypeDialogOpen(false)}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button variant="contained" disabled={typeSubmitting} onClick={() => handleConfirmTypeChange()}>
+            {t('orders.typeDialog.confirm', 'Change type')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <ApprovalModal
+        open={typeApprovalOpen}
+        onClose={() => setTypeApprovalOpen(false)}
+        onSuccess={(_pin, requestId) => {
+          setTypeApprovalOpen(false);
+          handleConfirmTypeChange(requestId);
+        }}
+        actionName="EDIT_ORDER"
+        entityType="ORDER"
+        entityId={typeOrder?.id}
+        detailsText={
+          typeEscalation === 'TYPE_CHANGE_AGAINST_PAID_ORDER'
+            ? t('orders.typeDialog.approvalDetailsPaid', 'Changing the type of an order that has been paid')
+            : t('orders.typeDialog.approvalDetails', 'Order type change outside the cashier window')
         }
         createRequest
       />

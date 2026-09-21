@@ -409,7 +409,8 @@
       "cancelOrder": "لغو سفارش",
       "detailsAudit": "جزئیات و لاگ رویدادها",
       "editOrder": "ویرایش اقلام",
-      "reportToSnappfood": "گزارش به اسنپ‌فود"
+      "reportToSnappfood": "گزارش به اسنپ‌فود",
+      "changeType": "تغییر نوع فاکتور"
     },
     "snappfood": {
       "withSupport": "نزد پشتیبانی اسنپ‌فود",
@@ -509,7 +510,8 @@
       "loadFailed": "خطا در بارگذاری سفارش‌های فعال",
       "updateStatusFailed": "خطا در تغییر وضعیت سفارش",
       "cancelFailed": "خطا در لغو سفارش",
-      "receiptFailed": "خطا در دریافت فاکتور سفارش"
+      "receiptFailed": "خطا در دریافت فاکتور سفارش",
+      "typeChangeFailed": "تغییر نوع فاکتور انجام نشد"
     },
     "detailTitle": "جزئیات سفارش",
     "itemsTitle": "اقلام سفارش",
@@ -551,6 +553,22 @@
       "failed": "اعمال ویرایش ممکن نشد",
       "approvalNeeded": "این تغییر به تأیید مدیر نیاز دارد.",
       "approvalDetails": "تغییر اقلام خارج از بازه مجاز صندوق‌دار"
+    },
+    "typeDialog": {
+      "title": "تغییر نوع فاکتور",
+      "help": "هزینه ارسال به نوع فاکتور بستگی دارد، پس این تغییر جمع کل را جابه‌جا می‌کند. اگر مبلغی دریافت شده باشد، تأیید مدیر لازم است.",
+      "newType": "نوع جدید",
+      "addressId": "آدرس ارسال",
+      "addressPlaceholder": "برای حفظ آدرس فعلی خالی بگذارید",
+      "zoneId": "منطقه ارسال",
+      "zonePlaceholder": "برای حفظ منطقه فعلی خالی بگذارید",
+      "tableId": "میز",
+      "tablePlaceholder": "اختیاری — می‌توان بعداً میز را مشخص کرد",
+      "reason": "علت",
+      "reasonPlaceholder": "مثلاً مشتری خودش می‌برد",
+      "confirm": "تغییر نوع",
+      "approvalDetails": "تغییر نوع فاکتور خارج از مهلت مجاز صندوق‌دار",
+      "approvalDetailsPaid": "تغییر نوع فاکتوری که پرداخت شده است"
     }
   },
   "dineIn": {

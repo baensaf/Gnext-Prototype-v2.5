@@ -9,6 +9,7 @@ import {
   OrderSubmitDto,
   OrderTransitionDto,
   OrderEditDto,
+  OrderTypeChangeDto,
   OrderItemReplaceDto,
   OrderCancelDto,
   OrderReopenDto,
@@ -178,6 +179,16 @@ export class OrdersController {
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
     return await this.orderService.editOrder(tenantId, id, body, userId, correlationId);
+  }
+
+  // Rung up as the wrong kind of order. Ordinary counter work inside the cashier's window,
+  // and the service escalates to an approval past it or once money has landed.
+  @Post(':id/change-type')
+  async changeOrderType(@Param('id') id: string, @Body() body: OrderTypeChangeDto, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    const correlationId = (req as any).correlationId;
+    return await this.orderService.changeOrderType(tenantId, id, body, userId, correlationId);
   }
 
   @Post(':id/replace-item')

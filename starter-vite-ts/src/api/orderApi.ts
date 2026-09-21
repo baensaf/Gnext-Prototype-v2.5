@@ -279,6 +279,30 @@ export const orderApi = {
     return res.data;
   },
 
+  /**
+   * The order was rung up as the wrong kind — a walk-in that turns out to be a delivery, a
+   * delivery the guest decides to collect.
+   *
+   * The delivery fee moves with the type, so this goes through the same authority as a line
+   * edit: 403 APPROVAL_REQUIRED past the cashier window or once money has landed, and 409
+   * REFUND_REQUIRED when dropping the fee would take the total below what was collected.
+   */
+  changeOrderType: async (
+    id: string,
+    orderType: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY',
+    options?: {
+      deliveryAddressId?: string;
+      deliveryZoneId?: string;
+      tableId?: string;
+      quoteVersion?: string;
+      approvalRequestId?: string;
+      reason?: string;
+    },
+  ): Promise<OrderHeader> => {
+    const res = await httpClient.post(`/api/v1/orders/${id}/change-type`, { orderType, ...options });
+    return res.data;
+  },
+
   /** Supersede a line. The replacement is priced from the catalog, not the client. */
   replaceItem: async (
     id: string,

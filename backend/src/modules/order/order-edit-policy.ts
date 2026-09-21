@@ -18,7 +18,12 @@ import { MoneyUtil } from '../../common/utils/money.util';
 
 export type EditDecision = 'ALLOW' | 'REQUIRE_APPROVAL' | 'FORBID';
 
-export type OrderEditAction = 'ADD_ITEM' | 'VOID_ITEM' | 'REPLACE_ITEM' | 'CANCEL_ORDER';
+export type OrderEditAction =
+  | 'ADD_ITEM'
+  | 'VOID_ITEM'
+  | 'REPLACE_ITEM'
+  | 'CANCEL_ORDER'
+  | 'CHANGE_ORDER_TYPE';
 
 /** Tenant-configurable windows, measured in minutes from `submitted_at`. */
 export interface OrderActionConfig {
@@ -138,7 +143,8 @@ export function resolveOrderEditDecision(
       return FORBID('ORDER_CANCELLED');
 
     // Spec 6.1: "Item edits forbidden. Cancellation requires approval."
-    // The food is with a courier; there is nothing left to amend.
+    // The food is with a courier; there is nothing left to amend. Nor can it stop being a
+    // delivery while a courier is carrying it.
     case 'OUT_FOR_DELIVERY':
       return action === 'CANCEL_ORDER'
         ? APPROVE('OUT_FOR_DELIVERY_CANCEL_NEEDS_APPROVAL')
@@ -156,6 +162,14 @@ export function resolveOrderEditDecision(
     case 'SUBMITTED':
     case 'CONFIRMED': {
       if (action === 'ADD_ITEM') return ALLOW('OPEN_CHECK_APPEND');
+
+      // Changing what kind of order this is moves money — the delivery fee comes off or
+      // goes on — so it is treated exactly like a removal rather than like an append:
+      // inside the cashier's window and with nothing collected it is theirs to fix, and
+      // past either of those it is a manager's.
+      if (action === 'CHANGE_ORDER_TYPE' && hasMoneyOnOrder(ctx)) {
+        return APPROVE('TYPE_CHANGE_AGAINST_PAID_ORDER');
+      }
 
       // Spec 6.1: "Cannot reduce paid order below net paid amount." The new
       // total is not known here, so any removal against collected money is
