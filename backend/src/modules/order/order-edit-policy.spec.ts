@@ -183,3 +183,71 @@ describe('order edit policy: line guards', () => {
     expect(res.reason).toBe('LINE_NOT_ACTIVE:VOID');
   });
 });
+
+/**
+ * Changing what kind of order this is moves the delivery fee, and therefore the total. It is
+ * governed like a removal rather than like an append: an append only ever raises the balance,
+ * a conversion can lower it below what the guest already handed over.
+ */
+describe('order edit policy: changing the order type', () => {
+  it('is the cashier\'s own inside their window, with nothing collected', () => {
+    expect(decide('CHANGE_ORDER_TYPE', { submittedAt: minutesAgo(3) })).toBe('ALLOW');
+  });
+
+  it('needs a manager once the cashier window has elapsed', () => {
+    expect(decide('CHANGE_ORDER_TYPE', { submittedAt: minutesAgo(30) })).toBe('REQUIRE_APPROVAL');
+  });
+
+  it('needs a manager as soon as money has landed, however recent the order', () => {
+    expect(
+      decide('CHANGE_ORDER_TYPE', { submittedAt: minutesAgo(1), paidTotal: '250000.0000' }),
+    ).toBe('REQUIRE_APPROVAL');
+  });
+
+  it('is free on a draft, which has neither fired nor been paid', () => {
+    expect(decide('CHANGE_ORDER_TYPE', { state: 'DRAFT', submittedAt: null })).toBe('ALLOW');
+  });
+
+  it('needs a manager once a cook has the ticket', () => {
+    expect(decide('CHANGE_ORDER_TYPE', { state: 'PREPARING' })).toBe('REQUIRE_APPROVAL');
+    expect(decide('CHANGE_ORDER_TYPE', { state: 'READY' })).toBe('REQUIRE_APPROVAL');
+  });
+
+  it('is refused outright while a courier is carrying the food', () => {
+    expect(decide('CHANGE_ORDER_TYPE', { state: 'OUT_FOR_DELIVERY' })).toBe('FORBID');
+  });
+
+  it('is refused on an order that is finished or cancelled', () => {
+    (['COMPLETED', 'CANCELLED'] as OrderState[]).forEach((state) => {
+      expect(decide('CHANGE_ORDER_TYPE', { state })).toBe('FORBID');
+    });
+  });
+
+  it('says which rule escalated it', () => {
+    const paid = resolveOrderEditDecision(
+      'CHANGE_ORDER_TYPE',
+      ctx({ paidTotal: '100000.0000' }),
+      ORDER_ACTION_DEFAULTS,
+      NOW,
+    );
+    expect(paid.reason).toBe('TYPE_CHANGE_AGAINST_PAID_ORDER');
+
+    const late = resolveOrderEditDecision(
+      'CHANGE_ORDER_TYPE',
+      ctx({ submittedAt: minutesAgo(30) }),
+      ORDER_ACTION_DEFAULTS,
+      NOW,
+    );
+    expect(late.reason).toBe('CASHIER_WINDOW_ELAPSED');
+  });
+
+  it('follows the edit window, not the cancel window', () => {
+    const config = { editWindowMinutes: 5, cancelWindowMinutes: 60 };
+    const at30 = ctx({ submittedAt: minutesAgo(30) });
+
+    expect(resolveOrderEditDecision('CHANGE_ORDER_TYPE', at30, config, NOW).decision).toBe(
+      'REQUIRE_APPROVAL',
+    );
+    expect(resolveOrderEditDecision('CANCEL_ORDER', at30, config, NOW).decision).toBe('ALLOW');
+  });
+});

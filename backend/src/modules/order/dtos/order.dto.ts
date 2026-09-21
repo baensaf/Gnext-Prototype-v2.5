@@ -3,6 +3,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsUUID,
+  IsIn,
   IsInt,
   IsArray,
   ValidateNested,
@@ -277,6 +278,43 @@ export class OrderEditChangesDto {
   @ValidateNested({ each: true })
   @Type(() => OrderEditVoidLineDto)
   void?: OrderEditVoidLineDto[];
+}
+
+/**
+ * The order was rung up as the wrong kind: a walk-in that turns out to be a delivery, a
+ * delivery the customer decides to collect. Aggregator orders are not convertible — that
+ * order belongs to Snappfood.
+ */
+export class OrderTypeChangeDto {
+  @IsIn(['DINE_IN', 'TAKEAWAY', 'DELIVERY'])
+  orderType: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
+
+  /** Needed to become a delivery, unless the order already carries them. */
+  @IsOptional()
+  @IsUUID()
+  deliveryAddressId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  deliveryZoneId?: string;
+
+  /** Where the guests are sitting, when becoming a dine-in check. */
+  @IsOptional()
+  @IsUUID()
+  tableId?: string;
+
+  @IsOptional()
+  @IsString()
+  quoteVersion?: string;
+
+  /** Required when the edit policy escalates the change. */
+  @IsOptional()
+  @IsUUID()
+  approvalRequestId?: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }
 
 export class OrderEditDto {

@@ -57,6 +57,7 @@ import { Branch } from '../../entities/Branch.entity';
 import { Payment } from '../../entities/Payment.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { DiningTable } from '../../entities/DiningTable.entity';
+import { TableSession } from '../../entities/TableSession.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { DeliveryZone } from '../../entities/DeliveryZone.entity';
 import { Delivery } from '../../entities/Delivery.entity';
@@ -79,6 +80,7 @@ import {
   OrderSubmitDto,
   OrderTransitionDto,
   OrderEditDto,
+  OrderTypeChangeDto,
   OrderItemReplaceDto,
   OrderCancelDto,
   OrderReopenDto,
@@ -1269,6 +1271,242 @@ export class OrderService {
     );
 
     return result.order;
+  }
+
+  /**
+   * The order was rung up as the wrong kind — a walk-in that turns out to be a delivery, a
+   * delivery the customer decides to collect on the way home.
+   *
+   * This is not a field edit, because the type is what the money hangs off: the delivery fee
+   * comes off or goes on, which moves the grand total and can take it below what has already
+   * been collected. So it runs through the same machinery as a line edit — the edit policy,
+   * the cashier window, the approval escalation, the quote version and the refund check —
+   * rather than quietly assigning a column.
+   *
+   * What it will not do:
+   *   - convert an aggregator order, because that order is Snappfood's, not ours
+   *   - take a delivery away from a courier who is already carrying it
+   *   - make an order a delivery without a customer, an address and a live zone
+   *
+   * The kitchen is deliberately not re-fired. The lines have not changed, and a station that
+   * has already cooked them does not need to see them again; what the pass needs to know is
+   * whether the food is being packed, and that is on the chit the operator reprints. Doing it
+   * automatically would put a duplicate chit on every conversion.
+   */
+  async changeOrderType(
+    tenantId: string,
+    id: string,
+    dto: OrderTypeChangeDto,
+    userId?: string,
+    correlationId?: string,
+  ) {
+    return await this.dataSource.transaction(async (em) => {
+      const order = await em.findOne(OrderHeader, {
+        where: { id, tenant_id: tenantId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!order) throw new NotFoundException(`Order ${id} not found`);
+
+      const from = order.order_type;
+      const to = dto.orderType;
+
+      this.refuseSnappfoodChange(order, 'change what kind of order it is');
+      if (from === to) {
+        throw new BadRequestException(`Order ${order.order_number} is already a ${to} order`);
+      }
+
+      // Same staleness rule as a line edit: the cashier must be acting on the totals they
+      // were shown, since this change moves them.
+      if (dto.quoteVersion && dto.quoteVersion !== order.quote_version) {
+        throw new ConflictException({
+          statusCode: 409,
+          code: 'QUOTE_STALE',
+          message: 'Order totals have changed since this conversion was composed',
+          currentQuoteVersion: order.quote_version,
+        });
+      }
+
+      const netPaid = await this.calculateNetPaid(tenantId, id, em);
+      const config = await this.getOrderActionConfig(tenantId, em, order.branch_id);
+      const decision = resolveOrderEditDecision(
+        'CHANGE_ORDER_TYPE',
+        { state: order.state, submittedAt: order.submitted_at || null, paidTotal: netPaid },
+        config,
+        new Date(),
+      );
+
+      if (decision.decision === 'FORBID') {
+        throw new BadRequestException(
+          `Cannot change the type of order ${order.order_number} in state ${order.state} (${decision.reason})`,
+        );
+      }
+      if (decision.decision === 'REQUIRE_APPROVAL') {
+        if (!dto.approvalRequestId) {
+          throw new ForbiddenException({
+            statusCode: 403,
+            code: 'APPROVAL_REQUIRED',
+            message: `Changing this order from ${from} to ${to} is outside cashier authority and needs an approved request (${decision.reason})`,
+            escalations: [`CHANGE_ORDER_TYPE:${decision.reason}`],
+          });
+        }
+        await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'EDIT_ORDER');
+      }
+
+      // A courier holding the food outranks everything above: there is no honest way to
+      // call it a takeaway while it is on a motorbike.
+      if (from === 'DELIVERY') {
+        const delivery = await em.findOne(Delivery, { where: { tenant_id: tenantId, order_id: id } });
+        if (delivery && !['UNASSIGNED', 'CANCELLED', 'FAILED'].includes(delivery.state)) {
+          throw new ConflictException({
+            code: 'DELIVERY_IN_PROGRESS',
+            message: `Order ${order.order_number} is already with a courier (${delivery.state}) and cannot stop being a delivery`,
+          });
+        }
+        if (delivery) {
+          delivery.state = 'CANCELLED';
+          await em.save(Delivery, delivery);
+        }
+      }
+
+      const before = {
+        order_type: from,
+        delivery_fee: order.delivery_fee,
+        grand_total: order.grand_total,
+        table_id: order.table_id,
+        delivery_zone_id: order.delivery_zone_id,
+      };
+
+      order.order_type = to;
+
+      if (to === 'DELIVERY') {
+        if (dto.deliveryAddressId) order.customer_address_id = dto.deliveryAddressId;
+        if (dto.deliveryZoneId) order.delivery_zone_id = dto.deliveryZoneId;
+        // Fails with the specific missing piece, so the cashier is told what to collect.
+        await this.validateDeliveryContext(tenantId, order, em, true);
+        // A check cannot be at a table and out for delivery at once.
+        await this.releaseTableForOrder(tenantId, order, em);
+      } else {
+        // Leaving delivery: the fee and the zone go with it, or the next recalculation
+        // would keep charging for a journey nobody is making.
+        order.delivery_zone_id = null as any;
+        order.delivery_fee = '0.0000';
+
+        if (to === 'DINE_IN') {
+          if (dto.tableId) {
+            const table = await em.findOne(DiningTable, { where: { id: dto.tableId, tenant_id: tenantId } });
+            if (!table) throw new BadRequestException(`Table ${dto.tableId} not found`);
+            order.table_id = table.id;
+            order.table_number = table.table_number;
+          }
+        } else {
+          // TAKEAWAY: no table, no zone, collected at the counter.
+          await this.releaseTableForOrder(tenantId, order, em);
+        }
+      }
+
+      const recalculated = await this.recalculateOrderTotals(tenantId, order, em);
+
+      // Dropping the delivery fee can take the total below what the guest already handed
+      // over. Same rule as a line edit: the money owed back is settled deliberately, not
+      // left as a negative balance nobody reconciles.
+      if (MoneyUtil.greaterThan(netPaid, recalculated.grand_total)) {
+        throw new ConflictException({
+          statusCode: 409,
+          code: 'REFUND_REQUIRED',
+          message:
+            `Changing this order to ${to} lowers its total to ${recalculated.grand_total}, ` +
+            `below the ${netPaid} already collected. Refund the difference first.`,
+          newGrandTotal: recalculated.grand_total,
+          refundDue: MoneyUtil.subtract(netPaid, recalculated.grand_total),
+        });
+      }
+
+      recalculated.version += 1;
+      await em.save(OrderHeader, recalculated);
+
+      // Same shape as a line edit: the order has not moved state, but the history needs a
+      // row saying what happened and who approved it. Written directly rather than through
+      // the transition recorder, which is for real state moves and would also try to settle
+      // loyalty on a completed order.
+      await em.save(
+        OrderStateEvent,
+        em.create(OrderStateEvent, {
+          tenant_id: tenantId,
+          order_id: recalculated.id,
+          from_state: recalculated.state,
+          to_state: recalculated.state,
+          action: 'CHANGE_ORDER_TYPE',
+          reason_text: dto.reason || `Converted from ${from} to ${to}`,
+          approval_request_id: dto.approvalRequestId || null,
+          occurred_by: userId || null,
+          snapshot: { from, to, before, after: { grand_total: recalculated.grand_total } },
+        }),
+      );
+
+      // The branch agent holds its own copy: a till that still thinks this is a delivery
+      // would price the next quote with a fee that is no longer there.
+      await this.outboxWriter.enqueueInTransaction(em, {
+        tenantId,
+        eventType: 'ORDER_UPDATED',
+        aggregateType: 'Order',
+        aggregateId: recalculated.id,
+        payload: {
+          orderId: recalculated.id,
+          orderNumber: recalculated.order_number,
+          action: 'CHANGE_ORDER_TYPE',
+          fromType: from,
+          toType: to,
+          grandTotal: recalculated.grand_total,
+        },
+      });
+
+      await this.auditWriter.writeInTransaction(em, {
+        tenantId,
+        actorType: 'ADMIN',
+        actorId: userId,
+        action: 'ORDER_TYPE_CHANGED',
+        entityType: 'Order',
+        entityId: id,
+        correlationId,
+        beforeData: before,
+        afterData: {
+          order_type: recalculated.order_type,
+          delivery_fee: recalculated.delivery_fee,
+          grand_total: recalculated.grand_total,
+          table_id: recalculated.table_id,
+          delivery_zone_id: recalculated.delivery_zone_id,
+        },
+        details: { from, to, reason: dto.reason || null, approvalRequestId: dto.approvalRequestId || null },
+      });
+
+      return await em.findOne(OrderHeader, {
+        where: { id },
+        relations: ['items', 'items.options', 'adjustments', 'stateEvents'],
+      });
+    });
+  }
+
+  /**
+   * Let go of the table an order is sitting at, if it is sitting at one.
+   *
+   * The floor map treats a table as occupied whenever a live order names it, so clearing
+   * the order's own columns is what actually frees it; the session row is closed too, so
+   * the seating history is not left open forever.
+   */
+  private async releaseTableForOrder(tenantId: string, order: OrderHeader, em: EntityManager) {
+    if (!order.table_id) return;
+
+    const session = await em.findOne(TableSession, {
+      where: { tenant_id: tenantId, table_id: order.table_id, closed_at: IsNull() },
+    });
+    if (session) {
+      session.closed_at = new Date();
+      session.status = 'AVAILABLE';
+      await em.save(TableSession, session);
+    }
+
+    order.table_id = null as any;
+    order.table_number = null as any;
   }
 
   /** Money actually collected: succeeded payments less succeeded refunds. */
