@@ -746,7 +746,7 @@ export function OrdersWorkflowPage() {
                         </TableCell>
                         <TableCell>
                           <Stack spacing={0.5}>
-                            {order.items.map((it) => (
+                            {order.items.filter((it: any) => it.state !== 'VOID').map((it) => (
                               <Typography key={it.id} variant="caption" sx={{ display: 'block' }}>
                                 <strong>{MoneyUtil.format(it.quantity, 0)}x</strong> {it.product_name}
                                 {it.options && it.options.length > 0 && (
@@ -972,7 +972,7 @@ export function OrdersWorkflowPage() {
                           </Typography>
 
                           <Box sx={{ bgcolor: 'background.paper', borderRadius: 1, mb: 1.5, p: 1 }}>
-                            {order.items?.map((item) => (
+                            {order.items?.filter((item: any) => item.state !== 'VOID').map((item) => (
                               <Box key={item.id} sx={{ mb: 0.5 }}>
                                 <Typography sx={{ fontWeight: 'bold' }} variant="body2">
                                   {MoneyUtil.format(item.quantity, 0)}x {item.product_name}
@@ -1101,9 +1101,11 @@ export function OrdersWorkflowPage() {
               onChange={(e) => setReasonCodeId(e.target.value)}
               value={reasonCodeId}
             >
-              {reasonCodes.map((r) => (
+              {reasonCodes
+                .filter((r) => r.is_active !== false && (!r.applies_to?.length || r.applies_to.includes('ORDER_CANCEL')))
+                .map((r) => (
                 <MenuItem key={r.id} value={r.id}>
-                  {r.name} ({r.code})
+                  {r.name}
                 </MenuItem>
               ))}
             </Select>
@@ -1434,10 +1436,18 @@ export function OrdersWorkflowPage() {
                         </TableHead>
                         <TableBody>
                           {(selectedDrawerOrder.items || []).map((item: any) => (
-                            <TableRow key={item.id}>
+                            // A voided line stays on the order for the audit trail, struck through
+                            // so it does not read as something still to be paid for.
+                            <TableRow
+                              key={item.id}
+                              sx={item.state === 'VOID' ? { opacity: 0.5, '& td': { textDecoration: 'line-through' } } : undefined}
+                            >
                               <TableCell>
                                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                   {item.product_name}
+                                  {item.state === 'VOID' && (
+                                    <Chip label={t('orders.drawer.voided', 'Voided')} size="small" color="error" variant="outlined" sx={{ ml: 1, height: 18, fontSize: '0.65rem' }} />
+                                  )}
                                 </Typography>
                                 {item.options && item.options.length > 0 && (
                                   <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', mt: 0.5 }}>

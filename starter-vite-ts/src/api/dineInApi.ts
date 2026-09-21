@@ -24,6 +24,8 @@ export interface DiningTable {
   active_order_id?: string;
   order_number?: string;
   grand_total?: string;
+  /** Open checks on the table; more than one when a second party or a split shares it. */
+  open_check_count?: number;
   active_session_id?: string;
 }
 

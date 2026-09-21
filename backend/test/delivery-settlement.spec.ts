@@ -348,6 +348,24 @@ describe('DeliveryService (Courier Settlement)', () => {
       expect(em.save).not.toHaveBeenCalledWith(CashMovement, expect.anything());
     });
 
+    // The courier keeps their pay out of what they collected. The drawer used to expect the
+    // whole collection, so every shift with deliveries closed short by exactly the pay.
+    it("takes the courier's pay back out of the drawer", async () => {
+      settlementRepo.findOne.mockResolvedValue({
+        id: 'settle-1', tenant_id: 't-1', branch_id: 'b-1', courier_id: 'c-1', settlement_number: 'SET-1',
+        status: 'UNDER_REVIEW', actual_cash_amount: '565000.00', cash_discrepancy_amount: '0.00', pos_discrepancy_amount: '0.00',
+        total_compensation_amount: '400000.00',
+      });
+
+      await service.closeSettlement('t-1', 'settle-1', 'user-1');
+
+      expect(shiftService.recordCashPaymentMovement).toHaveBeenCalledWith('t-1', 'shift-1', undefined, '565000.0000', 'user-1', em);
+      expect(em.save).toHaveBeenCalledWith(
+        CashMovement,
+        expect.objectContaining({ shift_id: 'shift-1', type: 'PAID_OUT', amount: '-400000.0000', reference: 'SET-1' }),
+      );
+    });
+
     it("records a shortage against the courier's handover, not as money the customer still owes", async () => {
       settlementRepo.findOne.mockResolvedValue({
         id: 'settle-1', tenant_id: 't-1', branch_id: 'b-1', courier_id: 'c-1', settlement_number: 'SET-1',

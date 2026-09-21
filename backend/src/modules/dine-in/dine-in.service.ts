@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In } from 'typeorm';
+import { Repository, DataSource, In, IsNull } from 'typeorm';
 import { DiningArea } from '../../entities/DiningArea.entity';
 import { DiningTable } from '../../entities/DiningTable.entity';
 import { TableSession } from '../../entities/TableSession.entity';
@@ -171,7 +171,7 @@ export class DineInService {
     const table = await this.tableRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!table) throw new NotFoundException(`Table ${id} not found`);
 
-    const activeSession = await this.sessionRepo.findOne({ where: { tenant_id: tenantId, table_id: id, closed_at: null as any } });
+    const activeSession = await this.sessionRepo.findOne({ where: { tenant_id: tenantId, table_id: id, closed_at: IsNull() } });
     if (activeSession) {
       throw new BadRequestException('Cannot archive table that is currently occupied');
     }
@@ -195,9 +195,17 @@ export class DineInService {
     if (sectionId && sectionId !== 'ALL') {
       tableQuery = tableQuery.andWhere('t.dining_area_id = :sectionId', { sectionId });
     }
+    // A table belongs to its branch through its section. Without this a branch's floor
+    // listed every other branch's tables too, their open checks included.
+    if (branchId) {
+      const areaIds = areas.map((a: any) => a.id);
+      tableQuery = areaIds.length
+        ? tableQuery.andWhere('t.dining_area_id IN (:...areaIds)', { areaIds })
+        : tableQuery.andWhere('1 = 0');
+    }
     const tables = await tableQuery.orderBy('t.table_number', 'ASC').getMany();
 
-    const activeSessions = await this.sessionRepo.find({ where: { tenant_id: tenantId, closed_at: null as any } });
+    const activeSessions = await this.sessionRepo.find({ where: { tenant_id: tenantId, closed_at: IsNull() } });
     const sessionMap = new Map(activeSessions.map((s) => [s.table_id, s]));
 
     // Fetch active open dine-in orders to map live totals & numbers
@@ -207,12 +215,21 @@ export class DineInService {
       .andWhere('o.state IN (:...states)', { states: ['DRAFT', 'SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY'] })
       .getMany();
 
-    const orderTableMap = new Map(activeOrders.filter((o) => o.table_id).map((o) => [o.table_id!, o]));
+    // A table can hold more than one open check (a second party, a split). Keying one order per
+    // table showed whichever came last, and releasing the table then failed on a check the
+    // floor never showed; every open check on the table is counted instead.
+    const ordersByTable = new Map<string, OrderHeader[]>();
+    for (const o of activeOrders.filter((ord) => ord.table_id)) {
+      ordersByTable.set(o.table_id!, [...(ordersByTable.get(o.table_id!) || []), o]);
+    }
 
     const now = new Date();
     const formattedTables = tables.map((t) => {
       const sess = sessionMap.get(t.id);
-      const activeOrd = orderTableMap.get(t.id);
+      const tableOrders = (ordersByTable.get(t.id) || []).sort(
+        (a, b) => new Date(a.placed_at || 0).getTime() - new Date(b.placed_at || 0).getTime(),
+      );
+      const activeOrd = tableOrders[0];
 
       let tableStatus = 'AVAILABLE';
       let guestCount = 0;
@@ -225,7 +242,7 @@ export class DineInService {
         tableStatus = 'OCCUPIED';
         orderId = activeOrd.id;
         orderNumber = activeOrd.order_number;
-        grandTotal = activeOrd.grand_total;
+        grandTotal = tableOrders.reduce((sum, o) => MoneyUtil.add(sum, o.grand_total || '0'), '0.0000');
         guestCount = activeOrd.guest_count || (sess ? sess.guest_count : 2);
       } else if (sess) {
         tableStatus = sess.status;
@@ -251,6 +268,7 @@ export class DineInService {
         active_order_id: orderId,
         order_number: orderNumber,
         grand_total: grandTotal,
+        open_check_count: tableOrders.length,
         active_session_id: sess ? sess.id : null,
       };
     });
@@ -263,7 +281,7 @@ export class DineInService {
     const table = await this.tableRepo.findOne({ where: { id: tableId, tenant_id: tenantId } });
     if (!table) throw new NotFoundException('Table not found');
 
-    const existingSession = await this.sessionRepo.findOne({ where: { tenant_id: tenantId, table_id: tableId, closed_at: null as any } });
+    const existingSession = await this.sessionRepo.findOne({ where: { tenant_id: tenantId, table_id: tableId, closed_at: IsNull() } });
     if (existingSession) throw new BadRequestException('Table is already occupied');
 
     const session = this.sessionRepo.create({
@@ -336,9 +354,11 @@ export class DineInService {
       if (guestCount) order.guest_count = guestCount;
       const updatedOrder = await em.save(OrderHeader, order);
 
-      // Manage sessions
+      // Manage sessions. The party moves with the check: its head count and the time it sat
+      // down go to the new table, instead of resetting to two guests seated just now.
+      let sourceSession: TableSession | null = null;
       if (sourceTableId && sourceTableId !== targetTableId) {
-        const sourceSession = await em.findOne(TableSession, { where: { tenant_id: tenantId, table_id: sourceTableId, closed_at: null as any } });
+        sourceSession = await em.findOne(TableSession, { where: { tenant_id: tenantId, table_id: sourceTableId, closed_at: IsNull() } });
         if (sourceSession) {
           sourceSession.closed_at = new Date();
           sourceSession.status = 'AVAILABLE';
@@ -346,15 +366,15 @@ export class DineInService {
         }
       }
 
-      let targetSession = await em.findOne(TableSession, { where: { tenant_id: tenantId, table_id: targetTableId, closed_at: null as any } });
+      let targetSession = await em.findOne(TableSession, { where: { tenant_id: tenantId, table_id: targetTableId, closed_at: IsNull() } });
       if (!targetSession) {
         targetSession = em.create(TableSession, {
           tenant_id: tenantId,
           table_id: targetTableId,
           active_order_id: order.id,
           status: 'OCCUPIED',
-          guest_count: order.guest_count || 2,
-          seated_at: new Date(),
+          guest_count: order.guest_count || sourceSession?.guest_count || 2,
+          seated_at: sourceSession?.seated_at || new Date(),
         });
       } else {
         targetSession.active_order_id = order.id;
@@ -369,7 +389,7 @@ export class DineInService {
         from_table_id: sourceTableId || undefined,
         order_id: order.id,
         event_type: 'MOVE',
-        guest_count: order.guest_count || 2,
+        guest_count: targetSession.guest_count,
         occurred_by: userId || null,
       });
       await em.save(TableOccupancyEvent, occ);
@@ -481,7 +501,7 @@ export class DineInService {
 
         // Release source table if present
         if (sOrd.table_id) {
-          const sess = await em.findOne(TableSession, { where: { tenant_id: tenantId, table_id: sOrd.table_id, closed_at: null as any } });
+          const sess = await em.findOne(TableSession, { where: { tenant_id: tenantId, table_id: sOrd.table_id, closed_at: IsNull() } });
           if (sess) {
             sess.closed_at = new Date();
             sess.status = 'AVAILABLE';
@@ -634,7 +654,7 @@ export class DineInService {
         });
       }
 
-      const session = await em.findOne(TableSession, { where: { tenant_id: tenantId, table_id: tableId, closed_at: null as any } });
+      const session = await em.findOne(TableSession, { where: { tenant_id: tenantId, table_id: tableId, closed_at: IsNull() } });
       if (session) {
         session.closed_at = new Date();
         session.status = nextStatus || 'AVAILABLE';

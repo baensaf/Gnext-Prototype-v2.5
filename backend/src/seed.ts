@@ -10,6 +10,7 @@ import {
   IRANBURGER_BRANCHES,
   IRANBURGER_CATEGORIES,
   IRANBURGER_PRODUCTS,
+  IRANBURGER_OPTION_GROUPS,
   IRANBURGER_TENANT_NAME,
   LEGACY_CATEGORY_CODE,
   LEGACY_PRODUCT_CODES,
@@ -187,9 +188,9 @@ export async function runSeed() {
 
   // 4b. Idempotent Delivery Zones
   const defaultZones = [
-    { tenant_id: tenant.id, branch_id: branchTeh.id, code: 'ZONE-CENTRAL-01', name: 'محدوده ارسال نصرت', fee: '25000.0000', currency_code: 'IRR', estimated_minutes: 30, is_active: true },
-    { tenant_id: tenant.id, branch_id: branchExpress.id, code: 'ZONE-DOWNTOWN-01', name: 'محدوده ارسال ولیعصر', fee: '20000.0000', currency_code: 'IRR', estimated_minutes: 20, is_active: true },
-    { tenant_id: tenant.id, branch_id: branchNorth.id, code: 'ZONE-NORTH-01', name: 'محدوده ارسال هروی', fee: '30000.0000', currency_code: 'IRR', estimated_minutes: 35, is_active: true },
+    { tenant_id: tenant.id, branch_id: branchTeh.id, code: 'ZONE-CENTRAL-01', name: 'محدوده ارسال نصرت', fee: '600000.0000', currency_code: 'IRR', estimated_minutes: 30, is_active: true },
+    { tenant_id: tenant.id, branch_id: branchExpress.id, code: 'ZONE-DOWNTOWN-01', name: 'محدوده ارسال ولیعصر', fee: '500000.0000', currency_code: 'IRR', estimated_minutes: 20, is_active: true },
+    { tenant_id: tenant.id, branch_id: branchNorth.id, code: 'ZONE-NORTH-01', name: 'محدوده ارسال هروی', fee: '700000.0000', currency_code: 'IRR', estimated_minutes: 35, is_active: true },
   ];
   for (const z of defaultZones) {
     const existing = await zoneRepo.findOne({ where: { tenant_id: tenant.id, code: z.code } });
@@ -197,6 +198,12 @@ export async function runSeed() {
       await zoneRepo.save(zoneRepo.create(z));
       console.log(`Seeded Delivery Zone: ${z.name}`);
     }
+  }
+  // The first fees (20,000–30,000 rial) came from the generic demo and were a rounding error
+  // next to Iran Burger's prices; a zone still on its first fee gets the chain-scale one.
+  for (const [code, from] of [['ZONE-CENTRAL-01', '25000.0000'], ['ZONE-DOWNTOWN-01', '20000.0000'], ['ZONE-NORTH-01', '30000.0000']]) {
+    const fee = defaultZones.find((z) => z.code === code)!.fee;
+    await zoneRepo.update({ tenant_id: tenant.id, code, fee: from }, { fee });
   }
 
   // 4c. Idempotent dine-in floor, one per selling site.
@@ -254,7 +261,11 @@ export async function runSeed() {
   const couriers = [
     { branch: branchTeh, code: 'CR-001', name: 'علی رضایی', phone: '09120000001' },
     { branch: branchExpress, code: 'CR-002', name: 'سارا احمدی', phone: '09120000002' },
+    // Valiasr runs two bikes at lunch, so a second order can go out while the first is away.
+    { branch: branchExpress, code: 'CR-003', name: 'مهدی کاظمی', phone: '09120000003' },
   ];
+  // Per-delivery pay at the menu's scale; the first figure (50,000 rial) was the generic demo's.
+  await courierRepo.update({ tenant_id: tenant.id, compensation_per_delivery: '50000.0000' }, { compensation_per_delivery: '400000.0000' });
   for (const courier of couriers) {
     const existing = await courierRepo.findOne({ where: { tenant_id: tenant.id, code: courier.code } });
     if (existing) continue;
@@ -266,7 +277,7 @@ export async function runSeed() {
       phone: courier.phone,
       vehicle_type: 'MOTORCYCLE',
       status: 'AVAILABLE',
-      compensation_per_delivery: '50000.0000',
+      compensation_per_delivery: '400000.0000',
       currency_code: 'IRR',
       is_active: true,
     }));
@@ -276,7 +287,7 @@ export async function runSeed() {
   // 5. Idempotent Terminals
   const terminals = [
     { tenant_id: tenant.id, branch_id: branchTeh.id, code: 'TERM-01', name: 'صندوق ۱ نصرت', device_type: 'POS_STATION' },
-    { tenant_id: tenant.id, branch_id: branchExpress.id, code: 'TERM-02', name: 'کیوسک ولیعصر', device_type: 'KIOSK' },
+    { tenant_id: tenant.id, branch_id: branchExpress.id, code: 'TERM-02', name: 'صندوق ۱ ولیعصر', device_type: 'POS_STATION' },
     { tenant_id: tenant.id, branch_id: branchNorth.id, code: 'TERM-03', name: 'صندوق ۱ هروی', device_type: 'POS_STATION' },
     // Every other branch gets one counter register, so any of them can be opened in the POS.
     ...sellingBranches
@@ -289,6 +300,9 @@ export async function runSeed() {
       await terminalRepo.save(terminalRepo.create(t));
     }
   }
+  // TERM-02 is Valiasr's only counter register (a CASHIER terminal). It used to be named as a
+  // kiosk, so the Valiasr cashier had to pick a "kiosk" to open a shift on.
+  await terminalRepo.update({ tenant_id: tenant.id, code: 'TERM-02', name: 'کیوسک ولیعصر' }, { name: 'صندوق ۱ ولیعصر' });
 
   // 6. Idempotent Payment Methods
   const payMethods = [
@@ -366,6 +380,44 @@ export async function runSeed() {
       await reasonRepo.save(reasonRepo.create(r));
     }
   }
+  // The till's own reasons, in the language the cashier reads, each offered only where it
+  // applies: a void picker used to list stock-waste codes and nothing for a guest who simply
+  // changed their mind.
+  const tillReasons = [
+    { code: 'CHANGED_MIND', name: 'مشتری منصرف شد', type: 'VOID', applies_to: ['ITEM_VOID', 'ORDER_CANCEL'] },
+    { code: 'WRONG_ENTRY', name: 'ثبت اشتباه در صندوق', type: 'VOID', applies_to: ['ITEM_VOID', 'ORDER_CANCEL', 'PAYMENT_REVERSAL'] },
+    { code: 'LONG_WAIT', name: 'تأخیر در آماده‌سازی', type: 'VOID', applies_to: ['ORDER_CANCEL', 'REFUND'] },
+    { code: 'FOOD_QUALITY', name: 'کیفیت نامناسب غذا', type: 'REFUND', applies_to: ['REFUND', 'ITEM_VOID'] },
+    { code: 'WRONG_ITEM', name: 'غذای اشتباه تحویل شد', type: 'REFUND', applies_to: ['REFUND'] },
+    { code: 'PAYOUT_SUPPLIES', name: 'خرید اقلام مصرفی', type: 'CASH', applies_to: ['SHIFT_CLOSE'] },
+    { code: 'PAYOUT_COURIER', name: 'پرداخت به پیک', type: 'CASH', applies_to: ['SHIFT_CLOSE', 'SETTLEMENT_CLOSE'] },
+    { code: 'CUSTOMER_COPY', name: 'درخواست نسخه دوم مشتری', type: 'OTHER', applies_to: ['REPRINT'] },
+    { code: 'MANAGER_DISCOUNT', name: 'تخفیف مدیریتی', type: 'OVERRIDE', applies_to: ['PRICE_OVERRIDE'] },
+  ];
+  for (const r of tillReasons) {
+    if (await reasonRepo.findOne({ where: { tenant_id: tenant.id, code: r.code } })) continue;
+    await reasonRepo.save(reasonRepo.create({ tenant_id: tenant.id, requires_approval: false, ...r }));
+  }
+  for (const [code, from, to] of [
+    ['WASTE_EXPIRED', 'Expired Stock Waste', 'ضایعات تاریخ گذشته'],
+    ['WASTE_DAMAGED', 'Damaged Goods Waste', 'ضایعات آسیب‌دیده'],
+    ['REFUND_CUSTOMER', 'Customer Dissatisfaction Refund', 'نارضایتی مشتری'],
+    ['MANAGER_OVERRIDE', 'Manager Manual Adjustment', 'اصلاح دستی مدیر'],
+  ]) {
+    await reasonRepo.update({ tenant_id: tenant.id, code, name: from }, { name: to });
+  }
+  // An empty scope offers a code everywhere; the stock-waste ones have no place at the till.
+  for (const [code, scope] of [
+    ['WASTE_EXPIRED', ['OTHER']],
+    ['WASTE_DAMAGED', ['OTHER']],
+    ['REFUND_CUSTOMER', ['REFUND']],
+    ['MANAGER_OVERRIDE', ['PRICE_OVERRIDE', 'OTHER']],
+  ] as Array<[string, string[]]>) {
+    await AppDataSource.query(
+      `UPDATE reason_code SET applies_to = $1 WHERE tenant_id = $2 AND code = $3 AND applies_to = '{}'`,
+      [scope, tenant.id, code],
+    );
+  }
 
   // 7a. Idempotent order action windows. Seeded from the same constant the edit
   // policy falls back to, so a tenant that has never saved the settings group
@@ -406,10 +458,14 @@ export async function runSeed() {
 
   // 7b. Demo customers make directory, address, and credit-account screens useful
   // immediately after a fresh deployment.
+  // Regulars of the Valiasr branch, with addresses its couriers can reach, and one company
+  // that eats on account. Credit limits are sized to the menu: a limit under one meal made
+  // the on-account tender refuse every order.
   const demoCustomers = [
-    { code: 'CUST-1001', first_name: 'Reza', last_name: 'Mohammadi', mobile: '09121234567', email: 'reza@example.test', credit_limit: '5000000.0000', current_balance: '-350000.0000' },
-    { code: 'CUST-1002', first_name: 'Sara', last_name: 'Ahmadi', mobile: '09121234568', email: 'sara@example.test', credit_limit: '3000000.0000', current_balance: '250000.0000' },
-    { code: 'CUST-1003', first_name: 'Nima', last_name: 'Hosseini', mobile: '09121234569', email: 'nima@example.test', credit_limit: '2000000.0000', current_balance: '0.0000' },
+    { code: 'CUST-1001', first_name: 'رضا', last_name: 'محمدی', legacyName: ['Reza', 'Mohammadi'], mobile: '09121234567', email: 'reza@example.test', credit_limit: '100000000.0000', legacyLimit: '5000000.0000', current_balance: '-35000000.0000', address: 'تهران، خیابان ولیعصر، بالاتر از چهارراه ولیعصر، کوچه بوعلی، پلاک ۱۲، واحد ۳', postal_code: '1415943511' },
+    { code: 'CUST-1002', first_name: 'الهام', last_name: 'صادقی', legacyName: ['Sara', 'Ahmadi'], mobile: '09121234568', email: 'sara@example.test', credit_limit: '60000000.0000', legacyLimit: '3000000.0000', current_balance: '25000000.0000', address: 'تهران، خیابان فاطمی غربی، کوچه جمالزاده شمالی، پلاک ۸، طبقه دوم', postal_code: '1416754321' },
+    { code: 'CUST-1003', first_name: 'نیما', last_name: 'حسینی', legacyName: ['Nima', 'Hosseini'], mobile: '09121234569', email: 'nima@example.test', credit_limit: '40000000.0000', legacyLimit: '2000000.0000', current_balance: '0.0000', address: 'تهران، خیابان انقلاب، خیابان وصال شیرازی، پلاک ۴۵', postal_code: '1417613412' },
+    { code: 'CUST-2001', first_name: 'شرکت فناوران آریا', last_name: '', legacyName: null, mobile: '02188001234', email: 'finance@arya.example.test', credit_limit: '300000000.0000', legacyLimit: null, current_balance: '0.0000', address: 'تهران، خیابان ولیعصر، نرسیده به پارک ساعی، برج نگار، طبقه ۷', postal_code: '1511733111' },
   ];
   for (const demo of demoCustomers) {
     let customer = await customerRepo.findOne({ where: { tenant_id: tenant.id, code: demo.code } });
@@ -423,6 +479,10 @@ export async function runSeed() {
         email: demo.email,
         is_active: true,
       }));
+    } else if (demo.legacyName && customer.first_name === demo.legacyName[0] && customer.last_name === demo.legacyName[1]) {
+      customer.first_name = demo.first_name;
+      customer.last_name = demo.last_name;
+      customer = await customerRepo.save(customer);
     }
 
     const phone = await customerPhoneRepo.findOne({ where: { tenant_id: tenant.id, customer_id: customer.id } });
@@ -443,11 +503,13 @@ export async function runSeed() {
       await customerAddressRepo.save(customerAddressRepo.create({
         tenant_id: tenant.id,
         customer_id: customer.id,
-        title: 'Home',
-        address_text: `Tehran demo address for ${demo.first_name} ${demo.last_name}`,
-        postal_code: `demo-${demo.code.toLowerCase()}`,
+        title: 'خانه',
+        address_text: demo.address,
+        postal_code: demo.postal_code,
         is_default: true,
       }));
+    } else if (address.postal_code === `demo-${demo.code.toLowerCase()}`) {
+      await customerAddressRepo.update({ id: address.id }, { title: 'خانه', address_text: demo.address, postal_code: demo.postal_code });
     }
 
     let account = await creditAccountRepo.findOne({
@@ -464,6 +526,9 @@ export async function runSeed() {
         status: 'ACTIVE',
         is_blocked: false,
       }));
+    } else if (demo.legacyLimit && account.credit_limit === demo.legacyLimit) {
+      // Only the limit is raised on an existing account; its balance is backed by ledger entries.
+      await creditAccountRepo.update({ id: account.id }, { credit_limit: demo.credit_limit });
     }
 
     if (demo.current_balance.startsWith('-')) {
@@ -520,6 +585,63 @@ export async function runSeed() {
       is_active: true,
     }));
     console.log(`Seeded Product: ${p.name}`);
+  }
+
+  // Modifiers. A group is attached to its categories' products only when the group is first
+  // created, so one detached in the catalogue stays detached.
+  const optionGroupRepo = AppDataSource.getRepository('OptionGroup');
+  const optionItemRepo = AppDataSource.getRepository('OptionItem');
+  const productOptionRepo = AppDataSource.getRepository('ProductOptionGroup');
+  for (const [groupIndex, g] of IRANBURGER_OPTION_GROUPS.entries()) {
+    if (await optionGroupRepo.findOne({ where: { tenant_id: tenant.id, code: g.code } })) continue;
+    const group: any = await optionGroupRepo.save(optionGroupRepo.create({
+      tenant_id: tenant.id,
+      code: g.code,
+      name: g.name,
+      min_selection: g.min,
+      max_selection: g.max,
+      is_required: g.min > 0,
+    }));
+    for (const [itemIndex, item] of g.items.entries()) {
+      await optionItemRepo.save(optionItemRepo.create({
+        tenant_id: tenant.id,
+        option_group_id: group.id,
+        code: item.code,
+        name: item.name,
+        price_delta: MoneyUtil.format(item.price),
+        is_default: !!item.isDefault,
+        sort_order: itemIndex,
+      }));
+    }
+    const products = await prodRepo.find({ where: { tenant_id: tenant.id, is_active: true } });
+    const categoryIds = g.categories.map((code) => categoryByCode.get(code)?.id).filter(Boolean);
+    for (const product of products.filter((p: any) => categoryIds.includes(p.category_id))) {
+      await productOptionRepo.save(productOptionRepo.create({
+        tenant_id: tenant.id,
+        product_id: product.id,
+        option_group_id: group.id,
+        sort_order: groupIndex,
+      }));
+    }
+    console.log(`Seeded Option Group: ${g.name}`);
+  }
+
+  // Coupons a cashier can key in at the till. Unlike the app's one-time codes these serve the
+  // demo's many sales, though a customer still redeems each only once. Amounts are in rial at
+  // the menu's prices, so a cap is large enough to matter on a burger.
+  const couponRepo = AppDataSource.getRepository('Coupon');
+  const productIdByCode = async (code: string) =>
+    ((await prodRepo.findOne({ where: { tenant_id: tenant.id, code } })) as any)?.id || null;
+  const coupons = [
+    { code: 'IB10', coupon_type: 'PERCENTAGE', percentage: '10.00', minimum_subtotal: MoneyUtil.format(5_000_000), maximum_discount_amount: MoneyUtil.format(2_000_000) },
+    { code: 'WELCOME15', coupon_type: 'PERCENTAGE', percentage: '15.00', minimum_subtotal: null, maximum_discount_amount: MoneyUtil.format(1_500_000) },
+    // Two Iran Burgers, and one portion of fries in the basket comes free.
+    { code: 'FRIES-FREE', coupon_type: 'FREE_ITEM', percentage: '0.00', buy_product_id: await productIdByCode('101001'), buy_quantity: 2, reward_product_id: await productIdByCode('104003'), reward_quantity: 1, minimum_subtotal: null, maximum_discount_amount: null },
+  ];
+  for (const c of coupons) {
+    if (await couponRepo.findOne({ where: { tenant_id: tenant.id, code: c.code } })) continue;
+    await couponRepo.save(couponRepo.create({ tenant_id: tenant.id, is_active: true, max_uses: 1000, uses_count: 0, ...c }));
+    console.log(`Seeded Coupon: ${c.code}`);
   }
 
   // 9. Idempotent chain sales history.
@@ -649,7 +771,7 @@ export async function runSeed() {
           });
         }
 
-        const deliveryFee = MoneyUtil.format(orderType === 'DELIVERY' ? 25000 : 0);
+        const deliveryFee = MoneyUtil.format(orderType === 'DELIVERY' ? 600000 : 0);
         // Tax follows the line items only: a delivery fee is a service charge here, not
         // a taxable good, which is also how the POS quotes it.
         const tax = MoneyUtil.multiply(subtotal, TAX_RATE);
@@ -782,7 +904,7 @@ async function rebrandLegacyDemo(
     }
     renames.push(
       ['terminal', 'TERM-01', 'Main POS Register T-01', 'صندوق ۱ نصرت'],
-      ['terminal', 'TERM-02', 'Express Kiosk T-02', 'کیوسک ولیعصر'],
+      ['terminal', 'TERM-02', 'Express Kiosk T-02', 'صندوق ۱ ولیعصر'],
       ['terminal', 'TERM-03', 'Northside POS Register T-03', 'صندوق ۱ هروی'],
       ['delivery_zone', 'ZONE-CENTRAL-01', 'Central District Zone 1', 'محدوده ارسال نصرت'],
       ['delivery_zone', 'ZONE-DOWNTOWN-01', 'Downtown Express Zone 1', 'محدوده ارسال ولیعصر'],

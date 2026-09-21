@@ -446,7 +446,12 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                   { label: t('settlements.previewModal.expectedPos'), value: previewData.expected_pos_amount },
                   // Priced on each trip when it closed, under the courier's pay rule.
                   { label: t('delivery.payRules.settlementPay'), value: previewData.total_compensation_amount },
-                  { label: t('delivery.payRules.settlementNet'), value: previewData.net_settlement_amount },
+                  // Card takings on the courier's reader are already in the bank, so the cash the
+                  // courier counts out is the cash collected less their pay — not the settlement net.
+                  {
+                    label: t('delivery.payRules.settlementNet'),
+                    value: MoneyUtil.subtract(previewData.expected_cash_amount || '0', previewData.total_compensation_amount || '0', 2),
+                  },
                 ].map((tile) => (
                   <Grid key={tile.label} size={{ xs: 6, md: 3 }}>
                     <Paper sx={{ p: 2, bgcolor: 'background.neutral', height: '100%' }}>

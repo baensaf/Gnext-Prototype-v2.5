@@ -1559,6 +1559,26 @@ export class DeliveryService {
         );
       }
 
+      // The courier keeps their pay out of the cash they collected (or is paid it from the
+      // till), so the drawer receives the collection less that pay. Without this the drawer
+      // expected the full collection and every shift with deliveries closed short by the pay.
+      const courierPay = MoneyUtil.format(settlement.total_compensation_amount || '0', 4);
+      if (drawer && MoneyUtil.greaterThan(courierPay, '0')) {
+        await em.save(
+          CashMovement,
+          em.create(CashMovement, {
+            tenant_id: tenantId,
+            shift_id: drawer.id,
+            type: 'PAID_OUT',
+            amount: MoneyUtil.multiply(courierPay, '-1'),
+            currency_code: drawer.currency_code,
+            reason_text: `Courier pay for ${courier?.name || settlement.courier_id} on ${settlement.settlement_number}`,
+            reference: settlement.settlement_number,
+            posted_by: userId || null,
+          }),
+        );
+      }
+
       settlement.status = 'CLOSED';
       settlement.closed_at = new Date();
       settlement.closed_by_user_id = userId;

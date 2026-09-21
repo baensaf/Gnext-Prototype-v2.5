@@ -36,6 +36,11 @@ const CASHIER_PATHS = [
   // A refund is handed over at the register, so this is the cashier's screen even though
   // the money only moves once an approver has put their pin in.
   '/app/refunds',
+  // At the counter it is the cashier who hands a delivery to the courier and counts the
+  // cash-on-delivery back in; the fleet itself (couriers, zones, pay) stays the manager's.
+  '/app/delivery/orders',
+  '/app/delivery/couriers',
+  '/app/delivery/settlements',
 ];
 
 /** A branch manager runs one site: its people, its money, its menu, its reports. */

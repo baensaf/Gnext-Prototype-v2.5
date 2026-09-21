@@ -146,6 +146,8 @@ export function CloseShiftDialog({ open, onClose, shiftId, shiftNumber, onClosed
                   <Row label={t('shift.close.cashSales', 'Cash sales')} value={MoneyUtil.formatCurrency(result.cashSales)} />
                   <Row label={t('shift.close.cashRefunds', 'Cash refunds')} value={MoneyUtil.formatCurrency(result.cashRefunds)} />
                   <Row label={t('shift.close.paidInOut', 'Paid in / out')} value={`${MoneyUtil.formatCurrency(result.paidIn)} / ${MoneyUtil.formatCurrency(result.paidOut)}`} />
+                  {/* Without the drops the lines above did not add up to the expected cash. */}
+                  <Row label={t('shift.movement.safeDrop', 'Safe drop')} value={MoneyUtil.formatCurrency(result.safeDrops || '0')} />
                   <Divider />
                   <Row label={t('cashier.expectedCash', 'Expected Cash')} value={MoneyUtil.formatCurrency(result.expectedCash)} />
                   <Row label={t('shift.close.countedLabel', 'Counted')} value={MoneyUtil.formatCurrency(result.actualCash)} />

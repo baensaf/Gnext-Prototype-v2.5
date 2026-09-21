@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager } from 'typeorm';
 import { OrderSequence } from '../../entities/OrderSequence.entity';
+import { BusinessDateUtil } from '../../common/utils/business-date.util';
 
 @Injectable()
 export class OrderSequenceService {
@@ -14,8 +15,9 @@ export class OrderSequenceService {
     tenantId: string,
     entityManager?: EntityManager,
   ): Promise<string> {
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+    // The day where the till stands, as shift numbers use: in Tehran an order rung up between
+    // midnight and 03:30 was numbered with the day before.
+    const dateStr = BusinessDateUtil.today(new Date()).replace(/-/g, '');
     const prefix = `ORD-${dateStr}`;
 
     const executeRepo = entityManager

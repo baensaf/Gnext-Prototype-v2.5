@@ -39,6 +39,8 @@ import {
   DialogActions,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { orderApi } from 'src/api/orderApi';
 import { dineInApi } from 'src/api/dineInApi';
 import { useScopedBranchId } from 'src/contexts/branch-context';
@@ -431,6 +433,7 @@ export function DineInPage() {
                         {tbl.order_number && (
                           <Typography variant="caption" sx={{ fontWeight: 'bold', direction: 'ltr', unicodeBidi: 'isolate' }}>
                             #{tbl.order_number}
+                            {(tbl.open_check_count || 0) > 1 && ` +${(tbl.open_check_count || 0) - 1}`}
                           </Typography>
                         )}
                       </Stack>
@@ -443,7 +446,7 @@ export function DineInPage() {
                         </Stack>
                         {tbl.grand_total && (
                           <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main', direction: 'ltr', unicodeBidi: 'isolate' }}>
-                            {tbl.grand_total}
+                            {MoneyUtil.formatCurrency(tbl.grand_total)} IRR
                           </Typography>
                         )}
                       </Stack>
@@ -598,7 +601,7 @@ export function DineInPage() {
               .filter((tbl) => tbl.id !== selectedTable?.id && tbl.active_order_id)
               .map((tbl) => (
                 <MenuItem key={tbl.id} value={tbl.active_order_id!}>
-                  {t('dineIn.table', 'Table')} {tbl.table_number} — #{tbl.order_number} ({tbl.grand_total})
+                  {t('dineIn.table', 'Table')} {tbl.table_number} — #{tbl.order_number} ({MoneyUtil.formatCurrency(tbl.grand_total || '0')} IRR)
                 </MenuItem>
               ))}
           </TextField>

@@ -44,6 +44,7 @@ import { AgentEnrolmentCode } from './entities/AgentEnrolmentCode.entity';
 import { AgentCommand } from './entities/AgentCommand.entity';
 import { AgentRelease } from './entities/AgentRelease.entity';
 import { DailyStock } from './entities/DailyStock.entity';
+import { NoteTemplate } from './entities/NoteTemplate.entity';
 import { AgentGatewayModule } from './modules/agent-gateway/agent-gateway.module';
 import { AgentLocalModule } from './modules/agent-local/agent-local.module';
 import { LiveModule } from './modules/live/live.module';
@@ -200,7 +201,7 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
           OperationalAlert, SavedReportView, ReportExportJob,
           TaxInvoice,
           Agent, AgentEnrolmentCode, AgentCommand, AgentRelease,
-          DailyStock,
+          DailyStock, NoteTemplate,
         ],
         synchronize: false, // Mandatory AD-02
         logging: config.get<string>('NODE_ENV') === 'development' ? ['error', 'warn'] : false,

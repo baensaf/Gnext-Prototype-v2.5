@@ -151,3 +151,58 @@ export const IRANBURGER_PRODUCTS: IranBurgerProduct[] = [
 /** The old demo catalogue, retired (not deleted) so orders that sold it still resolve. */
 export const LEGACY_PRODUCT_CODES = ['PROD-CHEESEBURGER', 'PROD-FRIES', 'PROD-COLA'];
 export const LEGACY_CATEGORY_CODE = 'CAT-FASTFOOD';
+
+export interface IranBurgerOptionGroup {
+  code: string;
+  name: string;
+  min: number;
+  max: number;
+  /** Rial deltas; `isDefault` is pre-ticked on the register. */
+  items: Array<{ code: string; name: string; price: number; isDefault?: boolean }>;
+  /** Categories whose products carry the group. */
+  categories: string[];
+}
+
+// The menu site lists no add-ons, so these are the counter's usual asks: extras cost, and
+// "without" requests are free. The combo drink choice is required so a combo never leaves
+// the register without one.
+export const IRANBURGER_OPTION_GROUPS: IranBurgerOptionGroup[] = [
+  {
+    code: 'IB-OPT-EXTRA',
+    name: 'افزودنی',
+    min: 0,
+    max: 3,
+    items: [
+      { code: 'IB-OPT-EXTRA-CHEESE', name: 'پنیر گودا اضافه', price: t(60) },
+      { code: 'IB-OPT-EXTRA-MUSHROOM', name: 'قارچ اضافه', price: t(50) },
+      { code: 'IB-OPT-EXTRA-BACON', name: 'بیکن گوشت', price: t(90) },
+      { code: 'IB-OPT-EXTRA-JALAPENO', name: 'هالوپینو', price: t(30) },
+    ],
+    categories: ['IB-BURGER', 'IB-SANDWICH'],
+  },
+  {
+    code: 'IB-OPT-WITHOUT',
+    name: 'بدون',
+    min: 0,
+    max: 4,
+    items: [
+      { code: 'IB-OPT-NO-PICKLE', name: 'بدون خیارشور', price: 0 },
+      { code: 'IB-OPT-NO-ONION', name: 'بدون پیاز', price: 0 },
+      { code: 'IB-OPT-NO-TOMATO', name: 'بدون گوجه', price: 0 },
+      { code: 'IB-OPT-NO-SAUCE', name: 'بدون سس', price: 0 },
+    ],
+    categories: ['IB-BURGER', 'IB-SANDWICH', 'IB-MINI'],
+  },
+  {
+    code: 'IB-OPT-COMBO-DRINK',
+    name: 'نوشیدنی کمبو',
+    min: 1,
+    max: 1,
+    items: [
+      { code: 'IB-OPT-DRINK-COLA', name: 'نوشابه مشکی', price: 0, isDefault: true },
+      { code: 'IB-OPT-DRINK-LEMON', name: 'نوشابه لیمویی', price: 0 },
+      { code: 'IB-OPT-DRINK-DOOGH', name: 'دوغ', price: t(10) },
+    ],
+    categories: ['IB-COMBO'],
+  },
+];
