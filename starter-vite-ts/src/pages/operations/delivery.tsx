@@ -56,6 +56,7 @@ import { useLiveRefresh } from 'src/utils/use-live-refresh';
 
 import { tenantApi } from 'src/api/tenantApi';
 import { settingsApi } from 'src/api/settingsApi';
+import { useAuthStore } from 'src/store/useAuthStore';
 import { useBranchContext } from 'src/contexts/branch-context';
 import { deliveryApi, COURIER_PAY_MODES } from 'src/api/deliveryApi';
 
@@ -84,6 +85,9 @@ function tabFromPathname(pathname: string): DeliveryTab {
 
 export function DeliveryPage() {
   const { t } = useTranslation();
+  // A cashier checks couriers in and out at the counter; taking one onto the roster is the
+  // manager's (the API refuses a register account).
+  const isCashier = useAuthStore((state) => state.user?.role)?.toUpperCase() === 'CASHIER';
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -138,13 +142,13 @@ export function DeliveryPage() {
     phone: '',
     vehicle_type: 'MOTORCYCLE',
     pay_mode: payMode,
-    compensation_per_delivery: '15000',
+    compensation_per_delivery: '400000',
   });
   const [courierForm, setCourierForm] = useState(() => emptyCourierForm('FLAT'));
   const [payEdit, setPayEdit] = useState<{ courier: Courier; pay_mode: CourierPayMode; amount: string } | null>(null);
 
   const [zoneModalOpen, setZoneModalOpen] = useState(false);
-  const [zoneForm, setZoneForm] = useState({ code: '', name: '', fee: '25000', estimated_minutes: 30, courier_pay: '' });
+  const [zoneForm, setZoneForm] = useState({ code: '', name: '', fee: '500000', estimated_minutes: 30, courier_pay: '' });
   const [zoneEdit, setZoneEdit] = useState<{
     zone: DeliveryZone;
     name: string;
@@ -453,7 +457,7 @@ export function DeliveryPage() {
         fee: zoneForm.fee.toString(),
       });
       setZoneModalOpen(false);
-      setZoneForm({ code: '', name: '', fee: '25000', estimated_minutes: 30, courier_pay: '' });
+      setZoneForm({ code: '', name: '', fee: '500000', estimated_minutes: 30, courier_pay: '' });
       loadData();
     } catch (err: any) {
       setError(err.detail || t('delivery.errors.createZoneFailed'));
@@ -709,11 +713,11 @@ export function DeliveryPage() {
                       </Typography>
 
                       <Stack spacing={0.5} sx={{ my: 1 }}>
-                        <Typography variant="caption">
-                          {t('delivery.card.expCash')}: {MoneyUtil.formatCurrency(del.cash_expected)} IRR
-                        </Typography>
-                        <Typography variant="caption">
-                          {t('delivery.card.expPos')}: {MoneyUtil.formatCurrency(del.mobile_pos_expected)} IRR
+                        {/* The expected cash and card figures are only written when the run is
+                            completed; until then what the rider must bring back is what the
+                            customer still owes. */}
+                        <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                          {t('delivery.card.toCollect', 'To collect')}: {MoneyUtil.formatCurrency((del as any).outstanding_total || '0')} IRR
                         </Typography>
                       </Stack>
 
@@ -800,9 +804,11 @@ export function DeliveryPage() {
         <Card sx={{ p: 3, borderRadius: 2 }}>
           <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t('delivery.couriers.title')} ({couriers.length})</Typography>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={openAddCourier}>
-              {t('delivery.couriers.addCourier')}
-            </Button>
+            {!isCashier && (
+              <Button variant="contained" startIcon={<AddIcon />} onClick={openAddCourier}>
+                {t('delivery.couriers.addCourier')}
+              </Button>
+            )}
           </Stack>
 
           <Table>
@@ -849,19 +855,21 @@ export function DeliveryPage() {
                             </Typography>
                           )}
                         </Box>
-                        <IconButton
-                          size="small"
-                          aria-label={t('delivery.couriers.editPay')}
-                          onClick={() =>
-                            setPayEdit({
-                              courier: c,
-                              pay_mode: (c.pay_mode || 'FLAT') as CourierPayMode,
-                              amount: String(Number(c.compensation_per_delivery || 0)),
-                            })
-                          }
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
+                        {!isCashier && (
+                          <IconButton
+                            size="small"
+                            aria-label={t('delivery.couriers.editPay')}
+                            onClick={() =>
+                              setPayEdit({
+                                courier: c,
+                                pay_mode: (c.pay_mode || 'FLAT') as CourierPayMode,
+                                amount: String(Number(c.compensation_per_delivery || 0)),
+                              })
+                            }
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        )}
                       </Stack>
                     </TableCell>
                     <TableCell>

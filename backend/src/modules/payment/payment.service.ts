@@ -52,7 +52,7 @@ export class PaymentService {
   ) {}
 
   private async generatePaymentNumber(tenantId: string, em: EntityManager): Promise<string> {
-    const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const todayStr = BusinessDateUtil.today(new Date()).replace(/-/g, ''); // the till's day, not UTC's
     const prefix = `PAY-${todayStr}-`;
     const count = await em
       .createQueryBuilder(Payment, 'p')

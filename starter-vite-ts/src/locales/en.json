@@ -212,6 +212,8 @@
     "delivery": "Delivery",
     "cartEmpty": "Cart is empty. Add items first.",
     "paymentSuccess": "Payment recorded successfully",
+    "changeDue": "Change to give back",
+    "noTenderMethod": "No active payment method for this tender",
     "paymentVoided": "Payment attempt voided",
     "directTerminalPay": "Direct Terminal Pay (PC-POS)",
     "itemSuspended": "86'd",
@@ -466,6 +468,7 @@
       "close": "Close"
     },
     "drawer": {
+      "voided": "Voided",
       "placedOn": "Placed on {{date}}",
       "table": "Table {{number}}",
       "note": "Note: {{note}}",
@@ -722,7 +725,7 @@
       "help_ZONE_RATE": "The courier rate set on each zone. A zone without one pays the amount below.",
       "tipsNote": "Tips always go to the courier in full.",
       "settlementPay": "Courier pay (kept by the courier)",
-      "settlementNet": "Net to hand back"
+      "settlementNet": "Cash to hand back"
     },
     "tabs": {
       "board": "Dispatch Board",
@@ -750,6 +753,7 @@
       "phone": "Phone",
       "noPhone": "N/A",
       "expCash": "Exp Cash",
+      "toCollect": "To collect",
       "expPos": "Exp POS",
       "compensation": "Compensation",
       "assignCourier": "Assign Courier",

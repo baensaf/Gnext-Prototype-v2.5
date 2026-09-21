@@ -6,6 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import { Repository, DataSource, EntityManager, In } from 'typeorm';
 import { Refund, RefundStatus } from '../../entities/Refund.entity';
 import { RefundAllocation } from '../../entities/RefundAllocation.entity';
@@ -42,7 +43,7 @@ export class RefundService {
   ) {}
 
   private async generateRefundNumber(tenantId: string, em: EntityManager): Promise<string> {
-    const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const todayStr = BusinessDateUtil.today(new Date()).replace(/-/g, ''); // the till's day, not UTC's
     const prefix = `REF-${todayStr}-`;
     const count = await em
       .createQueryBuilder(Refund, 'r')

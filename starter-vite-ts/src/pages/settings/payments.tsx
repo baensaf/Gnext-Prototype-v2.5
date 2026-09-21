@@ -231,7 +231,7 @@ export function PaymentSettingsPage() {
                       color={
                         m.kind === 'CASH'
                           ? 'success'
-                          : m.kind === 'CARD' || m.kind === 'POS'
+                          : m.kind === 'CARD' || m.kind === 'POS' || m.kind === 'CARD_POS'
                           ? 'primary'
                           : m.kind === 'CREDIT'
                           ? 'warning'

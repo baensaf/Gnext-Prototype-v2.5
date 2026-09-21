@@ -284,7 +284,9 @@ export function OrderEditDialog({ open, onClose, order, reasonCodes, onSaved }: 
                   value={reasonCodeId}
                   onChange={(e) => setReasonCodeId(e.target.value)}
                 >
-                  {reasonCodes.map((rc) => (
+                  {reasonCodes
+                    .filter((rc) => rc.is_active !== false && (!rc.applies_to?.length || rc.applies_to.includes('ITEM_VOID')))
+                    .map((rc) => (
                     <MenuItem key={rc.id} value={rc.id}>
                       {rc.name}
                     </MenuItem>

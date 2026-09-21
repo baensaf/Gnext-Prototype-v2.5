@@ -196,7 +196,8 @@ export function RefundsPage() {
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <code>{r.order_id.slice(0, 8)}...</code>
+                    {/* The order number is what the receipt in the customer's hand shows. */}
+                    <code>{orders.find((o) => o.id === r.order_id)?.order_number || `${r.order_id.slice(0, 8)}...`}</code>
                   </TableCell>
                   <TableCell>
                     <Chip

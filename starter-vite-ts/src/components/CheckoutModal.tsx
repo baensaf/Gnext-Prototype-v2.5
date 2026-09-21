@@ -71,6 +71,9 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const [loading, setLoading] = useState(false);
   const [terminalProcessing, setTerminalProcessing] = useState(false);
   const [showNumpad, setShowNumpad] = useState(false);
+  // Cash handed over beyond what is due: the drawer keeps only the due amount, and the
+  // cashier gives this back.
+  const [changeDue, setChangeDue] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (!orderId) return;
@@ -117,18 +120,29 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     if (e) e.preventDefault();
     if (!orderId || !selectedMethodId || !payAmount) return;
 
+    const method = paymentMethods.find((m) => m.id === selectedMethodId);
+    const due = order?.due_amount || '0';
+    const overTendered = method?.kind === 'CASH' && MoneyUtil.greaterThan(payAmount, due);
     try {
       setLoading(true);
       const res = await paymentApi.postPayment({
         order_id: orderId,
         payment_method_id: selectedMethodId,
-        amount: payAmount,
+        amount: overTendered ? due : payAmount,
         reference_number: refNumber || `POS-${Date.now().toString().slice(-6)}`,
       });
 
       setOrder(res.order);
       setPayAmount(res.order?.due_amount || '0');
       setRefNumber('');
+      setChangeDue(overTendered ? MoneyUtil.subtract(payAmount, due) : null);
+      if (overTendered) {
+        // Screens that close this dialog once the order is settled would hide the alert.
+        toast.warning(
+          `${t('pos.changeDue', 'Change to give back')}: ${MoneyUtil.formatCurrency(MoneyUtil.subtract(payAmount, due))} IRR`,
+          { duration: 15000 }
+        );
+      }
 
       const updatedPays = await paymentApi.getOrderPayments(orderId);
       setPayments(updatedPays);
@@ -168,10 +182,16 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     async (methodKind: 'CASH' | 'CARD' | 'POS') => {
       if (!order || !orderId || MoneyUtil.isZero(order.due_amount)) return;
 
-      const matchedMethod =
-        paymentMethods.find((m) => m.kind === methodKind || (methodKind === 'CARD' && m.kind === 'POS')) ||
-        paymentMethods[0];
-      if (!matchedMethod) return;
+      // The counter's card reader is kind CARD_POS. Falling back to the first method in the
+      // list recorded card sales as bank transfers, so a missing tender is reported instead.
+      const cardKinds = ['CARD_POS', 'CARD', 'POS'];
+      const matchedMethod = paymentMethods.find((m) =>
+        methodKind === 'CASH' ? m.kind === 'CASH' : cardKinds.includes(m.kind)
+      );
+      if (!matchedMethod) {
+        setError(t('pos.noTenderMethod', 'No active payment method for this tender'));
+        return;
+      }
 
       try {
         setTerminalProcessing(true);
@@ -272,6 +292,11 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
 
         {order && (
           <Stack spacing={2} sx={{ mb: 2, mt: 1 }}>
+            {changeDue && (
+              <Alert severity="warning" sx={{ py: 1.5, fontWeight: 700, fontSize: '1.1rem' }}>
+                {t('pos.changeDue', 'Change to give back')}: {MoneyUtil.formatCurrency(changeDue)} IRR
+              </Alert>
+            )}
             {/* Financial Summary Box */}
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'background.neutral' }}>
               <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1 }}>

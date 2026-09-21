@@ -324,8 +324,11 @@ export function PosOrderPage() {
         customerApi.getCustomers(),
         dineInApi.getTables(undefined, selectedBranchId).catch(() => [] as DiningTable[]),
       ]);
-      setCategories(cList);
-      if (cList.length > 0) setActiveTab(cList[0].id);
+      // Categories taken off the menu hold no sellable products; showing them (and opening on
+      // one) left the cashier looking at an empty grid.
+      const liveCategories = cList.filter((c) => c.is_active !== false);
+      setCategories(liveCategories);
+      if (liveCategories.length > 0) setActiveTab(liveCategories[0].id);
       // A product taken off the menu is not sold; the register refuses it too.
       setProducts(pList.filter((p) => p.is_active !== false));
       setCustomers(custs);
@@ -865,7 +868,10 @@ export function PosOrderPage() {
           items: cart.map((ci) => ({
             productId: ci.product.id,
             variantId: ci.selectedVariant?.id || undefined,
-            unitPrice: priceOf(ci.product, ci.selectedVariant).toString(),
+            // Add-ons are part of what the line sells for, so they are taxed with it.
+            unitPrice: ci.selectedOptions
+              .reduce((sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2), priceOf(ci.product, ci.selectedVariant).toString())
+              .toString(),
             quantity: ci.quantity.toString(),
           })),
         },

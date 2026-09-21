@@ -156,7 +156,7 @@ export function ReceiptPage() {
           </Stack>
 
           <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-            <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>VAT Tax (10%):</Typography>
+            <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>VAT:</Typography>
             <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>{MoneyUtil.formatCurrency(totals.tax_amount)} IRR</Typography>
           </Stack>
 
