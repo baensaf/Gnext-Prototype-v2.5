@@ -152,7 +152,14 @@ export function AgentReleasesCard() {
                       </Typography>
                     )}
                   </TableCell>
-                  <TableCell>{formatSize(r.size_bytes)}</TableCell>
+                  <TableCell>
+                    {formatSize(r.size_bytes)}
+                    {r.has_installer && (
+                      <Typography variant="caption" color="text.secondary" component="div">
+                        {t('operations.agents.releases.hasInstaller', '+ installer')}
+                      </Typography>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <code dir="ltr" title={r.sha256}>
                       {r.sha256.slice(0, 12)}…

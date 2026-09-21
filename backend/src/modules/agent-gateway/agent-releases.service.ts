@@ -11,6 +11,7 @@ import { compareVersions } from './agent-protocol';
 import { AgentSessionsService } from './agent-sessions.service';
 
 export const AGENT_BINARY_NAME = 'gnext-agent.exe';
+export const installerName = (version: string) => `gnext-agent-setup-${version}.exe`;
 /** A Windows build of the agent is a few megabytes; anything near this is a mistake. */
 export const MAX_RELEASE_BYTES = 64 * 1024 * 1024;
 const VERSION = /^\d{1,4}\.\d{1,4}\.\d{1,6}$/;
@@ -30,6 +31,8 @@ export interface LatestRelease {
   released_at: string;
   min_agent_version: string | null;
 }
+
+type UploadedFile = ReleaseUpload['file'];
 
 interface CheckedBuild {
   version: string;
@@ -93,17 +96,44 @@ export class AgentReleasesService {
    * agent/VERSION, and the stored build is kept: agents running that version must not be
    * told it is something else. Releases belong to no tenant, so this logs instead of auditing.
    */
-  async uploadFromCi(input: { version: string; commit?: string; file: ReleaseUpload['file'] }) {
+  async uploadFromCi(input: { version: string; commit?: string; file: UploadedFile; installer?: UploadedFile }) {
     const build = this.check({ version: input.version, file: input.file });
+    if (input.installer) this.checkExe(input.installer, 'installer');
     const commit = /^[0-9a-f]{7,40}$/i.test(input.commit || '') ? input.commit!.toLowerCase() : null;
     const notes = commit ? `Built by CI from commit ${commit.slice(0, 12)}.` : 'Built by CI.';
     const saved = (await this.repo.findOne({ where: { version: build.version } })) ? null : await this.store(build, notes, null);
-    if (!saved) {
-      const existing = await this.repo.findOneOrFail({ where: { version: build.version } });
-      return { created: false, sha256_matches: existing.sha256 === build.sha256, release: this.view(existing) };
+    const release = saved ?? (await this.repo.findOneOrFail({ where: { version: build.version } }));
+    const matches = release.sha256 === build.sha256;
+    if (saved) this.logger.log(`CI uploaded agent ${saved.version} (${saved.sha256})${commit ? ` from ${commit}` : ''}`);
+    // An installer wraps the exe it was built with, so it joins a release only when that exe is
+    // the stored one. A release from before installers were uploaded gets one on the next deploy.
+    const installerAttached = !!input.installer && matches && (await this.attachInstaller(release, input.installer));
+    const current = installerAttached ? await this.repo.findOneOrFail({ where: { id: release.id } }) : release;
+    return { created: !!saved, sha256_matches: matches, installer_attached: installerAttached, release: this.view(current) };
+  }
+
+  /** Stores the setup wizard of a release that has none yet. False when one is already there. */
+  private async attachInstaller(release: AgentRelease, file: UploadedFile): Promise<boolean> {
+    if (release.installer_path) return false;
+    const relative = path.posix.join('agent-releases', release.version, installerName(release.version));
+    const absolute = path.join(AgentReleasesService.dataDir(), relative);
+    const pending = `${absolute}.${randomUUID()}.part`;
+    await fs.mkdir(path.dirname(absolute), { recursive: true });
+    await fs.writeFile(pending, file.buffer);
+    try {
+      const sha256 = createHash('sha256').update(file.buffer).digest('hex');
+      // Only the upload that fills the empty column moves its file into place.
+      const result = await this.repo.update(
+        { id: release.id, installer_path: IsNull() },
+        { installer_path: relative, installer_sha256: sha256, installer_size_bytes: String(file.size) },
+      );
+      if (!result.affected) return false;
+      await fs.rename(pending, absolute);
+      this.logger.log(`CI attached the installer of agent ${release.version} (${sha256})`);
+      return true;
+    } finally {
+      await fs.rm(pending, { force: true });
     }
-    this.logger.log(`CI uploaded agent ${saved.version} (${saved.sha256})${commit ? ` from ${commit}` : ''}`);
-    return { created: true, sha256_matches: true, release: this.view(saved) };
   }
 
   private check(input: { version: string; minAgentVersion?: string; file: ReleaseUpload['file'] }): CheckedBuild {
@@ -113,11 +143,15 @@ export class AgentReleasesService {
     if (min && !VERSION.test(min)) throw new BadRequestException('Minimum agent version must look like 1.0.0.');
     if (min && compareVersions(min, version) > 0) throw new BadRequestException('The minimum agent version cannot be newer than the release.');
     const file = input.file;
-    if (!file?.buffer?.length) throw new BadRequestException('Attach the agent .exe.');
-    if (file.size > MAX_RELEASE_BYTES) throw new BadRequestException('The file is too large for an agent build.');
+    this.checkExe(file, 'agent');
+    return { version, min, file, sha256: createHash('sha256').update(file.buffer).digest('hex') };
+  }
+
+  private checkExe(file: UploadedFile | undefined, what: 'agent' | 'installer') {
+    if (!file?.buffer?.length) throw new BadRequestException(what === 'agent' ? 'Attach the agent .exe.' : 'The installer is empty.');
+    if (file.size > MAX_RELEASE_BYTES) throw new BadRequestException(`The file is too large for an ${what} build.`);
     // Every Windows executable starts with "MZ".
     if (file.buffer[0] !== 0x4d || file.buffer[1] !== 0x5a) throw new BadRequestException('That is not a Windows executable.');
-    return { version, min, file, sha256: createHash('sha256').update(file.buffer).digest('hex') };
   }
 
   /**
@@ -220,6 +254,29 @@ export class AgentReleasesService {
     return { stream: createReadStream(absolute), size: Number(release.size_bytes), sha256: release.sha256 };
   }
 
+  /**
+   * The setup wizard of the newest published release that has one. It may be older than the
+   * newest release; the agent it installs updates itself to that one after it enrols.
+   */
+  async openInstaller(): Promise<{ stream: ReadStream; size: number; sha256: string; filename: string }> {
+    const published = await this.repo.find({ where: { published_at: Not(IsNull()), installer_path: Not(IsNull()) } });
+    const top = published.sort((a, b) => compareVersions(b.version, a.version))[0];
+    if (!top) throw new NotFoundException({ code: 'NOT_FOUND', title: 'Not Found', detail: 'No published release has an installer yet.' });
+    const absolute = path.join(AgentReleasesService.dataDir(), top.installer_path!);
+    try {
+      await fs.access(absolute);
+    } catch {
+      this.logger.error(`the installer of ${top.version} is recorded but its file is missing: ${absolute}`);
+      throw new NotFoundException({ code: 'NOT_FOUND', title: 'Not Found', detail: `The installer file for ${top.version} is missing.` });
+    }
+    return {
+      stream: createReadStream(absolute),
+      size: Number(top.installer_size_bytes),
+      sha256: top.installer_sha256!,
+      filename: installerName(top.version),
+    };
+  }
+
   private async find(id: string) {
     const release = await this.repo.findOne({ where: { id } });
     if (!release) throw new NotFoundException('Release not found');
@@ -227,7 +284,13 @@ export class AgentReleasesService {
   }
 
   private view(r: AgentRelease) {
-    const { file_path, ...rest } = r;
-    return { ...rest, size_bytes: Number(r.size_bytes), url: releaseUrl(r.version), published: !!r.published_at };
+    const { file_path, installer_path, installer_sha256, installer_size_bytes, ...rest } = r;
+    return {
+      ...rest,
+      size_bytes: Number(r.size_bytes),
+      has_installer: !!installer_path,
+      url: releaseUrl(r.version),
+      published: !!r.published_at,
+    };
   }
 }

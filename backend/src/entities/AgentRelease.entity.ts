@@ -25,6 +25,16 @@ export class AgentRelease {
   @Column({ type: 'varchar', length: 255 })
   file_path: string;
 
+  /** The setup wizard for new branch PCs, e.g. `agent-releases/1.0.9/gnext-agent-setup-1.0.9.exe`. Only CI supplies one. */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  installer_path?: string | null;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  installer_sha256?: string | null;
+
+  @Column({ type: 'bigint', nullable: true })
+  installer_size_bytes?: string | null;
+
   @Column({ type: 'text', nullable: true })
   notes?: string | null;
 

@@ -9,6 +9,7 @@ import BlockIcon from '@mui/icons-material/Block';
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CopyIcon from '@mui/icons-material/ContentCopy';
+import DownloadIcon from '@mui/icons-material/Download';
 import {
   Box,
   Card,
@@ -166,6 +167,18 @@ export function AgentsPage() {
     }
   };
 
+  const [downloading, setDownloading] = useState(false);
+  const handleDownloadInstaller = async () => {
+    setDownloading(true);
+    try {
+      await agentsApi.downloadInstaller();
+    } catch (err: any) {
+      setError(errorText(err, 'operations.agents.downloadError', 'Could not download the installer'));
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const handleRevoke = async () => {
     if (!revokeTarget) return;
     try {
@@ -205,6 +218,11 @@ export function AgentsPage() {
           <Stack direction="row" spacing={1.5}>
             <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
               {t('common.refresh', 'Refresh')}
+            </Button>
+            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleDownloadInstaller} disabled={downloading}>
+              {downloading
+                ? t('operations.agents.downloading', 'Downloading…')
+                : t('operations.agents.downloadInstaller', 'Download installer')}
             </Button>
             <Button variant="contained" startIcon={<KeyIcon />} onClick={openCodeDialog}>
               {t('operations.agents.createCode', 'New enrolment code')}
