@@ -46,6 +46,7 @@ import { AgentRelease } from './entities/AgentRelease.entity';
 import { DailyStock } from './entities/DailyStock.entity';
 import { AgentGatewayModule } from './modules/agent-gateway/agent-gateway.module';
 import { AgentLocalModule } from './modules/agent-local/agent-local.module';
+import { LiveModule } from './modules/live/live.module';
 import { ImportJob } from './entities/ImportJob.entity';
 import { ImportRow } from './entities/ImportRow.entity';
 
@@ -234,6 +235,7 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
     ProfilesModule,
     AgentGatewayModule,
     AgentLocalModule,
+    LiveModule,
     TypeOrmModule.forFeature([AdminUser, Session, IdempotencyRecord]),
   ],
   controllers: [HealthController],

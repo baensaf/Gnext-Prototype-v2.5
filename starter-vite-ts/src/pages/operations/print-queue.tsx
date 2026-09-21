@@ -36,6 +36,7 @@ import {
 } from '@mui/material';
 
 import { fDateTime } from 'src/utils/format-time';
+import { useLiveRefresh } from 'src/utils/use-live-refresh';
 
 import { kdsApi } from 'src/api/kdsApi';
 
@@ -79,9 +80,9 @@ export function PrintQueuePage() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 5000);
-    return () => clearInterval(interval);
   }, [loadData]);
+
+  useLiveRefresh(['print'], loadData);
 
   const handleSimulateOutcome = async () => {
     if (!outcomeJob) return;
@@ -170,7 +171,7 @@ export function PrintQueuePage() {
           </Typography>
         </Box>
 
-        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
+        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => loadData()}>
           {t('monitoring.refresh', 'Refresh')}
         </Button>
       </Stack>

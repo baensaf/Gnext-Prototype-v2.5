@@ -34,6 +34,8 @@ import {
   DialogActions,
 } from '@mui/material';
 
+import { useLiveRefresh } from 'src/utils/use-live-refresh';
+
 import { kdsApi } from 'src/api/kdsApi';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 
@@ -79,9 +81,9 @@ export function KdsPage() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 5000);
-    return () => clearInterval(interval);
   }, [loadData]);
+
+  useLiveRefresh(['kds'], loadData, branchId);
 
   const handleStartTicket = async (ticketId: string) => {
     try {
@@ -168,7 +170,7 @@ export function KdsPage() {
         </Box>
 
         <Stack direction="row" spacing={2}>
-          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
+          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => loadData()}>
             {t('kds.refresh')}
           </Button>
           <Button variant="outlined" startIcon={<UndoIcon />} onClick={() => setRecallDrawerOpen(true)}>
