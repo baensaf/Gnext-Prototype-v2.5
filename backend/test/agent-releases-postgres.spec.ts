@@ -297,6 +297,23 @@ describe('agent releases (PostgreSQL)', () => {
         await ciPostWithInstaller(v, exe('build of 23'), Buffer.from('#!/bin/sh')).expect(400);
         expect(await dataSource.getRepository(AgentRelease).findOne({ where: { version: v } })).toBeNull();
       });
+
+      it('tells CI what it already holds, behind the same token', async () => {
+        const v = version(24);
+        const status = (bearer = token) =>
+          request(app.getHttpServer()).get(`/api/v1/agent-releases/ci/${v}`).set('Authorization', `Bearer ${bearer}`);
+        await status(token + 'x').expect(401);
+        expect((await status().expect(200)).body).toEqual({ exists: false, sha256: null, has_installer: false });
+
+        const bytes = exe('build of 24');
+        await ciPost(v, bytes).expect(200);
+        const sha256 = createHash('sha256').update(bytes).digest('hex');
+        expect((await status().expect(200)).body).toEqual({ exists: true, sha256, has_installer: false });
+
+        await ciPostWithInstaller(v, bytes, exe('setup of 24')).expect(200);
+        expect((await status().expect(200)).body).toEqual({ exists: true, sha256, has_installer: true });
+        await request(app.getHttpServer()).get('/api/v1/agent-releases/ci/latest').set('Authorization', `Bearer ${token}`).expect(400);
+      });
     });
   });
 

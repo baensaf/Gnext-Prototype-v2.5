@@ -100,6 +100,12 @@ export class CiAgentReleaseDto {
 export class AgentReleasesCiController {
   constructor(private readonly releases: AgentReleasesService) {}
 
+  /** What the cloud already holds for a version, so CI uploads only what is missing. */
+  @Get(':version')
+  async status(@Param('version') version: string) {
+    return await this.releases.ciStatus(version);
+  }
+
   @Post()
   @HttpCode(200)
   @UseInterceptors(

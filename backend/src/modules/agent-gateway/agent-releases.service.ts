@@ -96,6 +96,12 @@ export class AgentReleasesService {
    * agent/VERSION, and the stored build is kept: agents running that version must not be
    * told it is something else. Releases belong to no tenant, so this logs instead of auditing.
    */
+  async ciStatus(version: string) {
+    if (!VERSION.test(version)) throw new BadRequestException('Version must look like 1.0.3.');
+    const release = await this.repo.findOne({ where: { version } });
+    return { exists: !!release, sha256: release?.sha256 ?? null, has_installer: !!release?.installer_path };
+  }
+
   async uploadFromCi(input: { version: string; commit?: string; file: UploadedFile; installer?: UploadedFile }) {
     const build = this.check({ version: input.version, file: input.file });
     if (input.installer) this.checkExe(input.installer, 'installer');
