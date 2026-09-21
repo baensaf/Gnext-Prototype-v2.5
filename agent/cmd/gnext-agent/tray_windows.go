@@ -75,8 +75,8 @@ const (
 	nifTip        = 0x04
 	nifInfo       = 0x10
 	nifShowTip    = 0x80
-	niifInfo      = 0x01
-	niifWarning   = 0x02
+	niifUser      = 0x04 // the notice shows our own icon
+	niifLargeIcon = 0x20
 
 	mfString    = 0x0000
 	mfDisabled  = 0x0002
@@ -87,6 +87,7 @@ const (
 	tpmReturnCmd   = 0x0100
 	tpmLayoutRTL   = 0x8000
 
+	smCxIcon   = 11
 	smCxSmIcon = 49
 
 	cmdOpen      = 1
@@ -165,6 +166,7 @@ type notifyIconData struct {
 type tray struct {
 	hwnd           windows.HWND
 	icons          map[trayLevel]windows.Handle
+	large          map[trayLevel]windows.Handle // for notices
 	taskbarCreated uint32
 	added          bool
 
@@ -188,14 +190,19 @@ func runTray() int {
 	// Sharp icons on scaled screens; without it Windows stretches a 16-pixel one.
 	procSetDpiAwarenessContext.Call(^uintptr(3)) // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
 
-	t := &tray{icons: map[trayLevel]windows.Handle{}}
+	t := &tray{icons: map[trayLevel]windows.Handle{}, large: map[trayLevel]windows.Handle{}}
 	theTray = t
 	size, _, _ := procGetSystemMetrics.Call(smCxSmIcon)
 	if size == 0 {
 		size = 16
 	}
+	big, _, _ := procGetSystemMetrics.Call(smCxIcon)
+	if big == 0 {
+		big = 32
+	}
 	for level := range trayColours {
 		t.icons[level] = createIcon(int(size), drawTrayIcon(int(size), level))
+		t.large[level] = createIcon(int(big), drawTrayIcon(int(big), level))
 	}
 	if err := t.createWindow(); err != nil {
 		fmt.Fprintln(os.Stderr, "tray:", err)
@@ -264,7 +271,7 @@ func trayWndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 		case wmContextMenu:
 			t.menu()
 		case ninSelect, ninKeySelect, ninBalloonUserClick:
-			_ = openBrowser("http://" + uiAddr())
+			startWindow()
 		}
 		return 0
 	case wmRefresh:
@@ -347,12 +354,12 @@ func (t *tray) refresh() {
 	copyUTF16(d.Tip[:], v.Tip())
 	if len(notes) > 0 {
 		d.Flags |= nifInfo
-		d.InfoFlags = niifInfo
+		// Windows 10 and 11 show this as a system notification under the exe's name (its
+		// version resource), with the logo and the status light as its picture.
+		d.InfoFlags = niifUser | niifLargeIcon
+		d.BalloonIcon = t.large[v.Level]
 		title, lines := notes[0].Title, make([]string, 0, len(notes))
 		for _, n := range notes {
-			if n.Warn {
-				d.InfoFlags = niifWarning
-			}
 			if len(notes) == 1 {
 				lines = append(lines, n.Text)
 			} else {
@@ -422,7 +429,7 @@ func (t *tray) menu() {
 
 	switch {
 	case cmd == cmdOpen:
-		_ = openBrowser("http://" + uiAddr())
+		startWindow()
 	case cmd == cmdHide:
 		procPostMessageW.Call(uintptr(t.hwnd), wmClose, 0, 0)
 	case cmd >= cmdTestPrint && int(cmd-cmdTestPrint) < len(v.Printers):
