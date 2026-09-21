@@ -1,6 +1,19 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Req, UploadedFile, UseInterceptors } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { Request } from 'express';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Req,
+  Res,
+  UploadedFile,
+  UploadedFiles,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
+import { Request, Response } from 'express';
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { AgentReleaseCiAuthenticated } from './agent-release-ci.guard';
@@ -32,6 +45,19 @@ export class AgentReleasesController {
   @Get()
   async list() {
     return await this.releases.list();
+  }
+
+  /** The setup wizard for a new branch PC, from the newest published release that has one. */
+  @Get('installer')
+  async installer(@Res() res: Response) {
+    const file = await this.releases.openInstaller();
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Length', String(file.size));
+    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Content-SHA256');
+    res.setHeader('X-Content-SHA256', file.sha256);
+    file.stream.on('error', () => res.destroy());
+    file.stream.pipe(res);
   }
 
   @Post()
@@ -76,9 +102,22 @@ export class AgentReleasesCiController {
 
   @Post()
   @HttpCode(200)
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_RELEASE_BYTES, files: 1 } }))
-  async upload(@UploadedFile() file: any, @Body() body: CiAgentReleaseDto) {
-    return await this.releases.uploadFromCi({ version: body.version, commit: body.commit, file });
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'file', maxCount: 1 },
+        { name: 'installer', maxCount: 1 },
+      ],
+      { limits: { fileSize: MAX_RELEASE_BYTES, files: 2 } },
+    ),
+  )
+  async upload(@UploadedFiles() files: { file?: any[]; installer?: any[] }, @Body() body: CiAgentReleaseDto) {
+    return await this.releases.uploadFromCi({
+      version: body.version,
+      commit: body.commit,
+      file: files?.file?.[0],
+      installer: files?.installer?.[0],
+    });
   }
 }
 

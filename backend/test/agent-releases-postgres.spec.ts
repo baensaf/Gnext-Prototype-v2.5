@@ -238,6 +238,66 @@ describe('agent releases (PostgreSQL)', () => {
       const leftovers = (await fs.readdir(path.join(dataDir, 'agent-releases', v))).filter((f) => f.endsWith('.part'));
       expect(leftovers).toEqual([]);
     });
+
+    describe('with the installer', () => {
+      const ciPostWithInstaller = (v: string, bytes: Buffer, setup: Buffer) =>
+        request(app.getHttpServer())
+          .post('/api/v1/agent-releases/ci')
+          .set('Authorization', `Bearer ${token}`)
+          .field('version', v)
+          .attach('file', bytes, 'gnext-agent.exe')
+          .attach('installer', setup, `gnext-agent-setup-${v}.exe`);
+      const readAll = async (stream: NodeJS.ReadableStream) => {
+        const chunks: Buffer[] = [];
+        for await (const c of stream) chunks.push(c as Buffer);
+        return Buffer.concat(chunks);
+      };
+
+      it('stores it with the release, and offers it for download only once published', async () => {
+        const v = version(20);
+        const setup = exe('setup wizard of 20');
+        const res = await ciPostWithInstaller(v, exe('build of 20'), setup).expect(200);
+        expect(res.body).toMatchObject({ created: true, installer_attached: true, release: { has_installer: true } });
+        expect(res.body.release).not.toHaveProperty('installer_path');
+        expect(await fs.readFile(path.join(dataDir, 'agent-releases', v, `gnext-agent-setup-${v}.exe`))).toEqual(setup);
+
+        const before = await releases.openInstaller().catch(() => null);
+        expect(before?.filename).not.toBe(`gnext-agent-setup-${v}.exe`);
+        before?.stream.destroy();
+
+        await releases.publish(res.body.release.id, actor());
+        const file = await releases.openInstaller();
+        expect(file).toMatchObject({ filename: `gnext-agent-setup-${v}.exe`, size: setup.length });
+        expect(file.sha256).toBe(createHash('sha256').update(setup).digest('hex'));
+        expect(await readAll(file.stream)).toEqual(setup);
+        await releases.unpublish(res.body.release.id, actor());
+      });
+
+      it('adds it to a release that has none, and keeps the first one', async () => {
+        const v = version(21);
+        const bytes = exe('build of 21');
+        await ciPost(v, bytes).expect(200);
+
+        const added = await ciPostWithInstaller(v, bytes, exe('first setup')).expect(200);
+        expect(added.body).toMatchObject({ created: false, sha256_matches: true, installer_attached: true });
+        const again = await ciPostWithInstaller(v, bytes, exe('second setup')).expect(200);
+        expect(again.body).toMatchObject({ installer_attached: false, release: { has_installer: true } });
+        expect(await fs.readFile(path.join(dataDir, 'agent-releases', v, `gnext-agent-setup-${v}.exe`))).toEqual(exe('first setup'));
+      });
+
+      it('leaves it out when the exe it wraps is not the stored one', async () => {
+        const v = version(22);
+        await ciPost(v, exe('build of 22')).expect(200);
+        const res = await ciPostWithInstaller(v, exe('build of 22, changed'), exe('setup')).expect(200);
+        expect(res.body).toMatchObject({ sha256_matches: false, installer_attached: false, release: { has_installer: false } });
+      });
+
+      it('refuses an installer that is not a Windows executable', async () => {
+        const v = version(23);
+        await ciPostWithInstaller(v, exe('build of 23'), Buffer.from('#!/bin/sh')).expect(400);
+        expect(await dataSource.getRepository(AgentRelease).findOne({ where: { version: v } })).toBeNull();
+      });
+    });
   });
 
   it('withdraws a build on unpublish', async () => {

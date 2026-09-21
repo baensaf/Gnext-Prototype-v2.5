@@ -69,6 +69,8 @@ export interface AgentReleaseRow {
   published_at?: string | null;
   created_at: string;
   url: string;
+  /** CI stored the setup wizard with this build. */
+  has_installer: boolean;
 }
 
 export type EnrolmentCodeState = 'PENDING' | 'USED' | 'EXPIRED' | 'CANCELLED';
@@ -131,6 +133,26 @@ export const agentsApi = {
       timeout: 10 * 60_000,
     });
     return res.data;
+  },
+  /** Saves the setup wizard of the newest published build that has one. */
+  downloadInstaller: async (): Promise<void> => {
+    let res;
+    try {
+      res = await httpClient.get('/api/v1/agent-releases/installer', { responseType: 'blob', timeout: 10 * 60_000 });
+    } catch (err) {
+      // A refusal arrives as a Blob too; read the problem out of it.
+      if (err instanceof Blob) throw JSON.parse(await err.text());
+      throw err;
+    }
+    const name = /filename="([^"]+)"/.exec(res.headers['content-disposition'] || '')?.[1] || 'gnext-agent-setup.exe';
+    const url = URL.createObjectURL(res.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   },
   publishRelease: async (id: string): Promise<AgentReleaseRow> => {
     const res = await httpClient.post(`/api/v1/agent-releases/${id}/publish`, {});

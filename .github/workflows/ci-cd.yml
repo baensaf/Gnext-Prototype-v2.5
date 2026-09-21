@@ -206,9 +206,10 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
           sparse-checkout: agent/VERSION
           sparse-checkout-cone-mode: false
+      # Holds the bare exe (what agents update to) and the setup wizard (what head office downloads).
       - uses: actions/download-artifact@v4
         with:
-          name: gnext-agent-exe
+          name: gnext-agent-windows
           path: dist
       - name: Upload to the cloud
         env:
@@ -219,11 +220,14 @@ jobs:
             exit 0
           fi
           version=$(tr -d '[:space:]' < agent/VERSION)
-          sha256sum dist/gnext-agent.exe
+          setup="dist/gnext-agent-setup-$version.exe"
+          [ -f "$setup" ] || { echo "::error::$setup is missing from the gnext-agent-windows artifact"; exit 1; }
+          sha256sum dist/gnext-agent.exe "$setup"
           code=$(curl -sS -o response.json -w '%{http_code}' --max-time 300 --retry 3 --retry-all-errors \
             -H "Authorization: Bearer $TOKEN" \
             -F "version=$version" -F "commit=$(git rev-parse HEAD)" \
             -F "file=@dist/gnext-agent.exe;type=application/octet-stream" \
+            -F "installer=@$setup;type=application/octet-stream" \
             "$AGENT_RELEASE_URL/api/v1/agent-releases/ci") || code=000
           cat response.json 2>/dev/null; echo
           [ "$code" = "200" ] || { echo "::error::Upload of agent $version failed: HTTP $code"; exit 1; }
