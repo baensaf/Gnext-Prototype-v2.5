@@ -1,8 +1,8 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /** The setup wizard CI builds with each agent release, for head office to download. */
-export class AgentReleaseInstaller1700000000068 implements MigrationInterface {
-  name = 'AgentReleaseInstaller1700000000068';
+export class AgentReleaseInstaller1700000000069 implements MigrationInterface {
+  name = 'AgentReleaseInstaller1700000000069';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
