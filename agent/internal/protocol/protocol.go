@@ -51,6 +51,10 @@ const (
 // Device error codes (§8.3).
 const (
 	ErrPrinterUnreachable  = "PRINTER_UNREACHABLE"
+	ErrPrinterOffline      = "PRINTER_OFFLINE"
+	ErrPaperOut            = "PAPER_OUT"
+	ErrCoverOpen           = "COVER_OPEN"
+	ErrPrinterError        = "PRINTER_ERROR"
 	ErrRenderFailed        = "RENDER_FAILED"
 	ErrTimeout             = "TIMEOUT"
 	ErrAgentRestarted      = "AGENT_RESTARTED"

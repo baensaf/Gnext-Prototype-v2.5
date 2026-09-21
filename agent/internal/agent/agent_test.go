@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -167,7 +168,8 @@ func (whiteRenderer) Render(_ context.Context, _ string, width int) (image.Image
 	return img, nil
 }
 
-// printerLAN accepts raw print jobs like a port-9100 printer and counts them.
+// printerLAN accepts raw print jobs like a port-9100 printer that answers no status questions,
+// and counts the connections that carried a ticket (device checks carry none).
 type printerLAN struct {
 	ln   net.Listener
 	mu   sync.Mutex
@@ -190,7 +192,7 @@ func newPrinterLAN(t *testing.T) *printerLAN {
 			go func() {
 				defer c.Close()
 				b, _ := io.ReadAll(c)
-				if len(b) > 0 {
+				if bytes.Contains(b, []byte{0x1D, 0x76, 0x30}) { // GS v 0
 					p.mu.Lock()
 					p.jobs++
 					p.mu.Unlock()
@@ -273,7 +275,7 @@ func startWithKey(t *testing.T, dir string, cloud *fakeCloud, drv *stubDriver, k
 		WSURL:   cloud.wsURL(),
 		Headers: http.Header{"Authorization": {"Bearer " + key}},
 		Journal: j,
-		Printer: &printing.Printer{Renderer: whiteRenderer{}},
+		Printer: &printing.Printer{Renderer: whiteRenderer{}, StatusTimeout: 50 * time.Millisecond},
 		Log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 		NewDriver: func(t protocol.Terminal) payment.Driver {
 			if t.Driver != nil && *t.Driver == "stub" {

@@ -49,7 +49,8 @@ func (a *Agent) probe(ctx context.Context) {
 	a.devMu.Lock()
 	var changed []protocol.DeviceStatus
 	for k, st := range seen {
-		if old, ok := a.devices[k]; !ok || old.Status != st.Status {
+		// A new detail counts too: a printer can be online with its paper running low.
+		if old, ok := a.devices[k]; !ok || old.Status != st.Status || deref(old.Detail) != deref(st.Detail) {
 			changed = append(changed, st)
 		}
 	}
@@ -75,6 +76,13 @@ func (a *Agent) deviceList() []protocol.DeviceStatus {
 
 func sortDevices(ds []protocol.DeviceStatus) {
 	sort.Slice(ds, func(i, j int) bool { return ds[i].Kind+ds[i].ID < ds[j].Kind+ds[j].ID })
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 func detailPtr(s string) *string {

@@ -10,11 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode/utf16"
 	"unsafe"
 
 	"github.com/chromedp/chromedp"
 	"golang.org/x/sys/windows"
+
+	"gnext/agent/internal/winsession"
 )
 
 func launchBrowser(exe, profileDir string) (context.Context, context.CancelFunc, error) {
@@ -35,18 +36,15 @@ func runningAsSystem() bool {
 // goes into a job of its own whose handle only the agent holds, so it still ends when the
 // agent does.
 func launchInUserSession(exe string) (context.Context, context.CancelFunc, error) {
-	session := windows.WTSGetActiveConsoleSessionId()
-	var token windows.Token
-	if session == 0xFFFFFFFF || windows.WTSQueryUserToken(session, &token) != nil {
+	token, env, err := winsession.User(winsession.Console())
+	if errors.Is(err, winsession.ErrNoUser) {
 		return nil, nil, errors.New("no one is signed in to Windows; tickets are drawn in the signed-in user's session")
+	} else if err != nil {
+		return nil, nil, err
 	}
 	defer token.Close()
 
-	env, err := token.Environ(false)
-	if err != nil {
-		return nil, nil, fmt.Errorf("read the signed-in user's environment: %w", err)
-	}
-	local := lookupEnv(env, "LOCALAPPDATA")
+	local := winsession.LookupEnv(env, "LOCALAPPDATA")
 	if local == "" {
 		home, err := token.GetUserProfileDirectory()
 		if err != nil {
@@ -75,7 +73,7 @@ func launchInUserSession(exe string) (context.Context, context.CancelFunc, error
 	var pi windows.ProcessInformation
 	if err := windows.CreateProcessAsUser(token, nil, windows.StringToUTF16Ptr(cmdLine), nil, nil, false,
 		windows.CREATE_UNICODE_ENVIRONMENT|windows.CREATE_NO_WINDOW|windows.CREATE_SUSPENDED|windows.CREATE_BREAKAWAY_FROM_JOB,
-		envBlock(env), windows.StringToUTF16Ptr(dir), &si, &pi); err != nil {
+		winsession.EnvBlock(env), windows.StringToUTF16Ptr(dir), &si, &pi); err != nil {
 		return nil, nil, fmt.Errorf("start in the signed-in user's session: %w", err)
 	}
 	job := killOnCloseJob(pi.Process)
@@ -139,24 +137,4 @@ func waitForDevTools(proc windows.Handle, portFile string, timeout time.Duration
 		}
 	}
 	return "", errors.New("browser did not start within 20 seconds")
-}
-
-func lookupEnv(env []string, key string) string {
-	for _, e := range env {
-		if k, v, ok := strings.Cut(e, "="); ok && strings.EqualFold(k, key) {
-			return v
-		}
-	}
-	return ""
-}
-
-// envBlock encodes env as the double-NUL-terminated UTF-16 block CreateProcess takes.
-func envBlock(env []string) *uint16 {
-	var b []uint16
-	for _, e := range env {
-		b = append(b, utf16.Encode([]rune(e))...)
-		b = append(b, 0)
-	}
-	b = append(b, 0)
-	return &b[0]
 }

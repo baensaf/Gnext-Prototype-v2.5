@@ -5,6 +5,7 @@
 //	gnext-agent.exe enrol --code XXXX-XXXX [--server https://…]
 //	gnext-agent.exe run        (console; the service runs the same loop)
 //	gnext-agent.exe open       (opens the settings page)
+//	gnext-agent.exe tray       (status icon; the service starts one per signed-in user)
 //	gnext-agent.exe version
 package main
 
@@ -56,6 +57,8 @@ func main() {
 			fmt.Fprintln(os.Stderr, "open:", err)
 			os.Exit(1)
 		}
+	case "tray":
+		os.Exit(runTray())
 	case "version", "--version", "-v":
 		fmt.Println(version)
 	default:
@@ -70,6 +73,7 @@ func usage() {
   gnext-agent enrol --code XXXX-XXXX [--server https://app.example.ir]
   gnext-agent run
   gnext-agent open
+  gnext-agent tray
   gnext-agent service install|uninstall|start|stop
   gnext-agent version
 
@@ -166,6 +170,8 @@ func run(ctx context.Context, console io.Writer) int {
 			log.Error("settings page could not start", "addr", uiAddr(), "err", err)
 		}
 	}()
+
+	go launchTrays(ctx, log)
 
 	code := h.supervise(ctx)
 	if code == exitRestart {

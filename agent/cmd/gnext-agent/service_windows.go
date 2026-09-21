@@ -8,11 +8,16 @@ import (
 	"os/exec"
 	"syscall"
 	"time"
+	"unsafe"
 
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 )
 
 const serviceName = "GnextAgent"
+
+// wtsSessionLogon is the session-change event for a user signing in (WTS_SESSION_LOGON).
+const wtsSessionLogon = 5
 
 func isService() bool {
 	ok, err := svc.IsWindowsService()
@@ -27,7 +32,7 @@ func (handler) Execute(_ []string, req <-chan svc.ChangeRequest, status chan<- s
 	defer cancel()
 	done := make(chan int, 1)
 	go func() { done <- run(ctx, nil) }()
-	status <- svc.Status{State: svc.Running, Accepts: svc.AcceptStop | svc.AcceptShutdown}
+	status <- svc.Status{State: svc.Running, Accepts: svc.AcceptStop | svc.AcceptShutdown | svc.AcceptSessionChange}
 
 	for {
 		select {
@@ -42,6 +47,14 @@ func (handler) Execute(_ []string, req <-chan svc.ChangeRequest, status chan<- s
 			switch c.Cmd {
 			case svc.Interrogate:
 				status <- c.CurrentStatus
+			case svc.SessionChange:
+				if c.EventType == wtsSessionLogon && c.EventData != 0 {
+					n := *(**windows.WTSSESSION_NOTIFICATION)(unsafe.Pointer(&c.EventData))
+					select {
+					case trayLogons <- n.SessionID:
+					default:
+					}
+				}
 			case svc.Stop, svc.Shutdown:
 				status <- svc.Status{State: svc.StopPending}
 				cancel()

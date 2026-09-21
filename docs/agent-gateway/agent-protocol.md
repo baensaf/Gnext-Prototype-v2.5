@@ -529,6 +529,12 @@ printers, read the spooler status).
 `status`: `ONLINE`, `OFFLINE`, `ERROR` (reachable but faulted: paper out, cover open),
 `UNSUPPORTED` (no driver), `UNKNOWN` (not checked yet). The cloud acks it.
 
+For a TCP printer the agent asks the printer for its status (ESC/POS `DLE EOT` 1, 2 and 4)
+after connecting. A fault gives `ERROR` with the detail `paper out`, `cover open`,
+`printer error` or `printer offline`; paper running low gives `ONLINE` with the detail
+`paper low`. A printer that does not answer is `ONLINE` with no detail. A change of detail
+is reported like a change of status.
+
 ## 7. Commands in detail
 
 ### 7.1 `print.job`
@@ -575,8 +581,14 @@ printers, read the spooler status).
 
 - `status`: `SUCCESS` or `FAILED`.
 - On `FAILED`, `error` is `{ "code": "PAPER_OUT", "message": "…" }` with a code from §8.3.
-- `SUCCESS` means the printer or spooler accepted all copies. The agent does not claim the
-  paper came out; few printers can say so.
+- For a printer that answers status questions, the agent checks it before sending (a fault
+  fails the job with nothing printed) and after sending asks `GS r 1`, which the printer only
+  answers once everything before it has printed, checking `DLE EOT` every second meanwhile.
+  `SUCCESS` then means the printer confirmed the ticket printed; a fault while waiting fails
+  it with that code, and the message says the ticket may be partly printed. For a printer
+  that does not answer, `SUCCESS` means the printer accepted all copies, as before. The agent
+  remembers per printer which questions go unanswered until it restarts, so a silent printer
+  is not waited on for every ticket.
 - The cloud records the result on `PrintAttempt` and `PrintJob`, and the existing fallback
   and retry rules decide what happens next.
 
@@ -749,10 +761,10 @@ Printing:
 | Code | Meaning |
 |---|---|
 | `PRINTER_UNREACHABLE` | TCP/serial connect failed, or Windows printer not found. |
-| `PRINTER_OFFLINE` | Spooler reports the printer offline. |
-| `PAPER_OUT` | |
-| `COVER_OPEN` | |
-| `PRINTER_ERROR` | Any other fault the printer reports. |
+| `PRINTER_OFFLINE` | The printer (or spooler) reports itself offline for no reason below. |
+| `PAPER_OUT` | The printer reports its paper end. |
+| `COVER_OPEN` | The printer reports its cover open. |
+| `PRINTER_ERROR` | Any other fault the printer reports (cutter jam, overheating). |
 | `RENDER_FAILED` | The agent could not turn the HTML into output. |
 | `SPOOLER_ERROR` | Windows spooler refused the job. |
 | `TIMEOUT` | No completion within 60 s. |
