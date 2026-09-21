@@ -8,6 +8,15 @@ export interface Customer {
   mobile: string;
   email?: string;
   national_id?: string;
+  /** Gregorian YYYY-MM-DD; the picker shows it in the chain's calendar. */
+  birth_date?: string | null;
+  /**
+   * The chain refuses to serve this customer: they cannot be put on a new order at all.
+   * Not the same as a blocked credit account, which only stops them paying on account.
+   */
+  is_blocked?: boolean;
+  blocked_reason?: string | null;
+  blocked_at?: string | null;
   is_active: boolean;
   credit_account?: CustomerCreditAccount | null;
   wallet_balance?: string;
@@ -48,6 +57,19 @@ export const customerApi = {
   },
   createCustomer: async (data: Partial<Customer> & { credit_limit?: string }): Promise<Customer> => {
     const res = await httpClient.post('/api/v1/customers', data);
+    return res.data;
+  },
+  updateCustomer: async (id: string, data: Partial<Customer>): Promise<Customer> => {
+    const res = await httpClient.patch(`/api/v1/customers/${id}`, data);
+    return res.data;
+  },
+  /** Refusing service needs a reason; lifting it does not. */
+  blockCustomer: async (id: string, reason: string): Promise<Customer> => {
+    const res = await httpClient.post(`/api/v1/customers/${id}/block`, { reason });
+    return res.data;
+  },
+  unblockCustomer: async (id: string): Promise<Customer> => {
+    const res = await httpClient.post(`/api/v1/customers/${id}/unblock`, {});
     return res.data;
   },
 

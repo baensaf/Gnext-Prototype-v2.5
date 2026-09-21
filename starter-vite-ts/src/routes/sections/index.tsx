@@ -60,6 +60,7 @@ import { OfflineSyncPage } from 'src/pages/simulation/offline-sync';
 import { ChannelPricesPage } from 'src/pages/catalog/channel-prices';
 import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
 import { ProductDetailPage } from 'src/pages/catalog/product-detail';
+import { NoteTemplatesPage } from 'src/pages/settings/note-templates';
 import { BranchDetailPage } from 'src/pages/operations/branch-detail';
 import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
 import { CourierDetailPage } from 'src/pages/operations/courier-detail';
@@ -209,6 +210,7 @@ export const routesSection: RouteObject[] = [
       { path: 'settings/payments', element: <Navigate to="/app/settings/payments-refunds" replace /> },
       { path: 'settings/approvals', element: <ApprovalsSettingsPage /> },
       { path: 'settings/reasons', element: <ReasonCodesPage /> },
+      { path: 'settings/note-templates', element: <NoteTemplatesPage /> },
       { path: 'settings/localization', element: <MediaLocalizationDemoPage /> },
       { path: 'settings/data-reset', element: <DataResetPage /> },
       { path: 'pos/receipt/:id', element: <ReceiptPage /> },

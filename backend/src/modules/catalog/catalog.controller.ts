@@ -5,6 +5,7 @@ import { PriceListService } from './price-lists.service';
 import { ApprovalService } from '../approval/approval.service';
 import { PriceChangeInput, PriceChangeService } from './price-changes.service';
 import { StopReportService } from './stop-report.service';
+import { NoteTemplateService } from './note-template.service';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { HeadOfficeOnly, Roles, MANAGER_AND_ABOVE } from '../../common/decorators/roles.decorator';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
@@ -26,6 +27,7 @@ export class CatalogController {
     private readonly approvals: ApprovalService,
     private readonly priceChanges: PriceChangeService,
     private readonly stopReports: StopReportService,
+    private readonly noteTemplates: NoteTemplateService,
   ) {}
 
   // Categories
@@ -598,6 +600,51 @@ export class CatalogController {
       (req as any).tenantId,
       effectiveBranchId((req as any).userBranchId, body.branchId),
       body.entries,
+      (req as any).correlationId,
+    );
+  }
+
+  // Note templates: the fixed phrases a cashier taps instead of typing a note. What the
+  // chain is willing to say on a ticket is decided like the menu is, so writes are head
+  // office. Reads stay open — every register needs the list.
+  @Get('note-templates')
+  async getNoteTemplates(@Query() query: { scope?: string; includeInactive?: string }, @Req() req: Request) {
+    return await this.noteTemplates.list((req as any).tenantId, {
+      scope: query.scope,
+      includeInactive: query.includeInactive === 'true',
+    });
+  }
+
+  @HeadOfficeOnly()
+  @Post('note-templates')
+  async createNoteTemplate(@Body() body: any, @Req() req: Request) {
+    return await this.noteTemplates.create(
+      (req as any).tenantId,
+      body,
+      (req as any).userId,
+      (req as any).correlationId,
+    );
+  }
+
+  @HeadOfficeOnly()
+  @Patch('note-templates/:id')
+  async updateNoteTemplate(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+    return await this.noteTemplates.update(
+      (req as any).tenantId,
+      id,
+      body,
+      (req as any).userId,
+      (req as any).correlationId,
+    );
+  }
+
+  @HeadOfficeOnly()
+  @Delete('note-templates/:id')
+  async archiveNoteTemplate(@Param('id') id: string, @Req() req: Request) {
+    return await this.noteTemplates.archive(
+      (req as any).tenantId,
+      id,
+      (req as any).userId,
       (req as any).correlationId,
     );
   }

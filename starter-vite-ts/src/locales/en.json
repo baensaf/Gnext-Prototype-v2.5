@@ -25,7 +25,10 @@
       "OWNER": "Owner",
       "MANAGER": "Branch Manager",
       "CASHIER": "Cashier"
-    }
+    },
+    "idleTitle": "Are you still there?",
+    "idleBody": "This terminal has been idle. You will be signed out in {{count}} seconds.",
+    "idleStay": "I'm still here"
   },
   "nav": {
     "home": "Home",
@@ -278,7 +281,8 @@
       "stoppedFurtherNotice": "{{name}} is off sale until further notice",
       "resumed": "{{name}} is back on sale",
       "failed": "Could not change this item"
-    }
+    },
+    "quickTags": "Quick Tags"
   },
   "kiosk": {
     "title": "SELF-SERVICE KIOSK",
@@ -2916,6 +2920,10 @@
         "calendar": {
           "title": "Calendar",
           "description": "Jalali or Gregorian dates across the chain, and the first day of the week."
+        },
+        "noteTemplates": {
+          "title": "Order Note Templates",
+          "description": "One-tap phrases the register offers when a cashier adds a note to an order or an item."
         }
       },
       "scopeLegend": "Organization settings are defined once at head office and apply to every branch. Per-branch settings are configured separately at each location.",
@@ -2991,6 +2999,26 @@
         "5": "Friday",
         "6": "Saturday"
       }
+    },
+    "notesPage": {
+      "title": "Order Note Templates",
+      "create": "Add Phrase",
+      "edit": "Edit Phrase",
+      "colScope": "Applies To",
+      "colText": "Phrase",
+      "colCategory": "Group",
+      "colOrder": "Order",
+      "scopeOrder": "Whole order",
+      "scopeItem": "Single item",
+      "textHelp": "Exactly as it should print on the kitchen ticket.",
+      "categoryHelp": "Optional, e.g. Allergies or Delivery.",
+      "orderHelp": "Lower numbers appear first on the register.",
+      "help": "These phrases appear as one-tap chips on the register when a cashier adds a note. Order phrases apply to the whole ticket; item phrases apply to a single line.",
+      "empty": "No phrases yet. Cashiers can still type notes freely; adding phrases here makes the common ones one tap.",
+      "loadError": "Failed to load note templates",
+      "saveSuccess": "Note template saved",
+      "saveError": "Failed to save note template",
+      "statusError": "Failed to change the template status"
     }
   },
   "inventory": {
@@ -3069,7 +3097,10 @@
     "filterDocType": "Document Type",
     "allStatuses": "All Statuses",
     "allDocTypes": "All Document Types",
-    "noJobsFound": "No print jobs found in queue"
+    "noJobsFound": "No print jobs found in queue",
+    "printer": "Printer",
+    "reprintElsewhere": "Reprint on another printer",
+    "reprintElsewhereHelp": "Sends this document to a printer you choose instead of the one it was routed to. Use it when the usual printer is out of service."
   },
   "monitoring": {
     "title": "Operational Monitoring & Health",

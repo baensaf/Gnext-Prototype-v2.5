@@ -26,6 +26,32 @@ export class Customer {
   @Column({ type: 'varchar', length: 20, nullable: true })
   national_id: string;
 
+  /**
+   * Date of birth. Stored as a plain date, with no time and no zone: a birthday belongs to
+   * the calendar, not to an instant, and shifting it into the tenant's zone would move it
+   * by a day for anyone born near midnight.
+   */
+  @Column({ type: 'date', nullable: true })
+  birth_date: string | null;
+
+  /**
+   * A customer the chain refuses to serve — repeated false addresses, abuse of a courier.
+   * Distinct from `is_active`, which retires a record, and from a blocked credit account,
+   * which only stops credit: a blocked customer cannot be put on a new order at all, by
+   * any channel or payment method.
+   */
+  @Column({ type: 'boolean', default: false })
+  is_blocked: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  blocked_reason: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  blocked_at: Date | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  blocked_by: string | null;
+
   @Column({ type: 'boolean', default: true })
   is_active: boolean;
 

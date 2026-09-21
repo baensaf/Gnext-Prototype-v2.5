@@ -285,11 +285,19 @@ export class PrintersController {
     return await this.queueService.retryJob(tenantId, id, body || {});
   }
 
+  // `printerId` sends this copy to a named device instead of the one that printed the
+  // original — the everyday answer to a printer that has died mid-service.
   @Post('print-jobs/:id/reprint')
   async reprintJob(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).userId;
-    return await this.queueService.reprintJob(tenantId, id, body?.reason || 'Manual Reprint Request', userId);
+    return await this.queueService.reprintJob(
+      tenantId,
+      id,
+      body?.reason || 'Manual Reprint Request',
+      userId,
+      body?.printerId || body?.printer_id,
+    );
   }
 
   @Post('orders/:id/reprint')
@@ -303,6 +311,7 @@ export class PrintersController {
       true,
       body.reason || 'Order Reprint Request',
       userId,
+      body.printerId || body.printer_id,
     );
   }
 
