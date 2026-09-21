@@ -110,6 +110,18 @@ func (f *fakePrinter) printed() bool {
 	return bytes.Contains(f.got.Bytes(), []byte{0x1D, 0x76, 0x30})
 }
 
+// waitPrinted allows for the fake having read the ticket but not yet recorded it: a silent
+// printer gives Print nothing to wait for.
+func (f *fakePrinter) waitPrinted() bool {
+	for range 100 {
+		if f.printed() {
+			return true
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return false
+}
+
 type blankRenderer struct{}
 
 func (blankRenderer) Render(_ context.Context, _ string, w int) (image.Image, error) {
@@ -184,7 +196,7 @@ func TestPrintToSilentPrinterStillPrintsAndStopsAsking(t *testing.T) {
 	if err := pr.Print(context.Background(), p, testJob()); err != nil {
 		t.Fatal(err)
 	}
-	if !f.printed() {
+	if !f.waitPrinted() {
 		t.Fatal("the ticket was not sent")
 	}
 	start := time.Now()
