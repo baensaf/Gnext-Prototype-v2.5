@@ -135,6 +135,7 @@ export const routesSection: RouteObject[] = [
       { path: 'orders/:id', element: <OrdersDetailPage /> },
       { path: 'dine-in/floor', element: <DineInPage /> },
       { path: 'kds', element: <KdsPage /> },
+      { path: 'delivery', element: <Navigate to="/app/delivery/orders" replace /> },
       { path: 'delivery/orders', element: <DeliveryPage /> },
       { path: 'delivery/couriers', element: <DeliveryPage /> },
       { path: 'delivery/couriers/:courierId', element: <CourierDetailPage /> },
