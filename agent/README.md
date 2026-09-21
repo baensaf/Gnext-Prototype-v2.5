@@ -21,8 +21,9 @@ section numbers (§) in the code refer to it.
 - **Tray icon** (`gnext-agent tray`): the service starts one in every signed-in user's
   session, at start and at each sign-in. Its colour is the agent's state (green ready, amber
   a warning such as paper low, red a problem, grey agent not running); its menu lists the
-  connection and each device, opens the settings page and test-prints; it pops a notice when
-  the cloud is away for 30 s or a device breaks, and again when they are back. Closing it
+  connection and each device, opens the settings window and test-prints; a click opens the
+  window. It pops a system notification (logo and status light, under the name *Gnext Agent*)
+  when the cloud is away for 30 s or a device breaks, and again when they are back. Closing it
   hides it until the next sign-in. After an update the old tray leaves and the service starts
   the new one.
 - **Payments**: two terminal drivers.
@@ -39,8 +40,10 @@ section numbers (§) in the code refer to it.
     *Check terminal* finds them approved), `3` cancelled on the terminal.
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
   publishes a build, then swaps the binary after checking its SHA-256.
-- **Settings page** on `http://127.0.0.1:47800` (Start-menu and desktop shortcut *Gnext Agent*,
-  or `gnext-agent open`), in Persian: connection status, enrol or re-enrol with a server and a
+- **Settings window** (Start-menu and desktop shortcut *Gnext Agent*, the tray, or running the
+  exe): the page on `http://127.0.0.1:47800` in a window of its own, drawn by WebView2, the Edge
+  engine in Windows 10 and 11 (in the browser if it is missing). One window per user; opening it
+  again brings it to the front. In Persian: connection status, enrol or re-enrol with a server and a
   code, printers and card terminals with live status, test print, LAN scan for port-9100
   printers, and logs. Anyone at the PC can look and test-print; adding, editing or removing a
   device needs a Gnext sign-in by this branch's manager or head office. Changes are made in
@@ -52,7 +55,8 @@ section numbers (§) in the code refer to it.
 
 | Path | What |
 |---|---|
-| `cmd/gnext-agent` | `enrol`, `run`, `open`, `tray`, `service`, `version`; service wrapper; restarts the agent after enrolment; the tray icon and its launch per session |
+| `cmd/gnext-agent` | `enrol`, `run`, `open`, `tray`, `service`, `version`; service wrapper; restarts the agent after enrolment; the tray icon and its launch per session; the settings window |
+| `cmd/gnext-agent/winres` | Icon (the Gnext logo), version details and manifest; CI turns them into a `.syso` with go-winres |
 | `internal/agent` | WebSocket session, command handling, device probes |
 | `internal/journal` | Command/result journal |
 | `internal/printing` | Edge renderer, ESC/POS raster, TCP printer |
@@ -70,7 +74,12 @@ section numbers (§) in the code refer to it.
 ```powershell
 cd agent
 go test ./...
-go build -o gnext-agent.exe ./cmd/gnext-agent
+go build -o gnext-agent.exe ./cmd/gnext-agent   # a console build, handy for `run`
+
+# What CI ships: the icon and version details, and a windowed program (no console window;
+# commands typed in a terminal still print there):
+(cd cmd/gnext-agent; go run github.com/tc-hib/go-winres@v0.3.3 make --arch amd64 --product-version=1.0.9 --file-version=1.0.9)
+go build -ldflags "-H windowsgui" -o gnext-agent.exe ./cmd/gnext-agent
 
 # Run in a console against a local backend, with data in a scratch folder:
 $env:GNEXT_AGENT_HOME = "$PWD\.dev"

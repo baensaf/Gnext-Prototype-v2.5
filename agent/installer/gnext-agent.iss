@@ -35,6 +35,7 @@ WizardStyle=modern
 CloseApplications=no
 UninstallDisplayName=Gnext Branch Agent
 UninstallDisplayIcon={app}\gnext-agent.exe
+SetupIconFile=gnext.ico
 SetupLogging=yes
 
 [Languages]
@@ -48,14 +49,14 @@ Source: "{#SamanDir}\*"; DestDir: "{app}\saman"; Flags: ignoreversion recursesub
 #endif
 
 [Tasks]
-Name: "desktopicon"; Description: "Create a desktop shortcut to the agent settings page"
+Name: "desktopicon"; Description: "Create a desktop shortcut to Gnext Agent"
 
 [Icons]
 Name: "{autoprograms}\Gnext Agent"; Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Comment: "Gnext branch agent settings"
 Name: "{autodesktop}\Gnext Agent"; Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Comment: "Gnext branch agent settings"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Description: "Open the agent settings page"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Description: "Open Gnext Agent"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [UninstallRun]
 Filename: "{app}\gnext-agent.exe"; Parameters: "service uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveService"

@@ -1,54 +1,100 @@
 package main
 
-import "math"
+import (
+	"bytes"
+	_ "embed"
+	"image"
+	"image/draw"
+	"image/png"
+	"math"
+	"sync"
+)
+
+// logoPNG is the Gnext logo, 256×256. The exe's icon is made from the same file (winres).
+//
+//go:embed winres/icon.png
+var logoPNG []byte
 
 // trayColours: green ready, amber a warning, red a problem, grey the agent not running.
 var trayColours = map[trayLevel][3]uint8{
-	levelOK:   {0x16, 0xA3, 0x4A},
-	levelWarn: {0xD9, 0x77, 0x06},
-	levelBad:  {0xDC, 0x26, 0x26},
-	levelDown: {0x6B, 0x72, 0x80},
+	levelOK:   {0x22, 0xC5, 0x5E},
+	levelWarn: {0xF5, 0x9E, 0x0B},
+	levelBad:  {0xEF, 0x44, 0x44},
+	levelDown: {0x9C, 0xA3, 0xAF},
 }
 
-// drawTrayIcon draws a small receipt printer whose body has the level's colour, as size×size
-// BGRA pixels (top row first, straight alpha), sampled 4×4 per pixel for smooth edges.
-func drawTrayIcon(size int, level trayLevel) []byte {
-	body := trayColours[level]
-	ink := [3]uint8{0x1F, 0x29, 0x37}
-	white := [3]uint8{0xFF, 0xFF, 0xFF}
-	// Shapes on a 16×16 grid, painted in order: x0, y0, x1, y1, corner radius, colour.
-	shapes := []struct {
-		x0, y0, x1, y1, r float64
-		c                 [3]uint8
-	}{
-		{3.5, 0.5, 12.5, 6, 0, ink}, // paper going in, outlined
-		{4.5, 1.5, 11.5, 6, 0, white},
-		{0.5, 5, 15.5, 12, 2, body},   // the printer
-		{3, 9.2, 13, 10.4, 0, ink},    // the slot
-		{3.5, 10, 12.5, 15.5, 0, ink}, // the ticket coming out
-		{4.5, 10.4, 11.5, 14.5, 0, white},
-		{6, 12, 10, 12.8, 0, ink}, // a line on it
+var logo = sync.OnceValue(func() *image.NRGBA {
+	img, err := png.Decode(bytes.NewReader(logoPNG))
+	if err != nil {
+		return image.NewNRGBA(image.Rect(0, 0, 1, 1))
 	}
-	px := make([]byte, size*size*4)
-	scale := 16 / float64(size)
+	out := image.NewNRGBA(img.Bounds())
+	draw.Draw(out, out.Bounds(), img, img.Bounds().Min, draw.Src)
+	return out
+})
+
+// drawTrayIcon draws the Gnext logo at size×size with the dot at its foot enlarged into a
+// status light, as BGRA pixels (top row first, straight alpha). The logo's own dot is small
+// enough to vanish at 16 pixels, so the light covers it.
+func drawTrayIcon(size int, level trayLevel) []byte {
+	px := scaleLogo(size)
+	c := trayColours[level]
+	s := float64(size)
+	cx, cy, r := 0.74*s, 0.70*s, 0.21*s
+	ring := r + math.Max(1, 0.06*s)
 	const n = 4
 	for y := 0; y < size; y++ {
 		for x := 0; x < size; x++ {
-			var r, g, b, a float64
+			var inDot, inRing float64
 			for sy := 0; sy < n; sy++ {
 				for sx := 0; sx < n; sx++ {
-					gx := (float64(x) + (float64(sx)+0.5)/n) * scale
-					gy := (float64(y) + (float64(sy)+0.5)/n) * scale
-					var c [3]uint8
-					hit := false
-					for _, s := range shapes {
-						if inRoundRect(gx, gy, s.x0, s.y0, s.x1, s.y1, s.r) {
-							c, hit = s.c, true
-						}
+					dx := float64(x) + (float64(sx)+0.5)/n - cx
+					dy := float64(y) + (float64(sy)+0.5)/n - cy
+					d := math.Hypot(dx, dy)
+					if d <= r {
+						inDot++
+					} else if d <= ring {
+						inRing++
 					}
-					if hit {
-						r, g, b, a = r+float64(c[0]), g+float64(c[1]), b+float64(c[2]), a+1
-					}
+				}
+			}
+			if inDot+inRing == 0 {
+				continue
+			}
+			// The ring is white and the dot the status colour, over the logo.
+			i := (y*size + x) * 4
+			fd, fr := inDot/(n*n), inRing/(n*n)
+			under := 1 - fd - fr
+			for k, v := range [3]float64{float64(c[2]), float64(c[1]), float64(c[0])} { // BGR
+				px[i+k] = uint8(math.Round(float64(px[i+k])*under + v*fd + 255*fr))
+			}
+			a := float64(px[i+3])/255*under + fd + fr
+			px[i+3] = uint8(math.Round(math.Min(a, 1) * 255))
+		}
+	}
+	return px
+}
+
+// scaleLogo shrinks the logo to size×size BGRA by averaging each target pixel's area,
+// weighting colour by alpha so the transparent background does not darken the edges.
+func scaleLogo(size int) []byte {
+	src := logo()
+	sw, sh := src.Bounds().Dx(), src.Bounds().Dy()
+	px := make([]byte, size*size*4)
+	for y := 0; y < size; y++ {
+		y0, y1 := y*sh/size, max((y+1)*sh/size, y*sh/size+1)
+		for x := 0; x < size; x++ {
+			x0, x1 := x*sw/size, max((x+1)*sw/size, x*sw/size+1)
+			var r, g, b, a, count float64
+			for sy := y0; sy < y1; sy++ {
+				for sx := x0; sx < x1; sx++ {
+					o := src.PixOffset(sx, sy)
+					al := float64(src.Pix[o+3])
+					r += float64(src.Pix[o]) * al
+					g += float64(src.Pix[o+1]) * al
+					b += float64(src.Pix[o+2]) * al
+					a += al
+					count++
 				}
 			}
 			if a == 0 {
@@ -58,17 +104,8 @@ func drawTrayIcon(size int, level trayLevel) []byte {
 			px[i+0] = uint8(b / a)
 			px[i+1] = uint8(g / a)
 			px[i+2] = uint8(r / a)
-			px[i+3] = uint8(math.Round(a / (n * n) * 255))
+			px[i+3] = uint8(a / count)
 		}
 	}
 	return px
-}
-
-func inRoundRect(x, y, x0, y0, x1, y1, r float64) bool {
-	if x < x0 || x > x1 || y < y0 || y > y1 {
-		return false
-	}
-	cx := math.Max(x0+r, math.Min(x, x1-r))
-	cy := math.Max(y0+r, math.Min(y, y1-r))
-	return (x-cx)*(x-cx)+(y-cy)*(y-cy) <= r*r
 }

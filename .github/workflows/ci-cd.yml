@@ -101,7 +101,10 @@ jobs:
       - name: Build gnext-agent.exe
         run: |
           version=$(cat VERSION)
-          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "-s -w -X main.version=$version" -o dist/gnext-agent.exe ./cmd/gnext-agent
+          # Icon, version details and manifest (cmd/gnext-agent/winres), linked in as a .syso.
+          (cd cmd/gnext-agent && go run github.com/tc-hib/go-winres@v0.3.3 make --arch amd64 --product-version=$version --file-version=$version)
+          # A windowed program: no console for the service, tray or settings window.
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "-s -w -H windowsgui -X main.version=$version" -o dist/gnext-agent.exe ./cmd/gnext-agent
           sha256sum dist/gnext-agent.exe
       - uses: actions/upload-artifact@v4
         with:

@@ -4,7 +4,7 @@
 //
 //	gnext-agent.exe enrol --code XXXX-XXXX [--server https://…]
 //	gnext-agent.exe run        (console; the service runs the same loop)
-//	gnext-agent.exe open       (opens the settings page)
+//	gnext-agent.exe [open]     (the settings window; the browser if WebView2 is missing)
 //	gnext-agent.exe tray       (status icon; the service starts one per signed-in user)
 //	gnext-agent.exe version
 package main
@@ -39,10 +39,14 @@ func main() {
 		runService()
 		return
 	}
-	if len(os.Args) < 2 {
-		usage()
-		os.Exit(2)
+	// Opened from Explorer or the Start menu: show the settings window, like an app.
+	if len(os.Args) < 2 || os.Args[1] == "open" {
+		os.Exit(runWindow())
 	}
+	if os.Args[1] == "tray" {
+		os.Exit(runTray())
+	}
+	attachConsole()
 	switch os.Args[1] {
 	case "enrol", "enroll":
 		os.Exit(enrol(os.Args[2:]))
@@ -52,13 +56,6 @@ func main() {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
 		os.Exit(run(ctx, os.Stderr))
-	case "open":
-		if err := openBrowser("http://" + uiAddr()); err != nil {
-			fmt.Fprintln(os.Stderr, "open:", err)
-			os.Exit(1)
-		}
-	case "tray":
-		os.Exit(runTray())
 	case "version", "--version", "-v":
 		fmt.Println(version)
 	default:
@@ -72,7 +69,7 @@ func usage() {
 
   gnext-agent enrol --code XXXX-XXXX [--server https://app.example.ir]
   gnext-agent run
-  gnext-agent open
+  gnext-agent [open]      the settings window
   gnext-agent tray
   gnext-agent service install|uninstall|start|stop
   gnext-agent version

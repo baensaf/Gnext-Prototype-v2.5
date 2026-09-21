@@ -114,10 +114,14 @@ func TestDrawTrayIcon(t *testing.T) {
 		if len(px) != size*size*4 {
 			t.Fatalf("size %d: %d bytes", size, len(px))
 		}
-		// The middle of the printer's body is solid red (BGRA).
-		i := (size*8/16*size + size/16) * 4
-		if px[i+2] != 0xDC || px[i+3] != 0xFF {
-			t.Fatalf("size %d: body pixel %v", size, px[i:i+4])
+		// The middle of the status light is solid red (BGRA).
+		i := (size*70/100*size + size*74/100) * 4
+		if px[i+2] != 0xEF || px[i+1] != 0x44 || px[i+3] != 0xFF {
+			t.Fatalf("size %d: light pixel %v", size, px[i:i+4])
+		}
+		// The logo is drawn: its left arch is opaque.
+		if j := (size*40/100*size + size*30/100) * 4; drawTrayIcon(size, levelOK)[j+3] < 200 {
+			t.Fatalf("size %d: no logo", size)
 		}
 	}
 }
