@@ -52,6 +52,7 @@ import { paths } from 'src/routes/paths';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
+import { useLiveRefresh } from 'src/utils/use-live-refresh';
 
 import { tenantApi } from 'src/api/tenantApi';
 import { settingsApi } from 'src/api/settingsApi';
@@ -156,8 +157,9 @@ export function DeliveryPage() {
   const [selectedCourierForTerminal, setSelectedCourierForTerminal] = useState<Courier | null>(null);
   const [selectedTerminalId, setSelectedTerminalId] = useState('');
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  // `quiet` is for pushed refreshes: the board updates in place instead of flashing a loading state.
+  const loadData = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
     try {
       const [delList, courList, znList, termList] = await Promise.all([
         deliveryApi.getDeliveries(branchId),
@@ -175,15 +177,15 @@ export function DeliveryPage() {
     } catch (err: any) {
       setError(err.detail || err.message || t('delivery.errors.loadFailed'));
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, [branchId, t]);
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 5000);
-    return () => clearInterval(interval);
   }, [loadData]);
+
+  useLiveRefresh(['delivery'], () => loadData(true), branchId);
 
   useEffect(() => {
     setSelectedEvents([]);
@@ -569,7 +571,7 @@ export function DeliveryPage() {
             variant="outlined"
             disabled={loading || Boolean(pendingAction)}
             startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <RefreshIcon />}
-            onClick={loadData}
+            onClick={() => loadData()}
           >
             {loading ? t('delivery.refreshing') : t('delivery.refresh')}
           </Button>
