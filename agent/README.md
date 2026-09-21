@@ -13,8 +13,18 @@ section numbers (§) in the code refer to it.
   job twice. A charge interrupted by a restart is reported `UNKNOWN`, never charged again.
 - **Printing**: renders the cloud's HTML ticket in headless Microsoft Edge, turns it into a
   1-bit image and sends it to a **network printer (raw TCP, port 9100)** with ESC/POS `GS v 0`.
-  Persian is shaped by Edge, so no printer code page is involved. `windows` and `serial`
-  printer connections are not supported yet.
+  Persian is shaped by Edge, so no printer code page is involved. Printers that answer
+  ESC/POS status questions (`DLE EOT`, `GS r`) are checked before each ticket and must confirm
+  it printed: paper out, cover open or a fault fails the job (`PAPER_OUT`, `COVER_OPEN`, …)
+  instead of reporting a ticket that never came out, and device checks report paper running
+  low. `windows` and `serial` printer connections are not supported yet.
+- **Tray icon** (`gnext-agent tray`): the service starts one in every signed-in user's
+  session, at start and at each sign-in. Its colour is the agent's state (green ready, amber
+  a warning such as paper low, red a problem, grey agent not running); its menu lists the
+  connection and each device, opens the settings page and test-prints; it pops a notice when
+  the cloud is away for 30 s or a device breaks, and again when they are back. Closing it
+  hides it until the next sign-in. After an update the old tray leaves and the service starts
+  the new one.
 - **Payments**: two terminal drivers.
   - `sep` (Saman): the agent runs `saman\gnext-saman-bridge.exe`, a small .NET Framework 4.8
     program around Saman's own PC-POS SDK (`saman-bridge/vendor/SSP1126.PcPos.dll` 1.4.11.2),
@@ -42,7 +52,7 @@ section numbers (§) in the code refer to it.
 
 | Path | What |
 |---|---|
-| `cmd/gnext-agent` | `enrol`, `run`, `open`, `service`, `version`; service wrapper; restarts the agent after enrolment |
+| `cmd/gnext-agent` | `enrol`, `run`, `open`, `tray`, `service`, `version`; service wrapper; restarts the agent after enrolment; the tray icon and its launch per session |
 | `internal/agent` | WebSocket session, command handling, device probes |
 | `internal/journal` | Command/result journal |
 | `internal/printing` | Edge renderer, ESC/POS raster, TCP printer |
@@ -51,6 +61,7 @@ section numbers (§) in the code refer to it.
 | `internal/cloud` | HTTPS calls: enrol, me, releases |
 | `internal/localui` | Settings page (embedded HTML/JS) and its local API, LAN scan |
 | `internal/update` | Release check, download, verify, swap |
+| `internal/winsession` | Starts the ticket browser and the tray as the signed-in user |
 | `internal/store` | `config.json`, `identity.json`, DPAPI |
 | `installer/gnext-agent.iss` | Setup wizard (Inno Setup): server, enrolment code, service |
 

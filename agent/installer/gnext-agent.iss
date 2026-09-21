@@ -59,6 +59,8 @@ Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Description: "Open the ag
 
 [UninstallRun]
 Filename: "{app}\gnext-agent.exe"; Parameters: "service uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveService"
+; The tray icons run from the same exe in users' sessions; end them so it can be deleted.
+Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM gnext-agent.exe /FI ""SESSION ne 0"""; Flags: runhidden waituntilterminated; RunOnceId: "EndTrays"
 
 [Messages]
 FinishedLabel=The Gnext agent is installed and running. Its settings page (the Gnext Agent shortcut, or http://127.0.0.1:47800) shows the connection and lets a branch manager add printers and card terminals.%n%nLogs: C:\ProgramData\Gnext\Agent\logs\agent.log
@@ -185,6 +187,8 @@ begin
     RunAgent(ExpandConstant('{app}\gnext-agent.exe'), 'service stop', Output)
   else
     Exec(ExpandConstant('{sys}\net.exe'), 'stop GnextAgent', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  // The tray icons run the same binary in users' sessions; the service starts them again.
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM gnext-agent.exe /FI "SESSION ne 0"', '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
