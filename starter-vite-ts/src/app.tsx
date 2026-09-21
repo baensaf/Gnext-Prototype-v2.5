@@ -8,6 +8,7 @@ import { themeConfig, ThemeProvider } from 'src/theme';
 import { BranchProvider } from 'src/contexts/branch-context';
 
 import { Snackbar } from 'src/components/snackbar';
+import { IdleLogout } from 'src/components/idle-logout';
 import { ProgressBar } from 'src/components/progress-bar';
 import { MotionLazy } from 'src/components/animate/motion-lazy';
 import { CalendarSync } from 'src/components/calendar-date-field';
@@ -33,6 +34,7 @@ export default function App({ children }: AppProps) {
             <Snackbar />
             <ProgressBar />
             <CalendarSync />
+            <IdleLogout />
             <SettingsDrawer defaultSettings={defaultSettings} />
             {children}
           </MotionLazy>

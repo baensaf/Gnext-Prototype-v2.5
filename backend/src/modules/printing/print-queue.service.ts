@@ -33,6 +33,13 @@ interface JobOptions {
   isReprint: boolean;
   reason?: string;
   userId?: string;
+  /**
+   * Force every job this call produces onto one named printer, ignoring routing. Set only
+   * by a person reprinting to somewhere else because the usual device is unusable. For a
+   * kitchen ticket this deliberately collapses the station split: one printer working is
+   * better than three stations printing nowhere.
+   */
+  targetPrinterId?: string;
 }
 
 @Injectable()
@@ -65,13 +72,25 @@ export class PrintQueueService {
     isReprint = false,
     reason?: string,
     userId?: string,
+    targetPrinterId?: string,
   ): Promise<PrintJob[]> {
+    // Outside the catch below on purpose. That catch exists so a printing fault can never
+    // roll back an order, and it swallows everything — including "you picked a printer that
+    // does not exist", which is an answer the person at the till is waiting for. A named
+    // printer is only ever passed by someone choosing one, so it is checked up front where
+    // the error can still reach them.
+    if (targetPrinterId) {
+      const order = await this.orderRepo.findOne({ where: { id: orderId, tenant_id: tenantId } });
+      if (!order) throw new NotFoundException(`Order ${orderId} not found`);
+      await this.forcedTarget(tenantId, order.branch_id, targetPrinterId, 1);
+    }
+
     try {
       const order = await this.loadOrder(tenantId, orderId);
       // Voided and replaced lines stay on the order for history, but a reprint that
       // showed them would send the kitchen back to cooking food that was struck off.
       const activeLines = (order.items || []).filter(isActiveLine);
-      const opts = { isReprint, reason, userId };
+      const opts = { isReprint, reason, userId, targetPrinterId };
 
       if (documentType !== 'KITCHEN_TICKET') {
         const html = this.renderService.renderDocument({
@@ -156,14 +175,39 @@ export class PrintQueueService {
    * Print one job again - the paper jammed, the chit fell in the fryer. It goes to the same
    * printer with the same content, so the grill gets back the grill's chit and not the whole
    * order. A job that never had a printer is routed afresh instead.
+   *
+   * `targetPrinterId` overrides where it lands. Routing and the fallback printer cover a
+   * printer that reports failure, but not the everyday case where the device is simply
+   * gone — out of paper, unplugged by a cleaner, cooked — and the chit has to come out
+   * somewhere else now. The override is recorded on the job so the print history shows the
+   * copy went elsewhere and why.
    */
-  async reprintJob(tenantId: string, jobId: string, reason?: string, userId?: string): Promise<PrintJob[]> {
+  async reprintJob(
+    tenantId: string,
+    jobId: string,
+    reason?: string,
+    userId?: string,
+    targetPrinterId?: string,
+  ): Promise<PrintJob[]> {
     const job = await this.jobRepo.findOne({ where: { id: jobId, tenant_id: tenantId } });
     if (!job) throw new NotFoundException(`Print job ${jobId} not found`);
 
-    if (!job.printer_id) {
+    // A printer from another tenant, or one that has been retired, must not receive a chit.
+    let override: Printer | null = null;
+    if (targetPrinterId) {
+      override = await this.printerRepo.findOne({ where: { id: targetPrinterId, tenant_id: tenantId } });
+      if (!override) throw new NotFoundException(`Printer ${targetPrinterId} not found`);
+      // Sending the kitchen's chit to another site's printer is worse than not printing.
+      if (job.branch_id && override.branch_id && override.branch_id !== job.branch_id) {
+        throw new BadRequestException('Cannot reprint to a printer at a different branch');
+      }
+    }
+
+    if (!job.printer_id && !override) {
       return this.enqueueOrderPrintJobs(tenantId, job.entity_id, job.document_type, true, reason, userId);
     }
+
+    const destination = override ? override.id : job.printer_id;
 
     const copy = await this.jobRepo.save(
       this.jobRepo.create({
@@ -172,18 +216,20 @@ export class PrintQueueService {
         document_type: job.document_type,
         entity_type: job.entity_type,
         entity_id: job.entity_id,
-        printer_id: job.printer_id,
-        printer_group_id: job.printer_group_id,
+        printer_id: destination,
+        // The group routed the original. A copy aimed by hand at one device is no longer
+        // that group's job, and leaving the link would let a retry re-route it back.
+        printer_group_id: override ? null : job.printer_group_id,
         label: job.label,
         status: 'QUEUED',
         copies: job.copies,
         rendered_html: job.rendered_html,
         is_reprint: true,
-        reason: reason || null,
+        reason: override ? `${reason || 'Manual Reprint Request'} (redirected to ${override.name})` : reason || null,
         created_by: userId || null,
       }),
     );
-    return [await this.printOn(tenantId, copy, job.printer_id, { isReprint: true, userId })];
+    return [await this.printOn(tenantId, copy, destination, { isReprint: true, userId })];
   }
 
   private async loadOrder(tenantId: string, orderId: string) {
@@ -262,7 +308,12 @@ export class PrintQueueService {
     opts: JobOptions,
     label?: string,
   ): Promise<PrintJob[]> {
-    const targets = await this.routingService.printersForRoute(tenantId, order.branch_id, route);
+    // A hand-picked printer replaces whatever routing chose, and keeps the route's copy
+    // count so a receipt that normally prints twice still does.
+    const routed = await this.routingService.printersForRoute(tenantId, order.branch_id, route);
+    const targets = opts.targetPrinterId
+      ? await this.forcedTarget(tenantId, order.branch_id, opts.targetPrinterId, route?.copies || routed[0]?.copies || 1)
+      : routed;
     const newJob = (printerId: string | undefined, copies: number) =>
       this.jobRepo.create({
         tenant_id: tenantId,
@@ -309,6 +360,26 @@ export class PrintQueueService {
       jobs.push(await this.printOn(tenantId, savedJob, target.printer.id, opts));
     }
     return jobs;
+  }
+
+  /**
+   * The one printer an operator named, checked before anything is queued to it: it has to
+   * exist for this tenant, be in service, and belong to the order's branch. A chit that
+   * prints at another site is worse than one that does not print.
+   */
+  private async forcedTarget(
+    tenantId: string,
+    branchId: string,
+    printerId: string,
+    copies: number,
+  ): Promise<Array<{ printer: Printer; copies: number }>> {
+    const printer = await this.printerRepo.findOne({ where: { id: printerId, tenant_id: tenantId } });
+    if (!printer) throw new NotFoundException(`Printer ${printerId} not found`);
+    if (!printer.is_active) throw new BadRequestException(`Printer ${printer.name} is not in service`);
+    if (branchId && printer.branch_id && printer.branch_id !== branchId) {
+      throw new BadRequestException('Cannot print to a printer at a different branch');
+    }
+    return [{ printer, copies }];
   }
 
   /**

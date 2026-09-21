@@ -8,6 +8,7 @@ import type {
   Category,
   OptionItem,
   OptionGroup,
+  NoteTemplate,
   DailyStockLine,
   ProductVariant,
   ProductAvailability,
@@ -182,6 +183,9 @@ export function PosOrderPage() {
   const [orderNotes, setOrderNotes] = useState<string>('');
   const [notesModalOpen, setNotesModalOpen] = useState(false);
   const [tempNotesInput, setTempNotesInput] = useState<string>('');
+  // The chain's own phrases, managed in Settings. These used to be a hardcoded English
+  // list, which no branch could change and which stayed English on a Persian till.
+  const [noteTemplates, setNoteTemplates] = useState<NoteTemplate[]>([]);
 
   // Quick Add Customer Dialog state
   const [quickAddCustomerOpen, setQuickAddCustomerOpen] = useState(false);
@@ -340,6 +344,16 @@ export function PosOrderPage() {
   useEffect(() => {
     loadInitialData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // The note phrases change rarely, so they are fetched once with the till rather than each
+  // time the dialog opens. An empty list is a legitimate answer: the dialog simply shows no
+  // chips, and the cashier types.
+  useEffect(() => {
+    catalogApi
+      .getNoteTemplates('ORDER')
+      .then(setNoteTemplates)
+      .catch(() => setNoteTemplates([]));
   }, []);
 
   // Selling windows open and close, and items get 86'd from other screens, while the register
@@ -2892,34 +2906,34 @@ export function PosOrderPage() {
             sx={{ mb: 2 }}
           />
 
-          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.75, display: 'block', fontWeight: 600 }}>
-            Quick Tags:
-          </Typography>
-          <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', gap: 0.75 }}>
-            {[
-              'No Onions',
-              'Extra Spicy',
-              'Less Ice',
-              'Allergy Alert',
-              'Cutlery Needed',
-              'Call on Arrival',
-              'Urgent / Rush',
-            ].map((tag) => (
-              <Chip
-                key={tag}
-                label={tag}
-                size="small"
-                variant={tempNotesInput.includes(tag) ? 'filled' : 'outlined'}
-                color="primary"
-                onClick={() => {
-                  setTempNotesInput((prev) =>
-                    prev ? (prev.includes(tag) ? prev : `${prev}, ${tag}`) : tag
-                  );
-                }}
-                sx={{ fontWeight: 600, cursor: 'pointer' }}
-              />
-            ))}
-          </Stack>
+          {noteTemplates.length > 0 && (
+            <>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.75, display: 'block', fontWeight: 600 }}>
+                {t('pos.quickTags', 'Quick Tags')}:
+              </Typography>
+              <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+                {noteTemplates.map((template) => (
+                  <Chip
+                    key={template.id}
+                    label={template.text}
+                    size="small"
+                    variant={tempNotesInput.includes(template.text) ? 'filled' : 'outlined'}
+                    color="primary"
+                    onClick={() => {
+                      setTempNotesInput((prev) =>
+                        prev
+                          ? prev.includes(template.text)
+                            ? prev
+                            : `${prev}, ${template.text}`
+                          : template.text
+                      );
+                    }}
+                    sx={{ fontWeight: 600, cursor: 'pointer' }}
+                  />
+                ))}
+              </Stack>
+            </>
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
           {tempNotesInput && (

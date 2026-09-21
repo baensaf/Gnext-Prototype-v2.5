@@ -29,6 +29,40 @@ export function normalizePhone(rawPhone: string): string {
   return cleaned;
 }
 
+/**
+ * A birthday as the calendar writes it: `YYYY-MM-DD`, no time, no zone.
+ *
+ * Anything carrying a time is truncated rather than converted. A date sent as midnight
+ * Tehran becomes the previous day once it passes through UTC, which would move a customer's
+ * birthday by one day for everyone born in the evening.
+ */
+export function normalizeBirthDate(raw?: string | null): string | null {
+  if (!raw) return null;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return null;
+
+  const datePart = trimmed.split('T')[0];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+    throw new BadRequestException('birth_date must be a calendar date in YYYY-MM-DD form');
+  }
+
+  const [year, month, day] = datePart.split('-').map(Number);
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  if (
+    probe.getUTCFullYear() !== year ||
+    probe.getUTCMonth() !== month - 1 ||
+    probe.getUTCDate() !== day
+  ) {
+    throw new BadRequestException(`birth_date ${datePart} is not a real date`);
+  }
+  // A birthday in the future is a typed year, not a fact.
+  if (probe.getTime() > Date.now()) {
+    throw new BadRequestException('birth_date cannot be in the future');
+  }
+
+  return datePart;
+}
+
 @Injectable()
 export class CustomerService {
   constructor(
@@ -133,6 +167,7 @@ export class CustomerService {
       mobile: string;
       email?: string;
       national_id?: string;
+      birth_date?: string;
       credit_limit?: string;
     },
     correlationId: string,
@@ -158,6 +193,7 @@ export class CustomerService {
       mobile: normMobile || rawMobile,
       email: data.email || null,
       national_id: data.national_id || null,
+      birth_date: normalizeBirthDate(data.birth_date),
       is_active: true,
     });
 
@@ -197,6 +233,115 @@ export class CustomerService {
       entityId: saved.id,
       correlationId,
       afterData: saved,
+    });
+
+    return saved;
+  }
+
+  /**
+   * Edit the record's own fields. Phones, addresses, tags and credit each have their own
+   * endpoint and are not reachable from here.
+   *
+   * `is_blocked` is not settable here either: refusing to serve somebody needs a reason and
+   * ought to read as one deliberate act in the audit log, not as an edit that happened to
+   * flip a flag. See `setBlocked`.
+   */
+  async updateCustomer(
+    tenantId: string,
+    id: string,
+    data: {
+      first_name?: string;
+      last_name?: string;
+      email?: string | null;
+      national_id?: string | null;
+      birth_date?: string | null;
+      is_active?: boolean;
+    },
+    correlationId?: string,
+    actorId?: string,
+  ) {
+    const customer = await this.customerRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!customer) throw new NotFoundException('Customer not found');
+    const before = { ...customer };
+
+    if (data.first_name !== undefined) {
+      const name = data.first_name.trim();
+      if (!name) throw new BadRequestException('first_name cannot be empty');
+      customer.first_name = name;
+    }
+    if (data.last_name !== undefined) {
+      const name = data.last_name.trim();
+      if (!name) throw new BadRequestException('last_name cannot be empty');
+      customer.last_name = name;
+    }
+    if (data.email !== undefined) customer.email = data.email?.trim() || null;
+    if (data.national_id !== undefined) customer.national_id = data.national_id?.trim() || null;
+    if (data.birth_date !== undefined) customer.birth_date = normalizeBirthDate(data.birth_date);
+    if (data.is_active !== undefined) customer.is_active = Boolean(data.is_active);
+    customer.updated_by = actorId || null;
+
+    const saved = await this.customerRepo.save(customer);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      actorId,
+      action: 'CUSTOMER_UPDATED',
+      entityType: 'Customer',
+      entityId: saved.id,
+      correlationId,
+      beforeData: before,
+      afterData: saved,
+    });
+
+    return saved;
+  }
+
+  /**
+   * Refuse, or resume, serving somebody.
+   *
+   * Kept apart from `updateCustomer` because this is the one customer field with an
+   * operational consequence — a blocked customer cannot be put on a new order by any
+   * channel — and because a block is only worth anything if the reason travels with it.
+   * Who did it and why are on the row, not only in the audit log, so the cashier who is
+   * turning an order away can be told what to say.
+   */
+  async setBlocked(
+    tenantId: string,
+    id: string,
+    blocked: boolean,
+    reason?: string,
+    correlationId?: string,
+    actorId?: string,
+  ) {
+    const customer = await this.customerRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!customer) throw new NotFoundException('Customer not found');
+
+    const trimmedReason = (reason || '').trim();
+    if (blocked && !trimmedReason) {
+      throw new BadRequestException('A reason is required to block a customer');
+    }
+
+    const before = { ...customer };
+    customer.is_blocked = blocked;
+    customer.blocked_reason = blocked ? trimmedReason : null;
+    customer.blocked_at = blocked ? new Date() : null;
+    customer.blocked_by = blocked ? actorId || null : null;
+    customer.updated_by = actorId || null;
+
+    const saved = await this.customerRepo.save(customer);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      actorId,
+      action: blocked ? 'CUSTOMER_BLOCKED' : 'CUSTOMER_UNBLOCKED',
+      entityType: 'Customer',
+      entityId: saved.id,
+      correlationId,
+      beforeData: before,
+      afterData: saved,
+      details: { reason: trimmedReason || null },
     });
 
     return saved;

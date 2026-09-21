@@ -9,8 +9,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import HomeIcon from '@mui/icons-material/Home';
+import BlockIcon from '@mui/icons-material/Block';
 import SearchIcon from '@mui/icons-material/Search';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import {
   Box,
@@ -53,6 +55,7 @@ import {
 } from 'src/api/customerApi';
 
 import { ServerDataGrid } from 'src/components/server-data-grid';
+import { CalendarDateField } from 'src/components/calendar-date-field';
 
 export function CustomersPage() {
   const navigate = useNavigate();
@@ -69,6 +72,10 @@ export function CustomersPage() {
   const [lastName, setLastName] = useState('');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [blockOpen, setBlockOpen] = useState(false);
+  const [blockTarget, setBlockTarget] = useState<Customer | null>(null);
+  const [blockReason, setBlockReason] = useState('');
   const [creditLimit, setCreditLimit] = useState('10000000');
 
   // Credit Account Modal state
@@ -113,6 +120,7 @@ export function CustomersPage() {
         last_name: lastName,
         mobile,
         email,
+        birth_date: birthDate || undefined,
         credit_limit: creditLimit,
       });
       setDrawerOpen(false);
@@ -129,6 +137,7 @@ export function CustomersPage() {
     setLastName('');
     setMobile('');
     setEmail('');
+    setBirthDate('');
     setCreditLimit('10000000');
   };
 
@@ -172,6 +181,34 @@ export function CustomersPage() {
       setAddresses(res);
     } catch (err: any) {
       setError(err.detail || 'Failed to fetch customer addresses');
+    }
+  };
+
+  const handleOpenBlock = (c: Customer) => {
+    setBlockTarget(c);
+    setBlockReason('');
+    setBlockOpen(true);
+  };
+
+  const handleConfirmBlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!blockTarget || !blockReason.trim()) return;
+    try {
+      await customerApi.blockCustomer(blockTarget.id, blockReason.trim());
+      setBlockOpen(false);
+      setBlockTarget(null);
+      loadData();
+    } catch (err: any) {
+      setError(err.detail || 'Failed to block customer');
+    }
+  };
+
+  const handleUnblock = async (c: Customer) => {
+    try {
+      await customerApi.unblockCustomer(c.id);
+      loadData();
+    } catch (err: any) {
+      setError(err.detail || 'Failed to lift the block');
     }
   };
 
@@ -296,14 +333,31 @@ export function CustomersPage() {
           {
             field: 'is_active',
             headerName: 'Status',
-            width: 110,
-            renderCell: (params) => (
-              <Chip
-                label={params.value ? 'Active' : 'Disabled'}
-                color={params.value ? 'success' : 'default'}
-                size="small"
-              />
-            ),
+            width: 130,
+            renderCell: (params) => {
+              const c = params.row as Customer;
+              // Blocked outranks disabled on the badge: it is the one that stops an order
+              // at the till, so it is what a cashier needs to see first.
+              if (c.is_blocked) {
+                return (
+                  <Chip
+                    icon={<BlockIcon sx={{ '&&': { fontSize: 16 } }} />}
+                    label="Blocked"
+                    color="error"
+                    size="small"
+                    title={c.blocked_reason || 'This customer cannot be served'}
+                    sx={{ fontWeight: 600 }}
+                  />
+                );
+              }
+              return (
+                <Chip
+                  label={params.value ? 'Active' : 'Disabled'}
+                  color={params.value ? 'success' : 'default'}
+                  size="small"
+                />
+              );
+            },
           },
           {
             field: 'actions',
@@ -336,6 +390,14 @@ export function CustomersPage() {
                     onClick={() => handleOpenAddresses(c)}
                   >
                     <HomeIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    title={c.is_blocked ? 'Lift block — allow orders again' : 'Block — refuse to serve'}
+                    color={c.is_blocked ? 'success' : 'error'}
+                    onClick={() => (c.is_blocked ? handleUnblock(c) : handleOpenBlock(c))}
+                  >
+                    {c.is_blocked ? <CheckCircleIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
                   </IconButton>
                 </Stack>
               );
@@ -401,6 +463,16 @@ export function CustomersPage() {
                 fullWidth
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+              />
+
+              {/* The chain's calendar, so a Persian till asks for a Jalali date; the value
+                  sent is Gregorian either way. */}
+              <CalendarDateField
+                label="Date of Birth"
+                fullWidth
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+                helperText="Optional."
               />
 
               <TextField
@@ -610,6 +682,41 @@ export function CustomersPage() {
         <DialogActions>
           <Button onClick={() => setAddressDialogOpen(false)}>Close</Button>
         </DialogActions>
+      </Dialog>
+
+      {/* Block Customer */}
+      <Dialog open={blockOpen} onClose={() => setBlockOpen(false)} maxWidth="xs" fullWidth>
+        <form onSubmit={handleConfirmBlock}>
+          <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <BlockIcon color="error" />
+            Refuse to serve this customer
+          </DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {blockTarget ? `${blockTarget.first_name} ${blockTarget.last_name}` : ''} will not be
+              accepted on any new order, on any channel, until the block is lifted. Orders already
+              placed are untouched.
+            </Typography>
+            <TextField
+              label="Reason"
+              required
+              autoFocus
+              fullWidth
+              multiline
+              rows={2}
+              placeholder="e.g. repeated false delivery addresses"
+              helperText="Shown to the cashier who has to turn the order away."
+              value={blockReason}
+              onChange={(e) => setBlockReason(e.target.value)}
+            />
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2.5 }}>
+            <Button onClick={() => setBlockOpen(false)}>Cancel</Button>
+            <Button type="submit" variant="contained" color="error" disabled={!blockReason.trim()}>
+              Block Customer
+            </Button>
+          </DialogActions>
+        </form>
       </Dialog>
     </Box>
   );

@@ -19,6 +19,7 @@ import { OrderNote } from '../../entities/OrderNote.entity';
 import { OrderLink } from '../../entities/OrderLink.entity';
 import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
 import { Product } from '../../entities/Product.entity';
+import { Customer } from '../../entities/Customer.entity';
 import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { OptionItem } from '../../entities/OptionItem.entity';
 import { OptionGroup } from '../../entities/OptionGroup.entity';
@@ -255,8 +256,30 @@ export class OrderService {
     return { terminalId: terminal.id, shiftId: shift?.id ?? null };
   }
 
+  /**
+   * A customer the chain has refused cannot be put on a new order — any channel, any
+   * payment method. Blocking their credit account would only stop them paying on account;
+   * this is the stronger statement, that we are not serving them at all.
+   *
+   * The reason travels in the error so the cashier facing the customer is told why, rather
+   * than being left with a refusal they cannot explain.
+   */
+  private async assertCustomerServable(em: EntityManager, tenantId: string, customerId?: string | null) {
+    if (!customerId) return;
+    const customer = await em.findOne(Customer, { where: { id: customerId, tenant_id: tenantId } });
+    if (!customer) return; // A missing customer is the existing foreign-key's complaint, not this one's.
+    if (customer.is_blocked) {
+      throw new BadRequestException(
+        `CUSTOMER_BLOCKED: ${customer.first_name} ${customer.last_name} cannot be served${
+          customer.blocked_reason ? ` (${customer.blocked_reason})` : ''
+        }`,
+      );
+    }
+  }
+
   async createDraft(tenantId: string, dto: OrderCreateDto, userId?: string, correlationId?: string) {
     return await this.dataSource.transaction(async (em) => {
+      await this.assertCustomerServable(em, tenantId, dto.customer_id);
       const orderNumber = await this.sequenceService.generateOrderNumber(tenantId, em);
       const currencyCode = dto.currency_code || 'IRR';
       const channel = dto.channel || 'POS';
@@ -332,6 +355,11 @@ export class OrderService {
       if (!order) throw new NotFoundException(`Order ${id} not found`);
       if (order.state !== 'DRAFT') {
         throw new BadRequestException(`Only DRAFT orders can be updated via generic patch. Submitted orders require edit command.`);
+      }
+
+      // Attaching a customer to an existing draft is the other way one lands on an order.
+      if (dto.customer_id !== undefined && dto.customer_id !== order.customer_id) {
+        await this.assertCustomerServable(em, tenantId, dto.customer_id);
       }
 
       if (dto.branch_id !== undefined) order.branch_id = dto.branch_id;

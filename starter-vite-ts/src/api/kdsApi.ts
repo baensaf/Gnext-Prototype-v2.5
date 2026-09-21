@@ -281,12 +281,22 @@ export const kdsApi = {
     const res = await httpClient.post(`/api/v1/print-jobs/${id}/retry`, data || {});
     return res.data;
   },
-  reprintJob: async (id: string, reason?: string): Promise<any> => {
-    const res = await httpClient.post(`/api/v1/print-jobs/${id}/reprint`, { reason });
+  /** `printerId` redirects the copy to another device — the usual one has died. */
+  reprintJob: async (id: string, reason?: string, printerId?: string): Promise<any> => {
+    const res = await httpClient.post(`/api/v1/print-jobs/${id}/reprint`, { reason, printerId });
     return res.data;
   },
-  reprintOrder: async (orderId: string, documentType = 'CUSTOMER_RECEIPT', reason?: string): Promise<any> => {
-    const res = await httpClient.post(`/api/v1/orders/${orderId}/reprint`, { documentType, reason });
+  reprintOrder: async (
+    orderId: string,
+    documentType = 'CUSTOMER_RECEIPT',
+    reason?: string,
+    printerId?: string
+  ): Promise<any> => {
+    const res = await httpClient.post(`/api/v1/orders/${orderId}/reprint`, {
+      documentType,
+      reason,
+      printerId,
+    });
     return res.data;
   },
 };

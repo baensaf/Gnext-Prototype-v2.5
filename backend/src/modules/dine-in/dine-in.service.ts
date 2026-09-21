@@ -233,9 +233,14 @@ export class DineInService {
         orderId = sess.active_order_id;
       }
 
-      if (sess && sess.seated_at) {
-        const diffMs = now.getTime() - new Date(sess.seated_at).getTime();
-        elapsedTimeMinutes = Math.floor(diffMs / 60000);
+      // A table session is written when guests are seated or a check is moved. An order rung
+      // straight onto a table at the till makes no session at all, yet the table is shown
+      // OCCUPIED because of that order — so timing it only off the session left exactly the
+      // busiest tables reading 0 minutes all service. The order's own clock is the fallback.
+      const startedAt = sess?.seated_at || activeOrd?.placed_at;
+      if (startedAt) {
+        const diffMs = now.getTime() - new Date(startedAt).getTime();
+        elapsedTimeMinutes = Math.max(0, Math.floor(diffMs / 60000));
       }
 
       return {

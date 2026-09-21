@@ -7,6 +7,7 @@ import GavelIcon from '@mui/icons-material/Gavel';
 import PrintIcon from '@mui/icons-material/Print';
 import ShieldIcon from '@mui/icons-material/Shield';
 import SearchIcon from '@mui/icons-material/Search';
+import EditNoteIcon from '@mui/icons-material/EditNote';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import TranslateIcon from '@mui/icons-material/Translate';
 import TwoWheelerIcon from '@mui/icons-material/TwoWheeler';
@@ -315,6 +316,18 @@ export function SettingsHubPage() {
           icon: <GavelIcon sx={{ color: 'error.main' }} />,
           badge: { color: 'default', label: t('settings.hub.items.reasons.badge', 'Audit Ready') },
           tags: ['reasons', 'audit', 'voids', 'refunds', 'variances', 'compliance', 'codes', 'علت', 'ابطال', 'ممیزی', 'دلایل'],
+        },
+        {
+          id: 'note-templates',
+          scope: 'ORG',
+          title: t('settings.hub.items.noteTemplates.title', 'Order Note Templates'),
+          description: t(
+            'settings.hub.items.noteTemplates.description',
+            'One-tap phrases the register offers when a cashier adds a note to an order or an item.'
+          ),
+          path: '/app/settings/note-templates',
+          icon: <EditNoteIcon sx={{ color: 'primary.main' }} />,
+          tags: ['notes', 'templates', 'kitchen', 'instructions', 'chips', 'یادداشت', 'توضیحات', 'آشپزخانه'],
         },
       ],
     },

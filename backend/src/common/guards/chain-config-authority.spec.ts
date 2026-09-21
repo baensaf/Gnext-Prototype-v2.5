@@ -70,13 +70,17 @@ const OPEN_BY_DESIGN: Array<[string, any, string[]]> = [
   // Reads in all but HTTP verb — the register calls both in the middle of an order.
   ['discounts', DiscountsController, ['coupons/validate', 'discount-quotes']],
   ['localization', LocalizationController, []],
-  // Everything a counter does with a customer: sign one up, add a phone, an address, a
-  // consent. The record itself is the chain's, so merging two and the group taxonomy are not.
+  // Everything a counter does with a customer: sign one up, correct what it got wrong, add
+  // a phone, an address, a consent. The record itself is the chain's, so merging two and the
+  // group taxonomy are not — nor is refusing to serve somebody, since a block taken at one
+  // site has to hold at the next, which is why block/unblock carry @HeadOfficeOnly and are
+  // deliberately absent from this list.
   [
     'customer',
     CustomerController,
     [
       'customers',
+      'customers/:id',
       'customers/:id/phones',
       'customers/:id/consents',
       'customers/:id/addresses',

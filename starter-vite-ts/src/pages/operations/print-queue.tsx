@@ -1,4 +1,4 @@
-import type { PrintJob } from 'src/api/kdsApi';
+import type { PrintJob, PrinterDevice } from 'src/api/kdsApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -8,6 +8,7 @@ import ReplayIcon from '@mui/icons-material/Replay';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import PrintDisabledIcon from '@mui/icons-material/PrintDisabled';
 import {
   Box,
   Card,
@@ -53,6 +54,11 @@ export function PrintQueuePage() {
   const [outcomeJob, setOutcomeJob] = useState<PrintJob | null>(null);
   const [outcomeVal, setOutcomeVal] = useState<'SUCCESS' | 'FAILED'>('SUCCESS');
   const [useFallback, _setUseFallback] = useState(true);
+
+  // Reprint-to-another-printer dialog
+  const [redirectJob, setRedirectJob] = useState<PrintJob | null>(null);
+  const [redirectPrinterId, setRedirectPrinterId] = useState('');
+  const [printers, setPrinters] = useState<PrinterDevice[]>([]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -107,6 +113,31 @@ export function PrintQueuePage() {
       loadData();
     } catch (err: any) {
       setError(err.detail || 'Failed to enqueue reprint job');
+    }
+  };
+
+  // Reprinting somewhere else. The printer list is only needed once this dialog opens, so
+  // it is fetched then rather than with the page.
+  const handleOpenRedirect = async (job: PrintJob) => {
+    setRedirectJob(job);
+    setRedirectPrinterId('');
+    try {
+      const list = await kdsApi.getPrinters();
+      // A printer that is out of service cannot rescue a job, so it is not offered.
+      setPrinters(list.filter((p) => p.is_active));
+    } catch (err: any) {
+      setError(err.detail || 'Failed to load printers');
+    }
+  };
+
+  const handleConfirmRedirect = async () => {
+    if (!redirectJob || !redirectPrinterId) return;
+    try {
+      await kdsApi.reprintJob(redirectJob.id, 'Redirected reprint', redirectPrinterId);
+      setRedirectJob(null);
+      loadData();
+    } catch (err: any) {
+      setError(err.detail || 'Failed to reprint on the selected printer');
     }
   };
 
@@ -239,6 +270,12 @@ export function PrintQueuePage() {
                         <PrintIcon />
                       </IconButton>
                     </Tooltip>
+
+                    <Tooltip title={t('printQueue.reprintElsewhere', 'Reprint on another printer')}>
+                      <IconButton color="secondary" onClick={() => handleOpenRedirect(job)}>
+                        <PrintDisabledIcon />
+                      </IconButton>
+                    </Tooltip>
                   </Stack>
                 </TableCell>
               </TableRow>
@@ -305,6 +342,39 @@ export function PrintQueuePage() {
         <DialogActions>
           <Button onClick={() => setOutcomeJob(null)}>{t('common.cancel', 'Cancel')}</Button>
           <Button variant="contained" onClick={handleSimulateOutcome}>{t('common.confirm', 'Submit Outcome')}</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Reprint on another printer */}
+      <Dialog open={Boolean(redirectJob)} onClose={() => setRedirectJob(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t('printQueue.reprintElsewhere', 'Reprint on another printer')}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t(
+              'printQueue.reprintElsewhereHelp',
+              'Sends this document to a printer you choose instead of the one it was routed to. Use it when the usual printer is out of service.'
+            )}
+          </Typography>
+          <FormControl fullWidth sx={{ mt: 1 }}>
+            <InputLabel>{t('printQueue.printer', 'Printer')}</InputLabel>
+            <Select
+              value={redirectPrinterId}
+              label={t('printQueue.printer', 'Printer')}
+              onChange={(e) => setRedirectPrinterId(e.target.value)}
+            >
+              {printers.map((p) => (
+                <MenuItem key={p.id} value={p.id}>
+                  {p.name} — {p.printer_type}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRedirectJob(null)}>{t('common.cancel', 'Cancel')}</Button>
+          <Button variant="contained" disabled={!redirectPrinterId} onClick={handleConfirmRedirect}>
+            {t('printQueue.reprint', 'Reprint')}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

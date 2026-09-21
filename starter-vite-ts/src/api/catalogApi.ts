@@ -1,5 +1,18 @@
 import { httpClient } from './httpClient';
 
+/** ITEM sits on one line of an order, ORDER on the whole ticket. */
+export type NoteTemplateScope = 'ITEM' | 'ORDER';
+
+/** A phrase the till drops into a note with one tap. */
+export interface NoteTemplate {
+  id: string;
+  scope: NoteTemplateScope;
+  text: string;
+  category?: string | null;
+  sort_order: number;
+  is_active: boolean;
+}
+
 export interface Category {
   id: string;
   code: string;
@@ -611,5 +624,27 @@ export const catalogApi = {
   },
   deleteSchedule: async (id: string): Promise<void> => {
     await httpClient.delete(`/api/v1/availability/schedules/${id}`);
+  },
+
+  getNoteTemplates: async (
+    scope?: NoteTemplateScope,
+    includeInactive = false
+  ): Promise<NoteTemplate[]> => {
+    const res = await httpClient.get('/api/v1/note-templates', {
+      params: { scope, includeInactive: includeInactive ? 'true' : undefined },
+    });
+    return res.data;
+  },
+  createNoteTemplate: async (data: Partial<NoteTemplate>): Promise<NoteTemplate> => {
+    const res = await httpClient.post('/api/v1/note-templates', data);
+    return res.data;
+  },
+  updateNoteTemplate: async (id: string, data: Partial<NoteTemplate>): Promise<NoteTemplate> => {
+    const res = await httpClient.patch(`/api/v1/note-templates/${id}`, data);
+    return res.data;
+  },
+  archiveNoteTemplate: async (id: string): Promise<NoteTemplate> => {
+    const res = await httpClient.delete(`/api/v1/note-templates/${id}`);
+    return res.data;
   },
 };

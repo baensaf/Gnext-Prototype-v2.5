@@ -376,6 +376,52 @@ describe('PrintingModule (Unit & Integration)', () => {
         expect.objectContaining({ action: 'PRINT_JOB_REPRINTED', entityId: reprint.id }),
       );
     });
+
+    // Routing's fallback covers a printer that reports failure. It does not cover the
+    // everyday case: the device is simply gone — unplugged, out of paper, cooked — and the
+    // chit has to come out somewhere else now.
+    describe('reprinting on a printer chosen by hand', () => {
+      it('sends the copy to the named printer and says so on the job', async () => {
+        const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
+        const [grill] = jobsFor(jobs, 'prn-grill');
+
+        const [reprint] = await queueService.reprintJob(T, grill.id, 'Grill printer died', 'user-1', 'prn-counter');
+
+        expect(reprint.printer_id).toBe('prn-counter');
+        expect(reprint.is_reprint).toBe(true);
+        expect(reprint.rendered_html).toBe(grill.rendered_html);
+        expect(reprint.reason).toContain('prn-counter');
+      });
+
+      it('drops the group link, so a later retry cannot route it back to the dead printer', async () => {
+        const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
+        const [grill] = jobsFor(jobs, 'prn-grill');
+        expect(grill.printer_group_id).toBe('grp-grill');
+
+        const [reprint] = await queueService.reprintJob(T, grill.id, 'Grill printer died', 'user-1', 'prn-counter');
+
+        expect(reprint.printer_group_id).toBeNull();
+      });
+
+      it('refuses a printer that belongs to another branch', async () => {
+        printer('prn-other-site', { branch_id: 'br-2' });
+        const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
+        const [grill] = jobsFor(jobs, 'prn-grill');
+
+        await expect(
+          queueService.reprintJob(T, grill.id, 'Wrong site', 'user-1', 'prn-other-site'),
+        ).rejects.toThrow('different branch');
+      });
+
+      it('refuses a printer that does not exist', async () => {
+        const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
+        const [grill] = jobsFor(jobs, 'prn-grill');
+
+        await expect(
+          queueService.reprintJob(T, grill.id, 'Typo', 'user-1', 'prn-nonexistent'),
+        ).rejects.toThrow('not found');
+      });
+    });
   });
 
   // --- failure --------------------------------------------------------------------------

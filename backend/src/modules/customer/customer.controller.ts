@@ -60,6 +60,46 @@ export class CustomerController {
     return await this.customerService.createCustomer(tenantId, data, correlationId, (req as any).userId);
   }
 
+  // Correcting a name or a birthday is counter work, like signing the customer up.
+  @Patch('customers/:id')
+  async updateCustomer(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+    return await this.customerService.updateCustomer(
+      (req as any).tenantId,
+      id,
+      body,
+      (req as any).correlationId,
+      (req as any).userId,
+    );
+  }
+
+  // Refusing to serve somebody is not one branch's call: the customer belongs to the chain,
+  // and a block taken at one site has to hold at the next one.
+  @HeadOfficeOnly()
+  @Post('customers/:id/block')
+  async blockCustomer(@Param('id') id: string, @Body() body: { reason?: string }, @Req() req: Request) {
+    return await this.customerService.setBlocked(
+      (req as any).tenantId,
+      id,
+      true,
+      body?.reason,
+      (req as any).correlationId,
+      (req as any).userId,
+    );
+  }
+
+  @HeadOfficeOnly()
+  @Post('customers/:id/unblock')
+  async unblockCustomer(@Param('id') id: string, @Body() body: { reason?: string }, @Req() req: Request) {
+    return await this.customerService.setBlocked(
+      (req as any).tenantId,
+      id,
+      false,
+      body?.reason,
+      (req as any).correlationId,
+      (req as any).userId,
+    );
+  }
+
   @Post('customers/:id/phones')
   async addPhone(
     @Param('id') id: string,
