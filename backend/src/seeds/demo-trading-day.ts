@@ -21,25 +21,24 @@ import { BusinessDateUtil } from '../common/utils/business-date.util';
  * Seeds one completed trading day so the reports, shift and business-day screens open
  * with content instead of empty state, and so the figures on them cross-foot.
  *
- * The numbers are chosen to be narratable and to demonstrate the reconciliation rules:
+ * The numbers are chosen to be narratable and to demonstrate the reconciliation rules.
+ * Prices are Iran Burger's menu prices in rial (see iranburger-data.ts):
  *
- *   ORD-DEMO-0001  1,000,000 + 9% tax = 1,090,000   cash
- *   ORD-DEMO-0002    600,000 + 9% tax =   654,000   card
- *   ORD-DEMO-0003    400,000 + 9% tax =   436,000   cash
- *   ORD-DEMO-0004    300,000 + 9% tax =   327,000   card, 100,000 refunded
- *   ORD-DEMO-0005    500,000 + 9% tax =   545,000   CANCELLED, never paid
+ *   ORD-DEMO-0001  24,200,000 + 9% tax = 26,378,000   cash
+ *   ORD-DEMO-0002  23,200,000 + 9% tax = 25,288,000   card
+ *   ORD-DEMO-0003  22,300,000 + 9% tax = 24,307,000   cash
+ *   ORD-DEMO-0004  13,600,000 + 9% tax = 14,824,000   card, 2,700,000 refunded
+ *   ORD-DEMO-0005  19,150,000 + 9% tax = 20,873,500   CANCELLED, never paid
  *
- *   Gross subtotal   2,300,000      (cancelled order excluded)
- *   Tax                207,000
- *   Day total        2,507,000      = business_day_close.totals.totalSales
- *   Refunded           100,000
- *   Net sales        2,200,000      = total - tax - refunded
+ *   Gross subtotal   83,300,000      (cancelled order excluded)
+ *   Tax               7,497,000
+ *   Day total        90,797,000      = business_day_close.totals.totalSales
+ *   Refunded          2,700,000
+ *   Net sales        80,600,000      = total - tax - refunded
  *
- *   Opening float      500,000
- *   Cash takings     1,526,000      (orders 1 and 3; the refund went back to card)
- *   Expected cash    2,026,000      actual matches, so the shift closes with zero variance
- *
- * Every subtotal is a multiple of 100,000 so that 9% VAT lands on a whole thousand.
+ *   Opening float     5,000,000
+ *   Cash takings     50,685,000      (orders 1 and 3; the refund went back to card)
+ *   Expected cash    55,685,000      actual matches, so the shift closes with zero variance
  *
  * The day is dated yesterday, which leaves today clean for the live demo: whatever the
  * operator rings up is the only thing on today's figures.
@@ -61,78 +60,85 @@ type SeededOrder = {
   refund?: string;
 };
 
+// Product codes are Iran Burger's own.
+const IRAN_BURGER = '101001'; // 9,400,000
+const CHEESEBURGER = '101054'; // 7,400,000
+const ZINGER = '101012'; // 5,800,000
+const HOT_DOG = '102001'; // 8,200,000
+const MIXED_PIZZA = '11106'; // 11,000,000
+const BLUE_COMBO = '11303'; // 9,750,000
+const SALAD = '104001'; // 3,900,000
+const FRIES = '104003'; // 2,700,000
+
 const DEMO_ORDERS: SeededOrder[] = [
   {
     number: `${DEMO_ORDER_PREFIX}0001`,
     orderType: 'DINE_IN',
-    subtotal: '1000000.0000',
-    tax: '90000.0000',
-    total: '1090000.0000',
-    // 2 x 290,000 + 2 x 150,000 + 2 x 60,000
+    subtotal: '24200000.0000',
+    tax: '2178000.0000',
+    total: '26378000.0000',
+    // 2 x 9,400,000 + 2 x 2,700,000
     lines: [
-      { code: 'PROD-CHEESEBURGER', variantCode: 'VAR-CHB-TPL', qty: 2 },
-      { code: 'PROD-CHEESEBURGER', variantCode: 'VAR-CHB-SGL', qty: 2 },
-      { code: 'PROD-FRIES', qty: 2 },
+      { code: IRAN_BURGER, qty: 2 },
+      { code: FRIES, qty: 2 },
     ],
     tender: 'CASH',
   },
   {
     number: `${DEMO_ORDER_PREFIX}0002`,
     orderType: 'TAKEAWAY',
-    subtotal: '600000.0000',
-    tax: '54000.0000',
-    total: '654000.0000',
-    // 4 x 150,000
-    lines: [{ code: 'PROD-CHEESEBURGER', variantCode: 'VAR-CHB-SGL', qty: 4 }],
+    subtotal: '23200000.0000',
+    tax: '2088000.0000',
+    total: '25288000.0000',
+    // 4 x 5,800,000
+    lines: [{ code: ZINGER, qty: 4 }],
     tender: 'CARD_POS',
   },
   {
     number: `${DEMO_ORDER_PREFIX}0003`,
     orderType: 'DINE_IN',
-    subtotal: '400000.0000',
-    tax: '36000.0000',
-    total: '436000.0000',
-    // 150,000 + 220,000 + 30,000
+    subtotal: '22300000.0000',
+    tax: '2007000.0000',
+    total: '24307000.0000',
+    // 11,000,000 + 7,400,000 + 3,900,000
     lines: [
-      { code: 'PROD-CHEESEBURGER', variantCode: 'VAR-CHB-SGL', qty: 1 },
-      { code: 'PROD-CHEESEBURGER', variantCode: 'VAR-CHB-DBL', qty: 1 },
-      { code: 'PROD-COLA', qty: 1 },
+      { code: MIXED_PIZZA, qty: 1 },
+      { code: CHEESEBURGER, qty: 1 },
+      { code: SALAD, qty: 1 },
     ],
     tender: 'CASH',
   },
   {
     number: `${DEMO_ORDER_PREFIX}0004`,
     orderType: 'TAKEAWAY',
-    subtotal: '300000.0000',
-    tax: '27000.0000',
-    total: '327000.0000',
-    // 150,000 + 2 x 60,000 + 30,000
+    subtotal: '13600000.0000',
+    tax: '1224000.0000',
+    total: '14824000.0000',
+    // 8,200,000 + 2 x 2,700,000; one portion of fries comes back
     lines: [
-      { code: 'PROD-CHEESEBURGER', variantCode: 'VAR-CHB-SGL', qty: 1 },
-      { code: 'PROD-FRIES', qty: 2 },
-      { code: 'PROD-COLA', qty: 1 },
+      { code: HOT_DOG, qty: 1 },
+      { code: FRIES, qty: 2 },
     ],
     tender: 'CARD_POS',
-    refund: '100000.0000',
+    refund: '2700000.0000',
   },
   {
     number: `${DEMO_ORDER_PREFIX}0005`,
     orderType: 'DINE_IN',
-    subtotal: '500000.0000',
-    tax: '45000.0000',
-    total: '545000.0000',
-    // 150,000 + 290,000 + 60,000
+    subtotal: '19150000.0000',
+    tax: '1723500.0000',
+    total: '20873500.0000',
+    // 9,750,000 + 9,400,000
     lines: [
-      { code: 'PROD-CHEESEBURGER', variantCode: 'VAR-CHB-SGL', qty: 1 },
-      { code: 'PROD-CHEESEBURGER', variantCode: 'VAR-CHB-TPL', qty: 1 },
-      { code: 'PROD-FRIES', qty: 1 },
+      { code: BLUE_COMBO, qty: 1 },
+      { code: IRAN_BURGER, qty: 1 },
     ],
     tender: null,
     cancelled: true,
   },
 ];
 
-const OPENING_FLOAT = '500000.0000';
+const OPENING_FLOAT = '5000000.0000';
 
 export interface DemoTradingDayResult {
   seeded: boolean;
@@ -363,7 +369,7 @@ export async function seedDemoTradingDay(
           method_kind: method.kind,
           amount: spec.refund,
           currency_code: 'IRR',
-          reason_text: 'Customer returned one item',
+          reason_text: 'Customer returned one portion of fries',
           shift_id: shift.id,
           initiated_at: placedAt,
           posted_at: placedAt,

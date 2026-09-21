@@ -26,6 +26,7 @@ backend/uploads/*
 !backend/uploads/.gitkeep
 backend/seed-assets/*
 !backend/seed-assets/.gitkeep
+!backend/seed-assets/iranburger/
 
 # Database & OS artifacts
 *.sqlite
