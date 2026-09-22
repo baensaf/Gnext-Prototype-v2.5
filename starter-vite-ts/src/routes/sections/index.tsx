@@ -185,6 +185,7 @@ export const routesSection: RouteObject[] = [
       { path: 'operations/kds-configuration', element: <KdsConfigurationPage /> },
       { path: 'operations/printers', element: <PrintersPage /> },
       { path: 'operations/print-queue', element: <PrintQueuePage /> },
+      { path: 'print-queue', element: <Navigate to="/app/operations/print-queue" replace /> },
       { path: 'operations/monitoring', element: <MonitoringPage /> },
       { path: 'operations/agents', element: <AgentsPage /> },
       { path: 'simulation', element: <SimulationCenterPage /> },
