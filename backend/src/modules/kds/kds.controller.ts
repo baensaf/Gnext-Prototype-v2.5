@@ -178,6 +178,7 @@ export class KdsController {
     return await this.kdsService.getRoutingRules(tenantId, branchId);
   }
 
+  @BranchOwned(KitchenStation, { body: 'station_id' })
   @Roles(...MANAGER_AND_ABOVE)
   @Post('routing-rules')
   async createRoutingRule(@Body() body: CreateRoutingRuleDto, @Req() req: Request) {

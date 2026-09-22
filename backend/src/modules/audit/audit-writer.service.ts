@@ -19,6 +19,12 @@ export interface AuditWriteOptions {
 }
 
 import { randomUUID } from 'crypto';
+import { currentRequestActorId } from '../../common/utils/till-context';
+
+/** A person's action with no actor named is the signed-in user's; a job or a webhook is nobody's. */
+function actorFallback(options: AuditWriteOptions): string | null {
+  return options.actorType === 'ADMIN' || options.actorType === 'APPROVER_PROFILE' ? currentRequestActorId() : null;
+}
 
 function sanitizeUuid(val?: string): string | null {
   if (!val) return null;
@@ -43,7 +49,7 @@ export class AuditWriter {
       tenant_id: options.tenantId,
       event_type: options.action,
       actor_type: options.actorType,
-      actor_id: sanitizeUuid(options.actorId),
+      actor_id: sanitizeUuid(options.actorId) ?? actorFallback(options),
       action: options.action,
       entity_type: options.entityType || null,
       entity_id: sanitizeUuid(options.entityId),
@@ -62,7 +68,7 @@ export class AuditWriter {
       tenant_id: options.tenantId,
       event_type: options.action,
       actor_type: options.actorType,
-      actor_id: sanitizeUuid(options.actorId),
+      actor_id: sanitizeUuid(options.actorId) ?? actorFallback(options),
       action: options.action,
       entity_type: options.entityType || null,
       entity_id: sanitizeUuid(options.entityId),

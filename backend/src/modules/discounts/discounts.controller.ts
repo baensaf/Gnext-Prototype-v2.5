@@ -75,5 +75,14 @@ export class DiscountsController {
     const correlationId = (req as any).correlationId;
     return await this.discountsService.createOneTimeCoupon(tenantId, body, correlationId);
   }
+
+  /** Switch a code off (a leaked code, a campaign ended early) or back on. */
+  @HeadOfficeOnly()
+  @Patch('coupons/:id')
+  async setCouponActive(@Param('id') id: string, @Body() body: { is_active: boolean }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.discountsService.setCouponActive(tenantId, id, body.is_active !== false, correlationId);
+  }
 }
 

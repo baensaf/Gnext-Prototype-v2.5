@@ -1,7 +1,8 @@
+import type { Product } from 'src/api/catalogApi';
 import type { FileAssetDto } from 'src/api/mediaApi';
 
-import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from 'react';
 
 import SaveIcon from '@mui/icons-material/Save';
 import {
@@ -11,10 +12,13 @@ import {
   Stack,
   Alert,
   Button,
+  MenuItem,
+  TextField,
   Typography,
   CardContent,
 } from '@mui/material';
 
+import { catalogApi } from 'src/api/catalogApi';
 import { localizationApi } from 'src/api/localizationApi';
 
 import { ImageUploader } from 'src/components/ImageUploader';
@@ -23,27 +27,51 @@ import { BilingualInput } from 'src/components/BilingualInput';
 export function MediaLocalizationDemoPage() {
   const { t } = useTranslation();
 
-  const [productTitleFa, setProductTitleFa] = useState('همبرگر مخصوص اسپشال');
-  const [productTitleEn, setProductTitleEn] = useState('Special Beef Burger');
+  // Translations belong to a real menu item; the page used to write them against a made-up id.
+  const [products, setProducts] = useState<Product[]>([]);
+  const [entityId, setEntityId] = useState('');
 
-  const [descriptionFa, setDescriptionFa] = useState('تهیه شده از گوشت تازه گوساله و پنیر گودا');
-  const [descriptionEn, setDescriptionEn] = useState('Made with fresh beef patty and gouda cheese');
+  const [productTitleFa, setProductTitleFa] = useState('');
+  const [productTitleEn, setProductTitleEn] = useState('');
+
+  const [descriptionFa, setDescriptionFa] = useState('');
+  const [descriptionEn, setDescriptionEn] = useState('');
 
   const [uploadedAsset, setUploadedAsset] = useState<FileAssetDto | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Use valid UUID format for PostgreSQL UUID column compatibility
-  const [entityId, _setEntityId] = useState('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11');
+  useEffect(() => {
+    catalogApi
+      .getProducts()
+      .then((list) => setProducts(list.filter((p) => p.is_active !== false)))
+      .catch(() => setProducts([]));
+  }, []);
+
+  useEffect(() => {
+    const product = products.find((p) => p.id === entityId);
+    if (!product) return;
+    localizationApi
+      .getBilingualMap('PRODUCT', product.id)
+      .catch(() => ({}) as Record<string, Record<string, string>>)
+      .then((map) => {
+        setProductTitleFa(map.name?.fa || product.name || '');
+        setProductTitleEn(map.name?.en || '');
+        setDescriptionFa(map.description?.fa || product.description || '');
+        setDescriptionEn(map.description?.en || '');
+      });
+  }, [entityId, products]);
 
   const handleSaveTranslations = async () => {
+    if (!entityId) return;
     try {
-      await localizationApi.upsertStrings([
+      const strings = [
         { entity_type: 'PRODUCT', entity_id: entityId, field_name: 'name', locale: 'fa', text_value: productTitleFa },
         { entity_type: 'PRODUCT', entity_id: entityId, field_name: 'name', locale: 'en', text_value: productTitleEn },
         { entity_type: 'PRODUCT', entity_id: entityId, field_name: 'description', locale: 'fa', text_value: descriptionFa },
         { entity_type: 'PRODUCT', entity_id: entityId, field_name: 'description', locale: 'en', text_value: descriptionEn },
-      ]);
+      ].filter((row) => row.text_value.trim());
+      await localizationApi.upsertStrings(strings);
       setStatus(t('settings.localizationPage.saveSuccess', 'Bilingual localized strings saved successfully!'));
       setError(null);
     } catch (err: any) {
@@ -115,6 +143,20 @@ export function MediaLocalizationDemoPage() {
               </Typography>
 
               <Stack spacing={3}>
+                <TextField
+                  select
+                  fullWidth
+                  label={t('settings.localizationPage.selectProduct', 'Menu item')}
+                  value={entityId}
+                  onChange={(e) => setEntityId(e.target.value)}
+                >
+                  {products.map((p) => (
+                    <MenuItem key={p.id} value={p.id}>
+                      {p.name} ({p.code})
+                    </MenuItem>
+                  ))}
+                </TextField>
+
                 <BilingualInput
                   label={t('settings.localizationPage.productTitle', 'Product Title')}
                   faValue={productTitleFa}
@@ -138,6 +180,7 @@ export function MediaLocalizationDemoPage() {
                   variant="contained"
                   startIcon={<SaveIcon />}
                   onClick={handleSaveTranslations}
+                  disabled={!entityId}
                   sx={{ fontWeight: 'bold', alignSelf: 'flex-start' }}
                 >
                   {t('settings.localizationPage.saveButton', 'Save Localized Strings')}

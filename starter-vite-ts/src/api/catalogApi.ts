@@ -520,6 +520,9 @@ export const catalogApi = {
     const res = await httpClient.post(`/api/v1/menus/${id}/products`, { productId, categoryId, sortOrder, overridePrice });
     return res.data;
   },
+  removeProductFromMenu: async (id: string, productId: string): Promise<void> => {
+    await httpClient.delete(`/api/v1/menus/${id}/products/${productId}`);
+  },
 
   // Availability & Suspension
   getAvailabilities: async (branchId?: string): Promise<ProductAvailability[]> => {

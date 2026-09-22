@@ -25,6 +25,12 @@ export type BranchOwnedSpec = {
    * a table belongs to a floor, and the floor belongs to the shop.
    */
   through?: { entity: Function; foreignKey: string };
+  /**
+   * For a create: the body field naming the parent it is made under (a table under a floor).
+   * The branch-scope interceptor rewrites a body's branch_id, but not a parent's id, so a
+   * Valiasr manager could add a table to Nosrat's floor by naming it.
+   */
+  body?: string;
 };
 
 export const BranchOwned = (entity: Function, options: Omit<BranchOwnedSpec, 'entity'> = {}) =>

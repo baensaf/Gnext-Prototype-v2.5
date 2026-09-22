@@ -452,7 +452,10 @@ export class ReportsService {
           gross_sales: p.gross_sales,
           net_sales: p.net_sales,
           order_count: p.order_count,
-        }));
+        }))
+          // Best sellers first: a velocity report read in the order lines were first rung up
+          // put a one-off test item above the chain's top burger.
+          .sort((a, z) => (MoneyUtil.greaterThan(z.net_sales, a.net_sales) ? 1 : MoneyUtil.lessThan(z.net_sales, a.net_sales) ? -1 : 0));
 
         return {
           report_code: reportCode,

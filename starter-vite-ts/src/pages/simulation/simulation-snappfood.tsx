@@ -65,8 +65,9 @@ export function SimulationSnappfoodPage() {
   const [customerPhone, setCustomerPhone] = useState<string>('+989991111111');
   const [deliverAddress, setDeliverAddress] = useState<string>('تهران، زعفرانیه، ولیعصر، پلاک ۲');
   const [expeditionType, setExpeditionType] = useState<string>('DELIVERY');
-  const [price, setPrice] = useState<number>(1910);
-  const [paidPrice, setPaidPrice] = useState<number>(1910);
+  // 0 leaves the bill to the server, which prices a basket of real menu items.
+  const [price, setPrice] = useState<number>(0);
+  const [paidPrice, setPaidPrice] = useState<number>(0);
   const [otherDiscounts] = useState<number>(0);
   const [notes, setNotes] = useState<string>('غذا داخل باکس قرار داده شود - اردر تست');
   const [bikerName, setBikerName] = useState<string>('علی تهرانی');
@@ -504,7 +505,7 @@ export function SimulationSnappfoodPage() {
                         </FormControl>
                       </Grid>
                       <Grid size={{ xs: 12, sm: 4 }}>
-                        <TextField label={t('simulation.snappfood.webhook.totalPrice', 'Total Price (Toman)')} type="number" size="small" value={price} onChange={(e) => setPrice(Number(e.target.value))} fullWidth />
+                        <TextField label={t('simulation.snappfood.webhook.totalPrice', 'Total Price (Toman)')} type="number" size="small" value={price} onChange={(e) => setPrice(Number(e.target.value))} fullWidth helperText={t('simulation.snappfood.webhook.priceFromBasket', '0 = priced from the menu basket')} />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField label={t('simulation.snappfood.webhook.paidPrice', 'Paid Price (Toman)')} type="number" size="small" value={paidPrice} onChange={(e) => setPaidPrice(Number(e.target.value))} fullWidth />

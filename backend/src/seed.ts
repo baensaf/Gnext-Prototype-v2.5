@@ -3,6 +3,7 @@ import { AppDataSource } from './data-source';
 import { IsNull } from 'typeorm';
 import { ORDER_ACTION_DEFAULTS } from './modules/order/order-edit-policy';
 import { MoneyUtil } from './common/utils/money.util';
+import { seedAdminDemo } from './seeds/admin-demo';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -822,6 +823,10 @@ export async function runSeed() {
        AND placed_at <> submitted_at`,
     [tenant.id, `${HISTORY_PREFIX}%`],
   );
+
+  // 10. What head office and a branch manager work with day to day: menus, a branch price
+  // list, a bank account and card terminal, Valiasr's kitchen, closed days and more.
+  await seedAdminDemo(AppDataSource, tenant.id, branchByCode, branchManager?.id ?? null);
 
   console.log('Database seed execution completed successfully.');
   console.log('');

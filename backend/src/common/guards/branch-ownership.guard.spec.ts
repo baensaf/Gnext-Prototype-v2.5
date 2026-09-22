@@ -143,4 +143,15 @@ describe('BranchOwnershipGuard', () => {
     ).rejects.toThrow(ForbiddenException);
     expect(spy.joined).toBe('owner');
   });
+
+  // A create names its parent in the body: a table under a floor. The interceptor rewrites a
+  // body's branch_id, not the parent's id, so the parent has to be checked here.
+  it('refuses a create under a parent that another branch owns', async () => {
+    const underParent = { [BRANCH_OWNED_KEY]: { entity: DiningArea, body: 'dining_area_id' } };
+    const create = (areaId: string) => ({ ...request(DOWNTOWN), body: { dining_area_id: areaId } });
+    await expect(guard(underParent).canActivate(contextFor(create(otherTerminal)))).rejects.toThrow(
+      ForbiddenException,
+    );
+    await expect(guard(underParent).canActivate(contextFor(create(ownTerminal)))).resolves.toBe(true);
+  });
 });

@@ -36,11 +36,14 @@ import { MoneyUtil } from 'src/utils/money.util';
 import { tenantApi } from 'src/api/tenantApi';
 import { paymentApi } from 'src/api/paymentApi';
 import { httpClient } from 'src/api/httpClient';
+import { useAuthStore } from 'src/store/useAuthStore';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 
 import { TerminalAgentDialog } from 'src/components/payment-terminal/terminal-agent-dialog';
 
 export function PaymentsPage() {
+  // Settlement accounts are the chain's — one list, no branch column — so only head office adds one.
+  const canAddAccount = useAuthStore((state) => state.user?.isHeadOffice) !== false;
   const { t } = useTranslation();
 
   const [tabIndex, setTabIndex] = useState(0);
@@ -179,7 +182,7 @@ export function PaymentsPage() {
               {t('payments.addDevice', 'Register Device')}
             </Button>
           )}
-          {tabIndex === 2 && (
+          {tabIndex === 2 && canAddAccount && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAccDrawerOpen(true)}>
               {t('payments.addAccount', 'Create Account')}
             </Button>

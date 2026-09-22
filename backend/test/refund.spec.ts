@@ -235,5 +235,34 @@ describe('Refunds & Paid-Order Cancellation Suite (R16)', () => {
         expect.anything(), // Verify entityManager is passed
       );
     });
+
+    it('reverses loyalty cashback against the order total, not the user id', async () => {
+      const order = {
+        id: 'ord-cashback',
+        customer_id: 'cust-1',
+        terminal_id: 'term-1',
+        state: 'COMPLETED',
+        refunded_total: '0.0000',
+        total_amount: '10746000.0000',
+        currency_code: 'IRR',
+      };
+      orderRepo.findOne.mockResolvedValue(order);
+      paymentRepo.find.mockResolvedValue([{ id: 'pay-1', amount: '10746000.0000', status: 'SUCCEEDED', method_id: 'pm-cash' }]);
+      methodRepo.findOne.mockResolvedValue({ id: 'pm-cash', kind: 'CASH', is_active: true });
+      shiftService.requireDrawer.mockResolvedValue({ id: 'shift-1' });
+      shiftService.recordCashRefundMovement = jest.fn().mockResolvedValue(undefined);
+
+      const refund = await service.createRefundIntent('t-1', 'ord-cashback', { amount: '1000000.0000', reason: 'Late order' }, 'user-uuid', 'corr-1');
+      await service.processRefund('t-1', refund.id, {}, 'user-uuid', 'corr-1');
+
+      expect(creditService.reverseLoyaltyCashback).toHaveBeenCalledWith(
+        't-1',
+        'ord-cashback',
+        '1000000.0000',
+        '10746000.0000',
+        'IRR',
+        expect.anything(),
+      );
+    });
   });
 });

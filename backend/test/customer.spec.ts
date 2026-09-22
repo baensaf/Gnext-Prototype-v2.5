@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CustomerService, normalizePhone, normalizeBirthDate } from '../src/modules/customer/customer.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -122,6 +123,17 @@ describe('CustomerService (Unit)', () => {
       }),
     );
     expect(saved.code).toBe('VIP-001');
+  });
+
+  it('refuses a second customer with the same mobile written another way', async () => {
+    customerRepo.findOne.mockResolvedValue(null);
+    // CUST-1001 keeps the number as 0912…; the till types it as +98 912 ….
+    customerRepo.find.mockResolvedValue([{ id: 'c-1', code: 'CUST-1001', first_name: 'Reza', last_name: 'Mohammadi', mobile: '09121234567' }]);
+
+    await expect(
+      service.createCustomer('t-1', { first_name: 'Reza', last_name: 'M', mobile: '+98 912 123 4567' }, 'corr-3'),
+    ).rejects.toThrow(ConflictException);
+    expect(customerRepo.save).not.toHaveBeenCalled();
   });
 
   it('should throw ConflictException if customer code already exists', async () => {

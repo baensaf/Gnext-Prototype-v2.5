@@ -182,5 +182,12 @@ export class CreateOneTimeCouponDto {
   @IsOptional()
   @IsString()
   effective_to?: string;
+
+  /** How many orders may redeem the code; 1 (the default) for a single-use code. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  max_uses?: number;
 }
 

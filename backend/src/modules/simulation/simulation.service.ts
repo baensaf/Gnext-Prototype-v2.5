@@ -232,7 +232,7 @@ export class SimulationService {
         type: 'INCOMING_ORDER',
         severity: 'INFO',
         title: `New Snappfood order ${savedHeader.order_number}`,
-        message: `${payload.fullName || 'A customer'}: ${MoneyUtil.format(savedHeader.grand_total, 0)} waiting for acceptance`,
+        message: `${payload.fullName || 'A customer'}: ${MoneyUtil.formatCurrency(savedHeader.grand_total)} IRR waiting for acceptance`,
         acknowledged: false,
       }),
     );
@@ -394,7 +394,7 @@ export class SimulationService {
         title: unchanged
           ? `Snappfood sent order ${order.order_number} back to accept with a new time`
           : `Snappfood sent order ${order.order_number} again, changed`,
-        message: `${payload.fullName || 'A customer'}: ${MoneyUtil.format(order.grand_total, 0)} waiting for acceptance`,
+        message: `${payload.fullName || 'A customer'}: ${MoneyUtil.formatCurrency(order.grand_total)} IRR waiting for acceptance`,
         acknowledged: false,
       }),
     );
@@ -476,7 +476,7 @@ export class SimulationService {
     const raw: any[] =
       payload.items ||
       (Array.isArray(payload.products) && payload.products.length
-        ? payload.products.map((p: any) => ({ product_name: p.title, quantity: p.quantity, price: p.price, vat: p.vat }))
+        ? payload.products.map((p: any) => ({ product_name: p.title, product_id: p.product_id, quantity: p.quantity, price: p.price, vat: p.vat }))
         : [{ product_name: 'Snappfood Combo Meal', quantity: 1, price: 15.0 }]);
     return raw.map((line) => {
       const quantity = MoneyUtil.format(line.quantity || 1, 4);
@@ -725,6 +725,19 @@ export class SimulationService {
 
   async generateSnappfoodOrder(tenantId: string, data: any, correlationId?: string) {
     const seed = data?.seed || Math.floor(1000 + Math.random() * 9000).toString();
+
+    // With no basket given, order what the restaurant actually sells, at its prices. The fixed
+    // basket of two 500-Toman test pizzas landed at a burger chain as a 19,100 Rial order.
+    const menuBasket = data?.items || data?.products || data?.price ? null : await this.menuBasket(tenantId);
+    const basketToman = menuBasket
+      ? menuBasket.reduce((sum, p) => sum + p.price * p.quantity, 0)
+      : null;
+    const basketTax = menuBasket
+      ? Math.round(menuBasket.reduce((sum, p) => sum + p.price * p.quantity * p.vat, 0))
+      : null;
+    const deliveryToman = data?.deliveryPrice ?? (menuBasket ? 60000 : 500);
+    const packingToman = data?.packingPrice ?? (menuBasket ? 20000 : 200);
+    const billedToman = basketToman !== null ? basketToman + basketTax! + deliveryToman + packingToman : 1910;
     const eventId = data?.event_id || data?.code || `snapp-evt-${seed}`;
     const orderCode = data?.order_code || data?.code || `SF-${seed}`;
     
@@ -742,8 +755,8 @@ export class SimulationService {
       firstName: data?.firstName || 'حمید',
       lastName: data?.lastName || 'بیانک',
       phone: data?.phone || data?.customer_phone || '+989991111111',
-      price: data?.price || 1910,
-      paidPrice: data?.paidPrice || data?.price || 1910,
+      price: data?.price || billedToman,
+      paidPrice: data?.paidPrice || data?.price || billedToman,
       otherDiscounts: data?.otherDiscounts || 0,
       comment: data?.notes || data?.comment || 'اردر تست رستوران - تحویل فوری',
       vendor_notes: data?.notes || data?.vendor_notes || data?.comment || 'اردر تست رستوران - تحویل فوری',
@@ -752,13 +765,13 @@ export class SimulationService {
       orderDate: data?.orderDate || Date.now(),
       latitude: data?.latitude || 35.804123,
       longitude: data?.longitude || 51.419917,
-      deliveryPrice: data?.deliveryPrice || 500,
-      packingPrice: data?.packingPrice || 200,
+      deliveryPrice: deliveryToman,
+      packingPrice: packingToman,
       deliveryTime: data?.deliveryTime || 48,
       preparationTime: data?.preparationTime || 15,
       taxCoeff: data?.taxCoeff || 10,
-      tax: data?.tax || 110,
-      vat: data?.vat || 0.10,
+      tax: data?.tax || basketTax || 110,
+      vat: data?.vat || (menuBasket ? menuBasket[0].vat : 0.10),
       expeditionType: data?.expeditionType || 'DELIVERY', // DELIVERY, ZF_EXPRESS, MIARE, PICKUP, PICK_MAN
       discountType: data?.discountType || '',
       discountValue: data?.discountValue || 0,
@@ -770,7 +783,7 @@ export class SimulationService {
       vendorCode: data?.vendorCode || '0q54rd',
       bikerName: data?.bikerName || 'علی تهرانی',
       bikerStatusV2: data?.bikerStatusV2 || 'REQUESTED', // REQUESTED, ASSIGNED, CANCELED, ACK, AT_RESTAURANT, PICKED, DELIVERED
-      products: data?.items || data?.products || [
+      products: data?.items || data?.products || menuBasket || [
         {
           id: 101,
           vmsFoodId: 101,
@@ -810,6 +823,34 @@ export class SimulationService {
     const signature = crypto.createHmac('sha256', 'snappfood-secret-key-123').update(rawBody).digest('hex');
 
     return await this.handleSnappfoodWebhook(tenantId, rawBody, payload, signature, undefined, 'snappfood-secret-key-123', correlationId);
+  }
+
+  /** One to three of the tenant's active, priced products, as Snappfood lines in Toman. */
+  private async menuBasket(tenantId: string) {
+    const products = (await this.productRepo.find({ where: { tenant_id: tenantId, is_active: true } })).filter((p) =>
+      MoneyUtil.greaterThan(p.base_price || '0', '0'),
+    );
+    if (!products.length) return null;
+    const picks = [...products].sort(() => Math.random() - 0.5).slice(0, 1 + Math.floor(Math.random() * 3));
+    return picks.map((p, i) => {
+      const price = Number(MoneyUtil.divide(p.base_price, '10', 0));
+      return {
+        id: 900 + i,
+        vmsFoodId: 900 + i,
+        title: p.name,
+        product_id: p.id,
+        quantity: 1 + (i === 0 && Math.random() < 0.3 ? 1 : 0),
+        price,
+        originPrice: price,
+        originprice: price,
+        productDiscountSFShare: 0,
+        productDiscountVendorShare: 0,
+        discount: 0,
+        vat: Number(p.tax_rate || 0),
+        barcode: p.code,
+        toppings: [],
+      };
+    });
   }
 
   async triggerSnappfoodDuplicate(tenantId: string, logId?: string, correlationId?: string) {
