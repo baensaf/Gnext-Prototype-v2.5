@@ -459,12 +459,11 @@ export function PrintersPage() {
         severity="info"
         variant="outlined"
         icon={<SensorsIcon />}
-        action={<Chip label="SIMULATED" color="warning" size="small" sx={{ fontWeight: 'bold' }} />}
         sx={{ mb: 3, borderRadius: 2, fontWeight: 500 }}
       >
         {t(
           'operations.printers.v5PreviewBanner',
-          'V5 Preview Module: Advanced ESC/POS printer device hardware models, station group matrix routing & fallback chains. Retained for V5 hardware integration testing.'
+          "Printers with a network connection print for real through this branch's agent. Printers without one are simulated: their jobs are marked printed and nothing comes out."
         )}
       </Alert>
 
@@ -517,7 +516,8 @@ export function PrintersPage() {
                 </Button>
               </Stack>
 
-              <Table>
+              <Box sx={{ overflowX: 'auto' }}>
+              <Table sx={{ minWidth: 760 }}>
                 <TableHead>
                   <TableRow>
                     <TableCell>{t('operations.printers.colCode', 'Code')}</TableCell>
@@ -617,6 +617,7 @@ export function PrintersPage() {
                   )}
                 </TableBody>
               </Table>
+              </Box>
             </Card>
           )}
 
@@ -632,7 +633,8 @@ export function PrintersPage() {
                 </Button>
               </Stack>
 
-              <Table>
+              <Box sx={{ overflowX: 'auto' }}>
+              <Table sx={{ minWidth: 760 }}>
                 <TableHead>
                   <TableRow>
                     <TableCell>{t('operations.printers.colCode', 'Group Code')}</TableCell>
@@ -706,6 +708,7 @@ export function PrintersPage() {
                   )}
                 </TableBody>
               </Table>
+              </Box>
             </Card>
           )}
 
@@ -725,7 +728,8 @@ export function PrintersPage() {
                 {t('operations.printers.routingHint')}
               </Alert>
 
-              <Table>
+              <Box sx={{ overflowX: 'auto' }}>
+              <Table sx={{ minWidth: 760 }}>
                 <TableHead>
                   <TableRow>
                     <TableCell>{t('operations.printers.colPriority', 'Priority')}</TableCell>
@@ -788,6 +792,7 @@ export function PrintersPage() {
                   )}
                 </TableBody>
               </Table>
+              </Box>
             </Card>
           )}
         </>

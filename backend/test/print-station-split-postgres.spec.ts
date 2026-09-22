@@ -112,7 +112,7 @@ describe('kitchen tickets split by station (PostgreSQL)', () => {
 
   let orderId: string;
 
-  it('prints the receipt once and a chit per station on submit', async () => {
+  it('prints a chit per station on submit, and no receipt before the order is paid', async () => {
     const draft = await orders.createDraft(tenantId, {
       branch_id: branchId,
       order_type: 'DINE_IN',
@@ -130,8 +130,7 @@ describe('kitchen tickets split by station (PostgreSQL)', () => {
     const receipts = jobs.filter((j) => j.document_type === 'CUSTOMER_RECEIPT');
     const kitchen = jobs.filter((j) => j.document_type === 'KITCHEN_TICKET');
 
-    expect(receipts).toHaveLength(1);
-    expect(receipts[0].printer_id).toBe(printerIds['PRN-COUNTER']);
+    expect(receipts).toHaveLength(0);
 
     // Grill, Fryer, Bar (two printers) and the counter for the cake.
     expect(kitchen).toHaveLength(5);
@@ -170,9 +169,9 @@ describe('kitchen tickets split by station (PostgreSQL)', () => {
     expect(changes.map((j) => j.printer_id).sort()).toEqual(
       [printerIds['PRN-FRYER'], printerIds['PRN-BAR'], printerIds['PRN-PASS']].sort(),
     );
-    expect(onPrinter(changes, 'PRN-FRYER')[0].rendered_html).toMatch(/VOID<\/strong>.*FRIES/s);
-    expect(onPrinter(changes, 'PRN-BAR')[0].rendered_html).toMatch(/ADD<\/strong>.*COLA/s);
-    expect(changes.every((j) => j.rendered_html.includes('KITCHEN CHANGE - ORDER AMENDED'))).toBe(true);
+    expect(onPrinter(changes, 'PRN-FRYER')[0].rendered_html).toMatch(/حذف<\/span>.*FRIES/s);
+    expect(onPrinter(changes, 'PRN-BAR')[0].rendered_html).toMatch(/اضافه<\/span>.*COLA/s);
+    expect(changes.every((j) => j.rendered_html.includes('تغییر سفارش'))).toBe(true);
   }, 60000);
 
   it('reprints a single station chit without touching the others', async () => {
@@ -198,7 +197,9 @@ describe('kitchen tickets split by station (PostgreSQL)', () => {
     expect(stops.map((j) => j.printer_id).sort()).toEqual(
       [printerIds['PRN-GRILL'], printerIds['PRN-BAR'], printerIds['PRN-PASS'], printerIds['PRN-COUNTER']].sort(),
     );
-    expect(stops.every((j) => j.rendered_html.includes('ORDER CANCELLED - STOP'))).toBe(true);
+    expect(stops.every((j) => j.rendered_html.includes('لغو سفارش — آماده نکنید'))).toBe(true);
+    // The cook reads why, even when the till sent only a reason code.
+    expect(stops.every((j) => j.rendered_html.includes('Guest left'))).toBe(true);
     expect(stops.some((j) => j.rendered_html.includes('FRIES'))).toBe(false);
   }, 60000);
 });

@@ -38,6 +38,7 @@ import { PriceListService } from '../catalog/price-lists.service';
 import { checkOptionChoices } from '../catalog/option-choices.util';
 import { CreditService } from '../customer/credit.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
+import { ReasonCode } from '../../entities/ReasonCode.entity';
 import Decimal from 'decimal.js';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
@@ -698,14 +699,48 @@ export class OrderService {
 
     if (this.printQueueService) {
       try {
-        await this.printQueueService.enqueueOrderPrintJobs(tenantId, id, 'CUSTOMER_RECEIPT', false, undefined, userId);
         await this.printQueueService.enqueueOrderPrintJobs(tenantId, id, 'KITCHEN_TICKET', false, undefined, userId);
+        await this.printCustomerPaperwork(tenantId, id, userId);
       } catch (e) {
         // Printing side effect error must not fail submit
       }
     }
 
     return res;
+  }
+
+  /**
+   * The paper that goes with an order once the kitchen has it: a courier slip for a delivery,
+   * and the customer's receipt once it is paid for. A receipt printed at the till before the
+   * money was taken said "unpaid" on a paid order, so an order paid later gets it from
+   * `afterPaymentSucceeded`. Each prints once; a second copy is a reprint.
+   */
+  private async printCustomerPaperwork(tenantId: string, orderId: string, userId?: string) {
+    if (!this.printQueueService) return;
+    const order = await this.orderRepo.findOne({ where: { id: orderId, tenant_id: tenantId } });
+    if (!order || ['DRAFT', 'PENDING_ACCEPTANCE', 'CANCELLED', 'REJECTED'].includes(order.state)) return;
+
+    if (order.order_type === 'DELIVERY' && !(await this.printQueueService.hasPrinted(tenantId, orderId, 'COURIER_SLIP'))) {
+      await this.printQueueService.enqueueOrderPrintJobs(tenantId, orderId, 'COURIER_SLIP', false, undefined, userId);
+    }
+    const paid = !MoneyUtil.greaterThan(order.outstanding_total || '0.0000', '0.0000');
+    if (paid && !(await this.printQueueService.hasPrinted(tenantId, orderId, 'CUSTOMER_RECEIPT'))) {
+      await this.printQueueService.enqueueOrderPrintJobs(tenantId, orderId, 'CUSTOMER_RECEIPT', false, undefined, userId);
+    }
+  }
+
+  /**
+   * After a payment has committed: the receipt, once the order is paid in full, and a paid
+   * takeaway closed. Both are side effects of money already taken, so neither may fail the
+   * payment.
+   */
+  async afterPaymentSucceeded(tenantId: string, orderId: string, userId?: string, correlationId?: string) {
+    try {
+      await this.printCustomerPaperwork(tenantId, orderId, userId);
+    } catch {
+      // A receipt that does not print is reprinted from the order; the payment stands.
+    }
+    return await this.completeWhenPaidInFull(tenantId, orderId, userId, correlationId);
   }
 
   /** Derive delivery cost from the selected active branch zone; never accept a client fee. */
@@ -921,6 +956,8 @@ export class OrderService {
     if (this.printQueueService) {
       try {
         await this.printQueueService.enqueueOrderPrintJobs(tenantId, id, 'KITCHEN_TICKET', false, undefined, userId);
+        // An online order arrives paid: its receipt and slip go in the bag.
+        await this.printCustomerPaperwork(tenantId, id, userId);
       } catch (e) {
         // Printing side effect error must not fail the accept
       }
@@ -1287,7 +1324,7 @@ export class OrderService {
       id,
       result.voidedItemIds,
       result.addedItemIds,
-      dto.reason || removals[0]?.reason,
+      await this.reasonText(tenantId, dto.reason || removals[0]?.reason, dto.reasonCodeId || removals[0]?.reasonCodeId),
       userId,
     );
 
@@ -1598,6 +1635,21 @@ export class OrderService {
    * Best effort: a KDS hiccup must not fail an otherwise valid edit, since the
    * order and its money are already consistent by this point.
    */
+  /**
+   * The reason a cook reads on a change chit. The till sends a reason code more often than a
+   * typed note, and a chit saying only "order cancelled" leaves the kitchen guessing.
+   */
+  private async reasonText(tenantId: string, text?: string, reasonCodeId?: string): Promise<string | undefined> {
+    if (text?.trim()) return text.trim();
+    if (!reasonCodeId) return undefined;
+    try {
+      const code = await this.dataSource.getRepository(ReasonCode).findOne({ where: { id: reasonCodeId, tenant_id: tenantId } });
+      return code?.name || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   private async syncKitchenAfterEdit(
     tenantId: string,
     orderId: string,
@@ -1819,7 +1871,7 @@ export class OrderService {
       id,
       [replaced.replacedItemId],
       replaced.replacementItemId ? [replaced.replacementItemId] : [],
-      dto.reason,
+      await this.reasonText(tenantId, dto.reason, dto.reasonCodeId),
       userId,
     );
 
@@ -1900,7 +1952,14 @@ export class OrderService {
           correlationId,
         );
 
-    await this.stopKitchenAfterCancel(tenantId, id, stateBeforeCancel, activeItemIds, dto.reason, userId);
+    await this.stopKitchenAfterCancel(
+      tenantId,
+      id,
+      stateBeforeCancel,
+      activeItemIds,
+      await this.reasonText(tenantId, dto.reason, dto.reasonCodeId),
+      userId,
+    );
 
     return cancelled;
   }

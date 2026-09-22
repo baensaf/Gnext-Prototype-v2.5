@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { PrintJob } from '../../entities/PrintJob.entity';
 import { PrintAttempt } from '../../entities/PrintAttempt.entity';
 import { Printer } from '../../entities/Printer.entity';
@@ -8,7 +8,14 @@ import { PrintRoute } from '../../entities/PrintRoute.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { OperationalAlert } from '../../entities/OperationalAlert.entity';
-import { PrintRenderService } from './print-render.service';
+import { Branch } from '../../entities/Branch.entity';
+import { Tenant } from '../../entities/Tenant.entity';
+import { TenantSetting } from '../../entities/TenantSetting.entity';
+import { Customer } from '../../entities/Customer.entity';
+import { CustomerAddress } from '../../entities/CustomerAddress.entity';
+import { Payment } from '../../entities/Payment.entity';
+import { CALENDAR_SETTING_KEY, readCalendar } from '../../common/utils/calendar.util';
+import { markAsReprint, PrintRenderService, RenderDocOptions } from './print-render.service';
 import { PrintRoutingService } from './print-routing.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { AgentPrintingService } from './agent-printing.service';
@@ -92,15 +99,15 @@ export class PrintQueueService {
       const activeLines = (order.items || []).filter(isActiveLine);
       const opts = { isReprint, reason, userId, targetPrinterId };
 
+      const heading = await this.orderHeading(order);
+
       if (documentType !== 'KITCHEN_TICKET') {
         const html = this.renderService.renderDocument({
-          ...this.orderHeading(order),
+          ...heading,
+          ...(await this.orderMoney(order)),
           documentType,
+          isReprint,
           items: activeLines.map((i) => this.renderLine(i)),
-          subtotal: order.subtotal,
-          discountTotal: order.discount_total,
-          taxTotal: order.tax_total,
-          grandTotal: order.grand_total,
         });
         const routes = await this.routingService.loadRoutes(tenantId, order.branch_id, documentType);
         return await this.recordJobs(tenantId, order, documentType, html, this.routingService.matchRoute(routes, {}), opts);
@@ -111,8 +118,9 @@ export class PrintQueueService {
       const jobs: PrintJob[] = [];
       for (const batch of batches) {
         const html = this.renderService.renderDocument({
-          ...this.orderHeading(order),
+          ...heading,
           documentType,
+          isReprint,
           stationLabel: batch.label,
           items: batch.lines.map((l) => this.renderLine(l.item)),
         });
@@ -123,6 +131,14 @@ export class PrintQueueService {
       // Safe fallback: printing errors must NEVER throw and roll back order transactions!
       return [];
     }
+  }
+
+  /** Whether this document has already been printed for the order, reprints aside. */
+  async hasPrinted(tenantId: string, orderId: string, documentType: string): Promise<boolean> {
+    const count = await this.jobRepo.count({
+      where: { tenant_id: tenantId, entity_type: 'Order', entity_id: orderId, document_type: documentType, is_reprint: false },
+    });
+    return count > 0;
   }
 
   /**
@@ -151,10 +167,11 @@ export class PrintQueueService {
       const label = change.kind === 'CANCELLED' ? 'Order cancelled' : 'Order amended';
       const opts = { isReprint: false, reason: change.reason ? `${label}: ${change.reason}` : label, userId };
 
+      const heading = await this.orderHeading(order);
       const jobs: PrintJob[] = [];
       for (const batch of await this.splitByRoute(tenantId, order, lines)) {
         const html = this.renderService.renderDocument({
-          ...this.orderHeading(order),
+          ...heading,
           documentType: 'KITCHEN_TICKET',
           stationLabel: batch.label,
           kitchenChange: change.kind,
@@ -223,7 +240,9 @@ export class PrintQueueService {
         label: job.label,
         status: 'QUEUED',
         copies: job.copies,
-        rendered_html: job.rendered_html,
+        // Marked as a copy on the paper too: a second grill chit that looks like the first
+        // gets cooked twice.
+        rendered_html: markAsReprint(job.rendered_html),
         is_reprint: true,
         reason: override ? `${reason || 'Manual Reprint Request'} (redirected to ${override.name})` : reason || null,
         created_by: userId || null,
@@ -276,24 +295,82 @@ export class PrintQueueService {
     return result;
   }
 
-  private orderHeading(order: OrderHeader) {
-    return {
+  /**
+   * What every document for the order is headed with: who is printing it (the chain, the
+   * branch), the order, and who it is for. The lookups are best effort; a document with a
+   * missing phone number still prints.
+   */
+  private async orderHeading(order: OrderHeader): Promise<Omit<RenderDocOptions, 'documentType' | 'items'>> {
+    const heading: Omit<RenderDocOptions, 'documentType' | 'items'> = {
       orderNumber: order.order_number,
       orderType: order.order_type,
+      channel: order.channel,
       tableNumber: order.table_number || undefined,
-      customerName: order.customer_id || undefined,
+      orderNotes: order.notes || undefined,
       placedAt: order.placed_at || order.submitted_at || new Date(),
     };
+    const em = this.orderRepo.manager;
+    if (!em) return heading;
+    try {
+      const [tenant, branch, calendar, customer, address] = await Promise.all([
+        em.findOne(Tenant, { where: { id: order.tenant_id } }),
+        em.findOne(Branch, { where: { id: order.branch_id, tenant_id: order.tenant_id } }),
+        em.findOne(TenantSetting, { where: { tenant_id: order.tenant_id, key: CALENDAR_SETTING_KEY, branch_id: IsNull() } }),
+        order.customer_id ? em.findOne(Customer, { where: { id: order.customer_id, tenant_id: order.tenant_id } }) : null,
+        order.customer_address_id
+          ? em.findOne(CustomerAddress, { where: { id: order.customer_address_id, tenant_id: order.tenant_id } })
+          : null,
+      ]);
+      heading.brandName = tenant?.name || undefined;
+      heading.branchName = branch?.name || undefined;
+      heading.branchAddress = branch?.address || undefined;
+      heading.branchPhone = branch?.phone || undefined;
+      heading.calendar = readCalendar(calendar?.value);
+      const name = [customer?.first_name, customer?.last_name].filter(Boolean).join(' ').trim();
+      heading.customerName = name || undefined;
+      heading.customerMobile = customer?.mobile || undefined;
+      heading.deliveryAddress = address?.address_text || undefined;
+    } catch {
+      // A heading without the branch's address is still a ticket.
+    }
+    return heading;
+  }
+
+  /** The money half of a customer document: totals, and what has been paid and how. */
+  private async orderMoney(order: OrderHeader): Promise<Partial<RenderDocOptions>> {
+    const money: Partial<RenderDocOptions> = {
+      subtotal: order.subtotal,
+      discountTotal: order.discount_total,
+      taxTotal: order.tax_total,
+      deliveryFee: order.delivery_fee,
+      packagingTotal: order.packaging_total,
+      grandTotal: order.grand_total,
+      paidTotal: order.paid_total,
+      outstandingTotal: order.outstanding_total ?? undefined,
+    };
+    const em = this.orderRepo.manager;
+    if (!em) return money;
+    try {
+      const payments = await em.find(Payment, {
+        where: { tenant_id: order.tenant_id, order_id: order.id, status: In(['SUCCEEDED', 'COMPLETED', 'PARTIALLY_REFUNDED']) },
+        order: { initiated_at: 'ASC' },
+      });
+      money.payments = payments.map((p) => ({ method: p.method_kind, amount: p.amount }));
+    } catch {
+      // Totals alone still make a receipt.
+    }
+    return money;
   }
 
   private renderLine(i: OrderItem, change?: LineChange) {
+    const lineTotal = [i.line_total, i.subtotal].find((v) => v && Number(v) > 0);
     return {
-      product_name: i.product_name,
+      product_name: i.variant_name ? `${i.product_name} (${i.variant_name})` : i.product_name,
       quantity: i.quantity,
       unit_price: i.unit_price,
-      total_price: i.subtotal || i.unit_price,
-      special_instructions: i.special_instructions || undefined,
-      options_summary: i.options ? i.options.map((o) => o.option_item_name).join(', ') : undefined,
+      total_price: lineTotal || String(Number(i.unit_price || 0) * Number(i.quantity || 1)),
+      special_instructions: i.notes || i.special_instructions || undefined,
+      options_summary: i.options?.length ? i.options.map((o) => o.option_item_name).join('، ') : undefined,
       change,
     };
   }
@@ -451,14 +528,27 @@ export class PrintQueueService {
   }
 
   // Handle simulation outcome
-  async processSimulationOutcome(tenantId: string, data: { printJobId: string; scenarioId?: string; outcome: 'SUCCESS' | 'FAILED'; useFallback?: boolean }) {
+  async processSimulationOutcome(
+    tenantId: string,
+    data: { printJobId: string; scenarioId?: string; outcome: 'SUCCESS' | 'FAILED'; useFallback?: boolean; printerId?: string },
+    fromRetry = false,
+  ) {
     const job = await this.jobRepo.findOne({ where: { id: data.printJobId, tenant_id: tenantId } });
     if (!job) throw new NotFoundException(`Print job ${data.printJobId} not found`);
+
+    // A real printer reports its own result through the agent. Marking its job printed by hand
+    // would tell the kitchen a chit is on the rail that never came out.
+    if (!fromRetry && job.printer_id) {
+      const current = await this.printerRepo.findOne({ where: { id: job.printer_id, tenant_id: tenantId } });
+      if (current?.agent_connection) {
+        throw new BadRequestException('This job went to a real printer through the branch agent; its outcome cannot be simulated.');
+      }
+    }
 
     const attemptsCount = await this.attemptRepo.count({ where: { job_id: job.id } });
     const attemptNo = attemptsCount + 1;
 
-    let targetPrinterId = job.printer_id;
+    let targetPrinterId = data.printerId || job.printer_id;
 
     if (data.outcome === 'FAILED' && data.useFallback && job.printer_id) {
       const printer = await this.printerRepo.findOne({ where: { id: job.printer_id, tenant_id: tenantId } });
@@ -560,12 +650,16 @@ export class PrintQueueService {
       return { job: sent, attempt };
     }
 
-    return await this.processSimulationOutcome(tenantId, {
-      printJobId: job.id,
-      scenarioId: data.scenarioId,
-      outcome: 'SUCCESS',
-      useFallback: data.useFallback,
-    });
+    return await this.processSimulationOutcome(
+      tenantId,
+      {
+        printJobId: job.id,
+        scenarioId: data.scenarioId,
+        outcome: 'SUCCESS',
+        printerId: targetId,
+      },
+      true,
+    );
   }
 
   // List print jobs with filters & paging
@@ -575,12 +669,30 @@ export class PrintQueueService {
     if (status) where.status = status;
     if (documentType) where.document_type = documentType;
 
-    const [items, total] = await this.jobRepo.findAndCount({
+    const [jobs, total] = await this.jobRepo.findAndCount({
       where,
       order: { created_at: 'DESC' },
       take: limit,
       skip: offset,
     });
+
+    // The queue is read by people looking for "order 12's grill chit", not by job id.
+    const orderIds = [...new Set(jobs.filter((j) => j.entity_type === 'Order' && j.entity_id).map((j) => j.entity_id))];
+    const printerIds = [...new Set(jobs.map((j) => j.printer_id).filter(Boolean))];
+    const [orders, printers]: [OrderHeader[], Printer[]] = await Promise.all([
+      orderIds.length ? this.orderRepo.find({ where: { id: In(orderIds), tenant_id: tenantId } }) : Promise.resolve([]),
+      printerIds.length
+        ? this.printerRepo.find({ where: { id: In(printerIds), tenant_id: tenantId }, withDeleted: true })
+        : Promise.resolve([]),
+    ]);
+    const orderNumber = new Map<string, string>(orders.map((o) => [o.id, o.order_number]));
+    const printer = new Map<string, Printer>(printers.map((p) => [p.id, p]));
+    const items = jobs.map((j) => ({
+      ...j,
+      order_number: orderNumber.get(j.entity_id) ?? null,
+      printer_name: printer.get(j.printer_id)?.name ?? null,
+      via_agent: !!printer.get(j.printer_id)?.agent_connection,
+    }));
     return { items, total };
   }
 

@@ -43,12 +43,19 @@ import {
 import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 
+import { kdsApi } from 'src/api/kdsApi';
 import { orderApi } from 'src/api/orderApi';
 import { paymentApi } from 'src/api/paymentApi';
 import { settingsApi } from 'src/api/settingsApi';
 
 import { toast, showErrorToast } from 'src/components/snackbar';
 import { UnconfirmedChargeActions } from 'src/components/payment-terminal/unconfirmed-charge-actions';
+
+/**
+ * The amount the keypad starts from. The API sends "42292000.0000": shown as is it looked odd,
+ * and a digit typed after it made 42292000.00001.
+ */
+const wholeRials = (amount?: string | null) => String(amount || '0').replace(/\.0*$/, '');
 
 interface CheckoutModalProps {
   open: boolean;
@@ -81,7 +88,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     try {
       const o = await orderApi.getOrderById(orderId);
       setOrder(o);
-      setPayAmount(o.due_amount || o.outstanding_total || '0');
+      setPayAmount(wholeRials(o.due_amount || o.outstanding_total));
 
       const pms = await settingsApi.getPaymentMethods();
       const activeMethods = pms.filter((m) => m.is_active);
@@ -133,7 +140,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       });
 
       setOrder(res.order);
-      setPayAmount(res.order?.due_amount || '0');
+      setPayAmount(wholeRials(res.order?.due_amount));
       setRefNumber('');
       setChangeDue(overTendered ? MoneyUtil.subtract(payAmount, due) : null);
       if (overTendered) {
@@ -203,7 +210,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         });
 
         setOrder(res.order);
-        setPayAmount(res.order?.due_amount || '0');
+        setPayAmount(wholeRials(res.order?.due_amount));
         setRefNumber('');
 
         const updatedPays = await paymentApi.getOrderPayments(orderId);
@@ -264,6 +271,22 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   };
 
   const isFullyPaid = order ? MoneyUtil.isZero(order.due_amount) : false;
+
+  // Another copy on the branch's receipt printer. The first one printed by itself when the
+  // order was paid; the browser's print dialog only helps a till with a desktop printer.
+  const handlePrintReceipt = async () => {
+    if (!orderId) return;
+    try {
+      const jobs = await kdsApi.reprintOrder(orderId, 'CUSTOMER_RECEIPT', t('pos.printReceipt', 'Print Receipt'));
+      if (!Array.isArray(jobs) || jobs.length === 0 || jobs.every((j) => j.status === 'FAILED')) {
+        throw new Error(t('pos.receiptFailed', 'The receipt could not be sent to a printer'));
+      }
+      toast.success(t('pos.receiptSent', 'Receipt sent to the counter printer'));
+    } catch (err: any) {
+      toast.error(err?.detail || err?.message || t('pos.receiptFailed', 'The receipt could not be sent to a printer'));
+      navigate(`/app/pos/receipt/${orderId}`);
+    }
+  };
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -501,7 +524,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                             color="primary"
                             size="small"
                             sx={{ fontWeight: 700 }}
-                            onClick={() => setPayAmount(order.due_amount || '0')}
+                            onClick={() => setPayAmount(wholeRials(order.due_amount))}
                           >
                             تسویه کل مانده
                           </Button>
@@ -590,7 +613,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
             variant="contained"
             color="primary"
             startIcon={<PrintIcon />}
-            onClick={() => navigate(`/app/pos/receipt/${orderId}`)}
+            onClick={handlePrintReceipt}
             sx={{ fontWeight: 'bold' }}
           >
             {t('pos.printReceipt', 'Print Receipt')}

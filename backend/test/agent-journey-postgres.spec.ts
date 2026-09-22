@@ -140,7 +140,7 @@ describe('branch agent journey (PostgreSQL)', () => {
 
   let orderId: string;
 
-  it("3. prints a new order's receipt and kitchen ticket on the real printer", async () => {
+  it("3. prints a new order's kitchen ticket on the real printer", async () => {
     const draft = await orders.createDraft(
       tenantId,
       { branch_id: branchId, order_type: 'PICKUP', items: [{ product_id: productId, quantity: 1 }] } as any,
@@ -152,13 +152,14 @@ describe('branch agent journey (PostgreSQL)', () => {
     const jobs = () => dataSource.getRepository(PrintJob).find({ where: { tenant_id: tenantId, entity_id: orderId } });
     await until(async () => {
       const all = await jobs();
-      return all.length === 2 && all.every((j) => j.status === 'SUCCESS');
+      return all.length === 1 && all.every((j) => j.status === 'SUCCESS');
     });
+    // Not paid yet, so no receipt: that comes with the payment.
     const printed = [...agent.journal.values()].filter((e) => e.command.type === 'print.job').map((e) => e.command.payload.document_type);
-    expect(printed.sort()).toEqual(['CUSTOMER_RECEIPT', 'KITCHEN_TICKET']);
+    expect(printed).toEqual(['KITCHEN_TICKET']);
   });
 
-  it('4. takes the card payment on the real terminal', async () => {
+  it('4. takes the card payment on the real terminal, then prints the receipt', async () => {
     const order = await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: orderId });
     const intent = await payments.createPaymentIntent(tenantId, { orderId, methodId: cardMethodId, amount: order.outstanding_total } as any);
     const sent = await payments.processPayment(tenantId, intent.id, {}, cashierId);
@@ -168,6 +169,12 @@ describe('branch agent journey (PostgreSQL)', () => {
     const charge = [...agent.journal.values()].find((e) => e.command.type === 'payment.charge')!.command;
     expect(charge.payload).toMatchObject({ amount: '272500', terminal_id: terminalId, currency: 'IRR' });
     expect((await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: orderId })).outstanding_total).toBe('0.0000');
+
+    await until(async () =>
+      [...agent.journal.values()].some((e) => e.command.type === 'print.job' && e.command.payload.document_type === 'CUSTOMER_RECEIPT'),
+    );
+    const receipt = [...agent.journal.values()].find((e) => e.command.payload.document_type === 'CUSTOMER_RECEIPT')!.command;
+    expect(receipt.payload.content.html).toContain('پرداخت شد');
   });
 
   it('5. can ask for the latest build', async () => {
