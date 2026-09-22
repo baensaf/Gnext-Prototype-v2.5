@@ -11,7 +11,6 @@ import {
   IRANBURGER_BRANCHES,
   IRANBURGER_CATEGORIES,
   IRANBURGER_PRODUCTS,
-  IRANBURGER_OPTION_GROUPS,
   IRANBURGER_TENANT_NAME,
   LEGACY_CATEGORY_CODE,
   LEGACY_PRODUCT_CODES,
@@ -586,45 +585,6 @@ export async function runSeed() {
       is_active: true,
     }));
     console.log(`Seeded Product: ${p.name}`);
-  }
-
-  // Modifiers. A group is attached to its categories' products only when the group is first
-  // created, so one detached in the catalogue stays detached.
-  const optionGroupRepo = AppDataSource.getRepository('OptionGroup');
-  const optionItemRepo = AppDataSource.getRepository('OptionItem');
-  const productOptionRepo = AppDataSource.getRepository('ProductOptionGroup');
-  for (const [groupIndex, g] of IRANBURGER_OPTION_GROUPS.entries()) {
-    if (await optionGroupRepo.findOne({ where: { tenant_id: tenant.id, code: g.code } })) continue;
-    const group: any = await optionGroupRepo.save(optionGroupRepo.create({
-      tenant_id: tenant.id,
-      code: g.code,
-      name: g.name,
-      min_selection: g.min,
-      max_selection: g.max,
-      is_required: g.min > 0,
-    }));
-    for (const [itemIndex, item] of g.items.entries()) {
-      await optionItemRepo.save(optionItemRepo.create({
-        tenant_id: tenant.id,
-        option_group_id: group.id,
-        code: item.code,
-        name: item.name,
-        price_delta: MoneyUtil.format(item.price),
-        is_default: !!item.isDefault,
-        sort_order: itemIndex,
-      }));
-    }
-    const products = await prodRepo.find({ where: { tenant_id: tenant.id, is_active: true } });
-    const categoryIds = g.categories.map((code) => categoryByCode.get(code)?.id).filter(Boolean);
-    for (const product of products.filter((p: any) => categoryIds.includes(p.category_id))) {
-      await productOptionRepo.save(productOptionRepo.create({
-        tenant_id: tenant.id,
-        product_id: product.id,
-        option_group_id: group.id,
-        sort_order: groupIndex,
-      }));
-    }
-    console.log(`Seeded Option Group: ${g.name}`);
   }
 
   // Coupons a cashier can key in at the till. Unlike the app's one-time codes these serve the
