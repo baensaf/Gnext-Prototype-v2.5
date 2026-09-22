@@ -15,6 +15,7 @@ import { PrinterGroupMember } from '../src/entities/PrinterGroupMember.entity';
 import { PrintRoute } from '../src/entities/PrintRoute.entity';
 import { PrintJob } from '../src/entities/PrintJob.entity';
 import { OrderItem } from '../src/entities/OrderItem.entity';
+import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { ReasonCode } from '../src/entities/ReasonCode.entity';
 import { deleteTenantData } from './utils/tenant-teardown';
 
@@ -185,6 +186,33 @@ describe('kitchen tickets split by station (PostgreSQL)', () => {
     expect(reprint.printer_id).toBe(printerIds['PRN-GRILL']);
     expect(reprint.is_reprint).toBe(true);
     expect(reprint.label).toBe('Grill (1/4)');
+  }, 60000);
+
+  // A courier needs the address and whether to collect; a Snappfood order the store delivers
+  // itself is typed AGGREGATOR, so only its expedition says whose rider is coming.
+  it.each([
+    ['a delivery order', { order_type: 'DELIVERY' }],
+    ['a Snappfood order the store delivers', { order_type: 'AGGREGATOR', channel: 'AGGREGATOR', aggregator_expedition: 'DELIVERY' }],
+  ])('prints a courier slip and the paid receipt for %s', async (_name, overrides) => {
+    const repo = dataSource.getRepository(OrderHeader);
+    const order = (await repo.save(
+      repo.create({
+        tenant_id: tenantId,
+        branch_id: branchId,
+        order_number: `CS-${Date.now()}`,
+        state: 'CONFIRMED',
+        status: 'CONFIRMED',
+        grand_total: '100000.0000',
+        paid_total: '100000.0000',
+        outstanding_total: '0.0000',
+        ...overrides,
+      } as any),
+    )) as unknown as OrderHeader;
+
+    await orders.afterPaymentSucceeded(tenantId, order.id);
+
+    const printed = (await jobsFor(order.id)).map((j) => j.document_type).sort();
+    expect(printed).toEqual(['COURIER_SLIP', 'CUSTOMER_RECEIPT']);
   }, 60000);
 
   it('tells every station still holding food to stop on cancel', async () => {
