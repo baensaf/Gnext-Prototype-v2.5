@@ -1,4 +1,5 @@
 import type { ReasonCode } from 'src/api/settingsApi';
+import type { OptionItem, OptionGroup } from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useMemo, useState, useEffect } from 'react';
@@ -16,6 +17,7 @@ import {
   Button,
   Select,
   Divider,
+  Checkbox,
   TableRow,
   MenuItem,
   TableBody,
@@ -29,6 +31,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  FormControlLabel,
   CircularProgress,
 } from '@mui/material';
 
@@ -51,8 +54,10 @@ interface OrderEditDialogProps {
 interface PendingAddition {
   productId: string;
   productName: string;
+  /** Base price plus the chosen add-ons, for the preview; the server prices the line itself. */
   unitPrice: string;
   quantity: string;
+  options: OptionItem[];
 }
 
 const isActive = (item: OrderItem) => (item.state || 'ACTIVE') === 'ACTIVE';
@@ -74,6 +79,10 @@ export function OrderEditDialog({ open, onClose, order, reasonCodes, onSaved }: 
   const [products, setProducts] = useState<any[]>([]);
   const [pickerProductId, setPickerProductId] = useState('');
   const [pickerQuantity, setPickerQuantity] = useState('1');
+  // The picked product's add-on groups. A line added here used to go without them, so a
+  // combo (whose drink is required) was refused and a burger lost its extras.
+  const [pickerGroups, setPickerGroups] = useState<OptionGroup[]>([]);
+  const [pickerOptionIds, setPickerOptionIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [approvalOpen, setApprovalOpen] = useState(false);
@@ -88,9 +97,55 @@ export function OrderEditDialog({ open, onClose, order, reasonCodes, onSaved }: 
     setError(null);
     catalogApi
       .getProducts()
-      .then(setProducts)
+      // Items taken off the menu are not sold; the register refuses them.
+      .then((list) => setProducts(list.filter((p: any) => p.is_active !== false)))
       .catch(() => setProducts([]));
   }, [open]);
+
+  useEffect(() => {
+    setPickerGroups([]);
+    setPickerOptionIds([]);
+    if (!pickerProductId) return undefined;
+    let cancelled = false;
+    catalogApi
+      .getProductById(pickerProductId)
+      .then((full) => {
+        if (cancelled) return;
+        const groups = ((full.optionGroups || []) as OptionGroup[]).map((g) => ({
+          ...g,
+          items: (g.items || []).filter((i) => !(g.excluded_item_ids || []).includes(i.id)),
+        }));
+        setPickerGroups(groups);
+        // Defaults start ticked, as on the register.
+        setPickerOptionIds(
+          groups.flatMap((g) =>
+            (g.items || [])
+              .filter((i) => i.is_default)
+              .slice(0, g.max_selection > 0 ? g.max_selection : undefined)
+              .map((i) => i.id)
+          )
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [pickerProductId]);
+
+  // The first group short of its minimum, so Add waits until the required choice is made.
+  const unfilledGroup = pickerGroups.find(
+    (g) => (g.items || []).filter((i) => pickerOptionIds.includes(i.id)).length < (g.min_selection || (g.is_required ? 1 : 0))
+  );
+
+  const toggleOption = (group: OptionGroup, itemId: string, checked: boolean) => {
+    const inGroup = new Set((group.items || []).map((i) => i.id));
+    setPickerOptionIds((prev) => {
+      if (!checked) return prev.filter((id) => id !== itemId);
+      if (group.max_selection === 1) return [...prev.filter((id) => !inGroup.has(id)), itemId];
+      const chosen = prev.filter((id) => inGroup.has(id)).length;
+      return group.max_selection > 0 && chosen >= group.max_selection ? prev : [...prev, itemId];
+    });
+  };
 
   const lines = order?.items || [];
   const activeLines = useMemo(() => lines.filter(isActive), [lines]);
@@ -115,14 +170,16 @@ export function OrderEditDialog({ open, onClose, order, reasonCodes, onSaved }: 
 
   const handleStageAddition = () => {
     const product = products.find((p) => p.id === pickerProductId);
-    if (!product) return;
+    if (!product || unfilledGroup) return;
+    const options = pickerGroups.flatMap((g) => (g.items || []).filter((i) => pickerOptionIds.includes(i.id)));
     setAdditions((prev) => [
       ...prev,
       {
         productId: product.id,
         productName: product.name,
-        unitPrice: product.base_price || '0',
+        unitPrice: options.reduce((sum, o) => MoneyUtil.add(sum, o.price_delta || '0'), product.base_price || '0'),
         quantity: pickerQuantity || '1',
+        options,
       },
     ]);
     setPickerProductId('');
@@ -140,6 +197,7 @@ export function OrderEditDialog({ open, onClose, order, reasonCodes, onSaved }: 
           add: additions.map((a) => ({
             product_id: a.productId,
             quantity: MoneyUtil.format(a.quantity, 4),
+            options: a.options.map((o) => ({ option_item_id: o.id })),
           })),
           void: voidedIds.map((id) => ({ orderItemId: id, reasonCodeId })),
         },
@@ -220,6 +278,11 @@ export function OrderEditDialog({ open, onClose, order, reasonCodes, onSaved }: 
                     <TableCell>
                       {addition.productName}{' '}
                       <Chip size="small" color="success" label={t('orders.edit.new', 'New')} />
+                      {addition.options.length > 0 && (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          + {addition.options.map((o) => o.name).join('، ')}
+                        </Typography>
+                      )}
                     </TableCell>
                     <TableCell align="center">{addition.quantity}</TableCell>
                     <TableCell align="right">
@@ -269,12 +332,44 @@ export function OrderEditDialog({ open, onClose, order, reasonCodes, onSaved }: 
               <Button
                 startIcon={<AddIcon />}
                 variant="outlined"
-                disabled={!pickerProductId}
+                disabled={!pickerProductId || !!unfilledGroup}
                 onClick={handleStageAddition}
               >
                 {t('orders.edit.add', 'Add')}
               </Button>
             </Stack>
+
+            {pickerGroups.map((g) => (
+              <Box key={g.id}>
+                <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
+                  {g.name} {g.min_selection > 0 || g.is_required ? `(${t('pos.options.required')})` : ''}
+                </Typography>
+                <Stack direction="row" sx={{ flexWrap: 'wrap', columnGap: 2 }}>
+                  {(g.items || []).map((item) => (
+                    <FormControlLabel
+                      key={item.id}
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={pickerOptionIds.includes(item.id)}
+                          onChange={(e) => toggleOption(g, item.id, e.target.checked)}
+                        />
+                      }
+                      label={
+                        MoneyUtil.greaterThan(item.price_delta || '0', '0')
+                          ? `${item.name} (+${MoneyUtil.formatCurrency(item.price_delta, 0)})`
+                          : item.name
+                      }
+                    />
+                  ))}
+                </Stack>
+              </Box>
+            ))}
+            {unfilledGroup && (
+              <Typography variant="caption" color="warning.main">
+                {t('pos.comboChooseSlot', { slot: unfilledGroup.name })}
+              </Typography>
+            )}
 
             {needsReason && (
               <FormControl size="small" fullWidth required>

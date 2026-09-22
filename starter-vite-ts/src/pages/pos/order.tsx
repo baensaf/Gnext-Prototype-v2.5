@@ -496,6 +496,16 @@ export function PosOrderPage() {
 
       setProductVariants(onSale);
       setOptionGroups(offered);
+      // The catalogue's default choices start ticked (a combo's usual drink), up to what each
+      // group allows, so the common order is one tap.
+      setCheckedOptionIds(
+        offered.flatMap((g) =>
+          (g.items || [])
+            .filter((i) => i.is_default)
+            .slice(0, g.max_selection && g.max_selection > 0 ? g.max_selection : undefined)
+            .map((i) => i.id)
+        )
+      );
 
       const defaultVariant = onSale.find((v) => v.is_default) || onSale[0];
       setSelectedVariantId(defaultVariant?.id || '');
@@ -2654,8 +2664,7 @@ export function PosOrderPage() {
       {/* Option & Variant Customization Dialog */}
       <Dialog open={optionDialogOpen} onClose={() => setOptionDialogOpen(false)} maxWidth="sm" fullWidth aria-keyshortcuts="Escape">
         <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span>Configure {selectedProduct?.name}</span>
-          <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
+          <span>{t('pos.options.title', { name: selectedProduct?.name })}</span>
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           {/* Variant Selection Section */}
@@ -2663,9 +2672,8 @@ export function PosOrderPage() {
             <Box sx={{ mb: 2 }}>
               <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1, mb: 1 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                  Select Variant / Size
+                  {t('pos.options.variant')}
                 </Typography>
-                <Chip label="V5" size="small" color="info" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 'bold' }} />
               </Stack>
               <RadioGroup
                 value={selectedVariantId}
@@ -2723,14 +2731,13 @@ export function PosOrderPage() {
               {productVariants.length > 0 && <Divider sx={{ my: 2 }} />}
               <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1, mb: 1 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
-                  Optional Customizations & Modifiers
+                  {t('pos.options.addOns')}
                 </Typography>
-                <Chip label="V5" size="small" color="info" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 'bold' }} />
               </Stack>
               {optionGroups.map((g) => (
                 <Box key={g.id} sx={{ mb: 2 }}>
                   <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5, color: 'text.secondary' }}>
-                    {g.name} {g.is_required ? '(Required)' : ''}
+                    {g.name} {g.is_required ? `(${t('pos.options.required')})` : ''}
                   </Typography>
                   {g.items?.map((item) => (
                     <FormControlLabel
@@ -2753,7 +2760,12 @@ export function PosOrderPage() {
                           }}
                         />
                       }
-                      label={`${item.name} (+${MoneyUtil.formatCurrency(item.price_delta)} IRR)`}
+                      // A free choice ("no onions") shows no price; "+0 IRR" read as a charge.
+                      label={
+                        MoneyUtil.greaterThan(item.price_delta || '0', '0')
+                          ? `${item.name} (+${MoneyUtil.formatCurrency(item.price_delta)} IRR)`
+                          : item.name
+                      }
                       sx={{ display: 'block', mb: 0.5 }}
                     />
                   ))}
@@ -2763,7 +2775,7 @@ export function PosOrderPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOptionDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setOptionDialogOpen(false)}>{t('pos.options.cancel')}</Button>
           {unfilledSlot && (
             <Typography variant="caption" color="warning.main" sx={{ mr: 'auto', ml: 2 }}>
               {t('pos.comboChooseSlot', { slot: unfilledSlot.name })}
@@ -2775,7 +2787,7 @@ export function PosOrderPage() {
             disabled={!!unfilledSlot}
             sx={{ fontWeight: 'bold', px: 3 }}
           >
-            Add to Cart
+            {t('pos.options.addToCart')}
           </Button>
         </DialogActions>
       </Dialog>

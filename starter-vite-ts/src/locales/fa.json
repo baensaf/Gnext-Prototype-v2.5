@@ -191,6 +191,14 @@
     "scopeChain": "همه شعب"
   },
   "pos": {
+    "options": {
+      "title": "انتخاب‌های {{name}}",
+      "variant": "انتخاب اندازه",
+      "addOns": "افزودنی‌ها و تغییرات",
+      "required": "الزامی",
+      "cancel": "انصراف",
+      "addToCart": "افزودن به سبد"
+    },
     "title": "صندوق فروش POS",
     "activeCart": "سبد خرید فعال",
     "itemsCount": "قلم",
@@ -947,7 +955,7 @@
     "refresh": "تازه‌سازی",
     "tabs": {
       "overview": "نمای کلی سفیران تسویه‌نشده",
-      "batches": "دسته‌های تسویه‌حساب (نسخه ۵) ({{count}})"
+      "batches": "دسته‌های تسویه‌حساب ({{count}})"
     },
     "statuses": {
       "draft": "پیش‌نویس",

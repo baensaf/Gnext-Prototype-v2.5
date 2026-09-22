@@ -191,6 +191,14 @@
     "scopeChain": "All branches"
   },
   "pos": {
+    "options": {
+      "title": "Configure {{name}}",
+      "variant": "Choose a size",
+      "addOns": "Add-ons and changes",
+      "required": "required",
+      "cancel": "Cancel",
+      "addToCart": "Add to cart"
+    },
     "title": "POS Register",
     "activeCart": "Active Cart",
     "itemsCount": "items",
@@ -947,7 +955,7 @@
     "refresh": "Refresh",
     "tabs": {
       "overview": "Unsettled Couriers Overview",
-      "batches": "Settlement Batches (V5) ({{count}})"
+      "batches": "Settlement Batches ({{count}})"
     },
     "statuses": {
       "draft": "DRAFT",

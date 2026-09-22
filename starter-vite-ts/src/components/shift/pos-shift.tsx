@@ -8,7 +8,7 @@ import LockOpenIcon from '@mui/icons-material/LockOpen';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import { Card, Chip, Paper, Stack, Button, Typography, CircularProgress } from '@mui/material';
 
-import { fTime } from 'src/utils/format-time';
+import { fTime, fDateTime } from 'src/utils/format-time';
 
 import { RegisterNotice } from './register-notice';
 import { OpenShiftDialog } from './open-shift-dialog';
@@ -30,6 +30,8 @@ export function PosShiftBar({ register }: { register: RegisterShiftState }) {
 
   if (!terminal || !shift) return null;
 
+  const openedEarlier = !!shift.opened_at && new Date(shift.opened_at).toDateString() !== new Date().toDateString();
+
   return (
     <>
       <Paper
@@ -49,9 +51,15 @@ export function PosShiftBar({ register }: { register: RegisterShiftState }) {
             </span>
           }
         />
-        <Typography variant="caption" color="text.secondary">
+        {/* A shift left open from an earlier day shows its date, and stands out: "since 19:23"
+            read as this evening when the drawer had been open for six days. */}
+        <Typography
+          variant="caption"
+          color={openedEarlier ? 'warning.main' : 'text.secondary'}
+          sx={openedEarlier ? { fontWeight: 700 } : undefined}
+        >
           {t('shift.bar.since', 'Open since {{time}}', {
-            time: fTime(shift.opened_at),
+            time: openedEarlier ? fDateTime(shift.opened_at) : fTime(shift.opened_at),
           })}
         </Typography>
         <Button
