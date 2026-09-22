@@ -58,7 +58,7 @@ export class PaymentController {
     // failure here is logged rather than reported as a failed payment.
     if (payment.status === 'SUCCEEDED') {
       try {
-        await this.orderService.completeWhenPaidInFull(tenantId, payment.order_id, userId, correlationId);
+        await this.orderService.afterPaymentSucceeded(tenantId, payment.order_id, userId, correlationId);
       } catch (err) {
         this.logger.error(`Could not complete order ${payment.order_id} after payment: ${(err as Error)?.message}`);
       }

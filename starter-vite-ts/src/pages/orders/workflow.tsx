@@ -90,6 +90,8 @@ const OPEN_STATUSES = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'KITCHEN_PREPARING
 
 type Lifecycle = 'WAITING' | 'OPEN' | 'COMPLETED' | 'CANCELLED' | 'OTHER';
 
+type ReprintDocumentType = 'CUSTOMER_RECEIPT' | 'KITCHEN_TICKET' | 'GUEST_BILL' | 'COURIER_SLIP';
+
 const lifecycleOf = (status: string): Lifecycle => {
   if (status === 'PENDING_ACCEPTANCE') return 'WAITING';
   if (OPEN_STATUSES.includes(status)) return 'OPEN';
@@ -154,7 +156,7 @@ export function OrdersWorkflowPage() {
 
   // Prototype reprint workflow
   const [reprintDialogOpen, setReprintDialogOpen] = useState(false);
-  const [reprintDocumentType, setReprintDocumentType] = useState<'CUSTOMER_RECEIPT' | 'KITCHEN_TICKET'>('CUSTOMER_RECEIPT');
+  const [reprintDocumentType, setReprintDocumentType] = useState<ReprintDocumentType>('CUSTOMER_RECEIPT');
   const [reprintReason, setReprintReason] = useState('');
   const [reprintError, setReprintError] = useState<string | null>(null);
   const [reprintSubmitting, setReprintSubmitting] = useState(false);
@@ -509,9 +511,12 @@ export function OrdersWorkflowPage() {
         throw new Error(t('orders.reprintDialog.failed'));
       }
 
-      const documentLabel = reprintDocumentType === 'KITCHEN_TICKET'
-        ? t('orders.reprintDialog.kitchenTicket')
-        : t('orders.reprintDialog.customerReceipt');
+      const documentLabel = {
+        KITCHEN_TICKET: t('orders.reprintDialog.kitchenTicket'),
+        CUSTOMER_RECEIPT: t('orders.reprintDialog.customerReceipt'),
+        GUEST_BILL: t('orders.reprintDialog.guestBill'),
+        COURIER_SLIP: t('orders.reprintDialog.courierSlip'),
+      }[reprintDocumentType];
       setSuccess(t('orders.reprintDialog.success', {
         document: documentLabel,
         orderNumber: selectedOrder.order_number,
@@ -1201,7 +1206,7 @@ export function OrdersWorkflowPage() {
               <InputLabel>{t('orders.reprintDialog.documentType')}</InputLabel>
               <Select
                 label={t('orders.reprintDialog.documentType')}
-                onChange={(e) => setReprintDocumentType(e.target.value as 'CUSTOMER_RECEIPT' | 'KITCHEN_TICKET')}
+                onChange={(e) => setReprintDocumentType(e.target.value as ReprintDocumentType)}
                 value={reprintDocumentType}
               >
                 <MenuItem value="CUSTOMER_RECEIPT">
@@ -1210,6 +1215,14 @@ export function OrdersWorkflowPage() {
                 <MenuItem value="KITCHEN_TICKET">
                   {t('orders.reprintDialog.kitchenTicket')}
                 </MenuItem>
+                <MenuItem value="GUEST_BILL">
+                  {t('orders.reprintDialog.guestBill')}
+                </MenuItem>
+                {selectedOrder?.order_type === 'DELIVERY' && (
+                  <MenuItem value="COURIER_SLIP">
+                    {t('orders.reprintDialog.courierSlip')}
+                  </MenuItem>
+                )}
               </Select>
             </FormControl>
 

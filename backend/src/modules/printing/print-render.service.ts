@@ -4,10 +4,19 @@ import { CalendarSystem, formatBusinessDateTime } from '../../common/utils/calen
 export interface RenderDocOptions {
   documentType: 'CUSTOMER_RECEIPT' | 'KITCHEN_TICKET' | 'COURIER_SLIP' | 'GUEST_BILL' | string;
   orderNumber: string;
+  /** The chain's name, printed as the heading of customer documents. */
+  brandName?: string;
   branchName?: string;
+  branchAddress?: string;
+  branchPhone?: string;
   orderType?: string;
+  /** POS, KIOSK, AGGREGATOR...: where the order came from, when that matters to staff. */
+  channel?: string;
   tableNumber?: string;
   customerName?: string;
+  customerMobile?: string;
+  deliveryAddress?: string;
+  orderNotes?: string;
   placedAt?: Date | string;
   /** The calendar the date prints in, on the business clock. Jalali unless given. */
   calendar?: CalendarSystem;
@@ -20,6 +29,8 @@ export interface RenderDocOptions {
    */
   kitchenChange?: 'AMENDED' | 'CANCELLED';
   changeReason?: string;
+  /** A second copy of something already printed. Marked, so nobody cooks or charges it twice. */
+  isReprint?: boolean;
   items: Array<{
     product_name: string;
     quantity: number | string;
@@ -32,101 +43,275 @@ export interface RenderDocOptions {
   subtotal?: string;
   discountTotal?: string;
   taxTotal?: string;
+  deliveryFee?: string;
+  packagingTotal?: string;
   grandTotal?: string;
+  paidTotal?: string;
+  outstandingTotal?: string;
   payments?: Array<{ method: string; amount: string }>;
 }
 
+/** Where a reprinted job's marker goes. A job reprinted as-is swaps it for the marker. */
+export const REPRINT_SLOT = '<!--gnext:reprint-->';
+
+const REPRINT_MARK = '<div class="box">چاپ مجدد — نسخه تکراری</div>';
+
+/** A stored job reprinted as it was, marked as a copy where the original left room for it. */
+export function markAsReprint(html: string): string {
+  return html && html.includes(REPRINT_SLOT) ? html.replace(REPRINT_SLOT, REPRINT_MARK) : html;
+}
+
+const ORDER_TYPES: Record<string, string> = {
+  DINE_IN: 'سالن',
+  TAKEAWAY: 'بیرون‌بر',
+  DELIVERY: 'ارسال با پیک',
+  AGGREGATOR: 'سفارش آنلاین',
+};
+
+const CHANNELS: Record<string, string> = {
+  KIOSK: 'کیوسک',
+  AGGREGATOR: 'اسنپ‌فود',
+  SNAPPFOOD: 'اسنپ‌فود',
+  ONLINE: 'سفارش آنلاین',
+};
+
+const PAYMENT_METHODS: Record<string, string> = {
+  CASH: 'نقد',
+  CARD: 'کارتخوان',
+  POS: 'کارتخوان',
+  CARD_POS: 'کارتخوان',
+  NETWORK_POS: 'کارتخوان',
+  MOBILE_POS: 'کارتخوان سیار',
+  CUSTOMER_CREDIT: 'اعتبار مشتری',
+  BANK_TRANSFER: 'کارت به کارت',
+  ONLINE: 'پرداخت آنلاین',
+};
+
+/**
+ * The paper a branch prints: receipts, guest bills and courier slips for customers and couriers,
+ * chits for the kitchen. Persian, right to left, laid out 300 CSS px wide, which the branch agent
+ * scales to the 80 mm roll (agent/internal/printing/render.go keeps the same width).
+ */
 @Injectable()
 export class PrintRenderService {
   renderDocument(opts: RenderDocOptions): string {
-    const titleMap: Record<string, string> = {
-      CUSTOMER_RECEIPT: 'CUSTOMER RECEIPT',
-      KITCHEN_TICKET: 'KITCHEN DISPATCH CHIT',
-      COURIER_SLIP: 'COURIER DELIVERY SLIP',
-      GUEST_BILL: 'DINE-IN GUEST BILL',
-    };
-
-    const changeTitleMap: Record<string, string> = {
-      AMENDED: 'KITCHEN CHANGE - ORDER AMENDED',
-      CANCELLED: '*** ORDER CANCELLED - STOP ***',
-    };
-
-    const docTitle =
-      (opts.kitchenChange && changeTitleMap[opts.kitchenChange]) || titleMap[opts.documentType] || opts.documentType;
-    const dateStr = formatBusinessDateTime(opts.placedAt || new Date(), opts.calendar);
-
-    const changeMarker = (change?: 'VOID' | 'ADD') =>
-      change === 'VOID' ? '<strong>VOID</strong> ' : change === 'ADD' ? '<strong>ADD</strong> ' : '';
-
-    const itemsHtml = opts.items
-      .map(
-        (item) => `
-        <tr>
-          <td style="padding: 4px 0; border-bottom: 1px dashed #eee;">
-            ${changeMarker(item.change)}<span${item.change === 'VOID' ? ' style="text-decoration: line-through;"' : ''}><strong>${item.quantity}x</strong> ${this.escapeHtml(item.product_name)}</span>
-            ${item.options_summary ? `<br/><small style="color: #666;">+ ${this.escapeHtml(item.options_summary)}</small>` : ''}
-            ${item.special_instructions ? `<br/><small style="color: #d32f2f;">* ${this.escapeHtml(item.special_instructions)}</small>` : ''}
-          </td>
-          ${opts.documentType !== 'KITCHEN_TICKET' ? `<td style="padding: 4px 0; text-align: right; border-bottom: 1px dashed #eee;">${item.total_price || item.unit_price || ''}</td>` : ''}
-        </tr>
-      `,
-      )
-      .join('');
-
-    const totalsHtml =
-      opts.documentType !== 'KITCHEN_TICKET'
-        ? `
-        <div style="margin-top: 12px; border-top: 1px solid #000; padding-top: 8px;">
-          ${opts.subtotal ? `<div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>${opts.subtotal}</span></div>` : ''}
-          ${opts.discountTotal ? `<div style="display: flex; justify-content: space-between; color: #d32f2f;"><span>Discount:</span><span>-${opts.discountTotal}</span></div>` : ''}
-          ${opts.taxTotal ? `<div style="display: flex; justify-content: space-between;"><span>Tax:</span><span>${opts.taxTotal}</span></div>` : ''}
-          ${opts.grandTotal ? `<div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; margin-top: 4px;"><span>GRAND TOTAL:</span><span>${opts.grandTotal}</span></div>` : ''}
-        </div>
-      `
-        : '';
-
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8"/>
-        <style>
-          body { font-family: 'Courier New', Courier, monospace; width: 300px; margin: 0 auto; padding: 16px; background: #fff; color: #000; font-size: 13px; }
-          .banner { background: #fff3cd; color: #856404; border: 1px dashed #ffeeba; text-align: center; font-weight: bold; font-size: 11px; padding: 4px; margin-bottom: 12px; }
-          .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px; }
-          .title { font-weight: bold; font-size: 15px; margin: 4px 0; }
-          .info { font-size: 12px; margin-bottom: 8px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-          .footer { text-align: center; margin-top: 16px; border-top: 1px solid #000; padding-top: 8px; font-size: 11px; color: #555; }
-        </style>
-      </head>
-      <body>
-        <div class="banner">*** SIMULATED HARDWARE OUTPUT ***</div>
-        <div class="header">
-          <div style="font-weight: bold; font-size: 16px;">${this.escapeHtml(opts.branchName || 'MAIN BRANCH')}</div>
-          <div class="title">${docTitle}</div>
-          ${opts.stationLabel ? `<div class="title">&gt;&gt; ${this.escapeHtml(opts.stationLabel)} &lt;&lt;</div>` : ''}
-        </div>
-        <div class="info">
-          <div><strong>ORDER #:</strong> ${this.escapeHtml(opts.orderNumber)}</div>
-          <div><strong>DATE:</strong> ${dateStr}</div>
-          ${opts.orderType ? `<div><strong>TYPE:</strong> ${opts.orderType} ${opts.tableNumber ? `(Table ${opts.tableNumber})` : ''}</div>` : ''}
-          ${opts.customerName ? `<div><strong>CUSTOMER:</strong> ${this.escapeHtml(opts.customerName)}</div>` : ''}
-          ${opts.changeReason ? `<div><strong>REASON:</strong> ${this.escapeHtml(opts.changeReason)}</div>` : ''}
-        </div>
-        <table>
-          ${itemsHtml}
-        </table>
-        ${totalsHtml}
-        <div class="footer">
-          <div>Gnext Prototype v2 Simulated Thermal Print</div>
-        </div>
-      </body>
-      </html>
-    `;
+    const body = opts.documentType === 'KITCHEN_TICKET' ? this.kitchenChit(opts) : this.customerDocument(opts);
+    return `<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+<meta charset="utf-8"/>
+<style>
+  * { box-sizing: border-box; }
+  /* 300 px plus the padding is the 332 px the agent scales to the roll's width. */
+  body { box-sizing: content-box; font-family: Tahoma, 'Segoe UI', Arial, sans-serif; width: 300px; margin: 0 auto; padding: 16px; background: #fff; color: #000; font-size: 13px; line-height: 1.55; }
+  .c { text-align: center; }
+  .brand { font-size: 20px; font-weight: bold; }
+  .small { font-size: 11px; }
+  .title { font-size: 15px; font-weight: bold; margin: 6px 0 2px; }
+  .big { font-size: 30px; font-weight: bold; line-height: 1.2; }
+  .box { border: 2px solid #000; padding: 4px; margin: 6px 0; text-align: center; font-weight: bold; font-size: 15px; }
+  .inv { background: #000; color: #fff; padding: 6px 4px; margin: 6px 0; text-align: center; font-weight: bold; font-size: 20px; }
+  hr { border: 0; border-top: 1px dashed #000; margin: 8px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 3px 0; vertical-align: top; }
+  .num { text-align: left; white-space: nowrap; padding-right: 6px; }
+  .ltr { direction: ltr; unicode-bidi: embed; }
+  .row { display: flex; justify-content: space-between; gap: 8px; }
+  .total { font-size: 17px; font-weight: bold; }
+  .sub { font-size: 12px; padding-right: 10px; }
+  .note { font-weight: bold; border: 1px solid #000; padding: 2px 4px; margin-top: 2px; display: inline-block; }
+  .item { font-size: 18px; font-weight: bold; }
+  .void { text-decoration: line-through; }
+  .tag { font-size: 12px; font-weight: bold; border: 1px solid #000; padding: 0 3px; margin-left: 4px; }
+</style>
+</head>
+<body>
+${body}
+</body>
+</html>`;
   }
 
-  private escapeHtml(str: string): string {
+  // --- kitchen ------------------------------------------------------------------------------
+
+  private kitchenChit(o: RenderDocOptions): string {
+    const change =
+      o.kitchenChange === 'CANCELLED'
+        ? '<div class="inv">لغو سفارش — آماده نکنید</div>'
+        : o.kitchenChange === 'AMENDED'
+          ? '<div class="inv">تغییر سفارش</div>'
+          : '';
+    const station = o.stationLabel ? `<div class="inv">${this.fa(this.esc(o.stationLabel))}</div>` : '';
+
+    const lines = o.items
+      .map((item) => {
+        const tag = item.change === 'VOID' ? '<span class="tag">حذف</span>' : item.change === 'ADD' ? '<span class="tag">اضافه</span>' : '';
+        return `<tr><td>
+  <div class="item">${tag}<span${item.change === 'VOID' ? ' class="void"' : ''}>${this.fa(this.qty(item.quantity))} × ${this.esc(item.product_name)}</span></div>
+  ${item.options_summary ? `<div class="sub">+ ${this.esc(item.options_summary)}</div>` : ''}
+  ${item.special_instructions ? `<div class="note">* ${this.esc(item.special_instructions)}</div>` : ''}
+</td></tr>`;
+      })
+      .join('<tr><td><hr/></td></tr>');
+
+    return `${o.isReprint ? REPRINT_MARK : REPRINT_SLOT}
+${change}
+${station}
+<div class="c">
+  <div class="small">شماره سفارش</div>
+  <div class="big">${this.fa(this.shortNumber(o.orderNumber))}</div>
+  <div class="title">${this.orderTypeLine(o)}</div>
+  <div>${this.date(o)}</div>
+</div>
+${o.changeReason ? `<div class="box">علت: ${this.esc(o.changeReason)}</div>` : ''}
+<hr/>
+<table>${lines}</table>
+${o.orderNotes ? `<hr/><div class="note">توضیحات سفارش: ${this.esc(o.orderNotes)}</div>` : ''}
+<hr/>
+<div class="c small ltr">${this.esc(o.orderNumber)}</div>`;
+  }
+
+  // --- receipt, guest bill, courier slip ------------------------------------------------------
+
+  private customerDocument(o: RenderDocOptions): string {
+    const isSlip = o.documentType === 'COURIER_SLIP';
+    const title =
+      o.documentType === 'GUEST_BILL' ? 'صورتحساب' : isSlip ? 'برگه پیک' : o.documentType === 'CUSTOMER_RECEIPT' ? 'فاکتور فروش' : o.documentType;
+
+    const outstanding = this.money(o.outstandingTotal);
+    const paidInFull = o.outstandingTotal !== undefined && outstanding <= 0n;
+
+    const lines = o.items
+      .map((item) => {
+        const unit = item.unit_price !== undefined && item.unit_price !== null && item.unit_price !== '' ? this.rial(item.unit_price) : '';
+        const lineTotal = this.rial(item.total_price ?? item.unit_price ?? '');
+        if (isSlip) {
+          // The courier checks the bag, not the prices.
+          return `<tr><td>${this.fa(this.qty(item.quantity))} × ${this.esc(item.product_name)}</td></tr>`;
+        }
+        return `<tr>
+  <td>${this.esc(item.product_name)}
+    <div class="small">${this.fa(this.qty(item.quantity))} × ${unit}</div>
+    ${item.options_summary ? `<div class="sub">+ ${this.esc(item.options_summary)}</div>` : ''}
+    ${item.special_instructions ? `<div class="sub">* ${this.esc(item.special_instructions)}</div>` : ''}
+  </td>
+  <td class="num">${lineTotal}</td>
+</tr>`;
+      })
+      .join('');
+
+    const row = (label: string, value?: string, cls = '') =>
+      value !== undefined && value !== '' ? `<div class="row ${cls}"><span>${label}</span><span>${value}</span></div>` : '';
+    const positive = (v?: string) => (this.money(v) > 0n ? this.rial(v!) : undefined);
+
+    const totals = isSlip
+      ? ''
+      : `<hr/>
+${row('جمع اقلام', o.subtotal !== undefined ? this.rial(o.subtotal) : undefined)}
+${positive(o.discountTotal) ? row('تخفیف', `${positive(o.discountTotal)}-`) : ''}
+${row('بسته‌بندی', positive(o.packagingTotal))}
+${row('هزینه ارسال', positive(o.deliveryFee))}
+${row('مالیات بر ارزش افزوده', positive(o.taxTotal))}
+${row('مبلغ قابل پرداخت', o.grandTotal !== undefined ? `${this.rial(o.grandTotal)} ریال` : undefined, 'total')}`;
+
+    const payments = (o.payments || []).length
+      ? `<hr/>${(o.payments || []).map((p) => row(PAYMENT_METHODS[p.method] || p.method, this.rial(p.amount))).join('')}`
+      : '';
+
+    let status = '';
+    if (o.outstandingTotal !== undefined) {
+      if (isSlip) {
+        status = paidInFull
+          ? '<div class="box">پرداخت شده — وجهی دریافت نشود</div>'
+          : `<div class="inv">دریافت از مشتری: ${this.rial(o.outstandingTotal)} ریال</div>`;
+      } else if (o.documentType === 'CUSTOMER_RECEIPT') {
+        status = paidInFull ? '<div class="box">پرداخت شد</div>' : `<div class="box">پرداخت نشده — مانده ${this.rial(o.outstandingTotal)} ریال</div>`;
+      } else if (!paidInFull) {
+        status = `<div class="box">مانده قابل پرداخت: ${this.rial(o.outstandingTotal)} ریال</div>`;
+      }
+    }
+
+    const customer = [
+      row('مشتری', o.customerName ? this.esc(o.customerName) : undefined),
+      row('تلفن', o.customerMobile ? `<span class="ltr">${this.fa(this.esc(o.customerMobile))}</span>` : undefined),
+    ].join('');
+    const address = o.deliveryAddress ? `<div class="${isSlip ? 'box' : ''}">نشانی: ${this.esc(o.deliveryAddress)}</div>` : '';
+
+    return `<div class="c">
+  <div class="brand">${this.esc(o.brandName || o.branchName || '')}</div>
+  ${o.brandName && o.branchName ? `<div>${this.esc(o.branchName)}</div>` : ''}
+  ${o.branchAddress ? `<div class="small">${this.esc(o.branchAddress)}</div>` : ''}
+  ${o.branchPhone ? `<div class="small">تلفن: <span class="ltr">${this.fa(this.esc(o.branchPhone))}</span></div>` : ''}
+</div>
+<hr/>
+${o.isReprint ? REPRINT_MARK : REPRINT_SLOT}
+<div class="c">
+  <div class="title">${title}</div>
+  <div class="small">شماره سفارش</div>
+  <div class="big">${this.fa(this.shortNumber(o.orderNumber))}</div>
+  <div>${this.orderTypeLine(o)}</div>
+</div>
+${row('تاریخ', this.date(o))}
+${row('سفارش', `<span class="ltr">${this.esc(o.orderNumber)}</span>`)}
+${customer}
+${address}
+<hr/>
+<table>${lines}</table>
+${totals}
+${payments}
+${status}
+${o.orderNotes ? `<div class="sub">توضیحات: ${this.esc(o.orderNotes)}</div>` : ''}
+<hr/>
+<div class="c small">${isSlip ? 'نسخه پیک' : 'از خرید شما سپاسگزاریم'}</div>`;
+  }
+
+  // --- helpers --------------------------------------------------------------------------------
+
+  private orderTypeLine(o: RenderDocOptions): string {
+    const parts = [ORDER_TYPES[o.orderType || ''] || o.orderType || ''];
+    if (o.tableNumber) parts.push(`میز ${this.esc(o.tableNumber)}`);
+    const channel = CHANNELS[o.channel || ''];
+    if (channel && channel !== parts[0]) parts.push(channel);
+    return this.fa(parts.filter(Boolean).join(' — '));
+  }
+
+  private date(o: RenderDocOptions): string {
+    return formatBusinessDateTime(o.placedAt || new Date(), o.calendar, true);
+  }
+
+  /** The part of the order number people call out: ORD-20260922-0012 is order 12. */
+  private shortNumber(orderNumber: string): string {
+    const tail = String(orderNumber || '').split('-').pop() || '';
+    const trimmed = tail.replace(/^0+(?=\d)/, '');
+    return /^\d+$/.test(trimmed) ? trimmed : this.esc(orderNumber);
+  }
+
+  private qty(q: number | string): string {
+    const n = Number(q);
+    return Number.isFinite(n) ? String(n) : this.esc(String(q));
+  }
+
+  /** Whole rials. Amounts arrive as numeric strings such as "42292000.0000". */
+  private money(value?: string | number | null): bigint {
+    const s = String(value ?? '').trim();
+    const m = /^(-?)(\d+)/.exec(s);
+    if (!m) return 0n;
+    const n = BigInt(m[2]);
+    return m[1] ? -n : n;
+  }
+
+  private rial(value: string | number): string {
+    const n = this.money(value as any);
+    const neg = n < 0n;
+    const grouped = (neg ? -n : n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '٬');
+    return this.fa(`${neg ? '-' : ''}${grouped}`);
+  }
+
+  /** Persian digits for what is read on paper. */
+  private fa(s: string): string {
+    return s.replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+  }
+
+  private esc(str: string): string {
     if (!str) return '';
     return String(str)
       .replace(/&/g, '&amp;')

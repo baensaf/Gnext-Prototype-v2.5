@@ -292,7 +292,9 @@
       "resumed": "{{name}} is back on sale",
       "failed": "Could not change this item"
     },
-    "quickTags": "Quick Tags"
+    "quickTags": "Quick Tags",
+    "receiptSent": "Receipt sent to the counter printer",
+    "receiptFailed": "The receipt could not be sent to a printer"
   },
   "kiosk": {
     "title": "SELF-SERVICE KIOSK",
@@ -456,7 +458,7 @@
     },
     "reprintDialog": {
       "title": "Reprint order {{orderNumber}}",
-      "description": "Choose the document to print again. The request will be recorded in the simulated print queue.",
+      "description": "Choose the document to print again. It goes to the printer its print route names, marked as a copy.",
       "documentType": "Document type",
       "customerReceipt": "Customer receipt",
       "kitchenTicket": "Kitchen ticket",
@@ -466,7 +468,9 @@
       "confirm": "Queue reprint",
       "reasonRequired": "Enter a reason for this reprint",
       "success": "{{document}} for order {{orderNumber}} was added to the print queue.",
-      "failed": "Failed to queue the reprint"
+      "failed": "Failed to queue the reprint",
+      "guestBill": "Guest bill",
+      "courierSlip": "Courier slip"
     },
     "receiptModal": {
       "title": "Receipt #{{orderNumber}}",
@@ -3136,7 +3140,27 @@
     "noJobsFound": "No print jobs found in queue",
     "printer": "Printer",
     "reprintElsewhere": "Reprint on another printer",
-    "reprintElsewhereHelp": "Sends this document to a printer you choose instead of the one it was routed to. Use it when the usual printer is out of service."
+    "reprintElsewhereHelp": "Sends this document to a printer you choose instead of the one it was routed to. Use it when the usual printer is out of service.",
+    "subtitle": "Every document the branch printed or tried to print. Retry a failed job once its printer is fixed, or reprint it on another printer.",
+    "columnOrder": "Order",
+    "viaAgent": "Real printer",
+    "simulated": "Simulated",
+    "docTypes": {
+      "CUSTOMER_RECEIPT": "Customer receipt",
+      "KITCHEN_TICKET": "Kitchen ticket",
+      "COURIER_SLIP": "Courier slip",
+      "GUEST_BILL": "Guest bill"
+    },
+    "statuses": {
+      "QUEUED": "Queued",
+      "PROCESSING": "Printing",
+      "SUCCESS": "Printed",
+      "FAILED": "Failed"
+    },
+    "original": "Original",
+    "retryJob": "Retry on the same printer",
+    "previewJob": "Preview",
+    "lastError": "Last error"
   },
   "monitoring": {
     "title": "Operational Monitoring & Health",
@@ -3274,7 +3298,7 @@
     "printers": {
       "title": "Printers & Print Routing",
       "subtitle": "Manage network receipt printers, kitchen ticket routing groups, and print document rules",
-      "v5PreviewBanner": "V5 Preview Module: Advanced ESC/POS printer device hardware models, station group matrix routing & fallback chains. Retained for V5 hardware integration testing.",
+      "v5PreviewBanner": "Printers with a network connection print for real through this branch's agent. Printers without one are simulated: their jobs are marked printed and nothing comes out.",
       "branchFilter": "Branch Context",
       "allBranches": "All Branches",
       "quickLinks": {

@@ -181,10 +181,15 @@ func address(p protocol.Printer) string {
 	return net.JoinHostPort(p.Connection.Host, strconv.Itoa(p.Connection.TCPPort()))
 }
 
+// dialTimeout bounds connecting to a printer. A LAN printer answers at once; one that is off
+// or unplugged otherwise holds each ticket for Windows' ~21 s of SYN retries, so a split
+// order to a dead kitchen printer took over a minute to report its first failed chit.
+const dialTimeout = 5 * time.Second
+
 func (pr *Printer) dial(ctx context.Context, addr string) (net.Conn, error) {
 	dial := pr.Dial
 	if dial == nil {
-		dial = (&net.Dialer{}).DialContext
+		dial = (&net.Dialer{Timeout: dialTimeout}).DialContext
 	}
 	return dial(ctx, "tcp", addr)
 }

@@ -89,6 +89,10 @@ export interface PrintJob {
   is_reprint: boolean;
   reason?: string;
   created_at: string;
+  /** Listing only: the order the job printed, the printer's name, and whether it is a real one. */
+  order_number?: string | null;
+  printer_name?: string | null;
+  via_agent?: boolean;
   attempts?: Array<{
     id: string;
     attempt_no: number;

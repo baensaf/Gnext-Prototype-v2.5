@@ -115,6 +115,8 @@ export class PrintersController {
     if (!printer) throw new NotFoundException('Printer not found');
 
     await this.printerRepo.softDelete({ id });
+    // A retired printer leaves its groups, so they no longer list a device that is gone.
+    await this.memberRepo.delete({ printer_id: id });
     await this.pushConfig(tenantId, printer.branch_id);
     return { success: true };
   }

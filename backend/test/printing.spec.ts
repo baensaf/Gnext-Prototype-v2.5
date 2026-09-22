@@ -180,20 +180,46 @@ describe('PrintingModule (Unit & Integration)', () => {
 
   // --- rendering ------------------------------------------------------------------------
 
-  it('should render document with SIMULATED banner and escaped HTML', () => {
+  it('renders a Persian receipt a customer can read, with escaped HTML', () => {
     const html = renderService.renderDocument({
       documentType: 'CUSTOMER_RECEIPT',
-      orderNumber: 'ORD-101',
+      orderNumber: 'ORD-20260922-0012',
+      brandName: 'Iran Burger',
       branchName: 'Main Branch <Script>',
-      items: [{ product_name: 'Burger & Fries', quantity: 2, total_price: '30.00' }],
-      grandTotal: '30.00',
+      items: [{ product_name: 'Burger & Fries', quantity: 2, unit_price: '15000000.0000', total_price: '30000000.0000' }],
+      grandTotal: '30000000.0000',
+      outstandingTotal: '0.0000',
+      payments: [{ method: 'CASH', amount: '30000000.0000' }],
     });
 
-    expect(html).toContain('SIMULATED HARDWARE OUTPUT');
-    expect(html).toContain('CUSTOMER RECEIPT');
-    expect(html).toContain('ORD-101');
+    expect(html).not.toContain('SIMULATED');
+    expect(html).toContain('dir="rtl"');
+    expect(html).toContain('فاکتور فروش');
+    expect(html).toContain('ORD-20260922-0012');
+    // Called out as order 12, amounts grouped in Persian digits, and paid.
+    expect(html).toContain('<div class="big">۱۲</div>');
+    expect(html).toContain('۳۰٬۰۰۰٬۰۰۰');
+    expect(html).toContain('نقد');
+    expect(html).toContain('پرداخت شد');
     expect(html).toContain('Burger &amp; Fries');
     expect(html).not.toContain('<Script>');
+  });
+
+  it('says what is still owed on a courier slip', () => {
+    const html = renderService.renderDocument({
+      documentType: 'COURIER_SLIP',
+      orderNumber: 'ORD-20260922-0013',
+      customerName: 'Sara',
+      customerMobile: '09120000000',
+      deliveryAddress: 'Vanak Sq.',
+      items: [{ product_name: 'Burger', quantity: 1 }],
+      grandTotal: '1000000.0000',
+      outstandingTotal: '1000000.0000',
+    });
+
+    expect(html).toContain('برگه پیک');
+    expect(html).toContain('Vanak Sq.');
+    expect(html).toContain('دریافت از مشتری: ۱٬۰۰۰٬۰۰۰ ریال');
   });
 
   // --- route matching -------------------------------------------------------------------
@@ -304,7 +330,7 @@ describe('PrintingModule (Unit & Integration)', () => {
       const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
 
       expect(jobs.map((j) => j.label)).toEqual(['Grill (1/3)', 'Fryer (2/3)', 'Bar (3/3)']);
-      expect(jobsFor(jobs, 'prn-grill')[0].rendered_html).toContain('&gt;&gt; Grill (1/3) &lt;&lt;');
+      expect(jobsFor(jobs, 'prn-grill')[0].rendered_html).toContain('<div class="inv">Grill (۱/۳)</div>');
       expect(jobsFor(jobs, 'prn-grill')[0].printer_group_id).toBe('grp-grill');
       expect(jobs.every((j) => j.status === 'SUCCESS')).toBe(true);
       expect(attemptRepo.rows).toHaveLength(3);
@@ -370,7 +396,12 @@ describe('PrintingModule (Unit & Integration)', () => {
       expect(reprint.is_reprint).toBe(true);
       expect(reprint.printer_id).toBe('prn-grill');
       expect(reprint.label).toBe('Grill (1/3)');
-      expect(reprint.rendered_html).toBe(grill.rendered_html);
+      // The same chit, marked as a copy so the grill does not cook it twice.
+      expect(grill.rendered_html).not.toContain('چاپ مجدد');
+      expect(reprint.rendered_html).toContain('چاپ مجدد — نسخه تکراری');
+      expect(reprint.rendered_html.replace(/<div class="box">چاپ مجدد — نسخه تکراری<\/div>/, '')).toBe(
+        grill.rendered_html.replace('<!--gnext:reprint-->', ''),
+      );
       expect(reprint.status).toBe('SUCCESS');
       expect(auditWriter.write).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'PRINT_JOB_REPRINTED', entityId: reprint.id }),
@@ -389,7 +420,8 @@ describe('PrintingModule (Unit & Integration)', () => {
 
         expect(reprint.printer_id).toBe('prn-counter');
         expect(reprint.is_reprint).toBe(true);
-        expect(reprint.rendered_html).toBe(grill.rendered_html);
+        expect(reprint.rendered_html).toContain('Classic Burger');
+        expect(reprint.rendered_html).toContain('چاپ مجدد');
         expect(reprint.reason).toContain('prn-counter');
       });
 
@@ -441,6 +473,34 @@ describe('PrintingModule (Unit & Integration)', () => {
 
     expect(outcomeRes.attempt.status).toBe('FAILED');
     expect(outcomeRes.attempt.printer_id).toBe('prn-backup');
+  });
+
+  describe('a real printer behind the branch agent', () => {
+    beforeEach(() => {
+      order('ord-400', [line('l-1', 'p-burger', 'Burger')]);
+      printer('prn-kitchen', { agent_connection: { kind: 'tcp', host: '192.168.1.83', port: 9100 }, fallback_printer_id: 'prn-counter' });
+      printer('prn-counter');
+    });
+
+    // Retry used to go to the fallback printer every time: a kitchen chit retried after the
+    // kitchen printer was fixed came out at the counter instead.
+    it('retries a failed job on its own printer', async () => {
+      const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-400', 'KITCHEN_TICKET');
+      expect(job.printer_id).toBe('prn-kitchen');
+      job.status = 'FAILED';
+
+      await queueService.retryJob(T, job.id, {});
+
+      expect(agentPrinting.send).toHaveBeenLastCalledWith(T, expect.objectContaining({ id: job.id }), expect.objectContaining({ id: 'prn-kitchen' }), expect.any(Number));
+    });
+
+    it('refuses to simulate the outcome of a job a real printer is handling', async () => {
+      const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-400', 'KITCHEN_TICKET');
+
+      await expect(queueService.processSimulationOutcome(T, { printJobId: job.id, outcome: 'SUCCESS' })).rejects.toThrow(
+        /cannot be simulated/,
+      );
+    });
   });
 
   // The 2026-09-16 audit found every print job in the demo still QUEUED with no printer and
@@ -521,10 +581,10 @@ describe('PrintingModule (Unit & Integration)', () => {
       const [grill] = jobsFor(jobs, 'prn-grill');
       const [fryer] = jobsFor(jobs, 'prn-fryer');
       expect(grill.document_type).toBe('KITCHEN_TICKET');
-      expect(grill.rendered_html).toContain('KITCHEN CHANGE - ORDER AMENDED');
-      expect(grill.rendered_html).toMatch(/VOID<\/strong> <span[^>]*line-through[^>]*><strong>1x<\/strong> Kebab Burger/);
+      expect(grill.rendered_html).toContain('تغییر سفارش');
+      expect(grill.rendered_html).toMatch(/حذف<\/span><span class="void">۱ × Kebab Burger/);
       expect(grill.rendered_html).not.toContain('Baklava');
-      expect(fryer.rendered_html).toMatch(/ADD<\/strong> <span><strong>1x<\/strong> Baklava Fries/);
+      expect(fryer.rendered_html).toMatch(/اضافه<\/span><span>۱ × Baklava Fries/);
       expect(jobs.some((j) => j.rendered_html.includes('Doogh'))).toBe(false);
       expect(jobsFor(jobs, 'prn-bar')).toHaveLength(0);
       expect(grill.rendered_html).toContain('Swapped main for dessert');
@@ -535,7 +595,7 @@ describe('PrintingModule (Unit & Integration)', () => {
       const jobs = await queueService.enqueueKitchenChangeTicket(T, 'ord-200', { kind: 'CANCELLED' });
 
       expect(jobs.map((j) => j.printer_id).sort()).toEqual(['prn-bar', 'prn-fryer', 'prn-grill']);
-      expect(jobs.every((j) => j.rendered_html.includes('ORDER CANCELLED - STOP'))).toBe(true);
+      expect(jobs.every((j) => j.rendered_html.includes('لغو سفارش — آماده نکنید'))).toBe(true);
       expect(jobsFor(jobs, 'prn-grill')[0].rendered_html).toContain('Cheeseburger');
       // Already struck off by an earlier edit, and already told to the kitchen then.
       expect(jobs.some((j) => j.rendered_html.includes('Kebab'))).toBe(false);
@@ -557,7 +617,7 @@ describe('PrintingModule (Unit & Integration)', () => {
 
       expect(jobs.some((j) => j.rendered_html.includes('Kebab'))).toBe(false);
       expect(jobsFor(jobs, 'prn-bar')[0].rendered_html).toContain('Doogh');
-      expect(jobs.every((j) => j.is_reprint && j.rendered_html.includes('KITCHEN DISPATCH CHIT'))).toBe(true);
+      expect(jobs.every((j) => j.is_reprint && j.rendered_html.includes('چاپ مجدد — نسخه تکراری'))).toBe(true);
     });
   });
 });

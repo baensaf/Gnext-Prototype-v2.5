@@ -543,7 +543,7 @@ export class AgentPaymentsService implements OnApplicationBootstrap, OnApplicati
 
   private async completeOrder(payment: Payment, actor: PaymentActor) {
     try {
-      await this.orderService.completeWhenPaidInFull(payment.tenant_id, payment.order_id, actor.userId ?? undefined, actor.correlationId ?? undefined);
+      await this.orderService.afterPaymentSucceeded(payment.tenant_id, payment.order_id, actor.userId ?? undefined, actor.correlationId ?? undefined);
     } catch (err: any) {
       this.logger.error(`Could not complete order ${payment.order_id} after card payment: ${err?.message || err}`);
     }

@@ -39,9 +39,15 @@ import { fDateTime } from 'src/utils/format-time';
 import { useLiveRefresh } from 'src/utils/use-live-refresh';
 
 import { kdsApi } from 'src/api/kdsApi';
+import { useScopedBranchId } from 'src/contexts/branch-context';
+
+const DOC_TYPES = ['CUSTOMER_RECEIPT', 'KITCHEN_TICKET', 'COURIER_SLIP', 'GUEST_BILL'];
+const STATUSES = ['QUEUED', 'PROCESSING', 'SUCCESS', 'FAILED'];
 
 export function PrintQueuePage() {
   const { t } = useTranslation();
+  // The header's branch: a cashier looking for a missing chit wants this branch's printers.
+  const [branchId] = useScopedBranchId();
   const [jobs, setJobs] = useState<PrintJob[]>([]);
   const [_total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -61,10 +67,14 @@ export function PrintQueuePage() {
   const [redirectPrinterId, setRedirectPrinterId] = useState('');
   const [printers, setPrinters] = useState<PrinterDevice[]>([]);
 
+  const docTypeLabel = (type: string) => t(`printQueue.docTypes.${type}`, type);
+  const statusLabel = (status: string) => t(`printQueue.statuses.${status}`, status);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const res = await kdsApi.getPrintJobs({
+        branchId: branchId || undefined,
         status: statusFilter || undefined,
         documentType: docTypeFilter || undefined,
       });
@@ -76,7 +86,7 @@ export function PrintQueuePage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, docTypeFilter]);
+  }, [branchId, statusFilter, docTypeFilter]);
 
   useEffect(() => {
     loadData();
@@ -101,7 +111,8 @@ export function PrintQueuePage() {
 
   const handleRetryJob = async (id: string) => {
     try {
-      await kdsApi.retryPrintJob(id, { useFallback: true });
+      // The same printer, now fixed. Sending it somewhere else is "reprint on another printer".
+      await kdsApi.retryPrintJob(id, { useFallback: false });
       loadData();
     } catch (err: any) {
       setError(err.detail || 'Failed to retry print job');
@@ -123,7 +134,7 @@ export function PrintQueuePage() {
     setRedirectJob(job);
     setRedirectPrinterId('');
     try {
-      const list = await kdsApi.getPrinters();
+      const list = await kdsApi.getPrinters(job.branch_id);
       // A printer that is out of service cannot rescue a job, so it is not offered.
       setPrinters(list.filter((p) => p.is_active));
     } catch (err: any) {
@@ -154,20 +165,16 @@ export function PrintQueuePage() {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Alert severity="info" variant="outlined" sx={{ mb: 3, borderRadius: 2, fontWeight: 500 }}>
-        {t('inventory.v5Banner', 'ماژول پیش‌نمایش نسخه ۵: مدیریت صف چاپ شبیه‌سازی‌شده و صدور مجدد فیش.')}
-      </Alert>
-
-      <Stack direction="row" sx={{ mb: 3, justifyContent: 'space-between', alignItems: 'center' }}>
+      <Stack direction="row" sx={{ mb: 3, justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
         <Box>
-          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-            <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-              {t('printQueue.title', 'Print Queue & History')}
-            </Typography>
-            <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
-          </Stack>
+          <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+            {t('printQueue.title', 'Print Queue & History')}
+          </Typography>
           <Typography variant="body2" color="text.secondary">
-            {t('nav.hardwareSimDesc', 'View generated print jobs, preview rendered HTML receipts, simulate printer hardware outcomes, and trigger reprints.')}
+            {t(
+              'printQueue.subtitle',
+              'Every document the branch printed or tried to print. Retry a failed job once its printer is fixed, or reprint it on another printer.'
+            )}
           </Typography>
         </Box>
 
@@ -185,10 +192,9 @@ export function PrintQueuePage() {
             <InputLabel>{t('printQueue.filterStatus', 'Status')}</InputLabel>
             <Select value={statusFilter} label={t('printQueue.filterStatus', 'Status')} onChange={(e) => setStatusFilter(e.target.value)}>
               <MenuItem value="">{t('printQueue.allStatuses', 'All Statuses')}</MenuItem>
-              <MenuItem value="QUEUED">QUEUED</MenuItem>
-              <MenuItem value="PROCESSING">PROCESSING</MenuItem>
-              <MenuItem value="SUCCESS">SUCCESS</MenuItem>
-              <MenuItem value="FAILED">FAILED</MenuItem>
+              {STATUSES.map((s) => (
+                <MenuItem key={s} value={s}>{statusLabel(s)}</MenuItem>
+              ))}
             </Select>
           </FormControl>
 
@@ -196,10 +202,9 @@ export function PrintQueuePage() {
             <InputLabel>{t('printQueue.filterDocType', 'Document Type')}</InputLabel>
             <Select value={docTypeFilter} label={t('printQueue.filterDocType', 'Document Type')} onChange={(e) => setDocTypeFilter(e.target.value)}>
               <MenuItem value="">{t('printQueue.allDocTypes', 'All Document Types')}</MenuItem>
-              <MenuItem value="CUSTOMER_RECEIPT">Customer Receipt</MenuItem>
-              <MenuItem value="KITCHEN_TICKET">Kitchen Ticket</MenuItem>
-              <MenuItem value="COURIER_SLIP">Courier Slip</MenuItem>
-              <MenuItem value="GUEST_BILL">Guest Bill</MenuItem>
+              {DOC_TYPES.map((d) => (
+                <MenuItem key={d} value={d}>{docTypeLabel(d)}</MenuItem>
+              ))}
             </Select>
           </FormControl>
         </Stack>
@@ -207,90 +212,110 @@ export function PrintQueuePage() {
 
       {/* Jobs Table */}
       <Card sx={{ borderRadius: 2 }}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>{t('printQueue.columnJobId', 'Job ID')}</TableCell>
-              <TableCell>{t('printQueue.columnType', 'Document Type')}</TableCell>
-              <TableCell>{t('payments.columnOrder', 'Entity')}</TableCell>
-              <TableCell>{t('printQueue.columnStatus', 'Status')}</TableCell>
-              <TableCell>{t('printQueue.columnAttempts', 'Copies')}</TableCell>
-              <TableCell>{t('printQueue.reprint', 'Reprint')}</TableCell>
-              <TableCell>{t('printQueue.columnCreatedAt', 'Created At')}</TableCell>
-              <TableCell align="right">{t('printQueue.columnActions', 'Actions')}</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {jobs.map((job) => (
-              <TableRow key={job.id}>
-                <TableCell><code>{job.id.slice(0, 8)}...</code></TableCell>
-                <TableCell>
-                  <strong>{job.document_type}</strong>
-                  {job.label && (
-                    <Chip
-                      label={`${t('printQueue.station', 'Station')}: ${job.label}`}
-                      size="small"
-                      variant="outlined"
-                      sx={{ ms: 1 }}
-                    />
-                  )}
-                </TableCell>
-                <TableCell>{job.entity_type} #{job.entity_id.slice(0, 8)}</TableCell>
-                <TableCell>
-                  <Chip label={job.status} color={getStatusColor(job.status) as any} size="small" />
-                </TableCell>
-                <TableCell>{job.copies}</TableCell>
-                <TableCell>
-                  {job.is_reprint ? <Chip label="REPRINT" color="warning" size="small" /> : <Chip label="ORIGINAL" size="small" variant="outlined" />}
-                </TableCell>
-                <TableCell>{fDateTime(job.created_at)}</TableCell>
-                <TableCell align="right">
-                  <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
-                    <Tooltip title="Preview Rendered HTML">
-                      <IconButton color="primary" onClick={() => setPreviewJob(job)}>
-                        <VisibilityIcon />
-                      </IconButton>
-                    </Tooltip>
-
-                    <Tooltip title="Simulate Printer Outcome">
-                      <IconButton color="info" onClick={() => { setOutcomeJob(job); setOutcomeVal('SUCCESS'); }}>
-                        <PlayArrowIcon />
-                      </IconButton>
-                    </Tooltip>
-
-                    {job.status === 'FAILED' && (
-                      <Tooltip title="Retry Job">
-                        <IconButton color="warning" onClick={() => handleRetryJob(job.id)}>
-                          <ReplayIcon />
+        <Box sx={{ overflowX: 'auto' }}>
+          <Table sx={{ minWidth: 760 }}>
+            <TableHead>
+              <TableRow>
+                <TableCell>{t('printQueue.columnOrder', 'Order')}</TableCell>
+                <TableCell>{t('printQueue.columnType', 'Document Type')}</TableCell>
+                <TableCell>{t('printQueue.printer', 'Printer')}</TableCell>
+                <TableCell>{t('printQueue.columnStatus', 'Status')}</TableCell>
+                <TableCell>{t('printQueue.reprint', 'Reprint')}</TableCell>
+                <TableCell>{t('printQueue.columnCreatedAt', 'Created At')}</TableCell>
+                <TableCell align="right">{t('printQueue.columnActions', 'Actions')}</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {jobs.map((job) => (
+                <TableRow key={job.id}>
+                  <TableCell>
+                    <code dir="ltr">{job.order_number || `${job.entity_type} #${job.entity_id.slice(0, 8)}`}</code>
+                  </TableCell>
+                  <TableCell>
+                    <strong>{docTypeLabel(job.document_type)}</strong>
+                    {job.label && (
+                      <Chip
+                        label={`${t('printQueue.station', 'Station')}: ${job.label}`}
+                        size="small"
+                        variant="outlined"
+                        sx={{ ms: 1 }}
+                      />
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {job.printer_name || '—'}
+                    {job.printer_id && (
+                      <Chip
+                        label={job.via_agent ? t('printQueue.viaAgent', 'Real printer') : t('printQueue.simulated', 'Simulated')}
+                        color={job.via_agent ? 'info' : 'default'}
+                        size="small"
+                        variant="outlined"
+                        sx={{ ms: 1 }}
+                      />
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Chip label={statusLabel(job.status)} color={getStatusColor(job.status) as any} size="small" />
+                  </TableCell>
+                  <TableCell>
+                    {job.is_reprint ? (
+                      <Chip label={t('printQueue.reprint', 'Reprint')} color="warning" size="small" />
+                    ) : (
+                      <Chip label={t('printQueue.original', 'Original')} size="small" variant="outlined" />
+                    )}
+                  </TableCell>
+                  <TableCell>{fDateTime(job.created_at)}</TableCell>
+                  <TableCell align="right">
+                    <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+                      <Tooltip title={t('printQueue.previewJob', 'Preview')}>
+                        <IconButton color="primary" onClick={() => setPreviewJob(job)}>
+                          <VisibilityIcon />
                         </IconButton>
                       </Tooltip>
-                    )}
 
-                    <Tooltip title="Reprint Document">
-                      <IconButton color="secondary" onClick={() => handleReprintJob(job.id)}>
-                        <PrintIcon />
-                      </IconButton>
-                    </Tooltip>
+                      {/* A real printer reports its own result; only the simulator's can be faked. */}
+                      {!job.via_agent && (
+                        <Tooltip title={t('printQueue.simulateOutcome', 'Simulate Outcome')}>
+                          <IconButton color="info" onClick={() => { setOutcomeJob(job); setOutcomeVal('SUCCESS'); }}>
+                            <PlayArrowIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
 
-                    <Tooltip title={t('printQueue.reprintElsewhere', 'Reprint on another printer')}>
-                      <IconButton color="secondary" onClick={() => handleOpenRedirect(job)}>
-                        <PrintDisabledIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </Stack>
-                </TableCell>
-              </TableRow>
-            ))}
+                      {job.status === 'FAILED' && (
+                        <Tooltip title={t('printQueue.retryJob', 'Retry on the same printer')}>
+                          <IconButton color="warning" onClick={() => handleRetryJob(job.id)}>
+                            <ReplayIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
 
-            {jobs.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
-                  {t('printQueue.noJobsFound', 'No print jobs found in queue.')}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+                      <Tooltip title={t('printQueue.reprint', 'Reprint')}>
+                        <IconButton color="secondary" onClick={() => handleReprintJob(job.id)}>
+                          <PrintIcon />
+                        </IconButton>
+                      </Tooltip>
+
+                      <Tooltip title={t('printQueue.reprintElsewhere', 'Reprint on another printer')}>
+                        <IconButton color="secondary" onClick={() => handleOpenRedirect(job)}>
+                          <PrintDisabledIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              ))}
+
+              {jobs.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                    {t('printQueue.noJobsFound', 'No print jobs found in queue.')}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Box>
       </Card>
 
       {/* Rendered HTML Preview Modal */}
