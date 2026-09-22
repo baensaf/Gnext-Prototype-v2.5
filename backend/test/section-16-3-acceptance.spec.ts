@@ -1312,7 +1312,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     });
     expect(guestPaymentRes.success).toBe(true);
     expect(guestPaymentRes.receipt).toBeDefined();
-    expect(guestPaymentRes.receipt.status).toContain('SENT TO KITCHEN');
+    expect(guestPaymentRes.receipt.status).toBe('SENT_TO_KITCHEN');
 
     // Step 2: Mandatory Identification Policy Path
     const settingRepo = dataSource.getRepository(TenantSetting);

@@ -136,7 +136,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         order_id: orderId,
         payment_method_id: selectedMethodId,
         amount: overTendered ? due : payAmount,
-        reference_number: refNumber || `POS-${Date.now().toString().slice(-6)}`,
+        reference_number: refNumber || undefined,
       });
 
       setOrder(res.order);
@@ -206,7 +206,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
           order_id: orderId,
           payment_method_id: matchedMethod.id,
           amount: order.due_amount || '0',
-          reference_number: `POS-${Date.now().toString().slice(-6)}`,
+          reference_number: undefined,
         });
 
         setOrder(res.order);

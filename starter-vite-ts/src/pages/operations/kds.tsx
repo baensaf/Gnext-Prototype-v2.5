@@ -431,7 +431,13 @@ function KdsTicketCard({
       <CardContent sx={{ p: 2 }}>
         <Stack direction="row" sx={{ mb: 1, justifyContent: 'space-between', alignItems: 'center' }}>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            {/* The number the kitchen calls out; the chain-wide one is for looking it up. */}
+            {ticket.call_number ? (
+              <Typography variant="h4" sx={{ fontWeight: 900, lineHeight: 1 }}>
+                {ticket.call_number}
+              </Typography>
+            ) : null}
+            <Typography variant={ticket.call_number ? 'caption' : 'h6'} sx={{ fontWeight: 'bold' }}>
               #{ticket.order_number || ticket.ticket_number}
             </Typography>
             <Chip label={ticket.ticket_number} size="small" variant="outlined" />

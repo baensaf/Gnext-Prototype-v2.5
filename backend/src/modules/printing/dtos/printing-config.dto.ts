@@ -10,6 +10,7 @@ import {
   IsUUID,
   Min,
   ValidateNested,
+  IsIn,
 } from 'class-validator';
 
 /**
@@ -135,6 +136,11 @@ export class CreatePrinterGroupDto {
   @IsNotEmpty()
   name: string;
 
+  /** COMPACT or DETAILED paper for what this group prints; null takes the document's default. */
+  @IsOptional()
+  @IsIn(['COMPACT', 'DETAILED', null])
+  ticket_template?: 'COMPACT' | 'DETAILED' | null;
+
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
@@ -156,6 +162,11 @@ export class UpdatePrinterGroupDto {
   @IsString()
   @IsNotEmpty()
   name?: string;
+
+  /** COMPACT or DETAILED paper for what this group prints; null takes the document's default. */
+  @IsOptional()
+  @IsIn(['COMPACT', 'DETAILED', null])
+  ticket_template?: 'COMPACT' | 'DETAILED' | null;
 
   @IsOptional()
   @IsArray()

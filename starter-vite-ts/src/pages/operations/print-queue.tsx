@@ -353,14 +353,14 @@ export function PrintQueuePage() {
         <DialogTitle>{t('printQueue.simulateOutcome', 'Simulate Printer Hardware Outcome')}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>
-            Simulate hardware success or failure for Print Job #{outcomeJob?.id.slice(0, 8)}
+            {t('printQueue.simulateHelp', 'Mark this simulated printer’s job as printed or failed.')}
           </Typography>
           <Stack spacing={2}>
             <FormControl fullWidth>
               <InputLabel>{t('printQueue.simulateOutcome', 'Simulated Outcome')}</InputLabel>
               <Select value={outcomeVal} label={t('printQueue.simulateOutcome', 'Simulated Outcome')} onChange={(e) => setOutcomeVal(e.target.value as any)}>
-                <MenuItem value="SUCCESS">SUCCESS (Thermal Print Succeeded)</MenuItem>
-                <MenuItem value="FAILED">FAILED (Printer Error / Out of Paper)</MenuItem>
+                <MenuItem value="SUCCESS">{t('printQueue.statuses.SUCCESS', 'Printed')}</MenuItem>
+                <MenuItem value="FAILED">{t('printQueue.statuses.FAILED', 'Failed')}</MenuItem>
               </Select>
             </FormControl>
           </Stack>

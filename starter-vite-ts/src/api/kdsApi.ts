@@ -58,6 +58,8 @@ export interface PrinterGroup {
   id: string;
   code: string;
   name: string;
+  /** The paper this group prints; null takes the document's default. */
+  ticket_template?: 'COMPACT' | 'DETAILED' | null;
   members?: PrinterGroupMember[];
 }
 
@@ -119,6 +121,7 @@ export interface KitchenTicket {
   id: string;
   order_id: string;
   order_number: string;
+  call_number?: number | null;
   order_type: string;
   table_number?: string;
   customer_name?: string;
@@ -269,7 +272,7 @@ export const kdsApi = {
   },
 
   // 6. Print Jobs & Simulator Outcome
-  getPrintJobs: async (params?: { branchId?: string; status?: string; documentType?: string; limit?: number; offset?: number }): Promise<{ items: PrintJob[]; total: number }> => {
+  getPrintJobs: async (params?: { branchId?: string; status?: string; documentType?: string; entityId?: string; limit?: number; offset?: number }): Promise<{ items: PrintJob[]; total: number }> => {
     const res = await httpClient.get('/api/v1/print-jobs', { params });
     return res.data;
   },
@@ -294,12 +297,15 @@ export const kdsApi = {
     orderId: string,
     documentType = 'CUSTOMER_RECEIPT',
     reason?: string,
-    printerId?: string
+    printerId?: string,
+    /** One station's chit only, by its printer group. */
+    printerGroupId?: string
   ): Promise<any> => {
     const res = await httpClient.post(`/api/v1/orders/${orderId}/reprint`, {
       documentType,
       reason,
       printerId,
+      printerGroupId,
     });
     return res.data;
   },

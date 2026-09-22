@@ -146,6 +146,7 @@ export class PrintersController {
       branch_id: body.branch_id,
       code: body.code.toUpperCase(),
       name: body.name,
+      ticket_template: body.ticket_template ?? null,
     });
     const savedGroup = await this.groupRepo.save(group);
 
@@ -173,6 +174,7 @@ export class PrintersController {
 
     if (body.name !== undefined) group.name = body.name;
     if (body.code !== undefined) group.code = body.code.toUpperCase();
+    if (body.ticket_template !== undefined) group.ticket_template = body.ticket_template ?? null;
     if (body.branch_id) group.branch_id = body.branch_id;
 
     const savedGroup = await this.groupRepo.save(group);
@@ -267,12 +269,13 @@ export class PrintersController {
     @Query('branchId') branchId: string,
     @Query('status') status: string,
     @Query('documentType') documentType: string,
+    @Query('entityId') entityId: string,
     @Query('limit') limit: number,
     @Query('offset') offset: number,
     @Req() req: Request,
   ) {
     const tenantId = (req as any).tenantId;
-    return await this.queueService.getPrintJobs(tenantId, branchId, status, documentType, limit || 50, offset || 0);
+    return await this.queueService.getPrintJobs(tenantId, branchId, status, documentType, limit || 50, offset || 0, entityId);
   }
 
   @Get('print-jobs/:id')
@@ -314,6 +317,7 @@ export class PrintersController {
       body.reason || 'Order Reprint Request',
       userId,
       body.printerId || body.printer_id,
+      body.printerGroupId || body.printer_group_id,
     );
   }
 

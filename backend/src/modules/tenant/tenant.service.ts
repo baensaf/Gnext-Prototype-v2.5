@@ -5,6 +5,7 @@ import { Tenant } from '../../entities/Tenant.entity';
 import { Branch, BranchType } from '../../entities/Branch.entity';
 import { BranchOperatingHour } from '../../entities/BranchOperatingHour.entity';
 import { Terminal } from '../../entities/Terminal.entity';
+import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { AdminUser } from '../../entities/AdminUser.entity';
 import { BranchStatusSnapshot } from '../../entities/BranchStatusSnapshot.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
@@ -292,6 +293,16 @@ export class TenantService {
     const terminal = await this.terminalRepo.findOne({ where: { id: terminalId, tenant_id: tenantId } });
     if (!terminal) throw new NotFoundException('Terminal not found');
     const before = { ...terminal };
+    if (data.payment_device_id) {
+      // A kiosk charges on a terminal in its own shop, which its branch's agent can reach.
+      const device = await this.terminalRepo.manager.findOne(PaymentDevice, {
+        where: { id: data.payment_device_id, tenant_id: tenantId },
+      });
+      if (!device) throw new NotFoundException('Payment terminal not found');
+      if (device.branch_id && device.branch_id !== (data.branch_id || terminal.branch_id)) {
+        throw new BadRequestException('The card terminal belongs to another branch');
+      }
+    }
     Object.assign(terminal, data);
     const updated = await this.terminalRepo.save(terminal);
 

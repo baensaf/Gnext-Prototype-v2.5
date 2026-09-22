@@ -45,6 +45,8 @@ export interface OrderHeader {
   terminal_id?: string;
   shift_id?: string;
   order_number: string;
+  /** The branch's number for the order today (123), given as it goes to the kitchen. */
+  call_number?: number | null;
   order_type: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY' | 'AGGREGATOR';
   channel?: string;
   state: 'DRAFT' | 'PENDING_ACCEPTANCE' | 'SUBMITTED' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'OUT_FOR_DELIVERY' | 'COMPLETED' | 'CANCELLED' | 'REJECTED';

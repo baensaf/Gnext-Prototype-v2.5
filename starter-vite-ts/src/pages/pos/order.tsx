@@ -1133,7 +1133,7 @@ export function PosOrderPage() {
           order_id: submitted.id,
           payment_method_id: preferredPos.id,
           amount: submitted.due_amount || submitted.total_amount || '0',
-          reference_number: `POS-${Date.now().toString().slice(-6)}`,
+          reference_number: undefined,
         });
         setPlacedOrder(payRes.order || submitted);
       } else {
@@ -1141,7 +1141,7 @@ export function PosOrderPage() {
       }
 
       setCheckoutModalOpen(true);
-      toast.success(`سفارش #${submitted.order_number || ''} ثبت و با کارتخوان تسویه شد!`);
+      toast.success(t('pos.orderSubmittedPaid', { number: submitted.call_number || submitted.order_number || '' }));
       handleClearCart();
       fetchHeldOrders(selectedBranchId);
       setError(null);
@@ -1223,7 +1223,7 @@ export function PosOrderPage() {
 
       setPlacedOrder(submitted);
       setCheckoutModalOpen(true);
-      toast.success(`Order #${submitted.order_number || ''} submitted successfully!`);
+      toast.success(t('pos.orderSubmitted', { number: submitted.call_number || submitted.order_number || '' }));
       handleClearCart();
       fetchHeldOrders(selectedBranchId);
       setError(null);
@@ -1398,7 +1398,14 @@ export function PosOrderPage() {
             </Button>
           }
         >
-          <strong>Order Placed Successfully!</strong> Order Number: <code>{placedOrder.order_number}</code> | Total: {MoneyUtil.formatCurrency(placedOrder.total_amount)} IRR
+          <strong>{t('pos.orderPlaced', 'Order placed')}</strong>
+          {placedOrder.call_number ? (
+            <>
+              {' '}
+              {t('pos.callNumber', 'Number')}: <strong style={{ fontSize: '1.4em' }}>{placedOrder.call_number}</strong>
+            </>
+          ) : null}{' '}
+          | <code>{placedOrder.order_number}</code> | {MoneyUtil.formatCurrency(placedOrder.total_amount)} IRR
         </Alert>
       )}
 

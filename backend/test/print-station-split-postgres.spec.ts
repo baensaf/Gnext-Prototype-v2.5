@@ -199,7 +199,7 @@ describe('kitchen tickets split by station (PostgreSQL)', () => {
     );
     expect(stops.every((j) => j.rendered_html.includes('لغو سفارش — آماده نکنید'))).toBe(true);
     // The cook reads why, even when the till sent only a reason code.
-    expect(stops.every((j) => j.rendered_html.includes('Guest left'))).toBe(true);
+    expect(stops.every((j) => j.reason === 'Order cancelled: Guest left')).toBe(true);
     expect(stops.some((j) => j.rendered_html.includes('FRIES'))).toBe(false);
   }, 60000);
 });

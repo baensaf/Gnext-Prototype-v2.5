@@ -39,6 +39,7 @@ import {
   InputLabel,
   DialogTitle,
   FormControl,
+  FormHelperText,
   DialogContent,
   DialogActions,
   FormControlLabel,
@@ -119,6 +120,8 @@ export function PrintersPage() {
     code: '',
     name: '',
     branch_id: '',
+    // '' takes the document's default: a compact kitchen chit, a detailed receipt.
+    ticket_template: '' as '' | 'COMPACT' | 'DETAILED',
     members: [] as Array<{ printer_id: string; priority: number; copies: number }>,
   });
 
@@ -244,6 +247,7 @@ export function PrintersPage() {
       code: '',
       name: '',
       branch_id: getActiveBranchId(),
+      ticket_template: '',
       members: printers.length > 0 ? [{ printer_id: printers[0].id, priority: 1, copies: 1 }] : [],
     });
     setGroupModalOpen(true);
@@ -255,6 +259,7 @@ export function PrintersPage() {
       code: grp.code,
       name: grp.name,
       branch_id: (grp as any).branch_id || getActiveBranchId(),
+      ticket_template: grp.ticket_template || '',
       members: (grp.members || []).map((m) => ({
         printer_id: m.printer_id,
         priority: m.priority || 1,
@@ -299,6 +304,7 @@ export function PrintersPage() {
           branch_id: groupForm.branch_id || getActiveBranchId(),
           code: groupForm.code,
           name: groupForm.name,
+          ticket_template: groupForm.ticket_template || null,
           members: groupForm.members as any,
         });
       } else {
@@ -306,6 +312,7 @@ export function PrintersPage() {
           branch_id: groupForm.branch_id || getActiveBranchId(),
           code: groupForm.code,
           name: groupForm.name,
+          ticket_template: groupForm.ticket_template || null,
           members: groupForm.members as any,
         });
       }
@@ -640,6 +647,7 @@ export function PrintersPage() {
                     <TableCell>{t('operations.printers.colCode', 'Group Code')}</TableCell>
                     <TableCell>{t('operations.printers.colName', 'Group Name')}</TableCell>
                     <TableCell>{t('operations.printers.groupMembers', 'Assigned Printers')}</TableCell>
+                    <TableCell>{t('operations.printers.ticketTemplate', 'Paper template')}</TableCell>
                     <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
                       {t('operations.printers.colActions', 'Actions')}
                     </TableCell>
@@ -671,11 +679,13 @@ export function PrintersPage() {
                           )}
                         </Stack>
                       </TableCell>
+                      <TableCell>{t(`operations.printers.templates.${gr.ticket_template || 'DEFAULT'}`)}</TableCell>
                       <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
                         <Stack direction="row" spacing={0.5} sx={{ justifyContent: theme.direction === 'rtl' ? 'flex-start' : 'flex-end' }}>
                           <IconButton
                             color="primary"
                             size="small"
+                            aria-label={t('operations.printers.editGroup', 'Edit Group')}
                             title={t('operations.printers.editGroup', 'Edit Group')}
                             onClick={() => handleOpenEditGroup(gr)}
                           >
@@ -684,6 +694,8 @@ export function PrintersPage() {
                           <IconButton
                             color="error"
                             size="small"
+                            aria-label={t('operations.printers.deleteGroup', 'Delete group')}
+                            title={t('operations.printers.deleteGroup', 'Delete group')}
                             onClick={() =>
                               setDeleteConfirm({
                                 open: true,
@@ -701,7 +713,7 @@ export function PrintersPage() {
                   ))}
                   {groups.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                      <TableCell colSpan={5} align="center" sx={{ py: 5, color: 'text.secondary' }}>
                         {t('common.noRecords', 'No printer groups found.')}
                       </TableCell>
                     </TableRow>
@@ -990,6 +1002,20 @@ export function PrintersPage() {
                 required
               />
             </Stack>
+
+            <FormControl fullWidth>
+              <InputLabel>{t('operations.printers.ticketTemplate', 'Paper template')}</InputLabel>
+              <Select
+                label={t('operations.printers.ticketTemplate', 'Paper template')}
+                value={groupForm.ticket_template}
+                onChange={(e) => setGroupForm({ ...groupForm, ticket_template: e.target.value as '' | 'COMPACT' | 'DETAILED' })}
+              >
+                <MenuItem value="">{t('operations.printers.templates.DEFAULT')}</MenuItem>
+                <MenuItem value="COMPACT">{t('operations.printers.templates.COMPACT')}</MenuItem>
+                <MenuItem value="DETAILED">{t('operations.printers.templates.DETAILED')}</MenuItem>
+              </Select>
+              <FormHelperText>{t('operations.printers.templateHelp')}</FormHelperText>
+            </FormControl>
 
             <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 2, p: 2 }}>
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>

@@ -172,7 +172,12 @@
       "delete": "Delete",
       "archive": "Archive"
     },
-    "amountInWords": "{{words}} rials"
+    "amountInWords": "{{words}} rials",
+    "requiredFields": "Fill in the required fields.",
+    "noRecords": "Nothing here yet.",
+    "deleteError": "Could not delete this.",
+    "time": "Time",
+    "close": "Close"
   },
   "dashboard": {
     "title": "Operations Dashboard",
@@ -294,7 +299,11 @@
     },
     "quickTags": "Quick Tags",
     "receiptSent": "Receipt sent to the counter printer",
-    "receiptFailed": "The receipt could not be sent to a printer"
+    "receiptFailed": "The receipt could not be sent to a printer",
+    "orderPlaced": "Order placed",
+    "callNumber": "Number",
+    "orderSubmitted": "Order {{number}} sent to the kitchen",
+    "orderSubmittedPaid": "Order {{number}} paid and sent to the kitchen"
   },
   "kiosk": {
     "title": "SELF-SERVICE KIOSK",
@@ -307,7 +316,27 @@
     "fullName": "Full Name",
     "proceedToPayment": "Proceed to Payment",
     "paymentSuccessful": "Order Placed Successfully!",
-    "newOrder": "New Order"
+    "newOrder": "New Order",
+    "device": {
+      "title": "Set up this kiosk",
+      "help": "Choose which kiosk this device is. Its card payments go to the card terminal linked to it under Terminals.",
+      "none": "This branch has no active kiosk terminals. A manager can add one under Terminals.",
+      "assign": "Use this kiosk"
+    },
+    "pay": {
+      "insertCard": "Insert or tap your card",
+      "onTerminal": "Follow the instructions on the card terminal",
+      "simulated": "Simulated card terminal (no terminal is connected at this branch)",
+      "failed": "The card was not charged.",
+      "unresolved": "The card terminal did not confirm the payment. Please ask a member of staff."
+    },
+    "receipt": {
+      "yourNumber": "Your order number",
+      "reference": "Card reference",
+      "paid": "Paid",
+      "waiting": "Paid. Staff will confirm your order shortly.",
+      "sent": "Paid and sent to the kitchen."
+    }
   },
   "orders": {
     "people": {
@@ -470,7 +499,9 @@
       "success": "{{document}} for order {{orderNumber}} was added to the print queue.",
       "failed": "Failed to queue the reprint",
       "guestBill": "Guest bill",
-      "courierSlip": "Courier slip"
+      "courierSlip": "Courier slip",
+      "station": "Station",
+      "allStations": "Every station"
     },
     "receiptModal": {
       "title": "Receipt #{{orderNumber}}",
@@ -584,7 +615,8 @@
       "confirm": "Change type",
       "approvalDetails": "Order type change outside the cashier window",
       "approvalDetailsPaid": "Changing the type of an order that has been paid"
-    }
+    },
+    "dueAmount": "Amount due"
   },
   "dineIn": {
     "title": "Dine-In Floor Plan & Operations",
@@ -1317,7 +1349,10 @@
       "rrn": "Reference number (RRN)",
       "reason": "How you checked",
       "confirm": "Settle payment"
-    }
+    },
+    "instrument": "Payment instrument",
+    "amount": "Amount",
+    "reference": "Reference"
   },
   "refunds": {
     "title": "Refunds & Returns",
@@ -3059,6 +3094,22 @@
       "saveSuccess": "Note template saved",
       "saveError": "Failed to save note template",
       "statusError": "Failed to change the template status"
+    },
+    "callNumbers": {
+      "title": "Daily order numbers",
+      "help": "The number printed large on kitchen chits and receipts, and called out at the counter. Each branch starts every channel again at the beginning of its range each business day; a range that runs out starts over.",
+      "pos": "Tills",
+      "kiosk": "Kiosks",
+      "online": "Snappfood and online",
+      "from": "From",
+      "to": "To",
+      "save": "Save number ranges",
+      "saved": "Order number ranges saved.",
+      "saveError": "Could not save the order number ranges.",
+      "loadError": "Could not load the order number ranges.",
+      "invalid": "Each range must start at 1 or more and end at or after its start.",
+      "overlap": "The ranges overlap, so two orders could get the same number.",
+      "headOfficeOnly": "Head office sets these ranges for every branch."
     }
   },
   "inventory": {
@@ -3293,7 +3344,16 @@
         "KIOSK": "Self-Service Kiosk",
         "KDS": "Kitchen Display Station",
         "MOBILE": "Mobile Handheld POS"
-      }
+      },
+      "loadError": "Could not load the terminals.",
+      "selectBranchError": "Choose a branch.",
+      "createError": "Could not save the terminal.",
+      "archiveError": "Could not archive the terminal.",
+      "noTerminals": "No terminals here yet.",
+      "colCardTerminal": "Card terminal",
+      "cardAuto": "The branch's only terminal",
+      "cardLinked": "Card terminal saved for {{name}}.",
+      "cardLinkError": "Could not link the card terminal."
     },
     "printers": {
       "title": "Printers & Print Routing",
@@ -3403,7 +3463,20 @@
         "baud": "Baud rate",
         "agentHelp": "Jobs for this printer go to the branch agent. While the agent is offline they wait in the print queue.",
         "agentChip": "Agent"
-      }
+      },
+      "loadError": "Could not load the printers.",
+      "cycleError": "A printer cannot fall back to itself.",
+      "createPrinterError": "Could not save the printer.",
+      "createGroupError": "Could not save the printer group.",
+      "noGroupError": "Choose a printer group for this route.",
+      "createRouteError": "Could not save the print route.",
+      "ticketTemplate": "Paper template",
+      "templates": {
+        "DEFAULT": "Default for the document",
+        "COMPACT": "Compact",
+        "DETAILED": "Detailed"
+      },
+      "templateHelp": "A compact kitchen chit is the order number and this station’s items. A compact receipt drops the address and the tax breakdown. Left on the default, kitchen chits print compact and receipts detailed."
     },
     "kds": {
       "title": "KDS Configuration & Station Routing",

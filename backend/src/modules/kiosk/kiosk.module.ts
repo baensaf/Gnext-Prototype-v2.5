@@ -20,6 +20,10 @@ import { KdsModule } from '../kds/kds.module';
 import { PrintingModule } from '../printing/printing.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { ProductVariant } from '../../entities/ProductVariant.entity';
+import { Terminal } from '../../entities/Terminal.entity';
+import { PaymentDevice } from '../../entities/PaymentDevice.entity';
+import { OrderModule } from '../order/order.module';
+import { PaymentModule } from '../payment/payment.module';
 
 @Module({
   imports: [
@@ -38,11 +42,17 @@ import { ProductVariant } from '../../entities/ProductVariant.entity';
       Payment,
       Customer,
       ProductVariant,
+      Terminal,
+      PaymentDevice,
     ]),
     AuditModule,
     KdsModule,
     PrintingModule,
     CatalogModule,
+    // A paid kiosk order goes to the kitchen the way a till's does, and a card goes to the
+    // branch's real terminal through the payment service.
+    OrderModule,
+    PaymentModule,
   ],
   providers: [KioskService],
   controllers: [KioskController],

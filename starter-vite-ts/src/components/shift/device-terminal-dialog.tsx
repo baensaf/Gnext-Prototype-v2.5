@@ -35,6 +35,8 @@ type Props = {
   branchName?: string;
   current: DeviceTerminal | null;
   onAssigned: (terminal: DeviceTerminal) => void;
+  /** A till (the default) or a self-order kiosk, which has no drawer but may have a card terminal. */
+  terminalType?: 'CASHIER' | 'KIOSK';
 };
 
 /**
@@ -42,7 +44,8 @@ type Props = {
  * same list but hands the choice to a manager's pin, because a till set up against the
  * wrong drawer puts every sale into somebody else's count.
  */
-export function DeviceTerminalDialog({ open, onClose, branchId, branchName, current, onAssigned }: Props) {
+export function DeviceTerminalDialog({ open, onClose, branchId, branchName, current, onAssigned, terminalType = 'CASHIER' }: Props) {
+  const isKiosk = terminalType === 'KIOSK';
   const { t } = useTranslation();
   const role = useAuthStore((state) => state.user?.role);
   const canAssign = isApproverRole(role);
@@ -65,7 +68,7 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
         // A kiosk and a kitchen screen have no drawer, and the list endpoint answers head
         // office about every shop unless it is told which one.
         const registers = list.filter(
-          (term) => term.branch_id === branchId && term.is_active && term.terminal_type === 'CASHIER'
+          (term) => term.branch_id === branchId && term.is_active && term.terminal_type === terminalType
         );
         setTerminals(registers);
         const keep = registers.find((term) => term.id === current?.id);
@@ -80,7 +83,7 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
     return () => {
       cancelled = true;
     };
-  }, [open, branchId, current?.id, t]);
+  }, [open, branchId, current?.id, terminalType, t]);
 
   const assign = () => {
     const chosen = terminals.find((term) => term.id === selectedId);
@@ -92,14 +95,16 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
   return (
     <>
       <Dialog open={open && !pinOpen} onClose={onClose} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>{t('shift.device.title', 'Set up this register')}</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>{isKiosk ? t('kiosk.device.title', 'Set up this kiosk') : t('shift.device.title', 'Set up this register')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2}>
             <Typography variant="body2" color="text.secondary">
-              {t(
-                'shift.device.help',
-                'Choose which register this device is. It is remembered on this device, so shifts open against the right drawer without asking again.'
-              )}
+              {isKiosk
+                ? t('kiosk.device.help', 'Choose which kiosk this device is. Its card payments go to the card terminal linked to it under Terminals.')
+                : t(
+                    'shift.device.help',
+                    'Choose which register this device is. It is remembered on this device, so shifts open against the right drawer without asking again.'
+                  )}
             </Typography>
             {branchName && (
               <Typography variant="subtitle2">
@@ -113,7 +118,9 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
               </Stack>
             ) : terminals.length === 0 ? (
               <Alert severity="warning">
-                {t('shift.device.none', 'This branch has no active cash registers. A manager can add one under Terminals.')}
+                {isKiosk
+                ? t('kiosk.device.none', 'This branch has no active kiosk terminals. A manager can add one under Terminals.')
+                : t('shift.device.none', 'This branch has no active cash registers. A manager can add one under Terminals.')}
               </Alert>
             ) : (
               <RadioGroup value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
@@ -139,7 +146,7 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
             disabled={!selectedId}
             onClick={() => (canAssign ? assign() : setPinOpen(true))}
           >
-            {t('shift.device.assign', 'Use this register')}
+            {isKiosk ? t('kiosk.device.assign', 'Use this kiosk') : t('shift.device.assign', 'Use this register')}
           </Button>
         </DialogActions>
       </Dialog>

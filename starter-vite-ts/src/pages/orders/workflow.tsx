@@ -4,7 +4,7 @@ import type { ReasonCode } from 'src/api/settingsApi';
 import type { OrderHeader, DeclineReason } from 'src/api/orderApi';
 
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import CodeIcon from '@mui/icons-material/Code';
 import EditIcon from '@mui/icons-material/Edit';
@@ -157,6 +157,9 @@ export function OrdersWorkflowPage() {
   // Prototype reprint workflow
   const [reprintDialogOpen, setReprintDialogOpen] = useState(false);
   const [reprintDocumentType, setReprintDocumentType] = useState<ReprintDocumentType>('CUSTOMER_RECEIPT');
+  // Which station's chit to print again: '' is every station, as the order first printed.
+  const [reprintStationId, setReprintStationId] = useState('');
+  const [reprintStations, setReprintStations] = useState<Array<{ id: string; name: string }>>([]);
   const [reprintReason, setReprintReason] = useState('');
   const [reprintError, setReprintError] = useState<string | null>(null);
   const [reprintSubmitting, setReprintSubmitting] = useState(false);
@@ -484,6 +487,8 @@ export function OrdersWorkflowPage() {
   const handleOpenReprintDialog = (order: OrderHeader) => {
     setSelectedOrder(order);
     setReprintDocumentType('CUSTOMER_RECEIPT');
+    setReprintStationId('');
+    setReprintStations([]);
     setReprintReason('');
     setReprintError(null);
     setReprintDialogOpen(true);
@@ -494,6 +499,32 @@ export function OrdersWorkflowPage() {
     setReprintDialogOpen(false);
     setReprintError(null);
   };
+
+  /**
+   * The stations this order printed to, so one lost chit can be printed again on its own.
+   * Taken from the chits themselves, since routes may have changed since.
+   */
+  const loadReprintStations = useCallback(async (orderId: string) => {
+    try {
+      const res = await kdsApi.getPrintJobs({ entityId: orderId, documentType: 'KITCHEN_TICKET', limit: 50 });
+      const byGroup = new Map<string, string>();
+      for (const job of res.items) {
+        if (!job.printer_group_id) continue;
+        // "Grill (1/3)" is the same station as "Grill (2/4)" on another print.
+        byGroup.set(job.printer_group_id, (job.label || '').replace(/\s*\([^)]*\)\s*$/, '') || job.printer_group_id);
+      }
+      setReprintStations([...byGroup].map(([id, name]) => ({ id, name })));
+    } catch {
+      // Without the list the dialog just offers every station, which is the old behaviour.
+      setReprintStations([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (reprintDialogOpen && reprintDocumentType === 'KITCHEN_TICKET' && selectedOrder) {
+      loadReprintStations(selectedOrder.id);
+    }
+  }, [reprintDialogOpen, reprintDocumentType, selectedOrder, loadReprintStations]);
 
   const handleConfirmReprint = async () => {
     const reason = reprintReason.trim();
@@ -506,7 +537,13 @@ export function OrdersWorkflowPage() {
       setReprintSubmitting(true);
       setReprintError(null);
       // One job per printer: a kitchen ticket comes back as a job for each station.
-      const printJobs = await kdsApi.reprintOrder(selectedOrder.id, reprintDocumentType, reason);
+      const printJobs = await kdsApi.reprintOrder(
+        selectedOrder.id,
+        reprintDocumentType,
+        reason,
+        undefined,
+        reprintDocumentType === 'KITCHEN_TICKET' ? reprintStationId || undefined : undefined
+      );
       if (!Array.isArray(printJobs) || printJobs.length === 0) {
         throw new Error(t('orders.reprintDialog.failed'));
       }
@@ -702,6 +739,9 @@ export function OrdersWorkflowPage() {
                         }}
                       >
                         <TableCell>
+                          {order.call_number ? (
+                            <Chip label={order.call_number} size="small" color="primary" sx={{ fontWeight: 800, me: 0.5 }} />
+                          ) : null}
                           <Chip
                             label={order.order_number}
                             size="small"
@@ -954,6 +994,7 @@ export function OrdersWorkflowPage() {
                         >
                           <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1 }}>
                             <Typography sx={{ fontWeight: 'bold' }} variant="subtitle2">
+                              {order.call_number ? <strong>{order.call_number} · </strong> : null}
                               <code>{order.order_number}</code>
                             </Typography>
                             <Stack direction="row" spacing={0.5}>
@@ -1226,6 +1267,24 @@ export function OrdersWorkflowPage() {
               </Select>
             </FormControl>
 
+            {reprintDocumentType === 'KITCHEN_TICKET' && reprintStations.length > 1 && (
+              <FormControl fullWidth>
+                <InputLabel>{t('orders.reprintDialog.station', 'Station')}</InputLabel>
+                <Select
+                  label={t('orders.reprintDialog.station', 'Station')}
+                  onChange={(e) => setReprintStationId(e.target.value)}
+                  value={reprintStationId}
+                >
+                  <MenuItem value="">{t('orders.reprintDialog.allStations', 'Every station')}</MenuItem>
+                  {reprintStations.map((station) => (
+                    <MenuItem key={station.id} value={station.id}>
+                      {station.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
             <TextField
               autoFocus
               fullWidth
@@ -1339,6 +1398,9 @@ export function OrdersWorkflowPage() {
                   <Typography variant="h6" sx={{ fontFamily: 'monospace', fontWeight: 800 }}>
                     {selectedDrawerOrder.order_number}
                   </Typography>
+                  {selectedDrawerOrder.call_number ? (
+                    <Chip label={selectedDrawerOrder.call_number} color="primary" sx={{ fontWeight: 800 }} />
+                  ) : null}
                   <Chip
                     label={getOrderStatusLabel(selectedDrawerOrder.status)}
                     color={getStatusChipColor(selectedDrawerOrder.status) as any}

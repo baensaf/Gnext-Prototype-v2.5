@@ -39,6 +39,7 @@ import { checkOptionChoices } from '../catalog/option-choices.util';
 import { CreditService } from '../customer/credit.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { ReasonCode } from '../../entities/ReasonCode.entity';
+import { assignCallNumber } from './call-number';
 import Decimal from 'decimal.js';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
@@ -608,6 +609,9 @@ export class OrderService {
       order.submitted_at = new Date();
 
       await em.save(OrderHeader, order);
+      // The number the counter calls it by, given as it goes to the kitchen so an abandoned
+      // cart does not use one up.
+      await assignCallNumber(em, order);
 
       if (deliveryContext) {
         const existingDelivery = await em.findOne(Delivery, { where: { tenant_id: tenantId, order_id: order.id } });
@@ -730,11 +734,46 @@ export class OrderService {
   }
 
   /**
+   * A kiosk order waits for its guest's card before the kitchen sees it. Once it is paid in
+   * full it is confirmed, numbered and fired, whether the card went through the branch's
+   * terminal (the agent answers later) or the kiosk's simulator. One that the branch wants
+   * staff to accept keeps waiting; accepting it does the same.
+   */
+  private async sendPaidKioskOrderToKitchen(tenantId: string, orderId: string, correlationId?: string) {
+    const order = await this.orderRepo.findOne({ where: { id: orderId, tenant_id: tenantId } });
+    if (!order || order.channel !== 'KIOSK' || order.state !== 'SUBMITTED') return;
+    if (MoneyUtil.greaterThan(order.outstanding_total || '0.0000', '0.0000')) return;
+
+    order.state = 'CONFIRMED';
+    order.status = 'CONFIRMED';
+    order.submitted_at = order.submitted_at || new Date();
+    order.business_date = order.business_date || BusinessDateUtil.today();
+    await this.orderRepo.save(order);
+    await assignCallNumber(this.dataSource.manager, order);
+
+    if (this.kdsService) {
+      try {
+        await this.kdsService.generateTicketsForOrder(tenantId, orderId, correlationId);
+      } catch {
+        // A kitchen-screen failure must not undo a payment the guest has already made.
+      }
+    }
+    if (this.printQueueService) {
+      await this.printQueueService.enqueueOrderPrintJobs(tenantId, orderId, 'KITCHEN_TICKET', false);
+    }
+  }
+
+  /**
    * After a payment has committed: the receipt, once the order is paid in full, and a paid
    * takeaway closed. Both are side effects of money already taken, so neither may fail the
    * payment.
    */
   async afterPaymentSucceeded(tenantId: string, orderId: string, userId?: string, correlationId?: string) {
+    try {
+      await this.sendPaidKioskOrderToKitchen(tenantId, orderId, correlationId);
+    } catch (err) {
+      console.error(`Kiosk order ${orderId} could not be sent to the kitchen after payment`, err);
+    }
     try {
       await this.printCustomerPaperwork(tenantId, orderId, userId);
     } catch {
@@ -931,6 +970,8 @@ export class OrderService {
       userId,
       correlationId,
     );
+    // Numbered as it reaches the kitchen: a rejected order never takes one.
+    await assignCallNumber(this.dataSource.manager, order);
 
     if (this.kdsService && isAggregatorOrder(order)) {
       try {
@@ -2327,6 +2368,8 @@ export class OrderService {
         terminal_id: sourceOrder.terminal_id,
         shift_id: sourceOrder.shift_id,
         order_number: childOrderNumber,
+        // The same table's food: the kitchen and the guests already know it by this number.
+        call_number: sourceOrder.call_number ?? null,
         channel: sourceOrder.channel,
         order_type: 'DINE_IN',
         state: 'DRAFT' as OrderState,

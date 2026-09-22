@@ -4,6 +4,10 @@ import { CalendarSystem, formatBusinessDateTime } from '../../common/utils/calen
 export interface RenderDocOptions {
   documentType: 'CUSTOMER_RECEIPT' | 'KITCHEN_TICKET' | 'COURIER_SLIP' | 'GUEST_BILL' | string;
   orderNumber: string;
+  /** The branch's number for the order today (123): what prints large and what staff call. */
+  callNumber?: number | null;
+  /** The printer group's choice; unset takes the document's default. */
+  template?: TicketTemplate | null;
   /** The chain's name, printed as the heading of customer documents. */
   brandName?: string;
   branchName?: string;
@@ -51,6 +55,16 @@ export interface RenderDocOptions {
   payments?: Array<{ method: string; amount: string }>;
 }
 
+export type TicketTemplate = 'COMPACT' | 'DETAILED';
+
+/**
+ * A kitchen chit is compact unless its station asks for more, as Iranian kitchens work: the
+ * number and the food. Customer paper is detailed unless the counter asks for less.
+ */
+export function defaultTemplate(documentType: string): TicketTemplate {
+  return documentType === 'KITCHEN_TICKET' ? 'COMPACT' : 'DETAILED';
+}
+
 /** Where a reprinted job's marker goes. A job reprinted as-is swaps it for the marker. */
 export const REPRINT_SLOT = '<!--gnext:reprint-->';
 
@@ -95,7 +109,15 @@ const PAYMENT_METHODS: Record<string, string> = {
 @Injectable()
 export class PrintRenderService {
   renderDocument(opts: RenderDocOptions): string {
-    const body = opts.documentType === 'KITCHEN_TICKET' ? this.kitchenChit(opts) : this.customerDocument(opts);
+    const template = opts.template || defaultTemplate(opts.documentType);
+    const body =
+      opts.documentType === 'KITCHEN_TICKET'
+        ? template === 'COMPACT'
+          ? this.compactKitchenChit(opts)
+          : this.kitchenChit(opts)
+        : template === 'COMPACT' && opts.documentType !== 'COURIER_SLIP'
+          ? this.compactReceipt(opts)
+          : this.customerDocument(opts);
     return `<!DOCTYPE html>
 <html dir="rtl" lang="fa">
 <head>
@@ -109,6 +131,7 @@ export class PrintRenderService {
   .small { font-size: 11px; }
   .title { font-size: 15px; font-weight: bold; margin: 6px 0 2px; }
   .big { font-size: 30px; font-weight: bold; line-height: 1.2; }
+  .huge { font-size: 64px; font-weight: bold; line-height: 1.1; text-align: center; }
   .box { border: 2px solid #000; padding: 4px; margin: 6px 0; text-align: center; font-weight: bold; font-size: 15px; }
   .inv { background: #000; color: #fff; padding: 6px 4px; margin: 6px 0; text-align: center; font-weight: bold; font-size: 20px; }
   hr { border: 0; border-top: 1px dashed #000; margin: 8px 0; }
@@ -133,16 +156,17 @@ ${body}
 
   // --- kitchen ------------------------------------------------------------------------------
 
-  private kitchenChit(o: RenderDocOptions): string {
-    const change =
-      o.kitchenChange === 'CANCELLED'
-        ? '<div class="inv">لغو سفارش — آماده نکنید</div>'
-        : o.kitchenChange === 'AMENDED'
-          ? '<div class="inv">تغییر سفارش</div>'
-          : '';
-    const station = o.stationLabel ? `<div class="inv">${this.fa(this.esc(o.stationLabel))}</div>` : '';
+  private changeBanner(o: RenderDocOptions): string {
+    return o.kitchenChange === 'CANCELLED'
+      ? '<div class="inv">لغو سفارش — آماده نکنید</div>'
+      : o.kitchenChange === 'AMENDED'
+        ? '<div class="inv">تغییر سفارش</div>'
+        : '';
+  }
 
-    const lines = o.items
+  /** The station's lines, each with what the cook must know: VOID/ADD, add-ons, the note. */
+  private kitchenLines(o: RenderDocOptions): string {
+    return o.items
       .map((item) => {
         const tag = item.change === 'VOID' ? '<span class="tag">حذف</span>' : item.change === 'ADD' ? '<span class="tag">اضافه</span>' : '';
         return `<tr><td>
@@ -152,19 +176,36 @@ ${body}
 </td></tr>`;
       })
       .join('<tr><td><hr/></td></tr>');
+  }
+
+  /**
+   * What an Iranian kitchen chit is: the number the order is called by, very large, and this
+   * station's items. A change, a cancel or a copy still says so, since a cook acting on it
+   * as a fresh order makes the wrong food.
+   */
+  private compactKitchenChit(o: RenderDocOptions): string {
+    return `${o.isReprint ? REPRINT_MARK : REPRINT_SLOT}
+${this.changeBanner(o)}
+<div class="huge">${this.fa(this.displayNumber(o))}</div>
+<hr/>
+<table>${this.kitchenLines(o)}</table>`;
+  }
+
+  private kitchenChit(o: RenderDocOptions): string {
+    const station = o.stationLabel ? `<div class="inv">${this.fa(this.esc(o.stationLabel))}</div>` : '';
 
     return `${o.isReprint ? REPRINT_MARK : REPRINT_SLOT}
-${change}
+${this.changeBanner(o)}
 ${station}
 <div class="c">
   <div class="small">شماره سفارش</div>
-  <div class="big">${this.fa(this.shortNumber(o.orderNumber))}</div>
+  <div class="big">${this.fa(this.displayNumber(o))}</div>
   <div class="title">${this.orderTypeLine(o)}</div>
   <div>${this.date(o)}</div>
 </div>
 ${o.changeReason ? `<div class="box">علت: ${this.esc(o.changeReason)}</div>` : ''}
 <hr/>
-<table>${lines}</table>
+<table>${this.kitchenLines(o)}</table>
 ${o.orderNotes ? `<hr/><div class="note">توضیحات سفارش: ${this.esc(o.orderNotes)}</div>` : ''}
 <hr/>
 <div class="c small ltr">${this.esc(o.orderNumber)}</div>`;
@@ -247,7 +288,7 @@ ${o.isReprint ? REPRINT_MARK : REPRINT_SLOT}
 <div class="c">
   <div class="title">${title}</div>
   <div class="small">شماره سفارش</div>
-  <div class="big">${this.fa(this.shortNumber(o.orderNumber))}</div>
+  <div class="big">${this.fa(this.displayNumber(o))}</div>
   <div>${this.orderTypeLine(o)}</div>
 </div>
 ${row('تاریخ', this.date(o))}
@@ -276,6 +317,44 @@ ${o.orderNotes ? `<div class="sub">توضیحات: ${this.esc(o.orderNotes)}</di
 
   private date(o: RenderDocOptions): string {
     return formatBusinessDateTime(o.placedAt || new Date(), o.calendar, true);
+  }
+
+  /**
+   * A receipt for the counter that wants it short: who sold it, the number to wait for, what
+   * was bought and for how much, and whether it is paid.
+   */
+  private compactReceipt(o: RenderDocOptions): string {
+    const title = o.documentType === 'GUEST_BILL' ? 'صورتحساب' : 'فاکتور فروش';
+    const lines = o.items
+      .map(
+        (item) => `<tr>
+  <td>${this.fa(this.qty(item.quantity))} × ${this.esc(item.product_name)}</td>
+  <td class="num">${this.rial(item.total_price ?? item.unit_price ?? '')}</td>
+</tr>`,
+      )
+      .join('');
+    const owed = this.money(o.outstandingTotal);
+    const status =
+      o.outstandingTotal === undefined
+        ? ''
+        : owed <= 0n
+          ? '<div class="box">پرداخت شد</div>'
+          : `<div class="box">مانده: ${this.rial(o.outstandingTotal)} ریال</div>`;
+
+    return `<div class="c brand">${this.esc(o.brandName || o.branchName || '')}</div>
+${o.isReprint ? REPRINT_MARK : REPRINT_SLOT}
+<div class="c small">${title} — ${this.date(o)}</div>
+<div class="huge">${this.fa(this.displayNumber(o))}</div>
+<hr/>
+<table>${lines}</table>
+<hr/>
+${o.grandTotal !== undefined ? `<div class="row total"><span>مبلغ کل</span><span>${this.rial(o.grandTotal)} ریال</span></div>` : ''}
+${status}`;
+  }
+
+  /** The number that prints large: the branch's call number, else the tail of the order number. */
+  private displayNumber(o: RenderDocOptions): string {
+    return o.callNumber ? String(o.callNumber) : this.shortNumber(o.orderNumber);
   }
 
   /** The part of the order number people call out: ORD-20260922-0012 is order 12. */

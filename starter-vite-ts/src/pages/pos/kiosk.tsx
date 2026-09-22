@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
+import SettingsIcon from '@mui/icons-material/Settings';
 import {
   Box,
   Tab,
@@ -28,6 +29,27 @@ import { MoneyUtil } from 'src/utils/money.util';
 
 import { useAuthStore } from 'src/store/useAuthStore';
 import { httpClient as axios } from 'src/api/httpClient';
+import { useBranchContextOptional } from 'src/contexts/branch-context';
+
+import { DeviceTerminalDialog } from 'src/components/shift/device-terminal-dialog';
+
+/**
+ * Which kiosk this device is, kept apart from the till's register setting: a kiosk has no
+ * drawer, and its card payments go to the terminal linked to it.
+ */
+const KIOSK_TERMINAL_KEY = 'gnext_kiosk_terminal';
+type KioskTerminal = { id: string; code: string; name: string; branch_id: string };
+const readKioskTerminal = (): KioskTerminal | null => {
+  try {
+    const raw = localStorage.getItem(KIOSK_TERMINAL_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+/** How long the kiosk waits for the guest's card on the branch's terminal. */
+const CARD_WAIT_MS = 150000;
 
 /** What this branch charges for a product or size: the price the kiosk bootstrap sends, else base. */
 const shownPrice = (item: { price?: string; base_price: string }) => item.price ?? item.base_price;
@@ -87,7 +109,11 @@ interface CartItem {
 }
 
 export function KioskPage() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const branchScope = useBranchContextOptional();
+  const [kioskTerminal, setKioskTerminal] = useState<KioskTerminal | null>(() => readKioskTerminal());
+  const [deviceDialogOpen, setDeviceDialogOpen] = useState(false);
+  const kioskBranchId = kioskTerminal?.branch_id || branchScope?.selectedBranchId || undefined;
 
   // Kiosk Flow Steps: 0: WELCOME, 1: CATALOG, 2: PAYMENT_SIMULATION, 3: SUCCESS_RECEIPT, 4: PAYMENT_FAILED
   const [kioskStep, setKioskStep] = useState<number>(0);
@@ -123,7 +149,9 @@ export function KioskPage() {
   const fetchBootstrap = async () => {
     setLoading(true);
     try {
-      const res = await axios.get('/api/v1/kiosk/bootstrap');
+      const res = await axios.get('/api/v1/kiosk/bootstrap', {
+        params: { branchId: kioskBranchId, terminalId: kioskTerminal?.id },
+      });
       setBootstrapData(res.data);
     } catch (err) {
       console.error('Failed to load kiosk bootstrap context:', err);
@@ -134,7 +162,8 @@ export function KioskPage() {
 
   useEffect(() => {
     fetchBootstrap();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kioskBranchId, kioskTerminal?.id]);
 
   const { setLocale } = useAuthStore();
 
@@ -258,7 +287,8 @@ export function KioskPage() {
     setLoading(true);
     try {
       const orderPayload = {
-        branch_id: bootstrapData?.branch?.id || 'branch-1',
+        branch_id: bootstrapData?.branch?.id || kioskBranchId,
+        terminal_id: kioskTerminal?.id,
         order_type: orderType,
         customer_name: customerName || 'Kiosk Guest',
         customer_phone: customerPhone || undefined,
@@ -287,18 +317,46 @@ export function KioskPage() {
     }
   };
 
+  /**
+   * Charges the guest. With a Saman terminal behind the branch agent the answer comes later,
+   * so the kiosk asks after the payment until the terminal says yes or no. A charge the
+   * terminal never confirmed is not retried here: staff check the terminal first.
+   */
   const triggerSimulatedPosPayment = async (orderId: string) => {
     setPaymentError(null);
-    setTimeout(async () => {
-      try {
-        const res = await axios.post('/api/v1/kiosk/pay', { order_id: orderId });
-        setReceiptData(res.data.receipt);
+    const finish = (status: any) => {
+      if (status.success) {
+        setReceiptData(status.receipt);
         setKioskStep(3);
-      } catch (err: any) {
-        setPaymentError(err.response?.data?.message || 'Terminal Payment Failed');
-        setKioskStep(4);
+        return true;
       }
-    }, 2000);
+      if (status.failed || status.unresolved) {
+        setPaymentError(
+          status.unresolved
+            ? t('kiosk.pay.unresolved', 'The card terminal did not confirm the payment. Please ask a member of staff.')
+            : status.failure_message || t('kiosk.pay.failed', 'The card was not charged.')
+        );
+        setKioskStep(4);
+        return true;
+      }
+      return false;
+    };
+    try {
+      const res = await axios.post('/api/v1/kiosk/pay', { order_id: orderId, terminal_id: kioskTerminal?.id });
+      if (finish(res.data)) return;
+      const paymentId = res.data.payment?.id;
+      const started = Date.now();
+      while (Date.now() - started < CARD_WAIT_MS) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const status = await axios.get(`/api/v1/kiosk/payments/${paymentId}`);
+        if (finish(status.data)) return;
+      }
+      setPaymentError(t('kiosk.pay.unresolved', 'The card terminal did not confirm the payment. Please ask a member of staff.'));
+      setKioskStep(4);
+    } catch (err: any) {
+      setPaymentError(err.detail || err.response?.data?.message || t('kiosk.pay.failed', 'The card was not charged.'));
+      setKioskStep(4);
+    }
   };
 
   const handleRetryPayment = () => {
@@ -334,10 +392,35 @@ export function KioskPage() {
       >
         <Stack direction="row" sx={{ justifyContent: 'space-between', width: '100%', maxWidth: 900, mb: 4 }}>
           <Chip label="SELF-SERVICE KIOSK" color="primary" sx={{ fontWeight: 'bold', fontSize: '1rem', p: 1 }} />
-          <Button variant="outlined" size="large" onClick={toggleLanguage}>
-            {i18n.language === 'fa' ? 'English' : 'فارسی'}
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" size="large" onClick={toggleLanguage}>
+              {i18n.language === 'fa' ? 'English' : 'فارسی'}
+            </Button>
+            {/* Staff only: which kiosk this device is, so it charges the right card terminal. */}
+            <IconButton aria-label={t('kiosk.device.title', 'Set up this kiosk')} onClick={() => setDeviceDialogOpen(true)}>
+              <SettingsIcon />
+            </IconButton>
+          </Stack>
         </Stack>
+        {kioskBranchId && (
+          <DeviceTerminalDialog
+            open={deviceDialogOpen}
+            onClose={() => setDeviceDialogOpen(false)}
+            branchId={kioskBranchId}
+            branchName={bootstrapData?.branch?.name}
+            current={kioskTerminal}
+            terminalType="KIOSK"
+            onAssigned={(term) => {
+              const next = { id: term.id, code: term.code, name: term.name, branch_id: term.branch_id || kioskBranchId };
+              try {
+                localStorage.setItem(KIOSK_TERMINAL_KEY, JSON.stringify(next));
+              } catch {
+                // A kiosk that cannot remember itself still sells, on the branch's only terminal.
+              }
+              setKioskTerminal(next);
+            }}
+          />
+        )}
 
         <Paper sx={{ p: 6, borderRadius: 4, textAlign: 'center', maxWidth: 800, width: '100%', boxShadow: 8 }}>
           <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 1 }}>
@@ -781,9 +864,13 @@ export function KioskPage() {
           <DialogContent sx={{ textAlign: 'center', py: 6 }}>
             <CircularProgress size={60} sx={{ mb: 3 }} />
             <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
-              Insert or Tap Card
+              {t('kiosk.pay.insertCard', 'Insert or tap your card')}
             </Typography>
-            <Typography color="text.secondary">Simulating Network Card POS Terminal authorization...</Typography>
+            <Typography color="text.secondary">
+              {bootstrapData?.simulatedCapabilities?.simulated_card_terminal
+                ? t('kiosk.pay.simulated', 'Simulated card terminal (no terminal is connected at this branch)')
+                : t('kiosk.pay.onTerminal', 'Follow the instructions on the card terminal')}
+            </Typography>
           </DialogContent>
         </Dialog>
       )}
@@ -796,21 +883,27 @@ export function KioskPage() {
           </DialogTitle>
           <DialogContent dividers sx={{ p: 4 }}>
             <Paper sx={{ p: 4, fontFamily: 'monospace' }} variant="outlined">
-              <Typography variant="h5" align="center" sx={{ fontWeight: 'bold', mb: 1 }}>
-                {receiptData.header}
+              {/* The number the counter will call: what the guest needs to remember. */}
+              <Typography align="center" color="text.secondary">
+                {t('kiosk.receipt.yourNumber', 'Your order number')}
               </Typography>
-              <Typography variant="h4" align="center" color="primary.main" sx={{ fontWeight: 'bold', mb: 2 }}>
-                ORDER #{receiptData.order_number}
+              <Typography variant="h1" align="center" color="primary.main" sx={{ fontWeight: 900, mb: 1 }}>
+                {receiptData.call_number || receiptData.order_number}
+              </Typography>
+              <Typography align="center" variant="caption" sx={{ display: 'block' }}>
+                {receiptData.order_number}
               </Typography>
               <Divider sx={{ my: 2 }} />
-
-              <Typography>Order Type: {receiptData.order_type}</Typography>
-              <Typography>Terminal Ref: {receiptData.reference_number}</Typography>
+              <Typography>
+                {t('kiosk.receipt.reference', 'Card reference')}: {receiptData.reference_number || '—'}
+              </Typography>
               <Typography sx={{ mt: 1, fontWeight: 'bold', display: 'block' }}>
-                Total Paid: {MoneyUtil.formatCurrency(receiptData.total_paid)} IRR ({receiptData.payment_method})
+                {t('kiosk.receipt.paid', 'Paid')}: {MoneyUtil.formatCurrency(receiptData.total_paid)} IRR
               </Typography>
               <Typography color="success.main" sx={{ fontWeight: 'bold', mt: 2, display: 'block' }}>
-                Status: {receiptData.status}
+                {receiptData.status === 'WAITING_FOR_STAFF'
+                  ? t('kiosk.receipt.waiting', 'Paid. Staff will confirm your order shortly.')
+                  : t('kiosk.receipt.sent', 'Paid and sent to the kitchen.')}
               </Typography>
             </Paper>
           </DialogContent>
