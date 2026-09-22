@@ -35,6 +35,7 @@ var (
 func runWindow() int {
 	runtime.LockOSThread()
 	url := "http://" + uiAddr()
+	ensureTray()
 
 	mutex, err := windows.CreateMutex(nil, false, windows.StringToUTF16Ptr(`Local\GnextAgentWindow`))
 	if err != nil {
@@ -110,6 +111,21 @@ func startWindow() {
 	// Let the window take the foreground, which Windows otherwise keeps for the tray.
 	procAllowSetForegroundW.Call(^uintptr(0)) // ASFW_ANY
 	_ = exec.Command(exe, "open").Start()
+}
+
+// ensureTray brings the tray icon back when the user quit it and then opened the agent: the
+// service starts one only at sign-in, so without this it stays gone until the next one.
+func ensureTray() {
+	h, err := windows.OpenMutex(windows.SYNCHRONIZE, false, windows.StringToUTF16Ptr(`Local\GnextAgentTray`))
+	if err == nil {
+		windows.CloseHandle(h) // a tray is running
+		return
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	_ = exec.Command(exe, "tray").Start()
 }
 
 const waitingPage = `<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="utf-8">

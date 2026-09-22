@@ -78,7 +78,7 @@ go build -o gnext-agent.exe ./cmd/gnext-agent   # a console build, handy for `ru
 
 # What CI ships: the icon and version details, and a windowed program (no console window;
 # commands typed in a terminal still print there):
-(cd cmd/gnext-agent; go run github.com/tc-hib/go-winres@v0.3.3 make --arch amd64 --product-version=1.0.9 --file-version=1.0.9)
+(cd cmd/gnext-agent; go run github.com/tc-hib/go-winres@v0.3.3 make --arch amd64 --product-version=1.0.10 --file-version=1.0.10)
 go build -ldflags "-H windowsgui" -o gnext-agent.exe ./cmd/gnext-agent
 
 # Run in a console against a local backend, with data in a scratch folder:
