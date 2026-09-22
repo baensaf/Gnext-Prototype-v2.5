@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { SessionService } from '../../modules/auth/session.service';
 import { AdminUser } from '../../entities/AdminUser.entity';
+import { setRequestActor } from '../utils/till-context';
 
 @Injectable()
 export class SessionGuard implements CanActivate {
@@ -65,6 +66,7 @@ export class SessionGuard implements CanActivate {
     req.rawSessionToken = rawToken;
     req.user = user;
     req.userId = user.id;
+    setRequestActor(user.id);
     req.tenantId = user.tenant_id;
     req.userRole = user.role;
     // NULL here means head office. Handlers use it to decide what a request may reach,

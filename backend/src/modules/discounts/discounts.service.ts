@@ -6,6 +6,7 @@ import { CustomerDiscount } from '../../entities/CustomerDiscount.entity';
 import { Customer } from '../../entities/Customer.entity';
 import { Product } from '../../entities/Product.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { DiscountEvaluationService, DiscountQuoteResult } from './discount-evaluation.service';
 import {
@@ -14,6 +15,14 @@ import {
   CreateOneTimeCouponDto,
   DiscountQuoteRequestDto,
 } from './dtos/discounts.dto';
+
+/**
+ * A bare YYYY-MM-DD is a whole business day, from its first moment to its last on Tehran's
+ * clock. Read as UTC midnight, a window opened at 03:30 and lost its last day.
+ */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const windowStart = (v: string): Date => (DATE_ONLY.test(v) ? BusinessDateUtil.startOfDay(v) : new Date(v));
+const windowEnd = (v: string): Date => (DATE_ONLY.test(v) ? BusinessDateUtil.endOfDay(v) : new Date(v));
 
 @Injectable()
 export class DiscountsService {
@@ -110,8 +119,8 @@ export class DiscountsService {
       tenant_id: tenantId,
       customer_id: dto.customer_id,
       discount_percentage: percentage,
-      effective_from: dto.effective_from ? new Date(dto.effective_from) : null,
-      effective_to: dto.effective_to ? new Date(dto.effective_to) : null,
+      effective_from: dto.effective_from ? windowStart(dto.effective_from) : null,
+      effective_to: dto.effective_to ? windowEnd(dto.effective_to) : null,
       note: dto.note || null,
       is_active: dto.is_active ?? true,
       created_by: userId || null,
@@ -148,10 +157,10 @@ export class DiscountsService {
       discount.discount_percentage = percentage;
     }
     if (dto.effective_from !== undefined) {
-      discount.effective_from = dto.effective_from ? new Date(dto.effective_from) : null;
+      discount.effective_from = dto.effective_from ? windowStart(dto.effective_from) : null;
     }
     if (dto.effective_to !== undefined) {
-      discount.effective_to = dto.effective_to ? new Date(dto.effective_to) : null;
+      discount.effective_to = dto.effective_to ? windowEnd(dto.effective_to) : null;
     }
 
     if (discount.effective_from && discount.effective_to && discount.effective_from > discount.effective_to) {
@@ -203,6 +212,28 @@ export class DiscountsService {
     return { success: true };
   }
 
+  async setCouponActive(tenantId: string, id: string, isActive: boolean, correlationId?: string) {
+    const coupon = await this.couponRepo.findOne({ where: { id, tenant_id: tenantId } });
+    if (!coupon) throw new NotFoundException(`Coupon ${id} not found`);
+    const before = { is_active: coupon.is_active };
+    coupon.is_active = isActive;
+    const saved = await this.couponRepo.save(coupon);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: isActive ? 'COUPON_ACTIVATED' : 'COUPON_DEACTIVATED',
+      entityType: 'Coupon',
+      entityId: id,
+      correlationId: correlationId || 'system',
+      beforeData: before,
+      afterData: { is_active: isActive },
+      details: { code: coupon.code },
+    });
+
+    return saved;
+  }
+
   // One-Time Coupons (Workflow 4)
   async createOneTimeCoupon(tenantId: string, dto: CreateOneTimeCouponDto, correlationId?: string) {
     const code = dto.code.trim().toUpperCase();
@@ -240,10 +271,10 @@ export class DiscountsService {
       reward_quantity: couponType === 'FREE_ITEM' ? dto.reward_quantity || 1 : 1,
       minimum_subtotal: dto.minimum_subtotal ? MoneyUtil.format(dto.minimum_subtotal) : null,
       maximum_discount_amount: dto.maximum_discount_amount ? MoneyUtil.format(dto.maximum_discount_amount) : null,
-      max_uses: 1,
+      max_uses: dto.max_uses && Number(dto.max_uses) >= 1 ? Math.floor(Number(dto.max_uses)) : 1,
       uses_count: 0,
-      effective_from: dto.effective_from ? new Date(dto.effective_from) : null,
-      effective_to: dto.effective_to ? new Date(dto.effective_to) : null,
+      effective_from: dto.effective_from ? windowStart(dto.effective_from) : null,
+      effective_to: dto.effective_to ? windowEnd(dto.effective_to) : null,
       is_active: true,
     });
 

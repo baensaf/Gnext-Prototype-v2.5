@@ -94,7 +94,8 @@ export function TerminalsPage() {
       setDrawerOpen(false);
       setCode('');
       setName('');
-      setBranchId('');
+      // Back to the branch in scope, not blank: a pinned manager has no other branch to pick.
+      setBranchId(selectedBranchId);
       setSuccess(t('operations.terminals.createSuccess', 'Terminal created successfully'));
       loadData();
     } catch (err: any) {

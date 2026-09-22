@@ -839,6 +839,11 @@ export class CatalogService {
     return await this.menuCatRepo.save(link);
   }
 
+  async removeProductFromMenu(tenantId: string, menuId: string, productId: string) {
+    await this.menuProdRepo.delete({ tenant_id: tenantId, menu_id: menuId, product_id: productId });
+    return { success: true };
+  }
+
   async addProductToMenu(tenantId: string, menuId: string, productId: string, categoryId?: string, sortOrder: number = 0, overridePrice?: string) {
     let link = await this.menuProdRepo.findOne({ where: { tenant_id: tenantId, menu_id: menuId, product_id: productId } });
     if (!link) {

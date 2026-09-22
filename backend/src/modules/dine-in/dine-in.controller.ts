@@ -55,6 +55,7 @@ export class DineInController {
     return await this.dineInService.getTables(tenantId, { ...query, areaId });
   }
 
+  @BranchOwned(DiningArea, { body: 'dining_area_id' })
   @Roles(...MANAGER_AND_ABOVE)
   @Post('tables')
   async createTable(@Body() body: CreateTableDto, @Req() req: Request) {

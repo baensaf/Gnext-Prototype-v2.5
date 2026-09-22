@@ -5,6 +5,7 @@ import { Tenant } from '../../entities/Tenant.entity';
 import { Branch, BranchType } from '../../entities/Branch.entity';
 import { BranchOperatingHour } from '../../entities/BranchOperatingHour.entity';
 import { Terminal } from '../../entities/Terminal.entity';
+import { AdminUser } from '../../entities/AdminUser.entity';
 import { BranchStatusSnapshot } from '../../entities/BranchStatusSnapshot.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
@@ -155,6 +156,12 @@ export class TenantService {
     branch.is_active = false;
     await this.branchRepo.softRemove(branch);
 
+    // A closed shop's staff accounts go with it. Left active, they signed in pinned to a
+    // branch nobody could see, with every screen empty and no branch to switch to.
+    const users = await this.branchRepo.manager
+      .getRepository(AdminUser)
+      .update({ tenant_id: tenantId, branch_id: branchId, is_active: true }, { is_active: false });
+
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
@@ -162,8 +169,9 @@ export class TenantService {
       entityType: 'Branch',
       entityId: branchId,
       correlationId,
+      details: { accountsDisabled: users.affected ?? 0 },
     });
-    return { success: true };
+    return { success: true, accountsDisabled: users.affected ?? 0 };
   }
 
   async getBranchHours(tenantId: string, branchId: string) {

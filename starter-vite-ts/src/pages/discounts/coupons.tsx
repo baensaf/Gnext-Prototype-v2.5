@@ -77,11 +77,12 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
   const [maxCap, setMaxCap] = useState('');
   const [effectiveFrom, setEffectiveFrom] = useState('');
   const [effectiveTo, setEffectiveTo] = useState('');
+  const [maxUses, setMaxUses] = useState('1');
   const [saving, setSaving] = useState(false);
 
   // Test bench state
   const [testCouponCode, setTestCouponCode] = useState('');
-  const [testOrderTotal, setTestOrderTotal] = useState('100000');
+  const [testOrderTotal, setTestOrderTotal] = useState('10000000');
   const [validationResult, setValidationResult] = useState<any>(null);
   const [testError, setTestError] = useState<string | null>(null);
 
@@ -103,7 +104,7 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
     loadData();
     catalogApi
       .getProducts()
-      .then(setProducts)
+      .then((list) => setProducts(list.filter((p) => p.is_active !== false)))
       .catch(() => setProducts([]));
   }, []);
 
@@ -138,6 +139,7 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
         maximum_discount_amount: maxCap || undefined,
         effective_from: effectiveFrom || undefined,
         effective_to: effectiveTo || undefined,
+        max_uses: Number(maxUses) >= 1 ? Math.floor(Number(maxUses)) : 1,
       });
 
       setDrawerOpen(false);
@@ -165,7 +167,18 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
     }
   };
 
+  const handleToggleActive = async (coupon: Coupon) => {
+    setError(null);
+    try {
+      await axios.patch(`/api/v1/coupons/${coupon.id}`, { is_active: !coupon.is_active });
+      await loadData();
+    } catch (err: any) {
+      setError(err.detail || err.message);
+    }
+  };
+
   const resetForm = () => {
+    setMaxUses('1');
     setCode('');
     setCouponType('PERCENTAGE');
     setPercentage('15');
@@ -287,6 +300,7 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
                     <TableCell>{t('coupons.redemptionStatus', 'Redemption Status')}</TableCell>
                     <TableCell>{t('coupons.validity', 'Effective Window')}</TableCell>
                     <TableCell>{t('coupons.status', 'Status')}</TableCell>
+                    <TableCell align="right">{t('coupons.actions', 'Actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -336,6 +350,11 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
                             color={coupon.is_active ? 'success' : 'default'}
                             size="small"
                           />
+                        </TableCell>
+                        <TableCell align="right">
+                          <Button size="small" color={coupon.is_active ? 'error' : 'primary'} onClick={() => handleToggleActive(coupon)}>
+                            {coupon.is_active ? t('coupons.deactivate', 'Switch off') : t('coupons.activate', 'Switch on')}
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );
@@ -458,6 +477,15 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
                 value={maxCap}
                 onChange={(e) => setMaxCap(e.target.value)}
                 placeholder="50000"
+              />
+
+              <TextField
+                fullWidth
+                type="number"
+                label={t('coupons.maxUsesLabel', 'Uses allowed')}
+                value={maxUses}
+                onChange={(e) => setMaxUses(e.target.value)}
+                slotProps={{ htmlInput: { min: 1 } }}
               />
 
               <Stack direction="row" spacing={2}>

@@ -13,6 +13,7 @@ import { Repository, DataSource, EntityManager, In, IsNull } from 'typeorm';
 import { CALENDAR_SETTING_KEY, formatBusinessDateTime, readCalendar } from '../../common/utils/calendar.util';
 import { OrderHeader, OrderState } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
+import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { OrderItemOption } from '../../entities/OrderItemOption.entity';
 import { OrderAdjustment } from '../../entities/OrderAdjustment.entity';
 import { OrderNote } from '../../entities/OrderNote.entity';
@@ -925,6 +926,7 @@ export class OrderService {
       }
     }
 
+    await this.closeArrivalAlert(tenantId, order, userId);
     const snappfoodCode = this.snappfoodOrderCode(order);
     if (snappfoodCode && this.simulationService) {
       try {
@@ -970,6 +972,7 @@ export class OrderService {
     correlationId?: string,
   ) {
     const order = await this.transitionState(tenantId, id, 'REJECT', { reasonText }, userId, correlationId);
+    await this.closeArrivalAlert(tenantId, order, userId);
 
     const snappfoodCode = this.snappfoodOrderCode(order);
     if (snappfoodCode && this.simulationService) {
@@ -1074,6 +1077,24 @@ export class OrderService {
   }
 
   /** Snappfood's code for one of its orders: our order number without the SNP- prefix. */
+  /**
+   * The "waiting for acceptance" notice has done its job once the order is answered —
+   * accepted, rejected, or answered by the timeout. Left open, the bell kept a manager
+   * chasing orders that were long in the kitchen or long gone.
+   */
+  private async closeArrivalAlert(tenantId: string, order: OrderHeader, userId?: string) {
+    const alerts = this.orderRepo.manager?.getRepository?.(OperationalAlert);
+    if (!order?.order_number || !alerts) return;
+    try {
+      await alerts.update(
+        { tenant_id: tenantId, type: 'INCOMING_ORDER', title: `New Snappfood order ${order.order_number}`, acknowledged: false },
+        { acknowledged: true, acknowledged_at: new Date(), acknowledged_by: userId || null } as any,
+      );
+    } catch {
+      // A notice left open is untidy, not wrong; the answer to the order stands.
+    }
+  }
+
   private snappfoodOrderCode(order: OrderHeader): string | null {
     if (order.channel !== 'AGGREGATOR' || !order.order_number?.startsWith('SNP-')) return null;
     return order.order_number.slice('SNP-'.length);

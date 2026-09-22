@@ -341,12 +341,15 @@ export class RefundService {
       }
 
       if (refund.status === 'SUCCEEDED') {
+        // The cashback comes back in proportion to what is refunded of the order. The call
+        // used to pass the user id and correlation id where the order total and currency go,
+        // so refunding any order that had earned cashback failed with a DecimalError.
         await this.creditService.reverseLoyaltyCashback(
           tenantId,
           order.id,
           refund.amount,
-          userId,
-          correlationId,
+          order.total_amount,
+          order.currency_code || 'IRR',
           em,
         );
 

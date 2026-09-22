@@ -781,19 +781,26 @@ export class CreditService {
         const exposure = MoneyUtil.abs(acc.current_balance);
         totalOutstanding = MoneyUtil.add(totalOutstanding, exposure);
 
+        // Repayments settle the oldest purchases first, so what is still owed is the newest
+        // purchases up to the balance. Ageing every purchase ever made put paid-off charges
+        // in the buckets, and the buckets no longer added up to the outstanding total.
         const entries = await this.entryRepo.find({
           where: { account_id: acc.id, entry_type: 'PURCHASE' },
-          order: { posted_at: 'ASC' },
+          order: { posted_at: 'DESC' },
         });
 
         let accCurrent = '0.0000';
         let acc31_60 = '0.0000';
         let acc61_90 = '0.0000';
         let acc90Plus = '0.0000';
+        let unallocated = exposure;
 
         for (const e of entries) {
+          if (!MoneyUtil.greaterThan(unallocated, '0')) break;
           const ageDays = Math.floor((asOfDate.getTime() - new Date(e.posted_at).getTime()) / (1000 * 3600 * 24));
-          const entryAmt = MoneyUtil.abs(e.amount);
+          const purchased = MoneyUtil.abs(e.amount);
+          const entryAmt = MoneyUtil.lessThan(purchased, unallocated) ? purchased : unallocated;
+          unallocated = MoneyUtil.subtract(unallocated, entryAmt);
 
           if (ageDays <= 30) {
             accCurrent = MoneyUtil.add(accCurrent, entryAmt);
@@ -808,6 +815,11 @@ export class CreditService {
             acc90Plus = MoneyUtil.add(acc90Plus, entryAmt);
             bucket90Plus = MoneyUtil.add(bucket90Plus, entryAmt);
           }
+        }
+        // Owed through an adjustment rather than a purchase has no age to read; count it current.
+        if (MoneyUtil.greaterThan(unallocated, '0')) {
+          accCurrent = MoneyUtil.add(accCurrent, unallocated);
+          currentBucket = MoneyUtil.add(currentBucket, unallocated);
         }
 
         customerAgingList.push({

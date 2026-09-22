@@ -111,8 +111,6 @@ export function SimulationCenterPage() {
         customer_phone: '+989129990000',
         address: 'تهران، خیابان ولیعصر، پلاک ۱۰۰',
         expeditionType: 'DELIVERY',
-        price: 3200,
-        paidPrice: 3200,
         notes: 'سفارش ثبت‌شده از داشبورد کلی شبیه‌ساز',
         bikerName: 'پیک شبیه‌ساز',
         bikerStatusV2: 'REQUESTED',

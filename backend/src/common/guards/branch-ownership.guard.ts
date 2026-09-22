@@ -41,7 +41,7 @@ export class BranchOwnershipGuard implements CanActivate {
     if (!userBranchId) return true;
 
     // A create names no record, and a class-level mark covers those routes too.
-    const id = req.params?.[spec.param || 'id'];
+    const id = spec.body ? req.body?.[spec.body] : req.params?.[spec.param || 'id'];
     if (!id) return true;
 
     const owner = await this.branchOf(spec, req.tenantId, id);

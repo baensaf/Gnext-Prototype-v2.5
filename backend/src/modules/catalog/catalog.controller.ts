@@ -394,6 +394,13 @@ export class CatalogController {
     return await this.catalogService.addProductToMenu(tenantId, id, body.productId, body.categoryId, body.sortOrder, body.overridePrice);
   }
 
+  @HeadOfficeOnly()
+  @Delete('menus/:id/products/:productId')
+  async removeProductFromMenu(@Param('id') id: string, @Param('productId') productId: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.catalogService.removeProductFromMenu(tenantId, id, productId);
+  }
+
   // Availability & Suspension
   @Get('availability')
   async getAvailabilities(@Query('branchId') branchId: string, @Req() req: Request) {

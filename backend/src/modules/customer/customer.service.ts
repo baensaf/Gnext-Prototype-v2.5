@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In } from 'typeorm';
+import { Repository, DataSource, In, Like } from 'typeorm';
 import { Customer } from '../../entities/Customer.entity';
 import { CustomerPhone } from '../../entities/CustomerPhone.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
@@ -10,6 +10,8 @@ import { CustomerTagLink } from '../../entities/CustomerTagLink.entity';
 import { CustomerConsent } from '../../entities/CustomerConsent.entity';
 import { CustomerMerge } from '../../entities/CustomerMerge.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
+import { CreditEntry } from '../../entities/CreditEntry.entity';
+import { DiscountUsage } from '../../entities/DiscountUsage.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
@@ -184,6 +186,22 @@ export class CustomerService {
 
     const existing = await this.customerRepo.findOne({ where: { tenant_id: tenantId, code } });
     if (existing) throw new ConflictException(`Customer code ${code} already exists`);
+
+    // The code only caught a repeat typed the same way. 0912…, +98 912… and a record kept
+    // under a CUST- code are one person, and a second record splits their history and credit.
+    const last10 = normMobile.replace(/\D/g, '').slice(-10);
+    if (last10.length === 10) {
+      const sameNumber = (
+        (await this.customerRepo.find({ where: { tenant_id: tenantId, is_active: true, mobile: Like(`%${last10}`) } })) || []
+      ).find((c) => normalizePhone(c.mobile) === normMobile);
+      if (sameNumber) {
+        throw new ConflictException({
+          code: 'CUSTOMER_MOBILE_EXISTS',
+          message: `${sameNumber.first_name} ${sameNumber.last_name} (${sameNumber.code}) already has this mobile number`.replace(/\s+/g, ' '),
+          customerId: sameNumber.id,
+        });
+      }
+    }
 
     const customer = this.customerRepo.create({
       tenant_id: tenantId,
@@ -362,6 +380,9 @@ export class CustomerService {
 
     for (const [phone, group] of phoneMap.entries()) {
       if (group.length > 1) {
+        // Keep the record the customer has had longest — it carries the history, the credit
+        // account and the loyalty balance — and fold the newer copies into it.
+        group.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         for (let i = 0; i < group.length - 1; i++) {
           for (let j = i + 1; j < group.length; j++) {
             candidates.push({
@@ -408,8 +429,32 @@ export class CustomerService {
       // Relink orders
       await orderRepoTx.update({ tenant_id: tenantId, customer_id: source.id }, { customer_id: target.id });
 
-      // Relink credit accounts
-      await accRepoTx.update({ tenant_id: tenantId, customer_id: source.id }, { customer_id: target.id });
+      // Fold the credit accounts together. A customer holds one account per currency, and
+      // every customer is given one on sign-up, so relinking the source's account onto the
+      // target broke that rule and the whole merge failed. Its ledger moves across instead,
+      // with its balance, and the emptied account is closed.
+      const sourceAccounts = await accRepoTx.find({ where: { tenant_id: tenantId, customer_id: source.id } });
+      for (const sourceAccount of sourceAccounts) {
+        const targetAccount = await accRepoTx.findOne({
+          where: { tenant_id: tenantId, customer_id: target.id, currency_code: sourceAccount.currency_code },
+        });
+        if (!targetAccount) {
+          await accRepoTx.update({ id: sourceAccount.id }, { customer_id: target.id });
+          continue;
+        }
+        await manager.getRepository(CreditEntry).update({ account_id: sourceAccount.id }, { account_id: targetAccount.id });
+        targetAccount.current_balance = MoneyUtil.add(targetAccount.current_balance, sourceAccount.current_balance);
+        if (MoneyUtil.greaterThan(sourceAccount.credit_limit, targetAccount.credit_limit)) {
+          targetAccount.credit_limit = sourceAccount.credit_limit;
+        }
+        await accRepoTx.save(targetAccount);
+        sourceAccount.current_balance = MoneyUtil.format('0');
+        sourceAccount.status = 'CLOSED';
+        await accRepoTx.save(sourceAccount);
+      }
+
+      // Coupon redemptions count per customer, so they follow the person.
+      await manager.getRepository(DiscountUsage).update({ tenant_id: tenantId, customer_id: source.id }, { customer_id: target.id });
 
       // Relink addresses & phones
       await addrRepoTx.update({ tenant_id: tenantId, customer_id: source.id }, { customer_id: target.id });

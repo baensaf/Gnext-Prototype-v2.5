@@ -29,6 +29,8 @@ import {
 
 import { useParams } from 'src/routes/hooks';
 
+import { MoneyUtil } from 'src/utils/money.util';
+
 import { tenantApi } from 'src/api/tenantApi';
 import { catalogApi } from 'src/api/catalogApi';
 import { useScopedBranchId } from 'src/contexts/branch-context';
@@ -68,7 +70,10 @@ export function MenusPage() {
       setMenus(mList);
       setBranches(bList);
       setCategories(cList);
-      setProducts(pList);
+      // A retired product cannot be sold, so offering it for a menu only adds noise.
+      setProducts(pList.filter((p) => p.is_active !== false));
+      // Keep the open drawer showing the menu's current items after a change.
+      setSelectedMenu((current) => (current ? mList.find((m) => m.id === current.id) || null : null));
       setError(null);
     } catch (err: any) {
       setError(err.detail || t('catalog.menusPage.errors.loadFailed'));
@@ -127,8 +132,8 @@ export function MenusPage() {
     e.preventDefault();
     if (!selectedMenu || !selectedProductId) return;
     try {
-      await catalogApi.addProductToMenu(selectedMenu.id, selectedProductId, undefined, 0, overridePrice || undefined);
-      setAttachDrawerOpen(false);
+      const categoryId = products.find((p) => p.id === selectedProductId)?.category_id;
+      await catalogApi.addProductToMenu(selectedMenu.id, selectedProductId, categoryId, selectedMenu.products?.length || 0, overridePrice || undefined);
       setSelectedProductId('');
       setOverridePrice('');
       loadData();
@@ -136,6 +141,20 @@ export function MenusPage() {
       setError(err.detail || t('catalog.menusPage.errors.attachFailed'));
     }
   };
+
+  const handleRemoveProduct = async (productId: string) => {
+    if (!selectedMenu) return;
+    const productName = products.find((p) => p.id === productId)?.name || productId;
+    if (!window.confirm(t('catalog.menusPage.deleteConfirm', { name: productName }))) return;
+    try {
+      await catalogApi.removeProductFromMenu(selectedMenu.id, productId);
+      loadData();
+    } catch (err: any) {
+      setError(err.detail || t('catalog.menusPage.errors.detachFailed'));
+    }
+  };
+
+  const attachedIds = new Set((selectedMenu?.products || []).map((mp) => mp.product_id));
 
   return (
     <Box>
@@ -278,11 +297,13 @@ export function MenusPage() {
           <Box component="form" onSubmit={handleAddProductToMenu}>
             <Stack spacing={2}>
               <TextField select label={t('catalog.menusPage.selectProduct')} value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} required fullWidth>
-                {products.map((p) => (
-                  <MenuItem key={p.id} value={p.id}>
-                    {p.name} ({p.code}) — {p.base_price} IRR
-                  </MenuItem>
-                ))}
+                {products
+                  .filter((p) => !attachedIds.has(p.id))
+                  .map((p) => (
+                    <MenuItem key={p.id} value={p.id}>
+                      {p.name} ({p.code}) — {MoneyUtil.formatCurrency(p.base_price)} IRR
+                    </MenuItem>
+                  ))}
               </TextField>
               <TextField
                 label={t('catalog.menusPage.priceOverride')}
@@ -297,6 +318,44 @@ export function MenusPage() {
               </Button>
             </Stack>
           </Box>
+
+          <Typography variant="subtitle2" sx={{ mt: 4, mb: 1 }}>
+            {t('catalog.menusPage.itemsAttached')} ({selectedMenu?.products?.length || 0})
+          </Typography>
+          {(selectedMenu?.products || []).length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              {t('catalog.menusPage.noItems')}
+            </Typography>
+          ) : (
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>{t('catalog.menusPage.product')}</TableCell>
+                  <TableCell>{t('catalog.menusPage.priceOverride')}</TableCell>
+                  <TableCell />
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(selectedMenu?.products || []).map((mp) => {
+                  const product = products.find((p) => p.id === mp.product_id);
+                  return (
+                    <TableRow key={mp.id}>
+                      <TableCell>{product ? product.name : mp.product_id}</TableCell>
+                      <TableCell>
+                        {MoneyUtil.formatCurrency(mp.override_price || product?.base_price)}
+                        {mp.override_price ? ' *' : ''}
+                      </TableCell>
+                      <TableCell align="right">
+                        <IconButton color="error" size="small" onClick={() => handleRemoveProduct(mp.product_id)}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
         </Box>
       </Drawer>
     </Box>

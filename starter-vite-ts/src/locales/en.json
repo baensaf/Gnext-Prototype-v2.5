@@ -2074,16 +2074,16 @@
     "failedToRevoke": "Failed to revoke discount"
   },
   "coupons": {
-    "title": "One-Time Promotional Coupons",
-    "subtitle": "Create unique one-time percentage coupon codes with minimum purchase subtotal and redemption tracking.",
-    "createOneTime": "Create One-Time Coupon",
+    "title": "Coupons",
+    "subtitle": "Coupon codes with their own terms: single-use or a campaign code many customers can redeem.",
+    "createOneTime": "Create Coupon",
     "testBenchTitle": "POS Coupon Validation Test Bench",
     "testCodeLabel": "Coupon Code",
     "simulatedSubtotal": "Simulated Subtotal (IRR)",
     "validateButton": "Validate Code",
     "couponValid": "Coupon VALID! Applied Discount: -{{amount}} IRR",
     "ruleLabel": "Rule:",
-    "noCoupons": "No one-time coupons created yet.",
+    "noCoupons": "No coupons created yet.",
     "code": "Coupon Code",
     "redemptionStatus": "Redemption Status",
     "validity": "Effective Window",
@@ -2093,7 +2093,7 @@
     "noDateLimit": "No Date Limit",
     "start": "Start",
     "expires": "Expires",
-    "createModalTitle": "Create One-Time Coupon Code",
+    "createModalTitle": "Create Coupon Code",
     "codeLabel": "Unique Coupon Code",
     "codePlaceholder": "e.g. WELCOME15",
     "percentageLabel": "Discount Percentage (%)",
@@ -2101,7 +2101,7 @@
     "maxCapLabel": "Maximum Discount Cap (IRR)",
     "startDate": "Start Date",
     "endDate": "End Date",
-    "oneTimeNotice": "One-Time Coupons are locked to exactly 1 total redemption and 1 redemption per customer.",
+    "oneTimeNotice": "Leave Uses at 1 for a single-use code. A campaign code counts every redemption against its limit.",
     "failedToLoad": "Failed to load coupons",
     "failedToCreate": "Failed to create one-time coupon",
     "validationFailed": "Coupon validation failed",
@@ -2112,7 +2112,11 @@
     "buyProduct": "Buy",
     "rewardProduct": "Get free",
     "quantity": "Qty",
-    "freeItemNotice": "The cashier rings up the free item as usual; the coupon takes its price off once the order has what the coupon asks to buy."
+    "freeItemNotice": "The cashier rings up the free item as usual; the coupon takes its price off once the order has what the coupon asks to buy.",
+    "maxUsesLabel": "Uses allowed",
+    "actions": "Actions",
+    "deactivate": "Switch off",
+    "activate": "Switch on"
   },
   "authPolicy": {
     "title": "Cashier Manual Discount Authorizations",
@@ -2278,7 +2282,8 @@
         "successAlert": "ORDER CREATED SUCCESSFULLY",
         "duplicateAlert": "DUPLICATE WEBHOOK IGNORED (Exactly-Once Enforced)",
         "viewInOrders": "View in Orders Directory",
-        "openInPos": "Open POS Register"
+        "openInPos": "Open POS Register",
+        "priceFromBasket": "0 = priced from the menu basket"
       },
       "stepper": {
         "title": "Order Status Lifecycle State Machine",
@@ -2751,7 +2756,8 @@
       "saveButton": "Save Localized Strings",
       "saveSuccess": "Bilingual localized strings saved successfully!",
       "uploadSuccess": "Image asset uploaded successfully: {{url}}",
-      "saveError": "Failed to save translations"
+      "saveError": "Failed to save translations",
+      "selectProduct": "Menu item"
     },
     "dataResetPage": {
       "title": "System Data Reset & Seed Profiles",
