@@ -724,7 +724,10 @@ export class OrderService {
     const order = await this.orderRepo.findOne({ where: { id: orderId, tenant_id: tenantId } });
     if (!order || ['DRAFT', 'PENDING_ACCEPTANCE', 'CANCELLED', 'REJECTED'].includes(order.state)) return;
 
-    if (order.order_type === 'DELIVERY' && !(await this.printQueueService.hasPrinted(tenantId, orderId, 'COURIER_SLIP'))) {
+    // A Snappfood order the store delivers itself needs the slip too: it is typed AGGREGATOR,
+    // and only its expedition says whose rider is coming.
+    const ownCourier = order.order_type === 'DELIVERY' || order.aggregator_expedition === 'DELIVERY';
+    if (ownCourier && !(await this.printQueueService.hasPrinted(tenantId, orderId, 'COURIER_SLIP'))) {
       await this.printQueueService.enqueueOrderPrintJobs(tenantId, orderId, 'COURIER_SLIP', false, undefined, userId);
     }
     const paid = !MoneyUtil.greaterThan(order.outstanding_total || '0.0000', '0.0000');
