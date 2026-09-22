@@ -111,11 +111,20 @@ export class PrintRoutingService {
 
   /**
    * Every active printer in the route's group prints the job, in member priority order, each
-   * printing the route's copies times its own. A route whose group has no working printer, or
-   * no route at all, falls back to one active printer in the branch so the ticket still comes
-   * out somewhere. With no printer in the branch the list is empty.
+   * printing the route's copies times its own.
+   *
+   * A route whose group has no working printer, or no route at all, falls back to one printer
+   * of the kind the document belongs on, always the same one (by code): a kitchen chit to a
+   * kitchen printer, anything else to a receipt printer, else any printer. A kitchen chit with
+   * no kitchen printer comes back with none, so it fails and raises an alert rather than come
+   * out at the counter, where nobody cooking would see it.
    */
-  async printersForRoute(tenantId: string, branchId: string, route: PrintRoute | null): Promise<RoutedPrinter[]> {
+  async printersForRoute(
+    tenantId: string,
+    branchId: string,
+    route: PrintRoute | null,
+    documentType?: string,
+  ): Promise<RoutedPrinter[]> {
     const routeCopies = route?.copies || 1;
 
     if (route) {
@@ -130,23 +139,32 @@ export class PrintRoutingService {
       if (routed.length > 0) return routed;
     }
 
-    const fallback = await this.printerRepo.find({
+    const inBranch = await this.printerRepo.find({
       where: { tenant_id: tenantId, branch_id: branchId, is_active: true },
-      take: 1,
+      order: { code: 'ASC' },
     });
-    return fallback.map((printer) => ({ printer, copies: routeCopies }));
+    const isKitchen = (p: Printer) => String(p.printer_type || '').toUpperCase().startsWith('KITCHEN');
+    const fallback =
+      documentType === 'KITCHEN_TICKET'
+        ? inBranch.find(isKitchen)
+        : inBranch.find((p) => String(p.printer_type || '').toUpperCase().includes('RECEIPT')) ?? inBranch.find((p) => !isKitchen(p)) ?? inBranch[0];
+    return fallback ? [{ printer: fallback, copies: routeCopies }] : [];
   }
 
   async groupName(tenantId: string, groupId: string): Promise<string | undefined> {
-    const group = await this.groupRepo.findOne({ where: { id: groupId, tenant_id: tenantId } });
-    return group?.name;
+    return (await this.group(tenantId, groupId))?.name;
+  }
+
+  async group(tenantId: string, groupId?: string | null): Promise<PrinterGroup | null> {
+    if (!groupId) return null;
+    return await this.groupRepo.findOne({ where: { id: groupId, tenant_id: tenantId } });
   }
 
   /** The printers for a document with no lines to route by, or for a single line. */
   async resolvePrintersForRoute(opts: RouteMatchOptions): Promise<{ printers: Printer[]; copies: number }> {
     const routes = await this.loadRoutes(opts.tenantId, opts.branchId, opts.documentType);
     const route = this.matchRoute(routes, { productId: opts.productId, categoryId: opts.categoryId, stationId: opts.stationId });
-    const routed = await this.printersForRoute(opts.tenantId, opts.branchId, route);
+    const routed = await this.printersForRoute(opts.tenantId, opts.branchId, route, opts.documentType);
     return { printers: routed.map((r) => r.printer), copies: routed[0]?.copies || route?.copies || 1 };
   }
 }

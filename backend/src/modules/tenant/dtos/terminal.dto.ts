@@ -46,4 +46,9 @@ export class UpdateTerminalDto {
   @IsOptional()
   @IsBoolean()
   is_active?: boolean;
+
+  /** A kiosk's card terminal; null unlinks it. */
+  @IsOptional()
+  @IsUUID()
+  payment_device_id?: string | null;
 }

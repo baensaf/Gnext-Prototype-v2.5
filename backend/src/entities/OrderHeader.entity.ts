@@ -40,6 +40,13 @@ export class OrderHeader {
   @Column({ type: 'varchar', length: 32 })
   order_number: string;
 
+  /**
+   * What the branch calls the order by: 123, unique at the branch for the business day and
+   * drawn from its channel's range. Given when the order goes to the kitchen.
+   */
+  @Column({ type: 'integer', nullable: true })
+  call_number: number | null;
+
   @Column({ type: 'varchar', length: 30, default: 'DINE_IN' })
   order_type: string; // DINE_IN, TAKEAWAY, DELIVERY, AGGREGATOR
 

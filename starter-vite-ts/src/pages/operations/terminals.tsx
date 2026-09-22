@@ -1,3 +1,4 @@
+import type { PaymentDevice } from 'src/api/paymentApi';
 import type { Branch, Terminal } from 'src/api/tenantApi';
 
 import { useTranslation } from 'react-i18next';
@@ -33,6 +34,7 @@ import {
 } from '@mui/material';
 
 import { tenantApi } from 'src/api/tenantApi';
+import { paymentApi } from 'src/api/paymentApi';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 
 import { ConfirmDialog } from 'src/components/confirm-dialog';
@@ -42,6 +44,8 @@ export function TerminalsPage() {
   const { t } = useTranslation();
 
   const [terminals, setTerminals] = useState<Terminal[]>([]);
+  // Card terminals the branch agent drives: what a kiosk can charge its guests on.
+  const [cardTerminals, setCardTerminals] = useState<PaymentDevice[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useScopedBranchId();
   const [loading, setLoading] = useState(true);
@@ -71,6 +75,8 @@ export function TerminalsPage() {
       setBranches(bList || []);
       const tList = await tenantApi.getTerminals(selectedBranchId || undefined);
       setTerminals(tList || []);
+      const devices = await paymentApi.getDevices(selectedBranchId || undefined).catch(() => []);
+      setCardTerminals((devices || []).filter((d) => d.is_active && d.agent_connection && d.agent_driver));
       setError(null);
     } catch (err: any) {
       setError(err.detail || err.message || t('operations.terminals.loadError', 'Failed to load terminals'));
@@ -100,6 +106,16 @@ export function TerminalsPage() {
       loadData();
     } catch (err: any) {
       setError(err.detail || err.message || t('operations.terminals.createError', 'Failed to create terminal'));
+    }
+  };
+
+  const handleLinkCardTerminal = async (terminal: Terminal, deviceId: string) => {
+    try {
+      await tenantApi.updateTerminal(terminal.id, { payment_device_id: deviceId || null });
+      setSuccess(t('operations.terminals.cardLinked', 'Card terminal saved for {{name}}', { name: terminal.name }));
+      loadData();
+    } catch (err: any) {
+      setError(err.detail || err.message || t('operations.terminals.cardLinkError', 'Could not link the card terminal'));
     }
   };
 
@@ -190,6 +206,7 @@ export function TerminalsPage() {
                   <TableCell>{t('operations.terminals.colName', 'Terminal Name')}</TableCell>
                   <TableCell>{t('operations.terminals.colType', 'Terminal Type')}</TableCell>
                   <TableCell>{t('operations.terminals.colBranch', 'Branch')}</TableCell>
+                  <TableCell>{t('operations.terminals.colCardTerminal', 'Card terminal')}</TableCell>
                   <TableCell>{t('operations.terminals.colStatus', 'Status')}</TableCell>
                   <TableCell align="center">{t('operations.terminals.colActions', 'Actions')}</TableCell>
                 </TableRow>
@@ -197,13 +214,13 @@ export function TerminalsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
+                    <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                       <CircularProgress size={32} />
                     </TableCell>
                   </TableRow>
                 ) : terminals.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                       <Typography color="text.secondary">
                         {t('operations.terminals.noTerminals', 'No terminals found for this selection.')}
                       </Typography>
@@ -225,6 +242,29 @@ export function TerminalsPage() {
                           />
                         </TableCell>
                         <TableCell>{branchObj ? `${branchObj.name} (${branchObj.code})` : '—'}</TableCell>
+                        <TableCell>
+                          {item.terminal_type === 'KIOSK' ? (
+                            <Select
+                              size="small"
+                              displayEmpty
+                              value={item.payment_device_id || ''}
+                              onChange={(e) => handleLinkCardTerminal(item, e.target.value)}
+                              sx={{ minWidth: 180 }}
+                              inputProps={{ 'aria-label': t('operations.terminals.colCardTerminal', 'Card terminal') }}
+                            >
+                              <MenuItem value="">{t('operations.terminals.cardAuto', "Branch's only terminal")}</MenuItem>
+                              {cardTerminals
+                                .filter((d) => !d.branch_id || d.branch_id === item.branch_id)
+                                .map((d) => (
+                                  <MenuItem key={d.id} value={d.id}>
+                                    {d.name} ({d.code})
+                                  </MenuItem>
+                                ))}
+                            </Select>
+                          ) : (
+                            '—'
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Chip
                             label={item.is_active ? t('common.active', 'Active') : t('common.archived', 'Archived')}

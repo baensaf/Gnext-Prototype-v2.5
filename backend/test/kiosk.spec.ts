@@ -21,6 +21,10 @@ import { PrintQueueService } from '../src/modules/printing/print-queue.service';
 import { ProductVariant } from '../src/entities/ProductVariant.entity';
 import { CatalogService } from '../src/modules/catalog/catalog.service';
 import { ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Terminal } from '../src/entities/Terminal.entity';
+import { PaymentDevice } from '../src/entities/PaymentDevice.entity';
+import { OrderService } from '../src/modules/order/order.service';
+import { PaymentService } from '../src/modules/payment/payment.service';
 
 describe('KioskService (Unit)', () => {
   let service: KioskService;
@@ -42,8 +46,16 @@ describe('KioskService (Unit)', () => {
   let printQueueService: any;
   let variantRepo: any;
   let catalogService: any;
+  let terminalRepo: any;
+  let deviceRepo: any;
+  let orderService: any;
+  let paymentService: any;
 
   beforeEach(async () => {
+    terminalRepo = { findOne: jest.fn().mockResolvedValue(null) };
+    deviceRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null) };
+    orderService = { afterPaymentSucceeded: jest.fn().mockResolvedValue(null) };
+    paymentService = { createPaymentIntent: jest.fn(), processPayment: jest.fn() };
     categoryRepo = { find: jest.fn() };
     productRepo = { find: jest.fn(), findOne: jest.fn() };
     optionGroupRepo = { find: jest.fn() };
@@ -91,6 +103,10 @@ describe('KioskService (Unit)', () => {
         { provide: PrintQueueService, useValue: printQueueService },
         { provide: getRepositoryToken(ProductVariant), useValue: variantRepo },
         { provide: CatalogService, useValue: catalogService },
+        { provide: getRepositoryToken(Terminal), useValue: terminalRepo },
+        { provide: getRepositoryToken(PaymentDevice), useValue: deviceRepo },
+        { provide: OrderService, useValue: orderService },
+        { provide: PaymentService, useValue: paymentService },
         basePriceLists(),
       ],
     }).compile();
@@ -246,24 +262,78 @@ describe('KioskService (Unit)', () => {
       { id: 'pm-card', name: 'Bank Card POS', kind: 'CARD_POS' },
     ];
 
+    let saved: any;
     beforeEach(() => {
+      saved = null;
       paymentRepo.create.mockImplementation((dto: any) => dto);
-      paymentRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'pay-1' }));
+      paymentRepo.save.mockImplementation((dto: any) => Promise.resolve((saved = { ...dto, id: 'pay-1' })));
+      paymentRepo.findOne = jest.fn(async () => saved);
       orderRepo.save.mockImplementation((o: any) => Promise.resolve(o));
     });
 
-    it('takes the card, marks the order paid and confirmed, and sends it to the kitchen', async () => {
-      orderRepo.findOne.mockResolvedValue(unpaidOrder());
+    it('takes the card on the simulator, marks the order paid, and hands it on to the kitchen', async () => {
+      const order = unpaidOrder();
+      orderRepo.findOne.mockResolvedValue(order);
       paymentMethodRepo.find.mockResolvedValue(seededMethods);
 
       const res = await service.processKioskPayment('t-1', { order_id: 'ord-kiosk-1' });
 
       expect(res.payment).toEqual(expect.objectContaining({ method_id: 'pm-card', method_kind: 'CARD_POS', amount: '163500.0000' }));
-      expect(res.order).toEqual(expect.objectContaining({ state: 'CONFIRMED', paid_total: '163500.0000', outstanding_total: '0.0000' }));
-      expect(kdsService.generateTicketsForOrder).toHaveBeenCalledWith('t-1', 'ord-kiosk-1', undefined);
-      expect(printQueueService.enqueueOrderPrintJobs).toHaveBeenCalledWith('t-1', 'ord-kiosk-1', 'KITCHEN_TICKET', false);
-      expect(res.receipt.status).toBe('PAID & SENT TO KITCHEN');
+      expect(res.order).toEqual(expect.objectContaining({ paid_total: '163500.0000', outstanding_total: '0.0000' }));
+      // Confirming, numbering and firing it is the same step a real terminal's approval takes.
+      expect(orderService.afterPaymentSucceeded).toHaveBeenCalledWith('t-1', 'ord-kiosk-1', undefined, undefined);
+      expect(res.success).toBe(true);
+      expect(res.receipt?.simulated).toBe(true);
+      expect(paymentService.createPaymentIntent).not.toHaveBeenCalled();
       expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'KIOSK_PAYMENT_PROCESSED' }));
+    });
+
+    it("charges the branch's Saman terminal through the agent and waits for its answer", async () => {
+      orderRepo.findOne.mockResolvedValue(unpaidOrder({ branch_id: 'br-1' }));
+      paymentMethodRepo.find.mockResolvedValue(seededMethods);
+      deviceRepo.find.mockResolvedValue([
+        { id: 'dev-sep', code: 'POS-01', is_active: true, agent_connection: { kind: 'tcp' }, agent_driver: 'sep' },
+      ]);
+      paymentService.createPaymentIntent.mockResolvedValue({ id: 'pay-agent' });
+      paymentService.processPayment.mockResolvedValue({ id: 'pay-agent', status: 'PROCESSING' });
+      paymentRepo.findOne = jest.fn(async () => ({ id: 'pay-agent', order_id: 'ord-kiosk-1', status: 'PROCESSING', device_id: 'dev-sep' }));
+
+      const res = await service.processKioskPayment('t-1', { order_id: 'ord-kiosk-1' });
+
+      expect(paymentService.createPaymentIntent).toHaveBeenCalledWith(
+        't-1',
+        expect.objectContaining({ orderId: 'ord-kiosk-1', methodId: 'pm-card', amount: '163500.0000', deviceId: 'dev-sep' }),
+        undefined,
+        undefined,
+      );
+      expect(res.pending).toBe(true);
+      expect(res.success).toBe(false);
+      expect(paymentRepo.save).not.toHaveBeenCalled();
+      expect(orderService.afterPaymentSucceeded).not.toHaveBeenCalled();
+    });
+
+    it('refuses to guess between several terminals when none is linked to the kiosk', async () => {
+      orderRepo.findOne.mockResolvedValue(unpaidOrder({ branch_id: 'br-1' }));
+      paymentMethodRepo.find.mockResolvedValue(seededMethods);
+      const terminal = (id: string) => ({ id, code: id, is_active: true, agent_connection: { kind: 'tcp' }, agent_driver: 'sep' });
+      deviceRepo.find.mockResolvedValue([terminal('dev-a'), terminal('dev-b')]);
+
+      await expect(service.processKioskPayment('t-1', { order_id: 'ord-kiosk-1' })).rejects.toThrow(/link one to this kiosk/);
+      expect(paymentService.createPaymentIntent).not.toHaveBeenCalled();
+    });
+
+    it('uses the terminal linked to the kiosk when the branch has several', async () => {
+      orderRepo.findOne.mockResolvedValue(unpaidOrder({ branch_id: 'br-1' }));
+      paymentMethodRepo.find.mockResolvedValue(seededMethods);
+      terminalRepo.findOne.mockResolvedValue({ id: 'kiosk-1', payment_device_id: 'dev-b' });
+      deviceRepo.findOne.mockResolvedValue({ id: 'dev-b', is_active: true, agent_connection: { kind: 'tcp' }, agent_driver: 'sep' });
+      paymentService.createPaymentIntent.mockResolvedValue({ id: 'pay-agent' });
+      paymentService.processPayment.mockResolvedValue({ id: 'pay-agent', status: 'PROCESSING' });
+      paymentRepo.findOne = jest.fn(async () => ({ id: 'pay-agent', order_id: 'ord-kiosk-1', status: 'PROCESSING' }));
+
+      await service.processKioskPayment('t-1', { order_id: 'ord-kiosk-1', terminal_id: 'kiosk-1' });
+
+      expect(paymentService.createPaymentIntent).toHaveBeenCalledWith('t-1', expect.objectContaining({ deviceId: 'dev-b' }), undefined, undefined);
     });
 
     it('refuses to take payment when no card method exists rather than booking cash', async () => {
@@ -274,16 +344,15 @@ describe('KioskService (Unit)', () => {
       expect(paymentRepo.save).not.toHaveBeenCalled();
     });
 
-    it('leaves an order that needs staff acceptance waiting, and out of the kitchen', async () => {
+    it('says an order that needs staff acceptance is waiting for them', async () => {
       orderRepo.findOne.mockResolvedValue(unpaidOrder({ state: 'PENDING_ACCEPTANCE', status: 'PENDING_ACCEPTANCE' }));
       paymentMethodRepo.find.mockResolvedValue(seededMethods);
 
       const res = await service.processKioskPayment('t-1', { order_id: 'ord-kiosk-1' });
 
-      expect(res.order.state).toBe('PENDING_ACCEPTANCE');
-      expect(res.order.paid_total).toBe('163500.0000');
-      expect(kdsService.generateTicketsForOrder).not.toHaveBeenCalled();
-      expect(res.receipt.status).toBe('PAID & WAITING FOR STAFF');
+      expect(res.order?.state).toBe('PENDING_ACCEPTANCE');
+      expect(res.order?.paid_total).toBe('163500.0000');
+      expect(res.receipt?.status).toBe('WAITING_FOR_STAFF');
     });
 
     it('returns the existing payment when a paid order is paid again', async () => {
@@ -365,6 +434,10 @@ describe('KioskService selling rules', () => {
         { provide: getRepositoryToken(ProductVariant), useValue: variantRepo },
         { provide: AuditWriter, useValue: { write: jest.fn() } },
         { provide: CatalogService, useValue: catalogService },
+        { provide: getRepositoryToken(Terminal), useValue: { findOne: jest.fn().mockResolvedValue(null) } },
+        { provide: getRepositoryToken(PaymentDevice), useValue: { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() } },
+        { provide: OrderService, useValue: { afterPaymentSucceeded: jest.fn() } },
+        { provide: PaymentService, useValue: {} },
         basePriceLists(),
       ],
     }).compile();

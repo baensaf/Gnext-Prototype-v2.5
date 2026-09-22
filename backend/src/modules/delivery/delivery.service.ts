@@ -1013,6 +1013,7 @@ export class DeliveryService {
       result.push({
         ...reconciled,
         order_number: order ? order.order_number : 'ORD-00',
+        call_number: order?.call_number ?? null,
         grand_total: order ? order.grand_total : '0.0000',
         outstanding_total: order ? order.outstanding_total : '0.0000',
         customer_name: order ? (order as any).customer_name || 'Customer' : 'Customer',
@@ -1220,6 +1221,7 @@ export class DeliveryService {
       lines.push({
         assignment_id: a.id,
         order_number: order?.order_number || 'ORD-00',
+        call_number: order?.call_number ?? null,
         delivery_status: a.status,
         payment_method_code: breakdown.primaryMethod,
         expected_cash: MoneyUtil.format(breakdown.expCashStr, 2),

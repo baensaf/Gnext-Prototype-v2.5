@@ -31,6 +31,7 @@ import { useBranchContext } from 'src/contexts/branch-context';
 
 import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
+import { CallNumberRangesCard } from 'src/components/settings/call-number-ranges-card';
 
 /**
  * The cashier windows live in their own group, ORDER_ACTIONS, because that is the one
@@ -235,6 +236,11 @@ export function OrderWorkflowSettingsPage() {
           {success}
         </Alert>
       )}
+
+      {/* Outside the form below: head office's alone, and saved on its own. */}
+      <Box sx={{ mb: 3 }}>
+        <CallNumberRangesCard editable={!selectedBranchId} />
+      </Box>
 
       <form onSubmit={handleSave}>
         <Grid container spacing={3}>

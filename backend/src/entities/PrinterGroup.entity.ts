@@ -17,6 +17,13 @@ export class PrinterGroup {
   @Column({ type: 'varchar', length: 160 })
   name: string;
 
+  /**
+   * COMPACT or DETAILED paper for what this group prints. Null takes the document's default:
+   * a compact kitchen chit (big number, the station's items), a detailed receipt.
+   */
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  ticket_template: 'COMPACT' | 'DETAILED' | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

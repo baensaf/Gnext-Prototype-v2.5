@@ -28,6 +28,12 @@ import { PriceListService } from '../catalog/price-lists.service';
 import { inStorePrice } from '../../common/utils/price-list.util';
 import { checkOptionChoices } from '../catalog/option-choices.util';
 import { inTreeOrder } from '../../common/utils/category-tree.util';
+import { Terminal } from '../../entities/Terminal.entity';
+import { PaymentDevice } from '../../entities/PaymentDevice.entity';
+import { IsNull, Not } from 'typeorm';
+import { OrderService } from '../order/order.service';
+import { PaymentService } from '../payment/payment.service';
+import { isAgentTerminal } from '../payment/agent-payments.service';
 
 /** Tenders a kiosk's card terminal can take. The seeded card method is CARD_POS. */
 const KIOSK_CARD_KINDS = ['CARD_POS', 'NETWORK_POS', 'CARD', 'MOBILE_POS'];
@@ -49,9 +55,13 @@ export class KioskService {
     @InjectRepository(Payment) private readonly paymentRepo: Repository<Payment>,
     @InjectRepository(Customer) private readonly customerRepo: Repository<Customer>,
     @InjectRepository(ProductVariant) private readonly variantRepo: Repository<ProductVariant>,
+    @InjectRepository(Terminal) private readonly terminalRepo: Repository<Terminal>,
+    @InjectRepository(PaymentDevice) private readonly deviceRepo: Repository<PaymentDevice>,
     private readonly auditWriter: AuditWriter,
     private readonly catalogService: CatalogService,
     private readonly priceLists: PriceListService,
+    private readonly orderService: OrderService,
+    private readonly paymentService: PaymentService,
     @Optional() private readonly kdsService?: KdsService,
     @Optional() private readonly printQueueService?: PrintQueueService,
   ) {}
@@ -149,7 +159,8 @@ export class KioskService {
         : null,
       customer_identity_policy: customerIdentityPolicy,
       simulatedCapabilities: {
-        simulated_card_terminal: true,
+        // A real Saman terminal behind the branch agent, or the kiosk's own simulator.
+        simulated_card_terminal: !(await this.kioskCardTerminal(tenantId, branch?.id || '', terminalId).catch(() => true)),
         simulated_receipt_printer: true,
       },
       categories,
@@ -472,35 +483,14 @@ export class KioskService {
     const order = await this.orderRepo.findOne({ where: { id: data.order_id, tenant_id: tenantId } });
     if (!order) throw new NotFoundException('Order not found');
 
-    const waitsForStaff = order.state === 'PENDING_ACCEPTANCE';
-    const receiptStatus = waitsForStaff ? 'PAID & WAITING FOR STAFF' : 'PAID & SENT TO KITCHEN';
-
-    // Idempotency check: if order is already paid, return existing payment & receipt
+    // Already paid: the guest tapped twice, or the screen came back after a reload.
     if (MoneyUtil.lessThanOrEqual(order.outstanding_total ?? order.due_amount ?? '0', '0.01')) {
       const existingPayment = await this.paymentRepo.findOne({
-        where: { tenant_id: tenantId, order_id: order.id },
+        where: { tenant_id: tenantId, order_id: order.id, status: 'SUCCEEDED' },
         order: { initiated_at: 'DESC' },
       });
-
-      return {
-        success: true,
-        payment: existingPayment,
-        order,
-        receipt: {
-          header: 'GNEXT KIOSK SELF-SERVICE RECEIPT (SIMULATED CARD TERMINAL)',
-          order_number: order.order_number,
-          order_type: order.order_type,
-          date: new Date(),
-          reference_number: existingPayment ? existingPayment.reference : `POS-KOS-${order.id.slice(-6)}`,
-          total_paid: MoneyUtil.format(order.total_amount || '0', 2),
-          payment_method: 'Simulated Card Terminal',
-          status: receiptStatus,
-          hardware_status: 'SIMULATED NETWORK POS OK',
-        },
-      };
+      return { success: true, pending: false, payment: existingPayment, order, receipt: this.kioskReceipt(order, existingPayment) };
     }
-
-    const totalToPayStr = MoneyUtil.format(order.outstanding_total || order.due_amount || order.total_amount || '0', 4);
 
     let paymentMethod = null;
     if (data.payment_method_id) {
@@ -517,57 +507,55 @@ export class KioskService {
       throw new BadRequestException('No active card payment method is set up for the kiosk terminal');
     }
 
-    const refNum = `POS-KOS-${Date.now()}`;
+    const amount = order.outstanding_total || order.due_amount || order.total_amount || '0';
 
+    // The branch's Saman terminal, through its agent: the payment waits for the terminal's
+    // answer, and the kiosk asks after it until then.
+    const device = await this.kioskCardTerminal(tenantId, order.branch_id, data.terminal_id || order.terminal_id);
+    if (device) {
+      const intent = await this.paymentService.createPaymentIntent(
+        tenantId,
+        { orderId: order.id, methodId: paymentMethod.id, amount, deviceId: device.id, idempotencyKey: data.idempotency_key } as any,
+        undefined,
+        correlationId,
+      );
+      const payment = await this.paymentService.processPayment(tenantId, intent.id, {} as any, undefined, correlationId);
+      await this.auditWriter.write({
+        tenantId,
+        actorType: 'SYSTEM',
+        action: 'KIOSK_PAYMENT_SENT_TO_TERMINAL',
+        correlationId: correlationId || 'corr-kiosk-pay',
+        afterData: { payment_id: payment.id, order_id: order.id, terminal_id: device.id },
+      });
+      return this.kioskPaymentStatus(tenantId, payment.id);
+    }
+
+    // No terminal the agent drives here: the kiosk's own simulator takes the card.
+    const refNum = `SIM-KOS-${Date.now()}`;
     const payment = this.paymentRepo.create({
       tenant_id: tenantId,
       order_id: order.id,
       payment_number: `PAY-KOS-${Date.now()}`,
       method_id: paymentMethod.id,
       method_kind: paymentMethod.kind,
-      amount: totalToPayStr,
+      amount: MoneyUtil.format(amount, 4),
       status: 'SUCCEEDED',
       reference: refNum,
       business_date: BusinessDateUtil.today(),
       idempotency_key: data.idempotency_key || null,
     });
-
     const savedPayment = await this.paymentRepo.save(payment);
 
-    const currentPaidStr = MoneyUtil.add(order.paid_total || order.paid_amount || '0', totalToPayStr, 4);
+    const currentPaidStr = MoneyUtil.add(order.paid_total || order.paid_amount || '0', MoneyUtil.format(amount, 4), 4);
     const rawDueStr = MoneyUtil.subtract(order.grand_total || order.total_amount || '0', currentPaidStr, 4);
     const currentDueStr = MoneyUtil.lessThan(rawDueStr, '0') ? '0.0000' : rawDueStr;
-
     // paid_total and outstanding_total are what the rest of the system reads; writing only
     // the legacy paid_amount/due_amount left every kiosk order looking unpaid.
     order.paid_total = currentPaidStr;
     order.paid_amount = currentPaidStr;
     order.outstanding_total = currentDueStr;
     order.due_amount = currentDueStr;
-    // A paid kiosk order is confirmed and still has to be cooked. It used to jump to READY,
-    // which the kitchen never picks up, so no ticket was ever made. An order the branch
-    // wants accepted by staff stays waiting; accepting it sends it to the kitchen then.
-    if (!waitsForStaff) {
-      order.state = 'CONFIRMED' as any;
-      order.status = 'CONFIRMED';
-      order.submitted_at = order.submitted_at || new Date();
-    }
-
-    const updatedOrder = await this.orderRepo.save(order);
-
-    if (!waitsForStaff) {
-      try {
-        await this.kdsService?.generateTicketsForOrder(tenantId, order.id, correlationId);
-      } catch {
-        // A kitchen-screen failure must not undo a payment the guest has already made.
-      }
-      try {
-        await this.printQueueService?.enqueueOrderPrintJobs(tenantId, order.id, 'CUSTOMER_RECEIPT', false);
-        await this.printQueueService?.enqueueOrderPrintJobs(tenantId, order.id, 'KITCHEN_TICKET', false);
-      } catch {
-        // Printing is a side effect of the sale, as it is at the register.
-      }
-    }
+    await this.orderRepo.save(order);
 
     await this.auditWriter.write({
       tenantId,
@@ -577,21 +565,72 @@ export class KioskService {
       afterData: { payment_id: savedPayment.id, reference_number: refNum, order_id: order.id },
     });
 
+    // Confirmed, numbered and fired, then the receipt: the same step a card from the real
+    // terminal goes through once the agent answers.
+    await this.orderService.afterPaymentSucceeded(tenantId, order.id, undefined, correlationId);
+    return this.kioskPaymentStatus(tenantId, savedPayment.id);
+  }
+
+  /** Where a kiosk payment stands, for the screen to wait on. */
+  async kioskPaymentStatus(tenantId: string, paymentId: string) {
+    const payment = await this.paymentRepo.findOne({ where: { id: paymentId, tenant_id: tenantId } });
+    if (!payment) throw new NotFoundException('Payment not found');
+    const order = await this.orderRepo.findOne({ where: { id: payment.order_id, tenant_id: tenantId } });
+    const succeeded = payment.status === 'SUCCEEDED';
+    // A charge the terminal never confirmed is neither: the guest must ask staff, who check it.
+    const unresolved = payment.status === 'PROCESSING' && !!payment.needs_terminal_check;
     return {
-      success: true,
-      payment: savedPayment,
-      order: updatedOrder,
-      receipt: {
-        header: 'GNEXT KIOSK SELF-SERVICE RECEIPT (SIMULATED CARD TERMINAL)',
-        order_number: updatedOrder.order_number,
-        order_type: updatedOrder.order_type,
-        date: new Date(),
-        reference_number: refNum,
-        total_paid: MoneyUtil.format(totalToPayStr, 2),
-        payment_method: paymentMethod.name,
-        status: receiptStatus,
-        hardware_status: 'SIMULATED NETWORK POS OK',
-      },
+      success: succeeded,
+      pending: payment.status === 'PROCESSING' && !unresolved,
+      unresolved,
+      failed: ['FAILED', 'CANCELLED'].includes(payment.status),
+      failure_message: payment.failure_message || null,
+      payment,
+      order,
+      receipt: succeeded && order ? this.kioskReceipt(order, payment) : null,
+    };
+  }
+
+  /**
+   * The card terminal this kiosk charges on: the one linked to it, else the branch's only
+   * terminal the agent drives. With several and none linked, charging a random one could
+   * take a guest's money on a device across the room, so it is refused. None means the
+   * kiosk's simulator.
+   */
+  private async kioskCardTerminal(tenantId: string, branchId: string, terminalId?: string | null): Promise<PaymentDevice | null> {
+    if (terminalId) {
+      const kiosk = await this.terminalRepo.findOne({ where: { id: terminalId, tenant_id: tenantId } });
+      if (kiosk?.payment_device_id) {
+        const linked = await this.deviceRepo.findOne({ where: { id: kiosk.payment_device_id, tenant_id: tenantId } });
+        if (!linked || !isAgentTerminal(linked)) {
+          throw new BadRequestException('The card terminal linked to this kiosk is not connected to the branch agent');
+        }
+        return linked;
+      }
+    }
+    const devices = await this.deviceRepo.find({
+      where: { tenant_id: tenantId, branch_id: branchId, is_active: true, agent_connection: Not(IsNull()) },
+      order: { code: 'ASC' },
+    });
+    const agentTerminals = devices.filter(isAgentTerminal);
+    if (agentTerminals.length > 1) {
+      throw new BadRequestException('This branch has several card terminals; link one to this kiosk under Terminals');
+    }
+    return agentTerminals[0] ?? null;
+  }
+
+  private kioskReceipt(order: OrderHeader, payment?: Payment | null) {
+    const waitsForStaff = order.state === 'PENDING_ACCEPTANCE';
+    return {
+      order_number: order.order_number,
+      call_number: order.call_number ?? null,
+      order_type: order.order_type,
+      date: new Date(),
+      reference_number: payment?.reference || null,
+      total_paid: MoneyUtil.format(order.paid_total || order.total_amount || '0', 2),
+      payment_method: payment?.method_kind || null,
+      status: waitsForStaff ? 'WAITING_FOR_STAFF' : 'SENT_TO_KITCHEN',
+      simulated: !payment?.device_id,
     };
   }
 }

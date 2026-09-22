@@ -34,6 +34,8 @@ export interface Terminal {
   terminal_type: 'CASHIER' | 'KIOSK' | 'KDS';
   is_active: boolean;
   last_seen_at?: string;
+  /** A kiosk's card terminal, charged through the branch agent. */
+  payment_device_id?: string | null;
 }
 
 export interface BranchStatusSnapshot {

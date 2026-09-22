@@ -469,7 +469,7 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
       `corr-kiosk-pay-${tag}`,
     );
     expect(payResult.success).toBe(true);
-    expect(payResult.receipt.status).toBe('PAID & SENT TO KITCHEN');
+    expect(payResult.receipt.status).toBe('SENT_TO_KITCHEN');
     expect(payResult.receipt.reference_number).toBeDefined();
   });
 

@@ -326,11 +326,30 @@ describe('PrintingModule (Unit & Integration)', () => {
       expect(jobsFor(jobs, 'prn-counter')).toHaveLength(0);
     });
 
+    // What an Iranian kitchen works from: the number, very large, and the station's food.
+    it('prints a compact chit by default: the big number and the station items, nothing else', async () => {
+      orderRepo.rows.find((o) => o.id === 'ord-1').call_number = 123;
+      const [grill] = jobsFor(await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET'), 'prn-grill');
+
+      expect(grill.rendered_html).toContain('<div class="huge">۱۲۳</div>');
+      expect(grill.rendered_html).toContain('Classic Burger');
+      expect(grill.rendered_html).not.toContain('Grill (');
+      expect(grill.rendered_html).not.toContain('ORD-1');
+      expect(grill.rendered_html).not.toContain('سالن');
+    });
+
+    it('prints the station, order type and time when the station group asks for a detailed chit', async () => {
+      groupRepo.rows.find((g) => g.id === 'grp-grill').ticket_template = 'DETAILED';
+      const [grill] = jobsFor(await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET'), 'prn-grill');
+
+      expect(grill.rendered_html).toContain('<div class="inv">Grill (۱/۳)</div>');
+      expect(grill.rendered_html).toContain('سالن');
+    });
+
     it('labels each chit with its station and its part of the order', async () => {
       const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
 
       expect(jobs.map((j) => j.label)).toEqual(['Grill (1/3)', 'Fryer (2/3)', 'Bar (3/3)']);
-      expect(jobsFor(jobs, 'prn-grill')[0].rendered_html).toContain('<div class="inv">Grill (۱/۳)</div>');
       expect(jobsFor(jobs, 'prn-grill')[0].printer_group_id).toBe('grp-grill');
       expect(jobs.every((j) => j.status === 'SUCCESS')).toBe(true);
       expect(attemptRepo.rows).toHaveLength(3);
@@ -478,7 +497,7 @@ describe('PrintingModule (Unit & Integration)', () => {
   describe('a real printer behind the branch agent', () => {
     beforeEach(() => {
       order('ord-400', [line('l-1', 'p-burger', 'Burger')]);
-      printer('prn-kitchen', { agent_connection: { kind: 'tcp', host: '192.168.1.83', port: 9100 }, fallback_printer_id: 'prn-counter' });
+      printer('prn-kitchen', { printer_type: 'KITCHEN_IMPACT', agent_connection: { kind: 'tcp', host: '192.168.1.83', port: 9100 }, fallback_printer_id: 'prn-counter' });
       printer('prn-counter');
     });
 
@@ -547,7 +566,7 @@ describe('PrintingModule (Unit & Integration)', () => {
 
     it('prints on retry once the branch has a printer', async () => {
       const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-300', 'KITCHEN_TICKET');
-      printer('prn-kitchen');
+      printer('prn-kitchen', { printer_type: 'KITCHEN_IMPACT' });
 
       const res = await queueService.retryJob(T, job.id, {});
 
@@ -587,7 +606,6 @@ describe('PrintingModule (Unit & Integration)', () => {
       expect(fryer.rendered_html).toMatch(/اضافه<\/span><span>۱ × Baklava Fries/);
       expect(jobs.some((j) => j.rendered_html.includes('Doogh'))).toBe(false);
       expect(jobsFor(jobs, 'prn-bar')).toHaveLength(0);
-      expect(grill.rendered_html).toContain('Swapped main for dessert');
       expect(grill.reason).toBe('Order amended: Swapped main for dessert');
     });
 

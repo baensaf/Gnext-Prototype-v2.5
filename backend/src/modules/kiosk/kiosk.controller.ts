@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query, Body, Req } from '@nestjs/common';
+import { Controller, Get, Post, Query, Body, Req, Param, ParseUUIDPipe } from '@nestjs/common';
 import { Request } from 'express';
 import { KioskService } from './kiosk.service';
 
@@ -28,5 +28,12 @@ export class KioskController {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.kioskService.processKioskPayment(tenantId, body, correlationId);
+  }
+
+  /** The kiosk waits on this while the guest's card is on the branch's terminal. */
+  @Get('payments/:id')
+  async getKioskPayment(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.kioskService.kioskPaymentStatus(tenantId, id);
   }
 }

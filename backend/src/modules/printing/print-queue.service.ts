@@ -15,7 +15,7 @@ import { Customer } from '../../entities/Customer.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { Payment } from '../../entities/Payment.entity';
 import { CALENDAR_SETTING_KEY, readCalendar } from '../../common/utils/calendar.util';
-import { markAsReprint, PrintRenderService, RenderDocOptions } from './print-render.service';
+import { markAsReprint, PrintRenderService, RenderDocOptions, TicketTemplate } from './print-render.service';
 import { PrintRoutingService } from './print-routing.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { AgentPrintingService } from './agent-printing.service';
@@ -33,6 +33,8 @@ type LineChange = 'VOID' | 'ADD';
 interface StationBatch {
   route: PrintRoute | null;
   label: string;
+  /** The station group's choice of paper; null takes the chit's default. */
+  template: TicketTemplate | null;
   lines: Array<{ item: OrderItem; change?: LineChange }>;
 }
 
@@ -80,6 +82,8 @@ export class PrintQueueService {
     reason?: string,
     userId?: string,
     targetPrinterId?: string,
+    /** A kitchen reprint for one station only: the grill's chit fell in the fryer. */
+    onlyGroupId?: string,
   ): Promise<PrintJob[]> {
     // Outside the catch below on purpose. That catch exists so a printing fault can never
     // roll back an order, and it swallows everything — including "you picked a printer that
@@ -102,25 +106,31 @@ export class PrintQueueService {
       const heading = await this.orderHeading(order);
 
       if (documentType !== 'KITCHEN_TICKET') {
+        const routes = await this.routingService.loadRoutes(tenantId, order.branch_id, documentType);
+        const route = this.routingService.matchRoute(routes, {});
         const html = this.renderService.renderDocument({
           ...heading,
           ...(await this.orderMoney(order)),
           documentType,
           isReprint,
+          template: (await this.routingService.group(tenantId, route?.printer_group_id))?.ticket_template ?? null,
           items: activeLines.map((i) => this.renderLine(i)),
         });
-        const routes = await this.routingService.loadRoutes(tenantId, order.branch_id, documentType);
-        return await this.recordJobs(tenantId, order, documentType, html, this.routingService.matchRoute(routes, {}), opts);
+        return await this.recordJobs(tenantId, order, documentType, html, route, opts);
       }
 
       if (activeLines.length === 0) return [];
-      const batches = await this.splitByRoute(tenantId, order, activeLines.map((item) => ({ item })));
+      const batches = (await this.splitByRoute(tenantId, order, activeLines.map((item) => ({ item })))).filter(
+        // The station's lines as they stand now, so a line added since the first chit is on it.
+        (batch) => !onlyGroupId || batch.route?.printer_group_id === onlyGroupId,
+      );
       const jobs: PrintJob[] = [];
       for (const batch of batches) {
         const html = this.renderService.renderDocument({
           ...heading,
           documentType,
           isReprint,
+          template: batch.template,
           stationLabel: batch.label,
           items: batch.lines.map((l) => this.renderLine(l.item)),
         });
@@ -173,6 +183,7 @@ export class PrintQueueService {
         const html = this.renderService.renderDocument({
           ...heading,
           documentType: 'KITCHEN_TICKET',
+          template: batch.template,
           stationLabel: batch.label,
           kitchenChange: change.kind,
           changeReason: change.reason,
@@ -280,7 +291,7 @@ export class PrintQueueService {
       const key = route ? route.printer_group_id : '';
       const batch = batches.get(key);
       if (!batch) {
-        batches.set(key, { route, label: '', lines: [line] });
+        batches.set(key, { route, label: '', template: null, lines: [line] });
         continue;
       }
       batch.lines.push(line);
@@ -289,8 +300,10 @@ export class PrintQueueService {
 
     const result = [...batches.values()];
     for (const [index, batch] of result.entries()) {
-      const name = (batch.route && (await this.routingService.groupName(tenantId, batch.route.printer_group_id))) || 'Kitchen';
+      const group = await this.routingService.group(tenantId, batch.route?.printer_group_id);
+      const name = group?.name || 'آشپزخانه';
       batch.label = result.length > 1 ? `${name} (${index + 1}/${result.length})` : name;
+      batch.template = group?.ticket_template ?? null;
     }
     return result;
   }
@@ -303,6 +316,7 @@ export class PrintQueueService {
   private async orderHeading(order: OrderHeader): Promise<Omit<RenderDocOptions, 'documentType' | 'items'>> {
     const heading: Omit<RenderDocOptions, 'documentType' | 'items'> = {
       orderNumber: order.order_number,
+      callNumber: order.call_number ?? null,
       orderType: order.order_type,
       channel: order.channel,
       tableNumber: order.table_number || undefined,
@@ -387,7 +401,7 @@ export class PrintQueueService {
   ): Promise<PrintJob[]> {
     // A hand-picked printer replaces whatever routing chose, and keeps the route's copy
     // count so a receipt that normally prints twice still does.
-    const routed = await this.routingService.printersForRoute(tenantId, order.branch_id, route);
+    const routed = await this.routingService.printersForRoute(tenantId, order.branch_id, route, documentType);
     const targets = opts.targetPrinterId
       ? await this.forcedTarget(tenantId, order.branch_id, opts.targetPrinterId, route?.copies || routed[0]?.copies || 1)
       : routed;
@@ -663,8 +677,9 @@ export class PrintQueueService {
   }
 
   // List print jobs with filters & paging
-  async getPrintJobs(tenantId: string, branchId?: string, status?: string, documentType?: string, limit = 50, offset = 0) {
+  async getPrintJobs(tenantId: string, branchId?: string, status?: string, documentType?: string, limit = 50, offset = 0, entityId?: string) {
     const where: any = { tenant_id: tenantId };
+    if (entityId) where.entity_id = entityId;
     if (branchId) where.branch_id = branchId;
     if (status) where.status = status;
     if (documentType) where.document_type = documentType;
