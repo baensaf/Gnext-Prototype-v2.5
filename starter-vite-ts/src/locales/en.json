@@ -948,14 +948,12 @@
         "submit": "Assign Courier"
       },
       "complete": {
-        "title": "Complete Delivery & Instrument Actuals",
-        "description": "Record collected instruments for Order #{{orderNumber}}",
-        "owedLabel": "Still owed by the customer",
-        "cashLabel": "Cash to hand back at settlement (IRR)",
-        "cashHelper": "The order is paid, and the cash counted, when the courier is settled.",
-        "posLabel": "Taken on the company mobile POS (IRR)",
+        "title": "Mark Delivered",
+        "description": "Order #{{orderNumber}} was handed to the customer.",
+        "owedLabel": "The courier brings back",
+        "settleNote": "How the customer paid — card on the courier's reader, cash, or both — is entered when the courier comes back and is settled, from the card slip.",
         "cancel": "Cancel",
-        "submit": "Confirm Delivery"
+        "submit": "Mark Delivered"
       },
       "fail": {
         "title": "Record Delivery Failure",
@@ -1118,15 +1116,18 @@
       "verified": "Verified",
       "orderNumber": "Order #",
       "status": "Status",
-      "method": "Method",
-      "expCash": "Exp Cash",
-      "actCash": "Act Cash",
-      "expPos": "Exp POS",
-      "actPos": "Act POS",
+      "method": "Paid by",
       "closeWindow": "Close Window",
       "submitReview": "Submit for Review",
       "finalizeClose": "Finalize & Close Settlement",
-      "reverseSettlement": "Reverse Settlement"
+      "reverseSettlement": "Reverse Settlement",
+      "toCollect": "Owed",
+      "cardSlip": "Card (from slip)",
+      "cashHanded": "Cash handed over",
+      "methodCash": "Cash",
+      "methodCard": "Card",
+      "methodSplit": "Card + cash",
+      "lineHint": "Enter the card amount from each order's slip; the rest is filled in as cash. Change the cash only if the courier hands over a different amount."
     },
     "statementModal": {
       "title": "COURIER SETTLEMENT STATEMENT",

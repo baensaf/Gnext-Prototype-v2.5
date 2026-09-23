@@ -179,29 +179,53 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
     );
   };
 
+  // What the order still owed; the server keeps the line's cash and card expectations summing to it.
+  const lineOwed = (l: SettlementLine) => MoneyUtil.add(l.expected_cash || '0', l.expected_pos || '0', 2);
+
   const handleLineActualChange = (lineId: string, field: 'actual_cash' | 'actual_pos', value: string) => {
     setEditableLines((prev) =>
-      prev.map((l) => (l.id === lineId ? { ...l, [field]: value } : l))
+      prev.map((l) => {
+        if (l.id !== lineId) return l;
+        if (field === 'actual_cash') return { ...l, actual_cash: value };
+        // The card slip decides the split: the rest of what was owed is taken as cash, and the
+        // cashier changes the cash only when the courier hands over something else.
+        const card = MoneyUtil.isValid(value) ? value : '0';
+        const rest = MoneyUtil.subtract(lineOwed(l), card, 2);
+        return { ...l, actual_pos: value, actual_cash: MoneyUtil.greaterThan(rest, '0') ? rest : '0.00' };
+      })
     );
+  };
+
+  const paidByLabel = (l: SettlementLine) => {
+    const card = MoneyUtil.isValid(l.actual_pos) && MoneyUtil.greaterThan(l.actual_pos, '0');
+    const cash = MoneyUtil.isValid(l.actual_cash) && MoneyUtil.greaterThan(l.actual_cash, '0');
+    if (card && cash) return t('settlements.detailModal.methodSplit');
+    return card ? t('settlements.detailModal.methodCard') : t('settlements.detailModal.methodCash');
+  };
+
+  // Saves the cashier's figures. Review and close save first, so what is on screen is what closes.
+  const saveLines = async () => {
+    if (!activeSettlementDetail) return;
+    const linePayload = editableLines.map((l) => ({
+      id: l.id,
+      actual_cash: MoneyUtil.format(l.actual_cash || '0', 2),
+      actual_pos: MoneyUtil.format(l.actual_pos || '0', 2),
+      receipt_verified: l.receipt_verified,
+    }));
+
+    const res = await axios.patch(`/api/v1/delivery/settlements/${activeSettlementDetail.id}`, {
+      lines: linePayload,
+      total_compensation_amount: MoneyUtil.format(compAmount || '0', 2),
+      total_adjustment_amount: MoneyUtil.format(adjAmount || '0', 2),
+    });
+    setActiveSettlementDetail(res.data);
+    setEditableLines(res.data.lines || editableLines);
   };
 
   const handleSaveSettlementDraft = async () => {
     if (!activeSettlementDetail) return;
     try {
-      const linePayload = editableLines.map((l) => ({
-        id: l.id,
-        actual_cash: MoneyUtil.format(l.actual_cash || '0', 2),
-        actual_pos: MoneyUtil.format(l.actual_pos || '0', 2),
-        receipt_verified: l.receipt_verified,
-      }));
-
-      const res = await axios.patch(`/api/v1/delivery/settlements/${activeSettlementDetail.id}`, {
-        lines: linePayload,
-        total_compensation_amount: MoneyUtil.format(compAmount || '0', 2),
-        total_adjustment_amount: MoneyUtil.format(adjAmount || '0', 2),
-      });
-      setActiveSettlementDetail(res.data);
-      setEditableLines(res.data.lines || []);
+      await saveLines();
       alert(t('settlements.alerts.draftUpdated'));
       fetchData();
     } catch {
@@ -212,7 +236,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
   const handleReviewSettlement = async () => {
     if (!activeSettlementDetail) return;
     try {
-      await handleSaveSettlementDraft();
+      await saveLines();
       const res = await axios.post(`/api/v1/delivery/settlements/${activeSettlementDetail.id}/review`);
       setActiveSettlementDetail(res.data);
       alert(t('settlements.alerts.movedToReview'));
@@ -225,6 +249,8 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
   const handleCloseSettlement = async () => {
     if (!activeSettlementDetail) return;
     try {
+      // Closing used to skip saving, so card and cash typed in and not saved were lost.
+      await saveLines();
       await axios.post(`/api/v1/delivery/settlements/${activeSettlementDetail.id}/close`);
       alert(t('settlements.alerts.closed'));
       setDetailDialogOpen(false);
@@ -589,10 +615,16 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                   </Stack>
                 )}
 
-                {/* Line Items Table */}
+                {/* Line Items Table: the cashier types each order's card amount from the courier's
+                    slip; the cash fills in as the rest of what the order owed. */}
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                   {t('settlements.detailModal.lineItemsTitle')}
                 </Typography>
+                {['DRAFT', 'UNDER_REVIEW'].includes(activeSettlementDetail.status) && (
+                  <Typography variant="caption" color="text.secondary">
+                    {t('settlements.detailModal.lineHint')}
+                  </Typography>
+                )}
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
                     <TableHead>
@@ -600,15 +632,14 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                         <TableCell padding="checkbox">{t('settlements.detailModal.verified')}</TableCell>
                         <TableCell>{t('settlements.detailModal.orderNumber')}</TableCell>
                         <TableCell>{t('settlements.detailModal.status')}</TableCell>
+                        <TableCell align="right">{t('settlements.detailModal.toCollect')}</TableCell>
+                        <TableCell align="right" width={140}>
+                          {t('settlements.detailModal.cardSlip')}
+                        </TableCell>
+                        <TableCell align="right" width={140}>
+                          {t('settlements.detailModal.cashHanded')}
+                        </TableCell>
                         <TableCell>{t('settlements.detailModal.method')}</TableCell>
-                        <TableCell align="right">{t('settlements.detailModal.expCash')}</TableCell>
-                        <TableCell align="right" width={120}>
-                          {t('settlements.detailModal.actCash')}
-                        </TableCell>
-                        <TableCell align="right">{t('settlements.detailModal.expPos')}</TableCell>
-                        <TableCell align="right" width={120}>
-                          {t('settlements.detailModal.actPos')}
-                        </TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -623,22 +654,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                           </TableCell>
                           <TableCell sx={{ fontWeight: 'bold' }}>{line.order_number}</TableCell>
                           <TableCell>{line.delivery_status}</TableCell>
-                          <TableCell>{line.payment_method_code}</TableCell>
-                          <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(line.expected_cash || 0)} IRR</TableCell>
-                          <TableCell align="right">
-                            {['DRAFT', 'UNDER_REVIEW'].includes(activeSettlementDetail.status) ? (
-                              <TextField
-                                size="small"
-                                variant="outlined"
-                                value={line.actual_cash}
-                                onChange={(e) => handleLineActualChange(line.id, 'actual_cash', e.target.value)}
-                                slotProps={{ htmlInput: { style: { textAlign: 'right', padding: '4px 8px' } } }}
-                              />
-                            ) : (
-                              <span dir="ltr">{MoneyUtil.formatCurrency(line.actual_cash || 0)} IRR</span>
-                            )}
-                          </TableCell>
-                          <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(line.expected_pos || 0)} IRR</TableCell>
+                          <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(lineOwed(line))} IRR</TableCell>
                           <TableCell align="right">
                             {['DRAFT', 'UNDER_REVIEW'].includes(activeSettlementDetail.status) ? (
                               <TextField
@@ -652,6 +668,20 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                               <span dir="ltr">{MoneyUtil.formatCurrency(line.actual_pos || 0)} IRR</span>
                             )}
                           </TableCell>
+                          <TableCell align="right">
+                            {['DRAFT', 'UNDER_REVIEW'].includes(activeSettlementDetail.status) ? (
+                              <TextField
+                                size="small"
+                                variant="outlined"
+                                value={line.actual_cash}
+                                onChange={(e) => handleLineActualChange(line.id, 'actual_cash', e.target.value)}
+                                slotProps={{ htmlInput: { style: { textAlign: 'right', padding: '4px 8px' } } }}
+                              />
+                            ) : (
+                              <span dir="ltr">{MoneyUtil.formatCurrency(line.actual_cash || 0)} IRR</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{paidByLabel(line)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
