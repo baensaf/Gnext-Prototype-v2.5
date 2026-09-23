@@ -819,33 +819,7 @@ export class OrderService {
       await assignCallNumber(em, order);
 
       if (deliveryContext) {
-        const existingDelivery = await em.findOne(Delivery, { where: { tenant_id: tenantId, order_id: order.id } });
-        if (!existingDelivery) {
-          const delivery = em.create(Delivery, {
-            tenant_id: tenantId,
-            order_id: order.id,
-            zone_id: deliveryContext.zone.id,
-            state: 'UNASSIGNED',
-            fee: deliveryContext.zone.fee,
-            currency_code: order.currency_code || 'IRR',
-            address_snapshot: {
-              address_id: deliveryContext.address.id,
-              title: deliveryContext.address.title,
-              address_text: deliveryContext.address.address_text,
-              postal_code: deliveryContext.address.postal_code || null,
-              customer_id: order.customer_id,
-            },
-          });
-          const savedDelivery = await em.save(Delivery, delivery);
-          await em.save(DeliveryEvent, em.create(DeliveryEvent, {
-            tenant_id: tenantId,
-            delivery_id: savedDelivery.id,
-            from_state: 'NONE',
-            to_state: 'UNASSIGNED',
-            reason: 'Delivery order submitted',
-            occurred_by: userId || null,
-          }));
-        }
+        await this.openDelivery(em, tenantId, order, deliveryContext, userId, 'Delivery order submitted');
       }
 
       // Write OrderStateEvent
@@ -1004,6 +978,51 @@ export class OrderService {
       where: { id: order.delivery_zone_id, tenant_id: tenantId, branch_id: order.branch_id, is_active: true },
     });
     order.delivery_fee = zone?.fee || '0.0000';
+  }
+
+  /**
+   * Puts a delivery order on the delivery board: a new record, or the one it had before it
+   * stopped being a delivery, back to unassigned with today's address and zone. A delivery
+   * already open is left as it is.
+   */
+  private async openDelivery(
+    em: EntityManager,
+    tenantId: string,
+    order: OrderHeader,
+    context: { address: CustomerAddress; zone: DeliveryZone },
+    userId: string | undefined,
+    reason: string,
+  ) {
+    const existing = await em.findOne(Delivery, { where: { tenant_id: tenantId, order_id: order.id } });
+    if (existing && existing.state !== 'CANCELLED') return existing;
+
+    const fromState = existing ? existing.state : 'NONE';
+    const delivery = existing ?? em.create(Delivery, { tenant_id: tenantId, order_id: order.id });
+    Object.assign(delivery, {
+      zone_id: context.zone.id,
+      courier_id: null,
+      state: 'UNASSIGNED',
+      fee: context.zone.fee,
+      currency_code: order.currency_code || 'IRR',
+      failure_reason: null,
+      address_snapshot: {
+        address_id: context.address.id,
+        title: context.address.title,
+        address_text: context.address.address_text,
+        postal_code: context.address.postal_code || null,
+        customer_id: order.customer_id,
+      },
+    });
+    const saved = await em.save(Delivery, delivery);
+    await em.save(DeliveryEvent, em.create(DeliveryEvent, {
+      tenant_id: tenantId,
+      delivery_id: saved.id,
+      from_state: fromState,
+      to_state: 'UNASSIGNED',
+      reason,
+      occurred_by: userId || null,
+    }));
+    return saved;
   }
 
   private async validateDeliveryContext(tenantId: string, order: OrderHeader, em: EntityManager, requireComplete: boolean) {
@@ -1607,7 +1626,7 @@ export class OrderService {
     userId?: string,
     correlationId?: string,
   ) {
-    return await this.dataSource.transaction(async (em) => {
+    const changed = await this.dataSource.transaction(async (em) => {
       const order = await em.findOne(OrderHeader, {
         where: { id, tenant_id: tenantId },
         lock: { mode: 'pessimistic_write' },
@@ -1689,9 +1708,14 @@ export class OrderService {
         if (dto.deliveryAddressId) order.customer_address_id = dto.deliveryAddressId;
         if (dto.deliveryZoneId) order.delivery_zone_id = dto.deliveryZoneId;
         // Fails with the specific missing piece, so the cashier is told what to collect.
-        await this.validateDeliveryContext(tenantId, order, em, true);
+        const deliveryContext = await this.validateDeliveryContext(tenantId, order, em, true);
         // A check cannot be at a table and out for delivery at once.
         await this.releaseTableForOrder(tenantId, order, em);
+        // A draft gets its delivery when it is sent. One the kitchen already has needs it now,
+        // or it never reaches the delivery board and nothing can finish it.
+        if (order.state !== 'DRAFT' && deliveryContext) {
+          await this.openDelivery(em, tenantId, order, deliveryContext, userId, `Converted from ${from} to delivery`);
+        }
       } else {
         // Leaving delivery: the fee and the zone go with it, or the next recalculation
         // would keep charging for a journey nobody is making.
@@ -1791,6 +1815,16 @@ export class OrderService {
         relations: ['items', 'items.options', 'adjustments', 'stateEvents'],
       });
     });
+
+    // A sent order that became a delivery needs the courier slip it would have printed with.
+    if (changed && changed.order_type === 'DELIVERY' && changed.state !== 'DRAFT') {
+      try {
+        await this.printCustomerPaperwork(tenantId, id, userId);
+      } catch {
+        // The slip is reprinted from the order; the conversion stands.
+      }
+    }
+    return changed;
   }
 
   /**
