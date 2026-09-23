@@ -864,7 +864,12 @@
       "reassign": "Reassign",
       "complete": "Complete",
       "failed": "Failed",
-      "requeue": "Re-queue Delivery"
+      "requeue": "Re-queue Delivery",
+      "customer": "Customer",
+      "noCustomer": "No customer on file",
+      "callNumber": "#{{number}}",
+      "waiting": "{{minutes}} min",
+      "waitingLate": "Past the zone estimate of {{minutes}} min"
     },
     "states": {
       "unassigned": "Unassigned",

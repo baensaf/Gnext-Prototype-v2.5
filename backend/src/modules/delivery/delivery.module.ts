@@ -14,6 +14,7 @@ import { CourierTerminalAssignment } from '../../entities/CourierTerminalAssignm
 import { Delivery } from '../../entities/Delivery.entity';
 import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
+import { Customer } from '../../entities/Customer.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
@@ -41,6 +42,7 @@ import { CashierModule } from '../cashier/cashier.module';
       Delivery,
       DeliveryEvent,
       CustomerAddress,
+      Customer,
       Terminal,
       Branch,
       TenantSetting,

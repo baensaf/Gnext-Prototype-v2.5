@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, Not } from 'typeorm';
+import { Repository, In, Not, MoreThanOrEqual } from 'typeorm';
 import { Courier } from '../../entities/Courier.entity';
 import { DeliveryAssignment } from '../../entities/DeliveryAssignment.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
@@ -16,6 +16,7 @@ import { Delivery, DeliveryState } from '../../entities/Delivery.entity';
 import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
+import { Customer } from '../../entities/Customer.entity';
 import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
 import { PaymentAllocation } from '../../entities/PaymentAllocation.entity';
 import { CashMovement } from '../../entities/CashMovement.entity';
@@ -30,6 +31,21 @@ import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { CourierPayMode, computeCourierPay, isCourierPayMode, resolveCourierPayPolicy } from './courier-pay';
 
 const ACTIVE_DELIVERY_STATES: DeliveryState[] = ['ASSIGNED', 'PICKED_UP', 'EN_ROUTE'];
+
+/** Deliveries the board shows whatever their age: waiting for a courier, or with one. */
+const OPEN_DELIVERY_STATES: DeliveryState[] = ['UNASSIGNED', ...ACTIVE_DELIVERY_STATES];
+
+/** How far back the board's history column reaches. */
+const BOARD_HISTORY_HOURS = 12;
+
+/** Whether `reconcileDeliveryWithOrder` would change this delivery. */
+function deliveryDisagreesWithOrder(delivery: Delivery, order: OrderHeader): boolean {
+  const orderState = String(order.state || order.status || '').toUpperCase();
+  if (orderState === 'COMPLETED') return delivery.state !== 'DELIVERED';
+  if (orderState === 'CANCELLED') return delivery.state !== 'CANCELLED';
+  if (orderState === 'OUT_FOR_DELIVERY') return !['EN_ROUTE', 'DELIVERED', 'CANCELLED'].includes(delivery.state);
+  return false;
+}
 
 @Injectable()
 export class DeliveryService {
@@ -49,6 +65,7 @@ export class DeliveryService {
     @InjectRepository(DeliveryEvent) private readonly deliveryEventRepo: Repository<DeliveryEvent>,
     @InjectRepository(Terminal) private readonly terminalRepo: Repository<Terminal>,
     @InjectRepository(CustomerAddress) private readonly customerAddressRepo: Repository<CustomerAddress>,
+    @InjectRepository(Customer) private readonly customerRepo: Repository<Customer>,
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
     @InjectRepository(TenantSetting) private readonly settingRepo: Repository<TenantSetting>,
     private readonly transitionRecorder: OrderTransitionRecorder,
@@ -1045,35 +1062,74 @@ export class DeliveryService {
     return saved;
   }
 
+  /**
+   * The dispatch board: every delivery still in play, and those finished in the last twelve
+   * hours for the history column.
+   *
+   * It used to read every delivery the chain ever had and look up the order, courier and zone
+   * one row at a time, on every refresh of every open board. The rows now come in one query
+   * and their names in one batched lookup per table. Twelve hours rather than "since midnight"
+   * so a late shift keeps its evening's history past 00:00.
+   */
   async getDeliveries(tenantId: string, branchId?: string, state?: string) {
-    const where: any = { tenant_id: tenantId };
-    const deliveries = await this.deliveryRepo.find({ where, order: { created_at: 'DESC' } });
-    const result = [];
+    const finishedSince = new Date(Date.now() - BOARD_HISTORY_HOURS * 3600_000);
+    const deliveries = await this.deliveryRepo.find({
+      where: [
+        { tenant_id: tenantId, state: In(OPEN_DELIVERY_STATES) },
+        { tenant_id: tenantId, updated_at: MoreThanOrEqual(finishedSince) },
+      ],
+      order: { created_at: 'DESC' },
+    });
+    if (deliveries.length === 0) return [];
 
+    const idsOf = (values: Array<string | null | undefined>) => [...new Set(values.filter(Boolean))] as string[];
+    const orders = await this.orderRepo.find({ where: { tenant_id: tenantId, id: In(idsOf(deliveries.map((d) => d.order_id))) } });
+    const orderById = new Map(orders.map((o) => [o.id, o]));
+    const [couriers, zones, customers] = await Promise.all([
+      this.lookup(this.courierRepo, tenantId, idsOf(deliveries.map((d) => d.courier_id))),
+      this.lookup(this.zoneRepo, tenantId, idsOf(deliveries.map((d) => d.zone_id))),
+      this.lookup(this.customerRepo, tenantId, idsOf(orders.map((o) => o.customer_id))),
+    ]);
+
+    const result = [];
     for (const d of deliveries) {
-      const order = await this.orderRepo.findOne({ where: { id: d.order_id, tenant_id: tenantId } });
+      const order = orderById.get(d.order_id);
       if (!order || (branchId && order.branch_id !== branchId)) continue;
 
-      const reconciled = await this.reconcileDeliveryWithOrder(tenantId, d, order);
+      // A cancelled or completed order still marks its delivery here, since nothing else does.
+      // Only a row that disagrees costs a write.
+      const reconciled = deliveryDisagreesWithOrder(d, order) ? await this.reconcileDeliveryWithOrder(tenantId, d, order) : d;
       if (state && reconciled.state !== state) continue;
 
-      const courier = reconciled.courier_id ? await this.courierRepo.findOne({ where: { id: reconciled.courier_id, tenant_id: tenantId } }) : null;
-      const zone = reconciled.zone_id ? await this.zoneRepo.findOne({ where: { id: reconciled.zone_id, tenant_id: tenantId } }) : null;
+      const courier = reconciled.courier_id ? couriers.get(reconciled.courier_id) : null;
+      const zone = reconciled.zone_id ? zones.get(reconciled.zone_id) : null;
+      const customer = order.customer_id ? customers.get(order.customer_id) : null;
 
       result.push({
         ...reconciled,
-        order_number: order ? order.order_number : 'ORD-00',
-        call_number: order?.call_number ?? null,
-        grand_total: order ? order.grand_total : '0.0000',
-        outstanding_total: order ? order.outstanding_total : '0.0000',
-        customer_name: order ? (order as any).customer_name || 'Customer' : 'Customer',
+        order_number: order.order_number,
+        call_number: order.call_number ?? null,
+        order_state: order.state,
+        submitted_at: order.submitted_at || order.placed_at || null,
+        grand_total: order.grand_total,
+        outstanding_total: order.outstanding_total,
+        customer_name: customer ? [customer.first_name, customer.last_name].filter(Boolean).join(' ') || null : null,
+        customer_phone: customer?.mobile || null,
         courier_name: courier ? courier.name : 'Unassigned',
         courier_phone: courier ? courier.phone : '',
         zone_name: zone ? zone.name : 'Default Zone',
+        zone_estimated_minutes: zone?.estimated_minutes ?? null,
       });
     }
 
     return result;
+  }
+
+  /** Rows of one table by id, keyed by id, in a single query. */
+  private async lookup<T extends { id: string }>(repo: Repository<T>, tenantId: string, ids: string[]): Promise<Map<string, T>> {
+    if (ids.length === 0) return new Map();
+    const rows = await repo.find({ where: { tenant_id: tenantId, id: In(ids) } as any });
+    return new Map(rows.map((row) => [row.id, row]));
   }
 
   async getDeliveryEvents(tenantId: string, deliveryId: string) {

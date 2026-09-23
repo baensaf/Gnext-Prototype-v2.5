@@ -17,6 +17,7 @@ import { Delivery } from '../src/entities/Delivery.entity';
 import { DeliveryEvent } from '../src/entities/DeliveryEvent.entity';
 import { Terminal } from '../src/entities/Terminal.entity';
 import { CustomerAddress } from '../src/entities/CustomerAddress.entity';
+import { Customer } from '../src/entities/Customer.entity';
 import { Branch } from '../src/entities/Branch.entity';
 import { TenantSetting } from '../src/entities/TenantSetting.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
@@ -41,6 +42,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
   let deliveryEventRepo: any;
   let terminalRepo: any;
   let customerAddressRepo: any;
+  let customerRepo: any;
   let auditWriter: any;
   let transitionRecorder: any;
   let branchRepo: any;
@@ -53,6 +55,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
     assignmentRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn().mockImplementation((a) => a), save: jest.fn().mockImplementation((a) => Promise.resolve(a)) };
     orderRepo = {
       findOne: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
       save: jest.fn().mockImplementation((o) => Promise.resolve(o)),
       // Order moves are saved in a transaction with their history; hand the save back to the
       // repository the assertions watch.
@@ -71,6 +74,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
     deliveryEventRepo = { create: jest.fn().mockImplementation((e) => e), save: jest.fn().mockImplementation((e) => Promise.resolve(e)), find: jest.fn() };
     terminalRepo = { findOne: jest.fn() };
     customerAddressRepo = { findOne: jest.fn() };
+    customerRepo = { find: jest.fn().mockResolvedValue([]) };
     auditWriter = { write: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -91,6 +95,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
         { provide: getRepositoryToken(DeliveryEvent), useValue: deliveryEventRepo },
         { provide: getRepositoryToken(Terminal), useValue: terminalRepo },
         { provide: getRepositoryToken(CustomerAddress), useValue: customerAddressRepo },
+        { provide: getRepositoryToken(Customer), useValue: customerRepo },
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
         { provide: getRepositoryToken(TenantSetting), useValue: settingRepo },
         { provide: AuditWriter, useValue: auditWriter },
@@ -182,7 +187,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
   it('reconciles a stale delivery with a completed parent order before returning the board', async () => {
     const staleDelivery = { id: 'del-stale', tenant_id: 't-1', order_id: 'ord-done', state: 'UNASSIGNED' };
     deliveryRepo.find.mockResolvedValue([staleDelivery]);
-    orderRepo.findOne.mockResolvedValue({
+    orderRepo.find.mockResolvedValue([{
       id: 'ord-done',
       tenant_id: 't-1',
       branch_id: 'branch-1',
@@ -190,7 +195,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
       state: 'COMPLETED',
       grand_total: '239800.0000',
       completed_at: new Date('2026-09-07T10:00:00Z'),
-    });
+    }]);
 
     const result = await service.getDeliveries('t-1', 'branch-1');
 
@@ -200,6 +205,44 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
     expect(deliveryEventRepo.save).toHaveBeenCalledWith(
       expect.objectContaining({ from_state: 'UNASSIGNED', to_state: 'DELIVERED' }),
     );
+  });
+
+  // Audit OD7/OD8: the board read every delivery ever, one order, courier and zone at a time,
+  // and every card said "Customer".
+  it('reads the board in batches, only what is in play or recent, and names the customer', async () => {
+    deliveryRepo.find.mockResolvedValue([
+      { id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', courier_id: 'cour-1', zone_id: 'zone-1', state: 'ASSIGNED' },
+      { id: 'del-2', tenant_id: 't-1', order_id: 'ord-2', courier_id: null, zone_id: 'zone-1', state: 'UNASSIGNED' },
+    ]);
+    orderRepo.find.mockResolvedValue([
+      { id: 'ord-1', branch_id: 'branch-1', order_number: 'ORD-1', call_number: 42, state: 'READY', customer_id: 'cust-1', submitted_at: new Date('2026-09-23T10:00:00Z') },
+      { id: 'ord-2', branch_id: 'branch-2', order_number: 'ORD-2', state: 'CONFIRMED', customer_id: null },
+    ]);
+    courierRepo.find.mockResolvedValue([{ id: 'cour-1', name: 'Sara', phone: '0912' }]);
+    zoneRepo.find.mockResolvedValue([{ id: 'zone-1', name: 'Valiasr', estimated_minutes: 20 }]);
+    customerRepo.find.mockResolvedValue([{ id: 'cust-1', first_name: 'Reza', last_name: 'Mohammadi', mobile: '+989121234567' }]);
+
+    const board = await service.getDeliveries('t-1', 'branch-1');
+
+    // Open deliveries whatever their age, and finished ones from the last hours only.
+    const where = deliveryRepo.find.mock.calls[0][0].where;
+    expect(where).toHaveLength(2);
+    expect(where[1].updated_at).toBeDefined();
+    expect(orderRepo.findOne).not.toHaveBeenCalled();
+    expect(courierRepo.findOne).not.toHaveBeenCalled();
+    expect(deliveryRepo.save).not.toHaveBeenCalled();
+
+    expect(board).toHaveLength(1);
+    expect(board[0]).toEqual(expect.objectContaining({
+      order_number: 'ORD-1',
+      call_number: 42,
+      order_state: 'READY',
+      customer_name: 'Reza Mohammadi',
+      customer_phone: '+989121234567',
+      courier_name: 'Sara',
+      zone_name: 'Valiasr',
+      zone_estimated_minutes: 20,
+    }));
   });
 
   it('rejects courier assignment when the parent order is already completed', async () => {

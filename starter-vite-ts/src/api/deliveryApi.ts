@@ -78,7 +78,16 @@ export interface Delivery {
   grand_total: string;
   /** What the customer still owes on the order; a courier brings it back at settlement. */
   outstanding_total?: string;
-  customer_name: string;
+  /** Null when the order has no customer on file. */
+  customer_name: string | null;
+  customer_phone?: string | null;
+  /** The number the counter calls the order by. */
+  call_number?: number | null;
+  /** The order's own state, e.g. whether the kitchen has marked it ready. */
+  order_state?: string;
+  /** When the order was sent; the card counts its waiting time from here. */
+  submitted_at?: string | null;
+  zone_estimated_minutes?: number | null;
   address_snapshot?: any;
   assigned_at?: string;
   picked_up_at?: string;

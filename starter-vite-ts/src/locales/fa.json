@@ -864,7 +864,12 @@
       "reassign": "تغییر سفیر",
       "complete": "تکمیل و تسویه",
       "failed": "عدم تحویل",
-      "requeue": "ارسال مجدد به صف"
+      "requeue": "ارسال مجدد به صف",
+      "customer": "مشتری",
+      "noCustomer": "مشتری ثبت نشده",
+      "callNumber": "#{{number}}",
+      "waiting": "{{minutes}} دقیقه",
+      "waitingLate": "بیش از زمان تخمینی محدوده ({{minutes}} دقیقه)"
     },
     "states": {
       "unassigned": "تخصیص‌نیافته",

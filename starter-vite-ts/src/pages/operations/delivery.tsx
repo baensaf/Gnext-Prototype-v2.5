@@ -30,6 +30,7 @@ import {
   Dialog,
   Select,
   Divider,
+  Tooltip,
   TableRow,
   MenuItem,
   TableBody,
@@ -83,6 +84,58 @@ function tabFromPathname(pathname: string): DeliveryTab {
   return found ?? 'BOARD';
 }
 
+/**
+ * What a dispatcher reads off a card: the number the counter calls, who the order is for and
+ * where it goes, and how long it has waited since it was sent, in red once past the zone's
+ * estimate. Every card used to say "Customer", with no address or phone.
+ */
+function DispatchDetails({ delivery, now }: { delivery: Delivery; now: number }) {
+  const { t } = useTranslation();
+  const address = delivery.address_snapshot?.address_text;
+  const since = delivery.submitted_at || delivery.created_at;
+  const minutes = since ? Math.max(0, Math.floor((now - new Date(since).getTime()) / 60000)) : null;
+  const estimate = delivery.zone_estimated_minutes ?? null;
+  const late = minutes !== null && estimate !== null && minutes > estimate;
+
+  return (
+    <Stack spacing={0.5} sx={{ my: 1 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        {delivery.call_number != null && (
+          <Chip size="small" label={t('delivery.card.callNumber', { number: delivery.call_number })} />
+        )}
+        {minutes !== null && (
+          <Tooltip title={late ? t('delivery.card.waitingLate', { minutes: estimate }) : ''}>
+            <Chip
+              size="small"
+              color={late ? 'error' : 'default'}
+              variant={late ? 'filled' : 'outlined'}
+              label={t('delivery.card.waiting', { minutes })}
+            />
+          </Tooltip>
+        )}
+      </Stack>
+      <Typography variant="body2">
+        {t('delivery.card.customer')}: <strong>{delivery.customer_name || t('delivery.card.noCustomer')}</strong>
+        {delivery.customer_phone && (
+          <>
+            {' · '}
+            <span dir="ltr">{delivery.customer_phone}</span>
+          </>
+        )}
+      </Typography>
+      {address && (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+        >
+          {address}
+        </Typography>
+      )}
+    </Stack>
+  );
+}
+
 export function DeliveryPage() {
   const { t } = useTranslation();
   // A cashier checks couriers in and out at the counter; taking one onto the roster is the
@@ -117,6 +170,12 @@ export function DeliveryPage() {
 
   const [loading, setLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  // The waiting time on each card moves on between refreshes.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [courierOnFile, setCourierOnFile] = useState<CourierOnFile | null>(null);
@@ -617,6 +676,7 @@ export function DeliveryPage() {
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                         {t('delivery.card.order')} #{del.order_number}
                       </Typography>
+                      <DispatchDetails delivery={del} now={now} />
                       <Typography variant="body2" color="text.secondary">
                         {t('delivery.card.zone')}: {del.zone_name} | {t('delivery.card.fee')}: {MoneyUtil.formatCurrency(del.fee)} {del.currency_code}
                       </Typography>
@@ -663,6 +723,7 @@ export function DeliveryPage() {
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                         {t('delivery.card.phone')}: {del.courier_phone || t('delivery.card.noPhone')}
                       </Typography>
+                      <DispatchDetails delivery={del} now={now} />
 
                       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                         <Button
@@ -711,6 +772,7 @@ export function DeliveryPage() {
                       <Typography variant="body2" color="text.secondary">
                         {t('delivery.card.courier')}: <strong>{del.courier_name}</strong>
                       </Typography>
+                      <DispatchDetails delivery={del} now={now} />
 
                       <Stack spacing={0.5} sx={{ my: 1 }}>
                         {/* The expected cash and card figures are only written when the run is

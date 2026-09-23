@@ -22,6 +22,7 @@ import { Delivery } from '../src/entities/Delivery.entity';
 import { DeliveryEvent } from '../src/entities/DeliveryEvent.entity';
 import { Terminal } from '../src/entities/Terminal.entity';
 import { CustomerAddress } from '../src/entities/CustomerAddress.entity';
+import { Customer } from '../src/entities/Customer.entity';
 import { Branch } from '../src/entities/Branch.entity';
 import { TenantSetting } from '../src/entities/TenantSetting.entity';
 
@@ -99,6 +100,8 @@ describe('DeliveryService (Courier Settlement)', () => {
           provide: getRepositoryToken(CustomerAddress),
           useValue: { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]) },
         },
+        // Only the dispatch board reads customers; nothing under test here does.
+        { provide: getRepositoryToken(Customer), useValue: { find: jest.fn().mockResolvedValue([]) } },
         // Only the chain roll-up reads branches; nothing under test here does.
         { provide: getRepositoryToken(Branch), useValue: { find: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(TenantSetting), useValue: { find: jest.fn().mockResolvedValue([]) } },
