@@ -348,23 +348,25 @@
       "notRecorded": "Not recorded",
       "noCourier": "Not assigned"
     },
-    "title": "Order Management & Dispatch",
-    "subtitle": "Real-time order registry, interactive state machine controls, and KDS workflow status board",
-    "tableView": "Table View",
-    "kanbanBoard": "Kanban Board",
+    "title": "Orders",
+    "subtitle": "Every order at the branch: find one by number, customer, phone or item, and act on it.",
     "refresh": "Refresh",
-    "searchPlaceholder": "Search by order #, customer name, table...",
+    "searchPlaceholder": "Order or call no., customer, phone, item…",
     "tabs": {
       "all": "All ({{count}})",
-      "waiting": "Waiting for acceptance ({{count}})",
+      "waiting": "Waiting ({{count}})",
       "open": "Open ({{count}})",
       "completed": "Completed ({{count}})",
-      "cancelled": "Cancelled ({{count}})"
+      "cancelled": "Cancelled ({{count}})",
+      "held": "Held ({{count}})",
+      "refunded": "Refunded ({{count}})"
     },
     "types": {
       "dineIn": "Dine-In",
       "takeaway": "Takeaway",
-      "delivery": "Delivery"
+      "delivery": "Delivery",
+      "pickup": "Pickup",
+      "aggregator": "Snappfood"
     },
     "incoming": {
       "title": "Incoming Orders",
@@ -422,7 +424,6 @@
       "orderNumber": "Order Number",
       "customerName": "Customer Name",
       "type": "Type",
-      "tableNotes": "Table / Notes",
       "itemsSummary": "Items Summary",
       "totalAmount": "Total Amount",
       "paidDue": "Paid / Due",
@@ -431,13 +432,20 @@
       "actions": "Actions",
       "walkInCustomer": "Walk-in Customer",
       "tableNumber": "Table {{number}}",
-      "counterTakeaway": "Counter / Takeaway",
       "paid": "Paid: {{amount}}",
       "due": "Due: {{amount}}",
       "refunded": "Refunded: {{amount}}",
       "fullyPaid": "FULLY PAID",
       "empty": "No orders found matching your filter criteria.",
-      "branch": "Branch"
+      "branch": "Branch",
+      "channel": "Channel",
+      "where": "Where",
+      "delivery": "Delivery",
+      "noCourierYet": "No courier yet",
+      "snappfoodCourier": "Snappfood courier",
+      "counter": "Counter",
+      "itemCount": "{{count}} items in all",
+      "emptyHint": "Try another date or the All tab."
     },
     "actions": {
       "details": "Details",
@@ -448,10 +456,11 @@
       "cancel": "Cancel",
       "completeOrder": "Complete Order",
       "cancelOrder": "Cancel Order",
-      "detailsAudit": "Details & Audit Log",
       "editOrder": "Edit lines",
       "reportToSnappfood": "Report to Snappfood",
-      "changeType": "Change type"
+      "changeType": "Change type",
+      "more": "More actions",
+      "openPage": "Open full page"
     },
     "snappfood": {
       "withSupport": "With Snappfood support",
@@ -466,14 +475,6 @@
       "send": "Send to Snappfood",
       "reported": "Order {{orderNumber}} is with Snappfood support",
       "reportFailed": "Could not report this order to Snappfood"
-    },
-    "kanban": {
-      "waiting": "Waiting for acceptance",
-      "open": "Open",
-      "completed": "Completed",
-      "table": "Table: {{number}}",
-      "placed": "Placed: {{time}}",
-      "total": "Total: {{amount}} IRR"
     },
     "cancelDialog": {
       "title": "Cancel Order {{orderNumber}}",
@@ -514,11 +515,11 @@
       "voided": "Voided",
       "placedOn": "Placed on {{date}}",
       "table": "Table {{number}}",
-      "note": "Note: {{note}}",
       "justNow": "Just now",
       "tabs": {
         "summary": "Order Summary & Items",
-        "audit": "Audit Trail & Timeline ({{count}})"
+        "audit": "Timeline ({{count}})",
+        "payments": "Payments ({{count}})"
       },
       "customerContext": "Customer & Dining Context",
       "customerName": "Customer Name",
@@ -545,19 +546,54 @@
       "authenticatedUser": "Authenticated User",
       "systemPos": "System / POS",
       "reasonCode": "Reason Code:",
-      "noteLabel": "Note:",
       "corr": "Corr:",
       "inspectSnapshot": "Inspect Snapshot",
       "inspectTitle": "Audit Snapshot: {{action}}",
       "timestamp": "Timestamp:",
-      "close": "Close"
+      "close": "Close",
+      "takenBy": "Taken by",
+      "terminal": "Register",
+      "deliveryZone": "Delivery zone",
+      "deliveryState": "Delivery",
+      "courier": "Courier",
+      "deliveryAddress": "Delivery address",
+      "deliveryFee": "Delivery fee",
+      "refundedAmount": "Refunded",
+      "paymentsTitle": "Payments",
+      "refundsTitle": "Refunds",
+      "paidToSnappfood": "Snappfood collects for its orders; the till takes no payment.",
+      "noPayments": "No payment has been taken yet.",
+      "paymentMethod": "Method",
+      "paymentTime": "Time",
+      "methods": {
+        "CASH": "Cash",
+        "CARD": "Card",
+        "POS": "Card terminal",
+        "MOBILE_POS": "Courier card reader",
+        "CUSTOMER_CREDIT": "Customer credit",
+        "BANK_TRANSFER": "Bank transfer",
+        "ONLINE": "Online"
+      },
+      "paymentStatuses": {
+        "PENDING": "Pending",
+        "PROCESSING": "Processing",
+        "SUCCEEDED": "Succeeded",
+        "COMPLETED": "Completed",
+        "FAILED": "Failed",
+        "CANCELLED": "Cancelled",
+        "REVERSED": "Reversed",
+        "PARTIALLY_REFUNDED": "Partly refunded",
+        "REFUNDED": "Refunded"
+      }
     },
     "errors": {
       "loadFailed": "Failed to load active orders",
       "updateStatusFailed": "Failed to update order status",
       "cancelFailed": "Failed to cancel order",
       "receiptFailed": "Failed to load receipt details",
-      "typeChangeFailed": "Could not change the order type"
+      "typeChangeFailed": "Could not change the order type",
+      "detailFailed": "Could not load this order",
+      "exportFailed": "Could not export the orders"
     },
     "detailTitle": "Order Detail",
     "itemsTitle": "Order Items",
@@ -616,7 +652,28 @@
       "approvalDetails": "Order type change outside the cashier window",
       "approvalDetailsPaid": "Changing the type of an order that has been paid"
     },
-    "dueAmount": "Amount due"
+    "dueAmount": "Amount due",
+    "export": "Export CSV",
+    "channels": {
+      "pos": "Till",
+      "kiosk": "Kiosk",
+      "online": "Website",
+      "aggregator": "Snappfood"
+    },
+    "filters": {
+      "date": "Date",
+      "from": "From",
+      "to": "To",
+      "any": "Any",
+      "ranges": {
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "7d": "Last 7 days",
+        "30d": "Last 30 days",
+        "all": "Any date",
+        "custom": "Custom range"
+      }
+    }
   },
   "dineIn": {
     "title": "Dine-In Floor Plan & Operations",
@@ -1366,7 +1423,9 @@
     "amountHelp": "Leave empty to refund the whole order.",
     "continue": "Continue",
     "pinNotice": "Money going back out needs a manager PIN. You will be asked for one before the refund is created.",
-    "approvalDetails": "Refund against a paid order"
+    "approvalDetails": "Refund against a paid order",
+    "noPaidOrders": "No paid order matches",
+    "orderSearch": "Order no., customer or phone"
   },
   "customers": {
     "title": "Customer Directory",

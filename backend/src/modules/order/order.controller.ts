@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, Req, Header } from '@nestjs/common';
 import { Request } from 'express';
 import { OrderService } from './order.service';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
@@ -46,6 +46,25 @@ export class OrdersController {
     // The service reads three spellings of the same filter; clearing the other two stops
     // a client-supplied one from winning over the scope decided here.
     return await this.orderService.getOrders(tenantId, {
+      ...query,
+      branch: undefined,
+      branch_id: undefined,
+      branchId,
+    });
+  }
+
+  // The same filters as the list, as a spreadsheet. Declared before ':id' so the router does
+  // not take "export" for an order id.
+  @Get('export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="orders.csv"')
+  async exportOrders(@Query() query: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const branchId = effectiveBranchId(
+      (req as any).userBranchId,
+      query.branch || query.branch_id || query.branchId,
+    );
+    return await this.orderService.exportOrdersCsv(tenantId, {
       ...query,
       branch: undefined,
       branch_id: undefined,
@@ -107,8 +126,13 @@ export class OrdersController {
   async getOrderById(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const order = await this.orderService.getOrderById(tenantId, id);
-    // The names behind the ids, so the detail page can say who was involved and link to them.
-    return { ...order, people: await this.orderService.getOrderPeople(tenantId, order) };
+    // The names behind the ids, so the detail page can say who was involved and link to them,
+    // and where a delivery is going.
+    const [people, context] = await Promise.all([
+      this.orderService.getOrderPeople(tenantId, order),
+      this.orderService.getOrderContext(tenantId, order),
+    ]);
+    return { ...order, people, context };
   }
 
   @Patch(':id')

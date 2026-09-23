@@ -96,6 +96,61 @@ export interface OrderHeader {
   items: OrderItem[];
 }
 
+/** Where an order sits on the Orders page. The groups don't overlap, so they add up to All. */
+export type OrderLifecycle = 'WAITING' | 'OPEN' | 'HELD' | 'COMPLETED' | 'REFUNDED' | 'CANCELLED' | 'OTHER';
+
+/** A row of the order book, with the names and places the list shows beside it. */
+export interface OrderListRow extends OrderHeader {
+  lifecycle: OrderLifecycle;
+  delivery_zone_name: string | null;
+  delivery_state: string | null;
+  courier_name: string | null;
+  delivery_address: string | null;
+}
+
+/** The filters the order book understands; everything runs on the server. */
+export interface OrderListQuery {
+  branchId?: string;
+  group?: OrderLifecycle | 'ALL';
+  from?: string;
+  to?: string;
+  type?: string;
+  channel?: string;
+  q?: string;
+  paid?: boolean;
+  ids?: string[];
+  sort?: 'placed_at' | 'grand_total' | 'outstanding_total' | 'order_number';
+  dir?: 'asc' | 'desc';
+  page?: number;
+  limit?: number;
+  counts?: boolean;
+}
+
+export interface OrderListPage {
+  data: OrderListRow[];
+  total: number;
+  page: number;
+  limit: number;
+  counts?: Record<OrderLifecycle | 'ALL', number>;
+}
+
+const listParams = (query: OrderListQuery) => ({
+  branchId: query.branchId || undefined,
+  group: query.group && query.group !== 'ALL' ? query.group : undefined,
+  from: query.from,
+  to: query.to,
+  type: query.type || undefined,
+  channel: query.channel || undefined,
+  q: query.q?.trim() || undefined,
+  paid: query.paid ? '1' : undefined,
+  ids: query.ids?.length ? query.ids.join(',') : undefined,
+  sort: query.sort,
+  dir: query.dir,
+  page: query.page,
+  limit: query.limit,
+  counts: query.counts ? '1' : undefined,
+});
+
 /** One of Snappfood's reasons a store may give for turning an order down. */
 export interface DeclineReason {
   id: number;
@@ -122,6 +177,26 @@ export const orderApi = {
       return res.data;
     }
     return [];
+  },
+
+  /** One page of the order book, with the tab counts when asked. */
+  listOrders: async (query: OrderListQuery): Promise<OrderListPage> => {
+    const res = await httpClient.get('/api/v1/orders', { params: listParams(query) });
+    return res.data;
+  },
+
+  /** Saves the filtered order book (up to 5,000 rows) as a CSV file. */
+  exportOrders: async (query: OrderListQuery): Promise<void> => {
+    const { page: _page, limit: _limit, counts: _counts, ...filters } = query;
+    const res = await httpClient.get('/api/v1/orders/export', { params: listParams(filters), responseType: 'blob' });
+    const url = URL.createObjectURL(res.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   },
 
   getOrderById: async (id: string): Promise<OrderHeader> => {

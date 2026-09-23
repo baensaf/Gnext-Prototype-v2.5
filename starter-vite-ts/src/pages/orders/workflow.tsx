@@ -1,10 +1,12 @@
-import type { Customer } from 'src/api/customerApi';
-import type { ReceiptData } from 'src/api/paymentApi';
+import type { GridColDef, GridSortModel } from '@mui/x-data-grid';
+import type { RefundRecord } from 'src/api/refundApi';
 import type { ReasonCode } from 'src/api/settingsApi';
-import type { OrderHeader, DeclineReason } from 'src/api/orderApi';
+import type { ReceiptData, PaymentRecord } from 'src/api/paymentApi';
+import type { OrderHeader, OrderListRow, DeclineReason, OrderLifecycle, OrderListQuery } from 'src/api/orderApi';
 
+import { useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
 
 import CodeIcon from '@mui/icons-material/Code';
 import EditIcon from '@mui/icons-material/Edit';
@@ -18,12 +20,12 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import HistoryIcon from '@mui/icons-material/History';
 import PaymentIcon from '@mui/icons-material/Payment';
+import DownloadIcon from '@mui/icons-material/Download';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import SecurityIcon from '@mui/icons-material/Security';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
-import TableChartIcon from '@mui/icons-material/TableChart';
-import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
-import VisibilityIcon from '@mui/icons-material/Visibility';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import {
   Box,
@@ -32,6 +34,7 @@ import {
   Chip,
   Grid,
   Tabs,
+  Menu,
   Stack,
   Alert,
   Paper,
@@ -41,6 +44,7 @@ import {
   Select,
   Drawer,
   Divider,
+  Tooltip,
   TableRow,
   MenuItem,
   TableBody,
@@ -53,17 +57,27 @@ import {
   CardContent,
   DialogTitle,
   FormControl,
-  ToggleButton,
+  ListItemIcon,
+  ListItemText,
   DialogContent,
   DialogActions,
   TableContainer,
   InputAdornment,
   CircularProgress,
-  ToggleButtonGroup,
 } from '@mui/material';
+
+import { paths } from 'src/routes/paths';
+import { RouterLink } from 'src/routes/components';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fTime, fDateTime } from 'src/utils/format-time';
+import { useLiveRefresh } from 'src/utils/use-live-refresh';
+import {
+  businessDate,
+  businessToday,
+  formatCalendarTime,
+  formatCalendarDateTime,
+} from 'src/utils/calendar';
 import {
   promisedBy,
   isSnappfoodOrder,
@@ -73,28 +87,58 @@ import {
 
 import { kdsApi } from 'src/api/kdsApi';
 import { orderApi } from 'src/api/orderApi';
+import { refundApi } from 'src/api/refundApi';
 import { paymentApi } from 'src/api/paymentApi';
-import { customerApi } from 'src/api/customerApi';
 import { settingsApi } from 'src/api/settingsApi';
 import { httpClient as axios } from 'src/api/httpClient';
 import { useBranchContext, useScopedBranchId } from 'src/contexts/branch-context';
 
 import { CheckoutModal } from 'src/components/CheckoutModal';
+import { ServerDataGrid } from 'src/components/server-data-grid';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 import { OrderEditDialog } from 'src/components/orders/OrderEditDialog';
+import { CalendarDateField } from 'src/components/calendar-date-field/calendar-date-field';
 
-// An order is waiting, open, completed or cancelled. How far the kitchen or the courier has
-// got is shown beside that rather than as a stage of its own: most branches print tickets and
-// have no screen that would ever move an order to "preparing" or "ready".
+// An order is waiting, open, held, completed, refunded or cancelled. How far the kitchen or
+// the courier has got is shown beside that rather than as a stage of its own: most branches
+// print tickets and have no screen that would ever move an order to "preparing" or "ready".
+// The server files every order under one of these (see `order-list.ts`), so the tab counts
+// add up to All.
 const OPEN_STATUSES = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'KITCHEN_PREPARING', 'READY', 'OUT_FOR_DELIVERY'];
 
-type Lifecycle = 'WAITING' | 'OPEN' | 'COMPLETED' | 'CANCELLED' | 'OTHER';
+type Lifecycle = OrderLifecycle;
+type TabKey = Lifecycle | 'ALL';
+type RangeKey = 'today' | 'yesterday' | '7d' | '30d' | 'all' | 'custom';
 
 type ReprintDocumentType = 'CUSTOMER_RECEIPT' | 'KITCHEN_TICKET' | 'GUEST_BILL' | 'COURIER_SLIP';
 
-const lifecycleOf = (status: string): Lifecycle => {
+const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: 'OPEN', label: 'open' },
+  { key: 'WAITING', label: 'waiting' },
+  { key: 'HELD', label: 'held' },
+  { key: 'COMPLETED', label: 'completed' },
+  { key: 'REFUNDED', label: 'refunded' },
+  { key: 'CANCELLED', label: 'cancelled' },
+  { key: 'ALL', label: 'all' },
+];
+
+const RANGES: RangeKey[] = ['today', 'yesterday', '7d', '30d', 'all', 'custom'];
+const ORDER_TYPES = ['DINE_IN', 'TAKEAWAY', 'PICKUP', 'DELIVERY', 'AGGREGATOR'];
+const CHANNELS = ['POS', 'KIOSK', 'ONLINE', 'AGGREGATOR'];
+const PAGE_SIZES = [25, 50, 100];
+const SORTABLE = ['placed_at', 'grand_total', 'outstanding_total', 'order_number'] as const;
+
+// Defaults are left out of the address bar, so a plain /app/orders is today's open orders.
+const DEFAULTS = { tab: 'OPEN', range: 'today', page: '0', size: '25', sort: 'placed_at', dir: 'desc' };
+
+const lifecycleOf = (order: { status: string; refunded_total?: string | null }): Lifecycle => {
+  const { status } = order;
   if (status === 'PENDING_ACCEPTANCE') return 'WAITING';
   if (OPEN_STATUSES.includes(status)) return 'OPEN';
+  if (status === 'DRAFT') return 'HELD';
+  if (status === 'REFUNDED' || (status === 'COMPLETED' && MoneyUtil.greaterThan(order.refunded_total || '0', '0'))) {
+    return 'REFUNDED';
+  }
   if (status === 'COMPLETED') return 'COMPLETED';
   if (status === 'CANCELLED' || status === 'REJECTED') return 'CANCELLED';
   return 'OTHER';
@@ -118,6 +162,58 @@ const progressKeyOf = (status: string): string | null => {
   }
 };
 
+/** The `delivery.states` key for a delivery's state. */
+const deliveryStateKeyOf = (state: string | null | undefined): string | null => {
+  switch (state) {
+    case 'PENDING':
+    case 'UNASSIGNED':
+      return 'unassigned';
+    case 'ASSIGNED':
+      return 'assigned';
+    case 'PICKED_UP':
+      return 'pickedUp';
+    case 'EN_ROUTE':
+      return 'enRoute';
+    case 'DELIVERED':
+      return 'delivered';
+    case 'FAILED':
+      return 'failed';
+    case 'CANCELLED':
+      return 'cancelled';
+    default:
+      return null;
+  }
+};
+
+/** A business day (YYYY-MM-DD) moved by `days`, on the restaurants' clock. */
+const shiftDay = (day: string, days: number) =>
+  businessDate(new Date(new Date(`${day}T12:00:00+03:30`).getTime() + days * 86_400_000));
+
+/** Midnight at the start of a business day in Tehran, which keeps no daylight saving. */
+const startOfDay = (day: string) => `${day}T00:00:00+03:30`;
+
+/** The placed-at window a date choice stands for; `to` is exclusive. */
+const rangeBounds = (range: RangeKey, from: string, to: string): { from?: string; to?: string } => {
+  const today = businessToday();
+  switch (range) {
+    case 'today':
+      return { from: startOfDay(today), to: startOfDay(shiftDay(today, 1)) };
+    case 'yesterday':
+      return { from: startOfDay(shiftDay(today, -1)), to: startOfDay(today) };
+    case '7d':
+      return { from: startOfDay(shiftDay(today, -6)), to: startOfDay(shiftDay(today, 1)) };
+    case '30d':
+      return { from: startOfDay(shiftDay(today, -29)), to: startOfDay(shiftDay(today, 1)) };
+    case 'custom':
+      return {
+        from: from ? startOfDay(from) : undefined,
+        to: to ? startOfDay(shiftDay(to, 1)) : undefined,
+      };
+    default:
+      return {};
+  }
+};
+
 export function OrdersWorkflowPage() {
   const { t } = useTranslation();
   const [branchId] = useScopedBranchId();
@@ -130,16 +226,57 @@ export function OrdersWorkflowPage() {
   // Only head office ever sees more than one, and only there does the column mean anything.
   const showBranchColumn = !branchId && branches.length > 1;
 
-  const [orders, setOrders] = useState<OrderHeader[]>([]);
+  // Every filter lives in the address bar, so a reload, the back button or a shared link
+  // brings back the same list, and ?order= reopens the same order.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const param = (key: keyof typeof DEFAULTS | string, fallback = '') =>
+    searchParams.get(key) || (DEFAULTS as Record<string, string>)[key] || fallback;
+  const tab = param('tab') as TabKey;
+  const range = (RANGES.includes(param('range') as RangeKey) ? param('range') : 'today') as RangeKey;
+  const customFrom = param('from');
+  const customTo = param('to');
+  const typeFilter = param('type');
+  const channelFilter = param('channel');
+  const query = param('q');
+  const page = Math.max(0, Number(param('page', '0')) || 0);
+  const pageSize = PAGE_SIZES.includes(Number(param('size'))) ? Number(param('size')) : 25;
+  const sortField = (SORTABLE as readonly string[]).includes(param('sort')) ? (param('sort') as OrderListQuery['sort']) : 'placed_at';
+  const sortDir: 'asc' | 'desc' = param('dir') === 'asc' ? 'asc' : 'desc';
+  const drawerOrderId = searchParams.get('order');
+
+  const setParams = useCallback(
+    (changes: Record<string, string | number | null>, keepPage = false) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          for (const [key, raw] of Object.entries(changes)) {
+            const value = raw === null ? '' : String(raw);
+            if (!value || (DEFAULTS as Record<string, string>)[key] === value) next.delete(key);
+            else next.set(key, value);
+          }
+          // A different filter starts from the first page.
+          if (!keepPage && !('page' in changes)) next.delete('page');
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+
+  const [rows, setRows] = useState<OrderListRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState<Partial<Record<TabKey, number>>>({});
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [searchText, setSearchText] = useState(query);
   const [reasonCodes, setReasonCodes] = useState<ReasonCode[]>([]);
-  const [customersMap, setCustomersMap] = useState<Map<string, Customer>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // View state: 'table' vs 'kanban'
-  const [viewMode, setViewMode] = useState<'kanban' | 'table'>('table');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  // The row's "more" menu
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [menuOrder, setMenuOrder] = useState<OrderListRow | null>(null);
 
   // Cancellation Dialog
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -165,7 +302,6 @@ export function OrdersWorkflowPage() {
   const [reprintSubmitting, setReprintSubmitting] = useState(false);
 
   // Order Details & Audit Drawer State
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   // Converting an order to a different kind
   const [typeDialogOpen, setTypeDialogOpen] = useState(false);
@@ -185,9 +321,12 @@ export function OrdersWorkflowPage() {
   const [cancelEscalation, setCancelEscalation] = useState<string>('');
   const [selectedDrawerOrder, setSelectedDrawerOrder] = useState<any | null>(null);
   const [orderAuditLogs, setOrderAuditLogs] = useState<any[]>([]);
+  const [orderPayments, setOrderPayments] = useState<PaymentRecord[]>([]);
+  const [orderRefunds, setOrderRefunds] = useState<RefundRecord[]>([]);
   const [loadingDrawerDetails, setLoadingDrawerDetails] = useState(false);
-  const [drawerTab, setDrawerTab] = useState<'details' | 'audit'>('details');
+  const [drawerTab, setDrawerTab] = useState<'details' | 'payments' | 'audit'>('details');
   const [inspectingJson, setInspectingJson] = useState<any>(null);
+  const drawerOpen = !!drawerOrderId;
 
   // Report an accepted Snappfood order to Snappfood support: more time, or it cannot be made.
   const [reportOrder, setReportOrder] = useState<OrderHeader | null>(null);
@@ -204,29 +343,61 @@ export function OrdersWorkflowPage() {
         return t('orders.types.dineIn');
       case 'TAKEAWAY':
         return t('orders.types.takeaway');
+      case 'PICKUP':
+        return t('orders.types.pickup');
       case 'DELIVERY':
         return t('orders.types.delivery');
+      case 'AGGREGATOR':
+        return t('orders.types.aggregator');
       default:
         return orderType;
     }
   };
 
-  const getOrderStatusLabel = (status: string) => {
+  const getOrderTypeColor = (orderType: string) => {
+    switch (orderType) {
+      case 'DINE_IN':
+        return 'primary';
+      case 'DELIVERY':
+        return 'info';
+      case 'AGGREGATOR':
+        return 'warning';
+      default:
+        return 'secondary';
+    }
+  };
+
+  const getChannelLabel = (channel?: string | null) => {
+    switch (channel) {
+      case 'POS':
+        return t('orders.channels.pos');
+      case 'KIOSK':
+        return t('orders.channels.kiosk');
+      case 'ONLINE':
+        return t('orders.channels.online');
+      case 'AGGREGATOR':
+        return t('orders.channels.aggregator');
+      default:
+        return channel || '—';
+    }
+  };
+
+  const getOrderStatusLabel = (status: string, refundedTotal?: string | null) => {
     switch (status) {
       case 'DRAFT':
         return t('orders.statuses.draft');
       case 'REJECTED':
         return t('orders.statuses.rejected');
-      case 'REFUNDED':
-        return t('orders.statuses.refunded');
       default:
         break;
     }
-    switch (lifecycleOf(status)) {
+    switch (lifecycleOf({ status, refunded_total: refundedTotal })) {
       case 'WAITING':
         return t('orders.statuses.pendingAcceptance');
       case 'OPEN':
         return t('orders.statuses.open');
+      case 'REFUNDED':
+        return t('orders.statuses.refunded');
       case 'COMPLETED':
         return t('orders.statuses.completed');
       case 'CANCELLED':
@@ -243,7 +414,7 @@ export function OrdersWorkflowPage() {
 
   // An open Snappfood order shows the time the store promised, or that Snappfood support has it.
   const renderSnappfoodChips = (order: OrderHeader) => {
-    if (!isSnappfoodOrder(order) || lifecycleOf(order.status) !== 'OPEN') return null;
+    if (!isSnappfoodOrder(order) || lifecycleOf(order) !== 'OPEN') return null;
     if (order.aggregator_issue_at) {
       return <Chip color="warning" label={t('orders.snappfood.withSupport')} size="small" />;
     }
@@ -263,7 +434,7 @@ export function OrdersWorkflowPage() {
   // on the delivery screen, where the courier's cash is counted in.
   const canComplete = (order: OrderHeader) =>
     !readOnly &&
-    lifecycleOf(order.status) === 'OPEN' &&
+    lifecycleOf(order) === 'OPEN' &&
     order.order_type !== 'DELIVERY' &&
     order.status !== 'OUT_FOR_DELIVERY' &&
     !MoneyUtil.greaterThan(order.due_amount || '0', '0');
@@ -271,13 +442,16 @@ export function OrdersWorkflowPage() {
   // A waiting order is answered on Incoming Orders, and a finished one is refunded, not cancelled.
   // Only Snappfood cancels one of its orders; the store reports a problem to Snappfood instead.
   const canCancel = (order: OrderHeader) =>
-    !readOnly && !isSnappfoodOrder(order) && (lifecycleOf(order.status) === 'OPEN' || order.status === 'DRAFT');
+    !readOnly && !isSnappfoodOrder(order) && (lifecycleOf(order) === 'OPEN' || order.status === 'DRAFT');
 
   // Snappfood collects for its orders, so the till never takes money for one.
   const canPay = (order: OrderHeader) =>
     !readOnly && !isSnappfoodOrder(order) && order.status !== 'CANCELLED' && MoneyUtil.greaterThan(order.due_amount, '0');
 
   const canReport = (order: OrderHeader) => !readOnly && reportMinutesLeft(order, Date.now()) > 0;
+
+  // A receipt is for money taken; an unpaid order has a guest bill instead.
+  const hasReceipt = (order: OrderHeader) => MoneyUtil.greaterThan(order.paid_amount || order.paid_total || '0', '0');
 
   // Rung up as the wrong kind of order. Not a Snappfood order — that one is theirs — and not
   // once a courier has it, which the server refuses anyway; hiding the button just saves the
@@ -286,7 +460,10 @@ export function OrdersWorkflowPage() {
     !readOnly &&
     !isSnappfoodOrder(order) &&
     order.status !== 'OUT_FOR_DELIVERY' &&
-    (lifecycleOf(order.status) === 'OPEN' || order.status === 'DRAFT');
+    (lifecycleOf(order) === 'OPEN' || order.status === 'DRAFT');
+
+  const canEditLines = (order: OrderHeader) =>
+    !readOnly && !isSnappfoodOrder(order) && !['COMPLETED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(order.status);
 
   const handleOpenReport = (order: OrderHeader) => {
     setReportOrder(order);
@@ -313,7 +490,7 @@ export function OrdersWorkflowPage() {
       setReportOrder(null);
       loadData();
       if (drawerOpen && selectedDrawerOrder?.id === reported.id) {
-        handleOpenOrderDrawer(reported);
+        loadDrawerDetails(reported.id);
       }
     } catch (err: any) {
       setReportError(err?.detail || err?.message || t('orders.snappfood.reportFailed'));
@@ -322,68 +499,138 @@ export function OrdersWorkflowPage() {
     }
   };
 
-  const handleOpenOrderDrawer = async (order: OrderHeader) => {
-    setSelectedOrder(order);
-    setSelectedDrawerOrder(order);
-    setDrawerOpen(true);
-    setLoadingDrawerDetails(true);
-    try {
-      const [detailRes, auditRes] = await Promise.all([
-        axios.get(`/api/v1/orders/${order.id}`).catch(() => ({ data: order })),
-        axios.get('/api/v1/reports/audit', { params: { entityId: order.id } }).catch(() => ({ data: [] })),
-      ]);
-      setSelectedDrawerOrder(detailRes.data);
-      const auditList = Array.isArray(auditRes.data) ? auditRes.data : (auditRes.data?.data || []);
-      setOrderAuditLogs(auditList);
-    } catch (err) {
-      console.error('Failed to load order drawer details:', err);
-    } finally {
-      setLoadingDrawerDetails(false);
-    }
-  };
+  const listQuery = useMemo<OrderListQuery>(
+    () => ({
+      branchId: branchId || undefined,
+      group: tab,
+      ...rangeBounds(range, customFrom, customTo),
+      type: typeFilter || undefined,
+      channel: channelFilter || undefined,
+      q: query || undefined,
+      sort: sortField,
+      dir: sortDir,
+    }),
+    [branchId, tab, range, customFrom, customTo, typeFilter, channelFilter, query, sortField, sortDir]
+  );
 
-  const loadData = async () => {
-    try {
-      const [oList, rList, cList] = await Promise.all([
-        // Unfiltered, this listed the whole chain: a cashier at one shop could open
-        // another shop's order and had nothing on screen to tell them whose it was.
-        orderApi.getOrders(branchId || undefined),
-        settingsApi.getReasonCodes(),
-        customerApi.getCustomers(),
-      ]);
-      setOrders(oList);
-      setReasonCodes(rList);
+  // Answers can come back out of order when filters change quickly; only the latest counts.
+  const requestSeq = useRef(0);
 
-      const cMap = new Map<string, Customer>();
-      cList.forEach((c) => cMap.set(c.id, c));
-      setCustomersMap(cMap);
-
-      setError(null);
-    } catch (err: any) {
-      setError(err.detail || t('orders.errors.loadFailed'));
-    }
-  };
+  const loadData = useCallback(
+    async (silent = false) => {
+      const seq = ++requestSeq.current;
+      if (!silent) setLoading(true);
+      try {
+        const res = await orderApi.listOrders({ ...listQuery, page: page + 1, limit: pageSize, counts: true });
+        if (seq !== requestSeq.current) return;
+        setRows(res.data);
+        setTotal(res.total);
+        setCounts(res.counts || {});
+        setError(null);
+      } catch (err: any) {
+        if (seq === requestSeq.current) setError(err.detail || t('orders.errors.loadFailed'));
+      } finally {
+        if (seq === requestSeq.current) setLoading(false);
+      }
+    },
+    [listQuery, page, pageSize, t]
+  );
 
   useEffect(() => {
     loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId]);
+  }, [loadData]);
 
-  const getCustomerDisplayName = (order: OrderHeader) => {
-    if (order.customer_name) return order.customer_name;
-    if (order.customer_id && customersMap.has(order.customer_id)) {
-      const c = customersMap.get(order.customer_id)!;
-      return `${c.first_name} ${c.last_name}`;
-    }
-    return t('orders.table.walkInCustomer');
+  useEffect(() => {
+    settingsApi.getReasonCodes().then(setReasonCodes).catch(() => setReasonCodes([]));
+  }, []);
+
+  // An order placed at the till, paid, sent or finished anywhere in the branch shows up here
+  // without a refresh. The list re-reads in place, keeping the page and filters.
+  useLiveRefresh(['orders'], () => loadData(true), branchId);
+
+  // The search box writes to the address bar once typing pauses.
+  useEffect(() => {
+    setSearchText(query);
+  }, [query]);
+
+  useEffect(() => {
+    if (searchText === query) return undefined;
+    const timer = setTimeout(() => setParams({ q: searchText || null }), 350);
+    return () => clearTimeout(timer);
+  }, [searchText, query, setParams]);
+
+  const loadDrawerDetails = useCallback(
+    async (orderId: string) => {
+      setLoadingDrawerDetails(true);
+      try {
+        const [detail, audit, payments, refunds] = await Promise.all([
+          axios.get(`/api/v1/orders/${orderId}`).then((res) => res.data),
+          axios
+            .get('/api/v1/reports/audit', { params: { entityId: orderId } })
+            .then((res) => res.data)
+            .catch(() => []),
+          paymentApi.getOrderPayments(orderId).catch(() => [] as PaymentRecord[]),
+          refundApi.getRefunds(orderId).catch(() => [] as RefundRecord[]),
+        ]);
+        setSelectedDrawerOrder(detail);
+        setSelectedOrder(detail);
+        setOrderAuditLogs(Array.isArray(audit) ? audit : audit?.data || []);
+        setOrderPayments(payments);
+        setOrderRefunds(refunds);
+      } catch (err: any) {
+        setError(err?.detail || t('orders.errors.detailFailed'));
+      } finally {
+        setLoadingDrawerDetails(false);
+      }
+    },
+    [t]
+  );
+
+  // ?order= opens the drawer, so an order can be linked to and survives a reload.
+  useEffect(() => {
+    if (!drawerOrderId) return;
+    setDrawerTab('details');
+    setOrderAuditLogs([]);
+    setOrderPayments([]);
+    setOrderRefunds([]);
+    loadDrawerDetails(drawerOrderId);
+  }, [drawerOrderId, loadDrawerDetails]);
+
+  const openDrawer = (order: OrderHeader) => {
+    // The row is on screen already; show it while the full order loads.
+    setSelectedDrawerOrder(order);
+    setParams({ order: order.id }, true);
   };
 
-  const getCustomerMobile = (order: OrderHeader) => {
-    if (order.customer_mobile) return order.customer_mobile;
-    if (order.customer_id && customersMap.has(order.customer_id)) {
-      return customersMap.get(order.customer_id)!.mobile;
+  const closeDrawer = () => setParams({ order: null }, true);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await orderApi.exportOrders(listQuery);
+    } catch (err: any) {
+      setError(err?.detail || t('orders.errors.exportFailed'));
+    } finally {
+      setExporting(false);
     }
-    return null;
+  };
+
+  const openMenu = (event: React.MouseEvent<HTMLElement>, order: OrderListRow) => {
+    event.stopPropagation();
+    setMenuAnchor(event.currentTarget);
+    setMenuOrder(order);
+  };
+
+  const closeMenu = () => {
+    setMenuAnchor(null);
+    setMenuOrder(null);
+  };
+
+  /** Runs a menu choice for the row the menu was opened on. */
+  const fromMenu = (action: (order: OrderListRow) => void) => () => {
+    const order = menuOrder;
+    closeMenu();
+    if (order) action(order);
   };
 
   const handleUpdateStatus = async (orderId: string, nextStatus: string) => {
@@ -567,35 +814,297 @@ export function OrdersWorkflowPage() {
     }
   };
 
-  const getStatusChipColor = (status: string) => {
-    if (status === 'REFUNDED') return 'secondary';
-    switch (lifecycleOf(status)) {
-      case 'WAITING': return 'warning';
-      case 'OPEN': return 'info';
-      case 'CANCELLED': return 'error';
-      default: return 'default';
+  const getStatusChipColor = (order: { status: string; refunded_total?: string | null }) => {
+    switch (lifecycleOf(order)) {
+      case 'WAITING':
+        return 'warning';
+      case 'OPEN':
+        return 'info';
+      case 'REFUNDED':
+        return 'secondary';
+      case 'CANCELLED':
+        return 'error';
+      default:
+        return 'default';
     }
   };
 
-  // Filtered orders list
-  const filteredOrders = orders.filter((o) => {
-    const matchesStatus = statusFilter === 'ALL' || lifecycleOf(o.status) === statusFilter;
-    const q = searchQuery.toLowerCase().trim();
-    const custName = getCustomerDisplayName(o).toLowerCase();
-    const custMobile = (getCustomerMobile(o) || '').toLowerCase();
-    const matchesSearch =
-      !q ||
-      o.order_number.toLowerCase().includes(q) ||
-      custName.includes(q) ||
-      custMobile.includes(q) ||
-      (o.table_number && o.table_number.toLowerCase().includes(q)) ||
-      (o.notes && o.notes.toLowerCase().includes(q)) ||
-      o.items.some((it) => it.product_name.toLowerCase().includes(q));
-    return matchesStatus && matchesSearch;
-  });
+  /** Today's orders show the time; anything older shows the date too. */
+  const formatPlaced = (placedAt: string) =>
+    businessDate(placedAt) === businessToday() ? formatCalendarTime(placedAt) : formatCalendarDateTime(placedAt);
 
-  const getOrdersByLifecycle = (lifecycle: string) =>
-    orders.filter((o) => lifecycleOf(o.status) === lifecycle);
+  const activeItems = (order: OrderHeader) => (order.items || []).filter((it: any) => it.state !== 'VOID' && it.state !== 'REPLACED');
+
+  /** The one thing a cashier most likely wants to do next with this order, if anything. */
+  const primaryActionOf = (order: OrderListRow) => {
+    if (canPay(order)) {
+      return { key: 'pay', label: t('orders.actions.pay'), color: 'success' as const, icon: <PaymentIcon />, run: () => handleOpenPayment(order) };
+    }
+    if (canComplete(order)) {
+      return {
+        key: 'complete',
+        label: t('orders.actions.complete'),
+        color: 'primary' as const,
+        icon: <DoneAllIcon />,
+        run: () => handleUpdateStatus(order.id, 'COMPLETED'),
+      };
+    }
+    if (canReport(order)) {
+      return {
+        key: 'report',
+        label: t('orders.actions.reportToSnappfood'),
+        color: 'warning' as const,
+        icon: <ScheduleIcon />,
+        run: () => handleOpenReport(order),
+      };
+    }
+    return null;
+  };
+
+  /** Where the order is: its table, the counter, or where a delivery is going and who has it. */
+  const renderWhere = (order: OrderListRow) => {
+    if (order.table_number) {
+      return (
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          {t('orders.table.tableNumber', { number: order.table_number })}
+        </Typography>
+      );
+    }
+    const isDelivery = order.order_type === 'DELIVERY' || !!order.delivery_state || !!order.delivery_zone_name;
+    if (isDelivery) {
+      const stateKey = deliveryStateKeyOf(order.delivery_state);
+      return (
+        <Box>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            {order.delivery_zone_name || t('orders.table.delivery')}
+          </Typography>
+          <Typography color="text.secondary" variant="caption" sx={{ display: 'block' }}>
+            {[stateKey ? t(`delivery.states.${stateKey}`) : null, order.courier_name].filter(Boolean).join(' · ') ||
+              t('orders.table.noCourierYet')}
+          </Typography>
+        </Box>
+      );
+    }
+    if (order.order_type === 'AGGREGATOR') {
+      return <Typography variant="body2">{t('orders.table.snappfoodCourier')}</Typography>;
+    }
+    return <Typography variant="body2">{t('orders.table.counter')}</Typography>;
+  };
+
+  const renderPayment = (order: OrderListRow) => (
+    <Box>
+      <Typography color="success.main" sx={{ display: 'block', fontWeight: 600 }} variant="caption">
+        <span dir="ltr">{t('orders.table.paid', { amount: MoneyUtil.formatCurrency(order.paid_amount || order.paid_total || '0') })} IRR</span>
+      </Typography>
+      {/* Money given back outranks money taken: an order whose
+          tender was reversed must not keep reading as settled. */}
+      {MoneyUtil.greaterThan(order.refunded_total || '0', '0') ? (
+        <Typography color="warning.main" sx={{ display: 'block', fontWeight: 700 }} variant="caption">
+          <span dir="ltr">
+            {t('orders.table.refunded', { amount: MoneyUtil.formatCurrency(order.refunded_total || '0') })} IRR
+          </span>
+        </Typography>
+      ) : MoneyUtil.greaterThan(order.due_amount || '0', '0') ? (
+        <Typography color="error.main" sx={{ display: 'block', fontWeight: 700 }} variant="caption">
+          <span dir="ltr">{t('orders.table.due', { amount: MoneyUtil.formatCurrency(order.due_amount) })} IRR</span>
+        </Typography>
+      ) : (
+        <Chip color="success" label={t('orders.table.fullyPaid')} size="small" sx={{ fontSize: 9, height: 18 }} />
+      )}
+    </Box>
+  );
+
+  const columns: GridColDef<OrderListRow>[] = [
+    {
+      field: 'order_number',
+      headerName: t('orders.table.orderNumber'),
+      width: 170,
+      filterable: false,
+      renderCell: ({ row }) => (
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+          {row.call_number ? <Chip label={row.call_number} size="small" color="primary" sx={{ fontWeight: 800 }} /> : null}
+          <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
+            {row.order_number}
+          </Typography>
+        </Stack>
+      ),
+    },
+    ...(showBranchColumn
+      ? [
+          {
+            field: 'branch_id',
+            headerName: t('orders.table.branch', 'Branch'),
+            width: 140,
+            sortable: false,
+            filterable: false,
+            renderCell: ({ row }) => branchNameById.get(row.branch_id) || row.branch_id,
+          } as GridColDef<OrderListRow>,
+        ]
+      : []),
+    {
+      field: 'placed_at',
+      headerName: t('orders.table.placedAt'),
+      width: 130,
+      filterable: false,
+      renderCell: ({ row }) => (
+        <Typography variant="caption" dir="ltr">
+          {formatPlaced(row.placed_at)}
+        </Typography>
+      ),
+    },
+    {
+      field: 'channel',
+      headerName: t('orders.table.channel'),
+      width: 110,
+      sortable: false,
+      filterable: false,
+      renderCell: ({ row }) => <Chip label={getChannelLabel(row.channel)} size="small" variant="outlined" />,
+    },
+    {
+      field: 'order_type',
+      headerName: t('orders.table.type'),
+      width: 110,
+      sortable: false,
+      filterable: false,
+      renderCell: ({ row }) => (
+        <Chip color={getOrderTypeColor(row.order_type) as any} label={getOrderTypeLabel(row.order_type)} size="small" />
+      ),
+    },
+    {
+      field: 'where',
+      headerName: t('orders.table.where'),
+      minWidth: 150,
+      flex: 1,
+      sortable: false,
+      filterable: false,
+      renderCell: ({ row }) => renderWhere(row),
+    },
+    {
+      field: 'customer_name',
+      headerName: t('orders.table.customerName'),
+      minWidth: 150,
+      flex: 1,
+      sortable: false,
+      filterable: false,
+      renderCell: ({ row }) => (
+        <Box>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            {row.customer_name || t('orders.table.walkInCustomer')}
+          </Typography>
+          {row.customer_mobile && (
+            <Typography color="text.secondary" variant="caption" sx={{ display: 'block' }} dir="ltr">
+              {row.customer_mobile}
+            </Typography>
+          )}
+        </Box>
+      ),
+    },
+    {
+      field: 'items',
+      headerName: t('orders.table.itemsSummary'),
+      minWidth: 150,
+      flex: 1,
+      sortable: false,
+      filterable: false,
+      renderCell: ({ row }) => {
+        const items = activeItems(row);
+        const count = items.reduce((sum, it) => sum + Number(it.quantity || 0), 0);
+        return (
+          <Tooltip
+            title={items.map((it) => `${MoneyUtil.format(it.quantity, 0)}× ${it.product_name}`).join('، ')}
+            placement="top"
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="body2" noWrap>
+                {items[0]?.product_name || '—'}
+              </Typography>
+              {items.length > 1 && (
+                <Typography color="text.secondary" variant="caption" sx={{ display: 'block' }}>
+                  {t('orders.table.itemCount', { count })}
+                </Typography>
+              )}
+            </Box>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      field: 'grand_total',
+      headerName: t('orders.table.totalAmount'),
+      width: 140,
+      align: 'right',
+      headerAlign: 'right',
+      filterable: false,
+      renderCell: ({ row }) => (
+        <Typography variant="body2" sx={{ color: 'primary.main', fontWeight: 700 }}>
+          <span dir="ltr">{MoneyUtil.formatCurrency(row.total_amount || row.grand_total)} IRR</span>
+        </Typography>
+      ),
+    },
+    {
+      field: 'outstanding_total',
+      headerName: t('orders.table.paidDue'),
+      width: 150,
+      align: 'right',
+      headerAlign: 'right',
+      filterable: false,
+      renderCell: ({ row }) => renderPayment(row),
+    },
+    {
+      field: 'status',
+      headerName: t('orders.table.status'),
+      width: 170,
+      sortable: false,
+      filterable: false,
+      renderCell: ({ row }) => (
+        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+          <Chip
+            color={getStatusChipColor(row) as any}
+            label={getOrderStatusLabel(row.status, row.refunded_total)}
+            size="small"
+            sx={{ fontWeight: 700 }}
+          />
+          {renderProgressChip(row.status)}
+          {renderSnappfoodChips(row)}
+        </Stack>
+      ),
+    },
+    {
+      field: 'actions',
+      headerName: t('orders.table.actions'),
+      width: 160,
+      sortable: false,
+      filterable: false,
+      disableColumnMenu: true,
+      renderCell: ({ row }) => {
+        const primary = readOnly ? null : primaryActionOf(row);
+        return (
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'flex-end', width: 1 }}>
+            {primary && (
+              <Button
+                color={primary.color}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  primary.run();
+                }}
+                size="small"
+                startIcon={primary.icon}
+                variant="contained"
+              >
+                {primary.label}
+              </Button>
+            )}
+            <IconButton aria-label={t('orders.actions.more')} onClick={(e) => openMenu(e, row)} size="small">
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+          </Stack>
+        );
+      },
+    },
+  ];
+
+  const sortModel: GridSortModel = [{ field: sortField || 'placed_at', sort: sortDir }];
+  const menuPrimary = menuOrder && !readOnly ? primaryActionOf(menuOrder) : null;
 
   return (
     <Box sx={{ pb: 6 }}>
@@ -614,25 +1123,16 @@ export function OrdersWorkflowPage() {
           </Typography>
         </Box>
 
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <ToggleButtonGroup
-            color="primary"
-            exclusive
-            onChange={(_, nextView) => {
-              if (nextView) setViewMode(nextView);
-            }}
-            size="small"
-            value={viewMode}
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+          <Button
+            disabled={exporting || total === 0}
+            onClick={handleExport}
+            startIcon={exporting ? <CircularProgress size={16} /> : <DownloadIcon />}
+            variant="outlined"
           >
-            <ToggleButton value="table">
-              <TableChartIcon sx={{ mr: 0.5 }} /> {t('orders.tableView')}
-            </ToggleButton>
-            <ToggleButton value="kanban">
-              <ViewKanbanIcon sx={{ mr: 0.5 }} /> {t('orders.kanbanBoard')}
-            </ToggleButton>
-          </ToggleButtonGroup>
-
-          <Button onClick={loadData} startIcon={<RefreshIcon />} variant="outlined">
+            {t('orders.export')}
+          </Button>
+          <Button onClick={() => loadData()} startIcon={<RefreshIcon />} variant="outlined">
             {t('orders.refresh')}
           </Button>
         </Stack>
@@ -650,29 +1150,91 @@ export function OrdersWorkflowPage() {
         </Alert>
       )}
 
-      {/* Filters Bar */}
+      {/* Filters: which orders (tab), when, what kind, from where, and a search over all of them */}
       <Card sx={{ borderRadius: 3, boxShadow: 2, mb: 3 }}>
         <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-          <Stack
-            direction={{ md: 'row', xs: 'column' }}
-            spacing={2}
-            sx={{ alignItems: { md: 'center', xs: 'flex-start' }, justifyContent: 'space-between' }}
+          <Tabs
+            onChange={(_, val) => setParams({ tab: val })}
+            sx={{ minHeight: 40, mb: 2 }}
+            value={tab}
+            variant="scrollable"
           >
-            <Tabs
-              onChange={(_, val) => setStatusFilter(val)}
-              sx={{ minHeight: 40 }}
-              value={statusFilter}
-              variant="scrollable"
+            {TABS.map(({ key, label }) => (
+              <Tab key={key} label={t(`orders.tabs.${label}`, { count: counts[key] ?? 0 })} value={key} />
+            ))}
+          </Tabs>
+
+          <Stack direction={{ md: 'row', xs: 'column' }} spacing={1.5} sx={{ alignItems: { md: 'center', xs: 'stretch' }, flexWrap: 'wrap' }}>
+            <TextField
+              label={t('orders.filters.date')}
+              onChange={(e) => setParams({ range: e.target.value, from: null, to: null })}
+              select
+              size="small"
+              sx={{ minWidth: 150 }}
+              value={range}
             >
-              <Tab label={t('orders.tabs.all', { count: orders.length })} value="ALL" />
-              <Tab label={t('orders.tabs.waiting', { count: getOrdersByLifecycle('WAITING').length })} value="WAITING" />
-              <Tab label={t('orders.tabs.open', { count: getOrdersByLifecycle('OPEN').length })} value="OPEN" />
-              <Tab label={t('orders.tabs.completed', { count: getOrdersByLifecycle('COMPLETED').length })} value="COMPLETED" />
-              <Tab label={t('orders.tabs.cancelled', { count: getOrdersByLifecycle('CANCELLED').length })} value="CANCELLED" />
-            </Tabs>
+              {RANGES.map((key) => (
+                <MenuItem key={key} value={key}>
+                  {t(`orders.filters.ranges.${key}`)}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            {range === 'custom' && (
+              <>
+                <CalendarDateField
+                  label={t('orders.filters.from')}
+                  onChange={(e) => setParams({ from: e.target.value || null })}
+                  size="small"
+                  sx={{ width: { md: 170, xs: '100%' } }}
+                  value={customFrom}
+                />
+                <CalendarDateField
+                  label={t('orders.filters.to')}
+                  onChange={(e) => setParams({ to: e.target.value || null })}
+                  size="small"
+                  sx={{ width: { md: 170, xs: '100%' } }}
+                  value={customTo}
+                />
+              </>
+            )}
 
             <TextField
-              onChange={(e) => setSearchQuery(e.target.value)}
+              label={t('orders.table.type')}
+              onChange={(e) => setParams({ type: e.target.value || null })}
+              select
+              size="small"
+              sx={{ minWidth: 140 }}
+              value={typeFilter}
+            >
+              <MenuItem value="">{t('orders.filters.any')}</MenuItem>
+              {ORDER_TYPES.map((type) => (
+                <MenuItem key={type} value={type}>
+                  {getOrderTypeLabel(type)}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              label={t('orders.table.channel')}
+              onChange={(e) => setParams({ channel: e.target.value || null })}
+              select
+              size="small"
+              sx={{ minWidth: 140 }}
+              value={channelFilter}
+            >
+              <MenuItem value="">{t('orders.filters.any')}</MenuItem>
+              {CHANNELS.map((channel) => (
+                <MenuItem key={channel} value={channel}>
+                  {getChannelLabel(channel)}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <Box sx={{ flexGrow: 1 }} />
+
+            <TextField
+              onChange={(e) => setSearchText(e.target.value)}
               placeholder={t('orders.searchPlaceholder')}
               size="small"
               slotProps={{
@@ -685,450 +1247,108 @@ export function OrdersWorkflowPage() {
                 },
               }}
               sx={{ width: { md: 320, xs: '100%' } }}
-              value={searchQuery}
+              value={searchText}
             />
           </Stack>
         </CardContent>
       </Card>
 
-      {/* VIEW 1: DATA TABLE VIEW */}
-      {viewMode === 'table' && (
-        <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
-          <TableContainer component={Paper} variant="outlined">
-            <Table>
-              <TableHead>
-                <TableRow sx={{ bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100') }}>
-                  <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.orderNumber')}</TableCell>
-                  {showBranchColumn && (
-                    <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.branch', 'Branch')}</TableCell>
-                  )}
-                  <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.customerName')}</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.type')}</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.tableNotes')}</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.itemsSummary')}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>{t('orders.table.totalAmount')}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>{t('orders.table.paidDue')}</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 700 }}>{t('orders.table.placedAt')}</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 700 }}>{t('orders.table.status')}</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 700 }}>{t('orders.table.actions')}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredOrders.length === 0 ? (
-                  <TableRow>
-                    <TableCell align="center" colSpan={showBranchColumn ? 11 : 10} sx={{ py: 6 }}>
-                      <Typography color="text.secondary" variant="body1">
-                        {t('orders.table.empty')}
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredOrders.map((order) => {
-                    const custName = getCustomerDisplayName(order);
-                    const custMobile = getCustomerMobile(order);
+      <ServerDataGrid<OrderListRow>
+        columns={columns}
+        density="compact"
+        emptyTitle={t('orders.table.empty')}
+        emptyDescription={range !== 'all' ? t('orders.table.emptyHint') : undefined}
+        getRowHeight={() => 'auto'}
+        height={680}
+        loading={loading}
+        onPaginationModelChange={(model) =>
+          setParams({ page: model.pageSize !== pageSize ? null : model.page, size: model.pageSize }, true)
+        }
+        onRowClick={(params) => openDrawer(params.row)}
+        onSortModelChange={(model) => {
+          const next = model[0];
+          setParams({ sort: next?.field ?? null, dir: next?.sort ?? null });
+        }}
+        pageSizeOptions={PAGE_SIZES}
+        paginationModel={{ page, pageSize }}
+        rowCount={total}
+        rows={rows}
+        showToolbar={false}
+        sortModel={sortModel}
+        sx={{
+          borderRadius: 3,
+          boxShadow: 2,
+          '& .MuiDataGrid-row': { cursor: 'pointer' },
+          '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center', py: 1 },
+        }}
+      />
 
-                    return (
-                      <TableRow
-                        key={order.id}
-                        hover
-                        onClick={() => handleOpenOrderDrawer(order)}
-                        sx={{
-                          cursor: 'pointer',
-                          transition: 'background-color 0.15s',
-                          '&:hover': { bgcolor: 'action.hover' },
-                        }}
-                      >
-                        <TableCell>
-                          {order.call_number ? (
-                            <Chip label={order.call_number} size="small" color="primary" sx={{ fontWeight: 800, me: 0.5 }} />
-                          ) : null}
-                          <Chip
-                            label={order.order_number}
-                            size="small"
-                            sx={{ fontFamily: 'monospace', fontWeight: 700 }}
-                            variant="outlined"
-                          />
-                        </TableCell>
-                        {showBranchColumn && (
-                          <TableCell>
-                            <Typography variant="body2">
-                              {branchNameById.get(order.branch_id) || order.branch_id}
-                            </Typography>
-                          </TableCell>
-                        )}
-                        <TableCell>
-                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                            <PersonIcon color="action" fontSize="small" />
-                            <Box>
-                              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                                {custName}
-                              </Typography>
-                              {custMobile && (
-                                <Typography color="text.secondary" variant="caption" sx={{ display: 'block' }}>
-                                  {custMobile}
-                                </Typography>
-                              )}
-                            </Box>
-                          </Stack>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            color={order.order_type === 'DINE_IN' ? 'primary' : 'info'}
-                            label={getOrderTypeLabel(order.order_type)}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          {order.table_number ? (
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                              {t('orders.table.tableNumber', { number: order.table_number })}
-                            </Typography>
-                          ) : (
-                            <Typography color="text.secondary" variant="caption">
-                              {order.notes || t('orders.table.counterTakeaway')}
-                            </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Stack spacing={0.5}>
-                            {order.items.filter((it: any) => it.state !== 'VOID').map((it) => (
-                              <Typography key={it.id} variant="caption" sx={{ display: 'block' }}>
-                                <strong>{MoneyUtil.format(it.quantity, 0)}x</strong> {it.product_name}
-                                {it.options && it.options.length > 0 && (
-                                  <span style={{ opacity: 0.75 }}> ({it.options.map(o => o.option_item_name).join(', ')})</span>
-                                )}
-                              </Typography>
-                            ))}
-                          </Stack>
-                        </TableCell>
-                        <TableCell align="right" sx={{ color: 'primary.main', fontWeight: 700 }}>
-                          <span dir="ltr">{MoneyUtil.formatCurrency(order.total_amount)} IRR</span>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography color="success.main" sx={{ display: 'block', fontWeight: 600 }} variant="caption">
-                            <span dir="ltr">{t('orders.table.paid', { amount: MoneyUtil.formatCurrency(order.paid_amount) })} IRR</span>
-                          </Typography>
-                          {/* Money given back outranks money taken: an order whose
-                              tender was reversed must not keep reading as settled. */}
-                          {MoneyUtil.greaterThan(order.refunded_total || '0', '0') ? (
-                            <Typography color="warning.main" sx={{ fontWeight: 700 }} variant="caption">
-                              <span dir="ltr">
-                                {t('orders.table.refunded', {
-                                  amount: MoneyUtil.formatCurrency(order.refunded_total || '0'),
-                                })}{' '}
-                                IRR
-                              </span>
-                            </Typography>
-                          ) : MoneyUtil.greaterThan(order.due_amount, '0') ? (
-                            <Typography color="error.main" sx={{ fontWeight: 700 }} variant="caption">
-                              <span dir="ltr">{t('orders.table.due', { amount: MoneyUtil.formatCurrency(order.due_amount) })} IRR</span>
-                            </Typography>
-                          ) : (
-                            <Chip color="success" label={t('orders.table.fullyPaid')} size="small" sx={{ fontSize: 9, height: 18 }} />
-                          )}
-                        </TableCell>
-                        <TableCell align="center">
-                          <Typography variant="caption">
-                            {fTime(order.placed_at)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="center">
-                          <Stack spacing={0.5} sx={{ alignItems: 'center' }}>
-                            <Chip
-                              color={getStatusChipColor(order.status) as any}
-                              label={getOrderStatusLabel(order.status)}
-                              size="small"
-                              sx={{ fontWeight: 700 }}
-                            />
-                            {renderProgressChip(order.status)}
-                            {renderSnappfoodChips(order)}
-                          </Stack>
-                        </TableCell>
-                        <TableCell align="center">
-                          <Stack direction="row" spacing={1} sx={{ justifyContent: 'center' }}>
-                            <Button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenOrderDrawer(order);
-                              }}
-                              size="small"
-                              startIcon={<VisibilityIcon />}
-                              variant="outlined"
-                              color="primary"
-                            >
-                              {t('orders.actions.details')}
-                            </Button>
-
-                            <Button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleViewReceipt(order.id);
-                              }}
-                              size="small"
-                              startIcon={<ReceiptIcon />}
-                              variant="outlined"
-                            >
-                              {t('orders.actions.receipt')}
-                            </Button>
-
-                            {!readOnly && (
-                              <Button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenReprintDialog(order);
-                                }}
-                                size="small"
-                                startIcon={<PrintIcon />}
-                                variant="outlined"
-                              >
-                                {t('orders.actions.reprint')}
-                              </Button>
-                            )}
-
-                            {canPay(order) && (
-                              <Button
-                                color="success"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenPayment(order);
-                                }}
-                                size="small"
-                                startIcon={<PaymentIcon />}
-                                variant="contained"
-                              >
-                                {t('orders.actions.pay')}
-                              </Button>
-                            )}
-
-                            {canComplete(order) && (
-                              <Button
-                                color="primary"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleUpdateStatus(order.id, 'COMPLETED');
-                                }}
-                                size="small"
-                                startIcon={<DoneAllIcon />}
-                                variant="contained"
-                              >
-                                {t('orders.actions.complete')}
-                              </Button>
-                            )}
-
-                            {canReport(order) && (
-                              <Button
-                                color="warning"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenReport(order);
-                                }}
-                                size="small"
-                                startIcon={<ScheduleIcon />}
-                                variant="outlined"
-                              >
-                                {t('orders.actions.reportToSnappfood')}
-                              </Button>
-                            )}
-
-                            {canCancel(order) && (
-                              <Button
-                                color="error"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenCancelDialog(order);
-                                }}
-                                size="small"
-                                startIcon={<CancelIcon />}
-                                variant="outlined"
-                              >
-                                {t('orders.actions.cancel')}
-                              </Button>
-                            )}
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Card>
-      )}
-
-      {/* VIEW 2: KANBAN BOARD VIEW */}
-      {viewMode === 'kanban' && (
-        <Grid container spacing={2}>
-          {[
-            { color: 'warning.main', key: 'WAITING', title: t('orders.kanban.waiting') },
-            { color: 'info.main', key: 'OPEN', title: t('orders.kanban.open') },
-            { color: 'text.secondary', key: 'COMPLETED', title: t('orders.kanban.completed') },
-          ].map((col) => (
-            <Grid key={col.key} size={{ md: 4, xs: 12 }}>
-              <Card sx={{ bgcolor: 'background.neutral', borderRadius: 3, boxShadow: 2, minHeight: 600 }}>
-                <CardContent sx={{ p: 2 }}>
-                  <Typography sx={{ color: col.color, fontWeight: 'bold', mb: 2 }} variant="subtitle1">
-                    {col.title} ({getOrdersByLifecycle(col.key).length})
-                  </Typography>
-
-                  <Stack spacing={2}>
-                    {getOrdersByLifecycle(col.key).map((order) => {
-                      const custName = getCustomerDisplayName(order);
-
-                      return (
-                        <Card
-                          key={order.id}
-                          onClick={() => handleOpenOrderDrawer(order)}
-                          sx={{
-                            borderRadius: 2,
-                            boxShadow: 1,
-                            p: 2,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            '&:hover': {
-                              borderColor: 'primary.main',
-                              boxShadow: 3,
-                              transform: 'translateY(-2px)',
-                            },
-                          }}
-                        >
-                          <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1 }}>
-                            <Typography sx={{ fontWeight: 'bold' }} variant="subtitle2">
-                              {order.call_number ? <strong>{order.call_number} · </strong> : null}
-                              <code>{order.order_number}</code>
-                            </Typography>
-                            <Stack direction="row" spacing={0.5}>
-                              {renderProgressChip(order.status)}
-                              <Chip label={getOrderTypeLabel(order.order_type)} size="small" variant="outlined" />
-                            </Stack>
-                          </Stack>
-
-                          <Typography color="text.primary" sx={{ fontWeight: 700, mb: 0.5 }} variant="body2">
-                            👤 {custName}
-                          </Typography>
-
-                          {order.table_number && (
-                            <Typography color="text.secondary" sx={{ display: 'block', mb: 1 }} variant="caption">
-                              {t('orders.kanban.table', { number: order.table_number })}
-                            </Typography>
-                          )}
-
-                          <Typography color="text.secondary" sx={{ display: 'block', mb: 1.5 }} variant="caption">
-                            {t('orders.kanban.placed', { time: fTime(order.placed_at) })}
-                          </Typography>
-
-                          <Box sx={{ bgcolor: 'background.paper', borderRadius: 1, mb: 1.5, p: 1 }}>
-                            {order.items?.filter((item: any) => item.state !== 'VOID').map((item) => (
-                              <Box key={item.id} sx={{ mb: 0.5 }}>
-                                <Typography sx={{ fontWeight: 'bold' }} variant="body2">
-                                  {MoneyUtil.format(item.quantity, 0)}x {item.product_name}
-                                </Typography>
-                                {item.options?.map((opt) => (
-                                  <Typography key={opt.id} color="text.secondary" sx={{ display: 'block', pl: 1 }} variant="caption">
-                                    + {opt.option_item_name}
-                                  </Typography>
-                                ))}
-                              </Box>
-                            ))}
-                          </Box>
-
-                          <Typography color="primary.main" sx={{ fontWeight: 'bold', mb: 1.5 }} variant="subtitle2">
-                            <span dir="ltr">{t('orders.kanban.total', { amount: MoneyUtil.formatCurrency(order.total_amount) })}</span>
-                          </Typography>
-
-                          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-                            <Button
-                              color="inherit"
-                              fullWidth
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenOrderDrawer(order);
-                              }}
-                              size="small"
-                              startIcon={<HistoryIcon />}
-                              variant="outlined"
-                              sx={{ mb: 0.5 }}
-                            >
-                              {t('orders.actions.detailsAudit')}
-                            </Button>
-
-                            {!readOnly && (
-                              <Button
-                                color="inherit"
-                                fullWidth
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenReprintDialog(order);
-                                }}
-                                size="small"
-                                startIcon={<PrintIcon />}
-                                variant="outlined"
-                              >
-                                {t('orders.actions.reprint')}
-                              </Button>
-                            )}
-
-                            {canPay(order) && (
-                              <Button
-                                color="success"
-                                fullWidth
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenPayment(order);
-                                }}
-                                size="small"
-                                startIcon={<PaymentIcon />}
-                                sx={{ fontWeight: 'bold' }}
-                                variant="contained"
-                              >
-                                {t('orders.actions.pay')}
-                              </Button>
-                            )}
-
-                            {canComplete(order) && (
-                              <Button
-                                color="primary"
-                                fullWidth
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleUpdateStatus(order.id, 'COMPLETED');
-                                }}
-                                size="small"
-                                startIcon={<DoneAllIcon />}
-                                sx={{ fontWeight: 'bold' }}
-                                variant="contained"
-                              >
-                                {t('orders.actions.completeOrder')}
-                              </Button>
-                            )}
-
-                            {canCancel(order) && (
-                              <Button
-                                color="error"
-                                fullWidth
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenCancelDialog(order);
-                                }}
-                                size="small"
-                                startIcon={<CancelIcon />}
-                                sx={{ mt: 0.5 }}
-                                variant="outlined"
-                              >
-                                {t('orders.actions.cancel')}
-                              </Button>
-                            )}
-                          </Stack>
-                        </Card>
-                      );
-                    })}
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-      )}
+      {/* A row's other actions. The row itself opens the order. */}
+      <Menu anchorEl={menuAnchor} onClose={closeMenu} open={!!menuAnchor}>
+        <MenuItem onClick={fromMenu(openDrawer)}>
+          <ListItemIcon>
+            <ReceiptLongIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{t('orders.actions.details')}</ListItemText>
+        </MenuItem>
+        {menuOrder && (
+          <MenuItem component={RouterLink} href={paths.app.orders.detail(menuOrder.id)} onClick={closeMenu}>
+            <ListItemIcon>
+              <OpenInNewIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{t('orders.actions.openPage')}</ListItemText>
+          </MenuItem>
+        )}
+        {menuOrder && hasReceipt(menuOrder) && (
+          <MenuItem onClick={fromMenu((o) => handleViewReceipt(o.id))}>
+            <ListItemIcon>
+              <ReceiptIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{t('orders.actions.receipt')}</ListItemText>
+          </MenuItem>
+        )}
+        {!readOnly && (
+          <MenuItem onClick={fromMenu(handleOpenReprintDialog)}>
+            <ListItemIcon>
+              <PrintIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{t('orders.actions.reprint')}</ListItemText>
+          </MenuItem>
+        )}
+        {menuOrder && canPay(menuOrder) && menuPrimary?.key !== 'pay' && (
+          <MenuItem onClick={fromMenu(handleOpenPayment)}>
+            <ListItemIcon>
+              <PaymentIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{t('orders.actions.pay')}</ListItemText>
+          </MenuItem>
+        )}
+        {menuOrder && canReport(menuOrder) && menuPrimary?.key !== 'report' && (
+          <MenuItem onClick={fromMenu(handleOpenReport)}>
+            <ListItemIcon>
+              <ScheduleIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{t('orders.actions.reportToSnappfood')}</ListItemText>
+          </MenuItem>
+        )}
+        {menuOrder && canChangeType(menuOrder) && (
+          <MenuItem onClick={fromMenu(handleOpenTypeDialog)}>
+            <ListItemIcon>
+              <SwapHorizIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{t('orders.actions.changeType', 'Change type')}</ListItemText>
+          </MenuItem>
+        )}
+        {menuOrder && canCancel(menuOrder) && [
+          <Divider key="divider" />,
+          <MenuItem key="cancel" onClick={fromMenu(handleOpenCancelDialog)} sx={{ color: 'error.main' }}>
+            <ListItemIcon>
+              <CancelIcon color="error" fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{t('orders.actions.cancelOrder')}</ListItemText>
+          </MenuItem>,
+        ]}
+      </Menu>
 
       {/* Cancellation Reason Dialog */}
       <Dialog onClose={() => setCancelDialogOpen(false)} open={cancelDialogOpen}>
@@ -1377,7 +1597,7 @@ export function OrdersWorkflowPage() {
       <Drawer
         anchor="right"
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={closeDrawer}
         slotProps={{
           paper: {
             sx: {
@@ -1394,7 +1614,7 @@ export function OrdersWorkflowPage() {
             {/* Header */}
             <Box sx={{ p: 2.5, pb: 2, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.neutral' }}>
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
                   <Typography variant="h6" sx={{ fontFamily: 'monospace', fontWeight: 800 }}>
                     {selectedDrawerOrder.order_number}
                   </Typography>
@@ -1402,8 +1622,8 @@ export function OrdersWorkflowPage() {
                     <Chip label={selectedDrawerOrder.call_number} color="primary" sx={{ fontWeight: 800 }} />
                   ) : null}
                   <Chip
-                    label={getOrderStatusLabel(selectedDrawerOrder.status)}
-                    color={getStatusChipColor(selectedDrawerOrder.status) as any}
+                    label={getOrderStatusLabel(selectedDrawerOrder.status, selectedDrawerOrder.refunded_total)}
+                    color={getStatusChipColor(selectedDrawerOrder) as any}
                     size="small"
                     sx={{ fontWeight: 700 }}
                   />
@@ -1413,18 +1633,25 @@ export function OrdersWorkflowPage() {
                     label={getOrderTypeLabel(selectedDrawerOrder.order_type)}
                     size="small"
                     variant="outlined"
-                    color={selectedDrawerOrder.order_type === 'DINE_IN' ? 'primary' : 'default'}
+                    color={getOrderTypeColor(selectedDrawerOrder.order_type) as any}
                   />
+                  <Chip label={getChannelLabel(selectedDrawerOrder.channel)} size="small" variant="outlined" />
                 </Stack>
-                <IconButton onClick={() => setDrawerOpen(false)} size="small">
-                  <CloseIcon />
-                </IconButton>
+                <Stack direction="row" spacing={0.5}>
+                  <Tooltip title={t('orders.actions.openPage')}>
+                    <IconButton component={RouterLink} href={paths.app.orders.detail(selectedDrawerOrder.id)} size="small">
+                      <OpenInNewIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <IconButton onClick={closeDrawer} size="small">
+                    <CloseIcon />
+                  </IconButton>
+                </Stack>
               </Stack>
 
               <Typography variant="caption" color="text.secondary">
-                {t('orders.drawer.placedOn', { date: selectedDrawerOrder.placed_at ? fDateTime(selectedDrawerOrder.placed_at) : t('orders.drawer.justNow') })}
+                {t('orders.drawer.placedOn', { date: selectedDrawerOrder.placed_at ? formatCalendarDateTime(selectedDrawerOrder.placed_at) : t('orders.drawer.justNow') })}
                 {selectedDrawerOrder.table_number && ` • ${t('orders.drawer.table', { number: selectedDrawerOrder.table_number })}`}
-                {selectedDrawerOrder.notes && ` • ${t('orders.drawer.note', { note: selectedDrawerOrder.notes })}`}
               </Typography>
               {selectedDrawerOrder.aggregator_issue && (
                 <Typography variant="caption" color="warning.main" sx={{ display: 'block', fontWeight: 600 }}>
@@ -1437,6 +1664,7 @@ export function OrdersWorkflowPage() {
                 value={drawerTab}
                 onChange={(_, val) => setDrawerTab(val)}
                 sx={{ mt: 2, minHeight: 38 }}
+                variant="scrollable"
               >
                 <Tab
                   value="details"
@@ -1446,8 +1674,15 @@ export function OrdersWorkflowPage() {
                   sx={{ minHeight: 38, py: 0.5, fontWeight: 700 }}
                 />
                 <Tab
+                  value="payments"
+                  label={t('orders.drawer.tabs.payments', { count: orderPayments.length + orderRefunds.length })}
+                  icon={<PaymentIcon sx={{ fontSize: 18 }} />}
+                  iconPosition="start"
+                  sx={{ minHeight: 38, py: 0.5, fontWeight: 700 }}
+                />
+                <Tab
                   value="audit"
-                  label={t('orders.drawer.tabs.audit', { count: (orderAuditLogs.length + (selectedDrawerOrder.stateEvents?.length || 0)) || 1 })}
+                  label={t('orders.drawer.tabs.audit', { count: orderAuditLogs.length + (selectedDrawerOrder.stateEvents?.length || 0) })}
                   icon={<HistoryIcon sx={{ fontSize: 18 }} />}
                   iconPosition="start"
                   sx={{ minHeight: 38, py: 0.5, fontWeight: 700 }}
@@ -1463,24 +1698,37 @@ export function OrdersWorkflowPage() {
                 </Box>
               ) : drawerTab === 'details' ? (
                 <Stack spacing={3}>
-                  {/* Customer Info Card */}
+                  {/* Who and where */}
                   <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                       <PersonIcon fontSize="small" color="primary" /> {t('orders.drawer.customerContext')}
                     </Typography>
                     <Grid container spacing={1.5}>
-                      <Grid size={{ xs: 6 }}>
-                        <Typography variant="caption" color="text.secondary">{t('orders.drawer.customerName')}</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{getCustomerDisplayName(selectedDrawerOrder)}</Typography>
-                      </Grid>
-                      <Grid size={{ xs: 6 }}>
-                        <Typography variant="caption" color="text.secondary">{t('orders.drawer.contactPhone')}</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{getCustomerMobile(selectedDrawerOrder) || t('orders.drawer.walkIn')}</Typography>
-                      </Grid>
-                      {selectedDrawerOrder.table_number && (
-                        <Grid size={{ xs: 6 }}>
-                          <Typography variant="caption" color="text.secondary">{t('orders.drawer.dineInTable')}</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('orders.drawer.table', { number: selectedDrawerOrder.table_number })}</Typography>
+                      {[
+                        [t('orders.drawer.customerName'), selectedDrawerOrder.people?.customer
+                          ? `${selectedDrawerOrder.people.customer.first_name || ''} ${selectedDrawerOrder.people.customer.last_name || ''}`.trim()
+                          : selectedDrawerOrder.customer_name || t('orders.drawer.walkIn')],
+                        [t('orders.drawer.contactPhone'), selectedDrawerOrder.customer_mobile || rows.find((r) => r.id === selectedDrawerOrder.id)?.customer_mobile],
+                        [t('orders.drawer.dineInTable'), selectedDrawerOrder.table_number && t('orders.drawer.table', { number: selectedDrawerOrder.table_number })],
+                        [t('orders.drawer.takenBy'), selectedDrawerOrder.people?.taken_by?.display_name || selectedDrawerOrder.people?.taken_by?.username],
+                        [t('orders.drawer.terminal'), selectedDrawerOrder.context?.terminal_name],
+                        [t('orders.drawer.deliveryZone'), selectedDrawerOrder.context?.delivery_zone_name],
+                        [t('orders.drawer.deliveryState'), deliveryStateKeyOf(selectedDrawerOrder.context?.delivery_state)
+                          ? t(`delivery.states.${deliveryStateKeyOf(selectedDrawerOrder.context?.delivery_state)}`)
+                          : null],
+                        [t('orders.drawer.courier'), selectedDrawerOrder.people?.courier?.name],
+                      ]
+                        .filter(([, value]) => !!value)
+                        .map(([label, value]) => (
+                          <Grid key={String(label)} size={{ xs: 6 }}>
+                            <Typography variant="caption" color="text.secondary">{label}</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{value}</Typography>
+                          </Grid>
+                        ))}
+                      {selectedDrawerOrder.context?.delivery_address && (
+                        <Grid size={{ xs: 12 }}>
+                          <Typography variant="caption" color="text.secondary">{t('orders.drawer.deliveryAddress')}</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>{selectedDrawerOrder.context.delivery_address}</Typography>
                         </Grid>
                       )}
                       {selectedDrawerOrder.notes && (
@@ -1569,6 +1817,12 @@ export function OrdersWorkflowPage() {
                           <Typography variant="body2" color="success.main" dir="ltr">-{MoneyUtil.formatCurrency(selectedDrawerOrder.discount_amount)} IRR</Typography>
                         </Stack>
                       )}
+                      {MoneyUtil.greaterThan(selectedDrawerOrder.delivery_fee || '0', '0') && (
+                        <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                          <Typography variant="body2" color="text.secondary">{t('orders.drawer.deliveryFee')}</Typography>
+                          <Typography variant="body2" dir="ltr">+{MoneyUtil.formatCurrency(selectedDrawerOrder.delivery_fee)} IRR</Typography>
+                        </Stack>
+                      )}
                       {MoneyUtil.greaterThan(selectedDrawerOrder.tax_amount || '0', '0') && (
                         <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                           <Typography variant="body2" color="text.secondary">{t('orders.drawer.vat')}</Typography>
@@ -1588,6 +1842,14 @@ export function OrdersWorkflowPage() {
                           {MoneyUtil.formatCurrency(selectedDrawerOrder.paid_amount || '0')} IRR
                         </Typography>
                       </Stack>
+                      {MoneyUtil.greaterThan(selectedDrawerOrder.refunded_total || '0', '0') && (
+                        <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="body2" color="warning.main">{t('orders.drawer.refundedAmount')}</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: 'warning.main' }} dir="ltr">
+                            -{MoneyUtil.formatCurrency(selectedDrawerOrder.refunded_total)} IRR
+                          </Typography>
+                        </Stack>
+                      )}
                       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="body2" color="text.secondary">{t('orders.drawer.outstandingBalance')}</Typography>
                         <Typography variant="body2" sx={{ fontWeight: 700, color: MoneyUtil.greaterThan(selectedDrawerOrder.due_amount || '0', '0') ? 'error.main' : 'success.main' }} dir="ltr">
@@ -1597,8 +1859,100 @@ export function OrdersWorkflowPage() {
                     </Stack>
                   </Paper>
                 </Stack>
+              ) : drawerTab === 'payments' ? (
+                /* TAB 2: PAYMENTS AND REFUNDS */
+                <Stack spacing={3}>
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
+                      {t('orders.drawer.paymentsTitle')}
+                    </Typography>
+                    {orderPayments.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        {isSnappfoodOrder(selectedDrawerOrder) ? t('orders.drawer.paidToSnappfood') : t('orders.drawer.noPayments')}
+                      </Typography>
+                    ) : (
+                      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+                        <Table size="small">
+                          <TableHead sx={{ bgcolor: 'background.neutral' }}>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 700 }}>{t('orders.drawer.paymentMethod')}</TableCell>
+                              <TableCell sx={{ fontWeight: 700 }}>{t('orders.drawer.paymentTime')}</TableCell>
+                              <TableCell sx={{ fontWeight: 700 }}>{t('orders.table.status')}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 700 }}>{t('orders.drawer.total')}</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {orderPayments.map((payment) => (
+                              <TableRow key={payment.id}>
+                                <TableCell>
+                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                    {t(`orders.drawer.methods.${payment.method_kind}`, payment.method_kind)}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                                    {payment.payment_number}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="caption" dir="ltr">
+                                    {formatCalendarDateTime(payment.posted_at || payment.initiated_at)}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Chip
+                                    color={payment.status === 'SUCCEEDED' ? 'success' : payment.status === 'FAILED' ? 'error' : 'default'}
+                                    label={t(`orders.drawer.paymentStatuses.${payment.status}`, payment.status)}
+                                    size="small"
+                                    variant="outlined"
+                                  />
+                                </TableCell>
+                                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                                  <span dir="ltr">{MoneyUtil.formatCurrency(payment.amount)} IRR</span>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    )}
+                  </Box>
+
+                  {orderRefunds.length > 0 && (
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
+                        {t('orders.drawer.refundsTitle')}
+                      </Typography>
+                      <Stack spacing={1}>
+                        {orderRefunds.map((refund: any) => (
+                          <Paper key={refund.id} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Box>
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
+                                  {refund.code || refund.refund_number}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" dir="ltr">
+                                  {formatCalendarDateTime(refund.created_at)}
+                                </Typography>
+                              </Box>
+                              <Stack spacing={0.5} sx={{ alignItems: 'flex-end' }}>
+                                <Typography variant="body2" color="warning.main" sx={{ fontWeight: 700 }} dir="ltr">
+                                  -{MoneyUtil.formatCurrency(refund.total_refund_amount || refund.amount)} IRR
+                                </Typography>
+                                <Chip label={t(`orders.drawer.paymentStatuses.${refund.status}`, String(refund.status))} size="small" variant="outlined" />
+                              </Stack>
+                            </Stack>
+                            {refund.note && (
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                {refund.note}
+                              </Typography>
+                            )}
+                          </Paper>
+                        ))}
+                      </Stack>
+                    </Box>
+                  )}
+                </Stack>
               ) : (
-                /* TAB 2: AUDIT TRAIL & TIMELINE */
+                /* TAB 3: AUDIT TRAIL & TIMELINE */
                 <Stack spacing={2.5}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1607,109 +1961,110 @@ export function OrdersWorkflowPage() {
                     <Chip label={t('orders.drawer.appendOnly')} color="success" size="small" variant="outlined" />
                   </Box>
 
-                  {/* Unified Chronological Event Timeline */}
+                  {/* One timeline, oldest first: the order's own state changes and the audit log. */}
                   {orderAuditLogs.length === 0 && (!selectedDrawerOrder.stateEvents || selectedDrawerOrder.stateEvents.length === 0) ? (
                     <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderRadius: 2 }}>
                       <HistoryIcon color="disabled" sx={{ fontSize: 40, mb: 1 }} />
                       <Typography variant="body2" color="text.secondary">
-                        {t('orders.drawer.noEvents', { status: getOrderStatusLabel(selectedDrawerOrder.status) })}
+                        {t('orders.drawer.noEvents', { status: getOrderStatusLabel(selectedDrawerOrder.status, selectedDrawerOrder.refunded_total) })}
                       </Typography>
                     </Paper>
                   ) : (
                     <Stack spacing={2} sx={{ position: 'relative', pl: 2, '&::before': { content: '""', position: 'absolute', top: 12, bottom: 12, left: 19, width: 2, bgcolor: 'divider' } }}>
-                      {/* State Events from Order Aggregate */}
-                      {selectedDrawerOrder.stateEvents?.map((evt: any, idx: number) => (
-                        <Paper
-                          key={evt.id || idx}
-                          variant="outlined"
-                          sx={{
-                            p: 2,
-                            borderRadius: 2,
-                            position: 'relative',
-                            bgcolor: 'background.paper',
-                            borderColor: evt.to_state === 'CANCELLED' ? 'error.light' : 'divider',
-                          }}
-                        >
-                          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                              <Chip
-                                label={getOrderStatusLabel(evt.to_state)}
-                                color={getStatusChipColor(evt.to_state) as any}
-                                size="small"
-                                sx={{ fontWeight: 700 }}
-                              />
-                              <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                                {evt.from_state ? `${getOrderStatusLabel(evt.from_state)} → ${getOrderStatusLabel(evt.to_state)}` : getOrderStatusLabel(evt.to_state)}
-                              </Typography>
-                            </Stack>
-                            <Typography variant="caption" color="text.secondary">
-                              {evt.occurred_at ? fTime(evt.occurred_at) : t('orders.drawer.justNow')}
-                            </Typography>
-                          </Stack>
-
-                          <Typography variant="body2" sx={{ mb: 0.5 }}>
-                            <strong>{t('orders.drawer.actor')}</strong> {evt.actor_user_id ? t('orders.drawer.authenticatedUser') : t('orders.drawer.systemPos')}
-                          </Typography>
-                          {evt.reason && (
-                            <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
-                              <strong>{t('orders.drawer.reasonCode')}</strong> {evt.reason}
-                            </Typography>
-                          )}
-                          {evt.notes && (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                              {t('orders.drawer.noteLabel')} {evt.notes}
-                            </Typography>
-                          )}
-                        </Paper>
-                      ))}
-
-                      {/* System Audit Events from audit_event table */}
-                      {orderAuditLogs.map((log: any) => (
-                        <Paper
-                          key={log.id}
-                          variant="outlined"
-                          sx={{
-                            p: 2,
-                            borderRadius: 2,
-                            position: 'relative',
-                            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50',
-                          }}
-                        >
-                          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                              <Chip
-                                label={log.action}
-                                color="primary"
-                                size="small"
-                                sx={{ fontWeight: 700 }}
-                              />
-                              <Chip
-                                label={log.actor_type || 'SYSTEM'}
-                                size="small"
+                      {[
+                        ...(selectedDrawerOrder.stateEvents || []).map((evt: any) => ({ kind: 'state' as const, at: evt.occurred_at, evt })),
+                        ...orderAuditLogs.map((log: any) => ({ kind: 'audit' as const, at: log.occurred_at, evt: log })),
+                      ]
+                        .sort((a, b) => new Date(a.at || 0).getTime() - new Date(b.at || 0).getTime())
+                        .map(({ kind, evt }, idx) => {
+                          const actorNames: Record<string, string> = selectedDrawerOrder.context?.actor_names || {};
+                          if (kind === 'state') {
+                            const actor = evt.occurred_by
+                              ? actorNames[evt.occurred_by] || t('orders.drawer.authenticatedUser')
+                              : t('orders.drawer.systemPos');
+                            return (
+                              <Paper
+                                key={evt.id || `state-${idx}`}
                                 variant="outlined"
-                                sx={{ fontSize: '0.7rem', height: 20 }}
-                              />
-                            </Stack>
-                            <Typography variant="caption" color="text.secondary">
-                              {fDateTime(log.occurred_at)}
-                            </Typography>
-                          </Stack>
+                                sx={{
+                                  p: 2,
+                                  borderRadius: 2,
+                                  position: 'relative',
+                                  bgcolor: 'background.paper',
+                                  borderColor: evt.to_state === 'CANCELLED' ? 'error.light' : 'divider',
+                                }}
+                              >
+                                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                                    <Chip
+                                      label={getOrderStatusLabel(evt.to_state)}
+                                      color={getStatusChipColor({ status: evt.to_state }) as any}
+                                      size="small"
+                                      sx={{ fontWeight: 700 }}
+                                    />
+                                    <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                                      {evt.from_state ? `${getOrderStatusLabel(evt.from_state)} → ${getOrderStatusLabel(evt.to_state)}` : getOrderStatusLabel(evt.to_state)}
+                                    </Typography>
+                                  </Stack>
+                                  <Typography variant="caption" color="text.secondary" dir="ltr">
+                                    {evt.occurred_at ? formatCalendarDateTime(evt.occurred_at) : t('orders.drawer.justNow')}
+                                  </Typography>
+                                </Stack>
 
-                          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-                            <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
-                              {t('orders.drawer.corr')} {log.correlation_id ? log.correlation_id.substring(0, 8) + '...' : '-'}
-                            </Typography>
-                            <Button
-                              size="small"
-                              startIcon={<CodeIcon />}
-                              onClick={() => setInspectingJson(log)}
-                              sx={{ textTransform: 'none', py: 0.25, fontSize: '0.75rem' }}
+                                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                                  <strong>{t('orders.drawer.actor')}</strong> {actor}
+                                </Typography>
+                                {evt.reason_text && (
+                                  <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
+                                    <strong>{t('orders.drawer.reasonCode')}</strong> {evt.reason_text}
+                                  </Typography>
+                                )}
+                              </Paper>
+                            );
+                          }
+                          const actorId = evt.actor_id || evt.user_id;
+                          return (
+                            <Paper
+                              key={evt.id || `audit-${idx}`}
+                              variant="outlined"
+                              sx={{
+                                p: 2,
+                                borderRadius: 2,
+                                position: 'relative',
+                                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50',
+                              }}
                             >
-                              {t('orders.drawer.inspectSnapshot')}
-                            </Button>
-                          </Stack>
-                        </Paper>
-                      ))}
+                              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                                  <Chip label={evt.action} color="primary" size="small" sx={{ fontWeight: 700 }} />
+                                  <Chip
+                                    label={(actorId && actorNames[actorId]) || evt.actor_type || 'SYSTEM'}
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{ fontSize: '0.7rem', height: 20 }}
+                                  />
+                                </Stack>
+                                <Typography variant="caption" color="text.secondary" dir="ltr">
+                                  {formatCalendarDateTime(evt.occurred_at)}
+                                </Typography>
+                              </Stack>
+
+                              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                                <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                                  {t('orders.drawer.corr')} {evt.correlation_id ? evt.correlation_id.substring(0, 8) + '...' : '-'}
+                                </Typography>
+                                <Button
+                                  size="small"
+                                  startIcon={<CodeIcon />}
+                                  onClick={() => setInspectingJson(evt)}
+                                  sx={{ textTransform: 'none', py: 0.25, fontSize: '0.75rem' }}
+                                >
+                                  {t('orders.drawer.inspectSnapshot')}
+                                </Button>
+                              </Stack>
+                            </Paper>
+                          );
+                        })}
                     </Stack>
                   )}
                 </Stack>
@@ -1718,16 +2073,18 @@ export function OrdersWorkflowPage() {
 
             {/* Footer Quick Actions */}
             <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider', bgcolor: 'background.neutral' }}>
-              <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
-                <Button
-                  startIcon={<ReceiptIcon />}
-                  variant="outlined"
-                  onClick={() => {
-                    handleViewReceipt(selectedDrawerOrder.id);
-                  }}
-                >
-                  {t('orders.actions.receipt')}
-                </Button>
+              <Stack direction="row" sx={{ justifyContent: 'flex-end', flexWrap: 'wrap', gap: 1 }}>
+                {hasReceipt(selectedDrawerOrder) && (
+                  <Button
+                    startIcon={<ReceiptIcon />}
+                    variant="outlined"
+                    onClick={() => {
+                      handleViewReceipt(selectedDrawerOrder.id);
+                    }}
+                  >
+                    {t('orders.actions.receipt')}
+                  </Button>
+                )}
                 {!readOnly && (
                   <Button
                     startIcon={<PrintIcon />}
@@ -1743,7 +2100,7 @@ export function OrdersWorkflowPage() {
                     variant="contained"
                     startIcon={<PaymentIcon />}
                     onClick={() => {
-                      setDrawerOpen(false);
+                      closeDrawer();
                       handleOpenPayment(selectedDrawerOrder);
                     }}
                   >
@@ -1757,7 +2114,7 @@ export function OrdersWorkflowPage() {
                     startIcon={<DoneAllIcon />}
                     onClick={async () => {
                       if (await handleUpdateStatus(selectedDrawerOrder.id, 'COMPLETED')) {
-                        handleOpenOrderDrawer({ ...selectedDrawerOrder, status: 'COMPLETED' });
+                        loadDrawerDetails(selectedDrawerOrder.id);
                       }
                     }}
                   >
@@ -1765,9 +2122,7 @@ export function OrdersWorkflowPage() {
                   </Button>
                 )}
                 {/* Snappfood's lines are Snappfood's: it has no call for a store to change them. */}
-                {!readOnly &&
-                  !isSnappfoodOrder(selectedDrawerOrder) &&
-                  !['COMPLETED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(selectedDrawerOrder.status) && (
+                {canEditLines(selectedDrawerOrder) && (
                   <Button
                     color="inherit"
                     variant="outlined"
@@ -1793,7 +2148,7 @@ export function OrdersWorkflowPage() {
                     variant="outlined"
                     startIcon={<SwapHorizIcon />}
                     onClick={() => {
-                      setDrawerOpen(false);
+                      closeDrawer();
                       handleOpenTypeDialog(selectedDrawerOrder);
                     }}
                   >
@@ -1806,7 +2161,7 @@ export function OrdersWorkflowPage() {
                     variant="outlined"
                     startIcon={<CancelIcon />}
                     onClick={() => {
-                      setDrawerOpen(false);
+                      closeDrawer();
                       handleOpenCancelDialog(selectedDrawerOrder);
                     }}
                   >
@@ -1826,7 +2181,7 @@ export function OrdersWorkflowPage() {
         reasonCodes={reasonCodes}
         onSaved={async () => {
           await loadData();
-          if (selectedDrawerOrder) await handleOpenOrderDrawer(selectedDrawerOrder);
+          if (selectedDrawerOrder) await loadDrawerDetails(selectedDrawerOrder.id);
         }}
       />
 
