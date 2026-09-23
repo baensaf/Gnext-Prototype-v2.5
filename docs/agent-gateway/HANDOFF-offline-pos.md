@@ -25,9 +25,11 @@ What the offline POS can already rely on:
   terminal (`payment.Driver.Charge`), and serves a Persian page on `127.0.0.1:47800`
   (`agent/internal/localui`, embedded static files).
 
-## Decisions to get from the user first
+## Decisions (confirmed 2026-09-24)
 
-Ask these before writing the contract section. The recommendation comes first in each.
+The user took every recommendation below. The contract is §13 of `agent-protocol.md`; where it
+differs from this list (a separate staff list rather than users in the snapshot, argon2 hashes
+as the cloud stores them, not bcrypt), §13 wins.
 
 1. **Where the offline till runs.** *Recommended:* on the branch PC only, served by the agent
    at `http://127.0.0.1:47800/till` in the settings window or a browser. One till offline.
