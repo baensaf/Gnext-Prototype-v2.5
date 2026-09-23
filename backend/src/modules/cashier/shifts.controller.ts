@@ -127,6 +127,13 @@ export class ShiftsController {
     return await this.shiftService.closeShift(tenantId, id, body, userId, correlationId, this.viewer(req));
   }
 
+  /** What closing this shift would leave behind: open orders, unfinished cash, other tills. */
+  @Get(':id/close-check')
+  async getCloseCheck(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.shiftService.getCloseCheck(tenantId, id);
+  }
+
   @Get(':id/statement')
   async getShiftStatement(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

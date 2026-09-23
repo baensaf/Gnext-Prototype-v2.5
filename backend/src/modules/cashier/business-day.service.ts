@@ -21,32 +21,17 @@ import {
   NON_REVENUE_ORDER_STATES,
   REVENUE_ORDER_PREDICATE,
 } from '../../common/utils/business-date.util';
+import {
+  OPEN_ORDER_STATES,
+  FINISHED_ORDER_STATES,
+  OpenOrderIssue,
+  DayCloseOpenOrder,
+  ordersAwaitingCourier,
+  openOrderIssue,
+  openOrderView,
+} from './open-orders';
 
-/** Order states that are still open: anything not completed, cancelled or rejected. */
-const OPEN_ORDER_STATES = ['DRAFT', 'PENDING_ACCEPTANCE', 'SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY', 'OUT_FOR_DELIVERY'];
-
-/** Where an order has finished; rows written straight to the table may say so only in `status`. */
-const FINISHED_ORDER_STATES = ['COMPLETED', 'CANCELLED', 'REJECTED'];
-
-/** Open states a paid order is simply completed from when its day closes. */
-const COMPLETABLE_AT_DAY_CLOSE = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY'];
-
-/** Why an open order cannot just be completed when the day closes. */
-export type OpenOrderIssue = 'UNPAID' | 'NOT_SUBMITTED' | 'AWAITING_ACCEPTANCE' | 'DELIVERY_NOT_FINISHED';
-
-export interface DayCloseOpenOrder {
-  id: string;
-  orderNumber: string;
-  orderType: string;
-  channel: string;
-  state: string;
-  businessDate: string | null;
-  placedAt: Date;
-  tableNumber: string | null;
-  grandTotal: string;
-  outstandingTotal: string;
-  issue?: OpenOrderIssue;
-}
+export type { OpenOrderIssue, DayCloseOpenOrder } from './open-orders';
 
 export interface DayCloseOpenOrders {
   /** Paid and handed over in all but name; closing the day completes them. */
@@ -106,11 +91,11 @@ export class BusinessDayService {
     );
     const { toComplete, needsDecision } = this.sortOpenOrders(
       orders,
-      await this.ordersAwaitingCourier(this.dataSource.manager, tenantId, orders),
+      await ordersAwaitingCourier(this.dataSource.manager, tenantId, orders),
     );
     return {
-      toComplete: toComplete.map((order) => this.toView(order)),
-      needsDecision: needsDecision.map(({ order, issue }) => this.toView(order, issue)),
+      toComplete: toComplete.map((order) => openOrderView(order)),
+      needsDecision: needsDecision.map(({ order, issue }) => openOrderView(order, issue)),
     };
   }
 
@@ -161,7 +146,7 @@ export class BusinessDayService {
       const openOrders = await this.findOpenOrders(em, tenantId, dto.branchId, dto.businessDate, currencyCode);
       const { toComplete, needsDecision } = this.sortOpenOrders(
         openOrders,
-        await this.ordersAwaitingCourier(em, tenantId, openOrders),
+        await ordersAwaitingCourier(em, tenantId, openOrders),
       );
       const carryOverReason = dto.carryOverReason?.trim() || null;
 
@@ -171,7 +156,7 @@ export class BusinessDayService {
           message:
             `Cannot close business day ${dto.businessDate}: ${needsDecision.length} open order(s) are unpaid or unfinished. ` +
             'Settle, cancel or finish them, or carry them over with a reason.',
-          context: { needsDecision: needsDecision.map(({ order, issue }) => this.toView(order, issue)) },
+          context: { needsDecision: needsDecision.map(({ order, issue }) => openOrderView(order, issue)) },
         });
       }
 
@@ -306,41 +291,16 @@ export class BusinessDayService {
       .getMany();
   }
 
-  /**
-   * Open orders with a delivery still waiting for, or out with, a courier. Any kind of order can
-   * have one: a Snappfood order our own couriers take, or one changed to a delivery after it was
-   * sent. Completing it here would close the ride with nobody paid for it.
-   */
-  private async ordersAwaitingCourier(em: EntityManager, tenantId: string, orders: OrderHeader[]): Promise<Set<string>> {
-    if (orders.length === 0) return new Set();
-    const rows: Array<{ order_id: string }> = await em.query(
-      `SELECT order_id FROM delivery
-        WHERE tenant_id = $1 AND order_id = ANY($2::uuid[]) AND state NOT IN ('DELIVERED', 'CANCELLED')`,
-      [tenantId, orders.map((o) => o.id)],
-    );
-    return new Set(rows.map((r) => r.order_id));
-  }
-
   private sortOpenOrders(orders: OrderHeader[], awaitingCourier: Set<string> = new Set()) {
     const toComplete: OrderHeader[] = [];
     const needsDecision: { order: OrderHeader; issue: OpenOrderIssue }[] = [];
 
     for (const order of orders) {
-      const issue = this.issueOf(order, awaitingCourier.has(order.id));
+      const issue = openOrderIssue(order, awaitingCourier.has(order.id));
       if (issue) needsDecision.push({ order, issue });
       else toComplete.push(order);
     }
     return { toComplete, needsDecision };
-  }
-
-  private issueOf(order: OrderHeader, awaitingCourier = false): OpenOrderIssue | null {
-    if (order.state === 'DRAFT') return 'NOT_SUBMITTED';
-    if (order.state === 'PENDING_ACCEPTANCE') return 'AWAITING_ACCEPTANCE';
-    if (MoneyUtil.greaterThan(order.outstanding_total || '0.0000', '0.0000')) return 'UNPAID';
-    // A delivery is finished by its courier, whose cash and settlement hang off that step.
-    if (order.order_type === 'DELIVERY' || order.state === 'OUT_FOR_DELIVERY' || awaitingCourier) return 'DELIVERY_NOT_FINISHED';
-    if (!COMPLETABLE_AT_DAY_CLOSE.includes(order.state)) return 'DELIVERY_NOT_FINISHED';
-    return null;
   }
 
   private async completeAtDayClose(
@@ -378,21 +338,5 @@ export class BusinessDayService {
       correlationId,
       reasonText: `Completed when business day ${businessDate} closed`,
     });
-  }
-
-  private toView(order: OrderHeader, issue?: OpenOrderIssue): DayCloseOpenOrder {
-    return {
-      id: order.id,
-      orderNumber: order.order_number,
-      orderType: order.order_type,
-      channel: order.channel,
-      state: order.state,
-      businessDate: order.business_date || BusinessDateUtil.fromDate(order.placed_at),
-      placedAt: order.placed_at,
-      tableNumber: order.table_number || null,
-      grandTotal: order.grand_total,
-      outstandingTotal: order.outstanding_total,
-      ...(issue ? { issue } : {}),
-    };
   }
 }

@@ -113,6 +113,32 @@ export interface DayCloseOpenOrders {
   needsDecision: DayCloseOpenOrder[];
 }
 
+/** A cash payment begun at a drawer and never taken or cancelled. */
+export interface PendingCashPayment {
+  id: string;
+  paymentNumber: string;
+  orderId: string;
+  orderNumber: string | null;
+  amount: string;
+  status: string;
+  initiatedAt: string;
+}
+
+/** What closing a shift would leave behind. */
+export interface ShiftCloseCheck {
+  shiftId: string;
+  branchId: string;
+  businessDate: string;
+  currencyCode: string;
+  /** This till's held, unpaid or unaccepted orders; leaving them open takes a manager PIN. */
+  openOrders: DayCloseOpenOrder[];
+  /** Cash payments on this drawer that must be finished or cancelled first. */
+  pendingCash: PendingCashPayment[];
+  /** Other drawers still open at the branch on this business day. */
+  otherOpenTills: number;
+  dayClosed: boolean;
+}
+
 export const shiftApi = {
   getShifts: async (params?: Record<string, any>): Promise<{ data: CashierShift[]; total: number }> => {
     const res = await httpClient.get('/api/v1/shifts', { params });
@@ -182,6 +208,8 @@ export const shiftApi = {
       previewVersion?: string;
       /** An approver's pin, when the count is further out than the branch allows. */
       pin?: string;
+      /** An approver's pin, when orders this till rang up are left open. */
+      openOrdersPin?: string;
     },
   ): Promise<ShiftStatement> => {
     const res = await httpClient.post(`/api/v1/shifts/${shiftId}/close`, data);
@@ -196,6 +224,12 @@ export const shiftApi = {
 
   getShiftStatement: async (shiftId: string): Promise<ShiftStatement> => {
     const res = await httpClient.get(`/api/v1/shifts/${shiftId}/statement`);
+    return res.data;
+  },
+
+  /** Open orders, unfinished cash and other open tills, read before and after the close. */
+  getCloseCheck: async (shiftId: string): Promise<ShiftCloseCheck> => {
+    const res = await httpClient.get(`/api/v1/shifts/${shiftId}/close-check`);
     return res.data;
   },
 
