@@ -90,6 +90,8 @@ func execBrowser(exe, profileDir string) (context.Context, context.CancelFunc, e
 		chromedp.NoSandbox,
 		chromedp.Flag("hide-scrollbars", true),
 		chromedp.Flag("force-color-profile", "srgb"),
+		// A cold first start on a slow machine can take longer than chromedp's 20 s default.
+		chromedp.WSURLReadTimeout(60*time.Second),
 	)
 	alloc, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	return alloc, cancel, nil
