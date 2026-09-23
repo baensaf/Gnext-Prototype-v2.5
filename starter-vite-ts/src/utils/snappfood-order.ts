@@ -18,6 +18,10 @@ const KITCHEN_STATES = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY'];
 
 export const isSnappfoodOrder = (order: Pick<OrderHeader, 'channel'>) => order.channel === 'AGGREGATOR';
 
+/** A Snappfood order the store delivers with its own couriers, through the delivery board. */
+export const storeDeliversIt = (order: Pick<OrderHeader, 'channel' | 'aggregator_expedition'>) =>
+  isSnappfoodOrder(order) && order.aggregator_expedition === 'DELIVERY';
+
 /** Own delivery promises a delivery time; a Snapp Express rider or a pickup, a ready time. */
 export const promisesDeliveryTime = (order: OrderHeader) =>
   !order.aggregator_expedition || order.aggregator_expedition === 'DELIVERY';

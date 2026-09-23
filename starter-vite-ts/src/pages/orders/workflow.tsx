@@ -80,6 +80,7 @@ import {
 } from 'src/utils/calendar';
 import {
   promisedBy,
+  storeDeliversIt,
   isSnappfoodOrder,
   reportMinutesLeft,
   SNAPPFOOD_DELAY_REASON_ID,
@@ -436,12 +437,14 @@ export function OrdersWorkflowPage() {
     ) : null;
   };
 
-  // Completing closes the check, so nothing may be left to pay. Delivery orders are finished
-  // on the delivery screen, where the courier's cash is counted in.
+  // Completing closes the check, so nothing may be left to pay. Delivery orders, and Snappfood
+  // orders our own couriers take, are finished on the delivery screen, where the courier's cash
+  // is counted in.
   const canComplete = (order: OrderHeader) =>
     !readOnly &&
     lifecycleOf(order) === 'OPEN' &&
     order.order_type !== 'DELIVERY' &&
+    !storeDeliversIt(order) &&
     order.status !== 'OUT_FOR_DELIVERY' &&
     !MoneyUtil.greaterThan(order.due_amount || '0', '0');
 

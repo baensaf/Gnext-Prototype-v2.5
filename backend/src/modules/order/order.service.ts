@@ -983,13 +983,14 @@ export class OrderService {
   /**
    * Puts a delivery order on the delivery board: a new record, or the one it had before it
    * stopped being a delivery, back to unassigned with today's address and zone. A delivery
-   * already open is left as it is.
+   * already open is left as it is. A Snappfood order has no zone of ours; its fee is what
+   * Snappfood charged the customer for the ride.
    */
   private async openDelivery(
     em: EntityManager,
     tenantId: string,
     order: OrderHeader,
-    context: { address: CustomerAddress; zone: DeliveryZone },
+    context: { address: CustomerAddress; zone: DeliveryZone | null; fee?: string },
     userId: string | undefined,
     reason: string,
   ) {
@@ -999,10 +1000,10 @@ export class OrderService {
     const fromState = existing ? existing.state : 'NONE';
     const delivery = existing ?? em.create(Delivery, { tenant_id: tenantId, order_id: order.id });
     Object.assign(delivery, {
-      zone_id: context.zone.id,
+      zone_id: context.zone?.id ?? null,
       courier_id: null,
       state: 'UNASSIGNED',
-      fee: context.zone.fee,
+      fee: context.fee ?? context.zone?.fee ?? '0.0000',
       currency_code: order.currency_code || 'IRR',
       failure_reason: null,
       address_snapshot: {
@@ -1200,6 +1201,13 @@ export class OrderService {
     // Numbered as it reaches the kitchen: a rejected order never takes one.
     await assignCallNumber(this.dataSource.manager, order);
 
+    try {
+      await this.openSnappfoodDelivery(tenantId, order, userId);
+    } catch (err) {
+      // The accept has already been sent to the kitchen; the board can be fixed up by hand.
+      console.error(`Snappfood order ${order.order_number} could not be put on the delivery board`, err);
+    }
+
     if (this.kdsService && isAggregatorOrder(order)) {
       try {
         // Snappfood support sent the order back changed after the kitchen had it. The lines
@@ -1242,6 +1250,24 @@ export class OrderService {
     }
 
     return order;
+  }
+
+  /**
+   * A Snappfood order the store delivers with its own couriers goes on the delivery board once
+   * accepted, like one rung up at the till: a courier is assigned and paid for the ride, and
+   * cash the customer pays at the door comes back through the courier's settlement. Before,
+   * it had no delivery at all, and a cash one could never be paid or closed.
+   */
+  private async openSnappfoodDelivery(tenantId: string, order: OrderHeader, userId?: string) {
+    if (!isAggregatorOrder(order) || order.aggregator_expedition !== 'DELIVERY') return;
+    if (!order.customer_address_id) return;
+    const address = await this.dataSource.manager.findOne(CustomerAddress, {
+      where: { id: order.customer_address_id, tenant_id: tenantId },
+    });
+    if (!address) return;
+    await this.dataSource.transaction((em) =>
+      this.openDelivery(em, tenantId, order, { address, zone: null, fee: order.delivery_fee }, userId, 'Snappfood order the store delivers itself'),
+    );
   }
 
   /**

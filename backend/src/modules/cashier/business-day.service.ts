@@ -104,7 +104,10 @@ export class BusinessDayService {
       query.businessDate,
       query.currencyCode || 'IRR',
     );
-    const { toComplete, needsDecision } = this.sortOpenOrders(orders);
+    const { toComplete, needsDecision } = this.sortOpenOrders(
+      orders,
+      await this.ordersAwaitingCourier(this.dataSource.manager, tenantId, orders),
+    );
     return {
       toComplete: toComplete.map((order) => this.toView(order)),
       needsDecision: needsDecision.map(({ order, issue }) => this.toView(order, issue)),
@@ -147,7 +150,10 @@ export class BusinessDayService {
       // Orders nobody closed off. Most kitchens never tap "handed over", so a paid order is
       // completed here; one still owing money or not yet finished needs a person to decide.
       const openOrders = await this.findOpenOrders(em, tenantId, dto.branchId, dto.businessDate, currencyCode);
-      const { toComplete, needsDecision } = this.sortOpenOrders(openOrders);
+      const { toComplete, needsDecision } = this.sortOpenOrders(
+        openOrders,
+        await this.ordersAwaitingCourier(em, tenantId, openOrders),
+      );
       const carryOverReason = dto.carryOverReason?.trim() || null;
 
       if (needsDecision.length > 0 && !carryOverReason) {
@@ -283,24 +289,39 @@ export class BusinessDayService {
       .getMany();
   }
 
-  private sortOpenOrders(orders: OrderHeader[]) {
+  /**
+   * Open orders with a delivery still waiting for, or out with, a courier. Any kind of order can
+   * have one: a Snappfood order our own couriers take, or one changed to a delivery after it was
+   * sent. Completing it here would close the ride with nobody paid for it.
+   */
+  private async ordersAwaitingCourier(em: EntityManager, tenantId: string, orders: OrderHeader[]): Promise<Set<string>> {
+    if (orders.length === 0) return new Set();
+    const rows: Array<{ order_id: string }> = await em.query(
+      `SELECT order_id FROM delivery
+        WHERE tenant_id = $1 AND order_id = ANY($2::uuid[]) AND state NOT IN ('DELIVERED', 'CANCELLED')`,
+      [tenantId, orders.map((o) => o.id)],
+    );
+    return new Set(rows.map((r) => r.order_id));
+  }
+
+  private sortOpenOrders(orders: OrderHeader[], awaitingCourier: Set<string> = new Set()) {
     const toComplete: OrderHeader[] = [];
     const needsDecision: { order: OrderHeader; issue: OpenOrderIssue }[] = [];
 
     for (const order of orders) {
-      const issue = this.issueOf(order);
+      const issue = this.issueOf(order, awaitingCourier.has(order.id));
       if (issue) needsDecision.push({ order, issue });
       else toComplete.push(order);
     }
     return { toComplete, needsDecision };
   }
 
-  private issueOf(order: OrderHeader): OpenOrderIssue | null {
+  private issueOf(order: OrderHeader, awaitingCourier = false): OpenOrderIssue | null {
     if (order.state === 'DRAFT') return 'NOT_SUBMITTED';
     if (order.state === 'PENDING_ACCEPTANCE') return 'AWAITING_ACCEPTANCE';
     if (MoneyUtil.greaterThan(order.outstanding_total || '0.0000', '0.0000')) return 'UNPAID';
     // A delivery is finished by its courier, whose cash and settlement hang off that step.
-    if (order.order_type === 'DELIVERY' || order.state === 'OUT_FOR_DELIVERY') return 'DELIVERY_NOT_FINISHED';
+    if (order.order_type === 'DELIVERY' || order.state === 'OUT_FOR_DELIVERY' || awaitingCourier) return 'DELIVERY_NOT_FINISHED';
     if (!COMPLETABLE_AT_DAY_CLOSE.includes(order.state)) return 'DELIVERY_NOT_FINISHED';
     return null;
   }
