@@ -1,5 +1,11 @@
-import { IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Min, ValidateIf } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, Min, ValidateIf } from 'class-validator';
 import { COURIER_PAY_MODES } from '../courier-pay';
+
+/**
+ * A fee or a rider's pay: a plain non-negative amount. A minus sign was stored as a credit
+ * to the customer, and text went through to the database and came back a 500.
+ */
+const NON_NEGATIVE_AMOUNT = /^\d+(\.\d+)?$/;
 
 /**
  * What a delivery zone and a courier are made of.
@@ -26,7 +32,7 @@ export class CreateZoneDto {
   name: string;
 
   @IsOptional()
-  @IsString()
+  @Matches(NON_NEGATIVE_AMOUNT, { message: 'fee must be a non-negative amount' })
   fee?: string;
 
   @IsOptional()
@@ -40,7 +46,7 @@ export class CreateZoneDto {
 
   /** What a courier on the zone-rate pay rule earns per trip here. */
   @IsOptional()
-  @IsString()
+  @Matches(NON_NEGATIVE_AMOUNT, { message: 'courier_pay must be a non-negative amount' })
   courier_pay?: string;
 
   @IsOptional()
@@ -75,7 +81,7 @@ export class CreateCourierDto {
   vehicle_type?: string;
 
   @IsOptional()
-  @IsString()
+  @Matches(NON_NEGATIVE_AMOUNT, { message: 'compensation_per_delivery must be a non-negative amount' })
   compensation_per_delivery?: string;
 
   /** Left out, the courier starts on the branch's COURIER_PAY default. */
@@ -99,7 +105,7 @@ export class UpdateZoneDto {
   name?: string;
 
   @IsOptional()
-  @IsString()
+  @Matches(NON_NEGATIVE_AMOUNT, { message: 'fee must be a non-negative amount' })
   fee?: string;
 
   @IsOptional()
@@ -110,7 +116,7 @@ export class UpdateZoneDto {
   /** An empty value clears the rate, so couriers on the zone-rate rule fall back to their own. */
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
-  @IsString()
+  @Matches(NON_NEGATIVE_AMOUNT, { message: 'courier_pay must be a non-negative amount' })
   courier_pay?: string | null;
 }
 
@@ -119,6 +125,6 @@ export class UpdateCourierPayDto {
   pay_mode: string;
 
   @IsOptional()
-  @IsString()
+  @Matches(NON_NEGATIVE_AMOUNT, { message: 'compensation_per_delivery must be a non-negative amount' })
   compensation_per_delivery?: string;
 }

@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, EntityManager } from 'typeorm';
+import { Repository, DataSource, EntityManager, In } from 'typeorm';
 import { CashierShift, ShiftState } from '../../entities/CashierShift.entity';
 import { CashMovement, CashMovementType } from '../../entities/CashMovement.entity';
 import { Terminal } from '../../entities/Terminal.entity';
@@ -14,6 +14,7 @@ import { Payment } from '../../entities/Payment.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { AuditEvent } from '../../entities/AuditEvent.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import { currentTillTerminalId } from '../../common/utils/till-context';
@@ -82,6 +83,24 @@ export class ShiftService {
       if (key in copy) copy[key] = null;
     }
     return copy as T;
+  }
+
+  /**
+   * The count the register operator first gave for this close, read back from the
+   * SHIFT_COUNT_SUBMITTED audit a refused close leaves behind (written outside the close's
+   * transaction, so it survives the refusal). A return to open starts a fresh count.
+   */
+  private async recordedBlindCount(em: EntityManager, tenantId: string, shiftId: string): Promise<string | null> {
+    const events = await em.find(AuditEvent, {
+      where: { tenant_id: tenantId, entity_id: shiftId, action: In(['SHIFT_COUNT_SUBMITTED', 'SHIFT_RETURN_TO_OPEN']) },
+      order: { occurred_at: 'ASC' },
+    });
+    let recorded: string | null = null;
+    for (const e of events) {
+      if (e.action === 'SHIFT_RETURN_TO_OPEN') recorded = null;
+      else if (recorded === null && e.details?.actualCash !== undefined) recorded = MoneyUtil.format(e.details.actualCash);
+    }
+    return recorded;
   }
 
   async getShifts(tenantId: string, query: any) {
@@ -374,6 +393,20 @@ export class ShiftService {
       // A safe drop leaves the drawer like a pay-out does. It used to be posted as one, and
       // the screen's safe-drop total was hardcoded to zero.
       const leavesDrawer = dto.type === 'PAID_OUT' || dto.type === 'SAFE_DROP';
+      // Cash cannot leave a drawer that does not hold it. A slipped zero posted a pay-out of
+      // a trillion rial and left the shift expecting a negative count at close.
+      if (leavesDrawer) {
+        const moves = await em.find(CashMovement, { where: { tenant_id: tenantId, shift_id: shift.id } });
+        const inDrawer = moves
+          .filter((m) => m.type !== 'CLOSE_ADJUSTMENT')
+          .reduce((sum, m) => MoneyUtil.add(sum, m.amount), '0.0000');
+        if (MoneyUtil.greaterThan(dto.amount, inDrawer)) {
+          throw new BadRequestException({
+            code: 'EXCEEDS_DRAWER_CASH',
+            message: `Only ${MoneyUtil.formatCurrency(inDrawer)} is in the drawer; ${MoneyUtil.formatCurrency(dto.amount)} cannot be taken out`,
+          });
+        }
+      }
       const signedAmount = leavesDrawer ? `-${MoneyUtil.format(dto.amount)}` : MoneyUtil.format(dto.amount);
 
       const move = em.create(CashMovement, {
@@ -567,6 +600,25 @@ export class ShiftService {
       const shortOver = MoneyUtil.subtract(actualCash, expectedCash);
 
       const policy = await this.policyFor(tenantId, shift.branch_id);
+
+      // A blind count is the first number the register operator puts down. A refused close
+      // shows them what the drawer should hold, and they used to be able to type that back
+      // in and close balanced with no reason and no manager. A recount needs an approver.
+      if (policy.blindClose && !isApprover(closer?.role)) {
+        const recorded = await this.recordedBlindCount(em, tenantId, shiftId);
+        if (recorded !== null && MoneyUtil.notEqual(recorded, actualCash)) {
+          if (!dto.pin) {
+            throw new BadRequestException({
+              code: 'BLIND_COUNT_RECORDED',
+              title: 'Drawer Already Counted',
+              detail: `This drawer was counted at ${MoneyUtil.formatCurrency(recorded)}. A recount needs a manager PIN.`,
+              context: { recordedCount: recorded },
+            });
+          }
+          await this.approvalService.verifyApproverPin(tenantId, dto.pin, 'SHIFT_RECOUNT', userId || '', shift.branch_id);
+        }
+      }
+
       const hasDifference = MoneyUtil.notEqual(shortOver, '0.0000');
       const beyondTolerance = MoneyUtil.greaterThan(MoneyUtil.abs(shortOver), MoneyUtil.format(policy.varianceTolerance));
       const needsReason = hasDifference && !dto.reasonCodeId && !dto.reason;

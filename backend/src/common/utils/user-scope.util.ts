@@ -14,6 +14,14 @@ export const APPROVER_ROLES = [...HEAD_OFFICE_ROLES, 'MANAGER', 'SUPERVISOR'];
 /** Every role the users screen may hand out. */
 export const ASSIGNABLE_ROLES = [...APPROVER_ROLES, 'CASHIER'];
 
+/**
+ * An approver pin is four to eight digits. A one-digit pin falls to the fifth guess of the
+ * fifteen-minute window, and every refund and paid cancellation at that branch with it.
+ */
+export function isValidPin(pin: string): boolean {
+  return /^\d{4,8}$/.test(pin);
+}
+
 /** True when the account carries its own authority and needs nobody else's pin. */
 export function isApprover(role?: string | null): boolean {
   return APPROVER_ROLES.includes((role || '').toUpperCase());

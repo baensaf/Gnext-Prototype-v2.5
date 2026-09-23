@@ -10,7 +10,7 @@ import { Repository } from 'typeorm';
 import * as argon2 from 'argon2';
 import { AdminUser } from '../../entities/AdminUser.entity';
 import { Branch } from '../../entities/Branch.entity';
-import { ASSIGNABLE_ROLES, APPROVER_ROLES } from '../../common/utils/user-scope.util';
+import { ASSIGNABLE_ROLES, APPROVER_ROLES, HEAD_OFFICE_ROLES, isValidPin } from '../../common/utils/user-scope.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 
 /**
@@ -77,9 +77,20 @@ export class UsersService {
     return users.map((u) => this.present(u, u.branch_id ? nameById.get(u.branch_id) || null : null));
   }
 
-  private async validate(tenantId: string, data: UserWriteDto) {
+  /** `current` is the account being edited, so a partial update is judged as it will end up. */
+  private async validate(tenantId: string, data: UserWriteDto, current?: AdminUser) {
     if (data.role && !ASSIGNABLE_ROLES.includes(data.role.toUpperCase())) {
       throw new BadRequestException(`Unknown role: ${data.role}`);
+    }
+    // Only a head-office role may go without a branch. A cashier or manager with none was
+    // confined to nothing: every branch's orders, drawers and refunds were theirs to reach.
+    const role = (data.role ?? current?.role ?? '').toUpperCase();
+    const branchId = data.branch_id !== undefined ? data.branch_id : current?.branch_id ?? null;
+    if (role && !HEAD_OFFICE_ROLES.includes(role) && !branchId) {
+      throw new BadRequestException(`A ${role.toLowerCase()} account must belong to a branch`);
+    }
+    if (data.pin !== undefined && data.pin !== null && data.pin !== '' && !isValidPin(String(data.pin))) {
+      throw new BadRequestException('A PIN is 4 to 8 digits');
     }
     if (data.branch_id) {
       const branch = await this.branchRepo.findOne({
@@ -143,7 +154,6 @@ export class UsersService {
   async update(tenantId: string, id: string, data: UserWriteDto, actorId: string, correlationId: string) {
     const user = await this.userRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!user) throw new NotFoundException('User not found');
-    await this.validate(tenantId, data);
 
     // The demo disaster this prevents: an administrator demoting or disabling the account
     // they are signed in as, and losing the only way back into the application.
@@ -170,6 +180,9 @@ export class UsersService {
         });
       }
     }
+
+    // After the self-edit checks, so demoting yourself says so rather than naming a rule.
+    await this.validate(tenantId, data, user);
 
     const before = this.auditable(user);
 

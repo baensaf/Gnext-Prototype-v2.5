@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan, DataSource } from 'typeorm';
 import * as argon2 from 'argon2';
@@ -11,7 +11,7 @@ import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { TransactionUtil } from '../../common/utils/transaction.util';
 import { AppDataSource } from '../../data-source';
-import { APPROVER_ROLES, isApprover } from '../../common/utils/user-scope.util';
+import { APPROVER_ROLES, isApprover, isValidPin } from '../../common/utils/user-scope.util';
 
 @Injectable()
 export class ApprovalService {
@@ -68,6 +68,7 @@ export class ApprovalService {
   async setUserPin(tenantId: string, userId: string, newPin: string, correlationId: string) {
     const user = await this.userRepo.findOne({ where: { id: userId, tenant_id: tenantId } });
     if (!user) throw new NotFoundException('User not found');
+    if (!isValidPin(newPin || '')) throw new BadRequestException('A PIN is 4 to 8 digits');
 
     const hashed = await argon2.hash(newPin);
     user.pin_hash = hashed;
@@ -96,7 +97,7 @@ export class ApprovalService {
     });
 
     if (recentFailedCount >= 5) {
-      throw new ForbiddenException('PIN rate limit exceeded. 5 failed attempts in last 15 minutes. Account PIN locked.');
+      throw new ForbiddenException({ code: 'PIN_RATE_LIMITED', title: 'Too Many Wrong PINs', detail: 'PIN rate limit exceeded. 5 failed attempts in last 15 minutes. Account PIN locked.' });
     }
 
     const user = await this.userRepo.findOne({ where: { id: userId, tenant_id: tenantId } });
@@ -173,7 +174,8 @@ export class ApprovalService {
       },
     });
     if (recentFailedCount >= 5) {
-      throw new ForbiddenException('PIN rate limit exceeded. 5 failed attempts in last 15 minutes.');
+      // Named, so the screen can say "wait" rather than showing a server fault.
+      throw new ForbiddenException({ code: 'PIN_RATE_LIMITED', title: 'Too Many Wrong PINs', detail: 'PIN rate limit exceeded. 5 failed attempts in last 15 minutes.' });
     }
 
     const candidates = (
@@ -371,7 +373,13 @@ export class ApprovalService {
     return { ...req, decisions };
   }
 
-  async validateApprovedRequest(tenantId: string, requestId: string, expectedAction: string, expectedCommandHash?: string) {
+  async validateApprovedRequest(
+    tenantId: string,
+    requestId: string,
+    expectedAction: string,
+    expectedCommandHash?: string,
+    expectedEntityId?: string,
+  ) {
     const req = await this.requestRepo.findOne({ where: { id: requestId, tenant_id: tenantId } });
     if (!req) {
       throw new NotFoundException('Approval request not found');
@@ -391,6 +399,15 @@ export class ApprovalService {
 
     if (expectedCommandHash && req.command_hash && req.command_hash !== expectedCommandHash) {
       throw new ConflictException(`Approval binding mismatch: command payload has changed since approval (STALE_APPROVAL_BINDING).`);
+    }
+
+    // A manager's pin for one order is not a pass for the next ten minutes: without this,
+    // the approval id given to cancel order A cancelled and refunded order B as well.
+    if (expectedEntityId && req.entity_id !== expectedEntityId) {
+      throw new ForbiddenException({
+        code: 'APPROVAL_FOR_OTHER_ENTITY',
+        message: `Approval request ${req.code} was not given for this order`,
+      });
     }
 
     return req;

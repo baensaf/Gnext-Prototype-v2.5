@@ -8,6 +8,9 @@ import {
   PaidOrderCancelDto,
   RefundReversalDto,
 } from './dtos/refund.dto';
+import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
+import { OrderHeader } from '../../entities/OrderHeader.entity';
+import { Refund } from '../../entities/Refund.entity';
 
 @Controller('api/v1')
 export class RefundController {
@@ -40,6 +43,7 @@ export class RefundController {
     return await this.refundService.getRefunds(tenantId, query);
   }
 
+  @BranchOwned(OrderHeader, { param: 'orderId' })
   @Post('orders/:orderId/refunds')
   async createRefundIntent(
     @Param('orderId') orderId: string,
@@ -54,12 +58,14 @@ export class RefundController {
     return await this.refundService.processRefund(tenantId, intent.id, { scenarioId: body.scenarioId }, userId, correlationId);
   }
 
+  @BranchOwned(Refund, { through: { entity: OrderHeader, foreignKey: 'order_id' } })
   @Get('refunds/:id')
   async getRefundById(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.refundService.getRefundById(tenantId, id);
   }
 
+  @BranchOwned(Refund, { through: { entity: OrderHeader, foreignKey: 'order_id' } })
   @Post('refunds/:id/process')
   async processRefund(
     @Param('id') id: string,
@@ -73,6 +79,7 @@ export class RefundController {
     return await this.refundService.processRefund(tenantId, id, body, userId, correlationId);
   }
 
+  @BranchOwned(OrderHeader, { param: 'orderId' })
   @Post('orders/:orderId/cancel-paid')
   async cancelPaidOrder(
     @Param('orderId') orderId: string,
@@ -86,6 +93,7 @@ export class RefundController {
     return await this.refundService.cancelPaidOrder(tenantId, orderId, body, userId, correlationId);
   }
 
+  @BranchOwned(Refund, { through: { entity: OrderHeader, foreignKey: 'order_id' } })
   @Post('refunds/:id/reverse')
   async reverseRefund(
     @Param('id') id: string,

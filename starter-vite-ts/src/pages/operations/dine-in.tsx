@@ -229,7 +229,7 @@ export function DineInPage() {
   const handleCreateArea = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await dineInApi.createSection({ code: areaCode, name: areaName });
+      await dineInApi.createSection({ code: areaCode, name: areaName, branchId: branchId || undefined });
       setAreaDrawerOpen(false);
       setAreaCode('');
       setAreaName('');

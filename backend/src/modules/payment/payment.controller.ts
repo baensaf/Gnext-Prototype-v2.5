@@ -12,6 +12,12 @@ import {
   TerminalResolutionDto,
 } from './dtos/payment.dto';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
+import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
+import { OrderHeader } from '../../entities/OrderHeader.entity';
+import { Payment } from '../../entities/Payment.entity';
+
+/** A payment reaches its branch through the order it was taken against. */
+const PAYMENT_OF_BRANCH = { through: { entity: OrderHeader, foreignKey: 'order_id' } };
 
 @Controller('api/v1')
 export class PaymentController {
@@ -22,12 +28,15 @@ export class PaymentController {
     private readonly orderService: OrderService,
   ) {}
 
+  @BranchOwned(OrderHeader, { param: 'orderId' })
   @Get('orders/:orderId/payments')
   async getOrderPayments(@Param('orderId') orderId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.paymentService.getOrderPayments(tenantId, orderId);
   }
 
+  // The order a payment is taken against is named in the body, not the path.
+  @BranchOwned(OrderHeader, { body: 'orderId' })
   @Post('payments')
   async createPaymentIntent(@Body() body: PaymentCreateDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -36,12 +45,14 @@ export class PaymentController {
     return await this.paymentService.createPaymentIntent(tenantId, body, userId, correlationId);
   }
 
+  @BranchOwned(Payment, PAYMENT_OF_BRANCH)
   @Get('payments/:id')
   async getPaymentById(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.paymentService.getPaymentById(tenantId, id);
   }
 
+  @BranchOwned(Payment, PAYMENT_OF_BRANCH)
   @Post('payments/:id/process')
   async processPayment(
     @Param('id') id: string,
@@ -68,6 +79,7 @@ export class PaymentController {
   }
 
   /** Asks the card terminal how a charge it never confirmed ended. */
+  @BranchOwned(Payment, PAYMENT_OF_BRANCH)
   @Post('payments/:id/check-terminal')
   async checkTerminal(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -76,6 +88,7 @@ export class PaymentController {
   }
 
   /** A manager settles an unconfirmed card charge from the terminal's own report. */
+  @BranchOwned(Payment, PAYMENT_OF_BRANCH)
   @Roles(...MANAGER_AND_ABOVE)
   @Post('payments/:id/resolve-terminal')
   async resolveTerminal(@Param('id') id: string, @Body() body: TerminalResolutionDto, @Req() req: Request) {
@@ -84,6 +97,7 @@ export class PaymentController {
     return await this.paymentService.resolveTerminal(tenantId, id, body, userId, (req as any).correlationId);
   }
 
+  @BranchOwned(Payment, PAYMENT_OF_BRANCH)
   @Post('payments/:id/void')
   async voidPayment(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -92,6 +106,7 @@ export class PaymentController {
     return await this.paymentService.voidPayment(tenantId, id, userId, correlationId);
   }
 
+  @BranchOwned(Payment, PAYMENT_OF_BRANCH)
   @Post('payments/:id/reverse')
   async reversePayment(
     @Param('id') id: string,
@@ -104,6 +119,7 @@ export class PaymentController {
     return await this.paymentService.reversePayment(tenantId, id, body, userId, correlationId);
   }
 
+  @BranchOwned(Payment, PAYMENT_OF_BRANCH)
   @Post('payments/:id/correct')
   async correctPayment(
     @Param('id') id: string,

@@ -20,7 +20,12 @@ import { AppDataSource } from '../../data-source';
 
 export function normalizePhone(rawPhone: string): string {
   if (!rawPhone) return '';
-  let cleaned = rawPhone.replace(/[^\d+]/g, '');
+  // A number typed on a Persian keyboard arrives in Persian (or Arabic) digits, which `\d`
+  // does not match: they were stripped to nothing and the raw text kept as the number.
+  const western = rawPhone
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+  let cleaned = western.replace(/[^\d+]/g, '');
   if (cleaned.startsWith('09') && cleaned.length === 11) {
     cleaned = '+98' + cleaned.substring(1);
   } else if (cleaned.startsWith('989') && cleaned.length === 12) {
@@ -182,6 +187,10 @@ export class CustomerService {
     const code = (rawCode || normMobile || rawMobile).toUpperCase();
     if (!code) {
       throw new BadRequestException('Mobile phone number is required to register customer');
+    }
+    // "abc" normalised to nothing, so the text itself became the customer's number and code.
+    if (rawMobile && normMobile.replace(/\D/g, '').length < 8) {
+      throw new BadRequestException({ code: 'INVALID_MOBILE', message: `"${rawMobile}" is not a phone number` });
     }
 
     const existing = await this.customerRepo.findOne({ where: { tenant_id: tenantId, code } });

@@ -115,6 +115,15 @@ export class BusinessDayService {
   }
 
   async closeBusinessDay(tenantId: string, dto: BusinessDayCloseDto, userId?: string, correlationId?: string) {
+    // "not-a-date" went through as a date and was answered with 41 open orders; 2026-12-31
+    // closed a day that had not happened yet, so nothing could be sold on it.
+    const date = dto.businessDate;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) {
+      throw new BadRequestException('businessDate must be a date written YYYY-MM-DD');
+    }
+    if (date > BusinessDateUtil.today()) {
+      throw new BadRequestException(`Business day ${date} has not happened yet and cannot be closed`);
+    }
     return await this.dataSource.transaction(async (em) => {
       const currencyCode = dto.currencyCode || 'IRR';
 
@@ -188,12 +197,17 @@ export class BusinessDayService {
         totalSales = MoneyUtil.add(totalSales, o.grand_total || '0', 4);
       }
 
-      const dayClose = em.create(BusinessDayClose, {
+      // A reopened day keeps its row; closing it again used to insert a second one and hit
+      // the one-close-per-day unique key as a 500.
+      const reopened = await em.findOne(BusinessDayClose, {
+        where: { tenant_id: tenantId, branch_id: dto.branchId, business_date: dto.businessDate, currency_code: currencyCode },
+      });
+      const fields = {
         tenant_id: tenantId,
         branch_id: dto.branchId,
         business_date: dto.businessDate,
         currency_code: currencyCode,
-        status: 'CLOSED',
+        status: 'CLOSED' as const,
         closed_by: userId || null,
         totals: {
           totalSales,
@@ -202,7 +216,10 @@ export class BusinessDayService {
           carriedOverOrders: needsDecision.length,
           ...(needsDecision.length > 0 ? { carryOverReason } : {}),
         },
-      });
+      };
+      const dayClose = reopened
+        ? Object.assign(reopened, fields, { closed_at: new Date() })
+        : em.create(BusinessDayClose, fields);
 
       const savedClose = await em.save(BusinessDayClose, dayClose);
 

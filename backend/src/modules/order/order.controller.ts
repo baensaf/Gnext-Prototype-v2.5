@@ -253,6 +253,8 @@ export class OrdersController {
     return await this.orderService.splitOrder(tenantId, id, body, userId, correlationId);
   }
 
+  // The service holds the target to the source's branch.
+  @BranchOwned(OrderHeader, { body: 'sourceOrderId' })
   @Post('transfer-items')
   async transferItems(@Body() body: TransferItemsDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

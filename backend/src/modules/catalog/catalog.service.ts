@@ -341,7 +341,12 @@ export class CatalogService {
   }
 
   async createProduct(tenantId: string, data: { code: string; name: string; category_id: string; base_price: string; sku?: string; barcode?: string; description?: string; tax_rate?: string; image_asset_id?: string; product_type?: 'STANDARD' | 'COMBO' }, correlationId: string) {
-    const code = data.code.toUpperCase();
+    // The body is untyped, so what the database refused came back as a 500 and a negative
+    // price went straight onto the menu.
+    if (!data.code?.trim() || !data.name?.trim()) throw new BadRequestException('A product needs a code and a name');
+    if (!data.category_id) throw new BadRequestException('A product needs a category');
+    this.assertPrice(data.base_price ?? '0', 'base_price');
+    const code = data.code.trim().toUpperCase();
     const existing = await this.prodRepo.findOne({ where: { tenant_id: tenantId, code } });
     if (existing) throw new ConflictException(`Product code ${code} already exists`);
     this.assertProductType(data.product_type);
@@ -383,6 +388,7 @@ export class CatalogService {
     this.assertProductType(data.product_type);
 
     if (data.base_price) {
+      this.assertPrice(data.base_price, 'base_price');
       data.base_price = MoneyUtil.format(data.base_price);
     }
     if (data.container_price !== undefined) {
@@ -688,6 +694,13 @@ export class CatalogService {
     });
 
     return saved;
+  }
+
+  /** A price on the menu is a plain amount of zero or more. */
+  private assertPrice(value: unknown, field: string) {
+    if (!/^\d+(\.\d+)?$/.test(String(value).trim())) {
+      throw new BadRequestException(`${field} must be an amount of zero or more`);
+    }
   }
 
   private assertProductType(type?: string) {
