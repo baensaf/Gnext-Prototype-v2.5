@@ -934,13 +934,14 @@ snapshots have the same version and a pull that changes nothing is a `304`.
   ],
   "products": [
     {
-      "id": "…", "code": "B01", "name": "چیزبرگر", "category_ids": ["…"],
+      "id": "…", "code": "B01", "name": "چیزبرگر", "category_id": "…",
       "price": "2450000",
       "tax_rate": "0.1000",
+      "max_per_order": null,
       "variants": [ { "id": "…", "name": "دوبل", "price": "3100000" } ],
       "option_groups": [
         {
-          "id": "…", "name": "نوشیدنی", "min": 0, "max": 1,
+          "id": "…", "name": "نوشیدنی", "min": 0, "max": 1, "required": false,
           "items": [ { "id": "…", "name": "کوکا", "price_delta": "350000", "product_id": null } ]
         }
       ],
@@ -948,8 +949,12 @@ snapshots have the same version and a pull that changes nothing is a `304`.
     }
   ],
   "availability": {
-    "stopped": { "product_ids": [], "variant_ids": [], "option_item_ids": [] },
-    "schedules": [ { "product_id": "…", "days": [6, 0, 1, 2, 3, 4], "from": "11:00", "to": "16:00" } ],
+    "stopped": [
+      { "product_id": null, "variant_id": null, "option_item_id": "…", "until": "2026-09-24T12:00:00.000Z" }
+    ],
+    "schedules": [
+      { "product_id": "…", "windows": [ { "days": [6, 0, 1, 2, 3, 4], "from": "11:00", "to": "16:00" } ] }
+    ],
     "daily_stock": [ { "product_id": "…", "variant_id": null, "remaining": 12 } ]
   },
   "payment_methods": [ { "id": "…", "code": "CASH", "name": "نقد", "kind": "CASH" } ],
@@ -958,7 +963,10 @@ snapshots have the same version and a pull that changes nothing is a `304`.
   "delivery_zones": [ { "id": "…", "name": "ونک", "fee": "400000" } ],
   "tills": [ { "id": "…", "code": "T1", "name": "صندوق ۱", "payment_device_id": "e21d…" } ],
   "open_shifts": [
-    { "id": "…", "terminal_id": "…", "user_id": "…", "shift_number": "S-0412", "opened_at": "…" }
+    {
+      "id": "…", "terminal_id": "…", "user_id": "…", "shift_number": "S-0412",
+      "business_date": "2026-09-24", "opened_at": "…"
+    }
   ]
 }
 ```
@@ -971,6 +979,15 @@ snapshots have the same version and a pull that changes nothing is a `304`.
   till can show it greyed out. `availability` gives the rules behind that flag, so the
   offline till can re-evaluate them as the day goes on.
 - An option item a product leaves out of its group is not listed under that product.
+- `stopped` holds the stops that apply to a sale in store: a whole product, one size
+  (`variant_id`) or one add-on (`option_item_id`), until `until` (`null`: until someone puts it
+  back). A stop on Snappfood only is left out.
+- `schedules` lists each product that sells only in set windows (its own, else its
+  category's); a product not listed sells all day. `days`: 0 = Sunday … 6 = Saturday, on the
+  branch's clock. A window whose `to` is at or before its `from` runs past midnight.
+- `daily_stock.remaining` is today's count less what was sold when the snapshot was made.
+- `call_number_issued_today.POS` is how many POS call numbers the cloud has handed out today.
+- `tills` holds the branch's cashier tills, not kiosks.
 - Names are the ones the register shows (Persian for Persian tenants).
 - **Not in the snapshot**: customers, coupons and discounts, users and PINs, reports, other
   branches' data, printer and terminal config (that stays in `welcome.config`, §6.1).
@@ -979,19 +996,13 @@ snapshots have the same version and a pull that changes nothing is a `304`.
 
 The agent:
 
-- MUST pull after each `welcome` whose `data_version` differs from the one it holds, on
-  `data.changed`, and every **15 minutes** while connected. A failed pull is retried with the
+- MUST pull after every `welcome`, on `data.changed`, and every **15 minutes**. It sends the
+  version it holds in `If-None-Match`, so a pull that finds nothing new is a `304`. A failed pull is retried with the
   §4.7 backoff; the agent keeps selling from the copy it has.
 - MUST store the snapshot atomically (write a temporary file, then rename) in its data
   folder, and keep the previous one. It MUST NOT edit a snapshot.
 - Serves the snapshot to the offline POS (second step). Until then it only keeps it and
   reports its version (§12.7).
-
-`welcome` gains one field for agents that advertise `data.pull`:
-
-```json
-{ "data_version": "b1f0c9…" }
-```
 
 ### 12.3 `data.changed` (cloud → agent)
 
@@ -999,12 +1010,14 @@ A command, answered by `ack` only. Payload: `{ "expires_at": "…", "data_versio
 It expires after 24 h.
 
 The cloud sends it when anything in the branch's snapshot changes: catalog, prices,
-availability (stops, schedules, stock), payment methods, tables, delivery zones, tills, call
-number settings, or a shift opens or closes on one of the branch's tills. It MAY coalesce
-changes and send at most one every 10 s. The agent answers with `ack` and pulls (§12.2). If
-it already holds that version, it acks and does nothing.
+availability (stops, schedules, stock counts), payment methods, tables, delivery zones, tills,
+settings, or a shift opens or closes on one of the branch's tills. It coalesces changes into
+at most one notice every 10 s, and skips the notice when the agent last fetched that very
+version. The agent answers with `ack` and pulls (§12.2).
 
-`data.changed` is a hint. The 15-minute pull catches anything the cloud forgot to announce.
+`data.changed` is a hint. Stock sold and call numbers drawn change with every order and are
+not announced; they, a price that takes effect at a set time, and anything else the cloud did
+not announce reach the agent with its 15-minute pull.
 
 ### 12.4 Offline orders
 
@@ -1227,8 +1240,8 @@ test harness (task 9) or a real staging server:
 
 v2 (§12), for an agent that advertises `data.pull` and `sync.orders`:
 
-- [ ] Pulls the snapshot after `welcome` when the version differs, on `data.changed`, and every
-      15 min; a `304` changes nothing; a failed pull keeps the old copy.
+- [ ] Pulls the snapshot after every `welcome`, on `data.changed`, and every 15 min, sending
+      the version held; a `304` changes nothing; a failed pull keeps the old copy.
 - [ ] A snapshot is written atomically: killing the agent mid-write leaves the old one readable.
 - [ ] An offline order is uploaded once its offline life ends, oldest first, 50 at most a batch.
 - [ ] A batch cut off by a network error is resent as is, and the cloud answers `DUPLICATE`
