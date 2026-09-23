@@ -196,12 +196,85 @@ export class AgentSyncService {
     return await this.book(row);
   }
 
+  /**
+   * What the branches uploaded, newest first (§12.7). `attention` keeps the held orders and the
+   * flagged ones nobody has reviewed yet.
+   */
+  async list(tenantId: string, query: { view?: string; branchId?: string; limit?: number } = {}) {
+    const qb = this.rows
+      .createQueryBuilder('s')
+      .leftJoin('branch', 'b', 'b.id = s.branch_id')
+      .select(['s.id', 's.branch_id', 's.status', 's.flags', 's.error', 's.order_number', 's.received_at', 's.booked_at', 's.reviewed_at', 's.reviewed_by'])
+      .addSelect('b.name', 'branch_name')
+      .addSelect(`s.payload->>'state'`, 'order_state')
+      .addSelect(`s.payload->>'call_number'`, 'call_number')
+      .addSelect(`s.payload->>'placed_at'`, 'placed_at')
+      .addSelect(`s.payload->'totals'->>'grand_total'`, 'grand_total')
+      .where('s.tenant_id = :tenantId', { tenantId })
+      .orderBy('s.received_at', 'DESC')
+      .limit(Math.min(Math.max(Number(query.limit) || 100, 1), 500));
+    if (query.branchId) qb.andWhere('s.branch_id = :branchId', { branchId: query.branchId });
+    if (query.view !== 'all') {
+      qb.andWhere(`(s.status = 'HELD' OR (jsonb_array_length(s.flags) > 0 AND s.reviewed_at IS NULL))`);
+    }
+    const raw = await qb.getRawMany();
+    return raw.map((r) => ({
+      id: r.s_id,
+      branch_id: r.s_branch_id,
+      branch_name: r.branch_name ?? null,
+      status: r.s_status,
+      flags: r.s_flags || [],
+      error: r.s_error ?? null,
+      order_number: r.s_order_number ?? null,
+      order_state: r.order_state ?? null,
+      call_number: r.call_number ? Number(r.call_number) : null,
+      placed_at: r.placed_at ?? null,
+      grand_total: r.grand_total ?? null,
+      received_at: r.s_received_at,
+      booked_at: r.s_booked_at ?? null,
+      reviewed_at: r.s_reviewed_at ?? null,
+      reviewed_by: r.s_reviewed_by ?? null,
+    }));
+  }
+
+  /** Someone at head office has looked at a flagged order (§12.7). */
+  async markReviewed(tenantId: string, id: string, userId?: string) {
+    const row = await this.rows.findOne({ where: { id, tenant_id: tenantId } });
+    if (!row) throw new NotFoundException('No such uploaded order');
+    if (row.status !== 'ACCEPTED') throw new BadRequestException({ code: 'NOT_BOOKED', message: 'A held order is retried, not reviewed' });
+    row.reviewed_at = new Date();
+    row.reviewed_by = userId ?? null;
+    await this.rows.save(row);
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      actorId: userId,
+      action: 'AGENT_SYNC_ORDER_REVIEWED',
+      entityType: 'AgentSyncOrder',
+      entityId: id,
+      branchId: row.branch_id,
+      details: { flags: row.flags, order_number: row.order_number },
+    });
+    return { id, reviewed_at: row.reviewed_at };
+  }
+
   /** Head office retries a held order, for example after restoring a missing product (§12.7). */
-  async retry(tenantId: string, id: string): Promise<SyncResult> {
+  async retry(tenantId: string, id: string, userId?: string): Promise<SyncResult> {
     const row = await this.rows.findOne({ where: { id, tenant_id: tenantId } });
     if (!row) throw new NotFoundException('No such uploaded order');
     if (row.status === 'ACCEPTED') return { id, result: 'DUPLICATE', order_number: row.order_number ?? null, flags: row.flags };
-    return await this.book(row);
+    const result = await this.book(row);
+    await this.auditWriter.write({
+      tenantId,
+      actorType: userId ? 'ADMIN' : 'SYSTEM',
+      actorId: userId,
+      action: 'AGENT_SYNC_ORDER_RETRIED',
+      entityType: 'AgentSyncOrder',
+      entityId: id,
+      branchId: row.branch_id,
+      details: { result: result.result, flags: result.flags },
+    });
+    return result;
   }
 
   /** Checks the saved order and books it, or holds it with the reason. */

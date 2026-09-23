@@ -44,6 +44,19 @@ export interface AgentCommandSummary {
   error_message?: string | null;
 }
 
+/** The branch snapshot and offline-order backlog, as the agent's last heartbeat reported them. */
+export interface AgentSyncReport {
+  data_version: string | null;
+  data_pulled_at: string | null;
+  pending_orders: number;
+  oldest_pending_at: string | null;
+  last_upload_at: string | null;
+  last_upload_error: string | null;
+  reported_at: string;
+}
+
+export type AgentSyncWarning = 'SNAPSHOT_STALE' | 'BACKLOG_STUCK' | 'UPLOAD_FAILING';
+
 export interface AgentHealth {
   agent: BranchAgent;
   connection: {
@@ -54,8 +67,36 @@ export interface AgentHealth {
     agent_version?: string | null;
     capabilities?: string[];
     devices: AgentDeviceStatus[];
+    sync?: AgentSyncReport | null;
   };
+  sync_warnings?: AgentSyncWarning[];
   recent_commands: AgentCommandSummary[];
+}
+
+/** An order a branch took offline, as its agent uploaded it. */
+export interface SyncOrderRow {
+  id: string;
+  branch_id: string;
+  branch_name: string | null;
+  status: 'ACCEPTED' | 'HELD';
+  flags: string[];
+  error: string | null;
+  order_number: string | null;
+  order_state: 'COMPLETED' | 'CANCELLED' | 'OPEN' | null;
+  call_number: number | null;
+  placed_at: string | null;
+  grand_total: string | null;
+  received_at: string;
+  booked_at: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+}
+
+export interface SyncResult {
+  id: string;
+  result: 'ACCEPTED' | 'DUPLICATE' | 'HELD';
+  order_number: string | null;
+  flags: string[];
 }
 
 export interface AgentReleaseRow {
@@ -161,6 +202,17 @@ export const agentsApi = {
   unpublishRelease: async (id: string): Promise<AgentReleaseRow> => {
     const res = await httpClient.post(`/api/v1/agent-releases/${id}/unpublish`, {});
     return res.data;
+  },
+  listSyncOrders: async (params: { view?: 'attention' | 'all'; branchId?: string } = {}): Promise<SyncOrderRow[]> => {
+    const res = await httpClient.get('/api/v1/agent-sync/orders', { params: { view: params.view, branchId: params.branchId || undefined } });
+    return res.data;
+  },
+  retrySyncOrder: async (id: string): Promise<SyncResult> => {
+    const res = await httpClient.post(`/api/v1/agent-sync/orders/${id}/retry`, {});
+    return res.data;
+  },
+  reviewSyncOrder: async (id: string): Promise<void> => {
+    await httpClient.post(`/api/v1/agent-sync/orders/${id}/review`, {});
   },
   cancelCode: async (id: string): Promise<void> => {
     await httpClient.delete(`/api/v1/agents/enrolment-codes/${id}`);

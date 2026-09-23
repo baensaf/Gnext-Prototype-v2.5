@@ -24,6 +24,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import SecurityIcon from '@mui/icons-material/Security';
+import CloudOffIcon from '@mui/icons-material/CloudOff';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
@@ -940,6 +941,11 @@ export function OrdersWorkflowPage() {
           <Typography variant="caption" noWrap sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
             {row.order_number}
           </Typography>
+          {row.source === 'AGENT_OFFLINE' ? (
+            <Tooltip title={t('orders.table.takenOffline', 'Taken while the branch was offline')}>
+              <CloudOffIcon fontSize="small" color="action" />
+            </Tooltip>
+          ) : null}
         </Stack>
       ),
     },

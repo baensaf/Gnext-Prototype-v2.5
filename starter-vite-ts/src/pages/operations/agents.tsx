@@ -52,6 +52,7 @@ import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 import { AgentReleasesCard } from './agent-releases-card';
 import { AgentHealthDrawer } from './agent-health-drawer';
+import { AgentSyncOrdersCard } from './agent-sync-orders-card';
 
 const CODE_STATE_COLOR: Record<EnrolmentCodeState, 'info' | 'success' | 'default' | 'warning'> = {
   PENDING: 'info',
@@ -516,6 +517,8 @@ export function AgentsPage() {
         confirmLabel={t('operations.agents.revoke', 'Revoke')}
         confirmColor="error"
       />
+
+      <AgentSyncOrdersCard branchId={branchId || undefined} />
 
       <AgentReleasesCard />
 

@@ -118,7 +118,29 @@ describe('agent health (PostgreSQL)', () => {
     expect(view.recent_commands[0]).not.toHaveProperty('payload');
   });
 
+  it("shows the agent's menu copy and offline backlog from its heartbeats, with what looks wrong", async () => {
+    const agent = await connect();
+    const long = new Date(Date.now() - 45 * 60_000).toISOString();
+    const hb = agent.send('heartbeat', {
+      in_flight: 0,
+      unacked_results: 0,
+      sync: { data_version: 'abc', data_pulled_at: long, pending_orders: 3, oldest_pending_at: long, last_upload_at: null, last_upload_error: 'HTTP 502', extra: 'x'.repeat(10) },
+    });
+    await agent.next((m) => m.type === 'heartbeat.ack' && m.ref === hb);
+
+    const view = await health.health(tenantId, agentId);
+    expect(view.connection.sync).toMatchObject({ data_version: 'abc', data_pulled_at: long, pending_orders: 3, last_upload_error: 'HTTP 502' });
+    expect(view.connection.sync).not.toHaveProperty('extra');
+    expect(view.sync_warnings).toEqual(['SNAPSHOT_STALE', 'BACKLOG_STUCK', 'UPLOAD_FAILING']);
+
+    const fresh = new Date().toISOString();
+    const hb2 = agent.send('heartbeat', { sync: { data_version: 'abc', data_pulled_at: fresh, pending_orders: 0, oldest_pending_at: null, last_upload_at: fresh, last_upload_error: null } });
+    await agent.next((m) => m.type === 'heartbeat.ack' && m.ref === hb2);
+    expect((await health.health(tenantId, agentId)).sync_warnings).toEqual([]);
+  });
+
   it('raises one critical alert when the agent stays away, and closes it when it is back', async () => {
+    await until(() => !moduleRef.get(AgentSessionsService).isConnected(agentId));
     const agent = await connect();
     await health.sweep(new Date(Date.now() + OFFLINE_ALERT_AFTER_MS * 2), tenantId);
     expect(await offlineAlerts()).toHaveLength(0);
