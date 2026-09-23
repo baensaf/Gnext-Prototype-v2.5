@@ -33,6 +33,8 @@ import { AgentRegistryService } from '../src/modules/agent-gateway/agent-registr
 import { AgentPaymentsService } from '../src/modules/payment/agent-payments.service';
 import { AgentSyncService, parseOrder } from '../src/modules/agent-data/agent-sync.service';
 import { BusinessDateUtil } from '../src/common/utils/business-date.util';
+import { AgentSyncAdminController } from '../src/modules/agent-data/agent-sync-admin.controller';
+import { HEAD_OFFICE_ONLY_KEY } from '../src/common/decorators/roles.decorator';
 import { deleteTenantData } from './utils/tenant-teardown';
 
 // Orders a branch took offline, uploaded by its agent and booked by the cloud (protocol §12.4–§12.6).
@@ -336,6 +338,32 @@ describe('agent offline order upload (PostgreSQL)', () => {
     const retried = await moduleRef.get(AgentSyncService).retry(tenantId, order.id);
     expect(retried).toMatchObject({ result: 'ACCEPTED', flags: [] });
     expect((await upload([order]).expect(200)).body.results[0]).toMatchObject({ result: 'DUPLICATE', order_number: retried.order_number });
+  });
+
+  it("shows head office what needs a look, and clears it as it is reviewed or retried", async () => {
+    expect(Reflect.getMetadata(HEAD_OFFICE_ONLY_KEY, AgentSyncAdminController)).toBe(true);
+    const sync = moduleRef.get(AgentSyncService);
+
+    const attention = await sync.list(tenantId);
+    // Held orders, and booked ones with flags nobody has reviewed; clean ones are left out.
+    expect(attention.every((r) => r.status === 'HELD' || r.flags.length > 0)).toBe(true);
+    const flagged = attention.find((r) => r.status === 'ACCEPTED' && r.call_number === 163)!;
+    expect(flagged).toMatchObject({ branch_name: 'Offline branch', order_state: 'COMPLETED', call_number: 163, order_number: expect.stringMatching(/^ORD-/) });
+    expect(flagged.grand_total).toBe('3000000');
+    const held = attention.find((r) => r.status === 'HELD' && r.flags.includes('TOTAL_MISMATCH'))!;
+    expect(held.error).toContain('Line 1');
+
+    const all = await sync.list(tenantId, { view: 'all' });
+    expect(all.length).toBeGreaterThan(attention.length);
+    expect(all.some((r) => r.status === 'ACCEPTED' && r.flags.length === 0)).toBe(true);
+
+    await sync.markReviewed(tenantId, flagged.id, ids.cashier);
+    expect((await sync.list(tenantId)).some((r) => r.id === flagged.id)).toBe(false);
+    await expect(sync.markReviewed(tenantId, held.id)).rejects.toThrow(/retried, not reviewed/);
+
+    // Retrying something still wrong keeps it held, and says why.
+    expect(await sync.retry(tenantId, held.id, ids.cashier)).toMatchObject({ result: 'HELD', flags: ['TOTAL_MISMATCH'] });
+    expect(await dataSource.getRepository(AuditEvent).count({ where: { tenant_id: tenantId, action: 'AGENT_SYNC_ORDER_RETRIED', entity_id: held.id } })).toBe(1);
   });
 
   it('checks the shape of an order before anything else', () => {

@@ -7,10 +7,25 @@ import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { AgentCommandsService } from './agent-commands.service';
 import { AgentRegistryService } from './agent-registry.service';
 import { AgentSessionsService } from './agent-sessions.service';
-import { LiveAgentConnectionHandle } from './agent-connection';
+import { AgentSyncReport, LiveAgentConnectionHandle } from './agent-connection';
 
 /** How long an agent may be away before head office is told. A reconnect blip is not news. */
 export const OFFLINE_ALERT_AFTER_MS = 90_000;
+
+/** A connected agent whose snapshot has not been confirmed for this long is falling behind (§12.7). */
+export const SNAPSHOT_STALE_AFTER_MS = 30 * 60_000;
+/** Offline orders waiting this long while the agent is online are stuck. */
+export const BACKLOG_STUCK_AFTER_MS = 10 * 60_000;
+
+/** What head office should look at in an agent's sync report. */
+export function syncWarnings(sync: AgentSyncReport, now = new Date()): string[] {
+  const out: string[] = [];
+  const age = (at: string | null) => (at ? now.getTime() - new Date(at).getTime() : Infinity);
+  if (age(sync.data_pulled_at) > SNAPSHOT_STALE_AFTER_MS) out.push('SNAPSHOT_STALE');
+  if (sync.pending_orders > 0 && age(sync.oldest_pending_at) > BACKLOG_STUCK_AFTER_MS) out.push('BACKLOG_STUCK');
+  if (sync.last_upload_error) out.push('UPLOAD_FAILING');
+  return out;
+}
 const SWEEP_INTERVAL_MS = 30_000;
 export const AGENT_OFFLINE_ALERT = 'AGENT_OFFLINE';
 
@@ -115,8 +130,10 @@ export class AgentHealthService implements OnApplicationBootstrap, OnApplication
             agent_version: live.agentVersion,
             capabilities: live.capabilities,
             devices: live.devices ? [...live.devices.values()] : [],
+            sync: live.sync ?? null,
           }
         : { connected: false, devices: [] },
+      sync_warnings: live?.sync ? syncWarnings(live.sync) : [],
       recent_commands: commands.map((c) => ({
         id: c.id,
         type: c.type,

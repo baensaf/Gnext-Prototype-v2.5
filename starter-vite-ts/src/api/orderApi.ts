@@ -47,6 +47,8 @@ export interface OrderHeader {
   order_number: string;
   /** The branch's number for the order today (123), given as it goes to the kitchen. */
   call_number?: number | null;
+  /** AGENT_OFFLINE when the branch took it while offline and its agent uploaded it later. */
+  source?: string | null;
   order_type: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY' | 'AGGREGATOR';
   channel?: string;
   state: 'DRAFT' | 'PENDING_ACCEPTANCE' | 'SUBMITTED' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'OUT_FOR_DELIVERY' | 'COMPLETED' | 'CANCELLED' | 'REJECTED';

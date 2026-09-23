@@ -445,7 +445,8 @@
       "snappfoodCourier": "Snappfood courier",
       "counter": "Counter",
       "itemCount": "{{count}} items in all",
-      "emptyHint": "Try another date or the All tab."
+      "emptyHint": "Try another date or the All tab.",
+      "takenOffline": "Taken while the branch was offline"
     },
     "actions": {
       "details": "Details",
@@ -3682,6 +3683,21 @@
         "kind": {
           "printer": "Printer",
           "terminal": "Card terminal"
+        },
+        "sync": {
+          "title": "Offline selling",
+          "snapshot": "Menu copy",
+          "checkedAt": "Checked {{time}}",
+          "noSnapshot": "Not fetched yet",
+          "pending": "Waiting to upload",
+          "pendingSince": "{{count}} orders, oldest {{time}}",
+          "nonePending": "None",
+          "lastUpload": "Last upload",
+          "warning": {
+            "SNAPSHOT_STALE": "The agent has not confirmed its menu copy for over 30 minutes.",
+            "BACKLOG_STUCK": "Offline orders have been waiting over 10 minutes while the agent is online.",
+            "UPLOAD_FAILING": "The last upload of offline orders failed."
+          }
         }
       },
       "releases": {
@@ -3703,6 +3719,48 @@
         "minVersion": "Oldest agent still allowed to connect (optional)",
         "notes": "Notes",
         "chooseFile": "Choose gnext-agent.exe"
+      },
+      "syncOrders": {
+        "title": "Offline orders",
+        "subtitle": "Orders a branch took while offline, uploaded by its agent. They are booked at the price charged; differences are flagged here.",
+        "loadError": "Could not load offline orders",
+        "viewAttention": "Needs a look",
+        "viewAll": "All",
+        "colReceived": "Received",
+        "colOrder": "Order",
+        "colTotal": "Total",
+        "colResult": "Result",
+        "nothingToLookAt": "Nothing needs a look.",
+        "none": "No offline orders yet.",
+        "placedAt": "Taken {{time}}",
+        "held": "Held",
+        "accepted": "Booked",
+        "reviewed": "Looked at",
+        "retry": "Retry",
+        "markReviewed": "Mark reviewed",
+        "stillHeld": "Still held: {{reason}}",
+        "booked": "Booked as {{number}}",
+        "retryError": "Could not retry the order",
+        "reviewError": "Could not mark the order",
+        "state": {
+          "COMPLETED": "Completed",
+          "CANCELLED": "Cancelled",
+          "OPEN": "Still open"
+        },
+        "flag": {
+          "TOTAL_MISMATCH": "Totals do not add up",
+          "PRICE_MISMATCH": "Price not from its menu copy",
+          "ID_REUSED": "Same id, different order",
+          "SHIFT_UNKNOWN": "Unknown shift",
+          "INVALID_ORDER": "Malformed order",
+          "PROCESSING_FAILED": "Could not be booked",
+          "PRICE_CHANGED": "Price changed since",
+          "SNAPSHOT_UNKNOWN": "Menu copy unknown",
+          "ITEM_REMOVED": "Item removed since",
+          "SHIFT_CLOSED": "Shift already closed",
+          "DAY_CLOSED": "Day already closed",
+          "STOCK_NEGATIVE": "Stock below zero"
+        }
       }
     }
   },

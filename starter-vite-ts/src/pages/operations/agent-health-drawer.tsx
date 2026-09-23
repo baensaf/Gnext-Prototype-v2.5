@@ -202,6 +202,48 @@ export function AgentHealthDrawer({ agentId, branchId, onClose }: Props) {
               )}
             </Box>
 
+            {connection.sync && (
+              <>
+                <Divider />
+                <Stack spacing={0.75}>
+                  <Typography variant="subtitle2">{t('operations.agents.health.sync.title', 'Offline selling')}</Typography>
+                  {(health.sync_warnings || []).map((w) => (
+                    <Alert key={w} severity="warning" sx={{ py: 0 }}>
+                      {t(`operations.agents.health.sync.warning.${w}`, w)}
+                    </Alert>
+                  ))}
+                  <Row
+                    label={t('operations.agents.health.sync.snapshot', 'Menu copy')}
+                    value={
+                      connection.sync.data_pulled_at
+                        ? t('operations.agents.health.sync.checkedAt', 'Checked {{time}}', { time: fDateTime(connection.sync.data_pulled_at) })
+                        : t('operations.agents.health.sync.noSnapshot', 'Not fetched yet')
+                    }
+                  />
+                  <Row
+                    label={t('operations.agents.health.sync.pending', 'Waiting to upload')}
+                    value={
+                      connection.sync.pending_orders > 0 && connection.sync.oldest_pending_at
+                        ? t('operations.agents.health.sync.pendingSince', '{{count}} orders, oldest {{time}}', {
+                            count: connection.sync.pending_orders,
+                            time: fDateTime(connection.sync.oldest_pending_at),
+                          })
+                        : t('operations.agents.health.sync.nonePending', 'None')
+                    }
+                  />
+                  <Row
+                    label={t('operations.agents.health.sync.lastUpload', 'Last upload')}
+                    value={connection.sync.last_upload_at ? fDateTime(connection.sync.last_upload_at) : '—'}
+                  />
+                  {connection.sync.last_upload_error && (
+                    <Typography variant="caption" color="error" dir="ltr">
+                      {connection.sync.last_upload_error}
+                    </Typography>
+                  )}
+                </Stack>
+              </>
+            )}
+
             <Divider />
 
             <Box>

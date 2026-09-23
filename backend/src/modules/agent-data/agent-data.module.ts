@@ -24,6 +24,7 @@ import { AuditModule } from '../audit/audit.module';
 import { CashierModule } from '../cashier/cashier.module';
 import { OrderModule } from '../order/order.module';
 import { AgentSyncController } from './agent-sync.controller';
+import { AgentSyncAdminController } from './agent-sync-admin.controller';
 import { AgentSyncService } from './agent-sync.service';
 import { AgentDataChangesService } from './agent-data-changes.service';
 import { AgentDataController } from './agent-data.controller';
@@ -58,7 +59,7 @@ import { AgentDataService } from './agent-data.service';
     CashierModule,
     OrderModule,
   ],
-  controllers: [AgentDataController, AgentSyncController],
+  controllers: [AgentDataController, AgentSyncController, AgentSyncAdminController],
   providers: [AgentDataService, AgentDataChangesService, AgentSyncService],
   exports: [AgentDataService, AgentSyncService],
 })

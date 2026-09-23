@@ -50,9 +50,39 @@ export interface AgentConnectionDeps {
   log?: (message: string) => void;
 }
 
+/** The branch snapshot and offline-order backlog an agent reports in its heartbeats (§12.7). */
+export interface AgentSyncReport {
+  data_version: string | null;
+  data_pulled_at: string | null;
+  pending_orders: number;
+  oldest_pending_at: string | null;
+  last_upload_at: string | null;
+  last_upload_error: string | null;
+  reported_at: string;
+}
+
 export interface LiveAgentConnectionHandle extends AgentConnectionHandle {
   devices: Map<string, DeviceStatusEntry>;
   lastFrameAt: Date;
+  sync?: AgentSyncReport | null;
+}
+
+const text = (v: unknown, max = 500) => (typeof v === 'string' && v ? v.slice(0, max) : null);
+
+/** What the agent said in a heartbeat's `sync`, cut to known fields and sizes. */
+export function readSyncReport(raw: unknown, at = new Date()): AgentSyncReport | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const s = raw as Record<string, unknown>;
+  const pending = Number(s.pending_orders);
+  return {
+    data_version: text(s.data_version, 64),
+    data_pulled_at: text(s.data_pulled_at, 40),
+    pending_orders: Number.isInteger(pending) && pending >= 0 ? pending : 0,
+    oldest_pending_at: text(s.oldest_pending_at, 40),
+    last_upload_at: text(s.last_upload_at, 40),
+    last_upload_error: text(s.last_upload_error),
+    reported_at: at.toISOString(),
+  };
 }
 
 const DEVICE_STATUSES = new Set(['ONLINE', 'OFFLINE', 'ERROR', 'UNSUPPORTED', 'UNKNOWN']);
@@ -214,6 +244,7 @@ export class AgentConnection {
         return;
       case 'heartbeat':
         this.send(envelope('heartbeat.ack', { server_time: new Date().toISOString() }, message.id));
+        if (message.payload?.sync !== undefined) this.handle!.sync = readSyncReport(message.payload.sync);
         await this.deps.touch(this.agent);
         return;
       case 'device.status':
