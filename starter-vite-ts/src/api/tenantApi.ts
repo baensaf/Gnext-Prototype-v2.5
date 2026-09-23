@@ -38,15 +38,6 @@ export interface Terminal {
   payment_device_id?: string | null;
 }
 
-export interface BranchStatusSnapshot {
-  is_online: boolean;
-  agent_version?: string;
-  agent_health: string;
-  last_heartbeat_at?: string;
-  last_sync_at?: string;
-  simulated?: boolean;
-}
-
 export const tenantApi = {
   getTenantProfile: async (): Promise<any> => {
     const res = await httpClient.get('/api/v1/tenant');
@@ -81,10 +72,6 @@ export const tenantApi = {
   },
   updateBranchHours: async (id: string, hours: BranchOperatingHour[]): Promise<BranchOperatingHour[]> => {
     const res = await httpClient.patch(`/api/v1/branches/${id}/operating-hours`, { hours });
-    return res.data;
-  },
-  getBranchStatus: async (id: string): Promise<BranchStatusSnapshot> => {
-    const res = await httpClient.get(`/api/v1/branches/${id}/status`);
     return res.data;
   },
   getTerminals: async (branchId?: string): Promise<Terminal[]> => {

@@ -8,7 +8,6 @@ import { Terminal } from '../../entities/Terminal.entity';
 import { CashierShift } from '../../entities/CashierShift.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { AdminUser } from '../../entities/AdminUser.entity';
-import { BranchStatusSnapshot } from '../../entities/BranchStatusSnapshot.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
 
@@ -21,7 +20,6 @@ export class TenantService {
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
     @InjectRepository(BranchOperatingHour) private readonly hoursRepo: Repository<BranchOperatingHour>,
     @InjectRepository(Terminal) private readonly terminalRepo: Repository<Terminal>,
-    @InjectRepository(BranchStatusSnapshot) private readonly statusRepo: Repository<BranchStatusSnapshot>,
     private readonly auditWriter: AuditWriter,
   ) {}
 
@@ -363,23 +361,5 @@ export class TenantService {
     });
 
     return { success: true };
-  }
-
-  async getBranchStatus(tenantId: string, branchId: string) {
-    const snapshot = await this.statusRepo.findOne({
-      where: { tenant_id: tenantId, branch_id: branchId },
-      order: { recorded_at: 'DESC' },
-    });
-    if (!snapshot) {
-      return {
-        is_online: true,
-        agent_version: 'v2.0.0-simulated',
-        agent_health: 'HEALTHY',
-        last_heartbeat_at: new Date(),
-        last_sync_at: new Date(),
-        simulated: true,
-      };
-    }
-    return snapshot;
   }
 }

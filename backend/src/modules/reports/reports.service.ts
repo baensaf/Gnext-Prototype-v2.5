@@ -29,7 +29,6 @@ import { PrintJob } from '../../entities/PrintJob.entity';
 import { PrintAttempt } from '../../entities/PrintAttempt.entity';
 import { Printer } from '../../entities/Printer.entity';
 import { Delivery } from '../../entities/Delivery.entity';
-import { OfflineQueueItem } from '../../entities/OfflineQueueItem.entity';
 import { Product } from '../../entities/Product.entity';
 import { Category } from '../../entities/Category.entity';
 import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
@@ -70,7 +69,6 @@ export class ReportsService {
     @InjectRepository(PrintAttempt) private readonly printAttemptRepo: Repository<PrintAttempt>,
     @InjectRepository(Printer) private readonly printerRepo: Repository<Printer>,
     @InjectRepository(Delivery) private readonly deliveryRepo: Repository<Delivery>,
-    @InjectRepository(OfflineQueueItem) private readonly offlineQueueRepo: Repository<OfflineQueueItem>,
     @InjectRepository(Product) private readonly productRepo: Repository<Product>,
     @InjectRepository(Category) private readonly categoryRepo: Repository<Category>,
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,

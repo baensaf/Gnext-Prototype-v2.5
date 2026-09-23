@@ -325,10 +325,6 @@ export function useNavData(): NavSectionProps['data'] {
               path: '/app/simulation/payments-printers',
             },
             {
-              title: t('nav.syncSim', 'Offline Sync Engine'),
-              path: '/app/simulation/offline-sync',
-            },
-            {
               title: t('nav.logsSim', 'Integration Audit Logs'),
               path: '/app/simulation/logs',
             },

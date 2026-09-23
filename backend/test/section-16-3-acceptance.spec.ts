@@ -19,7 +19,6 @@ import { RefundService } from '../src/modules/refund/refund.service';
 import { DeliveryService } from '../src/modules/delivery/delivery.service';
 import { ReportsService } from '../src/modules/reports/reports.service';
 import { SimulationService } from '../src/modules/simulation/simulation.service';
-import { OfflineSyncService } from '../src/modules/offline-sync/offline-sync.service';
 import { KioskService } from '../src/modules/kiosk/kiosk.service';
 import { ImportExportService } from '../src/modules/import-export/import-export.service';
 import { SettingsService } from '../src/modules/settings/settings.service';
@@ -44,8 +43,6 @@ import { Customer } from '../src/entities/Customer.entity';
 import { DeliveryZone } from '../src/entities/DeliveryZone.entity';
 import { AuditEvent } from '../src/entities/AuditEvent.entity';
 import { IntegrationLog } from '../src/entities/IntegrationLog.entity';
-import { OfflineQueueItem } from '../src/entities/OfflineQueueItem.entity';
-import { SyncConflictRecord } from '../src/entities/SyncConflictRecord.entity';
 import { TenantSetting } from '../src/entities/TenantSetting.entity';
 
 // Utility
@@ -69,7 +66,6 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
   let deliveryService: DeliveryService;
   let reportsService: ReportsService;
   let simulationService: SimulationService;
-  let offlineSyncService: OfflineSyncService;
   let kioskService: KioskService;
   let importExportService: ImportExportService;
   let settingsService: SettingsService;
@@ -119,7 +115,6 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     deliveryService = moduleRef.get<DeliveryService>(DeliveryService);
     reportsService = moduleRef.get<ReportsService>(ReportsService);
     simulationService = moduleRef.get<SimulationService>(SimulationService);
-    offlineSyncService = moduleRef.get<OfflineSyncService>(OfflineSyncService);
     kioskService = moduleRef.get<KioskService>(KioskService);
     importExportService = moduleRef.get<ImportExportService>(ImportExportService);
     settingsService = moduleRef.get<SettingsService>(SettingsService);
@@ -1153,126 +1148,6 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
   // =========================================================================
   // WORKFLOW 5: OFFLINE SYNC COMPLETE LIFECYCLE (§16.3.5)
   // =========================================================================
-  it('Workflow 5: Offline Sync - Offline Toggle, Failure/Retry/DLQ, Conflict Creation & Resolution, Online Sync & Status Assertions', async () => {
-    const correlationId = `corr-offline-${Date.now()}`;
-    const tag = Date.now().toString().slice(-5);
-
-    // Step 1: Set Branch Offline
-    const offlineStatus = await offlineSyncService.toggleConnectivity(tenantId, branchId, false);
-    expect(offlineStatus.is_online).toBe(false);
-    expect(offlineStatus.offline_since).toBeDefined();
-
-    // Step 2: Enqueue Representative Operations
-    // A) Normal Offline Order
-    const normalItem = await offlineSyncService.enqueueOfflineItem(
-      tenantId,
-      {
-        branch_id: branchId,
-        terminal_id: terminalId,
-        entity_type: 'ORDER',
-        payload: {
-          order_num: `OFF-NORM-${tag}`,
-          items: [{ product_id: productId, quantity: 1 }],
-        },
-      },
-      correlationId,
-    );
-    expect(normalItem.status).toBe('PENDING');
-
-    // B) Conflict Order (simulate version mismatch conflict)
-    const conflictItem = await offlineSyncService.enqueueOfflineItem(
-      tenantId,
-      {
-        branch_id: branchId,
-        terminal_id: terminalId,
-        entity_type: 'ORDER',
-        client_version: 1,
-        payload: {
-          order_num: `OFF-CONF-${tag}`,
-          simulate_conflict: 'PRICE_MISMATCH',
-          cloud_version: 2,
-          cloud_original: { server_price: '250000.00', server_version: 2 },
-        },
-      },
-      correlationId,
-    );
-    expect(conflictItem.status).toBe('PENDING');
-
-    // C) DLQ Failure Order (simulate fatal retry failure)
-    const dlqItem = await offlineSyncService.enqueueOfflineItem(
-      tenantId,
-      {
-        branch_id: branchId,
-        terminal_id: terminalId,
-        entity_type: 'ORDER',
-        payload: {
-          order_num: `OFF-DLQ-${tag}`,
-          simulate_failure: 'Database locking timeout after 3 retries',
-        },
-      },
-      correlationId,
-    );
-    expect(dlqItem.status).toBe('PENDING');
-
-    // Step 3: Trigger Sync Worker & Verify Retry/DLQ and Conflict Creation
-    const workerRes1 = await offlineSyncService.triggerSyncWorker(tenantId, branchId, correlationId);
-    expect(workerRes1.processed_count).toBe(3);
-    expect(workerRes1.dlq_count).toBe(1);
-    expect(workerRes1.conflict_count).toBe(1);
-    expect(workerRes1.synced_count).toBe(1);
-
-    // Verify DLQ item status
-    const queueRepo = dataSource.getRepository(OfflineQueueItem);
-    const refreshedDlq = await queueRepo.findOne({ where: { id: dlqItem.id } });
-    expect(refreshedDlq?.status).toBe('DLQ_FAILED');
-    expect(refreshedDlq?.failure_reason).toContain('Database locking timeout');
-
-    // Verify Conflict Record creation
-    const conflictRepo = dataSource.getRepository(SyncConflictRecord);
-    const conflicts = await conflictRepo.find({ where: { tenant_id: tenantId, queue_item_id: conflictItem.id } });
-    expect(conflicts.length).toBe(1);
-    const conflictRec = conflicts[0];
-    expect(conflictRec.conflict_type).toBe('PRICE_MISMATCH');
-    expect(conflictRec.resolution_strategy).toBe('UNRESOLVED');
-
-    // Step 4: Conflict Resolution (Strategy: ACCEPT_CLIENT)
-    const resolvedConflict = await offlineSyncService.resolveConflict(
-      tenantId,
-      {
-        conflict_id: conflictRec.id,
-        resolution_strategy: 'ACCEPT_CLIENT',
-      },
-      adminUserId,
-      correlationId,
-    );
-    expect(resolvedConflict.conflict.resolution_strategy).toBe('ACCEPT_CLIENT');
-
-    const refreshedConflictQueueItem = await queueRepo.findOne({ where: { id: conflictItem.id } });
-    expect(['RESOLVED', 'SYNCED']).toContain(refreshedConflictQueueItem?.status);
-
-    // Step 5: Restore Online Connectivity & Assert Status
-    const onlineStatus = await offlineSyncService.toggleConnectivity(tenantId, branchId, true);
-    expect(onlineStatus.is_online).toBe(true);
-    expect(onlineStatus.offline_since).toBeNull();
-
-    const workerRes2 = await offlineSyncService.triggerSyncWorker(tenantId, branchId, correlationId);
-    expect(workerRes2.success).toBe(true);
-
-    const finalStatus = await offlineSyncService.getStatus(tenantId, branchId);
-    expect(finalStatus.is_online).toBe(true);
-    expect(finalStatus.pending_queue_count).toBe(0);
-    expect(finalStatus.last_synced_at).toBeDefined();
-
-    // Step 6: Verify Audit Trail for Offline Connectivity & Conflicts
-    const auditRepo = dataSource.getRepository(AuditEvent);
-    const offlineAudits = await auditRepo.find({
-      where: {
-        tenant_id: tenantId,
-        action: In(['BRANCH_CONNECTIVITY_OFFLINE', 'BRANCH_CONNECTIVITY_ONLINE', 'OFFLINE_ITEM_ENQUEUED', 'OFFLINE_CONFLICT_RESOLVED']),
-      },
-    });
-    expect(offlineAudits.length).toBeGreaterThanOrEqual(3);
-  });
 
   // =========================================================================
   // WORKFLOW 6: KIOSK COMPLETE LIFECYCLE (§16.3.6)

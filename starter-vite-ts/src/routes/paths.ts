@@ -88,7 +88,6 @@ export const paths = {
       root: `${ROOTS.APP}/simulation`,
       snappfood: `${ROOTS.APP}/simulation/snappfood`,
       paymentsPrinters: `${ROOTS.APP}/simulation/payments-printers`,
-      offlineSync: `${ROOTS.APP}/simulation/offline-sync`,
       logs: `${ROOTS.APP}/simulation/logs`,
     },
     reports: {

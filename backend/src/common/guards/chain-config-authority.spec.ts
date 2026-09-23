@@ -8,7 +8,6 @@ import { LocalizationController } from '../../modules/localization/localization.
 import { CustomerController } from '../../modules/customer/customer.controller';
 import { CreditController } from '../../modules/customer/credit.controller';
 import { SimulationController } from '../../modules/simulation/simulation.controller';
-import { OfflineSyncController } from '../../modules/offline-sync/offline-sync.controller';
 
 /**
  * What the chain decides once, and what a branch decides for itself.
@@ -92,7 +91,6 @@ const OPEN_BY_DESIGN: Array<[string, any, string[]]> = [
   // The demo sandbox writes real orders and flips connectivity the whole demo reads. Its
   // screens are head office's; so is the API.
   ['simulation', SimulationController, []],
-  ['offline sync', OfflineSyncController, []],
 ];
 
 describe.each(OPEN_BY_DESIGN)('%s: what the chain decides once', (label, controller, open) => {

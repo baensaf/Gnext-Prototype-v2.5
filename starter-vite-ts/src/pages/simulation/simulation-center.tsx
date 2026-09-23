@@ -1,13 +1,10 @@
-import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import RefreshIcon from '@mui/icons-material/Refresh';
-import WifiOffIcon from '@mui/icons-material/WifiOff';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import SyncProblemIcon from '@mui/icons-material/SyncProblem';
 import ElectricBoltIcon from '@mui/icons-material/ElectricBolt';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import PrintDisabledIcon from '@mui/icons-material/PrintDisabled';
@@ -49,7 +46,6 @@ import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 export function SimulationCenterPage() {
   const { t } = useTranslation();
   const theme = useTheme();
-  const navigate = useNavigate();
   const isRtl = theme.direction === 'rtl';
 
   const [logs, setLogs] = useState<any[]>([]);
@@ -61,7 +57,6 @@ export function SimulationCenterPage() {
     totalLogs: 0,
     snappfoodOrders: 0,
     printersOnline: 0,
-    syncQueuePending: 0,
   });
 
   // Log Inspection Dialog
@@ -70,11 +65,10 @@ export function SimulationCenterPage() {
   const fetchHubData = useCallback(async () => {
     setLoading(true);
     try {
-      const [logsRes, printersRes, terminalsRes, syncStatusRes] = await Promise.allSettled([
+      const [logsRes, printersRes, terminalsRes] = await Promise.allSettled([
         axios.get('/api/v1/simulation/logs'),
         kdsApi.getPrinters(),
         tenantApi.getTerminals(),
-        axios.get('/api/v1/sync/status'),
       ]);
 
       const logData = logsRes.status === 'fulfilled' && Array.isArray(logsRes.value.data) ? logsRes.value.data : [];
@@ -83,13 +77,11 @@ export function SimulationCenterPage() {
       const snappCount = logData.filter((l: any) => l.provider === 'SNAPPFOOD').length;
       const printerCount = printersRes.status === 'fulfilled' && Array.isArray(printersRes.value) ? printersRes.value.length : 0;
       const termCount = terminalsRes.status === 'fulfilled' && Array.isArray(terminalsRes.value) ? terminalsRes.value.length : 0;
-      const queuePending = syncStatusRes.status === 'fulfilled' ? (syncStatusRes.value.data?.pending_queue_count ?? 0) : 0;
 
       setStats({
         totalLogs: logData.length,
         snappfoodOrders: snappCount,
         printersOnline: printerCount + termCount,
-        syncQueuePending: queuePending,
       });
     } catch (err) {
       console.error('Failed to load simulation hub data:', err);
@@ -138,26 +130,6 @@ export function SimulationCenterPage() {
     });
   };
 
-  // Quick Action 3: Trigger Sync Worker
-  const handleQuickTriggerSync = async () => {
-    setLoading(true);
-    try {
-      const res = await axios.post('/api/v1/sync/trigger', {});
-      setQuickActionAlert({
-        type: 'info',
-        message: `Sync worker finished: ${res.data?.synced_count ?? 0} synced, ${res.data?.conflict_count ?? 0} conflicts.`,
-      });
-      fetchHubData();
-    } catch (err: any) {
-      setQuickActionAlert({
-        type: 'error',
-        message: err.response?.data?.message || err.message || 'Sync worker run failed',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const ArrowIcon = isRtl ? ArrowBackIcon : ArrowForwardIcon;
 
   return (
@@ -185,7 +157,7 @@ export function SimulationCenterPage() {
       <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
         {t(
           'simulation.hub.subtitle',
-          'Simulate Snappfood webhooks, HMAC verification, hardware fault injection, offline sync engine, and inspection logs.'
+          'Simulate Snappfood webhooks, HMAC verification, hardware fault injection, and inspection logs.'
         )}
       </Typography>
 
@@ -198,7 +170,7 @@ export function SimulationCenterPage() {
 
       {/* 1. Subsystem Metric Cards */}
       <Grid container spacing={2.5} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <Card sx={{ p: 2.5, borderRadius: 2.5, boxShadow: 2, borderLeft: '4px solid', borderColor: 'primary.main' }}>
             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
               {t('simulation.hub.stats.totalLogs', 'Logged Events')}
@@ -208,7 +180,7 @@ export function SimulationCenterPage() {
             </Typography>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <Card sx={{ p: 2.5, borderRadius: 2.5, boxShadow: 2, borderLeft: '4px solid', borderColor: '#e91e63' }}>
             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
               {t('simulation.hub.stats.snappfoodOrders', 'Snappfood Receipts')}
@@ -218,23 +190,13 @@ export function SimulationCenterPage() {
             </Typography>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <Card sx={{ p: 2.5, borderRadius: 2.5, boxShadow: 2, borderLeft: '4px solid', borderColor: 'warning.main' }}>
             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
               {t('simulation.hub.stats.activePrinters', 'Hardware Devices')}
             </Typography>
             <Typography variant="h3" sx={{ fontWeight: 800, mt: 0.5, color: 'warning.main' }}>
               {stats.printersOnline}
-            </Typography>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ p: 2.5, borderRadius: 2.5, boxShadow: 2, borderLeft: '4px solid', borderColor: 'info.main' }}>
-            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
-              {t('simulation.hub.stats.syncQueue', 'Sync Queue Items')}
-            </Typography>
-            <Typography variant="h3" sx={{ fontWeight: 800, mt: 0.5, color: 'info.main' }}>
-              {stats.syncQueuePending}
             </Typography>
           </Card>
         </Grid>
@@ -269,25 +231,6 @@ export function SimulationCenterPage() {
             onClick={handleQuickPrinterOutage}
           >
             {t('simulation.hub.quickTest.testPrinter', 'Trigger Printer Outage')}
-          </Button>
-          <Button
-            variant="outlined"
-            color="error"
-            size="small"
-            startIcon={<WifiOffIcon />}
-            onClick={() => navigate('/app/simulation/offline-sync')}
-          >
-            {t('simulation.hub.quickTest.toggleOffline', 'Simulate Offline Mode')}
-          </Button>
-          <Button
-            variant="outlined"
-            color="info"
-            size="small"
-            startIcon={<SyncProblemIcon />}
-            onClick={handleQuickTriggerSync}
-            disabled={loading}
-          >
-            {t('simulation.hub.quickTest.execSync', 'Run Sync Batch Worker')}
           </Button>
         </Stack>
       </Card>
@@ -358,37 +301,7 @@ export function SimulationCenterPage() {
           </Card>
         </Grid>
 
-        {/* Card 3: Offline Sync */}
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ p: 3, borderRadius: 3, boxShadow: 2, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <Box>
-              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                <Typography variant="h6" sx={{ fontWeight: 800, color: 'info.main' }}>
-                  {t('simulation.hub.cards.syncTitle', 'Offline Sync & Conflict Engine')}
-                </Typography>
-                <Chip label="V5 Preview" color="info" size="small" sx={{ fontWeight: 'bold' }} />
-              </Stack>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                {t(
-                  'simulation.hub.cards.syncDesc',
-                  'Branch envelope queues, DLQ retries, connectivity toggles, and side-by-side 3-way conflict resolution.'
-                )}
-              </Typography>
-            </Box>
-            <Button
-              component={RouterLink}
-              href="/app/simulation/offline-sync"
-              variant="contained"
-              color="info"
-              endIcon={<ArrowIcon />}
-              sx={{ alignSelf: 'flex-start', fontWeight: 'bold' }}
-            >
-              {t('simulation.hub.cards.syncAction', 'Open Sync Engine')}
-            </Button>
-          </Card>
-        </Grid>
-
-        {/* Card 4: Logs */}
+        {/* Card 3: Logs */}
         <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ p: 3, borderRadius: 3, boxShadow: 2, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <Box>

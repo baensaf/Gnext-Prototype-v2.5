@@ -22,7 +22,6 @@ import { PrintJob } from '../src/entities/PrintJob.entity';
 import { PrintAttempt } from '../src/entities/PrintAttempt.entity';
 import { Printer } from '../src/entities/Printer.entity';
 import { Delivery } from '../src/entities/Delivery.entity';
-import { OfflineQueueItem } from '../src/entities/OfflineQueueItem.entity';
 import { Product } from '../src/entities/Product.entity';
 import { Category } from '../src/entities/Category.entity';
 import { Branch } from '../src/entities/Branch.entity';
@@ -137,7 +136,6 @@ describe('ReportsService (Unit)', () => {
         { provide: getRepositoryToken(PrintAttempt), useValue: mockRepo },
         { provide: getRepositoryToken(Printer), useValue: mockRepo },
         { provide: getRepositoryToken(Delivery), useValue: mockRepo },
-        { provide: getRepositoryToken(OfflineQueueItem), useValue: mockRepo },
         { provide: getRepositoryToken(Product), useValue: mockRepo },
         { provide: getRepositoryToken(Category), useValue: mockRepo },
         { provide: getRepositoryToken(Branch), useValue: mockRepo },
