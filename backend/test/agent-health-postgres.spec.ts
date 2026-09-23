@@ -10,6 +10,7 @@ import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
 import { AgentEnrolmentService } from '../src/modules/agent-gateway/agent-enrolment.service';
 import { AgentRegistryService } from '../src/modules/agent-gateway/agent-registry.service';
 import { AgentCommandsService } from '../src/modules/agent-gateway/agent-commands.service';
+import { AgentSessionsService } from '../src/modules/agent-gateway/agent-sessions.service';
 import { AgentHealthService, OFFLINE_ALERT_AFTER_MS } from '../src/modules/agent-gateway/agent-health.service';
 import { AgentRegistryController } from '../src/modules/agent-gateway/agent-registry.controller';
 import { HEAD_OFFICE_ONLY_KEY } from '../src/common/decorators/roles.decorator';
@@ -145,6 +146,9 @@ describe('agent health (PostgreSQL)', () => {
   });
 
   it('closes the alert of an agent head office revoked', async () => {
+    // The last test's agent is closed on our side; wait until the server has let go of it too,
+    // or the sweep still sees it connected and raises nothing.
+    await until(() => !moduleRef.get(AgentSessionsService).isConnected(agentId));
     await health.sweep(new Date(Date.now() + OFFLINE_ALERT_AFTER_MS * 3), tenantId);
     expect((await offlineAlerts()).some((a) => !a.acknowledged)).toBe(true);
 
