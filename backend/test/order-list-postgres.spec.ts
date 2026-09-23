@@ -68,6 +68,11 @@ describe('order list (PostgreSQL)', () => {
     await order({ placed_at: day(20), status: 'CANCELLED' });
     await order({ placed_at: day(20), status: 'COMPLETED', refunded_total: '5000.0000', grand_total: '99000.0000' });
     await order({ placed_at: day(20), branch_id: branchB, status: 'CONFIRMED' });
+    // Branch B also has a COD delivery still out from the 5th, a day already finished, and a
+    // customer whose mobile was saved in the +98 form.
+    const nima = await save(Customer, { tenant_id: tenantId, code: 'C-NIMA', first_name: 'Nima', last_name: 'Hosseini', mobile: '+989351112233' });
+    await order({ placed_at: day(5), branch_id: branchB, status: 'OUT_FOR_DELIVERY', order_type: 'DELIVERY', customer_id: nima.id });
+    await order({ placed_at: day(5), branch_id: branchB, status: 'COMPLETED' });
   }, 120000);
 
   afterAll(async () => {
@@ -109,6 +114,25 @@ describe('order list (PostgreSQL)', () => {
     expect((await orders.getOrders(tenantId, { branchId: branchA, q: '۰۹۱۲۱۲۳' })).total).toBe(1);
     expect((await orders.getOrders(tenantId, { branchId: branchA, q: 'pizza' })).total).toBe(1);
     expect((await orders.getOrders(tenantId, { branchId: branchA, q: '۱۴۲' })).data[0].call_number).toBe(142);
+  });
+
+  it('shows open orders from earlier days under a date range, but keeps finished ones to it', async () => {
+    const onThe20th = { branchId: branchB, from: day(20, 0).toISOString(), to: day(21, 0).toISOString() };
+    const open = await orders.getOrders(tenantId, { ...onThe20th, group: 'OPEN' });
+    expect(open.data.map((o: any) => o.status).sort()).toEqual(['CONFIRMED', 'OUT_FOR_DELIVERY']);
+
+    const { counts } = await orders.getOrders(tenantId, { ...onThe20th, counts: '1', limit: '1' });
+    expect(counts).toMatchObject({ ALL: 2, OPEN: 2, COMPLETED: 0 });
+
+    // A spreadsheet of the 20th is the 20th.
+    const csv = await orders.exportOrdersCsv(tenantId, onThe20th);
+    expect(csv.slice(1).trim().split('\r\n')).toHaveLength(2);
+  });
+
+  it('finds a +98 mobile from the 09 number staff type, and the other way round', async () => {
+    expect((await orders.getOrders(tenantId, { branchId: branchB, q: '09351112233' })).total).toBe(1);
+    expect((await orders.getOrders(tenantId, { branchId: branchB, q: '۰۹۳۵۱۱' })).total).toBe(1);
+    expect((await orders.getOrders(tenantId, { branchId: branchA, q: '+98912123' })).total).toBe(1);
   });
 
   it('sorts by total, and keeps the old single-state filter for the POS held list', async () => {

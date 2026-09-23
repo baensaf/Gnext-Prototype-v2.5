@@ -19,6 +19,13 @@ export type LifecycleGroup = (typeof LIFECYCLE_GROUPS)[number];
 
 export const OPEN_STATUSES = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'KITCHEN_PREPARING', 'READY', 'OUT_FOR_DELIVERY'];
 
+/**
+ * Groups that are still somebody's job, whenever they were placed. A date range on the list
+ * picks which finished orders to look at; it must not hide a COD delivery waiting on its
+ * courier, an order carried past day close, or one rung up at 23:50 once the clock turns.
+ */
+const CURRENT_GROUPS: LifecycleGroup[] = ['WAITING', 'OPEN', 'HELD'];
+
 const inList = (values: string[]) => values.map((v) => `'${v}'`).join(', ');
 
 /** A SQL expression naming the lifecycle group of `o`. It follows `status`, as the screens do. */
@@ -64,6 +71,17 @@ export function normaliseDigits(text: string): string {
     .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
 }
 
+/**
+ * The same mobile as the other spelling it may be stored under. Staff type `0912…`; Snappfood
+ * and older imports keep `+98912…`. Works on a partial number too, since it only swaps the
+ * prefix. Null when the text is not a number in either form.
+ */
+export function alternatePhonePrefix(text: string): string | null {
+  if (/^0\d{3,}$/.test(text)) return `+98${text.slice(1)}`;
+  if (/^\+98\d{3,}$/.test(text)) return `0${text.slice(3)}`;
+  return null;
+}
+
 function validDate(value: unknown): Date | null {
   if (!value) return null;
   const date = new Date(String(value));
@@ -72,13 +90,16 @@ function validDate(value: unknown): Date | null {
 
 /**
  * Applies every filter the list understands. `group` is left out when counting the tabs,
- * since each tab counts its own group under the same other filters.
+ * since each tab counts its own group under the same other filters. `currentAnyDate` lets
+ * waiting, open and held orders through whatever the date range says, as the Orders page
+ * wants; the CSV export keeps the range strict.
  */
 export function applyOrderFilters(
   qb: SelectQueryBuilder<OrderHeader>,
   query: any,
-  options: { withGroup: boolean } = { withGroup: true },
+  options: { withGroup?: boolean; currentAnyDate?: boolean } = {},
 ) {
+  const { withGroup = true, currentAnyDate = false } = options;
   const branchVal = query.branch || query.branch_id || query.branchId;
   if (branchVal) qb.andWhere('o.branch_id = :branch', { branch: branchVal });
 
@@ -86,7 +107,7 @@ export function applyOrderFilters(
   const stateVal = query.state || query.status;
   if (stateVal) qb.andWhere('(o.state = :state OR o.status = :state)', { state: stateVal });
 
-  if (options.withGroup && query.group && query.group !== 'ALL') {
+  if (withGroup && query.group && query.group !== 'ALL') {
     const group = String(query.group).toUpperCase();
     if ((LIFECYCLE_GROUPS as readonly string[]).includes(group)) {
       qb.andWhere(`(${LIFECYCLE_SQL}) = :group`, { group });
@@ -102,8 +123,11 @@ export function applyOrderFilters(
 
   const from = validDate(query.from);
   const to = validDate(query.to);
-  if (from) qb.andWhere('o.placed_at >= :from', { from });
-  if (to) qb.andWhere('o.placed_at < :to', { to });
+  const bounds = [from && 'o.placed_at >= :from', to && 'o.placed_at < :to'].filter(Boolean).join(' AND ');
+  if (bounds) {
+    const params = { ...(from ? { from } : {}), ...(to ? { to } : {}) };
+    qb.andWhere(currentAnyDate ? `((${LIFECYCLE_SQL}) IN (${inList(CURRENT_GROUPS)}) OR (${bounds}))` : bounds, params);
+  }
 
   // Only orders that took money, for choosing one to refund.
   if (query.paid === '1' || query.paid === 'true') qb.andWhere('o.paid_total > 0');
@@ -116,17 +140,21 @@ export function applyOrderFilters(
   const q = normaliseDigits(String(query.q || '').trim());
   if (q) {
     const like = `%${q}%`;
+    const otherPhone = alternatePhonePrefix(q);
+    const phoneMatch = otherPhone ? ' OR c.mobile ILIKE :phoneLike OR c.phone ILIKE :phoneLike' : '';
     const clauses = [
       'o.order_number ILIKE :like',
       'o.notes ILIKE :like',
       'o.table_number ILIKE :like',
       `EXISTS (SELECT 1 FROM customer c WHERE c.id = o.customer_id AND c.tenant_id = o.tenant_id
         AND (concat_ws(' ', c.first_name, c.last_name) ILIKE :like OR c.full_name ILIKE :like
-             OR c.mobile ILIKE :like OR c.phone ILIKE :like))`,
+             OR c.mobile ILIKE :like OR c.phone ILIKE :like${phoneMatch}))`,
       `EXISTS (SELECT 1 FROM order_item i WHERE i.order_id = o.id AND i.product_name ILIKE :like)`,
     ];
+    // A Snappfood order keeps its customer's number in the notes, in the +98 form.
+    if (otherPhone) clauses.push('o.notes ILIKE :phoneLike');
     // The call number is what the customer hears and says back: "forty-two".
-    const params: Record<string, unknown> = { like };
+    const params: Record<string, unknown> = { like, ...(otherPhone ? { phoneLike: `%${otherPhone}%` } : {}) };
     if (/^\d{1,6}$/.test(q)) {
       clauses.push('o.call_number = :callNumber');
       params.callNumber = Number(q);

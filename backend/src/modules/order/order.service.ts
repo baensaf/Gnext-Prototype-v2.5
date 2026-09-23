@@ -179,7 +179,7 @@ export class OrderService {
       .leftJoinAndSelect('o.items', 'item')
       .leftJoinAndSelect('item.options', 'opt')
       .where('o.tenant_id = :tenantId', { tenantId });
-    applyOrderFilters(qb, query);
+    applyOrderFilters(qb, query, { currentAnyDate: true });
     applyOrderSort(qb, query);
 
     const page = Math.max(1, parseInt(query.page || '1', 10) || 1);
@@ -200,7 +200,7 @@ export class OrderService {
       .select(LIFECYCLE_SQL, 'grp')
       .addSelect('COUNT(*)', 'n')
       .where('o.tenant_id = :tenantId', { tenantId });
-    applyOrderFilters(qb, query, { withGroup: false });
+    applyOrderFilters(qb, query, { withGroup: false, currentAnyDate: true });
     const raw: Array<{ grp: string; n: string }> = await qb.groupBy('grp').getRawMany();
 
     const counts: Record<string, number> = { ALL: 0 };
