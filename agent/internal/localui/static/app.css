@@ -40,10 +40,7 @@ h2 { font-size: 15px; margin: 0 0 12px; }
 }
 .brand { display: flex; gap: 12px; align-items: center; }
 .brand p { margin: 0; font-size: 12px; }
-.logo {
-  width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
-  background: var(--primary); color: var(--primary-ink); font-weight: bold; font-size: 20px;
-}
+.logo { width: 40px; height: 40px; display: block; }
 .top-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
 .tabs { display: flex; gap: 4px; padding: 0 24px; background: var(--card); border-bottom: 1px solid var(--line); overflow-x: auto; }

@@ -119,7 +119,7 @@ func TestDrawTrayIcon(t *testing.T) {
 		if px[i+2] != 0xEF || px[i+1] != 0x44 || px[i+3] != 0xFF {
 			t.Fatalf("size %d: light pixel %v", size, px[i:i+4])
 		}
-		// The logo is drawn: its left arch is opaque.
+		// The mark is drawn: its tile is opaque.
 		if j := (size*40/100*size + size*30/100) * 4; drawTrayIcon(size, levelOK)[j+3] < 200 {
 			t.Fatalf("size %d: no logo", size)
 		}
