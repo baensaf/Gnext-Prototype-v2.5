@@ -22,8 +22,9 @@ v1 covers two jobs:
 - **Printing** — print a document the cloud rendered on a named branch printer.
 - **Card payments** — make a POS terminal charge an amount, and report the result.
 
-v1 has **no offline mode**. If the connection is down, the agent does nothing new; the
-cloud falls back to its simulator for that branch. (Offline orders are v2; see §12.)
+v1 has **no offline mode**. If the connection is down, the agent does nothing new, and the
+branch's jobs wait for it (§10). v2 (§12) adds a copy of the branch's menu and prices on the
+agent, and the upload of orders the branch took while offline.
 
 ```
  Branch LAN                                      VPS
@@ -40,7 +41,7 @@ cloud falls back to its simulator for that branch. (Offline orders are v2; see �
 | Channel | Used for |
 |---|---|
 | **WebSocket** `wss://<host>/api/v1/agent/ws` | Commands, acks, results, heartbeats, device status. One connection per agent. |
-| **HTTPS** `https://<host>/api/v1/agent/...` | Enrolment, release check, release download. (v2: data pull, sync upload.) |
+| **HTTPS** `https://<host>/api/v1/agent/...` | Enrolment, release check, release download; v2: branch snapshot, offline order upload (§12). |
 
 - `<host>` is the public Gnext domain. The agent gets it from its install config
   (§3.1), not from DNS discovery.
@@ -413,8 +414,9 @@ An `error` is never acked.
 | `device.status` | agent → cloud | event | `ack` |
 | `agent.check_update` | cloud → agent | command | `ack` only |
 
-Reserved for v2 and later (a v1 agent answers them with `ack ok:false UNKNOWN_TYPE`):
-`sync.*`, `data.*`, `order.*`.
+v2 adds `data.changed` (cloud → agent, command, `ack` only; §12.3), sent only to agents that
+advertise `data.pull`. Reserved for later (an agent answers them with
+`ack ok:false UNKNOWN_TYPE`): other `sync.*` and `data.*` types, and `order.*`.
 
 ### 5.2 Fields common to every command payload
 
@@ -430,7 +432,7 @@ If `now + offset > expires_at` when the command arrives, the agent MUST answer
 | `print.job` | 30 min |
 | `payment.charge` | 60 s (a charge must not start when nobody is at the till) |
 | `payment.query` | 10 min |
-| `config.updated`, `agent.check_update` | 24 h |
+| `config.updated`, `agent.check_update`, `data.changed` | 24 h |
 
 Expiry is checked **only on arrival**. A command that was acked runs to its end.
 
@@ -879,16 +881,324 @@ Not part of the wire contract, but it explains the behaviour the agent will see.
 ← {"v":1,"id":"s6","type":"heartbeat.ack","ref":"a5","ts":"…","payload":{"server_time":"…"}}
 ```
 
-## 12. Reserved for v2 and later
+## 12. Branch data and offline sync (v2)
 
-Named here so v1 does not collide with them. Not specified yet.
+Status: **draft for review** (HANDOFF tasks 10–13). Protocol version stays **1**: everything
+here is new endpoints, a new command and new optional fields, switched on by capabilities.
 
-- `GET /api/v1/agent/data/...` — paged, versioned pull of menu, prices, tax, printers,
-  terminals (task 10).
-- `POST /api/v1/agent/sync/orders` — idempotent batch upload of offline orders, payments and
-  print records with agent-generated IDs (task 11).
-- WebSocket types `sync.*`, `data.*`, `order.*`.
-- v3: replay protection, batch signing, key rotation, back-pressure, resumable sync.
+v2 is built in two steps. This section is the first: the agent keeps a copy of what the
+branch sells, and the cloud accepts orders the branch took while it was offline. The second
+step, the **offline POS** (a till screen served by the agent that takes orders, prints and
+charges while the internet is down), produces those orders. It is specified later; until it
+lands, the only offline orders are the ones tests make.
+
+### 12.1 Capabilities
+
+| Capability | Means |
+|---|---|
+| `data.pull` | The agent keeps the branch snapshot (§12.2) and handles `data.changed` (§12.3). |
+| `sync.orders` | The agent uploads offline orders (§12.5) and reports `sync` in heartbeats (§12.7). |
+
+The cloud sends `data.changed` only to an agent that advertises `data.pull`. A v1 agent
+advertises neither and sees no change.
+
+### 12.2 Branch snapshot: `GET /api/v1/agent/data/snapshot`
+
+Everything the branch needs to sell without the cloud, in one JSON document for the agent's
+branch. The menu is hundreds of rows, not millions, so there is no paging and no deltas: the
+agent fetches the whole snapshot when it changes.
+
+Request headers: the usual auth (§3.4), `Accept-Encoding: gzip`, and
+`If-None-Match: "<data_version>"` when the agent already holds one.
+
+- `200` with the snapshot and `ETag: "<data_version>"`.
+- `304` when the agent's copy is current.
+
+`data_version` is a hash of the snapshot's content (not a counter), so two identical
+snapshots have the same version and a pull that changes nothing is a `304`.
+
+```json
+{
+  "data_version": "b1f0c9…",
+  "generated_at": "2026-09-24T08:00:00.000Z",
+  "branch": {
+    "id": "…", "code": "CP", "name": "Central Plaza",
+    "currency_code": "IRR", "time_zone": "Asia/Tehran"
+  },
+  "settings": {
+    "call_numbers": { "POS": { "start": 100, "end": 399 } },
+    "call_number_issued_today": { "business_date": "2026-09-24", "POS": 37 }
+  },
+  "categories": [
+    { "id": "…", "parent_id": null, "name": "برگر", "sort_order": 1 }
+  ],
+  "products": [
+    {
+      "id": "…", "code": "B01", "name": "چیزبرگر", "category_ids": ["…"],
+      "price": "2450000",
+      "tax_rate": "0.1000",
+      "variants": [ { "id": "…", "name": "دوبل", "price": "3100000" } ],
+      "option_groups": [
+        {
+          "id": "…", "name": "نوشیدنی", "min": 0, "max": 1,
+          "items": [ { "id": "…", "name": "کوکا", "price_delta": "350000", "product_id": null } ]
+        }
+      ],
+      "is_available": true
+    }
+  ],
+  "availability": {
+    "stopped": { "product_ids": [], "variant_ids": [], "option_item_ids": [] },
+    "schedules": [ { "product_id": "…", "days": [6, 0, 1, 2, 3, 4], "from": "11:00", "to": "16:00" } ],
+    "daily_stock": [ { "product_id": "…", "variant_id": null, "remaining": 12 } ]
+  },
+  "payment_methods": [ { "id": "…", "code": "CASH", "name": "نقد", "kind": "CASH" } ],
+  "order_types": ["TAKEAWAY", "DINE_IN", "DELIVERY"],
+  "dining_tables": [ { "id": "…", "area": "سالن", "number": "12", "seats": 4 } ],
+  "delivery_zones": [ { "id": "…", "name": "ونک", "fee": "400000" } ],
+  "tills": [ { "id": "…", "code": "T1", "name": "صندوق ۱", "payment_device_id": "e21d…" } ],
+  "open_shifts": [
+    { "id": "…", "terminal_id": "…", "user_id": "…", "shift_number": "S-0412", "opened_at": "…" }
+  ]
+}
+```
+
+- **Prices are this branch's in-store prices** (its price list, else the base price), the
+  same numbers the register shows. Money is whole rials as strings (§2.1). `tax_rate` is a
+  fraction as a decimal string.
+- `products` holds active products only. A product that is stopped, outside its selling
+  window or sold out right now is still listed, with `is_available: false`, so the offline
+  till can show it greyed out. `availability` gives the rules behind that flag, so the
+  offline till can re-evaluate them as the day goes on.
+- An option item a product leaves out of its group is not listed under that product.
+- Names are the ones the register shows (Persian for Persian tenants).
+- **Not in the snapshot**: customers, coupons and discounts, users and PINs, reports, other
+  branches' data, printer and terminal config (that stays in `welcome.config`, §6.1).
+- The cloud MUST keep every snapshot it served, by `data_version`, for **30 days**. §12.6
+  checks an offline order against the snapshot its till used.
+
+The agent:
+
+- MUST pull after each `welcome` whose `data_version` differs from the one it holds, on
+  `data.changed`, and every **15 minutes** while connected. A failed pull is retried with the
+  §4.7 backoff; the agent keeps selling from the copy it has.
+- MUST store the snapshot atomically (write a temporary file, then rename) in its data
+  folder, and keep the previous one. It MUST NOT edit a snapshot.
+- Serves the snapshot to the offline POS (second step). Until then it only keeps it and
+  reports its version (§12.7).
+
+`welcome` gains one field for agents that advertise `data.pull`:
+
+```json
+{ "data_version": "b1f0c9…" }
+```
+
+### 12.3 `data.changed` (cloud → agent)
+
+A command, answered by `ack` only. Payload: `{ "expires_at": "…", "data_version": "…" }`.
+It expires after 24 h.
+
+The cloud sends it when anything in the branch's snapshot changes: catalog, prices,
+availability (stops, schedules, stock), payment methods, tables, delivery zones, tills, call
+number settings, or a shift opens or closes on one of the branch's tills. It MAY coalesce
+changes and send at most one every 10 s. The agent answers with `ack` and pulls (§12.2). If
+it already holds that version, it acks and does nothing.
+
+`data.changed` is a hint. The 15-minute pull catches anything the cloud forgot to announce.
+
+### 12.4 Offline orders
+
+An offline order is one the branch took while the agent could not reach the cloud. The agent
+gives it a UUID v4, which becomes the cloud order's `id`, so an order uploaded twice is still
+one order.
+
+The agent uploads an order **once**, when its offline life ends:
+
+- `COMPLETED`: paid in full, and handed over.
+- `CANCELLED`: voided before it was paid.
+- `OPEN`: still open when the link returned (a table still eating). The cloud takes it over as
+  an ordinary submitted order, and staff finish it on the normal POS.
+
+After an order is uploaded the agent never changes it. Anything that happens later happens in
+the cloud.
+
+```json
+{
+  "id": "7d3c…",
+  "data_version": "b1f0c9…",
+  "state": "COMPLETED",
+  "terminal_id": "…",
+  "shift_id": "…",
+  "created_by": "…",
+  "channel": "POS",
+  "order_type": "DINE_IN",
+  "table_id": "…",
+  "guest_count": 2,
+  "delivery_zone_id": null,
+  "call_number": 138,
+  "business_date": "2026-09-24",
+  "placed_at": "2026-09-24T09:12:40.000Z",
+  "completed_at": "2026-09-24T09:40:02.000Z",
+  "cancelled_at": null,
+  "cancellation_note": null,
+  "notes": null,
+  "lines": [
+    {
+      "id": "…",
+      "product_id": "…", "product_name": "چیزبرگر",
+      "variant_id": "…", "variant_name": "دوبل",
+      "quantity": "2",
+      "unit_price": "3100000",
+      "options": [ { "option_item_id": "…", "name": "کوکا", "price_delta": "350000" } ],
+      "tax_rate": "0.1000",
+      "line_total": "6900000",
+      "tax": "690000",
+      "notes": "بدون پیاز"
+    }
+  ],
+  "totals": {
+    "subtotal": "6900000",
+    "delivery_fee": "0",
+    "discount_total": "0",
+    "tax_total": "690000",
+    "grand_total": "7590000"
+  },
+  "payments": [
+    {
+      "id": "…",
+      "method_id": "…", "method_kind": "CARD",
+      "amount": "7590000",
+      "status": "APPROVED",
+      "card": {
+        "terminal_id": "e21d…", "rrn": "123456789012", "stan": "004512",
+        "card_pan_masked": "603799******1234", "response_code": "00"
+      },
+      "at": "2026-09-24T09:39:50.000Z"
+    }
+  ],
+  "prints": [
+    { "printer_id": "4c1e…", "kind": "KITCHEN", "status": "PRINTED", "at": "2026-09-24T09:12:43.000Z" }
+  ]
+}
+```
+
+- `quantity` is a whole number. `line_total = (unit_price + Σ price_delta) × quantity`;
+  `tax = line_total × tax_rate`, rounded to the nearest rial, halves up. Totals are the sums.
+  `grand_total = subtotal + delivery_fee − discount_total + tax_total`.
+- Names travel with the line, so an order stays readable if its product is deleted later.
+- `discount_total` is always `"0"` in v2: no coupons or manual discounts offline.
+- `payments[].status`: `APPROVED`, or `UNKNOWN` for a charge whose result the terminal never
+  gave (§7.4). Declined and cancelled attempts are not uploaded. Cash payments have no `card`.
+- A voided line is left out. A `CANCELLED` order has no payments.
+- `shift_id` is the shift that was open on that till when the order was taken
+  (`open_shifts` in the snapshot). The offline POS does not open or close shifts.
+- `call_number` continues the day's `POS` range from `call_number_issued_today` in the
+  snapshot, wrapping back to the range's start when it runs out, as the cloud does.
+
+### 12.5 Upload: `POST /api/v1/agent/sync/orders`
+
+Body: `{ "orders": [ … ] }`, **at most 50 orders and 1 MiB** before gzip
+(`Content-Encoding: gzip` is accepted). Oldest `placed_at` first.
+
+Once the cloud answers `200`, **it owns every order in the batch**. It saves each one as
+received, before it tries to turn it into an order, so nothing the agent sent is lost if the
+processing fails. The agent marks them uploaded.
+
+```json
+{
+  "results": [
+    { "id": "7d3c…", "result": "ACCEPTED", "order_number": "ORD-20260924-0183", "flags": ["PRICE_CHANGED"] },
+    { "id": "8e11…", "result": "DUPLICATE", "order_number": "ORD-20260924-0170", "flags": [] },
+    { "id": "9a02…", "result": "HELD", "order_number": null, "flags": ["TOTAL_MISMATCH"] }
+  ]
+}
+```
+
+| `result` | Means |
+|---|---|
+| `ACCEPTED` | Now a cloud order. `flags` lists anything a person should look at (§12.6). |
+| `DUPLICATE` | The same `id` with the same content was already uploaded. Nothing changed. |
+| `HELD` | Saved but not booked; a person fixes the cause and retries it from the cloud (§12.7). |
+
+Whole-batch errors (§8.2): `400 INVALID_PAYLOAD` (not JSON, over the limits, or an order
+without `id`), `401`/`403` as usual. On a `400` the agent MUST split the batch to find the bad
+order, upload the rest, and keep the bad one with the error for the logs. On `5xx` or a network
+error it retries the same batch with the §4.7 backoff.
+
+The agent:
+
+- keeps offline orders in its data folder (bbolt) until the cloud answers `200` for them, and
+  then for 7 more days (for reprints and support);
+- starts uploading after each `welcome`, and keeps one batch in flight at a time;
+- MUST NOT upload an order before its offline life has ended (§12.4).
+
+The same `id` with **different** content is `HELD` with `ID_REUSED`; the first upload stands.
+
+### 12.6 What the cloud does with an uploaded order
+
+The cloud takes the branch's word for what happened: the food went out and the money was
+taken. It never refuses a sale that was made. It books the order as the till recorded it and
+**flags** anything that disagrees with the cloud, so a person can look. It never rewrites a
+number silently.
+
+| Check | Outcome |
+|---|---|
+| Arithmetic: line totals, tax (±1 rial a line) and totals add up | Otherwise `HELD` `TOTAL_MISMATCH` |
+| The price charged matches the snapshot the till used (`data_version`) | Otherwise `HELD` `PRICE_MISMATCH`: the till charged a price the cloud never gave it |
+| The snapshot's price matches today's cloud price | Otherwise booked at the charged price, flag `PRICE_CHANGED` |
+| `data_version` is one the cloud still keeps | Otherwise the price check is skipped, flag `SNAPSHOT_UNKNOWN` |
+| Product, variant or option still exists and is active | Otherwise booked with the names from the order, flag `ITEM_REMOVED` |
+| `shift_id` is open | Closed: booked into that shift anyway, flag `SHIFT_CLOSED` (its cash count changes) |
+| `business_date` is not closed | Closed: booked on that date anyway, flag `DAY_CLOSED` |
+| Daily stock covers it | Otherwise stock goes below zero, flag `STOCK_NEGATIVE` |
+| A card payment is `APPROVED` with an `rrn` | `UNKNOWN`: the payment is `PROCESSING` with `needs_terminal_check`, and a manager resolves it as today (§10) |
+
+A booked order:
+
+- keeps its `id`, `call_number`, `placed_at`, `business_date` and the till's prices, and gets an
+  `order_number` from the cloud's sequence at upload time;
+- is marked as taken offline (`source = AGENT_OFFLINE`), and shows so in the order directory;
+- is **not** sent to the kitchen screens or printed again, since the branch already made it;
+- has its payments posted to its shift, and enters the Moadian sweep like any completed order;
+- moves the day's `POS` call-number counter up to at least its `call_number`;
+- is audited under `created_by`, with the agent as the source.
+
+`OPEN` orders are booked as submitted orders, in the same way, and continue on the normal POS.
+
+### 12.7 Sync status
+
+An agent with `sync.orders` adds this to every `heartbeat`:
+
+```json
+{
+  "sync": {
+    "data_version": "b1f0c9…",
+    "data_pulled_at": "2026-09-24T08:00:03.000Z",
+    "pending_orders": 3,
+    "oldest_pending_at": "2026-09-24T09:12:40.000Z",
+    "last_upload_at": "2026-09-24T09:50:00.000Z",
+    "last_upload_error": null
+  }
+}
+```
+
+The cloud shows it on the Agents screen, with a warning when the agent's `data_version` is
+older than the current snapshot for more than 30 minutes, or when orders have waited more than
+10 minutes while the agent is online.
+
+Head office also sees the orders each agent uploaded: flagged ones, with **Mark reviewed**, and
+held ones, with **Retry** (the saved order goes through §12.6 again, for example after the
+missing product is restored).
+
+### 12.8 Not in v2
+
+For the offline POS step: signing in offline (the snapshot has no users or PINs), rendering
+tickets on the agent, and serving the till screen. For later, if at all: coupons, discounts,
+refunds and customer lookup offline; opening or closing shifts offline. Snappfood orders keep
+arriving in the cloud while a branch is offline, and wait there.
+
+v3: replay protection, batch signing, key rotation, back-pressure, resumable uploads of very
+large backlogs.
 
 ## 13. Conformance checklist for the agent
 
@@ -914,6 +1224,17 @@ test harness (task 9) or a real staging server:
 - [ ] Update: a bad SHA-256 is rejected; a good release swaps the binary and the service
       comes back on the new version.
 - [ ] No device key, full PAN or PIN data in any log file.
+
+v2 (§12), for an agent that advertises `data.pull` and `sync.orders`:
+
+- [ ] Pulls the snapshot after `welcome` when the version differs, on `data.changed`, and every
+      15 min; a `304` changes nothing; a failed pull keeps the old copy.
+- [ ] A snapshot is written atomically: killing the agent mid-write leaves the old one readable.
+- [ ] An offline order is uploaded once its offline life ends, oldest first, 50 at most a batch.
+- [ ] A batch cut off by a network error is resent as is, and the cloud answers `DUPLICATE`
+      for the orders it already has; none is booked twice.
+- [ ] A `400` batch is split, the good orders go up, and the bad one is kept and logged.
+- [ ] Heartbeats carry `sync` with the right backlog.
 
 ## 14. Decisions and open questions
 

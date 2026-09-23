@@ -152,6 +152,46 @@ already uploaded "with a different build" means the agent changed without a vers
 - Whether Saman's protocol can query a past transaction (contract §14). Until that is known,
   unconfirmed charges are resolved by hand.
 
+## v2 plan (2026-09-23)
+
+The user chose to build tasks 10–14 first and the offline POS after them. The contract for
+10–13 is [§12 of `agent-protocol.md`](agent-protocol.md#12-branch-data-and-offline-sync-v2),
+in review in its own PR, as task 0 was.
+
+| # | Task | Cost | Risk | Importance |
+|---|---|---|---|---|
+| 10 | **Branch snapshot**: `GET /agent/data/snapshot` (ETag, served versions kept 30 days), `data.changed` push, agent keeps the copy | Med | Med | High |
+| 11 | **Offline order upload**: `POST /agent/sync/orders`, each order saved as received, then booked with its agent id; agent outbox and uploader | High | **High** | Critical |
+| 12 | **Conflict rules** (§12.6): book what the branch sold, flag `PRICE_CHANGED`, `ITEM_REMOVED`, `SHIFT_CLOSED`, `DAY_CLOSED`, `STOCK_NEGATIVE`; hold `TOTAL_MISMATCH`, `PRICE_MISMATCH` | High | High | High |
+| 13 | **Sync status**: `sync` in heartbeats, Agents screen warnings, uploaded orders with *Mark reviewed* and *Retry* | Low | Low | Med |
+| 14 | **Remove the fake offline sync** (see below) | Low | Low | Low |
+| ✂️ **Then the offline POS** (its own contract section and PR first) |||||
+
+Until the offline POS exists, nothing at a branch makes offline orders. The agent's half of
+task 11 is tested with orders the tests make; the cloud's half with `fake-agent.ts`.
+
+**Task 14 is narrower than the table above said.** `backend/src/modules/simulation` is the
+Snappfood and Tara mock that the demo uses, and the print and payment simulator is what every
+branch without an agent prints and charges through. Both stay. What goes is the fake offline
+sync that task 13 replaces: `backend/src/modules/offline-sync` (`/api/v1/sync/*`), the
+*Simulation → Offline sync* page and its tile in the simulation centre, and its tables.
+`sync_conflict_record` and `sync_category_log` have no other reader. `offline_queue_item` is read by
+`reports.service.ts` and `branch_status_snapshot` by `tenant.service.ts`; those reads move to the
+new sync data or go, before the tables are dropped.
+
+Decisions in §12 for the user to confirm in review:
+
+1. The snapshot is one document per branch, fetched whole when it changes. No paging, no deltas.
+2. It carries no users, PINs, customers, coupons or discounts. Offline sign-in is left to the
+   offline POS step.
+3. An offline order is uploaded once, when it is completed, cancelled, or still open when the
+   link returns. After that it lives in the cloud.
+4. The cloud never refuses a sale that was made. It books it at the price charged and flags
+   differences; it holds (does not book) only orders whose own numbers do not add up, or that
+   charged a price the cloud never gave the till.
+5. No coupons or discounts offline, and shifts are neither opened nor closed offline.
+6. Offline orders are not sent to the kitchen again on upload.
+
 ## How to start
 
 1. Read `CLAUDE.md` (worktree per task, PRs only, what CI runs).
