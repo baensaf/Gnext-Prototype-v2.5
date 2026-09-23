@@ -407,6 +407,12 @@ export function OrdersWorkflowPage() {
     }
   };
 
+  /** A state as the timeline names it: the kitchen or delivery step for an open order. */
+  const getStateStepLabel = (status: string) => {
+    const key = progressKeyOf(status);
+    return key ? t(`orders.progress.${key}`) : getOrderStatusLabel(status);
+  };
+
   const renderProgressChip = (status: string) => {
     const key = progressKeyOf(status);
     return key ? <Chip label={t(`orders.progress.${key}`)} size="small" variant="outlined" /> : null;
@@ -873,15 +879,20 @@ export function OrdersWorkflowPage() {
     const isDelivery = order.order_type === 'DELIVERY' || !!order.delivery_state || !!order.delivery_zone_name;
     if (isDelivery) {
       const stateKey = deliveryStateKeyOf(order.delivery_state);
+      // "No courier yet" only means something while the order is still on its way out.
+      const progress =
+        [stateKey ? t(`delivery.states.${stateKey}`) : null, order.courier_name].filter(Boolean).join(' · ') ||
+        (order.lifecycle === 'OPEN' ? t('orders.table.noCourierYet') : '');
       return (
         <Box>
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
             {order.delivery_zone_name || t('orders.table.delivery')}
           </Typography>
-          <Typography color="text.secondary" variant="caption" sx={{ display: 'block' }}>
-            {[stateKey ? t(`delivery.states.${stateKey}`) : null, order.courier_name].filter(Boolean).join(' · ') ||
-              t('orders.table.noCourierYet')}
-          </Typography>
+          {progress && (
+            <Typography color="text.secondary" variant="caption" sx={{ display: 'block' }}>
+              {progress}
+            </Typography>
+          )}
         </Box>
       );
     }
@@ -918,12 +929,12 @@ export function OrdersWorkflowPage() {
     {
       field: 'order_number',
       headerName: t('orders.table.orderNumber'),
-      width: 170,
+      width: 210,
       filterable: false,
       renderCell: ({ row }) => (
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
           {row.call_number ? <Chip label={row.call_number} size="small" color="primary" sx={{ fontWeight: 800 }} /> : null}
-          <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
+          <Typography variant="caption" noWrap sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
             {row.order_number}
           </Typography>
         </Stack>
@@ -1103,7 +1114,7 @@ export function OrdersWorkflowPage() {
     },
   ];
 
-  const sortModel: GridSortModel = [{ field: sortField || 'placed_at', sort: sortDir }];
+  const sortModel = useMemo<GridSortModel>(() => [{ field: sortField || 'placed_at', sort: sortDir }], [sortField, sortDir]);
   const menuPrimary = menuOrder && !readOnly ? primaryActionOf(menuOrder) : null;
 
   return (
@@ -1261,12 +1272,15 @@ export function OrdersWorkflowPage() {
         getRowHeight={() => 'auto'}
         height={680}
         loading={loading}
-        onPaginationModelChange={(model) =>
-          setParams({ page: model.pageSize !== pageSize ? null : model.page, size: model.pageSize }, true)
-        }
+        onPaginationModelChange={(model) => {
+          if (model.pageSize !== pageSize) setParams({ page: null, size: model.pageSize }, true);
+          else if (model.page !== page) setParams({ page: model.page }, true);
+        }}
         onRowClick={(params) => openDrawer(params.row)}
         onSortModelChange={(model) => {
+          // The grid also reports the model it was given; only a real change resets the page.
           const next = model[0];
+          if ((next?.field ?? 'placed_at') === sortField && (next?.sort ?? 'desc') === sortDir) return;
           setParams({ sort: next?.field ?? null, dir: next?.sort ?? null });
         }}
         pageSizeOptions={PAGE_SIZES}
@@ -1708,7 +1722,7 @@ export function OrdersWorkflowPage() {
                         [t('orders.drawer.customerName'), selectedDrawerOrder.people?.customer
                           ? `${selectedDrawerOrder.people.customer.first_name || ''} ${selectedDrawerOrder.people.customer.last_name || ''}`.trim()
                           : selectedDrawerOrder.customer_name || t('orders.drawer.walkIn')],
-                        [t('orders.drawer.contactPhone'), selectedDrawerOrder.customer_mobile || rows.find((r) => r.id === selectedDrawerOrder.id)?.customer_mobile],
+                        [t('orders.drawer.contactPhone'), selectedDrawerOrder.context?.customer_mobile || selectedDrawerOrder.customer_mobile],
                         [t('orders.drawer.dineInTable'), selectedDrawerOrder.table_number && t('orders.drawer.table', { number: selectedDrawerOrder.table_number })],
                         [t('orders.drawer.takenBy'), selectedDrawerOrder.people?.taken_by?.display_name || selectedDrawerOrder.people?.taken_by?.username],
                         [t('orders.drawer.terminal'), selectedDrawerOrder.context?.terminal_name],
@@ -1868,7 +1882,11 @@ export function OrdersWorkflowPage() {
                     </Typography>
                     {orderPayments.length === 0 ? (
                       <Typography variant="body2" color="text.secondary">
-                        {isSnappfoodOrder(selectedDrawerOrder) ? t('orders.drawer.paidToSnappfood') : t('orders.drawer.noPayments')}
+                        {isSnappfoodOrder(selectedDrawerOrder)
+                          ? t('orders.drawer.paidToSnappfood')
+                          : hasReceipt(selectedDrawerOrder)
+                            ? t('orders.drawer.paidWithoutDetail')
+                            : t('orders.drawer.noPayments')}
                       </Typography>
                     ) : (
                       <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
@@ -1997,13 +2015,13 @@ export function OrdersWorkflowPage() {
                                 <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                                   <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                                     <Chip
-                                      label={getOrderStatusLabel(evt.to_state)}
+                                      label={getStateStepLabel(evt.to_state)}
                                       color={getStatusChipColor({ status: evt.to_state }) as any}
                                       size="small"
                                       sx={{ fontWeight: 700 }}
                                     />
                                     <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                                      {evt.from_state ? `${getOrderStatusLabel(evt.from_state)} → ${getOrderStatusLabel(evt.to_state)}` : getOrderStatusLabel(evt.to_state)}
+                                      {evt.from_state ? `${getStateStepLabel(evt.from_state)} → ${getStateStepLabel(evt.to_state)}` : getStateStepLabel(evt.to_state)}
                                     </Typography>
                                   </Stack>
                                   <Typography variant="caption" color="text.secondary" dir="ltr">

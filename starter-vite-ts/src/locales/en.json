@@ -584,7 +584,8 @@
         "REVERSED": "Reversed",
         "PARTIALLY_REFUNDED": "Partly refunded",
         "REFUNDED": "Refunded"
-      }
+      },
+      "paidWithoutDetail": "The order is marked paid, but no payment record was kept for it."
     },
     "errors": {
       "loadFailed": "Failed to load active orders",

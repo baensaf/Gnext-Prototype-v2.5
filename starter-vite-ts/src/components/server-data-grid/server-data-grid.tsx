@@ -59,7 +59,12 @@ export interface ServerDataGridProps<T = any> {
 }
 
 // The grid's own words (the pager, the column menu, the toolbar) in the page's language.
-const faLocaleText = faIR.components.MuiDataGrid.defaultProps.localeText;
+// MUI's Persian pack leaves the pager's "1–25 of 84" in English.
+const faLocaleText = {
+  ...faIR.components.MuiDataGrid.defaultProps.localeText,
+  paginationDisplayedRows: ({ from, to, count }: { from: number; to: number; count: number }) =>
+    `${from}–${to} از ${count === -1 ? `بیش از ${to}` : count}`,
+};
 
 export function ServerDataGrid<T extends { id?: string | number }>({
   rows,
@@ -122,6 +127,8 @@ export function ServerDataGrid<T extends { id?: string | number }>({
         onRowClick={onRowClick}
         hideFooterPagination={hideFooterPagination}
         localeText={localeText}
+        // The theme turns the toolbar on for every grid; this lets a page leave it out.
+        showToolbar={showToolbar}
         getRowHeight={getRowHeight}
         getRowClassName={getRowClassName}
         columnVisibilityModel={columnVisibilityModel}

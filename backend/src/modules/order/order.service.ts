@@ -324,10 +324,11 @@ export class OrderService {
 
   /**
    * What the order drawer shows beyond the order itself: where a delivery is going, the
-   * register it was rung up on, and the names of the people in its history.
+   * register it was rung up on, the customer's mobile, and the names of the people in its
+   * history.
    */
   async getOrderContext(tenantId: string, order: OrderHeader) {
-    const [delivery, terminal, auditActors] = await Promise.all([
+    const [delivery, terminal, auditActors, customer] = await Promise.all([
       this.dataSource.query(
         `SELECT d.state, d.address_snapshot->>'address_text' AS address_text, d.zone_id
            FROM delivery d WHERE d.tenant_id = $1 AND d.order_id = $2
@@ -345,6 +346,12 @@ export class OrderService {
           WHERE tenant_id = $1 AND entity_id = $2 AND COALESCE(actor_id, user_id) IS NOT NULL`,
         [tenantId, order.id],
       ),
+      order.customer_id
+        ? this.dataSource.query(`SELECT COALESCE(mobile, phone) AS mobile FROM customer WHERE tenant_id = $1 AND id = $2`, [
+            tenantId,
+            order.customer_id,
+          ])
+        : [],
     ]);
 
     let address: string | null = delivery[0]?.address_text || null;
@@ -379,6 +386,7 @@ export class OrderService {
       delivery_zone_name: zone[0]?.name || null,
       delivery_state: delivery[0]?.state || null,
       terminal_name: terminal[0] ? terminal[0].name || terminal[0].code : null,
+      customer_mobile: customer[0]?.mobile || null,
       actor_names: Object.fromEntries(actors.map((a) => [a.id, a.name])),
     };
   }
