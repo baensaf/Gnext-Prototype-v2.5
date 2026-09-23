@@ -122,7 +122,11 @@ field name, or a mistaken assumption about how a feature works) and the app was 
 
 After the last fix, all 55 scenarios ran again in one pass and passed. The scenarios that use
 wrong PINs ran last, so the PIN lockout could not affect the others. CI's own checks were also
-run: backend `typecheck` and `jest`, frontend `lint` and `build` (results in the pull request).
+run. Backend `typecheck` is clean. Backend `jest` passed 84 suites and 998 tests; 5 tests were
+already skipped. Two specs had to change: `order-edit` now expects the order id on the approval
+check, and the `cashier-shift` pay-out tests start from a float. `cashier-shift` also gained tests
+for the drawer limit and the blind recount. Frontend `lint` gave 0 errors; its 10 warnings were
+already there. Frontend `build` passed.
 
 ## Remaining issues (not fixed)
 
