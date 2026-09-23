@@ -10,7 +10,8 @@ import (
 	"sync"
 )
 
-// logoPNG is the Gnext logo, 256×256. The exe's icon is made from the same file (winres).
+// logoPNG is the Gnext mark (a white G on a green tile), 256×256. The exe's icon is made
+// from the same file (winres).
 //
 //go:embed winres/icon.png
 var logoPNG []byte
@@ -33,14 +34,14 @@ var logo = sync.OnceValue(func() *image.NRGBA {
 	return out
 })
 
-// drawTrayIcon draws the Gnext logo at size×size with the dot at its foot enlarged into a
-// status light, as BGRA pixels (top row first, straight alpha). The logo's own dot is small
-// enough to vanish at 16 pixels, so the light covers it.
+// drawTrayIcon draws the Gnext mark at size×size with a status light over its bottom-right
+// corner, as BGRA pixels (top row first, straight alpha). The white ring keeps a green
+// "ready" light apart from the green tile.
 func drawTrayIcon(size int, level trayLevel) []byte {
 	px := scaleLogo(size)
 	c := trayColours[level]
 	s := float64(size)
-	cx, cy, r := 0.74*s, 0.70*s, 0.21*s
+	cx, cy, r := 0.79*s, 0.79*s, 0.18*s
 	ring := r + math.Max(1, 0.06*s)
 	const n = 4
 	for y := 0; y < size; y++ {
