@@ -111,6 +111,7 @@ describe('Order edit command (spec 7.9)', () => {
       create: jest.fn((_entityClass: any, data: any) => ({ ...data })),
       save: jest.fn(async (entityClass: any, data: any) => {
         if (entityClass === OrderStateEvent) stateEvents.push(data);
+        if (entityClass === Delivery) delivery = data;
         if (entityClass === OrderItem && !items.find((i) => i.id === data.id)) {
           items.push({ ...data, id: data.id || `item-new-${items.length + 1}` });
         }
@@ -506,6 +507,40 @@ describe('Order edit command (spec 7.9)', () => {
       expect(order.order_type).toBe('DELIVERY');
       expect(order.delivery_fee).toBe('25000.0000');
       expect(order.grand_total).toBe('125000.0000');
+    });
+
+    // Audit OD3: the delivery record was only ever made at submit, so an order the kitchen
+    // already had never reached the delivery board once it became a delivery.
+    it('puts a sent order that becomes a delivery on the delivery board', async () => {
+      order.order_type = 'TAKEAWAY';
+      order.customer_id = 'cust-1';
+      liveZone();
+
+      await service.changeOrderType(TENANT, ORDER_ID, { orderType: 'DELIVERY', deliveryAddressId: 'addr-1', deliveryZoneId: 'zone-1' });
+
+      expect(delivery).toEqual(expect.objectContaining({ order_id: ORDER_ID, state: 'UNASSIGNED', zone_id: 'zone-1', fee: '25000.0000' }));
+    });
+
+    it('brings back the delivery an order had before it stopped being one', async () => {
+      order.order_type = 'TAKEAWAY';
+      order.customer_id = 'cust-1';
+      liveZone();
+      delivery = { id: 'dlv-1', order_id: ORDER_ID, state: 'CANCELLED', courier_id: null, zone_id: 'zone-old' };
+
+      await service.changeOrderType(TENANT, ORDER_ID, { orderType: 'DELIVERY', deliveryAddressId: 'addr-1', deliveryZoneId: 'zone-1' });
+
+      expect(delivery).toEqual(expect.objectContaining({ id: 'dlv-1', state: 'UNASSIGNED', zone_id: 'zone-1' }));
+    });
+
+    it('leaves a held draft to get its delivery when it is sent', async () => {
+      order.state = 'DRAFT';
+      order.order_type = 'TAKEAWAY';
+      order.customer_id = 'cust-1';
+      liveZone();
+
+      await service.changeOrderType(TENANT, ORDER_ID, { orderType: 'DELIVERY', deliveryAddressId: 'addr-1', deliveryZoneId: 'zone-1' });
+
+      expect(delivery).toBeNull();
     });
 
     it('will not make an order a delivery with nowhere to deliver it', async () => {
