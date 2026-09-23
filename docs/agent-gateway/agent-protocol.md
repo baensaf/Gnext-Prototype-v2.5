@@ -24,7 +24,8 @@ v1 covers two jobs:
 
 v1 has **no offline mode**. If the connection is down, the agent does nothing new, and the
 branch's jobs wait for it (§10). v2 (§12) adds a copy of the branch's menu and prices on the
-agent, and the upload of orders the branch took while offline.
+agent, and the upload of orders the branch took while offline; §13 adds the till the branch
+takes those orders on.
 
 ```
  Branch LAN                                      VPS
@@ -41,7 +42,7 @@ agent, and the upload of orders the branch took while offline.
 | Channel | Used for |
 |---|---|
 | **WebSocket** `wss://<host>/api/v1/agent/ws` | Commands, acks, results, heartbeats, device status. One connection per agent. |
-| **HTTPS** `https://<host>/api/v1/agent/...` | Enrolment, release check, release download; v2: branch snapshot, offline order upload (§12). |
+| **HTTPS** `https://<host>/api/v1/agent/...` | Enrolment, release check, release download; v2: branch snapshot, offline order upload (§12), staff list (§13). |
 
 - `<host>` is the public Gnext domain. The agent gets it from its install config
   (§3.1), not from DNS discovery.
@@ -443,7 +444,8 @@ Expiry is checked **only on arrival**. A command that was acked runs to its end.
 The cloud sends the branch's hardware list in `welcome.config`, and again in full in
 `config.updated` whenever HQ changes a printer or terminal. The agent replaces its whole
 config each time (no merging) and acks. The agent MUST NOT persist config beyond a cache
-used for logging; the cloud is the source of truth.
+used for logging; the cloud is the source of truth. (An agent with the offline till keeps the
+last config on disk, §13.2.)
 
 ```json
 {
@@ -702,7 +704,7 @@ type TerminalDriver interface {
 ```
 
 `config.terminals[].driver` selects the driver. v1 needs exactly one real driver, `sep`, for
-the Saman terminal on the test branch PC (§14), plus a `fake` driver (approves amounts ending in `0`,
+the Saman terminal on the test branch PC (§15), plus a `fake` driver (approves amounts ending in `0`,
 declines amounts ending in `1`, times out on `2`) for development.
 
 ### 7.7 `config.updated`
@@ -889,7 +891,7 @@ here is new endpoints, a new command and new optional fields, switched on by cap
 v2 is built in two steps. This section is the first: the agent keeps a copy of what the
 branch sells, and the cloud accepts orders the branch took while it was offline. The second
 step, the **offline POS** (a till screen served by the agent that takes orders, prints and
-charges while the internet is down), produces those orders. It is specified later; until it
+charges while the internet is down), produces those orders. It is specified in §13; until it
 lands, the only offline orders are the ones tests make.
 
 ### 12.1 Capabilities
@@ -989,8 +991,9 @@ snapshots have the same version and a pull that changes nothing is a `304`.
 - `call_number_issued_today.POS` is how many POS call numbers the cloud has handed out today.
 - `tills` holds the branch's cashier tills, not kiosks.
 - Names are the ones the register shows (Persian for Persian tenants).
-- **Not in the snapshot**: customers, coupons and discounts, users and PINs, reports, other
-  branches' data, printer and terminal config (that stays in `welcome.config`, §6.1).
+- **Not in the snapshot**: customers, coupons and discounts, users and PINs (the offline till
+  gets its own staff list, §13.3), reports, other branches' data, printer and terminal config
+  (that stays in `welcome.config`, §6.1). §13.11 adds settings and print routing.
 - The cloud MUST keep every snapshot it served, by `data_version`, for **30 days**. §12.6
   checks an offline order against the snapshot its till used.
 
@@ -1001,8 +1004,8 @@ The agent:
   §4.7 backoff; the agent keeps selling from the copy it has.
 - MUST store the snapshot atomically (write a temporary file, then rename) in its data
   folder, and keep the previous one. It MUST NOT edit a snapshot.
-- Serves the snapshot to the offline POS (second step). Until then it only keeps it and
-  reports its version (§12.7).
+- Sells from the snapshot on the offline till (§13). An agent without it only keeps the
+  snapshot and reports its version (§12.7).
 
 ### 12.3 `data.changed` (cloud → agent)
 
@@ -1213,15 +1216,377 @@ missing product is restored).
 
 ### 12.8 Not in v2
 
-For the offline POS step: signing in offline (the snapshot has no users or PINs), rendering
-tickets on the agent, and serving the till screen. For later, if at all: coupons, discounts,
+The offline POS step (§13): signing in offline, rendering tickets on the agent, and serving the
+till screen. For later, if at all: coupons, discounts,
 refunds and customer lookup offline; opening or closing shifts offline. Snappfood orders keep
 arriving in the cloud while a branch is offline, and wait there.
 
 v3: replay protection, batch signing, key rotation, back-pressure, resumable uploads of very
 large backlogs.
 
-## 13. Conformance checklist for the agent
+## 13. Offline POS (v2, second step)
+
+Status: **draft for review** (P0 of `HANDOFF-offline-pos.md`). Protocol version stays **1**:
+one new endpoint, new optional fields, and a local page, switched on by a capability.
+
+When the branch loses the internet, the cashier goes on selling on a **till screen the agent
+serves on the branch PC**. The till sells from the snapshot (§12.2), prints and charges through
+the agent's own devices, and hands each order to the upload (§12.5) when its offline life ends
+(§12.4). The cloud books it by §12.6. Nothing in §12 changes; this section is what produces the
+orders §12 accepts.
+
+### 13.1 Decisions
+
+Confirmed by the product owner on 2026-09-24:
+
+1. **Where.** The till runs on the branch PC only, at `http://127.0.0.1:47800/till`, in the
+   agent's settings window or a browser on that PC. One offline till a branch. Tills on the
+   LAN come later, if at all.
+2. **Sign-in.** A cashier signs in by picking their name and typing their PIN, which the agent
+   checks against a staff list it keeps from the cloud (§13.3).
+3. **Which till.** A manager binds the agent to one of the branch's tills once (§13.4). Offline
+   orders are rung up on that till and its open shift.
+4. **Switching.** By hand. The web POS shows a banner when it cannot reach the cloud, and the
+   tray has an entry; nothing switches on its own, so two screens never take orders at once.
+5. **Scope.** Takeaway and dine-in; cash and card. Not offline: delivery, coupons and
+   discounts, refunds, customer lookup, opening or closing a shift, and orders that were open in
+   the cloud when the link dropped (they wait there).
+
+### 13.2 Capability
+
+| Capability | Means |
+|---|---|
+| `pos.offline` | The agent serves the offline till (§13.5), keeps the staff list (§13.3), and reports `till` in heartbeats (§13.10). |
+
+The cloud serves `GET /api/v1/agent/data/staff` and adds `call_numbers` to `heartbeat.ack`
+(§13.9) only for an agent that advertises `pos.offline`. It requires `data.pull` and
+`sync.orders`.
+
+An agent with `pos.offline` MUST keep the last config (§6.1) on disk and load it at start, so
+an agent restarted while offline still reaches its printers and terminal. This replaces §6.1's
+"MUST NOT persist config" for such an agent. The cloud stays the source of truth: every
+`welcome` and `config.updated` overwrites the copy.
+
+### 13.3 Staff list: `GET /api/v1/agent/data/staff`
+
+Who may sign in at this branch's offline till, with their PIN hashes. It is a separate document
+from the snapshot on purpose: the cloud keeps every served snapshot for 30 days (§12.2), and PIN
+hashes must not pile up there.
+
+Same request rules as the snapshot: auth (§3.4), `If-None-Match: "<staff_version>"`, `200` with
+`ETag`, or `304`.
+
+```json
+{
+  "staff_version": "5e2a…",
+  "generated_at": "2026-09-24T08:00:00.000Z",
+  "users": [
+    {
+      "id": "…", "display_name": "سارا احمدی", "role": "CASHIER",
+      "pin_hash": "$argon2id$v=19$m=65536,t=3,p=4$…"
+    }
+  ]
+}
+```
+
+- `users` holds the active users whose branch is this branch and who have a PIN, in the roles
+  `CASHIER`, `SUPERVISOR`, `MANAGER`, `ADMIN` and `OWNER`. Head office users without a branch are
+  left out. A user without a PIN cannot sign in offline.
+- `pin_hash` is the hash the cloud already stores (`admin_user.pin_hash`, argon2id in PHC form).
+  The agent verifies with the same algorithm (`golang.org/x/crypto/argon2`). A PIN is 4 to 8
+  digits, as online.
+- The cloud sends `data.changed` (§12.3) when the list changes: a user added, deactivated, moved
+  to another branch, a role or PIN changed. The agent pulls the staff list whenever it pulls the
+  snapshot, with its own `If-None-Match`, so an unchanged list costs a `304`.
+- The agent MUST store the list encrypted with DPAPI (machine scope), in its data folder, and
+  MUST NOT log a PIN or a hash. It replaces the list whole, and keeps the last one while offline.
+
+Known risk, accepted for the prototype: a 4-digit PIN falls to a brute force of its hash, and a
+manager's PIN is also their approver PIN online. Someone with administrator rights on the branch
+PC could recover it. DPAPI keeps a copied file useless elsewhere; it does not stop an
+administrator on that PC.
+
+Cashiers have no PIN today (the users screen gives one to approvers). P1 lets a manager set one
+for any role on the users screen. A cashier's PIN signs them in offline and approves nothing:
+approval online still looks only at approver roles.
+
+### 13.4 Till binding
+
+The agent sells as one till: one of the snapshot's `tills` (`terminal` in the cloud). A manager
+chooses it on the settings page, signed in there as today (online). While offline, anyone whose
+staff-list role is an approver (`SUPERVISOR`, `MANAGER`, `ADMIN`, `OWNER`) can choose it with
+their PIN. The agent keeps the choice in its data folder until it is changed.
+
+- An offline order's `terminal_id` is the bound till, its `shift_id` the till's open shift in
+  the snapshot (`open_shifts`, by `terminal_id`), and its `business_date` that shift's
+  `business_date`.
+- With no till bound, or no open shift on it in the snapshot, the till sells nothing and says
+  why (`NO_TILL`, `NO_SHIFT`). A shift cannot be opened offline.
+- The card terminal is the till's `payment_device_id` in the snapshot, found in the config by id.
+  With none, the till takes cash only.
+- Binding the agent to a till does not stop that till's web POS; the two just must not sell at
+  the same time (decision 4).
+
+### 13.5 Modes
+
+| Mode | When | The till |
+|---|---|---|
+| `ONLINE` | The agent has a WebSocket session and holds no unfinished offline order | Sells nothing. Shows a link to the web POS. |
+| `OFFLINE` | The agent has no session (never had one since start, or lost it) | Sells. |
+| `HANDOVER` | The agent has a session again and still holds unfinished offline orders | Starts no new order. Unfinished orders can be continued: lines added, sent, paid, finished, cancelled. |
+
+`HANDOVER` ends when the cashier presses **Hand over**, or on its own once the session has lasted
+**15 minutes** without a break. Then each unfinished order:
+
+- that was never sent to the kitchen and has no payment (a cart nobody paid for) is dropped: it
+  was never a sale. The till lists what it drops before a manual hand-over, and logs it;
+- otherwise goes to the upload as `OPEN` (§12.4), with the payments it has. An order whose card
+  charge is still running waits for the charge to end.
+
+Losing the session during `HANDOVER` returns the till to `OFFLINE`.
+
+### 13.6 Orders on the till
+
+An offline order lives **on the agent** from the moment it is started: the page shows it and
+asks the agent to change it. Nothing about an order is kept only in the browser, so a crash or a
+closed window loses nothing. Orders are kept in the agent's data folder (bbolt) and survive a
+restart.
+
+| Step | What happens |
+|---|---|
+| **New order** | Order type (`TAKEAWAY` or `DINE_IN`), and for dine-in a table from `dining_tables` and optionally a guest count. The agent gives it a UUID v4 (its `id` in §12.4), `created_by` = the signed-in user, `placed_at` = now. |
+| **Add line** | Product, size, add-ons, quantity, note. Checked against the snapshot as the cloud checks the register (below). Prices come only from the snapshot; the till cannot type a price. |
+| **Void line** | Removes a line. Before the kitchen has it, freely. After, see the edit rules below; the kitchen gets a VOID chit. |
+| **Send to kitchen** | Gives the order its call number (§13.9) if it has none, and prints the kitchen chits for the lines the kitchen does not have yet (§13.8). Later lines go the same way, as ADD chits. |
+| **Pay** | Cash or card (§13.7), for all or part of what is outstanding. An order is paid when its payments cover `grand_total`. |
+| **Finish** | Allowed when paid. A takeaway finishes on its own when it is paid; it is sent to the kitchen first if it was not. A dine-in order is finished by the cashier when the table leaves. The receipt prints when the order becomes paid. The order then goes to the upload as `COMPLETED`. |
+| **Cancel** | Only with no payments (there are no refunds offline). An order the kitchen has gets a CANCELLED chit and goes to the upload as `CANCELLED`. One the kitchen never had and that has no call number is simply dropped. |
+
+Line checks, all against the snapshot, re-evaluated on the branch clock (`branch.time_zone`)
+when the line is added:
+
+- the product is listed and active; the size (`variants`) and add-ons are the product's own;
+- it is not stopped (`availability.stopped`, product, size or add-on, `until` not passed), it is
+  inside its selling window (`availability.schedules`), and `daily_stock.remaining` covers it,
+  less what the till itself sold offline today;
+- each option group's `min`, `max` and `required` hold, and `max_per_order` is not exceeded.
+
+A line that fails is refused with `NOT_AVAILABLE` and the reason. A product that turns
+unavailable after it was added stays on the order.
+
+Money is §12.4's, exactly: `line_total = (unit_price + Σ price_delta) × quantity`, `tax =
+line_total × tax_rate` rounded to whole rials, halves up, per line; totals are the sums;
+`discount_total` and `delivery_fee` are `"0"`. The till shows the totals the upload will carry.
+
+**Edit rules** (the cloud's `order-edit-policy`, cut down to what exists offline), for a line or
+order the kitchen already has:
+
+- Adding lines: always, while the order is open.
+- Voiding a line or cancelling the order, with no payment on it: the cashier alone within the
+  tenant's edit or cancel window from when the order was first sent (`settings.order_actions`,
+  §13.11); after it, only with an approver's PIN.
+- With any payment on the order: no line can be voided and the order cannot be cancelled. The
+  cloud handles it after upload.
+
+An approver's PIN is checked against the staff list like a sign-in. The order records who
+voided what and who approved it (§13.12).
+
+### 13.7 Payments
+
+The payment method is the snapshot's first `payment_methods` entry of kind `CASH` or `CARD` (by
+`code`).
+
+**Cash.** The cashier types what the customer handed over; the till shows the change. The
+payment is the smaller of that and what is outstanding. No drawer is opened (the agent drives no
+drawer).
+
+**Card.** The agent charges the bound till's terminal through the same driver and the same
+per-device queue as a cloud `payment.charge` (§7.3, §7.6), with no cloud command. The amount is
+what is outstanding unless the cashier types less (to split with cash).
+
+- Before the amount goes to the terminal, the agent records the charge (id, order, amount) as
+  `RUNNING` on disk. §4.6 holds: a charge found `RUNNING` after a restart is `UNKNOWN` with
+  `AGENT_RESTARTED`, and is **never** charged again.
+- The charge's id is its merchant reference (`AttemptID`), as `attempt_id` is online.
+- `APPROVED` with an `rrn`: a payment, uploaded as `APPROVED` with its `card` block.
+- `DECLINED`, `CANCELLED`, `FAILED`: no payment. The till says so; the cashier may try again or
+  take cash. Nothing of it is uploaded.
+- `UNKNOWN`: a payment, uploaded as `UNKNOWN`, which the cloud leaves for **Check terminal** /
+  **Resolve** (§12.6). On the till it **counts as paid**, so nobody charges the card again; the
+  till tells the cashier to keep the terminal's slip, if any. The till never retries a charge
+  on its own.
+
+### 13.8 Printing
+
+The agent renders offline tickets itself and prints them with the printer it already uses for
+`print.job` (§6.2). A ticket printed offline looks like the one the cloud prints for the same
+order: the same document types, the same templates, the same heading.
+
+| Document | When | Where |
+|---|---|---|
+| `KITCHEN_TICKET` | Send to kitchen: the new lines. Void after sending: VOID lines. Cancel after sending: every line under a STOP heading. | Split by station, as the cloud does |
+| `CUSTOMER_RECEIPT` | When the order becomes paid | The receipt route |
+| `GUEST_BILL` | On request, for an open dine-in order | The bill route |
+
+Routing comes from the snapshot's `printing` block (§13.11):
+
+- Each line goes to its product's kitchen route (`kitchen_routes[product_id]`), or to the
+  fallback when it has none. Lines that share a printer group share one chit, labelled with the
+  group's name, and `(1/3)` when the order makes several chits, as the cloud labels them.
+- A chit prints on every printer of its group, each `route copies × member copies` times. A
+  group with no active printer in the config, and lines with no route, fall back to
+  `fallback.KITCHEN_TICKET`. With no fallback either, the chit fails and the till says so.
+- A receipt or bill goes to its document route's group, else to `fallback.OTHER`.
+
+A ticket that fails stays on the till with **Reprint**, to the same printer or another one the
+cashier picks. Every attempt goes into the order's `prints` (§12.4), `PRINTED` or `FAILED`. A
+reprint is marked as a copy on the paper, as the cloud marks one.
+
+Printing needs a signed-in Windows user (Edge renders the HTML), exactly as online.
+
+### 13.9 Call numbers
+
+An offline order is numbered in the day's `POS` range (`settings.call_numbers.POS`), for its
+`business_date`, on **Send to kitchen** or when it becomes paid, whichever comes first. The next
+number continues from the highest count the agent knows for that date:
+
+- `call_number_issued_today` in the snapshot;
+- `call_numbers` in the last `heartbeat.ack` (below), which is at most one heartbeat old when the
+  link drops, so the offline till does not repeat numbers the web POS gave just before;
+- the numbers the till itself gave offline.
+
+The count maps to a number as the cloud maps it (`start + (n − 1) mod size`), wrapping at the end
+of the range. On upload, the cloud raises its counter to at least the offline numbers (§12.6).
+
+For an agent with `pos.offline`, `heartbeat.ack` carries the counter:
+
+```json
+{ "type": "heartbeat.ack", "payload": { "server_time": "…",
+  "call_numbers": { "business_date": "2026-09-24", "POS": 41 } } }
+```
+
+`POS` is the count handed out (not the last number), as in `call_number_issued_today`.
+
+### 13.10 Heartbeat
+
+An agent with `pos.offline` adds `till` to every `heartbeat`:
+
+```json
+{ "till": { "terminal_id": "…", "mode": "HANDOVER", "open_orders": 2 } }
+```
+
+`terminal_id` is the bound till (`null` when none); `open_orders` counts unfinished offline
+orders. The Agents screen shows which till the agent sells as, and warns while open orders wait.
+
+### 13.11 Snapshot additions
+
+The snapshot (§12.2) gains, for every agent (a v1.2 agent ignores them):
+
+```json
+{
+  "settings": {
+    "order_actions": { "edit_window_minutes": 10, "cancel_window_minutes": 10 },
+    "auto_logout_minutes": 15
+  },
+  "printing": {
+    "heading": {
+      "brand_name": "…", "branch_name": "…", "branch_address": "…", "branch_phone": "…",
+      "calendar": "JALALI"
+    },
+    "groups": [
+      { "id": "…", "name": "گریل", "ticket_template": "COMPACT",
+        "printers": [ { "printer_id": "4c1e…", "copies": 1 } ] }
+    ],
+    "kitchen_routes": { "<product id>": { "group_id": "…", "copies": 1 } },
+    "documents": {
+      "CUSTOMER_RECEIPT": { "group_id": "…", "copies": 1 },
+      "GUEST_BILL": null
+    },
+    "fallback": { "KITCHEN_TICKET": "4c1e…", "OTHER": "9a07…" }
+  }
+}
+```
+
+- `order_actions` is the tenant's `ORDER_ACTIONS` setting, resolved over its defaults.
+  `auto_logout_minutes` is `SYSTEM.auto_logout_minutes`; `0` means the till's own default of
+  15 minutes.
+- `kitchen_routes` is the cloud's route matching done in advance: for each product, the most
+  specific `KITCHEN_TICKET` route (product, then category, then the kitchen station from the KDS
+  rules, then the catch-all). A product no route claims is left out.
+- `documents` holds each whole-order document's catch-all route, or `null` for none.
+- `groups[].printers` lists the group's members in priority order, with each member's copies.
+  The agent skips a printer that is not active in its config.
+- `fallback` is the printer the cloud falls back to for that kind (§6.1 ids), or `null`.
+- The cloud sends `data.changed` when routes, printer groups, KDS rules, the branch's name,
+  address or phone, or these settings change.
+
+### 13.12 Upload additions
+
+§12.4's order gains optional fields. The cloud MUST accept orders without them.
+
+| Field | Means |
+|---|---|
+| `lines[].options[].group_name` | The option group's name, kept on the cloud's order line (today it is left empty). |
+| `voided_lines` | Lines voided after the kitchen had them (a voided line is otherwise left out, §12.4): `{ product_name, variant_name, quantity, line_total, voided_by, approved_by, at }`. Audited with the order, not booked. |
+| `cancelled_by`, `approved_by` | Who cancelled the order, and who approved it when the edit rules asked. |
+| `prints[].document_type`, `prints[].copies`, `prints[].error` | What was printed, and why an attempt failed. |
+
+For an `OPEN` dine-in order the cloud also marks its table occupied when it books it (P8).
+
+### 13.13 The till's local API
+
+The till page and its API are part of the settings server (`localui`, `127.0.0.1:47800`), inside
+the agent process: the agent owns the order, journal and snapshot files, and a second process
+could not open them. The settings page's local-only rules hold for the till too: a request for
+another host is refused, and every request that changes something needs `X-Gnext-Local: 1` and
+a local `Origin`. The till takes money, so these rules MUST NOT be relaxed for it.
+
+Every `/api/till/*` request other than `state` and `login` needs the till session,
+`X-Gnext-Till-Session: <token>`, which `login` returns. One session at a time; signing in
+ends the previous one. It ends after `auto_logout_minutes` without a request.
+
+| Request | Does |
+|---|---|
+| `GET /till` | The page (Persian, right to left). |
+| `GET /api/till/state` | Mode, bound till and shift, snapshot age, the staff names (no hashes), who is signed in. |
+| `POST /api/till/login` `{user_id, pin}` / `POST /api/till/logout` | Sign in or out. |
+| `POST /api/till/binding` `{terminal_id, user_id?, pin?}` | Bind the till (§13.4): with the settings page's manager session, or an approver's PIN. |
+| `GET /api/till/menu` | Categories and products from the snapshot, each with its availability now. |
+| `GET /api/till/orders` | Unfinished orders, and today's finished ones for reprints. |
+| `POST /api/till/orders` `{order_type, table_id?, guest_count?}` | New order. |
+| `POST /api/till/orders/{id}/lines` `{product_id, variant_id?, quantity, options[], notes?}` | Add a line. |
+| `POST /api/till/orders/{id}/lines/{line}/void` `{approver_id?, pin?}` | Void a line. |
+| `POST /api/till/orders/{id}/send` | Send to kitchen. |
+| `POST /api/till/orders/{id}/payments` `{kind: "CASH", tendered}` or `{kind: "CARD", amount}` | Pay. A card charge answers `202` at once; the page follows the order until the charge ends. |
+| `POST /api/till/orders/{id}/finish` | Finish. |
+| `POST /api/till/orders/{id}/cancel` `{note, approver_id?, pin?}` | Cancel. |
+| `POST /api/till/orders/{id}/print` `{document, printer_id?, print_id?}` | Print a bill, or reprint a failed or lost ticket. |
+| `POST /api/till/handover` | End `HANDOVER` now (§13.5). |
+
+Errors are `{code, detail}`, with `detail` in Persian for the cashier: `TILL_ONLINE`,
+`HANDOVER` (no new orders), `NO_SNAPSHOT`, `NO_TILL`, `NO_SHIFT`, `UNAUTHENTICATED`,
+`PIN_WRONG`, `PIN_LOCKED` (5 wrong PINs for one user in 15 minutes lock that user for 15
+minutes, as online), `NOT_AVAILABLE`, `APPROVAL_REQUIRED`, `ORDER_PAID` (no void or cancel with
+payments), `ORDER_CLOSED`, `TERMINAL_BUSY`, `NO_TERMINAL`, `NO_PRINTER`.
+
+### 13.14 The web POS and the tray
+
+- The web POS shows a banner when its requests to the cloud have failed for 30 s: the internet
+  is down, and on the branch PC the offline till is at `http://127.0.0.1:47800/till` (a link).
+  It does not probe the agent; the link is all it offers.
+- The tray menu gains **Offline till**, which opens `/till` in the settings window.
+- When the link returns, the offline till shows that it is back and points to the web POS
+  (§13.5); orders it hands over appear on the web POS as ordinary open orders.
+
+### 13.15 Not in the offline POS
+
+Delivery, courier slips and zones; coupons, discounts and manual prices; refunds and paid
+cancellations; customer lookup and credit; kitchen screens (the kitchen gets chits only); a
+cash drawer; opening, closing or counting a shift; more than one till; seeing or changing orders
+that were open in the cloud before the outage. Tills on the LAN (listening beyond 127.0.0.1, a
+firewall rule, pairing) are a later step.
+
+## 14. Conformance checklist for the agent
 
 An agent build is ready for the branch PC when it passes all of these against the cloud's
 test harness (task 9) or a real staging server:
@@ -1257,7 +1622,24 @@ v2 (§12), for an agent that advertises `data.pull` and `sync.orders`:
 - [ ] A `400` batch is split, the good orders go up, and the bad one is kept and logged.
 - [ ] Heartbeats carry `sync` with the right backlog.
 
-## 14. Decisions and open questions
+Offline POS (§13), for an agent that advertises `pos.offline`:
+
+- [ ] Restarted with the network unplugged, the agent still knows its printers and terminal
+      (config from disk) and its till, shift, menu and staff.
+- [ ] The till sells only in `OFFLINE`; in `HANDOVER` it finishes open orders but starts none;
+      in `ONLINE` it sells nothing.
+- [ ] A wrong PIN five times locks that user for 15 minutes; no PIN or hash reaches a log.
+- [ ] Every total the till shows equals what the cloud recomputes on upload (no
+      `TOTAL_MISMATCH`, no `PRICE_MISMATCH`).
+- [ ] Killing the agent mid-charge gives `UNKNOWN AGENT_RESTARTED`, counted as paid, and the card
+      is not charged again.
+- [ ] Kitchen chits split by station as the cloud splits the same order; a void prints a VOID
+      chit to the line's station only.
+- [ ] Call numbers continue after the last `heartbeat.ack` without repeating one.
+- [ ] Hand-over uploads open orders as `OPEN`, drops unpaid carts the kitchen never had, and
+      the cloud books each order once.
+
+## 15. Decisions and open questions
 
 Decided by the product owner (2026-09-17):
 

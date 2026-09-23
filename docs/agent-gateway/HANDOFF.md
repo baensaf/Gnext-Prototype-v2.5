@@ -122,7 +122,7 @@ live in their own modules.
      protocol *Saman (SEP)*.
    - Agents → *New enrolment code*.
 5. **Build the Go agent** from the contract. Check it against `fake-agent.ts`, which behaves
-   the way the contract requires, and the conformance list in contract §13.
+   the way the contract requires, and the conformance list in contract §14.
 
 ### Agent releases from CI
 
@@ -149,7 +149,7 @@ already uploaded "with a different build" means the agent changed without a vers
   terminal driver. `backend/test/agent-go-binary-postgres.spec.ts` runs this journey against
   the real binary when `GNEXT_AGENT_BIN` is set. Still to do: the `sep` driver (needs Saman's
   integration document), `windows`/`serial` printers, the test on the branch PC.
-- Whether Saman's protocol can query a past transaction (contract §14). Until that is known,
+- Whether Saman's protocol can query a past transaction (contract §15). Until that is known,
   unconfirmed charges are resolved by hand.
 
 ## v2 plan (2026-09-23)
