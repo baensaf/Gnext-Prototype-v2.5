@@ -729,6 +729,15 @@ export class DeliveryService {
     if (['DELIVERED', 'CANCELLED'].includes(delivery.state)) {
       throw new BadRequestException(`Cannot assign a courier to a ${delivery.state.toLowerCase()} delivery`);
     }
+    // Once the courier has left, the food is on their bike. Naming another rider put the board
+    // back to "assigned" while the first still carried it. The ride is failed back first, then
+    // requeued, so the first courier's attempt is closed with whatever it is owed.
+    if (delivery.state === 'PICKED_UP' || delivery.state === 'EN_ROUTE') {
+      throw new ConflictException({
+        code: 'DELIVERY_ALREADY_LEFT',
+        message: `Order ${order.order_number} is already on its way; mark the ride failed and requeue it to send another courier`,
+      });
+    }
 
     const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
     if (!courier) throw new NotFoundException('Courier not found');
@@ -761,12 +770,25 @@ export class DeliveryService {
     }
 
     const fromState = delivery.state;
+    const previousCourierId = delivery.courier_id;
     delivery.courier_id = courierId;
     delivery.state = 'ASSIGNED';
     delivery.assigned_at = new Date();
 
     const saved = await this.deliveryRepo.save(delivery);
     await this.logDeliveryEvent(tenantId, saved.id, fromState, 'ASSIGNED', `Assigned to ${courier.name}`, userId);
+
+    // A courier taken off an order before leaving did no ride: their attempt is closed, with no
+    // pay and nothing to settle, instead of reading "assigned" in their history for good.
+    if (previousCourierId && previousCourierId !== courierId) {
+      const previous = await this.assignmentRepo.findOne({
+        where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: previousCourierId, status: 'ASSIGNED' },
+      });
+      if (previous) {
+        previous.status = 'REASSIGNED';
+        await this.assignmentRepo.save(previous);
+      }
+    }
 
     // A failed ride stays a record of its own, so a retry by the same courier is a new attempt.
     let assignment = await this.assignmentRepo.findOne({
@@ -945,14 +967,31 @@ export class DeliveryService {
     const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId, tenant_id: tenantId } });
     if (!delivery) throw new NotFoundException('Delivery not found');
 
+    const order = await this.orderRepo.findOne({ where: { id: delivery.order_id, tenant_id: tenantId } });
+    const orderState = String(order?.state || order?.status || '').toUpperCase();
+    if (order && ['COMPLETED', 'CANCELLED'].includes(orderState)) {
+      await this.reconcileDeliveryWithOrder(tenantId, delivery, order);
+      throw new ConflictException({
+        code: 'DELIVERY_NOT_ACTIVE',
+        message: `Order ${order.order_number} is already ${orderState.toLowerCase()}; its delivery cannot fail`,
+      });
+    }
+    // Only a ride that is still out can come back. A board that had not refreshed could fail a
+    // delivery already completed, which reopened a paid order and cleared the cash its courier
+    // owed.
+    if (!ACTIVE_DELIVERY_STATES.includes(delivery.state)) {
+      throw new ConflictException({
+        code: 'DELIVERY_NOT_ACTIVE',
+        message: `This delivery is ${delivery.state.toLowerCase()}; only one that is assigned or on its way can fail`,
+      });
+    }
+
     const fromState = delivery.state;
     delivery.state = 'FAILED';
     delivery.failure_reason = reason || 'Delivery attempt failed';
 
     const saved = await this.deliveryRepo.save(delivery);
     await this.logDeliveryEvent(tenantId, saved.id, fromState, 'FAILED', `Delivery failed: ${reason}`, userId);
-
-    const order = await this.orderRepo.findOne({ where: { id: delivery.order_id, tenant_id: tenantId } });
 
     // The courier's attempt is closed as failed, carrying its pay: a courier who rode out and
     // came back is paid for the trip when the branch's COURIER_PAY policy says so. A courier
@@ -972,10 +1011,13 @@ export class DeliveryService {
       }
     }
 
-    if (order) {
+    // The food is back at the counter. An order that never left is where the kitchen has it,
+    // and moving it to READY would skip the kitchen.
+    if (order && orderState === 'OUT_FOR_DELIVERY') {
       order.state = 'READY';
       order.status = 'READY';
-      await this.orderRepo.save(order);
+      order.fulfillment_status = 'PENDING';
+      await this.saveOrderTransition(tenantId, order, 'OUT_FOR_DELIVERY', 'DELIVERY_FAILED', userId, delivery.failure_reason);
     }
 
     return saved;
@@ -984,6 +1026,14 @@ export class DeliveryService {
   async requeueDelivery(tenantId: string, deliveryId: string, userId?: string) {
     const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId, tenant_id: tenantId } });
     if (!delivery) throw new NotFoundException('Delivery not found');
+    // Requeue is the step after a failed ride. On any other delivery it took the courier off an
+    // order still on their bike, or put a finished one back on the board.
+    if (delivery.state !== 'FAILED') {
+      throw new ConflictException({
+        code: 'DELIVERY_NOT_FAILED',
+        message: `This delivery is ${delivery.state.toLowerCase()}; only a failed delivery can be requeued`,
+      });
+    }
 
     const fromState = delivery.state;
     delivery.state = 'UNASSIGNED';
@@ -1059,7 +1109,7 @@ export class DeliveryService {
   }
 
   async updateAssignmentStatus(tenantId: string, assignmentId: string, status: string, failureReason?: string, correlationId?: string) {
-    if (status === 'EN_ROUTE' || status === 'PICKED_UP') {
+    if (status === 'EN_ROUTE' || status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY') {
       return await this.departDelivery(tenantId, assignmentId);
     }
     if (status === 'DELIVERED') {
@@ -1068,12 +1118,8 @@ export class DeliveryService {
     if (status === 'FAILED') {
       return await this.failDelivery(tenantId, assignmentId, failureReason || 'Failed');
     }
-    const delivery = await this.deliveryRepo.findOne({ where: { id: assignmentId, tenant_id: tenantId } });
-    if (delivery) {
-      delivery.state = status as any;
-      return await this.deliveryRepo.save(delivery);
-    }
-    throw new NotFoundException('Delivery not found');
+    // Any other status used to be written straight onto the delivery, past every rule above.
+    throw new BadRequestException(`Status ${status} is not a delivery step; use assign, depart, complete, fail or requeue`);
   }
 
   private async activeMethod(tenantId: string, kinds: string[]): Promise<PaymentMethod> {
