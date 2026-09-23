@@ -218,7 +218,8 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
       total_compensation_amount: MoneyUtil.format(compAmount || '0', 2),
       total_adjustment_amount: MoneyUtil.format(adjAmount || '0', 2),
     });
-    setActiveSettlementDetail(res.data);
+    // The update returns the batch without the courier's name; keep the one already shown.
+    setActiveSettlementDetail((prev: any) => (prev ? { ...prev, ...res.data } : res.data));
     setEditableLines(res.data.lines || editableLines);
   };
 
@@ -238,7 +239,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
     try {
       await saveLines();
       const res = await axios.post(`/api/v1/delivery/settlements/${activeSettlementDetail.id}/review`);
-      setActiveSettlementDetail(res.data);
+      setActiveSettlementDetail((prev: any) => (prev ? { ...prev, ...res.data } : res.data));
       alert(t('settlements.alerts.movedToReview'));
       fetchData();
     } catch {

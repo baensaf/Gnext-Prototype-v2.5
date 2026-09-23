@@ -862,7 +862,7 @@
       "depart": "Depart",
       "departing": "Departing…",
       "reassign": "Reassign",
-      "complete": "Complete",
+      "complete": "Delivered",
       "failed": "Failed",
       "requeue": "Re-queue Delivery",
       "customer": "Customer",
@@ -995,7 +995,11 @@
       "editZone": {
         "title": "Edit zone {{code}}",
         "cancel": "Cancel",
-        "submit": "Save Zone"
+        "submit": "Save Zone",
+        "remove": "Remove zone",
+        "removeConfirm": "Remove zone {{code}}? It stops being offered at the POS. Orders already placed in it keep it.",
+        "removeYes": "Remove",
+        "removeNo": "Keep"
       },
       "addZone": {
         "title": "Add Delivery Zone",
@@ -1033,7 +1037,8 @@
       "assignTerminalFailed": "Failed to assign mobile terminal",
       "unassignTerminalFailed": "Failed to unassign terminal",
       "timelineFailed": "Failed to load delivery timeline",
-      "noBranch": "No active branch selected"
+      "noBranch": "No active branch selected",
+      "deleteZoneFailed": "Could not remove the zone"
     },
     "couriersTab": "Couriers Roster",
     "ordersTab": "Delivery Orders",

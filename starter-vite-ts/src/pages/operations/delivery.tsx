@@ -214,6 +214,7 @@ export function DeliveryPage() {
     estimated_minutes: number;
     courier_pay: string;
   } | null>(null);
+  const [zoneRemoveAsked, setZoneRemoveAsked] = useState(false);
 
   const [terminalAssignModalOpen, setTerminalAssignModalOpen] = useState(false);
   const [selectedCourierForTerminal, setSelectedCourierForTerminal] = useState<Courier | null>(null);
@@ -305,6 +306,21 @@ export function DeliveryPage() {
       await loadData();
     } catch (err: any) {
       setError(err.detail || t('delivery.errors.updateZoneFailed'));
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  // Removal is a soft delete: the zone leaves the POS picker, and orders placed in it keep it.
+  const handleRemoveZone = async () => {
+    if (!zoneEdit) return;
+    try {
+      setPendingAction(`zone:${zoneEdit.zone.id}`);
+      await deliveryApi.deleteZone(zoneEdit.zone.id);
+      setZoneEdit(null);
+      await loadData();
+    } catch (err: any) {
+      setError(err.detail || t('delivery.errors.deleteZoneFailed'));
     } finally {
       setPendingAction(null);
     }
@@ -510,6 +526,8 @@ export function DeliveryPage() {
         branch_id: targetBranchId,
         ...zoneForm,
         fee: zoneForm.fee.toString(),
+        // Blank means "use each courier's own rate"; an empty string fails the amount check.
+        courier_pay: zoneForm.courier_pay.trim() === '' ? null : zoneForm.courier_pay,
       });
       setZoneModalOpen(false);
       setZoneForm({ code: '', name: '', fee: '500000', estimated_minutes: 30, courier_pay: '' });
@@ -1037,15 +1055,16 @@ export function DeliveryPage() {
                     <IconButton
                       size="small"
                       aria-label={t('delivery.zones.edit')}
-                      onClick={() =>
+                      onClick={() => {
+                        setZoneRemoveAsked(false);
                         setZoneEdit({
                           zone: z,
                           name: z.name,
                           fee: String(Number(z.fee || 0)),
                           estimated_minutes: z.estimated_minutes,
                           courier_pay: z.courier_pay !== null && z.courier_pay !== undefined ? String(Number(z.courier_pay)) : '',
-                        })
-                      }
+                        });
+                      }}
                     >
                       <EditIcon fontSize="small" />
                     </IconButton>
@@ -1299,10 +1318,28 @@ export function DeliveryPage() {
                 onChange={(e) => setZoneEdit({ ...zoneEdit, estimated_minutes: Number(e.target.value) })}
                 fullWidth
               />
+              {zoneRemoveAsked && (
+                <Alert
+                  severity="warning"
+                  action={
+                    <Stack direction="row" spacing={1}>
+                      <Button size="small" onClick={() => setZoneRemoveAsked(false)}>{t('delivery.modals.editZone.removeNo')}</Button>
+                      <Button size="small" color="error" variant="contained" disabled={Boolean(pendingAction)} onClick={handleRemoveZone}>
+                        {t('delivery.modals.editZone.removeYes')}
+                      </Button>
+                    </Stack>
+                  }
+                >
+                  {t('delivery.modals.editZone.removeConfirm', { code: zoneEdit.zone.code })}
+                </Alert>
+              )}
             </Stack>
           )}
         </DialogContent>
         <DialogActions>
+          <Button color="error" disabled={zoneRemoveAsked || Boolean(pendingAction)} onClick={() => setZoneRemoveAsked(true)} sx={{ mr: 'auto' }}>
+            {t('delivery.modals.editZone.remove')}
+          </Button>
           <Button onClick={() => setZoneEdit(null)}>{t('delivery.modals.editZone.cancel')}</Button>
           <Button variant="contained" disabled={Boolean(pendingAction) || !zoneEdit?.name.trim()} onClick={handleSaveZone}>
             {pendingAction?.startsWith('zone:') ? <CircularProgress size={20} color="inherit" /> : t('delivery.modals.editZone.submit')}
