@@ -14,7 +14,7 @@ export class DeliveryAssignment {
   @Column({ type: 'uuid' })
   courier_id: string;
 
-  @Column({ type: 'varchar', length: 32, default: 'ASSIGNED' }) // ASSIGNED, PICKED_UP, OUT_FOR_DELIVERY, DELIVERED, FAILED, RETURNED
+  @Column({ type: 'varchar', length: 32, default: 'ASSIGNED' }) // ASSIGNED, PICKED_UP, OUT_FOR_DELIVERY, DELIVERED, FAILED, RETURNED, REASSIGNED (taken off before leaving)
   status: string;
 
   @Column({ type: 'timestamptz' })

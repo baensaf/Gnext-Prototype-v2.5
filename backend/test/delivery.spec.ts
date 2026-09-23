@@ -221,6 +221,72 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
     expect(deliveryRepo.save).not.toHaveBeenCalled();
   });
 
+  // Audit OD4-OD6: fail, requeue and reassign took any delivery, so a board that had not
+  // refreshed could reopen a paid order or pull a courier off a ride they were on.
+  describe('state guards on the dispatch steps', () => {
+    it('will not fail a delivery that was already delivered, nor one whose order is finished', async () => {
+      deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', courier_id: 'cour-1', state: 'DELIVERED' });
+      orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', order_number: 'ORD-1', state: 'OUT_FOR_DELIVERY', outstanding_total: '500000.0000' });
+      await expect(service.failDelivery('t-1', 'del-1', 'late click')).rejects.toThrow(ConflictException);
+
+      deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', courier_id: 'cour-1', state: 'EN_ROUTE' });
+      orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', order_number: 'ORD-1', state: 'COMPLETED' });
+      await expect(service.failDelivery('t-1', 'del-1', 'late click')).rejects.toThrow(ConflictException);
+
+      expect(assignmentRepo.save).not.toHaveBeenCalled();
+      expect(orderRepo.save).not.toHaveBeenCalledWith(expect.objectContaining({ state: 'READY' }));
+    });
+
+    it('brings a failed ride back to READY with a history row, and leaves an order that never left alone', async () => {
+      deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', courier_id: 'cour-1', state: 'EN_ROUTE' });
+      orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', order_number: 'ORD-1', state: 'OUT_FOR_DELIVERY' });
+      await service.failDelivery('t-1', 'del-1', 'Nobody home');
+      expect(orderRepo.save).toHaveBeenCalledWith(expect.objectContaining({ state: 'READY' }));
+      expect(transitionRecorder.record).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ fromState: 'OUT_FOR_DELIVERY', action: 'DELIVERY_FAILED' }),
+      );
+
+      orderRepo.save.mockClear();
+      deliveryRepo.findOne.mockResolvedValue({ id: 'del-2', tenant_id: 't-1', order_id: 'ord-2', courier_id: 'cour-1', state: 'ASSIGNED' });
+      orderRepo.findOne.mockResolvedValue({ id: 'ord-2', tenant_id: 't-1', order_number: 'ORD-2', state: 'PREPARING' });
+      await service.failDelivery('t-1', 'del-2', 'Courier went home');
+      expect(orderRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('requeues only a failed delivery', async () => {
+      deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', courier_id: 'cour-1', state: 'EN_ROUTE' });
+      await expect(service.requeueDelivery('t-1', 'del-1')).rejects.toThrow(ConflictException);
+      expect(deliveryRepo.save).not.toHaveBeenCalled();
+
+      deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', courier_id: 'cour-1', state: 'FAILED' });
+      const requeued = await service.requeueDelivery('t-1', 'del-1');
+      expect(requeued).toEqual(expect.objectContaining({ state: 'UNASSIGNED', courier_id: null }));
+    });
+
+    it('closes the first courier’s attempt on a reassign, and refuses one once the courier has left', async () => {
+      orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', order_number: 'ORD-1', state: 'CONFIRMED' });
+      courierRepo.findOne.mockResolvedValue({ id: 'cour-2', tenant_id: 't-1', name: 'Mahdi', is_active: true });
+      attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_IN', availability_status: 'AVAILABLE' });
+
+      deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', courier_id: 'cour-1', state: 'EN_ROUTE' });
+      await expect(service.assignCourier('t-1', 'del-1', 'cour-2')).rejects.toThrow(ConflictException);
+      expect(deliveryRepo.save).not.toHaveBeenCalled();
+
+      deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', courier_id: 'cour-1', state: 'ASSIGNED' });
+      const first = { id: 'asgn-1', courier_id: 'cour-1', status: 'ASSIGNED' };
+      assignmentRepo.findOne.mockImplementation(({ where }: any) => Promise.resolve(where.courier_id === 'cour-1' ? first : null));
+      await service.assignCourier('t-1', 'del-1', 'cour-2');
+      expect(assignmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ id: 'asgn-1', status: 'REASSIGNED' }));
+      expect(assignmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ courier_id: 'cour-2', status: 'ASSIGNED' }));
+    });
+
+    it('will not write an arbitrary status onto a delivery through the old route', async () => {
+      await expect(service.updateAssignmentStatus('t-1', 'del-1', 'RETURNED')).rejects.toThrow(BadRequestException);
+      expect(deliveryRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
   describe('courier pay rules', () => {
     const enRoute = { id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', zone_id: 'zone-1', courier_id: 'cour-1', state: 'EN_ROUTE', fee: '25000.0000' };
 
