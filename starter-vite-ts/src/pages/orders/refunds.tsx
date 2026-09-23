@@ -1,4 +1,4 @@
-import type { OrderHeader } from 'src/api/orderApi';
+import type { OrderListRow } from 'src/api/orderApi';
 import type { RefundRequest } from 'src/api/refundApi';
 
 import { useTranslation } from 'react-i18next';
@@ -17,7 +17,6 @@ import {
   Button,
   Dialog,
   TableRow,
-  MenuItem,
   TableBody,
   TableCell,
   TableHead,
@@ -25,6 +24,7 @@ import {
   Typography,
   IconButton,
   DialogTitle,
+  Autocomplete,
   DialogContent,
   DialogActions,
   TableContainer,
@@ -49,7 +49,13 @@ export function RefundsPage() {
   const role = useAuthStore((state) => state.user?.role);
   const canApprove = APPROVER_ROLES.includes((role || '').toUpperCase());
 
-  const [orders, setOrders] = useState<OrderHeader[]>([]);
+  // The orders the listed refunds belong to, for their numbers.
+  const [orders, setOrders] = useState<OrderListRow[]>([]);
+  // Orders that took money, found by the search in the new-refund dialog. Searching the
+  // server reaches any order; the old list only ever held the newest 50.
+  const [orderQuery, setOrderQuery] = useState('');
+  const [orderOptions, setOrderOptions] = useState<OrderListRow[]>([]);
+  const [searchingOrders, setSearchingOrders] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -65,10 +71,11 @@ export function RefundsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [list, orderList] = await Promise.all([
-        refundApi.getRefunds(),
-        orderApi.getOrders(branchId || undefined),
-      ]);
+      const list = await refundApi.getRefunds();
+      const orderIds = [...new Set(list.map((r) => r.order_id))];
+      const orderList = orderIds.length
+        ? (await orderApi.listOrders({ ids: orderIds, limit: Math.min(200, orderIds.length) })).data
+        : [];
       setRefunds(list);
       setOrders(orderList);
       setError(null);
@@ -81,13 +88,25 @@ export function RefundsPage() {
 
   useEffect(() => {
     loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [branchId]);
 
-  // Only an order that took money can give any back.
-  const refundableOrders = orders.filter(
-    (order) => Number(order.paid_total || order.paid_amount || 0) > 0
-  );
+  // Only an order that took money can give any back, so the search asks for those alone.
+  useEffect(() => {
+    if (!newOpen) return undefined;
+    const timer = setTimeout(async () => {
+      setSearchingOrders(true);
+      try {
+        const res = await orderApi.listOrders({ branchId: branchId || undefined, q: orderQuery, paid: true, limit: 20 });
+        setOrderOptions(res.data);
+      } catch {
+        setOrderOptions([]);
+      } finally {
+        setSearchingOrders(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [newOpen, orderQuery, branchId]);
 
   const submitRefund = async (pin?: string) => {
     setSubmitting(true);
@@ -150,7 +169,6 @@ export function RefundsPage() {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            disabled={refundableOrders.length === 0}
             onClick={() => setNewOpen(true)}
           >
             {t('refunds.new', 'New refund')}
@@ -267,19 +285,28 @@ export function RefundsPage() {
         <DialogTitle>{t('refunds.new', 'New refund')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ mt: 1 }}>
-            <TextField
-              select
-              label={t('refunds.order', 'Order')}
-              value={form.orderId}
-              onChange={(e) => setForm({ ...form, orderId: e.target.value })}
-              fullWidth
-            >
-              {refundableOrders.map((order) => (
-                <MenuItem key={order.id} value={order.id}>
-                  {order.order_number} — {MoneyUtil.formatCurrency(order.paid_total || order.paid_amount || '0')}
-                </MenuItem>
-              ))}
-            </TextField>
+            <Autocomplete
+              options={orderOptions}
+              loading={searchingOrders}
+              filterOptions={(options) => options}
+              value={orderOptions.find((order) => order.id === form.orderId) ?? null}
+              onChange={(_, order) => setForm({ ...form, orderId: order?.id || '' })}
+              onInputChange={(_, value, reason) => {
+                if (reason === 'input') setOrderQuery(value);
+              }}
+              getOptionLabel={(order) =>
+                `${order.order_number} — ${MoneyUtil.formatCurrency(order.paid_total || order.paid_amount || '0')}`
+              }
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              noOptionsText={t('refunds.noPaidOrders', 'No paid order matches')}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label={t('refunds.order', 'Order')}
+                  placeholder={t('refunds.orderSearch', 'Order no., customer or phone')}
+                />
+              )}
+            />
 
             <TextField
               label={t('refunds.amount', 'Amount')}

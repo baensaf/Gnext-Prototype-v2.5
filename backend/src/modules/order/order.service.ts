@@ -40,6 +40,16 @@ import { CreditService } from '../customer/credit.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { ReasonCode } from '../../entities/ReasonCode.entity';
 import { assignCallNumber } from './call-number';
+import {
+  LIFECYCLE_SQL,
+  LIFECYCLE_GROUPS,
+  ORDER_EXPORT_LIMIT,
+  UUID_PATTERN,
+  applyOrderFilters,
+  applyOrderSort,
+  csvField,
+  lifecycleGroupOf,
+} from './order-list';
 import Decimal from 'decimal.js';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
@@ -157,33 +167,220 @@ export class OrderService {
     @Optional() @Inject(forwardRef(() => SimulationService)) private readonly simulationService?: SimulationService,
   ) {}
 
+  /**
+   * One page of the order book, filtered and sorted on the server (see `order-list.ts`).
+   * Each row also carries its customer's name and mobile and, for a delivery, where it is
+   * going and who has it, so the list needs no second lookup. `counts=1` adds the count of
+   * every lifecycle group under the same filters, for the tabs.
+   */
   async getOrders(tenantId: string, query: any) {
     const qb = this.orderRepo
       .createQueryBuilder('o')
       .leftJoinAndSelect('o.items', 'item')
       .leftJoinAndSelect('item.options', 'opt')
       .where('o.tenant_id = :tenantId', { tenantId });
+    applyOrderFilters(qb, query);
+    applyOrderSort(qb, query);
 
-    const branchVal = query.branch || query.branch_id || query.branchId;
-    if (branchVal) qb.andWhere('o.branch_id = :branch', { branch: branchVal });
-    const stateVal = query.state || query.status;
-    if (stateVal) qb.andWhere('(o.state = :state OR o.status = :state)', { state: stateVal });
-    if (query.type) qb.andWhere('o.order_type = :type', { type: query.type });
-    if (query.channel) qb.andWhere('o.channel = :channel', { channel: query.channel });
-    if (query.customer) qb.andWhere('o.customer_id = :customer', { customer: query.customer });
-    if (query.table) qb.andWhere('o.table_id = :table', { table: query.table });
-    if (query.shift) qb.andWhere('o.shift_id = :shift', { shift: query.shift });
-    if (query.q) {
-      qb.andWhere('(o.order_number ILIKE :q OR o.notes ILIKE :q)', { q: `%${query.q}%` });
-    }
-
-    qb.orderBy('o.placed_at', 'DESC');
-    const page = parseInt(query.page || '1', 10);
-    const limit = parseInt(query.limit || '50', 10);
+    const page = Math.max(1, parseInt(query.page || '1', 10) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(query.limit || '50', 10) || 50));
     qb.skip((page - 1) * limit).take(limit);
 
-    const [data, total] = await qb.getManyAndCount();
-    return { data, total, page, limit };
+    const [rows, total] = await qb.getManyAndCount();
+    const data = await this.withListContext(tenantId, rows);
+    const wantCounts = query.counts === '1' || query.counts === 'true';
+    const counts = wantCounts ? await this.countOrderGroups(tenantId, query) : undefined;
+    return { data, total, page, limit, ...(counts ? { counts } : {}) };
+  }
+
+  /** How many orders fall in each lifecycle group, under every filter but the group. */
+  async countOrderGroups(tenantId: string, query: any): Promise<Record<string, number>> {
+    const qb = this.orderRepo
+      .createQueryBuilder('o')
+      .select(LIFECYCLE_SQL, 'grp')
+      .addSelect('COUNT(*)', 'n')
+      .where('o.tenant_id = :tenantId', { tenantId });
+    applyOrderFilters(qb, query, { withGroup: false });
+    const raw: Array<{ grp: string; n: string }> = await qb.groupBy('grp').getRawMany();
+
+    const counts: Record<string, number> = { ALL: 0 };
+    for (const group of LIFECYCLE_GROUPS) counts[group] = 0;
+    for (const row of raw) {
+      counts[row.grp] = Number(row.n);
+      counts.ALL += Number(row.n);
+    }
+    return counts;
+  }
+
+  /** The names and places behind a page of orders: customer, delivery zone, delivery state, courier. */
+  private async withListContext(tenantId: string, rows: OrderHeader[]) {
+    if (rows.length === 0) return [];
+    const orderIds = rows.map((o) => o.id);
+    const customerIds = [...new Set(rows.map((o) => o.customer_id).filter(Boolean))];
+
+    const [customers, deliveries] = await Promise.all([
+      customerIds.length
+        ? this.dataSource.query(
+            `SELECT id,
+                    COALESCE(NULLIF(concat_ws(' ', first_name, last_name), ''), full_name) AS name,
+                    COALESCE(mobile, phone) AS mobile
+               FROM customer WHERE tenant_id = $1 AND id = ANY($2::uuid[])`,
+            [tenantId, customerIds],
+          )
+        : [],
+      this.dataSource.query(
+        `SELECT DISTINCT ON (d.order_id) d.order_id, d.state, d.zone_id, c.name AS courier_name,
+                d.address_snapshot->>'address_text' AS address_text
+           FROM delivery d LEFT JOIN courier c ON c.id = d.courier_id AND c.tenant_id = d.tenant_id
+          WHERE d.tenant_id = $1 AND d.order_id = ANY($2::uuid[])
+          ORDER BY d.order_id, d.created_at DESC`,
+        [tenantId, orderIds],
+      ),
+    ]);
+
+    const customerById = new Map<string, any>(customers.map((c: any) => [c.id, c]));
+    const deliveryByOrder = new Map<string, any>(deliveries.map((d: any) => [d.order_id, d]));
+    const zoneIds = [
+      ...new Set(
+        [...rows.map((o) => o.delivery_zone_id), ...deliveries.map((d: any) => d.zone_id)].filter(Boolean),
+      ),
+    ];
+    const zones: Array<{ id: string; name: string }> = zoneIds.length
+      ? await this.dataSource.query(`SELECT id, name FROM delivery_zone WHERE tenant_id = $1 AND id = ANY($2::uuid[])`, [
+          tenantId,
+          zoneIds,
+        ])
+      : [];
+    const zoneById = new Map(zones.map((z) => [z.id, z.name]));
+
+    return rows.map((o) => {
+      const customer = o.customer_id ? customerById.get(o.customer_id) : null;
+      const delivery = deliveryByOrder.get(o.id);
+      const zoneId = delivery?.zone_id || o.delivery_zone_id;
+      return {
+        ...o,
+        lifecycle: lifecycleGroupOf(o),
+        customer_name: customer?.name || null,
+        customer_mobile: customer?.mobile || null,
+        delivery_zone_name: zoneId ? zoneById.get(zoneId) || null : null,
+        delivery_state: delivery?.state || null,
+        courier_name: delivery?.courier_name || null,
+        delivery_address: delivery?.address_text || null,
+      };
+    });
+  }
+
+  /** The filtered order book as CSV, for head office to take into a spreadsheet. */
+  async exportOrdersCsv(tenantId: string, query: any): Promise<string> {
+    const qb = this.orderRepo
+      .createQueryBuilder('o')
+      .leftJoinAndSelect('o.items', 'item')
+      .where('o.tenant_id = :tenantId', { tenantId });
+    applyOrderFilters(qb, query);
+    applyOrderSort(qb, query);
+    qb.take(ORDER_EXPORT_LIMIT);
+    const rows = await this.withListContext(tenantId, await qb.getMany());
+
+    const branches: Array<{ id: string; name: string }> = await this.dataSource.query(
+      `SELECT id, name FROM branch WHERE tenant_id = $1`,
+      [tenantId],
+    );
+    const branchName = new Map(branches.map((b) => [b.id, b.name]));
+
+    const header = [
+      'order_number', 'call_number', 'branch', 'placed_at', 'business_date', 'channel', 'order_type',
+      'status', 'lifecycle', 'customer', 'mobile', 'table', 'delivery_zone', 'courier', 'items',
+      'grand_total', 'paid_total', 'refunded_total', 'outstanding_total', 'currency',
+    ];
+    const lines = rows.map((o) =>
+      [
+        o.order_number,
+        o.call_number,
+        branchName.get(o.branch_id) || o.branch_id,
+        o.placed_at ? new Date(o.placed_at).toISOString() : '',
+        o.business_date,
+        o.channel,
+        o.order_type,
+        o.status,
+        o.lifecycle,
+        o.customer_name,
+        o.customer_mobile,
+        o.table_number,
+        o.delivery_zone_name,
+        o.courier_name,
+        (o.items || []).filter(isActiveLine).reduce((sum, i) => sum + Number(i.quantity || 0), 0),
+        o.grand_total,
+        o.paid_total,
+        o.refunded_total,
+        o.outstanding_total,
+        o.currency_code,
+      ]
+        .map(csvField)
+        .join(','),
+    );
+    // The byte-order mark lets Excel read the Persian names as UTF-8.
+    return String.fromCharCode(0xfeff) + [header.join(','), ...lines].join('\r\n') + '\r\n';
+  }
+
+  /**
+   * What the order drawer shows beyond the order itself: where a delivery is going, the
+   * register it was rung up on, and the names of the people in its history.
+   */
+  async getOrderContext(tenantId: string, order: OrderHeader) {
+    const [delivery, terminal, auditActors] = await Promise.all([
+      this.dataSource.query(
+        `SELECT d.state, d.address_snapshot->>'address_text' AS address_text, d.zone_id
+           FROM delivery d WHERE d.tenant_id = $1 AND d.order_id = $2
+          ORDER BY d.created_at DESC LIMIT 1`,
+        [tenantId, order.id],
+      ),
+      order.terminal_id
+        ? this.dataSource.query(`SELECT name, code FROM terminal WHERE tenant_id = $1 AND id = $2`, [
+            tenantId,
+            order.terminal_id,
+          ])
+        : [],
+      this.dataSource.query(
+        `SELECT DISTINCT COALESCE(actor_id, user_id)::text AS id FROM audit_event
+          WHERE tenant_id = $1 AND entity_id = $2 AND COALESCE(actor_id, user_id) IS NOT NULL`,
+        [tenantId, order.id],
+      ),
+    ]);
+
+    let address: string | null = delivery[0]?.address_text || null;
+    if (!address && order.customer_address_id) {
+      const rows = await this.dataSource.query(
+        `SELECT address_text FROM customer_address WHERE tenant_id = $1 AND id = $2`,
+        [tenantId, order.customer_address_id],
+      );
+      address = rows[0]?.address_text || null;
+    }
+    const zoneId = delivery[0]?.zone_id || order.delivery_zone_id;
+    const zone = zoneId
+      ? await this.dataSource.query(`SELECT name FROM delivery_zone WHERE tenant_id = $1 AND id = $2`, [tenantId, zoneId])
+      : [];
+
+    const actorIds = [
+      ...new Set(
+        [...(order.stateEvents || []).map((e) => e.occurred_by), ...auditActors.map((a: any) => a.id), order.created_by]
+          .filter((id): id is string => !!id && UUID_PATTERN.test(id)),
+      ),
+    ];
+    const actors: Array<{ id: string; name: string }> = actorIds.length
+      ? await this.dataSource.query(
+          `SELECT id, COALESCE(NULLIF(display_name, ''), username) AS name
+             FROM admin_user WHERE tenant_id = $1 AND id = ANY($2::uuid[])`,
+          [tenantId, actorIds],
+        )
+      : [];
+
+    return {
+      delivery_address: address,
+      delivery_zone_name: zone[0]?.name || null,
+      delivery_state: delivery[0]?.state || null,
+      terminal_name: terminal[0] ? terminal[0].name || terminal[0].code : null,
+      actor_names: Object.fromEntries(actors.map((a) => [a.id, a.name])),
+    };
   }
 
   async getOrderById(tenantId: string, id: string) {

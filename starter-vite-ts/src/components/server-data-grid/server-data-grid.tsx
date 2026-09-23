@@ -1,14 +1,19 @@
 import type {
   GridColDef,
+  GridRowParams,
   GridSortModel,
   GridFilterModel,
+  GridRowHeightParams,
   GridPaginationModel,
   GridRowSelectionModel,
+  GridRowHeightReturnValue,
+  GridColumnVisibilityModel,
 } from '@mui/x-data-grid';
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { faIR } from '@mui/x-data-grid/locales';
 import {
   DataGrid,
   GridToolbar,
@@ -47,7 +52,14 @@ export interface ServerDataGridProps<T = any> {
   density?: 'compact' | 'standard' | 'comfortable';
   hideFooterPagination?: boolean;
   sx?: any;
+  getRowHeight?: (params: GridRowHeightParams) => GridRowHeightReturnValue;
+  getRowClassName?: (params: GridRowParams) => string;
+  columnVisibilityModel?: GridColumnVisibilityModel;
+  onColumnVisibilityModelChange?: (model: GridColumnVisibilityModel) => void;
 }
+
+// The grid's own words (the pager, the column menu, the toolbar) in the page's language.
+const faLocaleText = faIR.components.MuiDataGrid.defaultProps.localeText;
 
 export function ServerDataGrid<T extends { id?: string | number }>({
   rows,
@@ -74,8 +86,13 @@ export function ServerDataGrid<T extends { id?: string | number }>({
   density = 'comfortable',
   hideFooterPagination = false,
   sx,
+  getRowHeight,
+  getRowClassName,
+  columnVisibilityModel,
+  onColumnVisibilityModelChange,
 }: ServerDataGridProps<T>) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const localeText = i18n.language?.startsWith('fa') ? faLocaleText : undefined;
 
   const isServerPagination = rowCount !== undefined;
 
@@ -104,6 +121,11 @@ export function ServerDataGrid<T extends { id?: string | number }>({
         disableRowSelectionOnClick={disableRowSelectionOnClick}
         onRowClick={onRowClick}
         hideFooterPagination={hideFooterPagination}
+        localeText={localeText}
+        getRowHeight={getRowHeight}
+        getRowClassName={getRowClassName}
+        columnVisibilityModel={columnVisibilityModel}
+        onColumnVisibilityModelChange={onColumnVisibilityModelChange}
         slots={{
           toolbar: showToolbar ? GridToolbar : undefined,
           loadingOverlay: () => (

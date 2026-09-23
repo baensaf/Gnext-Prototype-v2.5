@@ -348,23 +348,25 @@
       "notRecorded": "ثبت نشده",
       "noCourier": "تخصیص داده نشده"
     },
-    "title": "مدیریت و گردش کار سفارش‌ها",
-    "subtitle": "ثبت سفارش‌های زنده، کنترل‌های ماشین وضعیت و تابلوی گردش کار آشپزخانه",
-    "tableView": "نمای جدول",
-    "kanbanBoard": "تابلوی کانبان",
+    "title": "سفارش‌ها",
+    "subtitle": "همه سفارش‌های شعبه: با شماره، مشتری، تلفن یا کالا پیدا کنید و روی آن اقدام کنید.",
     "refresh": "تازه‌سازی",
-    "searchPlaceholder": "جستجو بر اساس شماره سفارش، نام مشتری، میز...",
+    "searchPlaceholder": "شماره سفارش یا نوبت، مشتری، تلفن، کالا…",
     "tabs": {
       "all": "همه ({{count}})",
       "waiting": "در انتظار تأیید ({{count}})",
       "open": "باز ({{count}})",
       "completed": "تکمیل شده ({{count}})",
-      "cancelled": "لغو شده ({{count}})"
+      "cancelled": "لغو شده ({{count}})",
+      "held": "نگه‌داشته ({{count}})",
+      "refunded": "بازپرداخت شده ({{count}})"
     },
     "types": {
       "dineIn": "سالن",
       "takeaway": "بیرون‌بر",
-      "delivery": "ارسال با پیک"
+      "delivery": "ارسال با پیک",
+      "pickup": "تحویل حضوری",
+      "aggregator": "اسنپ‌فود"
     },
     "incoming": {
       "title": "سفارش‌های ورودی",
@@ -422,7 +424,6 @@
       "orderNumber": "شماره سفارش",
       "customerName": "نام مشتری",
       "type": "نوع سفارش",
-      "tableNotes": "میز / یادداشت",
       "itemsSummary": "خلاصه اقلام",
       "totalAmount": "مبلغ کل",
       "paidDue": "پرداختی / مانده",
@@ -431,13 +432,20 @@
       "actions": "عملیات",
       "walkInCustomer": "مشتری حضوری",
       "tableNumber": "میز {{number}}",
-      "counterTakeaway": "پیشخوان / بیرون‌بر",
       "paid": "پرداخت: {{amount}}",
       "due": "مانده: {{amount}}",
       "refunded": "بازپرداخت شده: {{amount}}",
       "fullyPaid": "تسویه کامل",
       "empty": "هیچ سفارشی مطابق با فیلترهای انتخابی یافت نشد.",
-      "branch": "شعبه"
+      "branch": "شعبه",
+      "channel": "کانال",
+      "where": "محل",
+      "delivery": "ارسال",
+      "noCourierYet": "هنوز پیکی ندارد",
+      "snappfoodCourier": "پیک اسنپ‌فود",
+      "counter": "پیشخوان",
+      "itemCount": "در مجموع {{count}} قلم",
+      "emptyHint": "تاریخ دیگری یا زبانه «همه» را امتحان کنید."
     },
     "actions": {
       "details": "جزئیات",
@@ -448,10 +456,11 @@
       "cancel": "لغو",
       "completeOrder": "تکمیل سفارش",
       "cancelOrder": "لغو سفارش",
-      "detailsAudit": "جزئیات و لاگ رویدادها",
       "editOrder": "ویرایش اقلام",
       "reportToSnappfood": "گزارش به اسنپ‌فود",
-      "changeType": "تغییر نوع فاکتور"
+      "changeType": "تغییر نوع فاکتور",
+      "more": "اقدامات بیشتر",
+      "openPage": "باز کردن صفحه کامل"
     },
     "snappfood": {
       "withSupport": "نزد پشتیبانی اسنپ‌فود",
@@ -466,14 +475,6 @@
       "send": "ارسال به اسنپ‌فود",
       "reported": "سفارش {{orderNumber}} به پشتیبانی اسنپ‌فود سپرده شد",
       "reportFailed": "گزارش این سفارش به اسنپ‌فود ناموفق بود"
-    },
-    "kanban": {
-      "waiting": "در انتظار تأیید",
-      "open": "باز",
-      "completed": "تکمیل شده",
-      "table": "میز: {{number}}",
-      "placed": "زمان ثبت: {{time}}",
-      "total": "مبلغ کل: {{amount}} IRR"
     },
     "cancelDialog": {
       "title": "لغو سفارش {{orderNumber}}",
@@ -514,11 +515,11 @@
       "voided": "ابطال شده",
       "placedOn": "ثبت شده در {{date}}",
       "table": "میز {{number}}",
-      "note": "یادداشت: {{note}}",
       "justNow": "لحظاتی پیش",
       "tabs": {
         "summary": "خلاصه و اقلام سفارش",
-        "audit": "سوابق و خط زمانی رویدادها ({{count}})"
+        "audit": "تاریخچه ({{count}})",
+        "payments": "پرداخت‌ها ({{count}})"
       },
       "customerContext": "اطلاعات مشتری و سالن",
       "customerName": "نام مشتری",
@@ -545,19 +546,54 @@
       "authenticatedUser": "کاربر سیستم",
       "systemPos": "سیستم خودکار / صندوق POS",
       "reasonCode": "کد علت:",
-      "noteLabel": "یادداشت:",
       "corr": "شناسه رهگیری:",
       "inspectSnapshot": "مشاهده داده خام",
       "inspectTitle": "جزئیات داده‌های لاگ: {{action}}",
       "timestamp": "زمان ثبت:",
-      "close": "بستن"
+      "close": "بستن",
+      "takenBy": "ثبت‌کننده",
+      "terminal": "صندوق",
+      "deliveryZone": "منطقه ارسال",
+      "deliveryState": "وضعیت ارسال",
+      "courier": "پیک",
+      "deliveryAddress": "نشانی ارسال",
+      "deliveryFee": "هزینه ارسال",
+      "refundedAmount": "بازپرداخت شده",
+      "paymentsTitle": "پرداخت‌ها",
+      "refundsTitle": "بازپرداخت‌ها",
+      "paidToSnappfood": "مبلغ سفارش‌های اسنپ‌فود را خود اسنپ‌فود می‌گیرد؛ صندوق پرداختی ثبت نمی‌کند.",
+      "noPayments": "هنوز پرداختی ثبت نشده است.",
+      "paymentMethod": "روش",
+      "paymentTime": "زمان",
+      "methods": {
+        "CASH": "نقد",
+        "CARD": "کارت",
+        "POS": "کارتخوان",
+        "MOBILE_POS": "کارتخوان پیک",
+        "CUSTOMER_CREDIT": "اعتبار مشتری",
+        "BANK_TRANSFER": "کارت به کارت",
+        "ONLINE": "آنلاین"
+      },
+      "paymentStatuses": {
+        "PENDING": "در انتظار",
+        "PROCESSING": "در حال انجام",
+        "SUCCEEDED": "موفق",
+        "COMPLETED": "انجام شده",
+        "FAILED": "ناموفق",
+        "CANCELLED": "لغو شده",
+        "REVERSED": "برگشت خورده",
+        "PARTIALLY_REFUNDED": "بخشی بازپرداخت شده",
+        "REFUNDED": "بازپرداخت شده"
+      }
     },
     "errors": {
       "loadFailed": "خطا در بارگذاری سفارش‌های فعال",
       "updateStatusFailed": "خطا در تغییر وضعیت سفارش",
       "cancelFailed": "خطا در لغو سفارش",
       "receiptFailed": "خطا در دریافت فاکتور سفارش",
-      "typeChangeFailed": "تغییر نوع فاکتور انجام نشد"
+      "typeChangeFailed": "تغییر نوع فاکتور انجام نشد",
+      "detailFailed": "بارگذاری این سفارش ممکن نشد",
+      "exportFailed": "خروجی گرفتن از سفارش‌ها ممکن نشد"
     },
     "detailTitle": "جزئیات سفارش",
     "itemsTitle": "اقلام سفارش",
@@ -616,7 +652,28 @@
       "approvalDetails": "تغییر نوع فاکتور خارج از مهلت مجاز صندوق‌دار",
       "approvalDetailsPaid": "تغییر نوع فاکتوری که پرداخت شده است"
     },
-    "dueAmount": "مانده قابل پرداخت"
+    "dueAmount": "مانده قابل پرداخت",
+    "export": "خروجی CSV",
+    "channels": {
+      "pos": "صندوق",
+      "kiosk": "کیوسک",
+      "online": "وب‌سایت",
+      "aggregator": "اسنپ‌فود"
+    },
+    "filters": {
+      "date": "تاریخ",
+      "from": "از",
+      "to": "تا",
+      "any": "همه",
+      "ranges": {
+        "today": "امروز",
+        "yesterday": "دیروز",
+        "7d": "۷ روز گذشته",
+        "30d": "۳۰ روز گذشته",
+        "all": "همه تاریخ‌ها",
+        "custom": "بازه دلخواه"
+      }
+    }
   },
   "dineIn": {
     "title": "نقشه سالن و عملیات میزها",
@@ -1366,7 +1423,9 @@
     "amountHelp": "برای بازپرداخت کل سفارش خالی بگذارید.",
     "continue": "ادامه",
     "pinNotice": "خروج پول از صندوق به پین مدیر نیاز دارد. پیش از ساخت بازپرداخت از شما پرسیده می‌شود.",
-    "approvalDetails": "بازپرداخت روی سفارش پرداخت‌شده"
+    "approvalDetails": "بازپرداخت روی سفارش پرداخت‌شده",
+    "noPaidOrders": "سفارش پرداخت‌شده‌ای با این مشخصات نیست",
+    "orderSearch": "شماره سفارش، مشتری یا تلفن"
   },
   "customers": {
     "title": "دفترچه مشتریان",
