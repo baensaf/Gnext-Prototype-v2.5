@@ -1145,7 +1145,14 @@ The agent:
 - starts uploading after each `welcome`, and keeps one batch in flight at a time;
 - MUST NOT upload an order before its offline life has ended (§12.4).
 
-The same `id` with **different** content is `HELD` with `ID_REUSED`; the first upload stands.
+The same `id` with **different** content is `HELD` with `ID_REUSED`; the first upload stands, and
+the second is kept only in the audit trail. A resend of a `HELD` order stays `HELD` until head office
+retries it.
+
+`HELD` reasons, in `flags`: `TOTAL_MISMATCH`, `PRICE_MISMATCH` (§12.6), `ID_REUSED`, `SHIFT_UNKNOWN`
+(`shift_id` is not a shift of this branch), `INVALID_ORDER` (the order does not have the §12.4 shape,
+or names a payment method the tenant does not have), `PROCESSING_FAILED` (anything else; the
+cloud logs it).
 
 ### 12.6 What the cloud does with an uploaded order
 
@@ -1161,6 +1168,7 @@ number silently.
 | The snapshot's price matches today's cloud price | Otherwise booked at the charged price, flag `PRICE_CHANGED` |
 | `data_version` is one the cloud still keeps | Otherwise the price check is skipped, flag `SNAPSHOT_UNKNOWN` |
 | Product, variant or option still exists and is active | Otherwise booked with the names from the order, flag `ITEM_REMOVED` |
+| `shift_id` is a shift of this branch | Otherwise `HELD` `SHIFT_UNKNOWN` |
 | `shift_id` is open | Closed: booked into that shift anyway, flag `SHIFT_CLOSED` (its cash count changes) |
 | `business_date` is not closed | Closed: booked on that date anyway, flag `DAY_CLOSED` |
 | Daily stock covers it | Otherwise stock goes below zero, flag `STOCK_NEGATIVE` |

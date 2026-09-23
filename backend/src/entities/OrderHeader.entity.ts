@@ -194,6 +194,10 @@ export class OrderHeader {
   @CreateDateColumn({ type: 'timestamptz' })
   placed_at: Date;
 
+  /** AGENT_OFFLINE for an order the branch took while offline and its agent uploaded later. */
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  source?: string | null;
+
   @UpdateDateColumn({ type: 'timestamptz' })
   updated_at: Date;
 

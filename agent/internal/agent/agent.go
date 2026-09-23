@@ -34,6 +34,8 @@ type Options struct {
 	Welcomed func()
 	// DataChanged is called when the cloud says the branch snapshot changed (§12.3).
 	DataChanged func()
+	// SyncStatus, when set, is sent in every heartbeat (§12.7).
+	SyncStatus func() any
 
 	// Timings, overridable in tests.
 	HandshakeTimeout time.Duration
@@ -284,7 +286,11 @@ func (a *Agent) heartbeat(ctx context.Context, c *websocket.Conn, interval time.
 			return
 		}
 		unacked, _ := a.o.Journal.UnackedResults()
-		a.send(protocol.TypeHeartbeat, "", protocol.Heartbeat{InFlight: int(a.running.Load()), UnackedResults: len(unacked)})
+		hb := protocol.Heartbeat{InFlight: int(a.running.Load()), UnackedResults: len(unacked)}
+		if a.o.SyncStatus != nil {
+			hb.Sync = a.o.SyncStatus()
+		}
+		a.send(protocol.TypeHeartbeat, "", hb)
 	}
 }
 

@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, BadRequestException } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { ProblemDetailsFilter } from './common/filters/problem-details.filter';
@@ -12,7 +13,9 @@ process.on('uncaughtException', (err) => {
 });
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // A branch agent uploads offline orders in batches of up to 1 MiB (protocol §12.5).
+  app.useBodyParser('json', { limit: '2mb' });
 
   const allowedOrigins = [
     process.env.FRONTEND_URL || 'http://localhost:3030',

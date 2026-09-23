@@ -49,6 +49,7 @@ import { AgentGatewayModule } from './modules/agent-gateway/agent-gateway.module
 import { AgentLocalModule } from './modules/agent-local/agent-local.module';
 import { AgentDataModule } from './modules/agent-data/agent-data.module';
 import { AgentDataSnapshot } from './entities/AgentDataSnapshot.entity';
+import { AgentSyncOrder } from './entities/AgentSyncOrder.entity';
 import { LiveModule } from './modules/live/live.module';
 import { ImportJob } from './entities/ImportJob.entity';
 import { ImportRow } from './entities/ImportRow.entity';
@@ -202,7 +203,7 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
           ImportJob, ImportRow,
           OperationalAlert, SavedReportView, ReportExportJob,
           TaxInvoice,
-          Agent, AgentEnrolmentCode, AgentCommand, AgentRelease, AgentDataSnapshot,
+          Agent, AgentEnrolmentCode, AgentCommand, AgentRelease, AgentDataSnapshot, AgentSyncOrder,
           DailyStock, NoteTemplate,
         ],
         synchronize: false, // Mandatory AD-02

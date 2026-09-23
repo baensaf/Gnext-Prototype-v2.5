@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AgentDataSnapshot } from '../../entities/AgentDataSnapshot.entity';
+import { AgentSyncOrder } from '../../entities/AgentSyncOrder.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { CashierShift } from '../../entities/CashierShift.entity';
 import { Category } from '../../entities/Category.entity';
@@ -19,15 +20,21 @@ import { Terminal } from '../../entities/Terminal.entity';
 import { AgentGatewayModule } from '../agent-gateway/agent-gateway.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { LiveModule } from '../live/live.module';
+import { AuditModule } from '../audit/audit.module';
+import { CashierModule } from '../cashier/cashier.module';
+import { OrderModule } from '../order/order.module';
+import { AgentSyncController } from './agent-sync.controller';
+import { AgentSyncService } from './agent-sync.service';
 import { AgentDataChangesService } from './agent-data-changes.service';
 import { AgentDataController } from './agent-data.controller';
 import { AgentDataService } from './agent-data.service';
 
-/** The branch snapshot the agent keeps for selling offline (protocol §12). */
+/** The branch snapshot the agent keeps, and the orders it uploads after selling offline (protocol §12). */
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       AgentDataSnapshot,
+      AgentSyncOrder,
       Tenant,
       Branch,
       Category,
@@ -47,9 +54,12 @@ import { AgentDataService } from './agent-data.service';
     AgentGatewayModule,
     CatalogModule,
     LiveModule,
+    AuditModule,
+    CashierModule,
+    OrderModule,
   ],
-  controllers: [AgentDataController],
-  providers: [AgentDataService, AgentDataChangesService],
-  exports: [AgentDataService],
+  controllers: [AgentDataController, AgentSyncController],
+  providers: [AgentDataService, AgentDataChangesService, AgentSyncService],
+  exports: [AgentDataService, AgentSyncService],
 })
 export class AgentDataModule {}
