@@ -245,6 +245,8 @@ type harness struct {
 	driver  *stubDriver
 	cancel  context.CancelFunc
 	done    chan error
+	// dataChanged receives each data.changed the agent passed on.
+	dataChanged chan struct{}
 }
 
 func testConfig(p *printerLAN) protocol.Config {
@@ -269,7 +271,7 @@ func startWithKey(t *testing.T, dir string, cloud *fakeCloud, drv *stubDriver, k
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &harness{cloud: cloud, journal: j, driver: drv, done: make(chan error, 1)}
+	h := &harness{cloud: cloud, journal: j, driver: drv, done: make(chan error, 1), dataChanged: make(chan struct{}, 10)}
 	h.agent = New(Options{
 		Version: "1.0.0",
 		WSURL:   cloud.wsURL(),
@@ -283,6 +285,7 @@ func startWithKey(t *testing.T, dir string, cloud *fakeCloud, drv *stubDriver, k
 			}
 			return nil
 		},
+		DataChanged:  func() { h.dataChanged <- struct{}{} },
 		ResultResend: 300 * time.Millisecond,
 		BackoffMax:   200 * time.Millisecond,
 	})
@@ -479,4 +482,24 @@ func TestUnknownKeyStops(t *testing.T) {
 		t.Fatal("agent kept retrying after 401")
 	}
 	h.cancel()
+}
+
+func TestDataChangedIsAckedAndPassedOn(t *testing.T) {
+	lan := newPrinterLAN(t)
+	cloud := newFakeCloud(t, testConfig(lan))
+	h := start(t, t.TempDir(), cloud, &stubDriver{})
+	defer h.stop(t)
+	cloud.waitConnected()
+
+	cloud.command("cmd-data", protocol.TypeDataChanged, map[string]any{"data_version": "abc"})
+	var a protocol.Ack
+	_ = json.Unmarshal(cloud.next(ofType(protocol.TypeAck, "cmd-data")).Payload, &a)
+	if !a.OK {
+		t.Fatalf("data.changed ack = %+v, want ok", a)
+	}
+	select {
+	case <-h.dataChanged:
+	case <-time.After(5 * time.Second):
+		t.Fatal("data.changed was not passed on")
+	}
 }

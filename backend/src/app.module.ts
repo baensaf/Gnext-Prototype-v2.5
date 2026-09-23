@@ -47,6 +47,8 @@ import { DailyStock } from './entities/DailyStock.entity';
 import { NoteTemplate } from './entities/NoteTemplate.entity';
 import { AgentGatewayModule } from './modules/agent-gateway/agent-gateway.module';
 import { AgentLocalModule } from './modules/agent-local/agent-local.module';
+import { AgentDataModule } from './modules/agent-data/agent-data.module';
+import { AgentDataSnapshot } from './entities/AgentDataSnapshot.entity';
 import { LiveModule } from './modules/live/live.module';
 import { ImportJob } from './entities/ImportJob.entity';
 import { ImportRow } from './entities/ImportRow.entity';
@@ -200,7 +202,7 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
           ImportJob, ImportRow,
           OperationalAlert, SavedReportView, ReportExportJob,
           TaxInvoice,
-          Agent, AgentEnrolmentCode, AgentCommand, AgentRelease,
+          Agent, AgentEnrolmentCode, AgentCommand, AgentRelease, AgentDataSnapshot,
           DailyStock, NoteTemplate,
         ],
         synchronize: false, // Mandatory AD-02
@@ -236,6 +238,7 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
     ProfilesModule,
     AgentGatewayModule,
     AgentLocalModule,
+    AgentDataModule,
     LiveModule,
     TypeOrmModule.forFeature([AdminUser, Session, IdempotencyRecord]),
   ],

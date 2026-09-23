@@ -14,11 +14,12 @@ export const COMMAND_TTL_MS: Record<string, number> = {
   'payment.query': 10 * 60_000,
   'config.updated': 24 * 3600_000,
   'agent.check_update': 24 * 3600_000,
+  'data.changed': 24 * 3600_000,
 };
 const DEFAULT_TTL_MS = 10 * 60_000;
 
 /** Commands the agent only acks; everything else ends in a `*.result`. */
-const ACK_ONLY_TYPES = new Set(['config.updated', 'agent.check_update']);
+const ACK_ONLY_TYPES = new Set(['config.updated', 'agent.check_update', 'data.changed']);
 
 /** A SENT command with no ack after this long is sent again (§4.4). */
 export const RESEND_AFTER_MS = 15_000;
