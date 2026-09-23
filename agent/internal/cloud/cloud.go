@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -124,6 +125,43 @@ func (c *Client) Download(ctx context.Context, url string, w io.Writer) error {
 	}
 	_, err = io.Copy(w, resp.Body)
 	return err
+}
+
+// ErrNotModified is Snapshot's answer when the agent already holds the current version.
+var ErrNotModified = errors.New("branch snapshot not modified")
+
+// Snapshot fetches the branch snapshot (§12.2). held is the version the agent has, or "". The
+// transport asks for gzip and unpacks it. Returns ErrNotModified on a 304.
+func (c *Client) Snapshot(ctx context.Context, held string) (body []byte, version string, err error) {
+	req, err := c.request(ctx, http.MethodGet, "/api/v1/agent/data/snapshot", nil)
+	if err != nil {
+		return nil, "", err
+	}
+	if held != "" {
+		req.Header.Set("If-None-Match", `"`+held+`"`)
+	}
+	resp, err := c.http().Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	switch {
+	case resp.StatusCode == http.StatusNotModified:
+		return nil, held, ErrNotModified
+	case resp.StatusCode != http.StatusOK:
+		return nil, "", problem(resp)
+	}
+	body, err = io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+	if err != nil {
+		return nil, "", err
+	}
+	var head struct {
+		DataVersion string `json:"data_version"`
+	}
+	if err := json.Unmarshal(body, &head); err != nil || head.DataVersion == "" {
+		return nil, "", fmt.Errorf("branch snapshot without a data_version")
+	}
+	return body, head.DataVersion, nil
 }
 
 // LocalUser is who signed in to the agent's local settings page.

@@ -23,12 +23,13 @@ func Home() string {
 	return filepath.Join(pd, "Gnext", "Agent")
 }
 
-func ConfigPath() string   { return filepath.Join(Home(), "config.json") }
-func IdentityPath() string { return filepath.Join(Home(), "identity.json") }
-func JournalPath() string  { return filepath.Join(Home(), "journal.db") }
-func UpdatesDir() string   { return filepath.Join(Home(), "updates") }
-func LogsDir() string      { return filepath.Join(Home(), "logs") }
-func BrowserDir() string   { return filepath.Join(Home(), "browser-profile") }
+func ConfigPath() string    { return filepath.Join(Home(), "config.json") }
+func IdentityPath() string  { return filepath.Join(Home(), "identity.json") }
+func JournalPath() string   { return filepath.Join(Home(), "journal.db") }
+func UpdatesDir() string    { return filepath.Join(Home(), "updates") }
+func LogsDir() string       { return filepath.Join(Home(), "logs") }
+func BrowserDir() string    { return filepath.Join(Home(), "browser-profile") }
+func BranchDataDir() string { return filepath.Join(Home(), "branch-data") }
 
 // InstallConfig is config.json, written by the installer.
 type InstallConfig struct {

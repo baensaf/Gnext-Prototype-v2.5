@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gnext/agent/internal/agent"
+	"gnext/agent/internal/branchdata"
 	"gnext/agent/internal/cloud"
 	"gnext/agent/internal/journal"
 	"gnext/agent/internal/localui"
@@ -127,14 +128,17 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 	defer cancel()
 	var exitCode atomic.Int32
 	client := &cloud.Client{Server: cfg.Server, Key: id.DeviceKey, Version: version}
+	// The branch snapshot is pulled after every welcome, where a 304 costs nothing, and on data.changed (§12.2).
+	data := &branchdata.Keeper{Dir: store.BranchDataDir(), Fetch: client, NotModified: cloud.ErrNotModified, Log: h.log}
 	a := agent.New(agent.Options{
-		Version:  version,
-		WSURL:    id.WSURL,
-		Headers:  client.Headers(),
-		Journal:  h.journal,
-		Printer:  &printing.Printer{Renderer: h.renderer},
-		Log:      h.log,
-		Welcomed: func() { update.Cleanup("") },
+		Version:     version,
+		WSURL:       id.WSURL,
+		Headers:     client.Headers(),
+		Journal:     h.journal,
+		Printer:     &printing.Printer{Renderer: h.renderer},
+		Log:         h.log,
+		Welcomed:    func() { update.Cleanup(""); data.Trigger() },
+		DataChanged: data.Trigger,
 	})
 	up := &update.Updater{
 		Client: client, Version: version, Dir: store.UpdatesDir(), Log: h.log,
@@ -151,6 +155,7 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 	h.id, h.agent, h.client = &id, a, client
 	h.mu.Unlock()
 	go updateLoop(runCtx, a, up, h.log)
+	go data.Run(runCtx)
 
 	done := make(chan error, 1)
 	go func() { done <- a.Run(runCtx) }()

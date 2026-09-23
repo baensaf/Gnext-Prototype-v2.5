@@ -38,6 +38,11 @@ section numbers (§) in the code refer to it.
     during a charge.
   - `fake`: amounts ending in `0` are approved, `1` declined, `2` time out (`UNKNOWN`; a later
     *Check terminal* finds them approved), `3` cancelled on the terminal.
+- **Branch snapshot** (§12.2): keeps a copy of what the branch sells, at its prices, in
+  `branch-datasnapshot.json` (the one before it in `snapshot.prev.json`), for the offline till
+  to come. It is fetched after every connect, when the cloud sends `data.changed`, and every
+  15 minutes, with the version held in `If-None-Match` so an unchanged copy costs a `304`. A
+  failed fetch keeps the copy it has and tries again with backoff.
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
   publishes a build, then swaps the binary after checking its SHA-256.
 - **Settings window** (Start-menu and desktop shortcut *Gnext Agent*, the tray, or running the
@@ -49,7 +54,8 @@ section numbers (§) in the code refer to it.
   device needs a Gnext sign-in by this branch's manager or head office. Changes are made in
   the cloud (`/api/v1/agent/local`, audited under that user) and pushed back to the agent. The
   page only listens on 127.0.0.1 and refuses other hosts and cross-site writes.
-- No offline mode (that is v2).
+- No offline selling yet: v2 keeps the snapshot and uploads offline orders; the offline till
+  that takes them comes after.
 
 ## Layout
 
@@ -62,7 +68,8 @@ section numbers (§) in the code refer to it.
 | `internal/printing` | Edge renderer, ESC/POS raster, TCP printer |
 | `internal/payment` | Terminal driver interface, the `sep` (Saman) and `fake` drivers |
 | `saman-bridge` | .NET Framework bridge to Saman's PC-POS SDK (vendor DLLs), built in CI |
-| `internal/cloud` | HTTPS calls: enrol, me, releases |
+| `internal/cloud` | HTTPS calls: enrol, me, releases, branch snapshot |
+| `internal/branchdata` | Keeps the branch snapshot current on disk |
 | `internal/localui` | Settings page (embedded HTML/JS) and its local API, LAN scan |
 | `internal/update` | Release check, download, verify, swap |
 | `internal/winsession` | Starts the ticket browser and the tray as the signed-in user |

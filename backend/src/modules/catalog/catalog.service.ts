@@ -1004,6 +1004,18 @@ export class CatalogService {
     return off;
   }
 
+  /** Each product's selling windows at a branch; a product on sale all day is left out. */
+  async sellingWindows(tenantId: string, branchId: string): Promise<Map<string, AvailabilitySchedule[]>> {
+    const schedules = await this.scheduleRepo.find({ where: { tenant_id: tenantId, is_active: true } });
+    const out = new Map<string, AvailabilitySchedule[]>();
+    if (!schedules.length) return out;
+    for (const product of await this.prodRepo.find({ where: { tenant_id: tenantId } })) {
+      const windows = await this.windowsFor(tenantId, product, branchId, schedules);
+      if (windows.length) out.set(product.id, windows);
+    }
+    return out;
+  }
+
   async getAvailabilities(tenantId: string, branchId?: string) {
     // A branch's list includes the chain-wide stops (no branch), which apply to it too.
     const where: any = branchId

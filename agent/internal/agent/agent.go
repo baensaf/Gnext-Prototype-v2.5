@@ -32,6 +32,8 @@ type Options struct {
 	NewDriver func(protocol.Terminal) payment.Driver
 	// Welcomed is called after every welcome (the updater deletes the old binary then).
 	Welcomed func()
+	// DataChanged is called when the cloud says the branch snapshot changed (§12.3).
+	DataChanged func()
 
 	// Timings, overridable in tests.
 	HandshakeTimeout time.Duration
@@ -360,6 +362,12 @@ func (a *Agent) command(env protocol.Envelope) {
 	case protocol.TypeCheckUpdate:
 		a.ack(env.ID)
 		a.triggerUpdate()
+
+	case protocol.TypeDataChanged:
+		a.ack(env.ID)
+		if a.o.DataChanged != nil {
+			a.o.DataChanged()
+		}
 
 	case protocol.TypePrintJob:
 		var job protocol.PrintJob

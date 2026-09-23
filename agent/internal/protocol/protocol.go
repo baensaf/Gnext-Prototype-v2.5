@@ -31,10 +31,11 @@ const (
 	TypePaymentResult = "payment.result"
 	TypeDeviceStatus  = "device.status"
 	TypeCheckUpdate   = "agent.check_update"
+	TypeDataChanged   = "data.changed"
 )
 
 // Capabilities this build advertises in hello.
-var Capabilities = []string{"print.html", "payment.charge", "payment.query"}
+var Capabilities = []string{"print.html", "payment.charge", "payment.query", "data.pull"}
 
 // Ack and envelope error codes (§8.1).
 const (
@@ -103,7 +104,7 @@ func New(typ, ref string, payload any) (Envelope, error) {
 // IsCommand reports whether a cloud → agent type asks for work.
 func IsCommand(typ string) bool {
 	switch typ {
-	case TypeConfigUpdated, TypePrintJob, TypePaymentCharge, TypePaymentQuery, TypeCheckUpdate:
+	case TypeConfigUpdated, TypePrintJob, TypePaymentCharge, TypePaymentQuery, TypeCheckUpdate, TypeDataChanged:
 		return true
 	}
 	return false

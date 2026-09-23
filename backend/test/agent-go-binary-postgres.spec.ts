@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { AddressInfo, createServer, Server } from 'net';
 import { ChildProcess, spawn } from 'child_process';
-import { mkdtempSync, rmSync } from 'fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { DataSource } from 'typeorm';
@@ -75,11 +75,12 @@ const bin = process.env.GNEXT_AGENT_BIN;
     payments = moduleRef.get(PaymentService);
     home = mkdtempSync(join(tmpdir(), 'gnext-agent-'));
 
-    // A port-9100 printer on "the LAN": counts the ESC/POS jobs it receives.
+    // A port-9100 printer on "the LAN": counts the connections that carried a ticket image
+    // (GS v 0). Status checks (DLE EOT, GS r) arrive on connections of their own.
     printer = createServer((socket) => {
-      let bytes = 0;
-      socket.on('data', (d) => (bytes += d.length));
-      socket.on('end', () => bytes > 0 && printed++);
+      const chunks: Buffer[] = [];
+      socket.on('data', (d) => chunks.push(d));
+      socket.on('end', () => Buffer.concat(chunks).includes(Buffer.from([0x1d, 0x76, 0x30])) && printed++);
     });
     await new Promise<void>((resolve) => printer.listen(0, '127.0.0.1', resolve));
     const printerPort = (printer.address() as AddressInfo).port;
@@ -164,9 +165,32 @@ const bin = process.env.GNEXT_AGENT_BIN;
     await until(async () => (await registry.listAgents(tenantId, { branchId }))[0]?.connected === true);
   }, 60000);
 
+  it('keeps the branch snapshot, and fetches it again when head office changes the menu', async () => {
+    const file = join(home, 'branch-data', 'snapshot.json');
+    const held = () => (existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null);
+    await until(() => !!held()?.data_version).catch((e) => {
+      throw new Error(`${e.message}
+--- agent log ---
+${agentLog}`);
+    });
+    const first = held();
+    expect(first.products.map((p: any) => p.id)).toContain(productId);
+
+    await dataSource.getRepository(Product).update({ id: productId }, { name: 'Renamed for the snapshot test' });
+    await until(() => held()?.products?.some((p: any) => p.name === 'Renamed for the snapshot test'), 40000).catch((e) => {
+      throw new Error(`${e.message}
+--- agent log ---
+${agentLog}`);
+    });
+    expect(held().data_version).not.toBe(first.data_version);
+  }, 60000);
+
   let orderId: string;
 
-  it("prints a new order's receipt and kitchen ticket as ESC/POS on the network printer", async () => {
+  const printJobs = () => dataSource.getRepository(PrintJob).find({ where: { tenant_id: tenantId, entity_id: orderId } });
+
+  // The receipt waits for payment (since #84); the kitchen ticket goes when the order is placed.
+  it("prints a new order's kitchen ticket as ESC/POS on the network printer", async () => {
     const draft = await orders.createDraft(
       tenantId,
       { branch_id: branchId, order_type: 'PICKUP', items: [{ product_id: productId, quantity: 1 }] } as any,
@@ -174,22 +198,29 @@ const bin = process.env.GNEXT_AGENT_BIN;
     );
     orderId = (await orders.submitOrder(tenantId, draft.id, {} as any, cashierId)).id;
     await until(async () => {
-      const jobs = await dataSource.getRepository(PrintJob).find({ where: { tenant_id: tenantId, entity_id: orderId } });
-      return jobs.length === 2 && jobs.every((j) => j.status === 'SUCCESS');
-    }, 60000).catch((e) => {
-      throw new Error(`${e.message}\n--- agent log ---\n${agentLog}`);
+      const jobs = await printJobs();
+      return jobs.length === 1 && jobs[0].status === 'SUCCESS';
+    }, 60000).catch(async (e) => {
+      throw new Error(`${e.message}\njobs: ${JSON.stringify((await printJobs()).map((j) => [j.document_type, j.status]))}\n--- agent log ---\n${agentLog}`);
     });
-    expect(printed).toBe(2);
+    expect(printed).toBe(1);
   }, 90000);
 
-  it('takes the card payment on the fake terminal', async () => {
+  it('takes the card payment on the fake terminal, and then prints the receipt', async () => {
     const order = await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: orderId });
     const intent = await payments.createPaymentIntent(tenantId, { orderId, methodId: cardMethodId, amount: order.outstanding_total } as any);
     await payments.processPayment(tenantId, intent.id, {}, cashierId);
     await until(async () => (await dataSource.getRepository(Payment).findOneByOrFail({ id: intent.id })).status === 'SUCCEEDED').catch((e) => {
       throw new Error(`${e.message}\n--- agent log ---\n${agentLog}`);
     });
-  }, 60000);
+    await until(async () => {
+      const jobs = await printJobs();
+      return jobs.length === 2 && jobs.every((j) => j.status === 'SUCCESS');
+    }, 60000).catch(async (e) => {
+      throw new Error(`${e.message}\njobs: ${JSON.stringify((await printJobs()).map((j) => [j.document_type, j.status]))}\n--- agent log ---\n${agentLog}`);
+    });
+    expect(printed).toBe(2);
+  }, 120000);
 
   it('stops for good when head office revokes it', async () => {
     await registry.revokeAgent(tenantId, agentId, 'test over', {});
