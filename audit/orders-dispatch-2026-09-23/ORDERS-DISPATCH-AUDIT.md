@@ -28,20 +28,31 @@ All order numbers are from the local database.
 
 ## Status at a glance
 
-| ID | Finding | Severity | Status on `415aadb` |
-|---|---|---|---|
-| OD1 | Orders page and Refunds loaded only the newest 50 orders | Blocker | **Fixed** by the Orders Directory |
-| OD2 | Snappfood orders the store delivers itself have no dispatch; cash ones are stuck | Blocker (if it applies) | Open |
-| OD3 | An order changed to Delivery after sending never reaches the board | High | Open |
-| OD4 | Failed works on finished deliveries, reopening paid orders and wiping COD debt | High | Open |
-| OD5 | Requeue has no state check | Medium | Open |
-| OD6 | Reassign leaves the old attempt open and is allowed after departure | Medium | Open |
-| OD7 | The delivery board reads every delivery ever, with N+1 queries, on every refresh | Medium → Blocker | Open |
-| OD8 | Dispatch cards show no customer, address, phone or age | Medium | Open (the Orders list now has these fields; the delivery board doesn't) |
-| OD9 | Order search can't find an order by the customer | Low | **Mostly fixed**. A `09…` phone number misses customers saved as `+98…` |
-| OD10 | A courier can leave before the kitchen is done | Info | Unchanged, by design |
-| **OD11** | **The Orders page opens on "today", hiding open orders from earlier days** | **High** | **New** |
-| **OD12** | **Any cashier can export the branch's whole order book, with customer mobiles** | Low | **New** |
+| ID | Finding | Severity | Status on `415aadb` | Fixed in |
+|---|---|---|---|---|
+| OD1 | Orders page and Refunds loaded only the newest 50 orders | Blocker | Fixed by the Orders Directory | #93 |
+| OD2 | Snappfood orders the store delivers itself have no dispatch; cash ones are stuck | Blocker (if it applies) | Open | **#98** |
+| OD3 | An order changed to Delivery after sending never reaches the board | High | Open | **#96** |
+| OD4 | Failed works on finished deliveries, reopening paid orders and wiping COD debt | High | Open | **#95** |
+| OD5 | Requeue has no state check | Medium | Open | **#95** |
+| OD6 | Reassign leaves the old attempt open and is allowed after departure | Medium | Open | **#95** |
+| OD7 | The delivery board reads every delivery ever, with N+1 queries, on every refresh | Medium → Blocker | Open | **#97** |
+| OD8 | Dispatch cards show no customer, address, phone or age | Medium | Open | **#97** |
+| OD9 | Order search can't find an order by the customer | Low | Mostly fixed; a `09…` number missed `+98…` customers | #93, **#94** |
+| OD10 | A courier can leave before the kitchen is done | Info | Unchanged, by design | — |
+| OD11 | The Orders page opens on "today", hiding open orders from earlier days | High | New | **#94** |
+| OD12 | Any cashier can export the branch's whole order book, with customer mobiles | Low | New | Open, your call |
+
+**Fixes shipped (2026-09-23):**
+- Plan items 1–5 were merged as #94–#98.
+- All the walk scenarios were re-run end to end on the combined code:
+  - Fail on a completed order gets 409.
+  - Reassign and requeue en route get 409, and the first courier's attempt reads `REASSIGNED`.
+  - An order changed from takeaway to delivery goes on the board.
+  - A Snappfood cash order the store delivers goes on the board with the customer, phone, address and call number; after it is delivered, the courier's settlement expects the full balance.
+  - The Open tab under "today" shows all 35 open orders.
+  - `09351112233` finds the `+98` customer.
+- Still open: OD12, which is your call, and OD10, which is left as it is by design.
 
 ## Verdict
 
