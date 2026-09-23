@@ -1,5 +1,6 @@
 import type { OrderHeader } from 'src/api/orderApi';
 import type { DiningTable } from 'src/api/dineInApi';
+import type { ReasonCode } from 'src/api/settingsApi';
 import type { DeliveryZone } from 'src/api/deliveryApi';
 import type { ManualDiscount } from 'src/api/discountsApi';
 import type { Customer, CustomerAddress } from 'src/api/customerApi';
@@ -268,6 +269,9 @@ export function PosOrderPage() {
   const [holdingOrder, setHoldingOrder] = useState(false);
   const [resumingOrderId, setResumingOrderId] = useState<string | null>(null);
   const [holdSuccessMessage, setHoldSuccessMessage] = useState<string | null>(null);
+  const [discardTarget, setDiscardTarget] = useState<OrderHeader | null>(null);
+  const [discardReasonCodes, setDiscardReasonCodes] = useState<ReasonCode[]>([]);
+  const [discardReasonCodeId, setDiscardReasonCodeId] = useState('');
 
   // Coupon state
   const [couponInput, setCouponInput] = useState('');
@@ -828,10 +832,38 @@ export function PosOrderPage() {
     }
   };
 
-  // Discard a Held Order
-  const handleDiscardHeldOrder = async (orderId: string) => {
+  // Discard a Held Order. The backend refuses to cancel a draft with items on it
+  // without a reason code (spec 6.1), so those go through the reason dialog; an
+  // empty draft still discards in one click.
+  const handleDiscardHeldOrder = async (order: OrderHeader) => {
+    if (!order.items?.length) {
+      await discardHeldOrder(order.id);
+      return;
+    }
+    setDiscardTarget(order);
+    setDiscardReasonCodeId('');
+    if (discardReasonCodes.length === 0) {
+      try {
+        const codes = await settingsApi.getReasonCodes();
+        setDiscardReasonCodes(codes.filter((c) => c.is_active));
+      } catch (err: any) {
+        showErrorToast(err, 'Failed to load reason codes');
+      }
+    }
+  };
+
+  const handleConfirmDiscard = async () => {
+    if (!discardTarget || !discardReasonCodeId) {
+      toast.error(t('orders.cancelDialog.reasonRequired'));
+      return;
+    }
+    const discarded = await discardHeldOrder(discardTarget.id, discardReasonCodeId);
+    if (discarded) setDiscardTarget(null);
+  };
+
+  const discardHeldOrder = async (orderId: string, reasonCodeId?: string): Promise<boolean> => {
     try {
-      await orderApi.cancelOrder(orderId, undefined, 'Discarded from held drafts');
+      await orderApi.cancelOrder(orderId, reasonCodeId, 'Discarded from held drafts');
       if (activeDraftOrderId === orderId) {
         handleClearCart();
       } else if (selectedBranchId) {
@@ -839,10 +871,12 @@ export function PosOrderPage() {
       }
       toast.info('Held draft order discarded');
       setError(null);
+      return true;
     } catch (err: any) {
       const msg = 'Failed to discard held draft';
       setError(msg);
       showErrorToast(err, msg);
+      return false;
     }
   };
 
@@ -2646,7 +2680,7 @@ export function PosOrderPage() {
                     color="error"
                     variant="text"
                     startIcon={<DeleteIcon fontSize="small" />}
-                    onClick={() => handleDiscardHeldOrder(ho.id)}
+                    onClick={() => handleDiscardHeldOrder(ho)}
                     sx={{ textTransform: 'none' }}
                   >
                     Discard
@@ -2667,6 +2701,35 @@ export function PosOrderPage() {
           </Stack>
         )}
       </Drawer>
+
+      {/* Discard Held Order: reason code */}
+      <Dialog open={Boolean(discardTarget)} onClose={() => setDiscardTarget(null)}>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>
+          {t('orders.cancelDialog.title', { orderNumber: discardTarget?.order_number })}
+        </DialogTitle>
+        <DialogContent sx={{ minWidth: 360, pt: 2 }}>
+          <FormControl fullWidth sx={{ mt: 1 }}>
+            <InputLabel>{t('orders.cancelDialog.reasonLabel')}</InputLabel>
+            <Select
+              label={t('orders.cancelDialog.reasonLabel')}
+              value={discardReasonCodeId}
+              onChange={(e) => setDiscardReasonCodeId(e.target.value)}
+            >
+              {discardReasonCodes.map((r) => (
+                <MenuItem key={r.id} value={r.id}>
+                  {r.name} ({r.code})
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDiscardTarget(null)}>{t('orders.cancelDialog.keepOrder')}</Button>
+          <Button color="error" variant="contained" onClick={handleConfirmDiscard} sx={{ fontWeight: 'bold' }}>
+            {t('orders.cancelDialog.confirm')}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Option & Variant Customization Dialog */}
       <Dialog open={optionDialogOpen} onClose={() => setOptionDialogOpen(false)} maxWidth="sm" fullWidth aria-keyshortcuts="Escape">
