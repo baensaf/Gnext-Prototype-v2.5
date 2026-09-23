@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"gnext/agent/internal/offline"
 	"gnext/agent/internal/protocol"
 	"gnext/agent/internal/store"
 )
@@ -162,6 +163,24 @@ func (c *Client) Snapshot(ctx context.Context, held string) (body []byte, versio
 		return nil, "", fmt.Errorf("branch snapshot without a data_version")
 	}
 	return body, head.DataVersion, nil
+}
+
+// UploadOrders sends offline orders (§12.5). A 400 for the whole batch comes back as a
+// *Problem with Status 400; see IsRefused.
+func (c *Client) UploadOrders(ctx context.Context, orders []json.RawMessage) ([]offline.Result, error) {
+	var out struct {
+		Results []offline.Result `json:"results"`
+	}
+	if err := c.do(ctx, http.MethodPost, "/api/v1/agent/sync/orders", map[string]any{"orders": orders}, &out); err != nil {
+		return nil, err
+	}
+	return out.Results, nil
+}
+
+// IsRefused reports whether the cloud refused a request as malformed (HTTP 400).
+func (c *Client) IsRefused(err error) bool {
+	var p *Problem
+	return errors.As(err, &p) && p.Status == http.StatusBadRequest
 }
 
 // LocalUser is who signed in to the agent's local settings page.

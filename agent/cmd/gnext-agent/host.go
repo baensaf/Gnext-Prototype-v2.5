@@ -14,6 +14,7 @@ import (
 	"gnext/agent/internal/cloud"
 	"gnext/agent/internal/journal"
 	"gnext/agent/internal/localui"
+	"gnext/agent/internal/offline"
 	"gnext/agent/internal/printing"
 	"gnext/agent/internal/store"
 	"gnext/agent/internal/update"
@@ -25,6 +26,7 @@ import (
 type host struct {
 	log      *slog.Logger
 	journal  *journal.Journal
+	outbox   *offline.Outbox
 	renderer *printing.BrowserRenderer
 	restart  chan struct{}
 
@@ -41,9 +43,16 @@ func newHost(log *slog.Logger) (*host, error) {
 	if err != nil {
 		return nil, err
 	}
+	ob, err := offline.Open(store.OfflinePath())
+	if err != nil {
+		j.Close()
+		return nil, err
+	}
+	ob.Log = log
 	return &host{
 		log:      log,
 		journal:  j,
+		outbox:   ob,
 		renderer: &printing.BrowserRenderer{ProfileDir: store.BrowserDir()},
 		restart:  make(chan struct{}, 1),
 	}, nil
@@ -52,6 +61,7 @@ func newHost(log *slog.Logger) (*host, error) {
 func (h *host) close() {
 	h.renderer.Close()
 	h.journal.Close()
+	h.outbox.Close()
 }
 
 // State implements localui.Host.
@@ -137,8 +147,9 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 		Journal:     h.journal,
 		Printer:     &printing.Printer{Renderer: h.renderer},
 		Log:         h.log,
-		Welcomed:    func() { update.Cleanup(""); data.Trigger() },
+		Welcomed:    func() { update.Cleanup(""); data.Trigger(); h.outbox.Trigger() },
 		DataChanged: data.Trigger,
+		SyncStatus:  func() any { return syncStatus(data.Status(), h.outbox.Status()) },
 	})
 	up := &update.Updater{
 		Client: client, Version: version, Dir: store.UpdatesDir(), Log: h.log,
@@ -156,6 +167,7 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 	h.mu.Unlock()
 	go updateLoop(runCtx, a, up, h.log)
 	go data.Run(runCtx)
+	go h.outbox.Run(runCtx, client)
 
 	done := make(chan error, 1)
 	go func() { done <- a.Run(runCtx) }()
@@ -198,5 +210,17 @@ func updateLoop(ctx context.Context, a *agent.Agent, up *update.Updater, log *sl
 			log.Warn("update check failed", "err", err)
 		}
 		next = time.Hour + time.Duration(rand.Int64N(int64(10*time.Minute))) - 5*time.Minute
+	}
+}
+
+// syncStatus is the heartbeat's sync block (§12.7): the snapshot held and the order backlog.
+func syncStatus(data branchdata.Status, orders offline.Status) map[string]any {
+	return map[string]any{
+		"data_version":      data.DataVersion,
+		"data_pulled_at":    data.PulledAt,
+		"pending_orders":    orders.PendingOrders,
+		"oldest_pending_at": orders.OldestPendingAt,
+		"last_upload_at":    orders.LastUploadAt,
+		"last_upload_error": orders.LastUploadError,
 	}
 }

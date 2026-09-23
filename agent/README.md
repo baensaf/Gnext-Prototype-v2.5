@@ -43,6 +43,12 @@ section numbers (§) in the code refer to it.
   to come. It is fetched after every connect, when the cloud sends `data.changed`, and every
   15 minutes, with the version held in `If-None-Match` so an unchanged copy costs a `304`. A
   failed fetch keeps the copy it has and tries again with backoff.
+- **Offline orders** (§12.4, §12.5): keeps the orders the branch took while offline in
+  `offline-orders.db` and uploads them, oldest first and 50 at a time, after every connect and
+  whenever one is added. The cloud answers for each (accepted, already had it, or held for head
+  office); a batch it refuses as malformed is split so only the bad order is set aside. Answered
+  orders stay a week. Heartbeats carry the snapshot version and the backlog (§12.7). Nothing adds
+  orders yet: the offline till that does comes next.
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
   publishes a build, then swaps the binary after checking its SHA-256.
 - **Settings window** (Start-menu and desktop shortcut *Gnext Agent*, the tray, or running the
@@ -70,6 +76,7 @@ section numbers (§) in the code refer to it.
 | `saman-bridge` | .NET Framework bridge to Saman's PC-POS SDK (vendor DLLs), built in CI |
 | `internal/cloud` | HTTPS calls: enrol, me, releases, branch snapshot |
 | `internal/branchdata` | Keeps the branch snapshot current on disk |
+| `internal/offline` | Holds offline orders and uploads them |
 | `internal/localui` | Settings page (embedded HTML/JS) and its local API, LAN scan |
 | `internal/update` | Release check, download, verify, swap |
 | `internal/winsession` | Starts the ticket browser and the tray as the signed-in user |

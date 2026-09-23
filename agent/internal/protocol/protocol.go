@@ -35,7 +35,7 @@ const (
 )
 
 // Capabilities this build advertises in hello.
-var Capabilities = []string{"print.html", "payment.charge", "payment.query", "data.pull"}
+var Capabilities = []string{"print.html", "payment.charge", "payment.query", "data.pull", "sync.orders"}
 
 // Ack and envelope error codes (§8.1).
 const (
@@ -149,6 +149,8 @@ type Welcome struct {
 type Heartbeat struct {
 	InFlight       int `json:"in_flight"`
 	UnackedResults int `json:"unacked_results"`
+	// Sync is the branch snapshot and offline-order backlog (§12.7).
+	Sync any `json:"sync,omitempty"`
 }
 
 type HeartbeatAck struct {
