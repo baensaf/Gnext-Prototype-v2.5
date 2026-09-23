@@ -200,12 +200,13 @@ Decisions in §12, confirmed by the user on 2026-09-24:
 | 10 | Branch snapshot, agent 1.1.0 | #106 | `backend/src/modules/agent-data` (`AgentDataService`, `AgentDataChangesService`), migration 073; `agent/internal/branchdata` |
 | 11–12 | Offline order upload and conflict rules, agent 1.2.0 | #107 | `AgentSyncService`, `agent_sync_order`, `order_header.source`, migration 074; `agent/internal/offline` |
 | 13 | Sync status and the Offline orders card | #108 | heartbeat `sync` in `agent-connection.ts`, `syncWarnings`, `/api/v1/agent-sync/orders`, `agent-sync-orders-card.tsx` |
-| 14 | Fake offline sync removed | this PR | module, page, tile, `GET /branches/:id/status` and four tables gone (migration 075) |
+| 14 | Fake offline sync removed | #109 | module, page, tile, `GET /branches/:id/status` and four tables gone (migration 075) |
 
 Press **Publish** on agent 1.2.0 in Branch Agents so branch PCs pick up `data.pull` and
 `sync.orders`.
 
-Left for the offline POS step (write its contract section first, and show the user):
+Left for the offline POS step; the task list, decisions to ask and traps are in
+[`HANDOFF-offline-pos.md`](HANDOFF-offline-pos.md):
 
 - The till screen, served by the agent on the branch LAN, that sells from `branch-datasnapshot.json`
   and hands finished orders to `offline.Outbox.Add`.
