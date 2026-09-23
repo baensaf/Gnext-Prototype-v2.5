@@ -79,11 +79,6 @@ export class TenantController {
     return await this.tenantService.updateBranchHours(tenantId, id, body.hours || [], correlationId);
   }
 
-  @Get('branches/:id/status')
-  async getBranchStatus(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.tenantService.getBranchStatus(tenantId, id);
-  }
 
   @Get('terminals')
   async getTerminals(@Query('branchId') branchId: string, @Req() req: Request) {

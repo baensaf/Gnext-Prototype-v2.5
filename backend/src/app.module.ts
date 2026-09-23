@@ -32,7 +32,6 @@ import { DeliveryModule } from './modules/delivery/delivery.module';
 import { CashierModule } from './modules/cashier/cashier.module';
 import { KioskModule } from './modules/kiosk/kiosk.module';
 import { SimulationModule } from './modules/simulation/simulation.module';
-import { OfflineSyncModule } from './modules/offline-sync/offline-sync.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { ImportExportModule } from './modules/import-export/import-export.module';
 import { UsersModule } from './modules/users/users.module';
@@ -85,7 +84,6 @@ import { IdempotencyRecord } from './entities/IdempotencyRecord.entity';
 import { Branch } from './entities/Branch.entity';
 import { BranchOperatingHour } from './entities/BranchOperatingHour.entity';
 import { Terminal } from './entities/Terminal.entity';
-import { BranchStatusSnapshot } from './entities/BranchStatusSnapshot.entity';
 import { TenantSetting } from './entities/TenantSetting.entity';
 import { Currency } from './entities/Currency.entity';
 import { PaymentMethod } from './entities/PaymentMethod.entity';
@@ -152,13 +150,10 @@ import { CashierShift } from './entities/CashierShift.entity';
 import { CashMovement } from './entities/CashMovement.entity';
 import { BusinessDayClose } from './entities/BusinessDayClose.entity';
 import { IntegrationLog } from './entities/IntegrationLog.entity';
-import { OfflineQueueItem } from './entities/OfflineQueueItem.entity';
-import { SyncConflictRecord } from './entities/SyncConflictRecord.entity';
 import { OperationalAlert } from './entities/OperationalAlert.entity';
 import { SavedReportView } from './entities/SavedReportView.entity';
 import { ReportExportJob } from './entities/ReportExportJob.entity';
 
-import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
 
 @Module({
   imports: [
@@ -178,7 +173,7 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
         database: config.get<string>('DB_NAME', 'appdb'),
         entities: [
           Tenant, AdminUser, Session, AuditEvent, OutboxEvent, IdempotencyRecord,
-          Branch, BranchOperatingHour, Terminal, BranchStatusSnapshot, TenantSetting,
+          Branch, BranchOperatingHour, Terminal, TenantSetting,
           Currency, PaymentMethod, ReasonCode,
           FileAsset, LocalizedString,
           Category, Product, ProductVariant, OptionGroup, OptionItem, ProductOptionGroup, PriceGroup,
@@ -199,7 +194,6 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
           DeliveryZone, CourierAttendance, CourierTerminalAssignment, Delivery, DeliveryEvent,
           CashierShift, CashMovement, BusinessDayClose,
           IntegrationLog,
-          OfflineQueueItem, SyncConflictRecord, SyncCategoryLog,
           ImportJob, ImportRow,
           OperationalAlert, SavedReportView, ReportExportJob,
           TaxInvoice,
@@ -231,7 +225,6 @@ import { SyncCategoryLog } from './entities/SyncCategoryLog.entity';
     DeliveryModule,
     KioskModule,
     SimulationModule,
-    OfflineSyncModule,
     ReportsModule,
     MoadianModule,
     ImportExportModule,

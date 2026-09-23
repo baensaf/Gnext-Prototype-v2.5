@@ -33,13 +33,6 @@ export const FEATURE_REGISTRY: Record<string, FeatureRegistryItem> = {
     labelKey: 'nav.printQueueV5',
     isV5Preview: true,
   },
-  offlineSync: {
-    id: 'offlineSync',
-    version: 'V5 Preview',
-    status: 'V5_PREVIEW',
-    labelKey: 'nav.offlineSyncV5',
-    isV5Preview: true,
-  },
   variants: {
     id: 'variants',
     version: 'V5 Preview',

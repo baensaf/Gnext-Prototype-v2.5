@@ -56,7 +56,6 @@ import { BusinessDaysPage } from 'src/pages/cashier/business-days';
 import { ReportViewerPage } from 'src/pages/reports/report-viewer';
 import { CalendarSettingsPage } from 'src/pages/settings/calendar';
 import { FleetRollupPage } from 'src/pages/operations/fleet-rollup';
-import { OfflineSyncPage } from 'src/pages/simulation/offline-sync';
 import { ChannelPricesPage } from 'src/pages/catalog/channel-prices';
 import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
 import { ProductDetailPage } from 'src/pages/catalog/product-detail';
@@ -191,7 +190,6 @@ export const routesSection: RouteObject[] = [
       { path: 'simulation', element: <SimulationCenterPage /> },
       { path: 'simulation/snappfood', element: <SimulationSnappfoodPage /> },
       { path: 'simulation/payments-printers', element: <SimulationPaymentsPrintersPage /> },
-      { path: 'simulation/offline-sync', element: <OfflineSyncPage /> },
       { path: 'simulation/logs', element: <SimulationLogsPage /> },
       { path: 'reports', element: <ReportsIndexPage /> },
       { path: 'reports/:reportCode', element: <ReportViewerPage /> },

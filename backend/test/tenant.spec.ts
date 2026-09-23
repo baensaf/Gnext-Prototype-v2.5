@@ -5,7 +5,6 @@ import { Tenant } from '../src/entities/Tenant.entity';
 import { Branch } from '../src/entities/Branch.entity';
 import { BranchOperatingHour } from '../src/entities/BranchOperatingHour.entity';
 import { Terminal } from '../src/entities/Terminal.entity';
-import { BranchStatusSnapshot } from '../src/entities/BranchStatusSnapshot.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 
@@ -15,7 +14,6 @@ describe('TenantService (Unit)', () => {
   let hoursRepo: any;
   let terminalRepo: any;
   let tenantRepo: any;
-  let statusRepo: any;
   let auditWriter: any;
 
   beforeEach(async () => {
@@ -23,7 +21,6 @@ describe('TenantService (Unit)', () => {
     branchRepo = { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn(), softRemove: jest.fn() };
     hoursRepo = { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
     terminalRepo = { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn(), softRemove: jest.fn() };
-    statusRepo = { findOne: jest.fn() };
     auditWriter = { write: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -33,7 +30,6 @@ describe('TenantService (Unit)', () => {
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
         { provide: getRepositoryToken(BranchOperatingHour), useValue: hoursRepo },
         { provide: getRepositoryToken(Terminal), useValue: terminalRepo },
-        { provide: getRepositoryToken(BranchStatusSnapshot), useValue: statusRepo },
         { provide: AuditWriter, useValue: auditWriter },
       ],
     }).compile();

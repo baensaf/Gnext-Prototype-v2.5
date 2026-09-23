@@ -156,7 +156,7 @@ already uploaded "with a different build" means the agent changed without a vers
 
 The user chose to build tasks 10–14 first and the offline POS after them. The contract for
 10–13 is [§12 of `agent-protocol.md`](agent-protocol.md#12-branch-data-and-offline-sync-v2),
-in review in its own PR, as task 0 was.
+agreed and merged (#105), as task 0 was.
 
 | # | Task | Cost | Risk | Importance |
 |---|---|---|---|---|
@@ -179,7 +179,7 @@ sync that task 13 replaces: `backend/src/modules/offline-sync` (`/api/v1/sync/*`
 `reports.service.ts` and `branch_status_snapshot` by `tenant.service.ts`; those reads move to the
 new sync data or go, before the tables are dropped.
 
-Decisions in §12 for the user to confirm in review:
+Decisions in §12, confirmed by the user on 2026-09-24:
 
 1. The snapshot is one document per branch, fetched whole when it changes. No paging, no deltas.
 2. It carries no users, PINs, customers, coupons or discounts. Offline sign-in is left to the
@@ -191,6 +191,30 @@ Decisions in §12 for the user to confirm in review:
    charged a price the cloud never gave the till.
 5. No coupons or discounts offline, and shifts are neither opened nor closed offline.
 6. Offline orders are not sent to the kitchen again on upload.
+
+### v2 status (2026-09-24)
+
+| # | Task | PR | Where |
+|---|---|---|---|
+| — | Contract §12 | #105 | `agent-protocol.md` §12 |
+| 10 | Branch snapshot, agent 1.1.0 | #106 | `backend/src/modules/agent-data` (`AgentDataService`, `AgentDataChangesService`), migration 073; `agent/internal/branchdata` |
+| 11–12 | Offline order upload and conflict rules, agent 1.2.0 | #107 | `AgentSyncService`, `agent_sync_order`, `order_header.source`, migration 074; `agent/internal/offline` |
+| 13 | Sync status and the Offline orders card | #108 | heartbeat `sync` in `agent-connection.ts`, `syncWarnings`, `/api/v1/agent-sync/orders`, `agent-sync-orders-card.tsx` |
+| 14 | Fake offline sync removed | this PR | module, page, tile, `GET /branches/:id/status` and four tables gone (migration 075) |
+
+Press **Publish** on agent 1.2.0 in Branch Agents so branch PCs pick up `data.pull` and
+`sync.orders`.
+
+Left for the offline POS step (write its contract section first, and show the user):
+
+- The till screen, served by the agent on the branch LAN, that sells from `branch-datasnapshot.json`
+  and hands finished orders to `offline.Outbox.Add`.
+- Offline sign-in (the snapshot has no users or PINs; decide how a cashier proves who they are).
+- Rendering tickets on the agent (today the cloud renders the HTML), and charging the terminal
+  without a cloud command.
+- On upload: marking tables occupied for an `OPEN` dine-in order, a delivery record for a delivery
+  order, and option group names on the lines.
+- Real-binary check of the upload path: nothing produces offline orders until the till exists.
 
 ## How to start
 

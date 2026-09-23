@@ -20,7 +20,6 @@ import { PrintJob } from '../../entities/PrintJob.entity';
 import { PrintAttempt } from '../../entities/PrintAttempt.entity';
 import { Printer } from '../../entities/Printer.entity';
 import { Delivery } from '../../entities/Delivery.entity';
-import { OfflineQueueItem } from '../../entities/OfflineQueueItem.entity';
 import { Product } from '../../entities/Product.entity';
 import { Category } from '../../entities/Category.entity';
 import { Branch } from '../../entities/Branch.entity';
@@ -53,7 +52,6 @@ import { ReportsController } from './reports.controller';
       PrintAttempt,
       Printer,
       Delivery,
-      OfflineQueueItem,
       Product,
       Category,
       Branch,

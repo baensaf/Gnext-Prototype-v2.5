@@ -89,7 +89,6 @@
     "simulationOverview": "Overview & Sandbox Hub",
     "snappfoodSim": "Snappfood Simulator (v4.3.0)",
     "hardwareSim": "Payments & Printers Mock",
-    "syncSim": "Offline Sync Engine",
     "logsSim": "Integration Audit Logs",
     "auditGroup": "Audit",
     "audit": "Audit Explorer",
@@ -107,7 +106,6 @@
     "v5Preview": "Inventory Stock & Movement",
     "printersV5": "Printers & Station Routing",
     "approvalsV5": "Multi-Step Approvals & Policy",
-    "offlineSyncV5": "Offline Sync & Conflict Engine",
     "outboxV5": "Outbox & Event Queue Monitor",
     "printQueueV5": "Thermal Print Queue Engine",
     "reportsSalesSummary": "Sales Summary",
@@ -2322,8 +2320,6 @@
     "hardwareNotice": "Payment POS Devices & Kitchen Printer Hardware Simulation Console",
     "hardwareTitle": "Hardware Failure & Response Simulator",
     "hardwareDesc": "Simulate mobile POS timeouts, paper-out printer errors, network drops, and device failover rerouting.",
-    "syncTitle": "Offline Sync & Conflict Simulator",
-    "syncDesc": "Cloud-branch offline operation envelope queue, DLQ retry workers & conflict resolution engine.",
     "logsNotice": "Integration Execution & Webhook Audit Logs",
     "logsTitle": "Integration Event Logs",
     "logsDesc": "Real-time inspection of external provider payloads, HMAC verification logs, and webhook status codes.",
@@ -2343,9 +2339,6 @@
         "hardwareTitle": "POS Terminals & Printers",
         "hardwareDesc": "POS terminal timeout/declines, printer paper-out/cover-open failover, and Tara digital wallet gateway.",
         "hardwareAction": "Open Hardware Console",
-        "syncTitle": "Offline Sync & Conflict Engine",
-        "syncDesc": "Branch envelope queues, DLQ retries, connectivity toggles, and side-by-side 3-way conflict resolution.",
-        "syncAction": "Open Sync Engine",
         "logsTitle": "Integration & Webhook Logs",
         "logsDesc": "Payload inspector, correlation IDs, HMAC validation badges, and idempotency replay tests.",
         "logsAction": "Open Audit Logs"
@@ -2353,15 +2346,12 @@
       "stats": {
         "totalLogs": "Logged Events",
         "snappfoodOrders": "Snappfood Receipts",
-        "activePrinters": "Printers Online",
-        "syncQueue": "Sync Queue Items"
+        "activePrinters": "Printers Online"
       },
       "quickTest": {
         "title": "Quick Simulator Actions",
         "genSnappfood": "Trigger Quick Snappfood Order",
-        "testPrinter": "Trigger Printer Outage",
-        "toggleOffline": "Simulate Offline Mode",
-        "execSync": "Run Sync Batch Worker"
+        "testPrinter": "Trigger Printer Outage"
       }
     },
     "snappfood": {
@@ -2514,71 +2504,6 @@
       "history": {
         "title": "Recent Hardware Simulation Events",
         "empty": "No simulation events recorded yet. Run a POS or printer test above."
-      }
-    },
-    "sync": {
-      "title": "Offline Sync & Conflict Simulator",
-      "subtitle": "Cloud-branch offline operation envelope queue, DLQ retry workers & conflict resolution engine.",
-      "v5Badge": "V5 Preview",
-      "bannerDesc": "V5 Preview Module: Cloud-branch offline operation envelope queue, DLQ retry workers & conflict resolution engine. Retained for V5 architectural validation.",
-      "branchContext": "Active Branch Context",
-      "branchUuid": "Selected Branch UUID:",
-      "noneSelected": "None Selected",
-      "noBranchAlert": "No branch context selected. Please select a valid branch to perform offline sync operations.",
-      "connectivityMode": "Branch Connectivity Mode:",
-      "online": "Online Connected",
-      "offline": "Offline Disconnected",
-      "onlineSwitch": "ONLINE",
-      "offlineSwitch": "OFFLINE SIMULATED",
-      "agentVersion": "Agent Version:",
-      "agentHealth": "Health:",
-      "lastSync": "Last Sync:",
-      "offlineSince": "Offline Since:",
-      "never": "Never",
-      "pendingCount": "Pending Queue Items",
-      "dlqCount": "DLQ / Failed Items",
-      "controlsTitle": "Sync Engine & Queue Controls",
-      "enqueueOrder": "+ Offline Order",
-      "enqueueConflict": "+ Price Conflict",
-      "enqueueDlq": "+ DLQ Failure",
-      "enqueueDedupe": "+ Dedupe Key Order",
-      "triggerWorker": "Trigger Sync Worker",
-      "queueTitle": "Offline Transaction Queue",
-      "items": "items",
-      "records": "records",
-      "table": {
-        "itemId": "Item ID",
-        "entityType": "Entity Type",
-        "status": "Status",
-        "dedupeKey": "Dedupe Key",
-        "retries": "Retries",
-        "conflictError": "Conflict / Error",
-        "actions": "Actions",
-        "cloneRetry": "Clone for Retry"
-      },
-      "conflictsTitle": "Sync Conflict Resolution Center",
-      "conflictTable": {
-        "id": "Conflict ID",
-        "type": "Conflict Type",
-        "strategy": "Resolution Strategy",
-        "timestamp": "Timestamp",
-        "action": "Action",
-        "resolveDiff": "Resolve Diff"
-      },
-      "modal": {
-        "title": "Resolve Sync Conflict:",
-        "clientState": "Client State (Local Original):",
-        "serverState": "Server State (Cloud Original):",
-        "chooseStrategy": "Choose Resolution Strategy:",
-        "acceptClient": "Accept Local Version",
-        "acceptServer": "Accept Cloud Version",
-        "manualOverride": "Merged / Manual Override",
-        "financialAlert": "Financial payloads must obey domain validation rules. Arbitrary or unvalidated financial JSON will be rejected.",
-        "overrideLabel": "Merged Domain Payload (JSON)",
-        "invalidJson": "Invalid JSON syntax in editor",
-        "validJson": "Valid JSON format",
-        "cancel": "Cancel",
-        "confirm": "Confirm Resolution"
       }
     },
     "logs": {
