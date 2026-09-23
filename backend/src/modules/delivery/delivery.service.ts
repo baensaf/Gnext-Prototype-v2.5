@@ -1438,23 +1438,34 @@ export class DeliveryService {
       throw new BadRequestException(`Settlement is ${settlement.status} and cannot be modified. Closed/reversed batches are immutable.`);
     }
 
+    let allLines: CourierSettlementLine[] | null = null;
     if (data.lines && Array.isArray(data.lines)) {
-      let linesActCash = '0.00';
-      let linesActPos = '0.00';
       for (const lineData of data.lines) {
         if (!lineData.id) continue;
         const line = await this.settlementLineRepo.findOne({ where: { id: lineData.id, settlement_id: id } });
         if (line) {
           if (lineData.actual_cash !== undefined) line.actual_cash = MoneyUtil.format(lineData.actual_cash, 2);
-          if (lineData.actual_pos !== undefined) line.actual_pos = MoneyUtil.format(lineData.actual_pos, 2);
+          if (lineData.actual_pos !== undefined) {
+            line.actual_pos = MoneyUtil.format(lineData.actual_pos, 2);
+            // The cashier learns how the customer paid only when the courier is back: the card
+            // slip is the card part, and the rest of what the order owed is cash. So the slip
+            // sets the line's expected split — a card payment is not a cash shortage — and only
+            // a card amount beyond what was owed is left as a card discrepancy.
+            const owed = MoneyUtil.add(line.expected_cash || '0', line.expected_pos || '0', 2);
+            const { cash, pos } = this.splitCollection(owed, line.actual_pos);
+            line.expected_cash = MoneyUtil.format(cash, 2);
+            line.expected_pos = MoneyUtil.format(pos, 2);
+            line.payment_method_code = MoneyUtil.greaterThan(line.expected_pos, line.expected_cash) ? 'MOBILE_POS' : 'CASH';
+          }
           if (lineData.receipt_verified !== undefined) line.receipt_verified = Boolean(lineData.receipt_verified);
           await this.settlementLineRepo.save(line);
-          linesActCash = MoneyUtil.add(linesActCash, line.actual_cash || '0.00', 2);
-          linesActPos = MoneyUtil.add(linesActPos, line.actual_pos || '0.00', 2);
         }
       }
-      if (data.actual_cash_amount === undefined) settlement.actual_cash_amount = linesActCash;
-      if (data.actual_pos_amount === undefined) settlement.actual_pos_amount = linesActPos;
+      allLines = (await this.settlementLineRepo.find({ where: { settlement_id: id } })) || [];
+      settlement.expected_cash_amount = MoneyUtil.sum(allLines.map((l) => l.expected_cash || '0'), 2);
+      settlement.expected_pos_amount = MoneyUtil.sum(allLines.map((l) => l.expected_pos || '0'), 2);
+      if (data.actual_cash_amount === undefined) settlement.actual_cash_amount = MoneyUtil.sum(allLines.map((l) => l.actual_cash || '0'), 2);
+      if (data.actual_pos_amount === undefined) settlement.actual_pos_amount = MoneyUtil.sum(allLines.map((l) => l.actual_pos || '0'), 2);
     }
 
     if (data.actual_cash_amount !== undefined) {
@@ -1496,7 +1507,8 @@ export class DeliveryService {
       afterData: saved,
     });
 
-    return saved;
+    // The screen keeps editing the lines it sent, so hand back their new expected split.
+    return allLines ? { ...saved, lines: allLines } : saved;
   }
 
   async reviewSettlement(tenantId: string, id: string, userId: string, correlationId?: string) {

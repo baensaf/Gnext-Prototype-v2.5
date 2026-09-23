@@ -272,6 +272,40 @@ describe('DeliveryService (Courier Settlement)', () => {
     expect(updated.net_settlement_amount).toBe('285.00');
   });
 
+  it('takes the card slip entered at settlement as the card part, not as a cash shortage', async () => {
+    const settlement = {
+      id: 'settle-1',
+      tenant_id: 't-1',
+      status: 'DRAFT',
+      expected_cash_amount: '565000.00',
+      actual_cash_amount: '565000.00',
+      expected_pos_amount: '0.00',
+      actual_pos_amount: '0.00',
+      total_compensation_amount: '0.00',
+      total_adjustment_amount: '0.00',
+    };
+    const line: any = { id: 'line-1', settlement_id: 'settle-1', expected_cash: '565000.00', actual_cash: '565000.00', expected_pos: '0.00', actual_pos: '0.00' };
+    settlementRepo.findOne.mockResolvedValue(settlement);
+    settlementRepo.save.mockImplementation((s: any) => Promise.resolve(s));
+    settlementLineRepo.findOne.mockResolvedValue(line);
+    settlementLineRepo.save.mockImplementation((l: any) => Promise.resolve(l));
+    settlementLineRepo.find.mockResolvedValue([line]);
+
+    // Paid 500,000 on the courier's card reader; handed over 60,000 cash (5,000 short).
+    const updated: any = await service.updateSettlement('t-1', 'settle-1', {
+      lines: [{ id: 'line-1', actual_pos: '500000', actual_cash: '60000' }],
+    });
+
+    expect(line.expected_pos).toBe('500000.00');
+    expect(line.expected_cash).toBe('65000.00');
+    expect(line.payment_method_code).toBe('MOBILE_POS');
+    expect(updated.expected_cash_amount).toBe('65000.00');
+    expect(updated.expected_pos_amount).toBe('500000.00');
+    expect(updated.pos_discrepancy_amount).toBe('0.00');
+    expect(updated.cash_discrepancy_amount).toBe('-5000.00');
+    expect(updated.lines).toHaveLength(1);
+  });
+
   it('should require approval when closing settlement with a discrepancy', async () => {
     const settlement = {
       id: 'settle-1',
