@@ -1,5 +1,5 @@
 import type { GridColDef } from '@mui/x-data-grid';
-import type { BusinessDayClose, DayCloseOpenOrder, DayCloseOpenOrders } from '../../api/shiftApi';
+import type { BusinessDayClose, DayCloseOpenOrders } from '../../api/shiftApi';
 
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
@@ -15,12 +15,10 @@ import {
   Card,
   Grid,
   Chip,
-  Link,
   Stack,
   Alert,
   Button,
   Dialog,
-  Checkbox,
   TextField,
   Typography,
   IconButton,
@@ -29,12 +27,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  CircularProgress,
-  FormControlLabel,
 } from '@mui/material';
-
-import { paths } from 'src/routes/paths';
-import { RouterLink } from 'src/routes/components';
 
 import { fDate , fDateTime } from 'src/utils/format-time';
 import { businessDate as businessDayOf } from 'src/utils/calendar';
@@ -42,6 +35,7 @@ import { businessDate as businessDayOf } from 'src/utils/calendar';
 import { useBranchContext } from 'src/contexts/branch-context';
 
 import { CalendarDateField } from 'src/components/calendar-date-field';
+import { DayCloseOrders } from 'src/components/shift/day-close-orders';
 
 import { shiftApi } from '../../api/shiftApi';
 import { ServerDataGrid } from '../../components/server-data-grid';
@@ -57,47 +51,6 @@ const nextBusinessDate = (date: string) => {
   const today = businessDayOf();
   return nextText > today ? today : nextText;
 };
-
-const ISSUE_FALLBACK: Record<string, string> = {
-  UNPAID: 'Unpaid',
-  NOT_SUBMITTED: 'Draft, never sent',
-  AWAITING_ACCEPTANCE: 'Waiting for acceptance',
-  DELIVERY_NOT_FINISHED: 'Delivery not finished',
-};
-
-/** One open order in the close dialog, linked to where it can be settled. */
-function OpenOrderLine({ order }: { order: DayCloseOpenOrder }) {
-  const { t } = useTranslation();
-  const href =
-    order.issue === 'AWAITING_ACCEPTANCE'
-      ? `${paths.app.orders.incoming}?order=${order.id}`
-      : paths.app.orders.detail(order.id);
-  const amount = order.issue === 'UNPAID' ? order.outstandingTotal : order.grandTotal;
-
-  return (
-    <Stack direction="row" sx={{ alignItems: 'center', gap: 1, py: 0.75, flexWrap: 'wrap' }}>
-      <Link component={RouterLink} href={href} target="_blank" rel="noopener" variant="subtitle2" dir="ltr">
-        {order.orderNumber}
-      </Link>
-      <Typography variant="caption" color="text.secondary">
-        {order.tableNumber ? `${order.orderType} · ${order.tableNumber}` : order.orderType} ·{' '}
-        <span dir="ltr">{fDate(order.businessDate)}</span>
-      </Typography>
-      <Box sx={{ flexGrow: 1 }} />
-      {order.issue && (
-        <Chip
-          size="small"
-          color="warning"
-          variant="outlined"
-          label={t(`cashier.openOrders.issue.${order.issue}`, ISSUE_FALLBACK[order.issue])}
-        />
-      )}
-      <Typography variant="body2" dir="ltr">
-        {Number(amount || 0).toLocaleString()} IRR
-      </Typography>
-    </Stack>
-  );
-}
 
 export function BusinessDaysPage() {
   const { t } = useTranslation();
@@ -178,7 +131,6 @@ export function BusinessDaysPage() {
     setOpenCloseDialog(true);
   };
 
-  const toComplete = alreadyClosed ? [] : (openOrders?.toComplete ?? []);
   const needsDecision = alreadyClosed ? [] : (openOrders?.needsDecision ?? []);
   const carryingOver = needsDecision.length > 0;
   const canClose =
@@ -477,74 +429,15 @@ export function BusinessDaysPage() {
               </Alert>
             )}
 
-            {!alreadyClosed && openOrdersLoading && (
-              <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
-                <CircularProgress size={16} />
-                <Typography variant="body2" color="text.secondary">
-                  {t('cashier.openOrders.checking', 'Checking open orders…')}
-                </Typography>
-              </Stack>
-            )}
-
-            {!alreadyClosed && !openOrdersLoading && openOrders && toComplete.length === 0 && needsDecision.length === 0 && (
-              <Alert severity="success">
-                {t('cashier.openOrders.noneOpen', 'No orders are left open for this day.')}
-              </Alert>
-            )}
-
-            {!openOrdersLoading && toComplete.length > 0 && (
-              <Box>
-                <Typography variant="subtitle2">
-                  {t('cashier.openOrders.toComplete', '{{count}} paid order(s) will be marked completed', {
-                    count: toComplete.length,
-                  })}
-                </Typography>
-                <Box sx={{ maxHeight: 180, overflowY: 'auto' }}>
-                  {toComplete.map((order) => (
-                    <OpenOrderLine key={order.id} order={order} />
-                  ))}
-                </Box>
-              </Box>
-            )}
-
-            {!openOrdersLoading && needsDecision.length > 0 && (
-              <Box>
-                <Alert severity="warning" sx={{ mb: 1 }}>
-                  <Typography variant="subtitle2">
-                    {t('cashier.openOrders.needsDecision', '{{count}} order(s) need a decision before the day closes', {
-                      count: needsDecision.length,
-                    })}
-                  </Typography>
-                  <Typography variant="body2">
-                    {t(
-                      'cashier.openOrders.needsDecisionHelp',
-                      'Take the payment, cancel, or finish the delivery for each, or carry them over to the next day with a reason.'
-                    )}
-                  </Typography>
-                </Alert>
-                <Box sx={{ maxHeight: 220, overflowY: 'auto' }}>
-                  {needsDecision.map((order) => (
-                    <OpenOrderLine key={order.id} order={order} />
-                  ))}
-                </Box>
-                <FormControlLabel
-                  sx={{ mt: 1 }}
-                  control={<Checkbox checked={carryOver} onChange={(e) => setCarryOver(e.target.checked)} />}
-                  label={t('cashier.openOrders.carryOver', 'Close anyway and carry these orders over')}
-                />
-                {carryOver && (
-                  <TextField
-                    label={t('cashier.openOrders.carryOverReason', 'Why they are carried over')}
-                    value={carryOverReason}
-                    onChange={(e) => setCarryOverReason(e.target.value)}
-                    multiline
-                    rows={2}
-                    fullWidth
-                    required
-                    sx={{ mt: 1 }}
-                  />
-                )}
-              </Box>
+            {!alreadyClosed && (
+              <DayCloseOrders
+                openOrders={openOrders}
+                loading={openOrdersLoading}
+                carryOver={carryOver}
+                onCarryOverChange={setCarryOver}
+                carryOverReason={carryOverReason}
+                onCarryOverReasonChange={setCarryOverReason}
+              />
             )}
 
             {closeError && <Alert severity="error">{closeError}</Alert>}

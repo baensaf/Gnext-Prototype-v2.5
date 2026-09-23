@@ -30,6 +30,49 @@ import {
   ShiftReturnToOpenDto,
   ShiftCloseDto,
 } from './dtos/shift.dto';
+import {
+  OPEN_ORDER_STATES,
+  FINISHED_ORDER_STATES,
+  OpenOrderIssue,
+  DayCloseOpenOrder,
+  openOrderIssue,
+  openOrderView,
+} from './open-orders';
+
+/**
+ * What a till leaves behind that its cashier should answer for before walking away: an order
+ * held and never sent, one still owing money, one nobody accepted. A paid order the kitchen
+ * has not marked handed over is not the cashier's to settle — the day close completes it —
+ * and a paid delivery out with a courier is settled at the courier's handover.
+ */
+const TILL_OPEN_ORDER_ISSUES: OpenOrderIssue[] = ['NOT_SUBMITTED', 'UNPAID', 'AWAITING_ACCEPTANCE'];
+
+/** A cash payment begun at a drawer and never taken or cancelled. */
+export interface PendingCashPayment {
+  id: string;
+  paymentNumber: string;
+  orderId: string;
+  orderNumber: string | null;
+  amount: string;
+  status: string;
+  initiatedAt: Date;
+}
+
+/** What closing a shift would leave behind, for the close dialog and for the close itself. */
+export interface ShiftCloseCheck {
+  shiftId: string;
+  branchId: string;
+  businessDate: string;
+  currencyCode: string;
+  /** This till's open orders; leaving them open takes a manager's PIN. */
+  openOrders: DayCloseOpenOrder[];
+  /** Cash payments on this drawer that must be finished or cancelled before it closes. */
+  pendingCash: PendingCashPayment[];
+  /** Other drawers still open at the branch on this business day. */
+  otherOpenTills: number;
+  /** Whether the branch has already closed this business day. */
+  dayClosed: boolean;
+}
 
 @Injectable()
 export class ShiftService {
@@ -580,6 +623,42 @@ export class ShiftService {
         throw new BadRequestException('Shift is already closed');
       }
 
+      // What the till leaves behind is settled before the count, so a refusal here costs the
+      // cashier nothing: no count has been recorded yet.
+      const leftBehind = await this.closeCheckFor(em, tenantId, shift);
+      if (leftBehind.pendingCash.length > 0) {
+        // Its intent names this drawer, and taking it later needs this drawer open: closed, the
+        // payment could never go through and it would hold up every other tender on the order.
+        throw new BadRequestException({
+          code: 'SHIFT_HAS_PENDING_CASH',
+          title: 'Cash Payment Not Finished',
+          detail: `${leftBehind.pendingCash.length} cash payment(s) on this drawer were started and never finished. Take or cancel them before closing.`,
+          context: { pendingCash: leftBehind.pendingCash },
+        });
+      }
+      let openOrdersApprovedBy: string | null = null;
+      if (leftBehind.openOrders.length > 0) {
+        if (isApprover(closer?.role)) {
+          openOrdersApprovedBy = userId || null;
+        } else if (!dto.openOrdersPin) {
+          throw new BadRequestException({
+            code: 'SHIFT_HAS_OPEN_ORDERS',
+            title: 'Orders Left Open',
+            detail: `${leftBehind.openOrders.length} order(s) from this till are held, unpaid or not accepted. Settle them, or a manager PIN is needed to leave them open.`,
+            context: { openOrders: leftBehind.openOrders },
+          });
+        } else {
+          const approval = await this.approvalService.verifyApproverPin(
+            tenantId,
+            dto.openOrdersPin,
+            'SHIFT_CLOSE_OPEN_ORDERS',
+            userId || '',
+            shift.branch_id,
+          );
+          openOrdersApprovedBy = approval.approver_user_id;
+        }
+      }
+
       // Check stale preview version if provided
       if (dto.previewVersion && shift.preview_version && dto.previewVersion !== shift.preview_version) {
         throw new ConflictException({
@@ -704,11 +783,94 @@ export class ShiftService {
         entityId: shiftId,
         correlationId,
         afterData: savedShift,
-        details: approverId ? { varianceApprovedBy: approverId, shortOver } : undefined,
+        details:
+          approverId || leftBehind.openOrders.length > 0
+            ? {
+                ...(approverId ? { varianceApprovedBy: approverId, shortOver } : {}),
+                ...(leftBehind.openOrders.length > 0
+                  ? { openOrderIds: leftBehind.openOrders.map((o) => o.id), openOrdersApprovedBy }
+                  : {}),
+              }
+            : undefined,
       });
 
       return await this.getShiftStatement(tenantId, shiftId, em);
     });
+  }
+
+  /** What closing this shift would leave behind; the close dialog reads it before the count. */
+  async getCloseCheck(tenantId: string, shiftId: string): Promise<ShiftCloseCheck> {
+    const em = this.dataSource.manager;
+    const shift = await em.findOne(CashierShift, { where: { id: shiftId, tenant_id: tenantId } });
+    if (!shift) throw new NotFoundException(`Shift ${shiftId} not found`);
+    return await this.closeCheckFor(em, tenantId, shift);
+  }
+
+  /**
+   * A till's open orders are the ones it rang up: stamped with this shift, or with this
+   * register by an earlier shift that left them. Orders no register took — kiosk, Snappfood —
+   * are the branch's, and the day close answers for those.
+   */
+  private async closeCheckFor(em: EntityManager, tenantId: string, shift: CashierShift): Promise<ShiftCloseCheck> {
+    const orders = await em
+      .createQueryBuilder(OrderHeader, 'o')
+      .where('o.tenant_id = :tenantId', { tenantId })
+      .andWhere('o.branch_id = :branchId', { branchId: shift.branch_id })
+      .andWhere('(o.shift_id = :shiftId OR o.terminal_id = :terminalId)', {
+        shiftId: shift.id,
+        terminalId: shift.terminal_id,
+      })
+      .andWhere('o.state IN (:...openStates)', { openStates: OPEN_ORDER_STATES })
+      .andWhere('o.status NOT IN (:...finishedStates)', { finishedStates: FINISHED_ORDER_STATES })
+      // An empty cart left on hold holds nothing; discarding one takes no reason either.
+      .andWhere(
+        `NOT (o.state = 'DRAFT' AND NOT EXISTS (
+           SELECT 1 FROM order_item i WHERE i.order_id = o.id AND COALESCE(i.state, 'ACTIVE') = 'ACTIVE'))`,
+      )
+      .orderBy('o.placed_at', 'ASC')
+      .getMany();
+    const openOrders: DayCloseOpenOrder[] = [];
+    for (const order of orders) {
+      const issue = openOrderIssue(order);
+      if (issue && TILL_OPEN_ORDER_ISSUES.includes(issue)) openOrders.push(openOrderView(order, issue));
+    }
+
+    const pendingCash: PendingCashPayment[] = await em.query(
+      `SELECT p.id, p.payment_number AS "paymentNumber", p.order_id AS "orderId", o.order_number AS "orderNumber",
+              p.amount, p.status, p.initiated_at AS "initiatedAt"
+         FROM payment p
+         LEFT JOIN order_header o ON o.id = p.order_id
+        WHERE p.tenant_id = $1 AND p.shift_id = $2 AND p.method_kind = 'CASH' AND p.status IN ('PENDING', 'PROCESSING')
+        ORDER BY p.initiated_at`,
+      [tenantId, shift.id],
+    );
+
+    const activeTills = await em.count(CashierShift, {
+      where: {
+        tenant_id: tenantId,
+        branch_id: shift.branch_id,
+        business_date: shift.business_date,
+        currency_code: shift.currency_code,
+        state: In(['OPEN', 'CLOSING_REVIEW']),
+      },
+    });
+    const dayClosed: unknown[] = await em.query(
+      `SELECT 1 FROM business_day_close
+        WHERE tenant_id = $1 AND branch_id = $2 AND business_date = $3 AND currency_code = $4 AND status = 'CLOSED'
+        LIMIT 1`,
+      [tenantId, shift.branch_id, shift.business_date, shift.currency_code],
+    );
+
+    return {
+      shiftId: shift.id,
+      branchId: shift.branch_id,
+      businessDate: shift.business_date,
+      currencyCode: shift.currency_code,
+      openOrders,
+      pendingCash,
+      otherOpenTills: activeTills - (shift.state === 'CLOSED' ? 0 : 1),
+      dayClosed: dayClosed.length > 0,
+    };
   }
 
   async getShiftStatement(tenantId: string, shiftId: string, entityManager?: EntityManager) {

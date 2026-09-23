@@ -42,6 +42,9 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
   /** SHIFT_POLICY rows the policy lookup finds; none means the defaults. */
   let settingRows: any[];
   let auditEvents: any[];
+  /** Open orders the closing till rang up, and cash payments begun at its drawer. */
+  let tillOrders: any[];
+  let pendingCash: any[];
 
   beforeEach(async () => {
     shiftRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() };
@@ -75,12 +78,24 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
         return [];
       }),
       delete: jest.fn(),
+      // What the close check reads: the till's open orders, its unfinished cash, the other tills.
+      createQueryBuilder: jest.fn(() => {
+        const qb: any = {};
+        for (const m of ['where', 'andWhere', 'orderBy']) qb[m] = jest.fn(() => qb);
+        qb.getMany = jest.fn(async () => tillOrders);
+        return qb;
+      }),
+      query: jest.fn(async (sql: string) => (sql.includes('FROM payment') ? pendingCash : [])),
+      count: jest.fn(async () => 1),
     };
 
     settingRows = [];
     auditEvents = [];
+    tillOrders = [];
+    pendingCash = [];
     dataSource = {
       transaction: jest.fn(async (cb) => await cb(mockEntityManager)),
+      manager: mockEntityManager,
       getRepository: jest.fn(() => ({ find: jest.fn(async () => settingRows) })),
     };
 
@@ -484,6 +499,91 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       await expect(shiftService.redactForBlindCount('t-1', statement, { role: 'MANAGER' })).resolves.toBe(statement);
       const closed = { ...statement, state: 'CLOSED' };
       await expect(shiftService.redactForBlindCount('t-1', closed, { role: 'CASHIER' })).resolves.toBe(closed);
+    });
+  });
+
+  describe('What a till leaves behind at close', () => {
+    const openShift = () => ({ id: 'shf-1', tenant_id: 't-1', branch_id: 'b-1', terminal_id: 'term-1', state: 'OPEN' });
+    const order = (over: any) => ({
+      id: 'o-1',
+      order_number: 'ORD-1',
+      order_type: 'TAKEAWAY',
+      state: 'CONFIRMED',
+      outstanding_total: '0.0000',
+      grand_total: '90000.0000',
+      business_date: '2026-09-23',
+      ...over,
+    });
+    beforeEach(() => {
+      movementRepo.find.mockResolvedValue([{ type: 'OPENING_FLOAT', amount: '50000.0000' }]);
+    });
+
+    it('needs a manager PIN to leave held or unpaid orders open, before any count is taken', async () => {
+      tillOrders = [order({ id: 'held', state: 'DRAFT' }), order({ id: 'owing', outstanding_total: '90000.0000' })];
+      shiftRepo.findOne.mockResolvedValue(openShift());
+
+      await expect(
+        shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000' }, 'cashier-1', undefined, { role: 'CASHIER' }),
+      ).rejects.toMatchObject({
+        response: {
+          code: 'SHIFT_HAS_OPEN_ORDERS',
+          context: { openOrders: [{ id: 'held', issue: 'NOT_SUBMITTED' }, { id: 'owing', issue: 'UNPAID' }] },
+        },
+      });
+      expect(auditWriter.write).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'SHIFT_COUNT_SUBMITTED' }));
+
+      const shift = openShift();
+      shiftRepo.findOne.mockResolvedValue(shift);
+      await shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000', openOrdersPin: '2468' }, 'cashier-1', undefined, { role: 'CASHIER' });
+      expect(approvalService.verifyApproverPin).toHaveBeenCalledWith('t-1', '2468', 'SHIFT_CLOSE_OPEN_ORDERS', 'cashier-1', 'b-1');
+      expect(shift.state).toBe('CLOSED');
+      expect(auditWriter.write).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'SHIFT_CLOSED',
+          details: { openOrderIds: ['held', 'owing'], openOrdersApprovedBy: 'manager-1' },
+        }),
+      );
+    });
+
+    it('does not hold the close for a paid order the kitchen has not handed over', async () => {
+      tillOrders = [order({ state: 'READY' })];
+      const shift = openShift();
+      shiftRepo.findOne.mockResolvedValue(shift);
+
+      await shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000' }, 'cashier-1', undefined, { role: 'CASHIER' });
+      expect(shift.state).toBe('CLOSED');
+      expect(approvalService.verifyApproverPin).not.toHaveBeenCalled();
+    });
+
+    it('lets a manager leave orders open on their own authority', async () => {
+      tillOrders = [order({ outstanding_total: '90000.0000' })];
+      const shift = openShift();
+      shiftRepo.findOne.mockResolvedValue(shift);
+
+      await shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000' }, 'manager-1', undefined, { role: 'MANAGER' });
+      expect(approvalService.verifyApproverPin).not.toHaveBeenCalled();
+      expect(shift.state).toBe('CLOSED');
+    });
+
+    it('refuses to close over an unfinished cash payment, even for a manager', async () => {
+      pendingCash = [{ id: 'pay-1', paymentNumber: 'PAY-1', orderId: 'o-1', orderNumber: 'ORD-1', amount: '90000.0000', status: 'PENDING' }];
+      const shift = openShift();
+      shiftRepo.findOne.mockResolvedValue(shift);
+
+      await expect(
+        shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000', openOrdersPin: '2468' }, 'manager-1', undefined, { role: 'MANAGER' }),
+      ).rejects.toMatchObject({ response: { code: 'SHIFT_HAS_PENDING_CASH', context: { pendingCash } } });
+      expect(shift.state).toBe('OPEN');
+    });
+
+    it('says whether this was the last till open at the branch', async () => {
+      shiftRepo.findOne.mockResolvedValue(openShift());
+      await expect(shiftService.getCloseCheck('t-1', 'shf-1')).resolves.toMatchObject({
+        openOrders: [],
+        pendingCash: [],
+        otherOpenTills: 0,
+        dayClosed: false,
+      });
     });
   });
 

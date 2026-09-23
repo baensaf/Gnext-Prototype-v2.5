@@ -99,6 +99,11 @@ export class ShiftCloseDto {
   @IsString()
   pin?: string;
 
+  /** An approver's pin, when orders this till rang up are left open at the close. */
+  @IsOptional()
+  @IsString()
+  openOrdersPin?: string;
+
   @IsOptional()
   @IsInt()
   version?: number;
