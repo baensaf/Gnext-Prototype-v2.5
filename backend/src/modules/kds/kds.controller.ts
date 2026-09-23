@@ -9,6 +9,8 @@ import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { KdsRoutingRule } from '../../entities/KdsRoutingRule.entity';
 import { KdsScreen } from '../../entities/KdsScreen.entity';
 import { KitchenStation } from '../../entities/KitchenStation.entity';
+import { KitchenTicket } from '../../entities/KitchenTicket.entity';
+import { KitchenTicketItem } from '../../entities/KitchenTicketItem.entity';
 import {
   CreateRoutingRuleDto,
   CreateScreenDto,
@@ -63,6 +65,7 @@ export class KdsController {
   }
 
   // Ticket Actions
+  @BranchOwned(KitchenTicket)
   @Post('tickets/:id/start')
   async startTicket(@Param('id') ticketId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -70,6 +73,7 @@ export class KdsController {
     return await this.kdsService.startTicket(tenantId, ticketId, userId);
   }
 
+  @BranchOwned(KitchenTicket)
   @Post('tickets/:id/bump')
   async bumpTicket(@Param('id') ticketId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -78,6 +82,7 @@ export class KdsController {
     return await this.kdsService.bumpTicket(tenantId, ticketId, correlationId, userId);
   }
 
+  @BranchOwned(KitchenTicket)
   @Post('tickets/:id/recall')
   async recallTicket(@Param('id') ticketId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -86,6 +91,7 @@ export class KdsController {
     return await this.kdsService.recallTicket(tenantId, ticketId, correlationId, userId);
   }
 
+  @BranchOwned(KitchenTicket)
   @Post('tickets/:id/priority')
   async setPriority(@Param('id') ticketId: string, @Body() body: { priority: number }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -93,6 +99,7 @@ export class KdsController {
     return await this.kdsService.setTicketPriority(tenantId, ticketId, body.priority || 0, userId);
   }
 
+  @BranchOwned(KitchenTicketItem, { through: { entity: KitchenTicket, foreignKey: 'ticket_id' } })
   @Post('ticket-items/:id/state')
   async updateItemState(@Param('id') itemId: string, @Body() body: { state: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -100,6 +107,7 @@ export class KdsController {
     return await this.kdsService.updateItemStatus(tenantId, itemId, body.state, userId);
   }
 
+  @BranchOwned(KitchenTicketItem, { param: 'itemId', ...{ through: { entity: KitchenTicket, foreignKey: 'ticket_id' } } })
   @Post('tickets/items/:itemId/status')
   async updateItemStatusLegacy(@Param('itemId') itemId: string, @Body() body: { status: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

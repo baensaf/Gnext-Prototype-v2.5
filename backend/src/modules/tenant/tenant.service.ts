@@ -1,15 +1,18 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Tenant } from '../../entities/Tenant.entity';
 import { Branch, BranchType } from '../../entities/Branch.entity';
 import { BranchOperatingHour } from '../../entities/BranchOperatingHour.entity';
 import { Terminal } from '../../entities/Terminal.entity';
+import { CashierShift } from '../../entities/CashierShift.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { AdminUser } from '../../entities/AdminUser.entity';
 import { BranchStatusSnapshot } from '../../entities/BranchStatusSnapshot.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
+
+const BRANCH_TYPES: BranchType[] = ['RESTAURANT', 'COMMISSARY', 'OFFICE'];
 
 @Injectable()
 export class TenantService {
@@ -88,6 +91,9 @@ export class TenantService {
   }
 
   async createBranch(tenantId: string, data: { code: string; name: string; branch_type?: BranchType; phone?: string; address?: string; time_zone?: string }, correlationId: string) {
+    if (data.branch_type && !BRANCH_TYPES.includes(data.branch_type)) {
+      throw new BadRequestException(`branch_type is one of ${BRANCH_TYPES.join(', ')}`);
+    }
     const existing = await this.branchRepo.findOne({ where: { tenant_id: tenantId, code: data.code } });
     if (existing) throw new ConflictException(`Branch code ${data.code} already exists`);
 
@@ -154,6 +160,16 @@ export class TenantService {
 
   async archiveBranch(tenantId: string, branchId: string, correlationId: string) {
     const branch = await this.getBranchById(tenantId, branchId);
+    // Same reason as a register: a till left open in a closed shop can never be counted.
+    const openShifts = await this.branchRepo.manager.count(CashierShift, {
+      where: { tenant_id: tenantId, branch_id: branchId, state: In(['OPEN', 'CLOSING_REVIEW']) },
+    });
+    if (openShifts > 0) {
+      throw new ConflictException({
+        code: 'BRANCH_HAS_OPEN_SHIFT',
+        message: `${branch.name} has ${openShifts} shift(s) open. Close them before closing the branch.`,
+      });
+    }
     branch.is_active = false;
     await this.branchRepo.softRemove(branch);
 
@@ -323,6 +339,17 @@ export class TenantService {
   async archiveTerminal(tenantId: string, terminalId: string, correlationId: string) {
     const terminal = await this.terminalRepo.findOne({ where: { id: terminalId, tenant_id: tenantId } });
     if (!terminal) throw new NotFoundException('Terminal not found');
+    // Archiving a register mid-shift stranded its drawer: the shift could no longer be
+    // found by terminal, so it could be neither traded on nor counted down.
+    const openShifts = await this.terminalRepo.manager.count(CashierShift, {
+      where: { tenant_id: tenantId, terminal_id: terminalId, state: In(['OPEN', 'CLOSING_REVIEW']) },
+    });
+    if (openShifts > 0) {
+      throw new ConflictException({
+        code: 'TERMINAL_HAS_OPEN_SHIFT',
+        message: `${terminal.name} has a shift open. Close the shift before retiring the register.`,
+      });
+    }
     terminal.is_active = false;
     await this.terminalRepo.softRemove(terminal);
 

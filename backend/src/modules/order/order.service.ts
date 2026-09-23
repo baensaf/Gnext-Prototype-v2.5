@@ -1509,7 +1509,7 @@ export class OrderService {
             escalations,
           });
         }
-        await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'EDIT_ORDER');
+        await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'EDIT_ORDER', undefined, id);
       }
 
       // Spec 6.1: removals must carry a reason so void reporting can attribute
@@ -1701,7 +1701,7 @@ export class OrderService {
             escalations: [`CHANGE_ORDER_TYPE:${decision.reason}`],
           });
         }
-        await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'EDIT_ORDER');
+        await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'EDIT_ORDER', undefined, id);
       }
 
       // A courier holding the food outranks everything above: there is no honest way to
@@ -2080,7 +2080,7 @@ export class OrderService {
             escalations: [`REPLACE_ITEM:${decision.reason}`],
           });
         }
-        await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'REPLACE_ITEM');
+        await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'REPLACE_ITEM', undefined, id);
       }
 
       if (!dto.reasonCodeId) {
@@ -2212,16 +2212,22 @@ export class OrderService {
       new Date(),
     );
 
-    if (decision.decision === 'REQUIRE_APPROVAL') {
+    // Handing money back out of the drawer is always a manager's call. A COMPLETED order
+    // comes back FORBID, which transitionState enforces — but a paid order never reaches
+    // transitionState: it goes to cancelPaidOrder below, so a cashier's plain cancel on a
+    // paid takeaway was refunding it with no approval at all.
+    const returnsMoney = MoneyUtil.greaterThan(netPaid, '0.0000');
+    if (decision.decision === 'REQUIRE_APPROVAL' || returnsMoney) {
+      const reason = decision.decision === 'REQUIRE_APPROVAL' ? decision.reason : 'CANCEL_AGAINST_PAID_ORDER';
       if (!dto.approvalRequestId) {
         throw new ForbiddenException({
           statusCode: 403,
           code: 'APPROVAL_REQUIRED',
-          message: `Cancelling this order is outside cashier authority (${decision.reason})`,
-          escalations: [`CANCEL_ORDER:${decision.reason}`],
+          message: `Cancelling this order is outside cashier authority (${reason})`,
+          escalations: [`CANCEL_ORDER:${reason}`],
         });
       }
-      await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'CANCEL_ORDER');
+      await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'CANCEL_ORDER', undefined, id);
     }
     // A FORBID here is left to transitionState, whose message names the states.
 
@@ -2292,7 +2298,7 @@ export class OrderService {
         message: 'Reopening a cancelled order requires an approved request',
       });
     }
-    await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'REOPEN_ORDER');
+    await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'REOPEN_ORDER', undefined, id);
 
     const everPaid = await this.dataSource.manager.count(Payment, {
       where: [
@@ -2383,6 +2389,15 @@ export class OrderService {
         }
 
         const qty = itemDto.quantity || '1.0000';
+        // The DTO only checks that the quantity is a number. A zero or negative line was
+        // stored as it came, with a negative line total, and printed on the kitchen ticket.
+        if (!(Number(qty) > 0)) {
+          throw new BadRequestException({
+            statusCode: 400,
+            code: 'INVALID_QUANTITY',
+            message: `Quantity for ${product.name} must be greater than zero`,
+          });
+        }
         let variant: ProductVariant | null = null;
         if (itemDto.variant_id) {
           variant = await this.variantRepo.findOne({

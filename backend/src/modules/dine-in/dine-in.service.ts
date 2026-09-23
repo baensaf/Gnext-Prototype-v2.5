@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In, IsNull } from 'typeorm';
 import { DiningArea } from '../../entities/DiningArea.entity';
@@ -120,7 +120,37 @@ export class DineInService {
     return await qb.getMany();
   }
 
+  /**
+   * A table number is how the floor, the POS and the kitchen ticket name a table, so it is
+   * one per shop — two "E-01"s sent food to whichever the waiter guessed. Returns the branch
+   * the section belongs to.
+   */
+  private async assertTableNumberFree(
+    tenantId: string,
+    areaId: string,
+    tableNumber: string,
+    code: string,
+    exceptId?: string,
+  ): Promise<string | null> {
+    const area = await this.areaRepo.findOne({ where: { id: areaId, tenant_id: tenantId } });
+    if (!area) throw new NotFoundException(`Section ${areaId} not found`);
+    const clash = await this.tableRepo
+      .createQueryBuilder('t')
+      .innerJoin(DiningArea, 'a', 'a.id = t.dining_area_id')
+      .where('t.tenant_id = :tenantId', { tenantId })
+      .andWhere('a.branch_id IS NOT DISTINCT FROM :branchId', { branchId: area.branch_id })
+      .andWhere('t.is_active = true')
+      .andWhere('(t.table_number = :tableNumber OR t.code = :code)', { tableNumber, code: code.toUpperCase() })
+      .andWhere(exceptId ? 't.id <> :exceptId' : '1=1', { exceptId })
+      .getOne();
+    if (clash) {
+      throw new ConflictException(`Table ${clash.table_number} (${clash.code}) already exists in this branch`);
+    }
+    return area.branch_id;
+  }
+
   async createTable(tenantId: string, dto: CreateTableDto, correlationId?: string) {
+    await this.assertTableNumberFree(tenantId, dto.dining_area_id, dto.table_number, dto.code);
     const table = this.tableRepo.create({
       tenant_id: tenantId,
       dining_area_id: dto.dining_area_id,
@@ -147,6 +177,20 @@ export class DineInService {
     const table = await this.tableRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!table) throw new NotFoundException(`Table ${id} not found`);
 
+    if (dto.dining_area_id !== undefined || dto.table_number !== undefined || dto.code !== undefined) {
+      const currentArea = await this.areaRepo.findOne({ where: { id: table.dining_area_id, tenant_id: tenantId } });
+      const targetBranch = await this.assertTableNumberFree(
+        tenantId,
+        dto.dining_area_id ?? table.dining_area_id,
+        dto.table_number ?? table.table_number,
+        dto.code ?? table.code,
+        table.id,
+      );
+      // The branch guard checks the table in the path, not the section named in the body.
+      if (currentArea && targetBranch !== currentArea.branch_id) {
+        throw new BadRequestException('A table can only move to a section in its own branch');
+      }
+    }
     if (dto.dining_area_id !== undefined) table.dining_area_id = dto.dining_area_id;
     if (dto.code !== undefined) table.code = dto.code.toUpperCase();
     if (dto.table_number !== undefined) table.table_number = dto.table_number;
@@ -346,6 +390,11 @@ export class DineInService {
       const targetTable = await em.findOne(DiningTable, { where: { id: targetTableId, tenant_id: tenantId } });
       if (!targetTable || !targetTable.is_active) {
         throw new NotFoundException(`Target table ${targetTableId} not found or inactive`);
+      }
+      // A table in another shop is not somewhere this order can be carried to.
+      const targetArea = await em.findOne(DiningArea, { where: { id: targetTable.dining_area_id, tenant_id: tenantId } });
+      if (!targetArea || targetArea.branch_id !== order.branch_id) {
+        throw new BadRequestException(`Table ${targetTable.table_number} is not in this order's branch`);
       }
 
       // Reassign order table

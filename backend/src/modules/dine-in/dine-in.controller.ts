@@ -6,6 +6,7 @@ import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorator
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { DiningArea } from '../../entities/DiningArea.entity';
 import { DiningTable } from '../../entities/DiningTable.entity';
+import { OrderHeader } from '../../entities/OrderHeader.entity';
 
 // One base, one name per thing. Mounted at two bases with per-handler aliases underneath,
 // a single handler answered at four addresses, and every rule about who may call it had to
@@ -26,7 +27,10 @@ export class DineInController {
   async createSection(@Body() body: CreateSectionDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
-    return await this.dineInService.createSection(tenantId, body, correlationId);
+    // A section with no branch is on nobody's floor, and a branch account cannot then add
+    // tables to it. The screen sent none, so every manager's new section came out that way.
+    const branchId = body.branchId || (req as any).userBranchId || undefined;
+    return await this.dineInService.createSection(tenantId, { ...body, branchId }, correlationId);
   }
 
   @BranchOwned(DiningArea)
@@ -93,6 +97,7 @@ export class DineInController {
   }
 
   // Move table
+  @BranchOwned(OrderHeader, { param: 'orderId' })
   @Post('orders/:orderId/move-table')
   async moveTable(
     @Param('orderId') orderId: string,
@@ -106,6 +111,7 @@ export class DineInController {
   }
 
   // Merge orders
+  @BranchOwned(OrderHeader, { body: 'targetOrderId' })
   @Post('orders/merge')
   async mergeOrders(@Body() body: MergeOrdersDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

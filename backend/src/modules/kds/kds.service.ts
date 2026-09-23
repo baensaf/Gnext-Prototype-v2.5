@@ -107,7 +107,21 @@ export class KdsService {
     return await this.screenRepo.find({ where, order: { name: 'ASC' } });
   }
 
+  /**
+   * A screen shows stations of its own kitchen only. The ids ride in the body, where the
+   * branch guard does not look, and a Valiasr screen could be pointed at Nosrat's grill.
+   */
+  private async assertStationsInBranch(tenantId: string, stationIds: string[] | undefined, branchId: string) {
+    const ids = (stationIds || []).filter(Boolean);
+    if (!ids.length) return;
+    const found = await this.stationRepo.find({ where: { tenant_id: tenantId, id: In(ids), branch_id: branchId } });
+    if (found.length !== new Set(ids).size) {
+      throw new BadRequestException('Every station on a screen must be in the screen\'s branch');
+    }
+  }
+
   async createScreen(tenantId: string, data: { branch_id: string; terminal_id?: string; code: string; name: string; station_ids?: string[] }) {
+    await this.assertStationsInBranch(tenantId, data.station_ids, data.branch_id);
     const screen = this.screenRepo.create({
       tenant_id: tenantId,
       branch_id: data.branch_id,
@@ -124,6 +138,7 @@ export class KdsService {
     const screen = await this.screenRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!screen) throw new NotFoundException('Screen not found');
     Object.assign(screen, data);
+    if (data.station_ids) await this.assertStationsInBranch(tenantId, screen.station_ids, screen.branch_id);
     return await this.screenRepo.save(screen);
   }
 

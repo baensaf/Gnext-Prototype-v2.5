@@ -34,7 +34,7 @@ export const dineInApi = {
     const res = await httpClient.get('/api/v1/dining/sections', { params: { branchId } });
     return res.data;
   },
-  createSection: async (data: Partial<DiningArea>): Promise<DiningArea> => {
+  createSection: async (data: Partial<DiningArea> & { branchId?: string }): Promise<DiningArea> => {
     const res = await httpClient.post('/api/v1/dining/sections', data);
     return res.data;
   },

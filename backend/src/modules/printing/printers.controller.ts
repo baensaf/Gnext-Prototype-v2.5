@@ -1,11 +1,14 @@
 import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Req, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Request } from 'express';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityTarget, Repository } from 'typeorm';
 import { Printer } from '../../entities/Printer.entity';
 import { PrinterGroup } from '../../entities/PrinterGroup.entity';
 import { PrinterGroupMember } from '../../entities/PrinterGroupMember.entity';
 import { PrintRoute } from '../../entities/PrintRoute.entity';
+import { PrintJob } from '../../entities/PrintJob.entity';
+import { OrderHeader } from '../../entities/OrderHeader.entity';
+import { KitchenStation } from '../../entities/KitchenStation.entity';
 import { PrintQueueService } from './print-queue.service';
 import { AgentConfigService } from '../agent-gateway/agent-config.service';
 import { parseDeviceConnection } from '../../common/utils/device-connection.util';
@@ -45,6 +48,25 @@ export class PrintersController {
     }
   }
 
+  /**
+   * A printer, group or station named inside a record has to be in that record's branch.
+   * The branch guard checks the id in the path; these ride in the body, and a Valiasr
+   * manager could make Nosrat's printer their fallback or send their tickets to its group.
+   */
+  private async assertInBranch(
+    tenantId: string,
+    entity: EntityTarget<any>,
+    id: string | null | undefined,
+    branchId: string | null | undefined,
+    label: string,
+  ) {
+    if (!id) return;
+    const row = await this.printerRepo.manager.findOne(entity, { where: { id, tenant_id: tenantId } });
+    if (!row || row.branch_id !== branchId) {
+      throw new BadRequestException(`${label} ${id} is not in this branch`);
+    }
+  }
+
   // 1. Printers CRUD
   @Get('printers')
   async getPrinters(@Query('branchId') branchId: string, @Req() req: Request) {
@@ -59,6 +81,7 @@ export class PrintersController {
   async createPrinter(@Body() body: CreatePrinterDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
+    await this.assertInBranch(tenantId, Printer, body.fallback_printer_id, body.branch_id, 'Fallback printer');
 
     const printer = this.printerRepo.create({
       tenant_id: tenantId,
@@ -100,6 +123,9 @@ export class PrintersController {
     const previousBranchId = printer.branch_id;
     const { agent_connection, ...rest } = body;
     Object.assign(printer, rest);
+    if (body.fallback_printer_id) {
+      await this.assertInBranch(tenantId, Printer, body.fallback_printer_id, printer.branch_id, 'Fallback printer');
+    }
     if (agent_connection !== undefined) printer.agent_connection = this.printerConnection(agent_connection);
     const saved = await this.printerRepo.save(printer);
     await this.pushConfig(tenantId, previousBranchId, saved.branch_id);
@@ -148,6 +174,9 @@ export class PrintersController {
       name: body.name,
       ticket_template: body.ticket_template ?? null,
     });
+    for (const m of Array.isArray(body.members) ? body.members : []) {
+      await this.assertInBranch(tenantId, Printer, m.printer_id, body.branch_id, 'Printer');
+    }
     const savedGroup = await this.groupRepo.save(group);
 
     if (body.members && Array.isArray(body.members)) {
@@ -176,6 +205,9 @@ export class PrintersController {
     if (body.code !== undefined) group.code = body.code.toUpperCase();
     if (body.ticket_template !== undefined) group.ticket_template = body.ticket_template ?? null;
     if (body.branch_id) group.branch_id = body.branch_id;
+    for (const m of Array.isArray(body.members) ? body.members : []) {
+      await this.assertInBranch(tenantId, Printer, m.printer_id, group.branch_id, 'Printer');
+    }
 
     const savedGroup = await this.groupRepo.save(group);
 
@@ -220,6 +252,8 @@ export class PrintersController {
   @Post('print-routes')
   async createRoute(@Body() body: CreatePrintRouteDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
+    await this.assertInBranch(tenantId, PrinterGroup, body.printer_group_id, body.branch_id, 'Printer group');
+    await this.assertInBranch(tenantId, KitchenStation, body.station_id, body.branch_id, 'Kitchen station');
     const route = this.routeRepo.create({
       tenant_id: tenantId,
       branch_id: body.branch_id,
@@ -250,6 +284,10 @@ export class PrintersController {
     if ('category_id' in body) route.category_id = body.category_id || null;
     if ('station_id' in body) route.station_id = body.station_id || null;
     if (body.branch_id) route.branch_id = body.branch_id;
+    if (body.printer_group_id !== undefined) {
+      await this.assertInBranch(tenantId, PrinterGroup, route.printer_group_id, route.branch_id, 'Printer group');
+    }
+    if (body.station_id) await this.assertInBranch(tenantId, KitchenStation, route.station_id, route.branch_id, 'Kitchen station');
 
     return await this.routeRepo.save(route);
   }
@@ -278,12 +316,14 @@ export class PrintersController {
     return await this.queueService.getPrintJobs(tenantId, branchId, status, documentType, limit || 50, offset || 0, entityId);
   }
 
+  @BranchOwned(PrintJob)
   @Get('print-jobs/:id')
   async getJobById(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.queueService.getPrintJobById(tenantId, id);
   }
 
+  @BranchOwned(PrintJob)
   @Post('print-jobs/:id/retry')
   async retryJob(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -292,6 +332,7 @@ export class PrintersController {
 
   // `printerId` sends this copy to a named device instead of the one that printed the
   // original — the everyday answer to a printer that has died mid-service.
+  @BranchOwned(PrintJob)
   @Post('print-jobs/:id/reprint')
   async reprintJob(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -305,6 +346,7 @@ export class PrintersController {
     );
   }
 
+  @BranchOwned(OrderHeader)
   @Post('orders/:id/reprint')
   async reprintOrder(@Param('id') orderId: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

@@ -20,6 +20,7 @@ import { Payment } from '../src/entities/Payment.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { Branch } from '../src/entities/Branch.entity';
 import { TableSession } from '../src/entities/TableSession.entity';
+import { AuditEvent } from '../src/entities/AuditEvent.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { OrderTransitionRecorder } from '../src/modules/order-lifecycle/order-transition-recorder.service';
 
@@ -40,6 +41,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
   let dataSource: any;
   /** SHIFT_POLICY rows the policy lookup finds; none means the defaults. */
   let settingRows: any[];
+  let auditEvents: any[];
 
   beforeEach(async () => {
     shiftRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() };
@@ -69,12 +71,14 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
         if (entityClass === CashMovement) return movementRepo.find(options);
         if (entityClass === CashierShift) return shiftRepo.find ? shiftRepo.find(options) : [];
         if (entityClass === OrderHeader) return orderRepo.find(options);
+        if (entityClass === AuditEvent) return auditEvents;
         return [];
       }),
       delete: jest.fn(),
     };
 
     settingRows = [];
+    auditEvents = [];
     dataSource = {
       transaction: jest.fn(async (cb) => await cb(mockEntityManager)),
       getRepository: jest.fn(() => ({ find: jest.fn(async () => settingRows) })),
@@ -203,6 +207,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
 
     it('posts a safe drop as cash leaving the drawer, and totals it apart from pay-outs', async () => {
       shiftRepo.findOne.mockResolvedValue({ id: 'shf-1', tenant_id: 't-1', state: 'OPEN', currency_code: 'IRR' });
+      movementRepo.find.mockResolvedValue([{ type: 'OPENING_FLOAT', amount: '5000000.0000' }]);
       const saved = await shiftService.recordMovement('t-1', 'shf-1', { type: 'SAFE_DROP', amount: '2000000' });
       expect(saved.amount).toBe('-2000000.0000');
 
@@ -219,12 +224,48 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
 
     it('refuses a pay-out with no reason', async () => {
       shiftRepo.findOne.mockResolvedValue({ id: 'shf-1', tenant_id: 't-1', state: 'OPEN', currency_code: 'IRR' });
+      movementRepo.find.mockResolvedValue([{ type: 'OPENING_FLOAT', amount: '5000000.0000' }]);
       await expect(shiftService.recordMovement('t-1', 'shf-1', { type: 'PAID_OUT', amount: '50000' })).rejects.toThrow(
         BadRequestException,
       );
       await expect(
         shiftService.recordMovement('t-1', 'shf-1', { type: 'PAID_OUT', amount: '50000', reason: 'Milk for the kitchen' }),
       ).resolves.toMatchObject({ amount: '-50000.0000' });
+    });
+
+    it('refuses taking more cash out than the drawer holds', async () => {
+      shiftRepo.findOne.mockResolvedValue({ id: 'shf-1', tenant_id: 't-1', state: 'OPEN', currency_code: 'IRR' });
+      movementRepo.find.mockResolvedValue([
+        { type: 'OPENING_FLOAT', amount: '5000000.0000' },
+        { type: 'CASH_PAYMENT', amount: '1000000.0000' },
+      ]);
+      await expect(
+        shiftService.recordMovement('t-1', 'shf-1', { type: 'PAID_OUT', amount: '6000001', reason: 'Too much' }),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        shiftService.recordMovement('t-1', 'shf-1', { type: 'SAFE_DROP', amount: '6000000' }),
+      ).resolves.toMatchObject({ amount: '-6000000.0000' });
+    });
+
+    it('holds a blind count to the first figure given, unless a manager recounts', async () => {
+      shiftRepo.findOne.mockResolvedValue({ id: 'shf-1', tenant_id: 't-1', branch_id: 'b-1', state: 'CLOSING_REVIEW' });
+      movementRepo.find.mockResolvedValue([{ type: 'OPENING_FLOAT', amount: '50000.0000' }]);
+      auditEvents = [{ action: 'SHIFT_COUNT_SUBMITTED', details: { actualCash: '45000.0000' } }];
+
+      // Typing in the expected figure after seeing it is refused...
+      await expect(
+        shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000' }, 'u-cashier', 'c', { role: 'CASHIER' }),
+      ).rejects.toMatchObject({ response: expect.objectContaining({ code: 'BLIND_COUNT_RECORDED' }) });
+      // ...the recorded count closes with its reason...
+      await expect(
+        shiftService.closeShift('t-1', 'shf-1', { actualCash: '45000', reason: 'Short' }, 'u-cashier', 'c', { role: 'CASHIER' }),
+      ).resolves.toBeDefined();
+      // ...and a return to open starts a fresh count.
+      auditEvents = [...auditEvents, { action: 'SHIFT_RETURN_TO_OPEN', details: null }];
+      shiftRepo.findOne.mockResolvedValue({ id: 'shf-1', tenant_id: 't-1', branch_id: 'b-1', state: 'CLOSING_REVIEW' });
+      await expect(
+        shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000' }, 'u-cashier', 'c', { role: 'CASHIER' }),
+      ).resolves.toBeDefined();
     });
 
     it('keeps a closed drawer expected cash apart from the difference booked at the count', async () => {

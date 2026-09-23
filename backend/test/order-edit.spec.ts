@@ -278,7 +278,8 @@ describe('Order edit command (spec 7.9)', () => {
         approvalRequestId: APPROVAL_ID,
       });
 
-      expect(approvalService.validateApprovedRequest).toHaveBeenCalledWith(TENANT, APPROVAL_ID, 'EDIT_ORDER');
+      // Bound to the order being edited, so another order's approval cannot be reused here.
+      expect(approvalService.validateApprovedRequest).toHaveBeenCalledWith(TENANT, APPROVAL_ID, 'EDIT_ORDER', undefined, 'ord-1');
     });
 
     it('refuses any edit on a completed order', async () => {
