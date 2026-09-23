@@ -13,6 +13,8 @@ import { OrderAdjustment } from '../src/entities/OrderAdjustment.entity';
 import { OrderNote } from '../src/entities/OrderNote.entity';
 import { OrderLink } from '../src/entities/OrderLink.entity';
 import { OrderStateEvent } from '../src/entities/OrderStateEvent.entity';
+import { Delivery } from '../src/entities/Delivery.entity';
+import { CustomerAddress } from '../src/entities/CustomerAddress.entity';
 import { OrderSequence } from '../src/entities/OrderSequence.entity';
 import { Product } from '../src/entities/Product.entity';
 import { ProductVariant } from '../src/entities/ProductVariant.entity';
@@ -122,6 +124,48 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
       expect(printQueueService.enqueueOrderPrintJobs).toHaveBeenCalledTimes(1);
       expect(printQueueService.enqueueOrderPrintJobs).toHaveBeenCalledWith('t-1', 'order-1', 'KITCHEN_TICKET', false, undefined, 'user-1');
       expect(simulationService.notifyAccepted).toHaveBeenCalledWith('t-1', 'SF-304', { deliveryTime: 25 });
+    });
+
+    // Audit OD2: a Snappfood order our own couriers take had no delivery, so no courier could
+    // be sent, paid or settled, and a cash one could never be closed.
+    describe('an order the store delivers itself', () => {
+      const address = { id: 'addr-1', tenant_id: 't-1', customer_id: 'cust-1', title: 'Snappfood', address_text: 'Valiasr, No. 2' };
+      const savedDeliveries = () => em.save.mock.calls.filter(([entity]: any[]) => entity === Delivery).map(([, data]: any[]) => data);
+
+      beforeEach(() => {
+        em.findOne.mockImplementation((entity: any, options: any) =>
+          entity === CustomerAddress ? Promise.resolve(address) : entity === Delivery ? Promise.resolve(null) : orderRepo.findOne(options),
+        );
+        (service as any).dataSource.manager = em;
+      });
+
+      it('goes on the delivery board when accepted, with the ride fee Snappfood charged', async () => {
+        orderRepo.findOne.mockResolvedValue(
+          pendingOrder({ aggregator_expedition: 'DELIVERY', customer_id: 'cust-1', customer_address_id: 'addr-1', delivery_fee: '600000.0000' }),
+        );
+
+        await service.acceptIncomingOrder('t-1', 'order-1', { prepMinutes: 40 }, 'user-1');
+
+        expect(savedDeliveries()).toEqual([
+          expect.objectContaining({
+            order_id: 'order-1',
+            state: 'UNASSIGNED',
+            zone_id: null,
+            fee: '600000.0000',
+            address_snapshot: expect.objectContaining({ address_text: 'Valiasr, No. 2' }),
+          }),
+        ]);
+      });
+
+      it('stays off the board when a Snapp rider collects it', async () => {
+        orderRepo.findOne.mockResolvedValue(
+          pendingOrder({ aggregator_expedition: 'ZF_EXPRESS', customer_id: 'cust-1', customer_address_id: 'addr-1' }),
+        );
+
+        await service.acceptIncomingOrder('t-1', 'order-1', { prepMinutes: 20 }, 'user-1');
+
+        expect(savedDeliveries()).toEqual([]);
+      });
     });
 
     it('reads the order under a row lock, so a second cashier waits and then sees it already accepted', async () => {

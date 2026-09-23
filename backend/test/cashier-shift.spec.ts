@@ -534,9 +534,10 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
   describe('Open orders at business day close', () => {
     /**
      * An EntityManager for the close: its first query finds `open`, the second the day's
-     * revenue orders, and `sessions` are the seated tables it can free.
+     * revenue orders, and `sessions` are the seated tables it can free. `awaitingCourier` names
+     * the orders with a delivery still open.
      */
-    const dayCloseEm = (open: any[], revenue: any[] = [], sessions: any[] = []) => {
+    const dayCloseEm = (open: any[], revenue: any[] = [], sessions: any[] = [], awaitingCourier: string[] = []) => {
       const qb: any = {
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
@@ -549,6 +550,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
         create: jest.fn((_entity: any, data: any) => ({ ...data })),
         save: jest.fn(async (_entity: any, data: any) => data),
         createQueryBuilder: jest.fn(() => qb),
+        query: jest.fn(async () => awaitingCourier.map((id) => ({ order_id: id }))),
       };
       dataSource.transaction.mockImplementation(async (cb: any) => cb(em));
       dataSource.manager = em;
@@ -588,6 +590,20 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
         // Paid, but a courier finishes a delivery; its cash settles off that step.
         ['delivery', 'DELIVERY_NOT_FINISHED'],
       ]);
+    });
+
+    it('waits on a paid Snappfood order still waiting for one of our couriers', async () => {
+      dayCloseEm(
+        [order({ id: 'sf-own', order_type: 'AGGREGATOR', channel: 'AGGREGATOR', aggregator_expedition: 'DELIVERY' })],
+        [],
+        [],
+        ['sf-own'],
+      );
+
+      const result = await dayService.getOpenOrders('t-1', { branchId: 'b-1', businessDate: '2026-09-10' });
+
+      expect(result.toComplete).toEqual([]);
+      expect(result.needsDecision.map((o) => [o.id, o.issue])).toEqual([['sf-own', 'DELIVERY_NOT_FINISHED']]);
     });
 
     it('will not close the day while an order still owes money, and completes nothing', async () => {
