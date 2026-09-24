@@ -41,6 +41,8 @@ type Keeper struct {
 	Fetch       Fetcher
 	NotModified error // the Fetcher's "not modified" error
 	Log         *slog.Logger
+	// Staff, when set, is pulled with every snapshot pull (§13.3).
+	Staff *Staff
 
 	// Timings, overridable in tests.
 	Interval   time.Duration
@@ -115,6 +117,12 @@ func (k *Keeper) Run(ctx context.Context) {
 		case <-timer.C:
 		}
 		err := k.Pull(ctx)
+		if k.Staff != nil {
+			if serr := k.Staff.Pull(ctx); serr != nil && ctx.Err() == nil {
+				k.Log.Warn("staff list pull failed", "err", serr)
+				err = errors.Join(err, serr)
+			}
+		}
 		next := k.Interval
 		if err != nil && ctx.Err() == nil {
 			next = time.Duration(float64(backoff) * (0.8 + 0.4*rand.Float64()))

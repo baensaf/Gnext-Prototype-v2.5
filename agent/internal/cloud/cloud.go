@@ -128,13 +128,24 @@ func (c *Client) Download(ctx context.Context, url string, w io.Writer) error {
 	return err
 }
 
-// ErrNotModified is Snapshot's answer when the agent already holds the current version.
-var ErrNotModified = errors.New("branch snapshot not modified")
+// ErrNotModified is the answer of Snapshot and Staff when the agent already holds the current
+// version.
+var ErrNotModified = errors.New("not modified")
 
 // Snapshot fetches the branch snapshot (§12.2). held is the version the agent has, or "". The
 // transport asks for gzip and unpacks it. Returns ErrNotModified on a 304.
 func (c *Client) Snapshot(ctx context.Context, held string) (body []byte, version string, err error) {
-	req, err := c.request(ctx, http.MethodGet, "/api/v1/agent/data/snapshot", nil)
+	return c.versioned(ctx, "/api/v1/agent/data/snapshot", "data_version", held)
+}
+
+// Staff fetches who may sign in at the offline till (§13.3), in the same way as Snapshot.
+func (c *Client) Staff(ctx context.Context, held string) (body []byte, version string, err error) {
+	return c.versioned(ctx, "/api/v1/agent/data/staff", "staff_version", held)
+}
+
+// versioned fetches a document whose version is its ETag and its field `field`.
+func (c *Client) versioned(ctx context.Context, path, field, held string) (body []byte, version string, err error) {
+	req, err := c.request(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -156,13 +167,13 @@ func (c *Client) Snapshot(ctx context.Context, held string) (body []byte, versio
 	if err != nil {
 		return nil, "", err
 	}
-	var head struct {
-		DataVersion string `json:"data_version"`
+	var head map[string]json.RawMessage
+	if err := json.Unmarshal(body, &head); err == nil {
+		if err := json.Unmarshal(head[field], &version); err == nil && version != "" {
+			return body, version, nil
+		}
 	}
-	if err := json.Unmarshal(body, &head); err != nil || head.DataVersion == "" {
-		return nil, "", fmt.Errorf("branch snapshot without a data_version")
-	}
-	return body, head.DataVersion, nil
+	return nil, "", fmt.Errorf("%s without a %s", path, field)
 }
 
 // UploadOrders sends offline orders (§12.5). A 400 for the whole batch comes back as a

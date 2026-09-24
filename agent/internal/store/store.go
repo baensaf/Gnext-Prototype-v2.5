@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -31,6 +32,53 @@ func LogsDir() string       { return filepath.Join(Home(), "logs") }
 func BrowserDir() string    { return filepath.Join(Home(), "browser-profile") }
 func BranchDataDir() string { return filepath.Join(Home(), "branch-data") }
 func OfflinePath() string   { return filepath.Join(Home(), "offline-orders.db") }
+
+// DevicesPath keeps the last config the cloud sent (§6.1, §13.2): the branch's printers and
+// terminal, for an agent restarted while offline.
+func DevicesPath() string { return filepath.Join(Home(), "devices.json") }
+
+// CallNumbersPath keeps the last POS call count a heartbeat.ack carried (§13.9).
+func CallNumbersPath() string { return filepath.Join(Home(), "call-numbers.json") }
+
+// LoadJSON and SaveJSON read and write one of the agent's files; SaveJSON replaces it whole.
+func LoadJSON(path string, v any) error { return readJSON(path, v) }
+func SaveJSON(path string, v any) error { return writeJSON(path, v) }
+
+// Seal encrypts data for this machine with DPAPI, for files that hold secrets. Outside
+// Windows (development only) it is stored as is, marked so.
+func Seal(plain []byte) ([]byte, error) {
+	blob, err := protect(plain)
+	if err != nil {
+		return nil, err
+	}
+	if blob == nil {
+		return append([]byte{sealedPlain}, plain...), nil
+	}
+	return append([]byte{sealedDPAPI}, blob...), nil
+}
+
+// Unseal reverses Seal.
+func Unseal(sealed []byte) ([]byte, error) {
+	if len(sealed) == 0 {
+		return nil, errors.New("sealed data is empty")
+	}
+	switch sealed[0] {
+	case sealedDPAPI:
+		return unprotect(sealed[1:])
+	case sealedPlain:
+		// Windows always seals with DPAPI; a plain file there was not written by the agent.
+		if runtime.GOOS == "windows" {
+			return nil, errors.New("sealed data is not encrypted")
+		}
+		return sealed[1:], nil
+	}
+	return nil, errors.New("sealed data has an unknown format")
+}
+
+const (
+	sealedDPAPI = 'D'
+	sealedPlain = 'P'
+)
 
 // InstallConfig is config.json, written by the installer.
 type InstallConfig struct {

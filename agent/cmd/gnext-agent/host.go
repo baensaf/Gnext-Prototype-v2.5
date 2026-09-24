@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"math/rand/v2"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"gnext/agent/internal/localui"
 	"gnext/agent/internal/offline"
 	"gnext/agent/internal/printing"
+	"gnext/agent/internal/protocol"
 	"gnext/agent/internal/store"
 	"gnext/agent/internal/update"
 )
@@ -36,6 +38,8 @@ type host struct {
 	agent   *agent.Agent
 	client  *cloud.Client
 	stopped string
+	// callNumbers is the last POS call count written to disk.
+	callNumbers protocol.CallNumbers
 }
 
 func newHost(log *slog.Logger) (*host, error) {
@@ -138,8 +142,13 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 	defer cancel()
 	var exitCode atomic.Int32
 	client := &cloud.Client{Server: cfg.Server, Key: id.DeviceKey, Version: version}
-	// The branch snapshot is pulled after every welcome, where a 304 costs nothing, and on data.changed (§12.2).
-	data := &branchdata.Keeper{Dir: store.BranchDataDir(), Fetch: client, NotModified: cloud.ErrNotModified, Log: h.log}
+	// The branch snapshot and the staff list are pulled after every welcome, where a 304 costs
+	// nothing, and on data.changed (§12.2, §13.3).
+	staff := &branchdata.Staff{
+		Dir: store.BranchDataDir(), Fetch: client.Staff, NotModified: cloud.ErrNotModified,
+		Seal: store.Seal, Unseal: store.Unseal, Log: h.log,
+	}
+	data := &branchdata.Keeper{Dir: store.BranchDataDir(), Fetch: client, NotModified: cloud.ErrNotModified, Log: h.log, Staff: staff}
 	a := agent.New(agent.Options{
 		Version:     version,
 		WSURL:       id.WSURL,
@@ -150,6 +159,11 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 		Welcomed:    func() { update.Cleanup(""); data.Trigger(); h.outbox.Trigger() },
 		DataChanged: data.Trigger,
 		SyncStatus:  func() any { return syncStatus(data.Status(), h.outbox.Status()) },
+		// The offline till is not built yet (P2–P4): no till is bound and nothing is open.
+		TillStatus:    func() any { return map[string]any{"terminal_id": nil, "mode": "ONLINE", "open_orders": 0} },
+		CallNumbers:   h.saveCallNumbers,
+		SavedConfig:   loadDevices(h.log),
+		ConfigChanged: func(c *protocol.Config) { saveDevices(c, h.log) },
 	})
 	up := &update.Updater{
 		Client: client, Version: version, Dir: store.UpdatesDir(), Log: h.log,
@@ -210,6 +224,40 @@ func updateLoop(ctx context.Context, a *agent.Agent, up *update.Updater, log *sl
 			log.Warn("update check failed", "err", err)
 		}
 		next = time.Hour + time.Duration(rand.Int64N(int64(10*time.Minute))) - 5*time.Minute
+	}
+}
+
+// loadDevices returns the config the cloud last sent, kept for an agent that starts offline
+// (§13.2), or nil when there is none.
+func loadDevices(log *slog.Logger) *protocol.Config {
+	var c protocol.Config
+	if err := store.LoadJSON(store.DevicesPath(), &c); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			log.Warn("saved device config unreadable; waiting for the cloud's", "err", err)
+		}
+		return nil
+	}
+	return &c
+}
+
+func saveDevices(c *protocol.Config, log *slog.Logger) {
+	if err := store.SaveJSON(store.DevicesPath(), c); err != nil {
+		log.Warn("could not keep the device config on disk", "err", err)
+	}
+}
+
+// saveCallNumbers keeps the POS call count from the last heartbeat.ack (§13.9), writing only
+// when it moved: it changes with orders, not with every heartbeat.
+func (h *host) saveCallNumbers(n protocol.CallNumbers) {
+	h.mu.Lock()
+	same := h.callNumbers == n
+	h.callNumbers = n
+	h.mu.Unlock()
+	if same {
+		return
+	}
+	if err := store.SaveJSON(store.CallNumbersPath(), n); err != nil {
+		h.log.Warn("could not keep the call-number count", "err", err)
 	}
 }
 

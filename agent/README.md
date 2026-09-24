@@ -49,6 +49,14 @@ section numbers (§) in the code refer to it.
   office); a batch it refuses as malformed is split so only the bad order is set aside. Answered
   orders stay a week. Heartbeats carry the snapshot version and the backlog (§12.7). Nothing adds
   orders yet: the offline till that does comes next.
+- **For the offline till** (§13, agent 1.3.0): advertises `pos.offline`, and keeps
+  - the staff list (who may sign in, with PIN hashes) in `branch-data\staff.dat`, sealed with
+    DPAPI for this machine, pulled with every snapshot pull;
+  - the last printer and terminal config from the cloud in `devices.json`, used at start until
+    the cloud sends one, so an agent restarted offline still reaches its devices;
+  - the POS call count from the last `heartbeat.ack` in `call-numbers.json`.
+
+  Heartbeats carry `till` (no till bound yet: the till itself is P2–P4).
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
   publishes a build, then swaps the binary after checking its SHA-256.
 - **Settings window** (Start-menu and desktop shortcut *Gnext Agent*, the tray, or running the
@@ -75,7 +83,7 @@ section numbers (§) in the code refer to it.
 | `internal/payment` | Terminal driver interface, the `sep` (Saman) and `fake` drivers |
 | `saman-bridge` | .NET Framework bridge to Saman's PC-POS SDK (vendor DLLs), built in CI |
 | `internal/cloud` | HTTPS calls: enrol, me, releases, branch snapshot |
-| `internal/branchdata` | Keeps the branch snapshot current on disk |
+| `internal/branchdata` | Keeps the branch snapshot and the sealed staff list current on disk |
 | `internal/offline` | Holds offline orders and uploads them |
 | `internal/localui` | Settings page (embedded HTML/JS) and its local API, LAN scan |
 | `internal/update` | Release check, download, verify, swap |
