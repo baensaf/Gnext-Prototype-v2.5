@@ -85,7 +85,7 @@ const STORAGE_KEY = 'active_branch_id';
 /**
  * Stored in place of a branch id when the user is at chain level. A real uuid can never
  * collide with it, and storing it explicitly is what separates "head office" from "has
- * not chosen yet" — the latter still falls through to the first branch.
+ * not chosen yet". An unconfined account that has not chosen starts at head office too.
  */
 export const HEAD_OFFICE_SCOPE = 'HQ';
 
@@ -128,17 +128,13 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
         setSelectedBranchIdState(HEAD_OFFICE_SCOPE);
       } else if (savedId && list.some((b) => b.id === savedId)) {
         setSelectedBranchIdState(savedId);
-      } else if (list.length > 0) {
-        setSelectedBranchIdState((prev) => {
-          if (prev && list.some((b) => b.id === prev)) return prev;
-          const defaultBranch = list[0].id;
-          try {
-            localStorage.setItem(STORAGE_KEY, defaultBranch);
-          } catch {
-            // ignore
-          }
-          return defaultBranch;
-        });
+      } else {
+        // No choice made yet, or the saved branch is gone. An unconfined account starts at
+        // head office: dropping it into whichever branch sorts first hid the chain's setup
+        // from the menu until the switcher was found. Not saved, so it stays "not chosen".
+        setSelectedBranchIdState((prev) =>
+          prev && list.some((b) => b.id === prev) ? prev : HEAD_OFFICE_SCOPE
+        );
       }
     } catch (err) {
       console.error('Failed to load branches:', err);
