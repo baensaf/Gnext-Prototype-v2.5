@@ -1264,7 +1264,7 @@ The raw simulated Snappfood webhook endpoint is `POST /simulated-webhooks/snappf
 /app
   /dashboard
   /pos
-  /kiosk                         (full-screen layout, also reachable without admin nav after session)
+  /kiosk                         (staff preview inside the app shell, labelled "Kiosk preview"; a full-screen guest device shell is not built)
   /orders
   /orders/:orderId
   /dine-in/floor

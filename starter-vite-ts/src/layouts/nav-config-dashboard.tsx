@@ -107,7 +107,7 @@ export function useNavData(): NavSectionProps['data'] {
           icon: ICONS.inventory,
         },
         {
-          title: t('nav.kiosk', 'Self-Service Kiosk'),
+          title: t('nav.kiosk', 'Kiosk preview'),
           path: '/app/kiosk',
           icon: ICONS.terminal,
         },
