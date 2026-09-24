@@ -60,6 +60,20 @@ func (s *Server) tillNewOrder(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// tillPlace starts an order with its lines and sends it to the kitchen, all of it or nothing.
+func (s *Server) tillPlace(w http.ResponseWriter, r *http.Request) {
+	var in till.PlaceInput
+	s.asCashier(w, r, &in, func(t *till.Till, u till.User) (any, error) {
+		return order(t.Place(u, in))
+	})
+}
+
+func (s *Server) tillOrder(w http.ResponseWriter, r *http.Request) {
+	s.asCashier(w, r, nil, func(t *till.Till, _ till.User) (any, error) {
+		return order(t.Order(r.PathValue("id")))
+	})
+}
+
 func (s *Server) tillOrderInfo(w http.ResponseWriter, r *http.Request) {
 	var in orderInfo
 	s.asCashier(w, r, &in, func(t *till.Till, _ till.User) (any, error) {

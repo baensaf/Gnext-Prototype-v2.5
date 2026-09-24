@@ -95,6 +95,19 @@ jobs:
         with:
           go-version-file: agent/go.mod
           cache-dependency-path: agent/go.sum
+      # The offline till screen is the web POS's register, built from starter-vite-ts into
+      # internal/localui/tillui, which the agent embeds and serves at /till/.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: starter-vite-ts/package-lock.json
+      - name: Build the offline till screen
+        working-directory: starter-vite-ts
+        run: |
+          npm ci --legacy-peer-deps
+          npm run build:till
+          test -f ../agent/internal/localui/tillui/index.html
       - run: go vet ./...
       - run: GOOS=windows go vet ./...
       - run: go test -race ./...

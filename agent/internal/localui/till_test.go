@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -110,8 +111,19 @@ func TestTillBindingNeedsAManagerOrAnApproversPIN(t *testing.T) {
 
 func TestTillMenuAndPricesNeedASignedInCashier(t *testing.T) {
 	h := newTestServer(&fakeHost{till: testTill(t)})
-	if rec := call(h, "GET", "/till", "", nil); rec.Code != 200 || !strings.Contains(rec.Body.String(), "صندوق آفلاین") {
-		t.Fatalf("page: %d", rec.Code)
+	if rec := call(h, "GET", "/till", "", nil); rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/till/" {
+		t.Fatalf("/till: %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+	// The screen, built or its stand-in, at its own address and at any route inside it, with
+	// scripts still only from the agent.
+	for _, path := range []string{"/till/", "/till/sell"} {
+		rec := call(h, "GET", path, "", nil)
+		if rec.Code != 200 || !strings.Contains(rec.Body.String(), "صندوق آفلاین") {
+			t.Fatalf("%s: %d", path, rec.Code)
+		}
+		if csp := rec.Header().Get("Content-Security-Policy"); !strings.HasPrefix(csp, "default-src 'self';") || strings.Contains(csp, "script-src") {
+			t.Fatalf("%s: CSP %q", path, csp)
+		}
 	}
 	if rec := call(h, "GET", "/api/till/menu", "", nil); rec.Code != 401 {
 		t.Fatalf("menu without a session: %d", rec.Code)
@@ -196,6 +208,22 @@ func TestTillOrdersOverTheLocalAPI(t *testing.T) {
 	}
 	if rec := call(h, "GET", "/api/till/orders", "", session); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"handed_over":true`) {
 		t.Fatalf("orders: %d %s", rec.Code, rec.Body)
+	}
+
+	// A whole cart placed at once, as the web POS's screen does; then read back on its own.
+	rec = call(h, "POST", "/api/till/orders/place", `{"order_type":"TAKEAWAY","notes":"سس جدا","lines":[{"product_id":"cola","quantity":1}]}`, session)
+	_ = json.Unmarshal(rec.Body.Bytes(), &res)
+	if rec.Code != 200 || res.Order.CallNumber == nil || *res.Order.CallNumber != 101 || res.Order.SentAt == nil {
+		t.Fatalf("place: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(h, "GET", "/api/till/orders/"+res.Order.ID, "", session); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"notes":"سس جدا"`) {
+		t.Fatalf("one order: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(h, "GET", "/api/till/orders/nope", "", session); rec.Code != 404 {
+		t.Fatalf("unknown order: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(h, "POST", "/api/till/orders/place", `{"order_type":"TAKEAWAY","lines":[{"product_id":"cola","quantity":5}]}`, session); rec.Code != 422 {
+		t.Fatalf("place over stock: %d %s", rec.Code, rec.Body)
 	}
 
 	// A cart the kitchen never had is dropped.

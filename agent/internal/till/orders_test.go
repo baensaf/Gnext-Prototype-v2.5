@@ -160,6 +160,52 @@ func TestTheSameItemAgainIsOneLineUntilTheKitchenHasIt(t *testing.T) {
 	}
 }
 
+func TestPlacingACartIsAllOrNothingAndSendsIt(t *testing.T) {
+	s := newShop(t)
+	o, err := s.till.Place(s.sara, PlaceInput{
+		OrderType: TypeDineIn, TableID: "t12", GuestCount: 2, Notes: " بدون پیاز ",
+		Lines: []LineInput{{ProductID: "burger", Quantity: 1}, {ProductID: "fries", Quantity: 1}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 2,450,000 + 10% and 1,000,000 + 9%; the cloud had drawn one number, so this is the second.
+	if o.Totals.GrandTotal != "3785000" || len(o.Lines) != 2 || o.CallNumber == nil || *o.CallNumber != 101 {
+		t.Fatalf("placed = %+v", o)
+	}
+	if o.SentAt == nil || o.Lines[0].SentAt == nil || o.Lines[1].SentAt == nil || o.State != StateOpen || deref(o.Notes) != "بدون پیاز" {
+		t.Fatalf("placed, not sent: %+v", o)
+	}
+	if o.TableID == nil || *o.TableID != "t12" || o.GuestCount == nil || *o.GuestCount != 2 || o.CreatedBy != "sara" {
+		t.Fatalf("order info = %+v", o)
+	}
+
+	// One fry is left today: a cart wanting two is refused whole, keeps nothing and draws no number.
+	_, err = s.till.Place(s.sara, PlaceInput{OrderType: TypeTakeaway, Lines: []LineInput{{ProductID: "burger", Quantity: 1}, {ProductID: "fries", Quantity: 2}}})
+	var e *Error
+	if !errors.As(err, &e) || e.Code != CodeNotAvailable {
+		t.Fatalf("over stock: %v", err)
+	}
+	if _, err := s.till.Place(s.sara, PlaceInput{OrderType: TypeTakeaway}); !errors.As(err, &e) || e.Code != CodeInvalid {
+		t.Fatalf("empty cart: %v", err)
+	}
+	if list, _ := s.till.Orders(); len(list) != 1 {
+		t.Fatalf("orders kept = %d", len(list))
+	}
+	next, err := s.till.Place(s.sara, PlaceInput{OrderType: TypeTakeaway, Lines: []LineInput{{ProductID: "burger", Quantity: 1}}})
+	if err != nil || *next.CallNumber != 102 {
+		t.Fatalf("next = %+v, %v", next, err)
+	}
+
+	// The note goes up with the order.
+	if _, err := s.till.Cancel(o.ID, s.sara, "مشتری رفت", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.uploaded) != 1 || s.uploaded[0]["notes"] != "بدون پیاز" {
+		t.Fatalf("uploaded = %v", s.uploaded)
+	}
+}
+
 func TestQuantityChangesOnlyUntilTheKitchenHasTheLine(t *testing.T) {
 	s := newShop(t)
 	o := s.add(s.newOrder(), "burger", 1)

@@ -1558,14 +1558,16 @@ ends the previous one. It ends after `auto_logout_minutes` without a request.
 
 | Request | Does |
 |---|---|
-| `GET /till` | The page (Persian, right to left). |
+| `GET /till/` | The page: the web POS's own register, built from `starter-vite-ts` (`npm run build:till`) and embedded in the agent, reading and writing through these routes. Persian, right to left, by default, with the web POS's fa/en switch and light/dark theme. Anything under `/till/` is the page; `/till` redirects to it. Its policy adds inline styles (`style-src 'self' 'unsafe-inline'`); scripts still come only from the agent. |
 | `GET /api/till/state` | Mode, bound till and shift, snapshot age, the staff names (no hashes), who is signed in. |
 | `POST /api/till/login` `{user_id, pin}` / `POST /api/till/logout` | Sign in or out. |
 | `POST /api/till/binding` `{terminal_id, user_id?, pin?}` | Bind the till (§13.4): with the settings page's manager session, or an approver's PIN. |
-| `GET /api/till/menu` | Categories, products (each with its availability now and the reason when not: `STOPPED`, `OUT_OF_HOURS`, `SOLD_OUT`) and dining tables, from the snapshot. |
+| `GET /api/till/menu` | Categories, products (each with its tax rate and its availability now, with the reason when not: `STOPPED`, `OUT_OF_HOURS`, `SOLD_OUT`), dining tables and payment methods, from the snapshot. `state` also names the branch. |
 | `POST /api/till/price` `{lines: [{product_id, variant_id, quantity, options[], notes}]}` | Checks and prices lines as one order without keeping it: `{lines, totals}` in the §12.4 shape, or `NOT_AVAILABLE` with `line`, the index of the line refused. The till screen shows only what this says. |
 | `GET /api/till/orders` | Unfinished orders, and those that ended in the last day, for reprints. |
 | `POST /api/till/orders` `{order_type, table_id?, guest_count?}` | New order. Order changes answer `{order}`. |
+| `POST /api/till/orders/place` `{order_type, table_id?, guest_count?, notes?, lines: [...]}` | A whole cart at once, as the web POS places it: checked and priced as one order, started, numbered and sent to the kitchen, or refused whole (`NOT_AVAILABLE` with `line`), keeping nothing and drawing no number. `notes` go up with the order. |
+| `GET /api/till/orders/{id}` | One order the till holds. |
 | `POST /api/till/orders/{id}/info` `{order_type, table_id?, guest_count?}` | Change the order's type, table or guests while it is open. |
 | `POST /api/till/orders/{id}/lines` `{product_id, variant_id?, quantity, options[], notes?}` | Add a line. The same thing again, before the kitchen has it, adds to that line. |
 | `POST /api/till/orders/{id}/lines/{line}/quantity` `{quantity}` | Change how many of a line the kitchen does not have yet (`0` removes it); a sent line is `LINE_SENT`, voided instead. |

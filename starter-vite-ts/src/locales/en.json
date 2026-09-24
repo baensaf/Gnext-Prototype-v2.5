@@ -195,7 +195,10 @@
   },
   "pos": {
     "offline": {
-      "unavailable": "Not available offline"
+      "unavailable": "Not available offline",
+      "notOnMenu": "This item is not on the branch menu.",
+      "tableFromList": "Offline, choose the table from the list.",
+      "paymentsLater": "Taking payment on the offline till comes with the next update of the Gnext agent."
     },
     "options": {
       "title": "Configure {{name}}",
@@ -305,6 +308,31 @@
     "callNumber": "Number",
     "orderSubmitted": "Order {{number}} sent to the kitchen",
     "orderSubmittedPaid": "Order {{number}} paid and sent to the kitchen"
+  },
+  "till": {
+    "title": "Offline till",
+    "signIn": {
+      "who": "Who is selling?",
+      "pin": "PIN",
+      "submit": "Sign in"
+    },
+    "signOut": "Sign out",
+    "mode": {
+      "OFFLINE": "Offline",
+      "HANDOVER": "Internet back",
+      "ONLINE": "Online"
+    },
+    "online": "The internet is back. Take orders on the online POS.",
+    "handover": "The internet is back. Finish the orders still open here, or hand them over to the online POS; new orders go on the online POS.",
+    "handoverButton": "Hand over",
+    "handedOver": "{{handed}} orders handed over; {{dropped}} unsent carts dropped.",
+    "openWebPos": "Open the online POS",
+    "problems": {
+      "NO_SNAPSHOT": "The branch menu has not come from the server yet.",
+      "NO_STAFF": "The staff list has not come from the server yet, so nobody can sign in.",
+      "NO_TILL": "No till has been chosen for selling offline. A manager chooses it on the Gnext Agent settings page.",
+      "NO_SHIFT": "This till has no open shift. Without one it cannot sell offline."
+    }
   },
   "kiosk": {
     "title": "SELF-SERVICE KIOSK",
