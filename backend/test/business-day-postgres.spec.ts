@@ -11,6 +11,7 @@ import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { CashierShift } from '../src/entities/CashierShift.entity';
 import { BusinessDayClose } from '../src/entities/BusinessDayClose.entity';
+import { AuditEvent } from '../src/entities/AuditEvent.entity';
 import { ShiftService } from '../src/modules/cashier/shift.service';
 import { BusinessDayService } from '../src/modules/cashier/business-day.service';
 import { BusinessDayAutoCloseService } from '../src/modules/cashier/business-day-auto-close.service';
@@ -261,5 +262,48 @@ describe('the overnight business day (PostgreSQL)', () => {
       (await dataSource.getRepository(OrderHeader).findOneOrFail({ where: { tenant_id: tenantId, business_date: '2026-10-14' } })).id,
     );
     expect((await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: legacy.id })).business_date).toBe('2026-10-11');
+  });
+
+  const storedOrder = (placed: string, businessDate: string) =>
+    dataSource.getRepository(OrderHeader).save(
+      dataSource.getRepository(OrderHeader).create({
+        tenant_id: tenantId,
+        branch_id: tehranBranch,
+        channel: 'POS',
+        order_number: `BD-FIX-${Math.random().toString(36).slice(2, 12)}`,
+        business_date: businessDate,
+        placed_at: new Date(placed),
+      }),
+    );
+
+  it('moves what the review lists onto its business date only when asked, with a reason, and audits each row', async () => {
+    // Rung up on the 12th on a shift left open since the 5th, so stored on the 5th.
+    const stale = await storedOrder('2026-10-12T13:00:00+03:30', '2026-10-05');
+    tehranTime('2026-10-18T12:00:00');
+    const window = { branchId: tehranBranch, from: '2026-10-09', to: '2026-10-13' };
+
+    await expect(businessDays.applyDateCorrections(tenantId, { ...window, reason: '  ' })).rejects.toThrow('requires a reason');
+    expect((await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: stale.id })).business_date).toBe('2026-10-05');
+
+    const result = await businessDays.applyDateCorrections(tenantId, { ...window, reason: 'Sold on a shift left open' }, undefined, 'bday-fix');
+    expect(result.moved).toEqual({ orders: 2, payments: 0, refunds: 0 });
+    expect((await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: stale.id })).business_date).toBe('2026-10-12');
+
+    const audits = await dataSource.getRepository(AuditEvent).find({ where: { tenant_id: tenantId, action: 'BUSINESS_DATE_CORRECTED', entity_id: stale.id } });
+    expect(audits).toHaveLength(1);
+    expect(audits[0].details).toMatchObject({ reason: 'Sold on a shift left open' });
+
+    const again = await businessDays.reviewStoredDates(tenantId, window);
+    expect(again.orders.count).toBe(0);
+  });
+
+  it('moves nothing into or out of a closed day', async () => {
+    // Placed on the 15th, which auto-close has already closed.
+    const intoClosed = await storedOrder('2026-10-15T13:00:00+03:30', '2026-10-12');
+    tehranTime('2026-10-18T12:00:00');
+    await expect(
+      businessDays.applyDateCorrections(tenantId, { branchId: tehranBranch, from: '2026-10-09', to: '2026-10-17', reason: 'Fix' }),
+    ).rejects.toMatchObject({ response: { code: 'DAY_CLOSED' } });
+    expect((await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: intoClosed.id })).business_date).toBe('2026-10-12');
   });
 });
