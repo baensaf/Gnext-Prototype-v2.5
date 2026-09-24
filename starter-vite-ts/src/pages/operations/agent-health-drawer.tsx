@@ -26,6 +26,7 @@ import { fDateTime } from 'src/utils/format-time';
 
 import { kdsApi } from 'src/api/kdsApi';
 import { agentsApi } from 'src/api/agentsApi';
+import { tenantApi } from 'src/api/tenantApi';
 import { paymentApi } from 'src/api/paymentApi';
 
 // ----------------------------------------------------------------------
@@ -87,18 +88,23 @@ export function AgentHealthDrawer({ agentId, branchId, onClose }: Props) {
   // The agent reports devices by id; show the names head office gave them.
   useEffect(() => {
     if (!branchId) return;
-    Promise.all([kdsApi.getPrinters(branchId).catch(() => []), paymentApi.getDevices(branchId).catch(() => [])]).then(
-      ([printers, terminals]) => {
-        const names: Record<string, string> = {};
-        printers.forEach((p) => {
-          names[`printer:${p.id}`] = `${p.name} (${p.code})`;
-        });
-        terminals.forEach((d) => {
-          names[`terminal:${d.id}`] = `${d.name} (${d.code})`;
-        });
-        setDeviceNames(names);
-      }
-    );
+    Promise.all([
+      kdsApi.getPrinters(branchId).catch(() => []),
+      paymentApi.getDevices(branchId).catch(() => []),
+      tenantApi.getTerminals(branchId).catch(() => []),
+    ]).then(([printers, terminals, tills]) => {
+      const names: Record<string, string> = {};
+      printers.forEach((p) => {
+        names[`printer:${p.id}`] = `${p.name} (${p.code})`;
+      });
+      terminals.forEach((d) => {
+        names[`terminal:${d.id}`] = `${d.name} (${d.code})`;
+      });
+      tills.forEach((till) => {
+        names[`till:${till.id}`] = `${till.name} (${till.code})`;
+      });
+      setDeviceNames(names);
+    });
   }, [branchId]);
 
   const agent = health?.agent;
@@ -239,6 +245,25 @@ export function AgentHealthDrawer({ agentId, branchId, onClose }: Props) {
                     <Typography variant="caption" color="error" dir="ltr">
                       {connection.sync.last_upload_error}
                     </Typography>
+                  )}
+                  {connection.till && (
+                    <>
+                      <Row
+                        label={t('operations.agents.health.till.bound', 'Offline till')}
+                        value={
+                          connection.till.terminal_id
+                            ? deviceNames[`till:${connection.till.terminal_id}`] || connection.till.terminal_id
+                            : t('operations.agents.health.till.none', 'Not chosen yet')
+                        }
+                      />
+                      {connection.till.open_orders > 0 && (
+                        <Alert severity="warning" sx={{ py: 0 }}>
+                          {t('operations.agents.health.till.openOrders', '{{count}} offline orders are still open on the till', {
+                            count: connection.till.open_orders,
+                          })}
+                        </Alert>
+                      )}
+                    </>
                   )}
                 </Stack>
               </>

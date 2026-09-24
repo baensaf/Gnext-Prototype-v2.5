@@ -57,6 +57,14 @@ export interface AgentSyncReport {
 
 export type AgentSyncWarning = 'SNAPSHOT_STALE' | 'BACKLOG_STUCK' | 'UPLOAD_FAILING';
 
+/** Which till the agent's offline till sells as, and what it still holds. */
+export interface AgentTillReport {
+  terminal_id: string | null;
+  mode: 'ONLINE' | 'OFFLINE' | 'HANDOVER';
+  open_orders: number;
+  reported_at: string;
+}
+
 export interface AgentHealth {
   agent: BranchAgent;
   connection: {
@@ -68,6 +76,7 @@ export interface AgentHealth {
     capabilities?: string[];
     devices: AgentDeviceStatus[];
     sync?: AgentSyncReport | null;
+    till?: AgentTillReport | null;
   };
   sync_warnings?: AgentSyncWarning[];
   recent_commands: AgentCommandSummary[];

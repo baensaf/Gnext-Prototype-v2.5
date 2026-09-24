@@ -25,7 +25,7 @@ import { fDate } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { profilesApi } from 'src/api/profilesApi';
-import { ROLE_LABELS } from 'src/config/role-access';
+import { ROLE_LABELS, isApproverRole } from 'src/config/role-access';
 
 import {
   InfoCard,
@@ -173,7 +173,8 @@ export function UserProfilePage() {
                 { label: t('users.displayName', 'Name'), value: user.display_name },
                 { label: t('users.role', 'Role'), value: roleLabel },
                 { label: t('users.scope', 'Scope'), value: user.branch_name || t('auth.headOffice', 'Head office') },
-                { label: t('users.approves', 'Approves'), value: user.has_pin ? t('common.yes', 'Yes') : t('common.no', 'No') },
+                { label: t('users.approves', 'Approves'), value: isApproverRole(user.role) && user.has_pin ? t('common.yes', 'Yes') : t('common.no', 'No') },
+                { label: t('users.pin', 'PIN'), value: user.has_pin ? t('common.yes', 'Yes') : t('common.no', 'No') },
                 { label: t('profile.user.locale'), value: user.preferred_locale },
               ]}
             />

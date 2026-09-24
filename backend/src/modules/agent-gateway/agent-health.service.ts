@@ -131,6 +131,7 @@ export class AgentHealthService implements OnApplicationBootstrap, OnApplication
             capabilities: live.capabilities,
             devices: live.devices ? [...live.devices.values()] : [],
             sync: live.sync ?? null,
+            till: live.till ?? null,
           }
         : { connected: false, devices: [] },
       sync_warnings: live?.sync ? syncWarnings(live.sync) : [],

@@ -5,7 +5,7 @@ import { AgentSessionsService } from '../agent-gateway/agent-sessions.service';
 import { LiveChange, LiveChangesService, RESYNC_TOPIC } from '../live/live-changes.service';
 import { AgentDataService } from './agent-data.service';
 
-/** The notice topic migration 073 raises for the tables a snapshot is built from. */
+/** The notice topic migrations 073 and 076 raise for the tables a snapshot or staff list is built from. */
 export const AGENT_DATA_TOPIC = 'agent-data';
 /** Changes inside this window reach the agent as one `data.changed` (§12.3). */
 export const DATA_CHANGED_COALESCE_MS = 10_000;
@@ -99,8 +99,14 @@ export class AgentDataChangesService implements OnModuleInit, OnModuleDestroy {
     for (const handle of agents) {
       try {
         const { data_version } = await this.data.build(tenantId, handle.branchId);
-        if (data_version === this.data.servedVersion(tenantId, handle.branchId)) continue;
-        await this.commands.enqueue(tenantId, handle.branchId, 'data.changed', { data_version });
+        // An agent with the offline till also keeps the staff list (§13.3), announced the same way.
+        const staff_version = handle.capabilities.includes('pos.offline')
+          ? (await this.data.buildStaff(tenantId, handle.branchId)).staff_version
+          : undefined;
+        const dataCurrent = data_version === this.data.servedVersion(tenantId, handle.branchId);
+        const staffCurrent = !staff_version || staff_version === this.data.servedStaffVersion(tenantId, handle.branchId);
+        if (dataCurrent && staffCurrent) continue;
+        await this.commands.enqueue(tenantId, handle.branchId, 'data.changed', staff_version ? { data_version, staff_version } : { data_version });
       } catch (err: any) {
         this.logger.warn(`data.changed for agent ${handle.agentId} failed: ${err?.message || err}`);
       }

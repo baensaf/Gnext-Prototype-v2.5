@@ -3623,6 +3623,11 @@
             "BACKLOG_STUCK": "Offline orders have been waiting over 10 minutes while the agent is online.",
             "UPLOAD_FAILING": "The last upload of offline orders failed."
           }
+        },
+        "till": {
+          "bound": "Offline till",
+          "none": "Not chosen yet",
+          "openOrders": "{{count}} offline orders are still open on the till"
         }
       },
       "releases": {
@@ -3775,7 +3780,11 @@
     "passwordNotice": "The new account starts on the shared demo password, and gets the demo approver PIN if its role can approve.",
     "roleApproves": "This role can approve with a PIN.",
     "roleNeedsApproval": "This role needs a PIN from someone else to move money back out.",
-    "selfEditNotice": "This is the account you are signed in as. Its role, scope and status are locked so you cannot lock yourself out."
+    "selfEditNotice": "This is the account you are signed in as. Its role, scope and status are locked so you cannot lock yourself out.",
+    "pin": "PIN",
+    "pinInvalid": "A PIN is 4 to 8 digits.",
+    "pinHelp": "Signs this person in at the offline till; an approver also approves with it.",
+    "pinKeep": "Signs this person in at the offline till; an approver also approves with it. Leave empty to keep the current PIN."
   },
   "rolesPage": {
     "title": "Roles & Permissions",
