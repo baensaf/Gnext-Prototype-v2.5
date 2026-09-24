@@ -57,6 +57,9 @@ export function Searchbar({ data: navItems = [], extraItems = [], sx, ...other }
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
+      // A page that uses the same keys for itself (the register's product search) got there
+      // first, on document; the page wins.
+      if (event.defaultPrevented) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         onToggle();
