@@ -57,9 +57,10 @@ import { useLiveRefresh } from 'src/utils/use-live-refresh';
 
 import { tenantApi } from 'src/api/tenantApi';
 import { settingsApi } from 'src/api/settingsApi';
-import { useAuthStore } from 'src/store/useAuthStore';
+import { canReachPath } from 'src/config/role-access';
 import { useBranchContext } from 'src/contexts/branch-context';
 import { deliveryApi, COURIER_PAY_MODES } from 'src/api/deliveryApi';
+import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
 import { CourierSettlementsPage } from './settlements';
 
@@ -140,7 +141,12 @@ export function DeliveryPage() {
   const { t } = useTranslation();
   // A cashier checks couriers in and out at the counter; taking one onto the roster is the
   // manager's (the API refuses a register account).
-  const isCashier = useAuthStore((state) => state.user?.role)?.toUpperCase() === 'CASHIER';
+  const role = useAuthStore((state) => state.user?.role);
+  const isCashier = role?.toUpperCase() === 'CASHIER';
+  const isHeadOfficeAccount = useIsHeadOffice();
+  // The same table the router applies: a cashier was offered Zones and Audit, and clicking
+  // either swapped the whole page for "Not available for your role".
+  const canOpenTab = (key: DeliveryTab) => canReachPath(role, TAB_PATHS[key], isHeadOfficeAccount);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -661,11 +667,13 @@ export function DeliveryPage() {
 
       <Paper sx={{ mb: 3, borderRadius: 2 }}>
         <Tabs value={tab} onChange={(_, val) => goToTab(val)}>
-          <Tab label={`${t('delivery.tabs.board')} (${deliveries.length})`} value="BOARD" icon={<LocalShippingIcon />} iconPosition="start" />
-          <Tab label={`${t('delivery.tabs.couriers')} (${couriers.length})`} value="COURIERS" icon={<PersonIcon />} iconPosition="start" />
-          <Tab label={t('delivery.tabs.settlements')} value="SETTLEMENTS" icon={<ReceiptLongIcon />} iconPosition="start" />
-          <Tab label={`${t('delivery.tabs.zones')} (${zones.length})`} value="ZONES" icon={<MapIcon />} iconPosition="start" />
-          <Tab label={t('delivery.tabs.audit')} value="AUDIT" icon={<HistoryIcon />} iconPosition="start" />
+          {[
+            <Tab key="BOARD" label={`${t('delivery.tabs.board')} (${deliveries.length})`} value="BOARD" icon={<LocalShippingIcon />} iconPosition="start" />,
+            <Tab key="COURIERS" label={`${t('delivery.tabs.couriers')} (${couriers.length})`} value="COURIERS" icon={<PersonIcon />} iconPosition="start" />,
+            <Tab key="SETTLEMENTS" label={t('delivery.tabs.settlements')} value="SETTLEMENTS" icon={<ReceiptLongIcon />} iconPosition="start" />,
+            <Tab key="ZONES" label={`${t('delivery.tabs.zones')} (${zones.length})`} value="ZONES" icon={<MapIcon />} iconPosition="start" />,
+            <Tab key="AUDIT" label={t('delivery.tabs.audit')} value="AUDIT" icon={<HistoryIcon />} iconPosition="start" />,
+          ].filter((item) => canOpenTab(item.key as DeliveryTab))}
         </Tabs>
       </Paper>
 
@@ -699,9 +707,14 @@ export function DeliveryPage() {
                       </Typography>
 
                       <Stack direction="row" sx={{ pt: 2, justifyContent: 'space-between', alignItems: 'center' }}>
-                        <IconButton size="small" onClick={() => handleViewEvents(del.id)}>
-                          <HistoryIcon fontSize="small" />
-                        </IconButton>
+                        {/* The timeline opens on the Audit tab, which a cashier cannot reach. */}
+                        {canOpenTab('AUDIT') ? (
+                          <IconButton size="small" onClick={() => handleViewEvents(del.id)}>
+                            <HistoryIcon fontSize="small" />
+                          </IconButton>
+                        ) : (
+                          <span />
+                        )}
                         <Button variant="contained" size="small" onClick={() => handleOpenAssignModal(del)}>
                           {t('delivery.card.assignCourier')}
                         </Button>
