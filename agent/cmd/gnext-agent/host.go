@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"math/rand/v2"
@@ -30,6 +31,7 @@ type host struct {
 	log      *slog.Logger
 	journal  *journal.Journal
 	outbox   *offline.Outbox
+	orders   *till.Store
 	renderer *printing.BrowserRenderer
 	restart  chan struct{}
 
@@ -55,19 +57,45 @@ func newHost(log *slog.Logger) (*host, error) {
 		return nil, err
 	}
 	ob.Log = log
-	return &host{
+	orders, err := till.OpenStore(store.TillOrdersPath())
+	if err != nil {
+		j.Close()
+		ob.Close()
+		return nil, err
+	}
+	h := &host{
 		log:      log,
 		journal:  j,
 		outbox:   ob,
+		orders:   orders,
 		renderer: &printing.BrowserRenderer{ProfileDir: store.BrowserDir()},
 		restart:  make(chan struct{}, 1),
-	}, nil
+	}
+	// The last count the cloud gave, for an agent that starts offline (§13.9).
+	_ = store.LoadJSON(store.CallNumbersPath(), &h.callNumbers)
+	return h, nil
 }
 
 func (h *host) close() {
 	h.renderer.Close()
 	h.journal.Close()
 	h.outbox.Close()
+	h.orders.Close()
+}
+
+// cloudCallCount is the POS call count from the last heartbeat.ack (§13.9).
+func (h *host) cloudCallCount() (string, int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.callNumbers.BusinessDate, h.callNumbers.POS
+}
+
+// upload hands an ended offline order to the outbox; one it already holds is handed over.
+func (h *host) upload(payload json.RawMessage) error {
+	if err := h.outbox.Add(payload); err != nil && !errors.Is(err, offline.ErrExists) {
+		return err
+	}
+	return nil
 }
 
 // State implements localui.Host.
@@ -155,7 +183,11 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 	// The offline till sells from the snapshot and signs in from the staff list (§13).
 	tl := &till.Till{
 		Path: store.TillPath(), Staff: staff.Load, Snapshot: data.Load, Log: h.log,
-		Connected: func() bool { return a.Status().Connected },
+		Connected:      func() bool { return a.Status().Connected },
+		ConnectedSince: func() *time.Time { return a.Status().ConnectedSince },
+		Store:          h.orders,
+		Upload:         h.upload,
+		CloudCallCount: h.cloudCallCount,
 	}
 	a = agent.New(agent.Options{
 		Version:       version,
@@ -189,6 +221,7 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 	go updateLoop(runCtx, a, up, h.log)
 	go data.Run(runCtx)
 	go h.outbox.Run(runCtx, client)
+	go tl.Run(runCtx, 30*time.Second)
 
 	done := make(chan error, 1)
 	go func() { done <- a.Run(runCtx) }()

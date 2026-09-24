@@ -1,7 +1,7 @@
 'use strict';
 
-// The offline till (protocol §13). The agent checks and prices everything; this page only shows
-// what it says. The order is held here until the till keeps orders itself (P4).
+// The offline till (protocol §13). Orders live on the agent, which checks, prices and keeps
+// them; this page shows what it says and asks it to change them.
 
 const $ = (sel) => document.querySelector(sel);
 const fa = (s) => String(s).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
@@ -9,6 +9,7 @@ const money = (rials) => `${Number(rials || 0).toLocaleString('fa-IR')} ریال
 const SESSION = 'gnext-till-session';
 
 const ROLES = { CASHIER: 'صندوق‌دار', SUPERVISOR: 'سرپرست', MANAGER: 'مدیر', ADMIN: 'مدیر سیستم', OWNER: 'مالک' };
+const APPROVERS = ['SUPERVISOR', 'MANAGER', 'ADMIN', 'OWNER'];
 const REASONS = { STOPPED: 'موجود نیست', OUT_OF_HOURS: 'خارج از ساعت فروش', SOLD_OUT: 'تمام شده' };
 const MODES = { ONLINE: ['آنلاین', 'ok'], OFFLINE: ['آفلاین', 'bad'], HANDOVER: ['بازگشت اینترنت', ''] };
 
@@ -17,10 +18,9 @@ let tillState = null;
 let user = null;
 let menu = null;
 let category = '';
-let cart = []; // what the till screen asked for: { product_id, variant_id, quantity, options, notes }
-let priced = null; // what the agent made of it: { lines, totals }
-let badLine = null;
-let orderType = 'TAKEAWAY';
+let orders = []; // the agent's unfinished orders
+let current = null; // the order on screen
+let orderType = 'TAKEAWAY'; // for the next order, until one is started
 
 function safeGet(key) {
   try {
@@ -96,16 +96,25 @@ async function loadState() {
   $('#who').textContent = user ? `${user.display_name} (${ROLES[user.role] || user.role})` : '';
   $('#lock').hidden = !user;
 
-  const notes = [];
-  if (t.mode === 'ONLINE') notes.push('اینترنت وصل است؛ سفارش‌ها را در صندوق آنلاین جی‌نکست ثبت کنید.');
-  if (t.problems.includes('NO_SNAPSHOT')) notes.push('منوی شعبه هنوز از سرور دریافت نشده است.');
-  if (t.problems.includes('NO_STAFF')) notes.push('هیچ کارمندی پین ندارد؛ در جی‌نکست برای کارکنان پین تعریف کنید.');
-  if (t.problems.includes('NO_TILL')) notes.push('هنوز صندوقی برای فروش آفلاین انتخاب نشده است؛ در تنظیمات عامل انتخاب کنید.');
-  if (t.problems.includes('NO_SHIFT')) notes.push('این صندوق شیفت باز ندارد؛ بدون شیفت باز، فروش آفلاین ممکن نیست.');
   const banner = $('#banner');
+  const notes = [];
+  if (t.mode === 'ONLINE') notes.push(el('div', {}, 'اینترنت وصل است؛ سفارش‌ها را در صندوق آنلاین جی‌نکست ثبت کنید.'));
+  if (t.mode === 'HANDOVER') {
+    notes.push(
+      el('div', {},
+        'اینترنت برگشته است. سفارش جدید را در صندوق آنلاین ثبت کنید؛ سفارش‌های باز همین‌جا تمام می‌شوند یا به صندوق آنلاین تحویل داده می‌شوند.',
+        user ? el('button', { class: 'btn', onclick: handover }, 'تحویل به صندوق آنلاین') : '',
+      ),
+    );
+  }
+  if (t.problems.includes('NO_SNAPSHOT')) notes.push(el('div', {}, 'منوی شعبه هنوز از سرور دریافت نشده است.'));
+  if (t.problems.includes('NO_STAFF')) notes.push(el('div', {}, 'هیچ کارمندی پین ندارد؛ در جی‌نکست برای کارکنان پین تعریف کنید.'));
+  if (t.problems.includes('NO_TILL')) {
+    notes.push(el('div', {}, 'هنوز صندوقی برای فروش آفلاین انتخاب نشده است؛ ', el('a', { href: '/' }, 'در تنظیمات عامل انتخاب کنید'), '.'));
+  }
+  if (t.problems.includes('NO_SHIFT')) notes.push(el('div', {}, 'این صندوق شیفت باز ندارد؛ بدون شیفت باز، فروش آفلاین ممکن نیست.'));
   banner.hidden = notes.length === 0;
-  banner.replaceChildren(...notes.map((n) => el('div', {}, n)));
-  if (t.problems.includes('NO_TILL')) banner.append(el('a', { href: '/' }, 'رفتن به تنظیمات عامل'));
+  banner.replaceChildren(...notes);
   return true;
 }
 
@@ -134,6 +143,8 @@ function askPin(u) {
   $('#pin').focus();
 }
 
+const latinDigits = (s) => s.replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+
 document.querySelectorAll('.keys [data-key]').forEach((b) =>
   b.addEventListener('click', () => {
     const pin = $('#pin');
@@ -145,9 +156,8 @@ document.querySelectorAll('.keys [data-key]').forEach((b) =>
 $('#pin-cancel').addEventListener('click', showSignin);
 $('#pin-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const pin = $('#pin').value.replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
   try {
-    const res = await api('POST', '/api/till/login', { user_id: pinUser.id, pin });
+    const res = await api('POST', '/api/till/login', { user_id: pinUser.id, pin: latinDigits($('#pin').value) });
     token = res.token;
     safeSet(SESSION, token);
     user = res.user;
@@ -186,7 +196,7 @@ async function startSelling() {
   renderCategories();
   renderProducts();
   renderTables();
-  renderOrder();
+  await loadOrders();
 }
 
 function renderCategories() {
@@ -223,11 +233,13 @@ function fromPrice(p) {
   return prices.length ? `از ${money(Math.min(...prices))}` : '';
 }
 
+function tableName(id) {
+  const t = menu?.tables.find((x) => x.id === id);
+  return t ? `${t.area ? t.area + ' · ' : ''}میز ${fa(t.number)}` : '';
+}
+
 function renderTables() {
-  $('#table').replaceChildren(
-    el('option', { value: '' }, 'انتخاب کنید'),
-    ...menu.tables.map((t) => el('option', { value: t.id }, `${t.area ? t.area + ' · ' : ''}میز ${fa(t.number)}`)),
-  );
+  $('#table').replaceChildren(el('option', { value: '' }, 'انتخاب کنید'), ...menu.tables.map((t) => el('option', { value: t.id }, tableName(t.id))));
 }
 
 // ---- choosing a product: size, add-ons, quantity ----
@@ -262,12 +274,7 @@ function renderPick() {
     ...p.variants.map((v) =>
       el(
         'button',
-        {
-          type: 'button',
-          class: 'choice' + (v.id === pick.variant ? ' on' : ''),
-          disabled: !v.available,
-          onclick: () => { pick.variant = v.id; renderPick(); },
-        },
+        { type: 'button', class: 'choice' + (v.id === pick.variant ? ' on' : ''), disabled: !v.available, onclick: () => { pick.variant = v.id; renderPick(); } },
         v.name, ' ', el('small', {}, v.available ? money(v.price) : REASONS[v.reason] || ''),
       ),
     ),
@@ -284,12 +291,7 @@ function renderPick() {
           ...g.items.map((it) =>
             el(
               'button',
-              {
-                type: 'button',
-                class: 'choice' + (pick.options.has(it.id) ? ' on' : ''),
-                disabled: !it.available,
-                onclick: () => toggleOption(g, it),
-              },
+              { type: 'button', class: 'choice' + (pick.options.has(it.id) ? ' on' : ''), disabled: !it.available, onclick: () => toggleOption(g, it) },
               it.name,
               Number(it.price_delta) ? el('small', {}, ` +${money(it.price_delta)}`) : '',
             ),
@@ -349,91 +351,243 @@ $('#product-form').addEventListener('submit', async (e) => {
   }
 });
 
-// ---- the order ----
-const sameLine = (a, b) =>
-  a.product_id === b.product_id && a.variant_id === b.variant_id && a.notes === b.notes && a.options.join() === b.options.join();
-
-// A change is kept only if the agent accepts the whole order with it.
-async function reprice(next) {
-  const result = next.length ? await api('POST', '/api/till/price', { lines: next }) : { lines: [], totals: null };
-  cart = next;
-  priced = result;
-  badLine = null;
+// ---- the orders, kept on the agent ----
+async function loadOrders(keep) {
+  const res = await api('GET', '/api/till/orders').catch(() => null);
+  if (!res) return;
+  orders = res.orders.filter((o) => o.state === 'OPEN' && !o.handed_over);
+  const id = keep ?? current?.id;
+  current = orders.find((o) => o.id === id) || null;
   renderOrder();
 }
 
-async function addLine(input) {
-  const next = cart.map((l) => ({ ...l }));
-  const same = next.find((l) => sameLine(l, input));
-  if (same) same.quantity += input.quantity;
-  else next.push(input);
-  await reprice(next);
+// Show the agent's answer about one order.
+function show(order) {
+  const i = orders.findIndex((o) => o.id === order?.id);
+  if (order && order.state === 'OPEN' && !order.handed_over) {
+    if (i >= 0) orders[i] = order;
+    else orders.push(order);
+    current = order;
+  } else {
+    if (i >= 0) orders.splice(i, 1);
+    current = null;
+  }
+  renderOrder();
 }
 
-async function changeQty(i, delta) {
-  const next = cart.map((l) => ({ ...l }));
-  next[i].quantity += delta;
-  if (next[i].quantity < 1) next.splice(i, 1);
+function guests() {
+  return Number($('#guests').value) || 0;
+}
+
+async function addLine(input) {
+  if (!current) {
+    const res = await api('POST', '/api/till/orders', { order_type: orderType, table_id: $('#table').value, guest_count: guests() });
+    show(res.order);
+  }
+  show((await api('POST', `/api/till/orders/${current.id}/lines`, input)).order);
+  refreshMenu();
+}
+
+async function setQuantity(line, quantity) {
   try {
-    await reprice(next);
+    show((await api('POST', `/api/till/orders/${current.id}/lines/${line.id}/quantity`, { quantity })).order);
+    refreshMenu();
   } catch (e) {
     toast(e.message, true);
   }
 }
 
+// Striking a line the kitchen has: the cashier alone within the edit window, else an approver.
+async function voidLine(line) {
+  if (!confirm(`«${line.product_name}» از سفارش حذف شود؟`)) return;
+  await withApproval('حذف ردیف', false, (extra) => api('POST', `/api/till/orders/${current.id}/lines/${line.id}/void`, extra));
+  refreshMenu();
+}
+
+$('#cancel').addEventListener('click', async () => {
+  if (!current) return;
+  const sent = !!current.sent_at || current.call_number;
+  if (!sent) {
+    if (!confirm('این سفارش هنوز به آشپزخانه نرفته است و پاک می‌شود. ادامه می‌دهید؟')) return;
+    try {
+      const id = current.id;
+      const res = await api('POST', `/api/till/orders/${id}/cancel`, {});
+      // A dropped cart comes back as no order at all.
+      if (res.dropped) {
+        orders = orders.filter((o) => o.id !== id);
+        current = null;
+        renderOrder();
+      } else show(res.order);
+    } catch (e) {
+      toast(e.message, true);
+    }
+    refreshMenu();
+    return;
+  }
+  const note = await askApproval({ title: 'لغو سفارش', why: 'دلیل لغو را بنویسید.', note: true, pin: false });
+  if (note === null) return;
+  await withApproval('لغو سفارش', true, (extra) => api('POST', `/api/till/orders/${current.id}/cancel`, { note: note.note, ...extra }));
+  toast('سفارش لغو شد.');
+  refreshMenu();
+});
+
+// Runs a change; if the agent asks for an approver, asks for one and runs it again.
+async function withApproval(title, isCancel, run) {
+  try {
+    show((await run({})).order);
+  } catch (e) {
+    if (e.code !== 'APPROVAL_REQUIRED') {
+      toast(e.message, true);
+      return;
+    }
+    const a = await askApproval({ title, why: e.message, note: false, pin: true });
+    if (!a) return;
+    try {
+      show((await run({ approver_id: a.approver_id, pin: latinDigits(a.pin) })).order);
+    } catch (e2) {
+      toast(e2.message, true);
+    }
+  }
+}
+
+function askApproval({ title, why, note, pin }) {
+  const dlg = $('#dlg-approve');
+  const form = $('#approve-form');
+  form.reset();
+  $('#approve-title').textContent = title;
+  $('#approve-why').textContent = why || '';
+  $('#approve-note-row').hidden = !note;
+  $('#approve-pin-rows').hidden = !pin;
+  form.approver_id.replaceChildren(
+    ...(tillState?.staff || []).filter((u) => APPROVERS.includes(u.role)).map((u) => el('option', { value: u.id }, u.display_name)),
+  );
+  // Answered on submit, which fires at once; close (Esc) only says no. The close event can wait
+  // until the page is drawn again.
+  return new Promise((resolve) => {
+    let done = false;
+    const answer = (value) => {
+      if (!done) (done = true), resolve(value);
+    };
+    form.onsubmit = (e) =>
+      answer(e.submitter?.value === 'ok' ? { note: form.note.value.trim(), approver_id: form.approver_id.value, pin: form.pin.value } : null);
+    dlg.onclose = () => answer(null);
+    dlg.showModal();
+  });
+}
+
+$('#send').addEventListener('click', async () => {
+  if (!current) return;
+  try {
+    const res = await api('POST', `/api/till/orders/${current.id}/send`);
+    show(res.order);
+    toast(`سفارش ${fa(res.order.call_number)} به آشپزخانه رفت.`);
+  } catch (e) {
+    toast(e.message, true);
+  }
+});
+
+$('#new-order').addEventListener('click', () => {
+  current = null;
+  renderOrder();
+});
+
+async function handover() {
+  const open = orders.length;
+  if (!confirm(`${fa(open)} سفارش باز به صندوق آنلاین تحویل داده می‌شود؛ سفارش‌هایی که به آشپزخانه نرفته‌اند پاک می‌شوند. ادامه می‌دهید؟`)) return;
+  try {
+    const res = await api('POST', '/api/till/handover');
+    toast(`${fa(res.handed)} سفارش تحویل شد${res.dropped ? `، ${fa(res.dropped)} سفارش ارسال‌نشده پاک شد` : ''}.`);
+    await loadState();
+    await loadOrders(null);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// Type, table and guests: for the order on screen, or the next one.
+document.querySelectorAll('.order-type [data-type]').forEach((b) =>
+  b.addEventListener('click', () => {
+    orderType = b.dataset.type;
+    saveInfo();
+  }),
+);
+$('#table').addEventListener('change', saveInfo);
+$('#guests').addEventListener('change', saveInfo);
+
+async function saveInfo() {
+  if (current) {
+    try {
+      show((await api('POST', `/api/till/orders/${current.id}/info`, { order_type: orderType, table_id: $('#table').value, guest_count: guests() })).order);
+      return;
+    } catch (e) {
+      toast(e.message, true);
+    }
+  }
+  renderOrder();
+}
+
 function renderOrder() {
-  const lines = priced?.lines || [];
-  $('#empty').hidden = cart.length > 0;
+  const o = current;
+  // The order tabs: each unfinished order by its number, or its table, or "new".
+  $('#open-orders').replaceChildren(
+    ...orders.map((x) =>
+      el('button', { type: 'button', class: x.id === o?.id ? 'on' : '', onclick: () => { current = x; renderOrder(); } },
+        x.call_number ? `#${fa(x.call_number)}` : 'ارسال‌نشده', x.table_id ? ` · ${tableName(x.table_id)}` : ''),
+    ),
+  );
+  if (o) orderType = o.order_type;
+  document.querySelectorAll('.order-type [data-type]').forEach((x) => x.classList.toggle('on', x.dataset.type === orderType));
+  $('#dine-in').hidden = orderType !== 'DINE_IN';
+  if (o) {
+    $('#table').value = o.table_id || '';
+    $('#guests').value = o.guest_count || '';
+  }
+  $('#order-head').replaceChildren(
+    o ? (o.call_number ? el('span', { class: 'call' }, `سفارش ${fa(o.call_number)}`) : 'سفارش جدید (هنوز به آشپزخانه نرفته)') : 'سفارش جدید',
+  );
+
+  const lines = o?.lines || [];
+  $('#empty').hidden = lines.length > 0;
   $('#lines').replaceChildren(
-    ...lines.map((l, i) =>
+    ...lines.map((l) =>
       el(
         'li',
-        { class: i === badLine ? 'bad' : '' },
+        {},
         el('div', { class: 'line-head' },
           el('span', { class: 'name' }, l.variant_name ? `${l.product_name} (${l.variant_name})` : l.product_name),
           el('span', {}, money(l.line_total)),
         ),
-        l.options.length ? el('div', { class: 'line-sub' }, l.options.map((o) => o.name).join('، ')) : '',
+        l.options.length ? el('div', { class: 'line-sub' }, l.options.map((x) => x.name).join('، ')) : '',
         l.notes ? el('div', { class: 'line-sub' }, `توضیح: ${l.notes}`) : '',
-        el('div', { class: 'line-tools' },
-          el('button', { class: 'btn', onclick: () => changeQty(i, -1) }, '−'),
-          el('span', {}, fa(l.quantity)),
-          el('button', { class: 'btn', onclick: () => changeQty(i, +1) }, '+'),
-          el('span', { class: 'muted small' }, `× ${money(Number(l.line_total) / Number(l.quantity))}`),
-        ),
+        l.sent_at
+          ? el('div', { class: 'line-tools' },
+              el('span', { class: 'line-sent' }, `در آشپزخانه · ${fa(l.quantity)} عدد`),
+              el('button', { class: 'btn danger', onclick: () => voidLine(l) }, 'حذف'),
+            )
+          : el('div', { class: 'line-tools' },
+              el('button', { class: 'btn', onclick: () => setQuantity(l, Number(l.quantity) - 1) }, '−'),
+              el('span', {}, fa(l.quantity)),
+              el('button', { class: 'btn', onclick: () => setQuantity(l, Number(l.quantity) + 1) }, '+'),
+              el('span', { class: 'muted small' }, `× ${money(Number(l.line_total) / Number(l.quantity))}`),
+            ),
       ),
     ),
   );
-  const t = priced?.totals;
+  const t = o?.totals;
   $('#subtotal').textContent = money(t?.subtotal);
   $('#tax').textContent = money(t?.tax_total);
   $('#grand').textContent = money(t?.grand_total);
-  $('#clear').disabled = cart.length === 0;
+  $('#cancel').disabled = !o;
+  $('#send').disabled = !o || !lines.some((l) => !l.sent_at);
 }
 
-$('#clear').addEventListener('click', () => {
-  if (cart.length && confirm('سفارش پاک شود؟')) reprice([]);
-});
-
-document.querySelectorAll('.order-type [data-type]').forEach((b) =>
-  b.addEventListener('click', () => {
-    orderType = b.dataset.type;
-    document.querySelectorAll('.order-type [data-type]').forEach((x) => x.classList.toggle('on', x === b));
-    $('#dine-in').hidden = orderType !== 'DINE_IN';
-  }),
-);
-
-// What sells changes with the clock (a window closes, a stop ends): check the order again.
-async function recheck() {
-  if (!user || !cart.length) return;
+// Today's stock moves with every order the till takes.
+async function refreshMenu() {
   try {
-    await reprice(cart);
-  } catch (e) {
-    if (typeof e.line === 'number') {
-      badLine = e.line;
-      renderOrder();
-    }
-    toast(e.message, true);
+    menu = await api('GET', '/api/till/menu');
+    renderProducts();
+  } catch {
+    // The next tick tries again.
   }
 }
 
@@ -449,13 +603,8 @@ setInterval(async () => {
   // The session ended on the agent (idle): back to the names.
   if (!user && !$('#sell').hidden) signedOut();
 }, 10000);
-setInterval(async () => {
+setInterval(() => {
   if (!user || $('#sell').hidden) return;
-  try {
-    menu = await api('GET', '/api/till/menu');
-    renderProducts();
-  } catch {
-    // The next tick tries again.
-  }
-  recheck();
-}, 60000);
+  refreshMenu();
+  loadOrders(); // the agent may have handed orders over on its own
+}, 30000);

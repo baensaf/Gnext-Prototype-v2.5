@@ -206,6 +206,24 @@ describe('agent offline order upload (PostgreSQL)', () => {
     expect(await dataSource.getRepository(AuditEvent).count({ where: { tenant_id: tenantId, action: 'ORDER_OFFLINE_SYNCED', entity_id: order.id } })).toBe(1);
   });
 
+  // The agent's till (1.6.0) sends §13.12's additions: they are taken without complaint.
+  it("accepts an order in the offline till's own shape, with its additions", async () => {
+    const order = offlineOrder({ call_number: 139 }, [
+      {
+        product: ids.burger, name: 'چیزبرگر', unit: '2450000', qty: 1, rate: '0.1000',
+        options: [{ option_item_id: ids.cola, name: 'کوکا', group_name: 'نوشیدنی', price_delta: '350000' }],
+      },
+    ]);
+    order.voided_lines = [
+      { product_name: 'سیب‌زمینی', variant_name: 'بزرگ', quantity: '1', line_total: '1500000', voided_by: ids.cashier, approved_by: null, at: '2026-09-24T06:15:00.000Z' },
+    ];
+    order.cancelled_by = null;
+    order.approved_by = null;
+    delete order.payments[0].card; // a cash payment carries no card block at all
+    const res = await upload([order]).expect(200);
+    expect(res.body.results).toEqual([{ id: order.id, result: 'ACCEPTED', order_number: expect.stringMatching(/^ORD-/), flags: [] }]);
+  });
+
   it('answers DUPLICATE for a resend, and holds a different order under the same id', async () => {
     const order = offlineOrder({ call_number: 141 });
     const first = (await upload([order]).expect(200)).body.results[0];

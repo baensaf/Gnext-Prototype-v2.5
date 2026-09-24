@@ -85,10 +85,18 @@ type Till struct {
 	Log       *slog.Logger
 	// Now is the clock, overridable in tests.
 	Now func() time.Time
-	// Sold counts what the till sold offline today, against today's stock (the till's orders, P4).
-	Sold SoldOffline
+
+	// Store holds the till's orders (§13.6); nil means none can be taken.
+	Store *Store
+	// Upload hands an order whose offline life ended to the upload (§12.5): offline.Outbox.Add.
+	Upload func(payload json.RawMessage) error
+	// CloudCallCount is the POS call count from the last heartbeat.ack (§13.9), and its date.
+	CloudCallCount func() (businessDate string, count int)
+	// ConnectedSince is when the current session with the cloud began, or nil offline.
+	ConnectedSince func() *time.Time
 
 	once     sync.Once
+	omu      sync.Mutex // orders: one change at a time
 	mu       sync.Mutex
 	binding  *Binding
 	session  *session
@@ -158,12 +166,16 @@ func (t *Till) readSnapshot() (*snapshot, error) {
 	return &s, nil
 }
 
-// Mode is whether the till may sell now (§13.5). HANDOVER comes with the orders the till holds.
+// Mode is whether the till may sell now (§13.5): OFFLINE without a session; HANDOVER with one
+// while unfinished offline orders remain; ONLINE otherwise.
 func (t *Till) Mode() string {
-	if t.Connected != nil && t.Connected() {
-		return ModeOnline
+	if t.Connected == nil || !t.Connected() {
+		return ModeOffline
 	}
-	return ModeOffline
+	if t.openOrders() > 0 {
+		return ModeHandover
+	}
+	return ModeOnline
 }
 
 // Binding returns the till the agent sells as, or nil.
@@ -360,13 +372,13 @@ func (t *Till) State() State {
 	return st
 }
 
-// Heartbeat is the heartbeat's `till` block (§13.10). Open orders come with the till's orders.
+// Heartbeat is the heartbeat's `till` block (§13.10).
 func (t *Till) Heartbeat() map[string]any {
 	var id any
 	if b := t.Binding(); b != nil {
 		id = b.TerminalID
 	}
-	return map[string]any{"terminal_id": id, "mode": t.Mode(), "open_orders": 0}
+	return map[string]any{"terminal_id": id, "mode": t.Mode(), "open_orders": t.openOrders()}
 }
 
 func newToken() string {

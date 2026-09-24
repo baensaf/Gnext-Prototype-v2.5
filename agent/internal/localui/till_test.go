@@ -143,6 +143,70 @@ func TestTillMenuAndPricesNeedASignedInCashier(t *testing.T) {
 	}
 }
 
+func TestTillOrdersOverTheLocalAPI(t *testing.T) {
+	tl := testTill(t)
+	store, err := till.OpenStore(filepath.Join(t.TempDir(), "orders.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	var uploaded []string
+	tl.Store = store
+	tl.Upload = func(p json.RawMessage) error { uploaded = append(uploaded, string(p)); return nil }
+	if _, err := tl.Bind("till-1", "amir"); err != nil {
+		t.Fatal(err)
+	}
+	h := newTestServer(&fakeHost{till: tl})
+
+	if rec := call(h, "POST", "/api/till/orders", `{"order_type":"TAKEAWAY"}`, nil); rec.Code != 401 {
+		t.Fatalf("new order without a session: %d", rec.Code)
+	}
+	rec := call(h, "POST", "/api/till/login", `{"user_id":"sara","pin":"1111"}`, nil)
+	var login struct{ Token string }
+	_ = json.Unmarshal(rec.Body.Bytes(), &login)
+	session := map[string]string{"X-Gnext-Till-Session": login.Token}
+
+	var res struct {
+		Order   till.Order `json:"order"`
+		Dropped bool       `json:"dropped"`
+	}
+	rec = call(h, "POST", "/api/till/orders", `{"order_type":"TAKEAWAY"}`, session)
+	_ = json.Unmarshal(rec.Body.Bytes(), &res)
+	id := res.Order.ID
+	if rec.Code != 200 || id == "" || res.Order.ShiftID != "sh" {
+		t.Fatalf("new order: %d %s", rec.Code, rec.Body)
+	}
+	rec = call(h, "POST", "/api/till/orders/"+id+"/lines", `{"product_id":"cola","quantity":2}`, session)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"grand_total":"770000"`) {
+		t.Fatalf("add line: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(h, "POST", "/api/till/orders/"+id+"/lines", `{"product_id":"cola","quantity":1}`, session); rec.Code != 422 {
+		t.Fatalf("over today's stock: %d %s", rec.Code, rec.Body)
+	}
+	rec = call(h, "POST", "/api/till/orders/"+id+"/send", "", session)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"call_number":100`) {
+		t.Fatalf("send: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(h, "POST", "/api/till/orders/"+id+"/finish", "", session); rec.Code != 409 || !strings.Contains(rec.Body.String(), "ORDER_NOT_PAID") {
+		t.Fatalf("finish unpaid: %d %s", rec.Code, rec.Body)
+	}
+	rec = call(h, "POST", "/api/till/orders/"+id+"/cancel", `{"note":"test"}`, session)
+	if rec.Code != 200 || len(uploaded) != 1 || !strings.Contains(uploaded[0], `"state":"CANCELLED"`) {
+		t.Fatalf("cancel: %d %s, uploaded %v", rec.Code, rec.Body, uploaded)
+	}
+	if rec := call(h, "GET", "/api/till/orders", "", session); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"handed_over":true`) {
+		t.Fatalf("orders: %d %s", rec.Code, rec.Body)
+	}
+
+	// A cart the kitchen never had is dropped.
+	rec = call(h, "POST", "/api/till/orders", `{"order_type":"TAKEAWAY"}`, session)
+	_ = json.Unmarshal(rec.Body.Bytes(), &res)
+	rec = call(h, "POST", "/api/till/orders/"+res.Order.ID+"/cancel", `{}`, session)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"dropped":true`) {
+		t.Fatalf("drop: %d %s", rec.Code, rec.Body)
+	}
+}
+
 func TestTillRoutesAnswerNotEnrolledWithoutATill(t *testing.T) {
 	h := newTestServer(&fakeHost{})
 	if rec := call(h, "GET", "/api/till/state", "", nil); rec.Code != 409 || !strings.Contains(rec.Body.String(), "NOT_ENROLLED") {

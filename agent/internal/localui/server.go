@@ -111,6 +111,17 @@ func (s *Server) Handler(addr string) http.Handler {
 	mux.HandleFunc("GET /till", s.tillPage)
 	mux.HandleFunc("GET /api/till/menu", s.tillMenu)
 	mux.HandleFunc("POST /api/till/price", s.tillPrice)
+	// Its orders; see till_orders.go.
+	mux.HandleFunc("GET /api/till/orders", s.tillOrders)
+	mux.HandleFunc("POST /api/till/orders", s.tillNewOrder)
+	mux.HandleFunc("POST /api/till/orders/{id}/info", s.tillOrderInfo)
+	mux.HandleFunc("POST /api/till/orders/{id}/lines", s.tillAddLine)
+	mux.HandleFunc("POST /api/till/orders/{id}/lines/{line}/quantity", s.tillLineQuantity)
+	mux.HandleFunc("POST /api/till/orders/{id}/lines/{line}/void", s.tillVoidLine)
+	mux.HandleFunc("POST /api/till/orders/{id}/send", s.tillSend)
+	mux.HandleFunc("POST /api/till/orders/{id}/finish", s.tillFinish)
+	mux.HandleFunc("POST /api/till/orders/{id}/cancel", s.tillCancel)
+	mux.HandleFunc("POST /api/till/handover", s.tillHandover)
 	for _, kind := range []string{"printers", "terminals"} {
 		mux.HandleFunc("POST /api/"+kind, s.proxy(http.MethodPost, "/"+kind))
 		mux.HandleFunc("PATCH /api/"+kind+"/{id}", s.proxy(http.MethodPatch, "/"+kind+"/{id}"))
