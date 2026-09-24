@@ -16,7 +16,7 @@ import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { AuditEvent } from '../../entities/AuditEvent.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
-import { BusinessDateUtil } from '../../common/utils/business-date.util';
+import { loadBusinessClock } from '../../common/utils/business-clock';
 import { currentTillTerminalId } from '../../common/utils/till-context';
 import { isApprover } from '../../common/utils/user-scope.util';
 import { ApprovalService } from '../approval/approval.service';
@@ -265,7 +265,7 @@ export class ShiftService {
           detail: "This device is a register at another branch. Cash taken here would be counted in that branch's drawer.",
         });
       }
-      return await this.getCurrentShift(tenantId, terminalId, terminal.branch_id);
+      return await this.onBusinessDay(await this.getCurrentShift(tenantId, terminalId, terminal.branch_id), strict);
     }
 
     if (!branchId) return null;
@@ -284,7 +284,20 @@ export class ShiftService {
         detail: `${open.length} drawers are open at this branch. Set this device up as one of the registers so the cash is counted in the right one.`,
       });
     }
-    return open[0] ?? null;
+    return await this.onBusinessDay(open[0] ?? null, strict);
+  }
+
+  /**
+   * A drawer left open past its business day's cutoff is not the drawer for a new sale. Cash
+   * is refused with the reason; card and credit, which only note their shift, note none.
+   */
+  private async onBusinessDay(shift: CashierShift | null, strict: boolean): Promise<CashierShift | null> {
+    if (!shift) return null;
+    if (strict) {
+      await this.assertShiftOnBusinessDay(shift);
+      return shift;
+    }
+    return (await this.shiftBusinessDayEnded(shift)) ? null : shift;
   }
 
   /** The drawer for cash, or a refusal naming why there is none. */
@@ -315,7 +328,38 @@ export class ShiftService {
         detail: 'The drawer this payment was started at has been closed since. Start the payment again.',
       });
     }
+    await this.assertShiftOnBusinessDay(shift, entityManager);
     return shift;
+  }
+
+  /**
+   * Whether a shift's business day has already ended at its branch. After the cutoff an old
+   * shift can only be counted and closed: every sale belongs to the new day, and a drawer
+   * holds one day's money, so the cashier opens a new shift to keep selling.
+   */
+  async shiftBusinessDayEnded(
+    shift: Pick<CashierShift, 'tenant_id' | 'branch_id' | 'business_date'>,
+    em?: EntityManager,
+    now: Date = new Date(),
+  ): Promise<{ today: string; cutoff: string } | null> {
+    if (!shift?.business_date) return null;
+    const clock = await loadBusinessClock(em ?? this.dataSource?.manager, shift.tenant_id, shift.branch_id);
+    const today = clock.today(now);
+    return String(shift.business_date).slice(0, 10) < today ? { today, cutoff: clock.policy.cutoff } : null;
+  }
+
+  /** Refuses a sale on a shift whose business day has ended. */
+  async assertShiftOnBusinessDay(shift: CashierShift, em?: EntityManager) {
+    const ended = await this.shiftBusinessDayEnded(shift, em);
+    if (!ended) return;
+    throw new ConflictException({
+      code: 'SHIFT_BUSINESS_DAY_ENDED',
+      title: 'Business Day Ended',
+      detail:
+        `Shift ${shift.shift_number || ''} belongs to business day ${shift.business_date}, which ended at ${ended.cutoff}. ` +
+        'Count and close it, then open a new shift to keep selling.',
+      context: { shiftId: shift.id, shiftBusinessDate: shift.business_date, businessDate: ended.today, cutoff: ended.cutoff },
+    });
   }
 
   /**
@@ -362,9 +406,17 @@ export class ShiftService {
       }
 
       const now = new Date();
-      // The operating day where the till stands, not the UTC one: in Tehran a drawer opened
-      // between midnight and 03:30 was stamped to the day before, and counted in its close.
-      const dateStr = dto.businessDate || BusinessDateUtil.today(now);
+      // The business day where the till stands: its branch's clock and cutoff, so a drawer
+      // opened at 02:00 belongs to the night's trade, not to a day that has not opened yet.
+      // Nobody has to close the day first; a shift simply opens on the current day.
+      const dateStr = (await loadBusinessClock(em, tenantId, terminal.branch_id)).today(now);
+      if (dto.businessDate && dto.businessDate !== dateStr) {
+        throw new BadRequestException({
+          code: 'NOT_THE_BUSINESS_DAY',
+          title: 'Not Today',
+          detail: `A shift opens on the current business day, ${dateStr}, not ${dto.businessDate}.`,
+        });
+      }
       const shiftNum = `SHF-${dateStr.replace(/-/g, '')}-${Math.floor(Math.random() * 9000) + 1000}`;
       const openingCash = MoneyUtil.format(dto.openingCash || dto.openingFloat || '0.0000');
 
@@ -957,8 +1009,7 @@ export class ShiftService {
    * what a chain operator is scanning for.
    */
   async getShiftRollup(tenantId: string, businessDate?: string) {
-    const date = businessDate || BusinessDateUtil.today();
-    const today = BusinessDateUtil.today();
+    const date = businessDate || (await loadBusinessClock(this.shiftRepo.manager, tenantId)).today();
 
     const branches = await this.branchRepo.find({ where: { tenant_id: tenantId } });
     const sellingBranches = branches
@@ -968,13 +1019,18 @@ export class ShiftService {
     const shifts = await this.shiftRepo.find({ where: { tenant_id: tenantId, business_date: date } });
     // Asked separately because these are by definition NOT on the day being reported: a
     // till opened on Tuesday and never closed does not appear in Wednesday's rows, which
-    // is the whole reason nobody notices it.
-    const stale = await this.shiftRepo
+    // is the whole reason nobody notices it. "Ended" is each branch's own business day: two
+    // shops in different time zones pass their cutoff at different instants.
+    const stillOpen = await this.shiftRepo
       .createQueryBuilder('s')
       .where('s.tenant_id = :tenantId', { tenantId })
-      .andWhere('s.business_date < :today', { today })
       .andWhere("(s.state <> 'CLOSED' AND s.status <> 'CLOSED')")
       .getMany();
+    const todayAt = new Map<string, string>();
+    for (const branchId of new Set(stillOpen.map((s) => s.branch_id))) {
+      todayAt.set(branchId, (await loadBusinessClock(this.shiftRepo.manager, tenantId, branchId)).today());
+    }
+    const stale = stillOpen.filter((s) => String(s.business_date).slice(0, 10) < todayAt.get(s.branch_id)!);
 
     type Bucket = {
       open: number;

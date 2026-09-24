@@ -20,6 +20,23 @@ export class BusinessDaysController {
     return await this.businessDayService.getBusinessDays(tenantId, { ...query, branch, branchId: branch });
   }
 
+  /** Which business day it is at a branch, when it turns over, and the shop's hours. */
+  @Get('current')
+  async getCurrent(@Query() query: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const branchId = effectiveBranchId((req as any).userBranchId, query.branchId || query.branch);
+    return await this.businessDayService.getCurrentBusinessDay(tenantId, branchId);
+  }
+
+  /** Stored dates the current cutoff rule would have given differently. Read only. */
+  @Roles(...MANAGER_AND_ABOVE)
+  @Get('date-review')
+  async reviewStoredDates(@Query() query: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const branchId = effectiveBranchId((req as any).userBranchId, query.branchId || query.branch);
+    return await this.businessDayService.reviewStoredDates(tenantId, { branchId, from: query.from, to: query.to });
+  }
+
   /** The open orders closing a day would complete, and those it is waiting on a decision for. */
   @Roles(...MANAGER_AND_ABOVE)
   @Get('open-orders')

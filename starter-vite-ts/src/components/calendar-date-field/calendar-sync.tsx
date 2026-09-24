@@ -8,20 +8,28 @@ import { useAuthStore } from 'src/store/useAuthStore';
 // ----------------------------------------------------------------------
 
 /**
- * Loads head office's CALENDAR setting once someone is signed in. Until it arrives (and when
- * nobody has set it) the app shows Jalali dates with a Saturday week start.
+ * Loads head office's CALENDAR setting, and the business day's cutoff, once someone is signed
+ * in. Until they arrive (and when nobody has set them) the app shows Jalali dates with a
+ * Saturday week start, and starts its day at 04:00.
  */
 export function CalendarSync() {
   const tenantId = useAuthStore((state) => state.user?.tenantId);
   const setCalendar = useCalendarStore((state) => state.setCalendar);
+  const setBusinessDay = useCalendarStore((state) => state.setBusinessDay);
 
   useEffect(() => {
     if (!tenantId) return;
     settingsApi
       .getSettings()
-      .then((settings) => setCalendar(settings?.CALENDAR))
-      .catch(() => setCalendar(null));
-  }, [tenantId, setCalendar]);
+      .then((settings) => {
+        setCalendar(settings?.CALENDAR);
+        setBusinessDay(settings?.BUSINESS_DAY);
+      })
+      .catch(() => {
+        setCalendar(null);
+        setBusinessDay(null);
+      });
+  }, [tenantId, setCalendar, setBusinessDay]);
 
   return null;
 }

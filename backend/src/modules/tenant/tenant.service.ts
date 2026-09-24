@@ -10,6 +10,8 @@ import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { AdminUser } from '../../entities/AdminUser.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
+import { trackBusinessDayChange } from '../../common/utils/business-clock';
+import { isTimeZone } from '../../common/utils/business-day';
 
 const BRANCH_TYPES: BranchType[] = ['RESTAURANT', 'COMMISSARY', 'OFFICE'];
 
@@ -34,8 +36,12 @@ export class TenantService {
     const before = { ...tenant };
     if (data.name) tenant.name = data.name;
     if (data.default_locale) tenant.default_locale = data.default_locale;
-    if (data.time_zone) tenant.time_zone = data.time_zone;
-    const updated = await this.tenantRepo.save(tenant);
+    if (data.time_zone) {
+      if (!isTimeZone(data.time_zone)) throw new BadRequestException(`${data.time_zone} is not a time zone`);
+      tenant.time_zone = data.time_zone;
+    }
+    // A branch with no zone of its own keeps the chain's clock, so its business day moves with it.
+    const updated = await trackBusinessDayChange(this.tenantRepo.manager, tenantId, () => this.tenantRepo.save(tenant));
 
     await this.auditWriter.write({
       tenantId,
@@ -94,6 +100,7 @@ export class TenantService {
     }
     const existing = await this.branchRepo.findOne({ where: { tenant_id: tenantId, code: data.code } });
     if (existing) throw new ConflictException(`Branch code ${data.code} already exists`);
+    if (data.time_zone && !isTimeZone(data.time_zone)) throw new BadRequestException(`${data.time_zone} is not a time zone`);
 
     const branch = this.branchRepo.create({
       tenant_id: tenantId,
@@ -140,8 +147,12 @@ export class TenantService {
   async updateBranch(tenantId: string, branchId: string, data: Partial<Branch>, correlationId: string) {
     const branch = await this.getBranchById(tenantId, branchId);
     const before = { ...branch };
-    Object.assign(branch, data);
-    const updated = await this.branchRepo.save(branch);
+    if (data.time_zone && !isTimeZone(data.time_zone)) throw new BadRequestException(`${data.time_zone} is not a time zone`);
+    // The business-day timeline is history; only a change of rule writes to it.
+    const { business_day_timeline: _timeline, ...changes } = data;
+    Object.assign(branch, changes);
+    // A new time zone moves when the branch's day turns over, from now on.
+    const updated = await trackBusinessDayChange(this.branchRepo.manager, tenantId, () => this.branchRepo.save(branch));
 
     await this.auditWriter.write({
       tenantId,

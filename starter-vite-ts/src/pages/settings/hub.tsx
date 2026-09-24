@@ -14,6 +14,7 @@ import TwoWheelerIcon from '@mui/icons-material/TwoWheeler';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import NightsStayIcon from '@mui/icons-material/NightsStay';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import CountertopsIcon from '@mui/icons-material/Countertops';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
@@ -259,6 +260,15 @@ export function SettingsHubPage() {
           path: '/app/settings/shift-policy',
           icon: <PointOfSaleIcon sx={{ color: 'success.main' }} />,
           tags: ['shift', 'drawer', 'float', 'variance', 'blind count', 'cash', 'شیفت', 'صندوق', 'کشو', 'مغایرت'],
+        },
+        {
+          id: 'businessDay',
+          scope: 'BRANCH',
+          title: t('settings.hub.items.businessDay.title'),
+          description: t('settings.hub.items.businessDay.description'),
+          path: '/app/settings/business-day',
+          icon: <NightsStayIcon sx={{ color: 'primary.main' }} />,
+          tags: ['business day', 'cutoff', 'overnight', 'hours', 'day close', 'روز کاری', 'پایان روز', 'ساعت کاری', 'بستن روز'],
         },
         {
           id: 'courierPay',

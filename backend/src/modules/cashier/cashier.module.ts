@@ -9,6 +9,7 @@ import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { ShiftService } from './shift.service';
 import { BusinessDayService } from './business-day.service';
+import { BusinessDayAutoCloseService } from './business-day-auto-close.service';
 import { ShiftsController } from './shifts.controller';
 import { BusinessDaysController } from './business-days.controller';
 import { AuditModule } from '../audit/audit.module';
@@ -30,8 +31,8 @@ import { OrderLifecycleModule } from '../order-lifecycle/order-lifecycle.module'
     AuditModule,
     OrderLifecycleModule,
   ],
-  providers: [ShiftService, BusinessDayService],
+  providers: [ShiftService, BusinessDayService, BusinessDayAutoCloseService],
   controllers: [ShiftsController, BusinessDaysController],
-  exports: [ShiftService, BusinessDayService],
+  exports: [ShiftService, BusinessDayService, BusinessDayAutoCloseService],
 })
 export class CashierModule {}

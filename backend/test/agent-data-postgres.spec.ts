@@ -34,6 +34,7 @@ import { CatalogService } from '../src/modules/catalog/catalog.service';
 import { PriceListService } from '../src/modules/catalog/price-lists.service';
 import { LiveChangesService } from '../src/modules/live/live-changes.service';
 import { BusinessDateUtil } from '../src/common/utils/business-date.util';
+import { BusinessClock } from '../src/common/utils/business-day';
 import { deleteTenantData } from './utils/tenant-teardown';
 import { TestAgent } from './utils/agent-client';
 
@@ -66,6 +67,9 @@ describe('agent branch snapshot (PostgreSQL)', () => {
   let branchId: string;
   let deviceKey: string;
   const ids: Record<string, string> = {};
+  // The branch's business day: Tehran's clock, the default 04:00 cutoff.
+  const businessClock = BusinessClock.fromConfig({}, 'Asia/Tehran');
+  const businessToday = () => businessClock.today();
   const open: TestAgent[] = [];
 
   const save = <T>(entity: any, data: Partial<T>) =>
@@ -208,9 +212,18 @@ describe('agent branch snapshot (PostgreSQL)', () => {
     ]);
     expect(body.settings).toEqual({
       call_numbers: { POS: { start: 100, end: 399 } },
-      call_number_issued_today: { business_date: BusinessDateUtil.today(), POS: 0 },
+      call_number_issued_today: { business_date: businessToday(), POS: 0 },
       order_actions: { edit_window_minutes: 10, cancel_window_minutes: 10 },
       auto_logout_minutes: 0,
+      // How the till dates what it sells offline: the same cutoff as every other channel.
+      business_day: {
+        business_date: businessToday(),
+        cutoff: '04:00',
+        time_zone: 'Asia/Tehran',
+        opens_at: '08:00',
+        closes_at: '04:00',
+        ends_at: new Date(businessClock.endOf(businessToday()).getTime() + 1).toISOString(),
+      },
     });
     // No printers yet: nothing to route to (§13.11).
     expect(body.printing).toEqual({
@@ -397,12 +410,12 @@ describe('agent branch snapshot (PostgreSQL)', () => {
     it('puts the day’s POS call count in heartbeat.ack for an offline till only', async () => {
       await dataSource.query(
         `INSERT INTO "order_call_counter" ("tenant_id", "branch_id", "business_date", "channel_group", "last_value") VALUES ($1, $2, $3, 'POS', 41)`,
-        [tenantId, branchId, BusinessDateUtil.today()],
+        [tenantId, branchId, businessToday()],
       );
       const till = await connect(OFFLINE_TILL);
       const beat = till.send('heartbeat', { in_flight: 0, unacked_results: 0, till: { terminal_id: ids.till, mode: 'ONLINE', open_orders: 0 } });
       const ack = await till.next((m) => m.type === 'heartbeat.ack' && m.ref === beat);
-      expect(ack.payload.call_numbers).toEqual({ business_date: BusinessDateUtil.today(), POS: 41 });
+      expect(ack.payload.call_numbers).toEqual({ business_date: businessToday(), POS: 41 });
       till.ws.terminate();
       await till.closed;
 

@@ -11,7 +11,7 @@ import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { IncomingOrderPolicyService } from '../order/incoming-order-policy.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
-import { BusinessDateUtil } from '../../common/utils/business-date.util';
+import { loadBusinessClock } from '../../common/utils/business-clock';
 import { Payment } from '../../entities/Payment.entity';
 import { PaymentAllocation } from '../../entities/PaymentAllocation.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
@@ -618,7 +618,7 @@ export class SimulationService {
         amount: onlinePaid,
         currency_code: 'IRR',
         reference: order.order_number,
-        business_date: order.business_date || BusinessDateUtil.today(),
+        business_date: order.business_date || (await loadBusinessClock(this.paymentRepo.manager, tenantId, order.branch_id)).today(),
         idempotency_key: `snappfood:${order.id}:${count + 1}`,
         posted_at: new Date(),
       }),

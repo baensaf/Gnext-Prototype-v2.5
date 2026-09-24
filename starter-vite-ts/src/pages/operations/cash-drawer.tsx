@@ -50,6 +50,7 @@ import { OpenShiftDialog } from 'src/components/shift/open-shift-dialog';
 import { CloseShiftDialog } from 'src/components/shift/close-shift-dialog';
 import { useRegisterShift } from 'src/components/shift/use-register-shift';
 import { DeviceTerminalDialog } from 'src/components/shift/device-terminal-dialog';
+import { BusinessDayEndedAlert } from 'src/components/shift/business-day-ended-alert';
 
 // ----------------------------------------------------------------------
 
@@ -260,7 +261,7 @@ export function CashDrawerPage() {
       <Alert severity="info" sx={{ mb: 3 }}>
         {t(
           'shift.page.help',
-          'Every register at {{branch}}. A shift belongs to one register and is counted down when it closes. The branch’s day is closed on Business Days once every drawer is counted.',
+          'Every register at {{branch}}. A shift belongs to one register and is counted down when it closes. The business day turns over at its cutoff by itself, and closes on its own once every drawer is counted.',
           { branch: selectedBranch?.name || '' }
         )}
       </Alert>
@@ -283,6 +284,8 @@ export function CashDrawerPage() {
             : t('shift.device.notSetUp', 'This device is not set up as a register')}
         </Alert>
       )}
+
+      <BusinessDayEndedAlert register={register} />
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>

@@ -19,7 +19,7 @@ import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { Tenant } from '../../entities/Tenant.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { Terminal } from '../../entities/Terminal.entity';
-import { BusinessDateUtil } from '../../common/utils/business-date.util';
+import { loadBusinessClock } from '../../common/utils/business-clock';
 import { CALENDAR_SETTING_KEY, readCalendar } from '../../common/utils/calendar.util';
 import { inTreeOrder } from '../../common/utils/category-tree.util';
 import { MoneyUtil } from '../../common/utils/money.util';
@@ -171,7 +171,10 @@ export class AgentDataService {
       this.tenants.findOneOrFail({ where: { id: tenantId } }),
       this.branches.findOneOrFail({ where: { id: branchId, tenant_id: tenantId } }),
     ]);
-    const businessDate = BusinessDateUtil.today(now);
+    // The branch's business day, which turns over at its cutoff; the till dates its offline
+    // orders by the same rule, from `settings.business_day`.
+    const clock = await loadBusinessClock(this.settings.manager, tenantId, branchId);
+    const businessDate = clock.today(now);
 
     const [categories, products, variants, groups, items, links, off, windows, stock, listed, stops] = await Promise.all([
       this.categories.find({ where: { tenant_id: tenantId, is_active: true }, order: { sort_order: 'ASC', name: 'ASC', id: 'ASC' } }),
@@ -280,6 +283,14 @@ export class AgentDataService {
           cancel_window_minutes: orderActions.cancelWindowMinutes,
         },
         auto_logout_minutes: Number.isInteger(autoLogout) && autoLogout > 0 ? autoLogout : 0,
+        business_day: {
+          business_date: businessDate,
+          cutoff: clock.policy.cutoff,
+          time_zone: clock.policy.timeZone,
+          opens_at: clock.policy.opensAt,
+          closes_at: clock.policy.closesAt,
+          ends_at: new Date(clock.endOf(businessDate).getTime() + 1).toISOString(),
+        },
       },
       categories: inTreeOrder(categories).map((c) => ({ id: c.id, parent_id: c.parent_id ?? null, name: c.name, sort_order: c.sort_order ?? 0 })),
       products: catalogProducts,

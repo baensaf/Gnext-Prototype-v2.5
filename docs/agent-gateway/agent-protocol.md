@@ -929,7 +929,11 @@ snapshots have the same version and a pull that changes nothing is a `304`.
   },
   "settings": {
     "call_numbers": { "POS": { "start": 100, "end": 399 } },
-    "call_number_issued_today": { "business_date": "2026-09-24", "POS": 37 }
+    "call_number_issued_today": { "business_date": "2026-09-24", "POS": 37 },
+    "business_day": {
+      "business_date": "2026-09-24", "cutoff": "04:00", "time_zone": "Asia/Tehran",
+      "opens_at": "08:00", "closes_at": "04:00", "ends_at": "2026-09-25T00:30:00.000Z"
+    }
   },
   "categories": [
     { "id": "…", "parent_id": null, "name": "برگر", "sort_order": 1 }
@@ -989,6 +993,10 @@ snapshots have the same version and a pull that changes nothing is a `304`.
   branch's clock. A window whose `to` is at or before its `from` runs past midnight.
 - `daily_stock.remaining` is today's count less what was sold when the snapshot was made.
 - `call_number_issued_today.POS` is how many POS call numbers the cloud has handed out today.
+- `business_day` is how the branch dates what it sells: the business day turns over at
+  `cutoff` on `time_zone`'s clock, not at midnight, so a sale at 01:30 belongs to the day
+  before. `business_date` is the day in progress when the snapshot was made and `ends_at` the
+  instant it turns over. The offline till dates each order and call number the same way.
 - `tills` holds the branch's cashier tills, not kiosks.
 - Names are the ones the register shows (Persian for Persian tenants).
 - **Not in the snapshot**: customers, coupons and discounts, users and PINs (the offline till
@@ -1174,6 +1182,7 @@ number silently.
 | `shift_id` is a shift of this branch | Otherwise `HELD` `SHIFT_UNKNOWN` |
 | `shift_id` is open | Closed: booked into that shift anyway, flag `SHIFT_CLOSED` (its cash count changes) |
 | `business_date` is not closed | Closed: booked on that date anyway, flag `DAY_CLOSED` |
+| `business_date` is the one the branch's cutoff gives `placed_at` | Otherwise booked on the till's date anyway, flag `BUSINESS_DATE_DIFFERS` |
 | Daily stock covers it | Otherwise stock goes below zero, flag `STOCK_NEGATIVE` |
 | A card payment is `APPROVED` with an `rrn` | `UNKNOWN`: the payment is `PROCESSING` with `needs_terminal_check`, and a manager resolves it as today (§10) |
 

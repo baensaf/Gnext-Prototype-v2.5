@@ -14,6 +14,11 @@ import {
 } from '../../common/utils/setting-scope.util';
 import { canActOnBranch, isHeadOfficeUser, UserScope } from '../../common/utils/user-scope.util';
 import { COURIER_PAY_MODES, isCourierPayMode } from '../delivery/courier-pay';
+import { BUSINESS_DAY_SETTING_KEY, businessDaySettingProblem } from '../../common/utils/business-day';
+import { trackBusinessDayChange } from '../../common/utils/business-clock';
+
+/** A change to the business day is recorded on each branch's timeline; nothing else needs it. */
+const tracksBusinessDay = (key: string) => key.toUpperCase() === BUSINESS_DAY_SETTING_KEY;
 
 @Injectable()
 export class SettingsService {
@@ -114,6 +119,9 @@ export class SettingsService {
           throw new BadRequestException('CALENDAR setting property weekStartsOn must be 0 (Sunday) to 6 (Saturday)');
         }
       }
+    } else if (group === BUSINESS_DAY_SETTING_KEY) {
+      const problem = businessDaySettingProblem(value);
+      if (problem) throw new BadRequestException(problem);
     } else if (group === 'DISCOUNTS') {
       if (value.cashierMaxDiscountPercent !== undefined) {
         if (
@@ -197,7 +205,9 @@ export class SettingsService {
       throw new NotFoundException(`No branch override for setting ${key}`);
     }
 
-    await this.settingRepo.remove(override);
+    const remove = () => this.settingRepo.remove(override);
+    if (tracksBusinessDay(key)) await trackBusinessDayChange(this.settingRepo.manager, tenantId, remove);
+    else await remove();
 
     await this.auditWriter.write({
       tenantId,
@@ -259,7 +269,8 @@ export class SettingsService {
       setting.value = value;
     }
 
-    const saved = await this.settingRepo.save(setting);
+    const save = () => this.settingRepo.save(setting!);
+    const saved = tracksBusinessDay(key) ? await trackBusinessDayChange(this.settingRepo.manager, tenantId, save) : await save();
 
     await this.auditWriter.write({
       tenantId,

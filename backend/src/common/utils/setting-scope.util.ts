@@ -18,6 +18,8 @@ export const BRANCH_OVERRIDABLE_SETTING_GROUPS = [
   'SHIFT_POLICY',
   // How a new courier is paid and whether a failed ride is paid: shops in one chain differ.
   'COURIER_PAY',
+  // When the business day turns over and the shop's hours: a late-night site closes later.
+  'BUSINESS_DAY',
 ];
 
 export function isBranchOverridable(key: string): boolean {

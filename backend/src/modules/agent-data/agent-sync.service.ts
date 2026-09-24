@@ -6,6 +6,7 @@ import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import { Agent } from '../../entities/Agent.entity';
 import { AgentSyncOrder } from '../../entities/AgentSyncOrder.entity';
 import { BusinessDayClose } from '../../entities/BusinessDayClose.entity';
+import { loadBusinessClock } from '../../common/utils/business-clock';
 import { CashierShift } from '../../entities/CashierShift.entity';
 import { OptionItem } from '../../entities/OptionItem.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
@@ -379,6 +380,10 @@ export class AgentSyncService {
     if (shift.state !== 'OPEN') flags.add('SHIFT_CLOSED');
     const dayClosed = await em.findOne(BusinessDayClose, { where: { tenant_id: tenantId, branch_id: branchId, business_date: order.business_date, status: 'CLOSED' } });
     if (dayClosed) flags.add('DAY_CLOSED');
+    // Every channel dates a sale by the branch's cutoff. The till's date is kept, as the branch
+    // sold it, but one the rule would not give its placing time is for a person to look at.
+    const clock = await loadBusinessClock(em, tenantId, branchId);
+    if (clock.dateOf(order.placed_at) !== order.business_date) flags.add('BUSINESS_DATE_DIFFERS');
 
     // Payment methods must be real ones.
     const methodIds = [...new Set(order.payments.map((p) => p.method_id))];

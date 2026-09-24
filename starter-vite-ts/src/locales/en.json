@@ -1244,7 +1244,20 @@
     "ordersCount": "Orders",
     "sales": "Sales",
     "dayClosed": "Business day {{date}} closed",
-    "dayReopened": "Business day {{date}} reopened"
+    "dayReopened": "Business day {{date}} reopened",
+    "closeDayEarly": "Close a day now",
+    "closeDayOptional": "You do not need to do this for the date to move on or to open the next shift.",
+    "autoClosed": "Auto",
+    "currentDay": "Business day now: {{date}} · turns over at {{cutoff}} · hours {{opens}}–{{closes}}",
+    "autoCloseOn": "The date moves on at the cutoff by itself and new shifts open on the new day. Each day closes on its own once every shift on it is counted; close one here only to finish it early.",
+    "autoCloseOff": "The date moves on at the cutoff by itself and new shifts open on the new day. Automatic closing is off for this branch, so close each day here once its drawers are counted.",
+    "dateReview": {
+      "title": "Check past dates against the cutoff",
+      "subtitle": "Lists orders, payments, refunds and shifts from the last 90 days whose stored date the current cutoff would have given differently — usually sales after midnight dated to the next day. Nothing is changed.",
+      "run": "Check",
+      "result": "{{from}} to {{to}}: {{orders}} orders, {{payments}} payments, {{refunds}} refunds and {{shifts}} shifts are stored on a date the {{cutoff}} cutoff would not give them. They keep their stored dates.",
+      "failed": "Could not review the stored dates"
+    }
   },
   "shift": {
     "register": "Register",
@@ -1319,7 +1332,7 @@
     },
     "page": {
       "title": "Shifts & drawers",
-      "help": "Every register at {{branch}}. A shift belongs to one register and is counted down when it closes. The branch’s day is closed on Business Days once every drawer is counted.",
+      "help": "Every register at {{branch}}. A shift belongs to one register and is counted down when it closes. The business day turns over at its cutoff by itself, and closes on its own once every drawer is counted.",
       "registers": "Registers",
       "loadError": "Failed to load the drawers"
     },
@@ -1378,6 +1391,10 @@
       "time": "Time",
       "movement": "Movement",
       "reason": "Reason / reference"
+    },
+    "dayEnded": {
+      "title": "This shift’s business day has ended",
+      "body": "Shift {{shift}} belongs to {{shiftDate}}, which ended at {{cutoff}}. Count and close it, then open a new shift on {{today}} to keep selling."
     }
   },
   "payments": {
@@ -3014,6 +3031,10 @@
         "noteTemplates": {
           "title": "Order Note Templates",
           "description": "One-tap phrases the register offers when a cashier adds a note to an order or an item."
+        },
+        "businessDay": {
+          "title": "Business Day",
+          "description": "When the business day turns over (04:00 by default), the shop’s hours, and closing the day automatically."
         }
       },
       "scopeLegend": "Organization settings are defined once at head office and apply to every branch. Per-branch settings are configured separately at each location.",
@@ -3125,6 +3146,23 @@
       "invalid": "Each range must start at 1 or more and end at or after its start.",
       "overlap": "The ranges overlap, so two orders could get the same number.",
       "headOfficeOnly": "Head office sets these ranges for every branch."
+    },
+    "businessDay": {
+      "title": "Business Day",
+      "cardTitle": "When the day turns over",
+      "cutoffLabel": "Business day cutoff",
+      "cutoffHelp": "The new business day starts here, on the branch’s own clock. With 04:00, a sale at 01:30 belongs to the day before and one at 04:00 to the new day. Orders, payments, refunds, call numbers and reports all follow it.",
+      "opensLabel": "Opens at",
+      "opensHelp": "When the shop opens for the day.",
+      "closesLabel": "Closes at",
+      "closesHelp": "May run past midnight, up to the cutoff.",
+      "autoCloseLabel": "Close the day automatically",
+      "autoCloseHelp": "After the cutoff, the previous business day closes by itself once every shift on it has been counted and closed. Nobody has to close it for the date to move on or for the next shift to open.",
+      "changeNote": "A change applies from the moment it is saved. Nothing already recorded is re-dated, and the day in progress never moves back to yesterday.",
+      "now": "Now: business day {{date}}, which ends at {{ends}} ({{zone}}).",
+      "saveSuccess": "Business day saved for every branch that follows head office.",
+      "loadError": "Failed to load the business day settings",
+      "saveError": "Failed to save the business day settings"
     }
   },
   "inventory": {
@@ -3689,7 +3727,8 @@
           "ITEM_REMOVED": "Item removed since",
           "SHIFT_CLOSED": "Shift already closed",
           "DAY_CLOSED": "Day already closed",
-          "STOCK_NEGATIVE": "Stock below zero"
+          "STOCK_NEGATIVE": "Stock below zero",
+          "BUSINESS_DATE_DIFFERS": "Dated differently from the cutoff"
         }
       }
     }

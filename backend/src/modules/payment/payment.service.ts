@@ -16,6 +16,7 @@ import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { SettlementAccount } from '../../entities/SettlementAccount.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { BusinessDateUtil } from '../../common/utils/business-date.util';
+import { loadBusinessClock } from '../../common/utils/business-clock';
 import { isAggregatorOrder } from '../../common/utils/snappfood-order.util';
 import { ShiftService } from '../cashier/shift.service';
 import { CreditService } from '../customer/credit.service';
@@ -191,7 +192,9 @@ export class PaymentService {
         reference: dto.reference || null,
         receipt_number: dto.receiptNumber || null,
         shift_id: currentShiftId,
-        business_date: order.business_date || BusinessDateUtil.today(),
+        // The business day the money is taken on, by the branch's cutoff — not the order's:
+        // a bill rung up at 03:50 and paid at 04:10 is paid on the new day, in the new shift.
+        business_date: (await loadBusinessClock(em, tenantId, order.branch_id)).today(),
         idempotency_key: dto.idempotencyKey || null,
       });
 

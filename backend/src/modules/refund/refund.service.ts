@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { BusinessDateUtil } from '../../common/utils/business-date.util';
+import { loadBusinessClock } from '../../common/utils/business-clock';
 import { Repository, DataSource, EntityManager, In } from 'typeorm';
 import { Refund, RefundStatus } from '../../entities/Refund.entity';
 import { RefundAllocation } from '../../entities/RefundAllocation.entity';
@@ -209,6 +210,8 @@ export class RefundService {
         approval_request_id: dto.approvalRequestId || null,
         device_id: dto.deviceId || null,
         shift_id: null,
+        // The business day the money goes back on, by the branch's cutoff.
+        business_date: (await loadBusinessClock(em, tenantId, order.branch_id)).today(),
       });
 
       const savedRefund = await em.save(Refund, refund);
