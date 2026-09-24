@@ -11,16 +11,18 @@ import (
 	"testing"
 
 	"gnext/agent/internal/cloud"
+	"gnext/agent/internal/till"
 )
 
 type fakeHost struct {
 	cloud   *cloud.Client
+	till    *till.Till
 	enrols  []string
 	enrolOK bool
 }
 
 func (h *fakeHost) State() State {
-	return State{Enrolled: h.cloud != nil, Server: "https://gnext.test", Cloud: h.cloud}
+	return State{Enrolled: h.cloud != nil, Server: "https://gnext.test", Cloud: h.cloud, Till: h.till}
 }
 
 func (h *fakeHost) Enrol(_ context.Context, server, code string) error {

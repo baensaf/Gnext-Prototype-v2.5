@@ -21,6 +21,7 @@ import (
 
 	"gnext/agent/internal/agent"
 	"gnext/agent/internal/cloud"
+	"gnext/agent/internal/till"
 )
 
 // DefaultAddr is where the page listens. Only this PC can reach it.
@@ -41,6 +42,7 @@ type State struct {
 	Stopped    string       // why the agent is not running, when it is not
 	Agent      *agent.Agent // nil while not running
 	Cloud      *cloud.Client
+	Till       *till.Till // nil while not enrolled
 }
 
 // Host is the agent process the page belongs to.
@@ -101,6 +103,11 @@ func (s *Server) Handler(addr string) http.Handler {
 	mux.HandleFunc("POST /api/logout", s.logout)
 	mux.HandleFunc("POST /api/scan", s.scan)
 	mux.HandleFunc("POST /api/printers/{id}/test", s.testPrint)
+	// The offline till (§13.13); see till.go.
+	mux.HandleFunc("GET /api/till/state", s.tillState)
+	mux.HandleFunc("POST /api/till/login", s.tillLogin)
+	mux.HandleFunc("POST /api/till/logout", s.tillLogout)
+	mux.HandleFunc("POST /api/till/binding", s.tillBinding)
 	for _, kind := range []string{"printers", "terminals"} {
 		mux.HandleFunc("POST /api/"+kind, s.proxy(http.MethodPost, "/"+kind))
 		mux.HandleFunc("PATCH /api/"+kind+"/{id}", s.proxy(http.MethodPatch, "/"+kind+"/{id}"))

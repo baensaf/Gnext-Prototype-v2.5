@@ -9,6 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
 	go.etcd.io/bbolt v1.5.0
+	golang.org/x/crypto v0.57.0
 	golang.org/x/sys v0.48.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )

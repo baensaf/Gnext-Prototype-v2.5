@@ -1566,7 +1566,8 @@ ends the previous one. It ends after `auto_logout_minutes` without a request.
 | `POST /api/till/handover` | End `HANDOVER` now (§13.5). |
 
 Errors are `{code, detail}`, with `detail` in Persian for the cashier: `TILL_ONLINE`,
-`HANDOVER` (no new orders), `NO_SNAPSHOT`, `NO_TILL`, `NO_SHIFT`, `UNAUTHENTICATED`,
+`HANDOVER` (no new orders), `NOT_ENROLLED`, `NO_SNAPSHOT`, `NO_STAFF`, `NO_TILL`, `NO_SHIFT`,
+`UNKNOWN_TILL`, `UNKNOWN_USER` (not on the staff list, or no PIN), `UNAUTHENTICATED`,
 `PIN_WRONG`, `PIN_LOCKED` (5 wrong PINs for one user in 15 minutes lock that user for 15
 minutes, as online), `NOT_AVAILABLE`, `APPROVAL_REQUIRED`, `ORDER_PAID` (no void or cancel with
 payments), `ORDER_CLOSED`, `TERMINAL_BUSY`, `NO_TERMINAL`, `NO_PRINTER`.

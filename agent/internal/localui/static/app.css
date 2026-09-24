@@ -101,6 +101,9 @@ input.code { letter-spacing: 2px; text-transform: uppercase; }
 .scan { display: flex; align-items: center; gap: 10px; }
 .found { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; max-height: 140px; overflow: auto; }
 .found button { direction: ltr; }
+#till-card .row { align-items: center; margin-top: 12px; }
+#till-card .row select { flex: 1; }
+#till-card .row .btn { white-space: nowrap; }
 
 .logs { background: #0f141a; color: #cfd8dc; border-radius: 10px; padding: 12px; font: 12px/1.6 Consolas, monospace; max-height: 60vh; overflow: auto; white-space: pre-wrap; margin: 0; }
 

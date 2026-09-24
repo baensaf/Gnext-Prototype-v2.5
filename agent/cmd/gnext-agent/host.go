@@ -19,6 +19,7 @@ import (
 	"gnext/agent/internal/printing"
 	"gnext/agent/internal/protocol"
 	"gnext/agent/internal/store"
+	"gnext/agent/internal/till"
 	"gnext/agent/internal/update"
 )
 
@@ -37,6 +38,7 @@ type host struct {
 	id      *store.Identity
 	agent   *agent.Agent
 	client  *cloud.Client
+	till    *till.Till
 	stopped string
 	// callNumbers is the last POS call count written to disk.
 	callNumbers protocol.CallNumbers
@@ -72,7 +74,7 @@ func (h *host) close() {
 func (h *host) State() localui.State {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	st := localui.State{Server: h.server, Agent: h.agent, Cloud: h.client, Stopped: h.stopped}
+	st := localui.State{Server: h.server, Agent: h.agent, Cloud: h.client, Till: h.till, Stopped: h.stopped}
 	if h.id != nil {
 		st.Enrolled, st.AgentID, st.BranchName = true, h.id.AgentID, h.id.BranchName
 	}
@@ -129,7 +131,7 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 	cfg, cfgErr := store.LoadInstallConfig()
 	id, idErr := store.LoadIdentity()
 	h.mu.Lock()
-	h.server, h.agent, h.client, h.id, h.stopped = cfg.Server, nil, nil, nil, ""
+	h.server, h.agent, h.client, h.till, h.id, h.stopped = cfg.Server, nil, nil, nil, nil, ""
 	h.mu.Unlock()
 	if cfgErr != nil || idErr != nil {
 		if !errors.Is(idErr, store.ErrNotEnrolled) && idErr != nil {
@@ -149,18 +151,23 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 		Seal: store.Seal, Unseal: store.Unseal, Log: h.log,
 	}
 	data := &branchdata.Keeper{Dir: store.BranchDataDir(), Fetch: client, NotModified: cloud.ErrNotModified, Log: h.log, Staff: staff}
-	a := agent.New(agent.Options{
-		Version:     version,
-		WSURL:       id.WSURL,
-		Headers:     client.Headers(),
-		Journal:     h.journal,
-		Printer:     &printing.Printer{Renderer: h.renderer},
-		Log:         h.log,
-		Welcomed:    func() { update.Cleanup(""); data.Trigger(); h.outbox.Trigger() },
-		DataChanged: data.Trigger,
-		SyncStatus:  func() any { return syncStatus(data.Status(), h.outbox.Status()) },
-		// The offline till is not built yet (P2–P4): no till is bound and nothing is open.
-		TillStatus:    func() any { return map[string]any{"terminal_id": nil, "mode": "ONLINE", "open_orders": 0} },
+	var a *agent.Agent
+	// The offline till sells from the snapshot and signs in from the staff list (§13).
+	tl := &till.Till{
+		Path: store.TillPath(), Staff: staff.Load, Snapshot: data.Load, Log: h.log,
+		Connected: func() bool { return a.Status().Connected },
+	}
+	a = agent.New(agent.Options{
+		Version:       version,
+		WSURL:         id.WSURL,
+		Headers:       client.Headers(),
+		Journal:       h.journal,
+		Printer:       &printing.Printer{Renderer: h.renderer},
+		Log:           h.log,
+		Welcomed:      func() { update.Cleanup(""); data.Trigger(); h.outbox.Trigger() },
+		DataChanged:   data.Trigger,
+		SyncStatus:    func() any { return syncStatus(data.Status(), h.outbox.Status()) },
+		TillStatus:    func() any { return tl.Heartbeat() },
 		CallNumbers:   h.saveCallNumbers,
 		SavedConfig:   loadDevices(h.log),
 		ConfigChanged: func(c *protocol.Config) { saveDevices(c, h.log) },
@@ -177,7 +184,7 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 		},
 	}
 	h.mu.Lock()
-	h.id, h.agent, h.client = &id, a, client
+	h.id, h.agent, h.client, h.till = &id, a, client, tl
 	h.mu.Unlock()
 	go updateLoop(runCtx, a, up, h.log)
 	go data.Run(runCtx)
