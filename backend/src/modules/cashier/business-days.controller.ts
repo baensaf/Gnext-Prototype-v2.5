@@ -37,6 +37,21 @@ export class BusinessDaysController {
     return await this.businessDayService.reviewStoredDates(tenantId, { branchId, from: query.from, to: query.to });
   }
 
+  /** Moves what the date review lists onto the dates the rule gives it. Audited, with a reason. */
+  @Roles(...MANAGER_AND_ABOVE)
+  @Post('date-review/apply')
+  async applyDateCorrections(@Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const branchId = effectiveBranchId((req as any).userBranchId, body?.branchId);
+    const userId = (req as any).user?.id || (req as any).userId;
+    return await this.businessDayService.applyDateCorrections(
+      tenantId,
+      { branchId, from: body?.from, to: body?.to, reason: body?.reason },
+      userId,
+      (req as any).correlationId,
+    );
+  }
+
   /** The open orders closing a day would complete, and those it is waiting on a decision for. */
   @Roles(...MANAGER_AND_ABOVE)
   @Get('open-orders')

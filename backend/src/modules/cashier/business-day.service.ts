@@ -5,10 +5,12 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, EntityManager, IsNull } from 'typeorm';
+import { Repository, DataSource, EntityManager, In, IsNull } from 'typeorm';
 import { BusinessDayClose } from '../../entities/BusinessDayClose.entity';
 import { CashierShift } from '../../entities/CashierShift.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
+import { Payment } from '../../entities/Payment.entity';
+import { Refund } from '../../entities/Refund.entity';
 import { TableSession } from '../../entities/TableSession.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { OrderTransitionRecorder } from '../order-lifecycle/order-transition-recorder.service';
@@ -180,6 +182,75 @@ export class BusinessDayService {
       refunds,
       shifts,
     };
+  }
+
+  /**
+   * Moves what reviewStoredDates lists onto the business date the current rule gives it: an
+   * order sold on the 22nd but stored on the 11th, because it was rung up on a shift left open
+   * since then, goes to the 22nd. Only when a manager asks, with a reason, and every row moved
+   * is audited with its old and new date. Orders, payments and refunds only: a shift's date is
+   * the day its drawer was opened, and its count was made against it.
+   *
+   * Refused, moving nothing, when a row would leave or join a day the branch has closed (reopen
+   * that day first), or when the window lists more rows than the review shows.
+   */
+  async applyDateCorrections(
+    tenantId: string,
+    dto: { branchId?: string; from?: string; to?: string; reason?: string },
+    userId?: string,
+    correlationId?: string,
+  ) {
+    const reason = dto.reason?.trim();
+    if (!reason) throw new BadRequestException('Correcting stored business dates requires a reason');
+    const review = await this.reviewStoredDates(tenantId, dto);
+    const sections = { orders: review.orders, payments: review.payments, refunds: review.refunds };
+    for (const [kind, section] of Object.entries(sections)) {
+      if (section.count === '500+') {
+        throw new BadRequestException(`More than 500 ${kind} to correct; narrow the window with from and to`);
+      }
+    }
+
+    const touched = new Set<string>();
+    for (const section of Object.values(sections)) {
+      for (const row of section.rows) touched.add(row.stored_date).add(row.rule_date);
+    }
+    if (touched.size) {
+      const closed = await this.dayCloseRepo.find({
+        where: { tenant_id: tenantId, branch_id: review.branchId, business_date: In([...touched]), status: 'CLOSED' },
+      });
+      if (closed.length) {
+        throw new ConflictException({
+          code: 'DAY_CLOSED',
+          message: `Business day(s) ${closed.map((d) => d.business_date).sort().join(', ')} are closed. Reopen them before moving anything in or out.`,
+        });
+      }
+    }
+
+    const tables = { orders: OrderHeader, payments: Payment, refunds: Refund } as const;
+    const moved = await this.dataSource.transaction(async (em) => {
+      const counts = { orders: 0, payments: 0, refunds: 0 };
+      for (const kind of Object.keys(tables) as (keyof typeof tables)[]) {
+        for (const row of sections[kind].rows) {
+          await em.update(tables[kind] as any, { id: row.id, tenant_id: tenantId }, { business_date: row.rule_date });
+          counts[kind] += 1;
+          await this.auditWriter.write({
+            tenantId,
+            actorType: userId ? 'ADMIN' : 'SYSTEM',
+            actorId: userId,
+            action: 'BUSINESS_DATE_CORRECTED',
+            entityType: tables[kind].name,
+            entityId: row.id,
+            correlationId,
+            beforeData: { business_date: row.stored_date },
+            afterData: { business_date: row.rule_date },
+            details: { reference: row.reference, at: row.at, reason, branchId: review.branchId, rule: review.rule },
+          });
+        }
+      }
+      return counts;
+    });
+
+    return { branchId: review.branchId, from: review.from, to: review.to, rule: review.rule, reason, moved };
   }
 
   /**
