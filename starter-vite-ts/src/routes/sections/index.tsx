@@ -3,6 +3,8 @@ import type { RouteObject } from 'react-router';
 import { useEffect } from 'react';
 import { Navigate } from 'react-router';
 
+import { RequiresBranch } from 'src/routes/components/requires-branch';
+
 import Page404 from 'src/pages/error/404';
 import { LoginPage } from 'src/pages/login';
 import { AppShell } from 'src/layouts/AppShell';
@@ -128,28 +130,28 @@ export const routesSection: RouteObject[] = [
     children: [
       /* --- Section 9.1 Exact Canonical Routes --- */
       { path: 'dashboard', element: <DashboardPage /> },
-      { path: 'pos', element: <PosOrderPage /> },
-      { path: 'kiosk', element: <KioskPage /> },
+      { path: 'pos', element: <RequiresBranch><PosOrderPage /></RequiresBranch> },
+      { path: 'kiosk', element: <RequiresBranch><KioskPage /></RequiresBranch> },
       { path: 'orders', element: <OrdersWorkflowPage /> },
-      { path: 'orders/incoming', element: <IncomingOrdersPage /> },
+      { path: 'orders/incoming', element: <RequiresBranch><IncomingOrdersPage /></RequiresBranch> },
       { path: 'orders/:id', element: <OrdersDetailPage /> },
-      { path: 'dine-in/floor', element: <DineInPage /> },
-      { path: 'kds', element: <KdsPage /> },
+      { path: 'dine-in/floor', element: <RequiresBranch><DineInPage /></RequiresBranch> },
+      { path: 'kds', element: <RequiresBranch><KdsPage /></RequiresBranch> },
       { path: 'delivery', element: <Navigate to="/app/delivery/orders" replace /> },
-      { path: 'delivery/orders', element: <DeliveryPage /> },
-      { path: 'delivery/couriers', element: <DeliveryPage /> },
+      { path: 'delivery/orders', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },
+      { path: 'delivery/couriers', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },
       { path: 'delivery/couriers/:courierId', element: <CourierDetailPage /> },
-      { path: 'delivery/settlements', element: <DeliveryPage /> },
+      { path: 'delivery/settlements', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },
       { path: 'delivery/settlements/:settlementId', element: <SettlementDetailPage /> },
-      { path: 'delivery/zones', element: <DeliveryPage /> },
-      { path: 'delivery/audit', element: <DeliveryPage /> },
+      { path: 'delivery/zones', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },
+      { path: 'delivery/audit', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },
       { path: 'delivery/rollup', element: <FleetRollupPage /> },
-      { path: 'cashier/shifts', element: <CashDrawerPage /> },
+      { path: 'cashier/shifts', element: <RequiresBranch rollup="/app/cashier/rollup"><CashDrawerPage /></RequiresBranch> },
       { path: 'cashier/shifts/:shiftId', element: <ShiftDetailPage /> },
-      { path: 'cashier/business-days', element: <BusinessDaysPage /> },
+      { path: 'cashier/business-days', element: <RequiresBranch><BusinessDaysPage /></RequiresBranch> },
       { path: 'cashier/rollup', element: <ShiftRollupPage /> },
-      { path: 'payments', element: <PaymentsPage /> },
-      { path: 'refunds', element: <RefundsPage /> },
+      { path: 'payments', element: <RequiresBranch><PaymentsPage /></RequiresBranch> },
+      { path: 'refunds', element: <RequiresBranch><RefundsPage /></RequiresBranch> },
       { path: 'customer-club/discounts', element: <Navigate to="/app/discounts/customer-rates" replace /> },
       { path: 'customer-club/wallet', element: <Navigate to="/app/discounts/wallet" replace /> },
       { path: 'customers', element: <CustomersPage /> },
@@ -181,10 +183,10 @@ export const routesSection: RouteObject[] = [
       { path: 'discounts/wallet', element: <DiscountsHubPage defaultTab={2} /> },
       { path: 'operations/branches', element: <BranchesPage /> },
       { path: 'operations/branches/:id', element: <BranchDetailPage /> },
-      { path: 'operations/terminals', element: <TerminalsPage /> },
-      { path: 'operations/kds-configuration', element: <KdsConfigurationPage /> },
-      { path: 'operations/printers', element: <PrintersPage /> },
-      { path: 'operations/print-queue', element: <PrintQueuePage /> },
+      { path: 'operations/terminals', element: <RequiresBranch><TerminalsPage /></RequiresBranch> },
+      { path: 'operations/kds-configuration', element: <RequiresBranch><KdsConfigurationPage /></RequiresBranch> },
+      { path: 'operations/printers', element: <RequiresBranch><PrintersPage /></RequiresBranch> },
+      { path: 'operations/print-queue', element: <RequiresBranch><PrintQueuePage /></RequiresBranch> },
       { path: 'print-queue', element: <Navigate to="/app/operations/print-queue" replace /> },
       { path: 'operations/monitoring', element: <MonitoringPage /> },
       { path: 'operations/agents', element: <AgentsPage /> },

@@ -3865,7 +3865,11 @@
   "access": {
     "deniedTitle": "Not available for your role",
     "deniedBody": "This page belongs to another part of the organization. Your account does not have access to it.",
-    "backHome": "Go to my start page"
+    "backHome": "Go to my start page",
+    "pickBranchTitle": "Pick a branch to open this page",
+    "pickBranchBody": "This page runs one branch at a time. The header is set to head office, which is not a branch, so it would show every branch mixed together.",
+    "pickBranchNone": "No branch can run this page. Production kitchens and offices do not sell.",
+    "pickBranchRollup": "See all branches instead"
   },
   "users": {
     "title": "Users & Roles",
