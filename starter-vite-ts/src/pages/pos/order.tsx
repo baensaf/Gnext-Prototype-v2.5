@@ -1353,9 +1353,11 @@ export function PosOrderPage() {
 
     };
 
-    window.addEventListener('keydown', handleKeyDown);
+    // On document rather than window: a keydown reaches document first, so the register's
+    // Ctrl+K (product search) runs before the header's, which then sees it was taken.
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, [
     cart.length,
