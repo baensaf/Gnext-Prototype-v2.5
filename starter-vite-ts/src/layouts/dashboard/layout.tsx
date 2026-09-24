@@ -27,6 +27,7 @@ import { dashboardLayoutVars, dashboardNavColorVars } from './css-vars';
 import { NotificationsDrawer } from '../components/notifications-drawer';
 import { IncomingOrdersButton } from '../components/incoming-orders-button';
 import { MainSection, layoutClasses, HeaderSection, LayoutSection } from '../core';
+import { useSettingsSearchItems } from '../components/searchbar/use-settings-search-items';
 
 // ----------------------------------------------------------------------
 
@@ -60,6 +61,7 @@ export function DashboardLayout({
 
   const dynamicNavData = useNavData();
   const navData = slotProps?.nav?.data ?? dynamicNavData;
+  const settingsSearchItems = useSettingsSearchItems();
 
   const isNavMini = settings.state.navLayout === 'mini';
   const isNavHorizontal = settings.state.navLayout === 'horizontal';
@@ -129,7 +131,7 @@ export function DashboardLayout({
       rightArea: (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0, sm: 0.75 } }}>
           {/** @slot Searchbar */}
-          <Searchbar data={navData} />
+          <Searchbar data={navData} extraItems={settingsSearchItems} />
 
           {/** @slot Language popover */}
           <LanguagePopover

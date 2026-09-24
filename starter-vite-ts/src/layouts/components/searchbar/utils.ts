@@ -12,6 +12,8 @@ export type OutputItem = {
   title: string;
   path: string;
   group: string;
+  /** Extra words that should find this item without showing in the result. */
+  keywords?: string[];
 };
 
 const flattenNavItems = (navItems: NavItem[], parentGroup?: string): OutputItem[] => {
@@ -50,7 +52,9 @@ type ApplyFilterProps = {
 export function applyFilter({ inputData, query }: ApplyFilterProps): OutputItem[] {
   if (!query) return inputData;
 
-  return inputData.filter(({ title, path, group }) =>
-    [title, path, group].some((field) => field?.toLowerCase().includes(query.toLowerCase()))
+  return inputData.filter(({ title, path, group, keywords = [] }) =>
+    [title, path, group, ...keywords].some((field) =>
+      field?.toLowerCase().includes(query.toLowerCase())
+    )
   );
 }
