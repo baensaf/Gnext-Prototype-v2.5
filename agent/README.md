@@ -56,7 +56,12 @@ section numbers (§) in the code refer to it.
     the cloud sends one, so an agent restarted offline still reaches its devices;
   - the POS call count from the last `heartbeat.ack` in `call-numbers.json`.
 
-  Heartbeats carry `till` (no till bound yet: the till itself is P2–P4).
+  Since 1.4.0 (`internal/till`): the till the agent sells as, chosen on the settings page (card
+  *صندوق آفلاین*) by a signed-in manager or, offline, by an approver's PIN, kept in `till.json`;
+  sign-in by name and PIN checked here against the staff list (argon2, as the cloud stores it),
+  five wrong PINs lock that user for 15 minutes; one session at a time, ended after the tenant's
+  auto-logout time. Local API under `/api/till/*` (§13.13). Heartbeats carry `till` with the
+  bound till and the mode. The till screen and its orders come next (P3–P4).
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
   publishes a build, then swaps the binary after checking its SHA-256.
 - **Settings window** (Start-menu and desktop shortcut *Gnext Agent*, the tray, or running the
@@ -85,6 +90,7 @@ section numbers (§) in the code refer to it.
 | `internal/cloud` | HTTPS calls: enrol, me, releases, branch snapshot |
 | `internal/branchdata` | Keeps the branch snapshot and the sealed staff list current on disk |
 | `internal/offline` | Holds offline orders and uploads them |
+| `internal/till` | The offline till: which till the agent sells as, PIN sign-in and lockout, mode |
 | `internal/localui` | Settings page (embedded HTML/JS) and its local API, LAN scan |
 | `internal/update` | Release check, download, verify, swap |
 | `internal/winsession` | Starts the ticket browser and the tray as the signed-in user |

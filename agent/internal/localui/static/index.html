@@ -58,6 +58,20 @@
             <dt>دستگاه‌ها</dt><dd id="s-devices">—</dd>
           </dl>
         </div>
+        <div class="card" id="till-card" hidden>
+          <h2>صندوق آفلاین</h2>
+          <dl class="facts">
+            <dt>صندوق</dt><dd id="t-till">—</dd>
+            <dt>شیفت باز</dt><dd id="t-shift">—</dd>
+            <dt>کارکنان با پین</dt><dd id="t-staff">—</dd>
+            <dt>منوی شعبه</dt><dd id="t-snapshot">—</dd>
+          </dl>
+          <p id="t-problems" class="note warn-text" hidden></p>
+          <div class="row">
+            <select id="t-choose"></select>
+            <button class="btn primary" id="t-bind">انتخاب صندوق</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -187,6 +201,19 @@
       <div class="actions">
         <button class="btn ghost" value="cancel" formnovalidate>انصراف</button>
         <button class="btn primary" value="ok">ذخیره</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-till-pin">
+    <form method="dialog" id="till-pin-form">
+      <h2>انتخاب صندوق با پین</h2>
+      <p class="muted">مدیر یا سرپرست شعبه نام خود را انتخاب کند و پین خود را وارد کند.</p>
+      <label>نام<select name="user_id" required></select></label>
+      <label>پین<input name="pin" type="password" class="ltr" inputmode="numeric" required minlength="4" maxlength="8" autocomplete="off"></label>
+      <div class="actions">
+        <button class="btn ghost" value="cancel" formnovalidate>انصراف</button>
+        <button class="btn primary" value="ok">انتخاب</button>
       </div>
     </form>
   </dialog>

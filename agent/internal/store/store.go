@@ -40,6 +40,9 @@ func DevicesPath() string { return filepath.Join(Home(), "devices.json") }
 // CallNumbersPath keeps the last POS call count a heartbeat.ack carried (§13.9).
 func CallNumbersPath() string { return filepath.Join(Home(), "call-numbers.json") }
 
+// TillPath keeps which of the branch's tills the offline till sells as (§13.4).
+func TillPath() string { return filepath.Join(Home(), "till.json") }
+
 // LoadJSON and SaveJSON read and write one of the agent's files; SaveJSON replaces it whole.
 func LoadJSON(path string, v any) error { return readJSON(path, v) }
 func SaveJSON(path string, v any) error { return writeJSON(path, v) }

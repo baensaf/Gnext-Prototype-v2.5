@@ -80,6 +80,7 @@ async function refresh() {
     return;
   }
   render();
+  loadTill();
 }
 
 function render() {
@@ -389,6 +390,81 @@ async function loadLogs() {
   }
 }
 $('#refresh-logs').addEventListener('click', loadLogs);
+
+// ---- offline till (§13.4) ----
+const TILL_PROBLEMS = {
+  NO_SNAPSHOT: 'منوی شعبه هنوز از سرور دریافت نشده است.',
+  NO_STAFF: 'هیچ کارمندی پین ندارد؛ در جی‌نکست برای کارکنان پین تعریف کنید.',
+  NO_TILL: 'هنوز صندوقی برای فروش آفلاین انتخاب نشده است.',
+  NO_SHIFT: 'این صندوق شیفت باز ندارد؛ بدون شیفت باز، فروش آفلاین ممکن نیست.',
+};
+const APPROVERS = ['SUPERVISOR', 'MANAGER', 'ADMIN', 'OWNER'];
+let tillState = null;
+
+async function loadTill() {
+  if (!state?.enrolled) {
+    $('#till-card').hidden = true;
+    return;
+  }
+  try {
+    tillState = (await api('GET', '/api/till/state')).state;
+  } catch {
+    $('#till-card').hidden = true;
+    return;
+  }
+  const t = tillState;
+  $('#till-card').hidden = false;
+  $('#t-till').textContent = t.till ? `${t.till.name} (${t.till.code})` : 'انتخاب نشده';
+  const day = t.shift?.business_date ? new Date(`${t.shift.business_date}T12:00:00Z`).toLocaleDateString('fa-IR') : '';
+  $('#t-shift').textContent = t.shift ? `${t.shift.shift_number || '—'} · ${day}` : '—';
+  $('#t-staff').textContent = fa(t.staff.length);
+  $('#t-snapshot').textContent = t.snapshot_generated_at ? when(t.snapshot_generated_at) : 'دریافت نشده';
+  const problems = t.problems.map((p) => TILL_PROBLEMS[p] || p);
+  $('#t-problems').hidden = problems.length === 0;
+  $('#t-problems').textContent = problems.join(' ');
+
+  // Redraw the choice only when the list changes, so the refresh does not reset a pick.
+  const key = JSON.stringify([t.tills, t.binding?.terminal_id]);
+  if (key !== loadTill.last) {
+    loadTill.last = key;
+    $('#t-choose').replaceChildren(
+      ...t.tills.map((x) => el('option', { value: x.id, selected: x.id === t.binding?.terminal_id }, `${x.name} (${x.code})`)),
+    );
+  }
+  $('#t-bind').disabled = t.tills.length === 0;
+}
+
+// A manager signed in here chooses directly; otherwise an approver's PIN does, which works
+// with the internet down.
+$('#t-bind').addEventListener('click', async () => {
+  const terminal_id = $('#t-choose').value;
+  if (!terminal_id) return;
+  try {
+    if (state?.user) {
+      await api('POST', '/api/till/binding', { terminal_id });
+    } else {
+      const approvers = (tillState?.staff || []).filter((u) => APPROVERS.includes(u.role));
+      if (!approvers.length) {
+        toast('مدیری با پین در فهرست کارکنان نیست؛ مدیر با حساب جی‌نکست وارد شود.', true);
+        return;
+      }
+      const dlg = $('#dlg-till-pin');
+      const form = $('#till-pin-form');
+      form.reset();
+      form.user_id.replaceChildren(...approvers.map((u) => el('option', { value: u.id }, u.display_name)));
+      const ok = await new Promise((resolve) => {
+        dlg.onclose = () => resolve(dlg.returnValue === 'ok');
+        dlg.showModal();
+      });
+      if (!ok) return;
+      await api('POST', '/api/till/binding', { terminal_id, user_id: form.user_id.value, pin: form.pin.value });
+    }
+    toast('صندوق آفلاین انتخاب شد.');
+    loadTill();
+  } catch (e) {
+    toast(e.message, true);
+  }
+});
 
 refresh();
 setInterval(refresh, 3000);
