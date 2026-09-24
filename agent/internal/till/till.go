@@ -94,6 +94,9 @@ type Till struct {
 	CloudCallCount func() (businessDate string, count int)
 	// ConnectedSince is when the current session with the cloud began, or nil offline.
 	ConnectedSince func() *time.Time
+	// Charge charges the bound till's card terminal (§13.7), through the agent's driver and queue;
+	// ErrChargeNotStarted means the amount never reached the terminal.
+	Charge func(terminalID, attemptID, amount string) (CardResult, error)
 
 	once     sync.Once
 	omu      sync.Mutex // orders: one change at a time
@@ -124,6 +127,7 @@ func (t *Till) init() {
 		if raw, err := os.ReadFile(t.Path); err == nil && json.Unmarshal(raw, &b) == nil && b.TerminalID != "" {
 			t.binding = &b
 		}
+		t.recoverCharges()
 	})
 }
 

@@ -1404,8 +1404,10 @@ voided what and who approved it (§13.12).
 
 ### 13.7 Payments
 
-The payment method is the snapshot's first `payment_methods` entry of kind `CASH` or `CARD` (by
-`code`).
+The payment method is the snapshot's first `payment_methods` entry of kind `CASH`, or for a card
+of kind `CARD_POS`, `CARD` or `POS` (the kinds the web POS takes as a card reader). The upload
+carries that method's id and kind. The card terminal is the bound till's `payment_device_id`; a
+till without one takes cash only (`NO_TERMINAL`).
 
 **Cash.** The cashier types what the customer handed over; the till shows the change. The
 payment is the smaller of that and what is outstanding. No drawer is opened (the agent drives no
@@ -1416,7 +1418,8 @@ per-device queue as a cloud `payment.charge` (§7.3, §7.6), with no cloud comma
 what is outstanding unless the cashier types less (to split with cash).
 
 - Before the amount goes to the terminal, the agent records the charge (id, order, amount) as
-  `RUNNING` on disk. §4.6 holds: a charge found `RUNNING` after a restart is `UNKNOWN` with
+  `RUNNING` on disk, on the order in `till-orders.db`. While it runs the order takes no other
+  payment, cannot be finished, cancelled or handed over (`TERMINAL_BUSY`), and an update waits. §4.6 holds: a charge found `RUNNING` after a restart is `UNKNOWN` with
   `AGENT_RESTARTED`, and is **never** charged again.
 - The charge's id is its merchant reference (`AttemptID`), as `attempt_id` is online.
 - `APPROVED` with an `rrn`: a payment, uploaded as `APPROVED` with its `card` block.
@@ -1573,7 +1576,7 @@ ends the previous one. It ends after `auto_logout_minutes` without a request.
 | `POST /api/till/orders/{id}/lines/{line}/quantity` `{quantity}` | Change how many of a line the kitchen does not have yet (`0` removes it); a sent line is `LINE_SENT`, voided instead. |
 | `POST /api/till/orders/{id}/lines/{line}/void` `{approver_id?, pin?}` | Void a line. |
 | `POST /api/till/orders/{id}/send` | Send to kitchen. |
-| `POST /api/till/orders/{id}/payments` `{kind: "CASH", tendered}` or `{kind: "CARD", amount}` | Pay. A card charge answers `202` at once; the page follows the order until the charge ends. |
+| `POST /api/till/orders/{id}/payments` `{kind: "CASH", tendered}` or `{kind: "CARD", amount?}` | Pay. Cash answers `{order, change}`. A card charge answers `202` `{order, payment_id}` at once; the page follows the order (`GET /api/till/orders/{id}`) until `card_attempts[]` for that payment leaves `RUNNING`: `APPROVED`, `UNKNOWN` (paid; keep the slip), or `DECLINED`, `CANCELLED`, `FAILED` with a `message` and no payment. `amount` defaults to what is outstanding. A takeaway paid in full finishes. |
 | `POST /api/till/orders/{id}/finish` | Finish. |
 | `POST /api/till/orders/{id}/cancel` `{note, approver_id?, pin?}` | Cancel. A cart dropped before the kitchen had it answers `{order: null, dropped: true}`. |
 | `POST /api/till/orders/{id}/print` `{document, printer_id?, print_id?}` | Print a bill, or reprint a failed or lost ticket. |
@@ -1584,7 +1587,7 @@ Errors are `{code, detail}`, with `detail` in Persian for the cashier: `TILL_ONL
 `UNKNOWN_TILL`, `UNKNOWN_USER` (not on the staff list, or no PIN), `UNAUTHENTICATED`,
 `PIN_WRONG`, `PIN_LOCKED` (5 wrong PINs for one user in 15 minutes lock that user for 15
 minutes, as online), `NOT_AVAILABLE`, `APPROVAL_REQUIRED`, `ORDER_PAID` (no void or cancel with
-payments), `ORDER_CLOSED`, `TERMINAL_BUSY`, `NO_TERMINAL`, `NO_PRINTER`.
+payments), `ORDER_CLOSED`, `TERMINAL_BUSY`, `NO_TERMINAL`, `NO_PAYMENT_METHOD`, `NO_PRINTER`.
 
 ### 13.14 The web POS and the tray
 

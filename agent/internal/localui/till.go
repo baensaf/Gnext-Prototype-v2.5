@@ -34,6 +34,9 @@ var tillStatus = map[string]int{
 	till.CodeNotPaid:          http.StatusConflict,
 	till.CodeLineSent:         http.StatusConflict,
 	till.CodeInvalid:          http.StatusBadRequest,
+	till.CodeNoTerminal:       http.StatusConflict,
+	till.CodeTerminalBusy:     http.StatusConflict,
+	till.CodeNoMethod:         http.StatusConflict,
 }
 
 // theTill returns the agent's till, or answers that there is none yet.

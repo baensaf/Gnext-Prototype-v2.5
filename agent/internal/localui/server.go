@@ -122,6 +122,7 @@ func (s *Server) Handler(addr string) http.Handler {
 	mux.HandleFunc("POST /api/till/orders/{id}/lines/{line}/quantity", s.tillLineQuantity)
 	mux.HandleFunc("POST /api/till/orders/{id}/lines/{line}/void", s.tillVoidLine)
 	mux.HandleFunc("POST /api/till/orders/{id}/send", s.tillSend)
+	mux.HandleFunc("POST /api/till/orders/{id}/payments", s.tillPay)
 	mux.HandleFunc("POST /api/till/orders/{id}/finish", s.tillFinish)
 	mux.HandleFunc("POST /api/till/orders/{id}/cancel", s.tillCancel)
 	mux.HandleFunc("POST /api/till/handover", s.tillHandover)

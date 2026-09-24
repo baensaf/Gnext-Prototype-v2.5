@@ -617,3 +617,56 @@ func TestDataChangedIsAckedAndPassedOn(t *testing.T) {
 		t.Fatal("data.changed was not passed on")
 	}
 }
+
+func TestChargeLocalUsesTheTerminalsDriverAndQueueWithoutTheCloud(t *testing.T) {
+	stub := "stub"
+	drv := &stubDriver{block: make(chan struct{})}
+	a := New(Options{
+		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		SavedConfig: &protocol.Config{Terminals: []protocol.Terminal{{ID: "t1", Active: true, Driver: &stub, ChargeTimeoutS: 5}}},
+		NewDriver: func(t protocol.Terminal) payment.Driver {
+			if t.Driver != nil && *t.Driver == "stub" {
+				return drv
+			}
+			return nil
+		},
+	})
+
+	if _, err := a.ChargeLocal("t9", "att-0", "1000"); !errors.Is(err, ErrNoTerminal) {
+		t.Fatalf("unknown terminal: %v", err)
+	}
+	a.Updating(true)
+	if _, err := a.ChargeLocal("t1", "att-0", "1000"); !errors.Is(err, ErrUpdating) {
+		t.Fatalf("while updating: %v", err)
+	}
+	a.Updating(false)
+	if drv.charges != 0 {
+		t.Fatalf("refused charges reached the terminal: %d", drv.charges)
+	}
+
+	type res struct {
+		out payment.Outcome
+		err error
+	}
+	got := make(chan res, 1)
+	go func() {
+		out, err := a.ChargeLocal("t1", "att-1", "1250000")
+		got <- res{out, err}
+	}()
+	// While the customer is at the terminal, an update waits.
+	deadline := time.Now().Add(2 * time.Second)
+	for a.Idle() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if a.Idle() {
+		t.Fatal("the agent says idle during a charge")
+	}
+	close(drv.block)
+	r := <-got
+	if r.err != nil || r.out.Status != protocol.PayApproved || r.out.RRN == "" || drv.charges != 1 {
+		t.Fatalf("charge = %+v, %v (charges %d)", r.out, r.err, drv.charges)
+	}
+	if !a.Idle() {
+		t.Fatal("still busy after the charge")
+	}
+}

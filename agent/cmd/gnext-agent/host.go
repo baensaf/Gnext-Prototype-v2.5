@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"os"
@@ -188,6 +189,17 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 		Store:          h.orders,
 		Upload:         h.upload,
 		CloudCallCount: h.cloudCallCount,
+		// Offline card charges use the terminal's driver and queue, with no cloud command (§13.7).
+		Charge: func(terminalID, attemptID, amount string) (till.CardResult, error) {
+			out, err := a.ChargeLocal(terminalID, attemptID, amount)
+			if err != nil {
+				return till.CardResult{}, fmt.Errorf("%w: %v", till.ErrChargeNotStarted, err)
+			}
+			return till.CardResult{
+				Status: out.Status, RRN: out.RRN, STAN: out.STAN, CardPANMasked: out.CardPANMasked,
+				ResponseCode: out.BankResponseCode, Message: out.Message,
+			}, nil
+		},
 	}
 	a = agent.New(agent.Options{
 		Version:       version,

@@ -198,7 +198,9 @@
       "unavailable": "Not available offline",
       "notOnMenu": "This item is not on the branch menu.",
       "tableFromList": "Offline, choose the table from the list.",
-      "paymentsLater": "Taking payment on the offline till comes with the next update of the Gnext agent."
+      "cardUnknown": "The card terminal gave no clear answer. This amount counts as paid and will not be charged again; keep the terminal slip if there is one.",
+      "cardFailed": "The card payment did not go through. Try again or take cash.",
+      "cardStillRunning": "The card terminal is still working on this payment. Check it under Open orders."
     },
     "options": {
       "title": "Configure {{name}}",
@@ -332,6 +334,24 @@
       "NO_STAFF": "The staff list has not come from the server yet, so nobody can sign in.",
       "NO_TILL": "No till has been chosen for selling offline. A manager chooses it on the Gnext Agent settings page.",
       "NO_SHIFT": "This till has no open shift. Without one it cannot sell offline."
+    },
+    "orders": {
+      "title": "Open orders",
+      "help": "Pay, finish or cancel the orders taken on this till",
+      "empty": "No open orders.",
+      "pay": "Pay",
+      "finish": "Finish",
+      "cancel": "Cancel order",
+      "keep": "Keep order",
+      "paid": "Paid",
+      "charging": "At the card terminal",
+      "due": "Due {{amount}} IRR",
+      "finished": "Order {{number}} finished.",
+      "cancelled": "Order {{number}} cancelled.",
+      "dropped": "Cart dropped.",
+      "cancelTitle": "Cancel order {{number}}",
+      "cancelNote": "Reason",
+      "approver": "Approved by"
     }
   },
   "kiosk": {

@@ -110,6 +110,43 @@ func (s *Server) tillSend(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// tillPay takes cash, answering with the change, or starts a card charge, answering 202 at once;
+// the page then follows the order until the charge ends (§13.7).
+func (s *Server) tillPay(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Kind     string `json:"kind"`
+		Tendered string `json:"tendered"`
+		Amount   string `json:"amount"`
+	}
+	t := s.theTill(w)
+	if t == nil {
+		return
+	}
+	u, ok := s.tillUser(w, r, t)
+	if !ok || !readJSON(w, r, &in) {
+		return
+	}
+	id := r.PathValue("id")
+	switch in.Kind {
+	case "CASH":
+		o, change, err := t.PayCash(id, u, in.Tendered)
+		if err != nil {
+			tillError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"order": o, "change": change})
+	case "CARD":
+		o, paymentID, err := t.PayCard(id, u, in.Amount)
+		if err != nil {
+			tillError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, map[string]any{"order": o, "payment_id": paymentID})
+	default:
+		fail(w, http.StatusBadRequest, till.CodeInvalid, "نوع پرداخت باید نقد یا کارت باشد.")
+	}
+}
+
 func (s *Server) tillFinish(w http.ResponseWriter, r *http.Request) {
 	s.asCashier(w, r, nil, func(t *till.Till, u till.User) (any, error) {
 		return order(t.Finish(r.PathValue("id"), u))

@@ -36,6 +36,7 @@ func testTill(t *testing.T) *till.Till {
 		Snapshot: func() ([]byte, error) {
 			return []byte(`{"tills":[{"id":"till-1","code":"T1","name":"صندوق ۱"}],"open_shifts":[{"id":"sh","terminal_id":"till-1"}],
 			  "branch":{"time_zone":"Asia/Tehran"},
+			  "payment_methods":[{"id":"m-cash","code":"CASH","name":"نقد","kind":"CASH"}],
 			  "products":[{"id":"cola","name":"کوکا","price":"350000","tax_rate":"0.1000","variants":[],"option_groups":[]}],
 			  "availability":{"stopped":[],"schedules":[],"daily_stock":[{"product_id":"cola","variant_id":null,"remaining":2}]}}`), nil
 		},
@@ -224,6 +225,19 @@ func TestTillOrdersOverTheLocalAPI(t *testing.T) {
 	}
 	if rec := call(h, "POST", "/api/till/orders/place", `{"order_type":"TAKEAWAY","lines":[{"product_id":"cola","quantity":5}]}`, session); rec.Code != 422 {
 		t.Fatalf("place over stock: %d %s", rec.Code, rec.Body)
+	}
+
+	// Paying it (§13.7): this till has no card terminal; cash gives change and finishes the takeaway.
+	pay := "/api/till/orders/" + res.Order.ID + "/payments"
+	if rec := call(h, "POST", pay, `{"kind":"CARD"}`, session); rec.Code != 409 || !strings.Contains(rec.Body.String(), "NO_TERMINAL") {
+		t.Fatalf("card without a terminal: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(h, "POST", pay, `{"kind":"CHEQUE"}`, session); rec.Code != 400 {
+		t.Fatalf("unknown kind: %d %s", rec.Code, rec.Body)
+	}
+	rec = call(h, "POST", pay, `{"kind":"CASH","tendered":"500000"}`, session)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"change":"115000"`) || !strings.Contains(rec.Body.String(), `"state":"COMPLETED"`) {
+		t.Fatalf("cash: %d %s", rec.Code, rec.Body)
 	}
 
 	// A cart the kitchen never had is dropped.

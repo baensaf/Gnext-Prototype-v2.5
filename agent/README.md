@@ -85,7 +85,14 @@ section numbers (§) in the code refer to it.
   through the local API (`src/till/agent-source.ts`) and places a whole cart at once
   (`/api/till/orders/place`). What the till cannot do offline (delivery, customers, discounts,
   parked orders, 86, shift open/close) stays on screen, disabled. A Go build without the screen
-  serves `tillui/NOT-BUILT.html` instead. Paying and printing come next (P5, P6).
+  serves `tillui/NOT-BUILT.html` instead.
+
+  Since 1.8.0: paying offline. Cash takes what was handed over and gives the change. A card is
+  charged on the bound till's terminal through the same driver and queue as a cloud charge
+  (`Agent.ChargeLocal`), written to `till-orders.db` as `RUNNING` first: a restart turns it
+  `UNKNOWN` and never charges it again, and an unknown charge counts as paid. A takeaway paid in
+  full finishes; the header's *Open orders* lists what is still open, to pay, finish or cancel
+  (with an approver's PIN after the window). Printing comes next (P6).
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
   publishes a build, then swaps the binary after checking its SHA-256.
 - **Settings window** (Start-menu and desktop shortcut *Gnext Agent*, the tray, or running the

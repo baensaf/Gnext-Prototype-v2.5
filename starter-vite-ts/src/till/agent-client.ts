@@ -136,7 +136,18 @@ export type AgentOrder = {
   cancelled_at: string | null;
   lines: AgentLine[];
   totals: { subtotal: string; delivery_fee: string; discount_total: string; tax_total: string; grand_total: string };
-  payments: { id: string; method_id: string; method_kind: string; amount: string; status: string; at: string }[];
+  payments: {
+    id: string;
+    method_id: string;
+    method_kind: string;
+    amount: string;
+    /** RUNNING while at the terminal, then APPROVED or UNKNOWN. */
+    status: string;
+    card?: { terminal_id?: string; rrn?: string; card_pan_masked?: string };
+    at: string;
+  }[];
+  /** Every card charge tried, and how it ended; one that left no payment says why. */
+  card_attempts?: { payment_id: string; amount: string; status: string; message?: string; at: string }[];
   handed_over: boolean;
 };
 
@@ -157,8 +168,18 @@ export const tillApi = {
   orders: () => agentRequest<{ orders: AgentOrder[] }>('GET', '/api/till/orders'),
   order: (id: string) => agentRequest<{ order: AgentOrder }>('GET', `/api/till/orders/${encodeURIComponent(id)}`),
   place: (input: PlaceInput) => agentRequest<{ order: AgentOrder }>('POST', '/api/till/orders/place', input),
-  cancel: (id: string, note: string) =>
-    agentRequest<{ order: AgentOrder | null; dropped: boolean }>('POST', `/api/till/orders/${encodeURIComponent(id)}/cancel`, { note }),
+  cancel: (id: string, note: string, approverId = '', pin = '') =>
+    agentRequest<{ order: AgentOrder | null; dropped: boolean }>('POST', `/api/till/orders/${encodeURIComponent(id)}/cancel`, {
+      note,
+      approver_id: approverId,
+      pin,
+    }),
+  /** Cash answers with the change; a card charge answers at once, and the order shows how it ended. */
+  payCash: (id: string, tendered: string) =>
+    agentRequest<{ order: AgentOrder; change: string }>('POST', `/api/till/orders/${encodeURIComponent(id)}/payments`, { kind: 'CASH', tendered }),
+  payCard: (id: string, amount: string) =>
+    agentRequest<{ order: AgentOrder; payment_id: string }>('POST', `/api/till/orders/${encodeURIComponent(id)}/payments`, { kind: 'CARD', amount }),
+  finish: (id: string) => agentRequest<{ order: AgentOrder }>('POST', `/api/till/orders/${encodeURIComponent(id)}/finish`, {}),
   handover: () => agentRequest<{ dropped: number; handed: number }>('POST', '/api/till/handover', {}),
   /** The settings page's status: the cloud's address, for the way back to the web POS. */
   status: () => agentRequest<{ server?: string; branch_name?: string }>('GET', '/api/status'),

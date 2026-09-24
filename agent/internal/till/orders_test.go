@@ -29,7 +29,8 @@ const ordersJSON = `{
   ],
   "availability": { "stopped": [], "schedules": [], "daily_stock": [ { "product_id": "fries", "variant_id": null, "remaining": 2 } ] },
   "dining_tables": [ { "id": "t12", "area": "سالن", "number": "12", "seats": 4 } ],
-  "tills": [ { "id": "till-1", "code": "T1", "name": "صندوق ۱" } ],
+  "payment_methods": [ { "id": "m-cash", "code": "CASH", "name": "نقد", "kind": "CASH" }, { "id": "m-card", "code": "POS", "name": "کارتخوان", "kind": "CARD_POS" } ],
+  "tills": [ { "id": "till-1", "code": "T1", "name": "صندوق ۱", "payment_device_id": "pos-1" } ],
   "open_shifts": [ { "id": "shift-1", "terminal_id": "till-1", "shift_number": "S-1", "business_date": "2026-09-24" } ]
 }`
 
@@ -41,9 +42,11 @@ type shop struct {
 	uploaded []map[string]any
 	failing  bool
 	cloud    int // the POS count in the last heartbeat.ack
-	till     *Till
-	sara     User
-	amir     User
+	// charge answers the till's card charges; nil means the charge never reaches a terminal.
+	charge func(terminalID, attemptID, amount string) (CardResult, error)
+	till   *Till
+	sara   User
+	amir   User
 }
 
 func newShop(t *testing.T) *shop {
@@ -88,6 +91,12 @@ func (s *shop) open() *Till {
 		},
 		CloudCallCount: func() (string, int) { return "2026-09-24", s.cloud },
 		ConnectedSince: func() *time.Time { return s.up },
+		Charge: func(terminalID, attemptID, amount string) (CardResult, error) {
+			if s.charge == nil {
+				return CardResult{}, ErrChargeNotStarted
+			}
+			return s.charge(terminalID, attemptID, amount)
+		},
 	}
 }
 
