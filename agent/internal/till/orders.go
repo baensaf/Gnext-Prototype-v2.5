@@ -56,6 +56,7 @@ type Order struct {
 	GuestCount   *int    `json:"guest_count"`
 	CallNumber   *int    `json:"call_number"`
 	CreatedBy    string  `json:"created_by"`
+	Notes        *string `json:"notes"` // for the kitchen and the courier, as the web POS takes them
 
 	PlacedAt    time.Time  `json:"placed_at"`
 	SentAt      *time.Time `json:"sent_at"` // first sent to the kitchen: the edit windows run from here
@@ -240,18 +241,79 @@ func (t *Till) open(id string) (*Order, error) {
 func (t *Till) NewOrder(by User, orderType, tableID string, guests int) (*Order, error) {
 	t.omu.Lock()
 	defer t.omu.Unlock()
-	if err := t.guard(true); err != nil {
+	o, _, err := t.start(by, orderType, tableID, guests)
+	if err != nil {
 		return nil, err
+	}
+	if err := t.Store.put(o); err != nil {
+		return nil, err
+	}
+	t.Log.Info("offline order started", "order", o.ID, "by", by.ID)
+	return o, nil
+}
+
+// PlaceInput is a whole cart, placed at once as the web POS's screen places it.
+type PlaceInput struct {
+	OrderType  string      `json:"order_type"`
+	TableID    string      `json:"table_id"`
+	GuestCount int         `json:"guest_count"`
+	Notes      string      `json:"notes"`
+	Lines      []LineInput `json:"lines"`
+}
+
+// Place starts an order with its lines and sends it to the kitchen in one step, all of it or
+// nothing: the lines are checked and priced as one order (§12.4, §13.6), and the order gets its
+// call number (§13.9).
+func (t *Till) Place(by User, in PlaceInput) (*Order, error) {
+	t.omu.Lock()
+	defer t.omu.Unlock()
+	if len(in.Lines) == 0 {
+		return nil, refuse(CodeInvalid, "سبد خرید خالی است.")
+	}
+	o, c, err := t.start(by, in.OrderType, in.TableID, in.GuestCount)
+	if err != nil {
+		return nil, err
+	}
+	for i := range in.Lines {
+		in.Lines[i].Notes = strings.TrimSpace(in.Lines[i].Notes)
+	}
+	lines, _, err := c.Price(t.Now(), in.Lines, t.soldOffline(c, ""))
+	if err != nil {
+		return nil, err
+	}
+	now := t.Now().UTC()
+	for i, l := range lines {
+		o.Lines = append(o.Lines, OrderLine{ID: uuid.NewString(), Line: l, Input: in.Lines[i], SentAt: &now, AddedBy: by.ID})
+	}
+	if notes := strings.TrimSpace(in.Notes); notes != "" {
+		o.Notes = &notes
+	}
+	o.retotal()
+	if err := t.number(o); err != nil {
+		return nil, err
+	}
+	o.SentAt = &now
+	if err := t.Store.put(o); err != nil {
+		return nil, err
+	}
+	t.Log.Info("offline order placed and sent to the kitchen", "order", o.ID, "call_number", deref(o.CallNumber), "lines", len(o.Lines), "by", by.ID)
+	return o, nil
+}
+
+// start makes a new order on the bound till and its open shift, not yet kept.
+func (t *Till) start(by User, orderType, tableID string, guests int) (*Order, *Catalog, error) {
+	if err := t.guard(true); err != nil {
+		return nil, nil, err
 	}
 	st := t.State()
 	for _, p := range []string{CodeNoSnapshot, CodeNoTill, CodeNoShift} {
 		if slices.Contains(st.Problems, p) {
-			return nil, refuse(p, problemText[p])
+			return nil, nil, refuse(p, problemText[p])
 		}
 	}
 	c, err := t.catalog()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// The order belongs to its shift's business day; a shift without one, to today on the branch clock.
 	day := st.Shift.BusinessDate
@@ -264,14 +326,10 @@ func (t *Till) NewOrder(by User, orderType, tableID string, guests int) (*Order,
 		CreatedBy: by.ID, PlacedAt: t.Now().UTC(), Lines: []OrderLine{}, Voided: []VoidedLine{}, Payments: []Payment{},
 	}
 	if err := t.setInfo(c, o, orderType, tableID, guests); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	o.retotal()
-	if err := t.Store.put(o); err != nil {
-		return nil, err
-	}
-	t.Log.Info("offline order started", "order", o.ID, "by", by.ID)
-	return o, nil
+	return o, c, nil
 }
 
 var problemText = map[string]string{
@@ -724,7 +782,7 @@ func uploadPayload(o *Order) map[string]any {
 		"order_type": o.OrderType, "table_id": o.TableID, "guest_count": o.GuestCount, "delivery_zone_id": nil,
 		"call_number": o.CallNumber, "business_date": o.BusinessDate,
 		"placed_at": stamp(&o.PlacedAt), "completed_at": stamp(o.CompletedAt), "cancelled_at": stamp(o.CancelledAt),
-		"cancellation_note": o.CancellationNote, "notes": nil,
+		"cancellation_note": o.CancellationNote, "notes": o.Notes,
 		"lines": lines, "totals": o.Totals, "payments": payments, "prints": []any{},
 		"voided_lines": voided, "cancelled_by": o.CancelledBy, "approved_by": o.ApprovedBy,
 	}

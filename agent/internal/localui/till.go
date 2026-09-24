@@ -1,8 +1,11 @@
 package localui
 
 import (
+	"embed"
 	"errors"
+	"io/fs"
 	"net/http"
+	"strings"
 
 	"gnext/agent/internal/till"
 )
@@ -68,9 +71,33 @@ func (s *Server) tillUser(w http.ResponseWriter, r *http.Request, t *till.Till) 
 	return u, ok
 }
 
-// tillPage serves the till screen (§13.13).
-func (s *Server) tillPage(w http.ResponseWriter, r *http.Request) {
-	http.ServeFileFS(w, r, static, "static/till.html")
+// The till screen (§13.13) is the web POS's own register, built from starter-vite-ts with
+// `npm run build:till` into tillui. A Go build without it serves NOT-BUILT.html instead.
+//
+//go:embed tillui
+var tillUI embed.FS
+
+// tillCSP is the settings page's policy, plus the inline styles the screen's components set.
+// Scripts still come only from the agent.
+const tillCSP = "default-src 'self'; img-src 'self' data:; font-src 'self' data:; style-src 'self' 'unsafe-inline'"
+
+// tillScreen serves the screen's files; any other path under /till/ is the screen itself, which
+// routes on its own.
+func (s *Server) tillScreen(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Security-Policy", tillCSP)
+	files, _ := fs.Sub(tillUI, "tillui")
+	name := strings.TrimPrefix(r.URL.Path, "/till/")
+	if name != "" && name != "NOT-BUILT.html" {
+		if info, err := fs.Stat(files, name); err == nil && !info.IsDir() {
+			http.ServeFileFS(w, r, files, name)
+			return
+		}
+	}
+	if _, err := fs.Stat(files, "index.html"); err == nil {
+		http.ServeFileFS(w, r, files, "index.html")
+		return
+	}
+	http.ServeFileFS(w, r, files, "NOT-BUILT.html")
 }
 
 // tillMenu is the branch's menu with what sells right now.

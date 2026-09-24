@@ -16,9 +16,18 @@ type SoldOffline func(productID, variantID string) int
 
 // Menu is the snapshot's catalogue with what can be sold right now (§13.13 `menu`).
 type Menu struct {
-	Categories []MenuCategory `json:"categories"`
-	Products   []MenuProduct  `json:"products"`
-	Tables     []MenuTable    `json:"tables"`
+	Categories     []MenuCategory      `json:"categories"`
+	Products       []MenuProduct       `json:"products"`
+	Tables         []MenuTable         `json:"tables"`
+	PaymentMethods []MenuPaymentMethod `json:"payment_methods"`
+}
+
+// MenuPaymentMethod is a way the branch takes money (§12.2).
+type MenuPaymentMethod struct {
+	ID   string `json:"id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
+	Kind string `json:"kind"`
 }
 
 // MenuTable is a dining table a dine-in order can sit at.
@@ -41,6 +50,7 @@ type MenuProduct struct {
 	Name         string        `json:"name"`
 	CategoryID   *string       `json:"category_id"`
 	Price        Money         `json:"price"`
+	TaxRate      string        `json:"tax_rate"`
 	MaxPerOrder  *int          `json:"max_per_order"`
 	Available    bool          `json:"available"`
 	Reason       string        `json:"reason,omitempty"`
@@ -75,7 +85,10 @@ type MenuOption struct {
 
 // Menu evaluates availability at `now` on the branch clock.
 func (c *Catalog) Menu(now time.Time, sold SoldOffline) Menu {
-	m := Menu{Categories: []MenuCategory{}, Products: []MenuProduct{}, Tables: []MenuTable{}}
+	m := Menu{Categories: []MenuCategory{}, Products: []MenuProduct{}, Tables: []MenuTable{}, PaymentMethods: []MenuPaymentMethod{}}
+	for _, pm := range c.PaymentMethods {
+		m.PaymentMethods = append(m.PaymentMethods, MenuPaymentMethod{ID: pm.ID, Code: pm.Code, Name: pm.Name, Kind: pm.Kind})
+	}
 	for _, tb := range c.DiningTables {
 		m.Tables = append(m.Tables, MenuTable{ID: tb.ID, Area: tb.Area, Number: tb.Number, Seats: tb.Seats})
 	}
@@ -84,7 +97,7 @@ func (c *Catalog) Menu(now time.Time, sold SoldOffline) Menu {
 	}
 	for _, p := range c.Products {
 		mp := MenuProduct{
-			ID: p.ID, Code: p.Code, Name: p.Name, CategoryID: p.CategoryID, Price: p.Price, MaxPerOrder: p.MaxPerOrder,
+			ID: p.ID, Code: p.Code, Name: p.Name, CategoryID: p.CategoryID, Price: p.Price, TaxRate: p.TaxRate, MaxPerOrder: p.MaxPerOrder,
 			Variants: []MenuVariant{}, OptionGroups: []MenuGroup{},
 		}
 		mp.Reason = c.productReason(now, &p, sold)

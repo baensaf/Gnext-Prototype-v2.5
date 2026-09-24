@@ -129,12 +129,20 @@ func (t *Till) init() {
 
 // snapshot is the part of the branch snapshot the till reads here.
 type snapshot struct {
-	GeneratedAt string `json:"generated_at"`
+	GeneratedAt string      `json:"generated_at"`
+	Branch      *BranchInfo `json:"branch"`
 	Settings    struct {
 		AutoLogoutMinutes int `json:"auto_logout_minutes"`
 	} `json:"settings"`
 	Tills      []Register `json:"tills"`
 	OpenShifts []Shift    `json:"open_shifts"`
+}
+
+// BranchInfo is the branch the snapshot is for.
+type BranchInfo struct {
+	ID   string `json:"id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
 }
 
 // Register is one of the branch's tills in the snapshot (a `terminal` in the cloud).
@@ -323,13 +331,14 @@ func (t *Till) idle() time.Duration {
 
 // State is what the till page and the settings page show (§13.13 `state`).
 type State struct {
-	Mode       string     `json:"mode"`
-	Binding    *Binding   `json:"binding"`
-	Till       *Register  `json:"till"`
-	Shift      *Shift     `json:"shift"`
-	Tills      []Register `json:"tills"`
-	Staff      []User     `json:"staff"`
-	SnapshotAt string     `json:"snapshot_generated_at,omitempty"`
+	Mode       string      `json:"mode"`
+	Branch     *BranchInfo `json:"branch"`
+	Binding    *Binding    `json:"binding"`
+	Till       *Register   `json:"till"`
+	Shift      *Shift      `json:"shift"`
+	Tills      []Register  `json:"tills"`
+	Staff      []User      `json:"staff"`
+	SnapshotAt string      `json:"snapshot_generated_at,omitempty"`
 	// Problems lists what stops the till selling: NO_SNAPSHOT, NO_STAFF, NO_TILL, NO_SHIFT.
 	Problems []string `json:"problems"`
 }
@@ -342,7 +351,7 @@ func (t *Till) State() State {
 	if err != nil {
 		st.Problems = append(st.Problems, CodeNoSnapshot)
 	} else {
-		st.Tills, st.SnapshotAt = s.Tills, s.GeneratedAt
+		st.Tills, st.SnapshotAt, st.Branch = s.Tills, s.GeneratedAt, s.Branch
 	}
 	if list, err := t.Staff(); err != nil || len(list.Users) == 0 {
 		st.Problems = append(st.Problems, CodeNoStaff)

@@ -34,3 +34,7 @@ backend/seed-assets/*
 .DS_Store
 Thumbs.db
 screenshots/
+
+# The offline till screen, built from starter-vite-ts (npm run build:till); only the stand-in is kept
+agent/internal/localui/tillui/*
+!agent/internal/localui/tillui/NOT-BUILT.html
