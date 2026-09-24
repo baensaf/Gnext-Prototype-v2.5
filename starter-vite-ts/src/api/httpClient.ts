@@ -3,6 +3,7 @@ import type { AxiosError } from 'axios';
 import axios from 'axios';
 
 import { readDeviceTerminal } from 'src/utils/device-terminal';
+import { isGatewayFailure, reportCloudAnswered, reportCloudUnreachable } from 'src/utils/cloud-reachability';
 
 import { CONFIG } from 'src/global-config';
 
@@ -75,10 +76,17 @@ httpClient.interceptors.request.use((config) => {
 });
 
 httpClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    reportCloudAnswered();
+    return response;
+  },
   (error: AxiosError<ProblemDetails>) => {
     const isNetworkError = !error.response;
     const isServerError = !!(error.response && error.response.status >= 500);
+    // For the web POS's offline-till banner: no answer at all, or a gateway with no server
+    // behind it, is the cloud out of reach; any other answer is the cloud answering.
+    if (isNetworkError || isGatewayFailure(error.response?.status)) reportCloudUnreachable();
+    else reportCloudAnswered();
     const skipToast = error.config?.headers?.['X-Skip-Toast'] === 'true' || (error.config as any)?.skipToast;
 
     if (error.response?.data) {

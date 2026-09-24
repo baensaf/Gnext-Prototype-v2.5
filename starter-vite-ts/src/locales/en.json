@@ -309,7 +309,12 @@
     "orderPlaced": "Order placed",
     "callNumber": "Number",
     "orderSubmitted": "Order {{number}} sent to the kitchen",
-    "orderSubmittedPaid": "Order {{number}} paid and sent to the kitchen"
+    "orderSubmittedPaid": "Order {{number}} paid and sent to the kitchen",
+    "offlineTill": {
+      "title": "The internet is down",
+      "body": "Gnext cannot be reached. On the branch PC, keep selling on the offline till; its orders come here when the internet is back.",
+      "open": "Open offline till"
+    }
   },
   "till": {
     "title": "Offline till",

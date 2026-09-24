@@ -46,6 +46,10 @@ func main() {
 	if os.Args[1] == "tray" {
 		os.Exit(runTray())
 	}
+	// The offline till (§13.14), in a window of its own, from the tray or the Start menu.
+	if os.Args[1] == "till" {
+		os.Exit(runTillWindow())
+	}
 	attachConsole()
 	switch os.Args[1] {
 	case "enrol", "enroll":
@@ -70,6 +74,7 @@ func usage() {
   gnext-agent enrol --code XXXX-XXXX [--server https://app.example.ir]
   gnext-agent run
   gnext-agent [open]      the settings window
+  gnext-agent till        the offline till, in a window of its own
   gnext-agent tray
   gnext-agent service install|uninstall|start|stop
   gnext-agent version
@@ -78,6 +83,9 @@ Data folder:   %s
 Settings page: http://%s
 `, version, store.Home(), uiAddr())
 }
+
+// tillPath is the offline till on the settings server (§13.13).
+const tillPath = "/till/"
 
 // uiAddr is where the settings page listens; GNEXT_AGENT_UI_ADDR overrides it for development.
 func uiAddr() string {
