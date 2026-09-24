@@ -516,6 +516,41 @@ func (a *Agent) runCharge(env protocol.Envelope, ch protocol.PaymentCharge, t pr
 	a.finish(env.ID, protocol.TypePaymentResult, paymentResult(ch.PaymentID, ch.AttemptID, ch.TerminalID, out, started))
 }
 
+// ErrNoPrinter: the printer is not in the config, not active, or on a connection this build
+// cannot drive.
+var ErrNoPrinter = errors.New("no active printer this agent can reach")
+
+// Printers are the active printers in the config that this build can drive, for the offline
+// till's routing and its reprint menu (§13.8).
+func (a *Agent) Printers() []protocol.Printer {
+	out := []protocol.Printer{}
+	for _, p := range a.cfg.Load().Printers {
+		if p.Active && printing.Supported(p) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// PrintLocal prints an offline ticket (§13.8) on the same printer and per-device queue as a
+// cloud print.job, with no cloud command, and returns once it printed or failed. A print is
+// not journaled: a ticket cut off by a restart is reprinted by hand, as online.
+func (a *Agent) PrintLocal(printerID, documentType, label, html string, copies int) error {
+	p, ok := findPrinter(a.cfg.Load(), printerID)
+	if !ok || !p.Active || !printing.Supported(p) {
+		return ErrNoPrinter
+	}
+	job := protocol.PrintJob{JobID: "offline", AttemptNo: 1, PrinterID: p.ID, DocumentType: documentType, Label: label, Copies: max(copies, 1)}
+	job.Content.Format, job.Content.HTML = "html", html
+	done := make(chan error, 1)
+	a.running.Add(1)
+	a.queue(p.ID) <- func() {
+		defer a.running.Add(-1)
+		done <- a.o.Printer.Print(context.Background(), p, job)
+	}
+	return <-done
+}
+
 // Refusals of ChargeLocal before the terminal is touched.
 var (
 	// ErrNoTerminal: the terminal is not in the config, not active, or its driver is not in this build.

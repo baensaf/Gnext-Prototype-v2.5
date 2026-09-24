@@ -1,0 +1,131 @@
+{
+  "kitchen-compact": {
+    "documentType": "KITCHEN_TICKET",
+    "orderNumber": "OFF-7DD260EA",
+    "callNumber": 137,
+    "orderType": "DINE_IN",
+    "tableNumber": "12",
+    "placedAt": "2026-09-24T17:25:08.416Z",
+    "items": [
+      { "product_name": "ایران برگر", "quantity": "1", "options_summary": "نان سبوس‌دار، پنیر اضافه", "special_instructions": "بدون پیاز" },
+      { "product_name": "نوشابه (خانواده)", "quantity": "2" }
+    ]
+  },
+  "kitchen-detailed-station": {
+    "documentType": "KITCHEN_TICKET",
+    "template": "DETAILED",
+    "orderNumber": "OFF-7DD260EA",
+    "callNumber": 137,
+    "orderType": "DINE_IN",
+    "tableNumber": "12",
+    "channel": "POS",
+    "stationLabel": "گریل (1/2)",
+    "orderNotes": "سس جدا",
+    "placedAt": "2026-09-24T17:25:08.416Z",
+    "items": [{ "product_name": "دبل برگر", "quantity": "2" }]
+  },
+  "kitchen-cancelled": {
+    "documentType": "KITCHEN_TICKET",
+    "orderNumber": "OFF-3D063798",
+    "callNumber": 140,
+    "orderType": "TAKEAWAY",
+    "kitchenChange": "CANCELLED",
+    "placedAt": "2026-03-20T20:30:00.000Z",
+    "items": [
+      { "product_name": "دبل برگر", "quantity": "1", "change": "VOID" },
+      { "product_name": "دوغ", "quantity": "1", "change": "VOID" }
+    ]
+  },
+  "kitchen-amended-detailed": {
+    "documentType": "KITCHEN_TICKET",
+    "template": "DETAILED",
+    "orderNumber": "OFF-3D063798",
+    "callNumber": 140,
+    "orderType": "DINE_IN",
+    "tableNumber": "4",
+    "kitchenChange": "AMENDED",
+    "changeReason": "مشتری عوض کرد",
+    "stationLabel": "آشپزخانه",
+    "placedAt": "2026-03-21T00:05:00.000Z",
+    "items": [
+      { "product_name": "دبل برگر", "quantity": "1", "change": "VOID" },
+      { "product_name": "ایران برگر", "quantity": "1", "change": "ADD" }
+    ]
+  },
+  "kitchen-reprint": {
+    "documentType": "KITCHEN_TICKET",
+    "orderNumber": "ORD-20260924-0012",
+    "isReprint": true,
+    "placedAt": "2026-09-24T17:25:08.416Z",
+    "items": [{ "product_name": "سیب‌زمینی", "quantity": "3" }]
+  },
+  "receipt-detailed-paid": {
+    "documentType": "CUSTOMER_RECEIPT",
+    "orderNumber": "OFF-B04BAB38",
+    "callNumber": 137,
+    "brandName": "ایران برگر",
+    "branchName": "ولیعصر",
+    "branchAddress": "تهران، خیابان ولیعصر، پلاک ۱۲",
+    "branchPhone": "021-88001234",
+    "orderType": "TAKEAWAY",
+    "calendar": "JALALI",
+    "placedAt": "2026-09-24T19:08:30.492Z",
+    "items": [
+      { "product_name": "ایران برگر", "quantity": "1", "unit_price": "9400000", "total_price": "10200000", "options_summary": "نان سبوس‌دار، پنیر اضافه" },
+      { "product_name": "نوشابه (قوطی)", "quantity": "2", "unit_price": "600000", "total_price": "1200000" }
+    ],
+    "subtotal": "11400000",
+    "discountTotal": "0",
+    "taxTotal": "1026000",
+    "deliveryFee": "0",
+    "grandTotal": "12426000",
+    "paidTotal": "12426000",
+    "outstandingTotal": "0",
+    "payments": [
+      { "method": "CASH", "amount": "2426000" },
+      { "method": "CARD_POS", "amount": "10000000" }
+    ]
+  },
+  "receipt-compact-owing": {
+    "documentType": "CUSTOMER_RECEIPT",
+    "template": "COMPACT",
+    "orderNumber": "OFF-B442E0FD",
+    "callNumber": 138,
+    "branchName": "ولیعصر",
+    "orderType": "DINE_IN",
+    "tableNumber": "12",
+    "placedAt": "2026-01-01T08:00:00.000Z",
+    "items": [{ "product_name": "آب معدنی", "quantity": "1", "unit_price": "100001", "total_price": "100001" }],
+    "grandTotal": "100001",
+    "outstandingTotal": "100001"
+  },
+  "guest-bill": {
+    "documentType": "GUEST_BILL",
+    "orderNumber": "OFF-A1B2C3D4",
+    "callNumber": 141,
+    "brandName": "ایران برگر",
+    "branchName": "ولیعصر",
+    "orderType": "DINE_IN",
+    "tableNumber": "7",
+    "orderNotes": "تولد",
+    "placedAt": "2026-09-24T12:00:00.000Z",
+    "items": [{ "product_name": "پیتزا <ویژه> & \"مخصوص\"", "quantity": "1", "unit_price": "15000000", "total_price": "15000000", "special_instructions": "تند" }],
+    "subtotal": "15000000",
+    "taxTotal": "1350000",
+    "grandTotal": "16350000",
+    "outstandingTotal": "16350000"
+  },
+  "receipt-gregorian": {
+    "documentType": "CUSTOMER_RECEIPT",
+    "orderNumber": "OFF-00000001",
+    "brandName": "Gnext Burger",
+    "orderType": "TAKEAWAY",
+    "calendar": "GREGORIAN",
+    "placedAt": "2026-12-31T21:15:00.000Z",
+    "items": [{ "product_name": "Burger", "quantity": "1", "unit_price": "1000", "total_price": "1000" }],
+    "subtotal": "1000",
+    "grandTotal": "1000",
+    "outstandingTotal": "0",
+    "payments": [{ "method": "CASH", "amount": "1000" }]
+  }
+}

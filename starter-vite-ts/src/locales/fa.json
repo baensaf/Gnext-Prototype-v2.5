@@ -352,6 +352,18 @@
       "cancelTitle": "لغو سفارش {{number}}",
       "cancelNote": "دلیل",
       "approver": "تأییدکننده"
+    },
+    "print": {
+      "kitchen": "برگه آشپزخانه",
+      "receipt": "فاکتور",
+      "bill": "صورتحساب",
+      "billButton": "چاپ صورتحساب",
+      "reprint": "چاپ دوباره",
+      "failed": "چاپ نشد",
+      "reprintTitle": "چاپ دوباره: {{ticket}}",
+      "printer": "چاپگر",
+      "sent": "به چاپگر فرستاده شد.",
+      "problems": "برگه‌هایی که چاپ نشدند"
     }
   },
   "kiosk": {

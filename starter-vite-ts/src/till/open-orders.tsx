@@ -1,14 +1,16 @@
-import type { AgentOrder } from './agent-client';
+import type { TillPrint, AgentOrder, TillPrinter } from './agent-client';
 
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
 
 import ClearIcon from '@mui/icons-material/Clear';
+import PrintIcon from '@mui/icons-material/Print';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PaymentIcon from '@mui/icons-material/Payment';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import PrintDisabledIcon from '@mui/icons-material/PrintDisabled';
 import {
   Box,
   Chip,
@@ -46,16 +48,35 @@ import { tillApi } from './agent-client';
 /** Roles that may approve a change after the edit window (§13.6), as the agent checks them. */
 const APPROVER_ROLES = ['SUPERVISOR', 'MANAGER', 'ADMIN', 'OWNER'];
 
-/** The till's orders still open: paid for later, finished when the table leaves, or cancelled. */
+/**
+ * The tickets of an order that did not print and have not come out since: a failed ticket counts
+ * until a later copy of the same document for the same station printed.
+ */
+export function failedTickets(o: AgentOrder): TillPrint[] {
+  const prints = o.prints || [];
+  return prints.filter(
+    (p, i) =>
+      p.status === 'FAILED' &&
+      !prints.some((q, j) => j > i && q.status !== 'FAILED' && q.document_type === p.document_type && (q.label || '') === (p.label || ''))
+  );
+}
+
+/**
+ * The till's orders still open: paid for later, finished when the table leaves, or cancelled.
+ * And the ones that ended in the last day with a ticket that did not print, to reprint it.
+ */
 export function useOpenOrders(active: boolean) {
   const [orders, setOrders] = useState<AgentOrder[]>([]);
+  const [troubled, setTroubled] = useState<AgentOrder[]>([]);
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
       const res = await tillApi.orders();
-      setOrders(res.orders.filter((o) => o.state === 'OPEN' && !o.handed_over).reverse());
+      const newest = [...res.orders].reverse();
+      setOrders(newest.filter((o) => o.state === 'OPEN' && !o.handed_over));
+      setTroubled(newest.filter((o) => !(o.state === 'OPEN' && !o.handed_over) && failedTickets(o).length > 0));
     } catch {
       // The header's banner reports an agent that does not answer.
     } finally {
@@ -69,7 +90,102 @@ export function useOpenOrders(active: boolean) {
     return () => window.clearInterval(timer);
   }, [refresh, active]);
 
-  return { orders, loading, refresh };
+  return { orders, troubled, loading, refresh };
+}
+
+const DOCUMENT_KEYS: Record<string, string> = {
+  KITCHEN_TICKET: 'till.print.kitchen',
+  CUSTOMER_RECEIPT: 'till.print.receipt',
+  GUEST_BILL: 'till.print.bill',
+};
+
+/** The tickets that did not print, each with its reprint. */
+function FailedTickets({ order, onReprint }: { order: AgentOrder; onReprint: (p: TillPrint) => void }) {
+  const { t } = useTranslation();
+  const failed = failedTickets(order);
+  if (failed.length === 0) return null;
+  return (
+    <Stack spacing={0.75} sx={{ mb: 1.5 }}>
+      {failed.map((p) => (
+        <Alert
+          key={p.id}
+          severity="error"
+          icon={<PrintDisabledIcon fontSize="small" />}
+          sx={{ py: 0, alignItems: 'center' }}
+          action={
+            <Button color="inherit" size="small" startIcon={<PrintIcon fontSize="small" />} onClick={() => onReprint(p)}>
+              {t('till.print.reprint')}
+            </Button>
+          }
+        >
+          <Typography variant="caption" sx={{ fontWeight: 600, display: 'block' }}>
+            {p.label || t(DOCUMENT_KEYS[p.document_type] || 'till.print.kitchen')}
+          </Typography>
+          <Typography variant="caption">{p.error || t('till.print.failed')}</Typography>
+        </Alert>
+      ))}
+    </Stack>
+  );
+}
+
+/** One ticket again, to its printer or another one the cashier picks (§13.8). */
+function ReprintDialog({ order, ticket, onClose }: { order: AgentOrder | null; ticket: TillPrint | null; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [printers, setPrinters] = useState<TillPrinter[]>([]);
+  const [printerId, setPrinterId] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!ticket) return;
+    setPrinterId(ticket.printer_id || '');
+    tillApi
+      .printers()
+      .then((res) => setPrinters(res.printers))
+      .catch(() => setPrinters([]));
+  }, [ticket]);
+
+  if (!order || !ticket) return null;
+
+  const reprint = async () => {
+    setBusy(true);
+    try {
+      await tillApi.print(order.id, { print_id: ticket.id, printer_id: printerId !== ticket.printer_id ? printerId : undefined });
+      toast.success(t('till.print.sent'));
+      onClose();
+    } catch (err: any) {
+      toast.error(err.detail || err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open onClose={() => !busy && onClose()} maxWidth="xs" fullWidth>
+      <DialogTitle sx={{ fontWeight: 'bold' }}>
+        {t('till.print.reprintTitle', { ticket: ticket.label || t(DOCUMENT_KEYS[ticket.document_type] || 'till.print.kitchen') })}
+      </DialogTitle>
+      <DialogContent sx={{ pt: 1 }}>
+        <FormControl fullWidth sx={{ mt: 1 }}>
+          <InputLabel>{t('till.print.printer')}</InputLabel>
+          <Select value={printerId} label={t('till.print.printer')} onChange={(e) => setPrinterId(e.target.value)}>
+            {printers.map((p) => (
+              <MenuItem key={p.id} value={p.id}>
+                {p.name || p.code}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={busy}>
+          {t('common.cancel', 'Cancel')}
+        </Button>
+        <Button variant="contained" onClick={reprint} disabled={busy || !printerId} startIcon={<PrintIcon />}>
+          {t('till.print.reprint')}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
 }
 
 function due(o: AgentOrder): bigint {
@@ -82,6 +198,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   orders: AgentOrder[];
+  troubled: AgentOrder[];
   loading: boolean;
   refresh: () => Promise<void>;
 };
@@ -90,11 +207,25 @@ type Props = {
  * Where the web POS sends the cashier to the Orders pages, the offline till lists its own open
  * orders beside the register, in the drawer the web POS uses for held carts.
  */
-export function OpenOrdersDrawer({ open, onClose, orders, loading, refresh }: Props) {
+export function OpenOrdersDrawer({ open, onClose, orders, troubled, loading, refresh }: Props) {
   const { t } = useTranslation();
   const [payingId, setPayingId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<AgentOrder | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [reprinting, setReprinting] = useState<{ order: AgentOrder; ticket: TillPrint } | null>(null);
+
+  const bill = async (o: AgentOrder) => {
+    setBusyId(o.id);
+    try {
+      await tillApi.print(o.id, { document: 'GUEST_BILL' });
+      toast.success(t('till.print.sent'));
+      await refresh();
+    } catch (err: any) {
+      toast.error(err.detail || err.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const finish = async (o: AgentOrder) => {
     setBusyId(o.id);
@@ -134,11 +265,11 @@ export function OpenOrdersDrawer({ open, onClose, orders, loading, refresh }: Pr
 
         <Divider sx={{ mb: 2 }} />
 
-        {loading && orders.length === 0 ? (
+        {loading && orders.length === 0 && troubled.length === 0 ? (
           <Box sx={{ py: 8, display: 'flex', justifyContent: 'center' }}>
             <CircularProgress size={32} />
           </Box>
-        ) : orders.length === 0 ? (
+        ) : orders.length === 0 && troubled.length === 0 ? (
           <Box sx={{ py: 8, textAlign: 'center' }}>
             <Typography variant="body1" color="text.secondary">
               {t('till.orders.empty')}
@@ -189,7 +320,20 @@ export function OpenOrdersDrawer({ open, onClose, orders, loading, refresh }: Pr
                     {` • ${o.lines.map((l) => `${l.product_name}${l.variant_name ? ` (${l.variant_name})` : ''} ×${l.quantity}`).join('، ')}`}
                   </Typography>
 
-                  <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+                  <FailedTickets order={o} onReprint={(ticket) => setReprinting({ order: o, ticket })} />
+
+                  <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap', gap: 1 }}>
+                    {o.order_type === 'DINE_IN' && (
+                      <Button
+                        size="small"
+                        color="inherit"
+                        disabled={busyId === o.id}
+                        startIcon={<PrintIcon fontSize="small" />}
+                        onClick={() => bill(o)}
+                      >
+                        {t('till.print.billButton')}
+                      </Button>
+                    )}
                     {o.payments.length === 0 && (
                       <Button size="small" color="error" startIcon={<DeleteIcon fontSize="small" />} onClick={() => setCancelling(o)}>
                         {t('till.orders.cancel')}
@@ -222,9 +366,39 @@ export function OpenOrdersDrawer({ open, onClose, orders, loading, refresh }: Pr
                 </Paper>
               );
             })}
+
+            {troubled.length > 0 && (
+              <>
+                <Typography variant="subtitle2" color="error" sx={{ fontWeight: 700, pt: 1 }}>
+                  {t('till.print.problems')}
+                </Typography>
+                {troubled.map((o) => (
+                  <Paper key={o.id} variant="outlined" sx={{ p: 2, borderRadius: 2.5, borderColor: 'error.light' }}>
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        {o.call_number ?? '—'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {fTime(o.placed_at)}
+                      </Typography>
+                    </Stack>
+                    <FailedTickets order={o} onReprint={(ticket) => setReprinting({ order: o, ticket })} />
+                  </Paper>
+                ))}
+              </>
+            )}
           </Stack>
         )}
       </Drawer>
+
+      <ReprintDialog
+        order={reprinting?.order ?? null}
+        ticket={reprinting?.ticket ?? null}
+        onClose={() => {
+          setReprinting(null);
+          refresh();
+        }}
+      />
 
       <CheckoutModal
         open={Boolean(payingId)}

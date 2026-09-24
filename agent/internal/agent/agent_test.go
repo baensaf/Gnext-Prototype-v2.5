@@ -670,3 +670,34 @@ func TestChargeLocalUsesTheTerminalsDriverAndQueueWithoutTheCloud(t *testing.T) 
 		t.Fatal("still busy after the charge")
 	}
 }
+
+func TestPrintLocalPrintsOnTheConfiguredPrinterWithoutTheCloud(t *testing.T) {
+	lan := newPrinterLAN(t)
+	cfg := testConfig(lan)
+	cfg.Printers = append(cfg.Printers, protocol.Printer{ID: "p-off", Code: "OFF", Active: false,
+		Connection: &protocol.Connection{Kind: "tcp", Host: "127.0.0.1", Port: lan.port()}})
+	a := New(Options{
+		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Printer:     &printing.Printer{Renderer: whiteRenderer{}, StatusTimeout: 50 * time.Millisecond},
+		SavedConfig: &cfg,
+	})
+	if ps := a.Printers(); len(ps) != 1 || ps[0].ID != "p1" {
+		t.Fatalf("printers = %+v", ps)
+	}
+	if err := a.PrintLocal("p-off", "KITCHEN_TICKET", "", "<p>x</p>", 1); !errors.Is(err, ErrNoPrinter) {
+		t.Fatalf("inactive printer: %v", err)
+	}
+	if err := a.PrintLocal("p9", "KITCHEN_TICKET", "", "<p>x</p>", 1); !errors.Is(err, ErrNoPrinter) {
+		t.Fatalf("unknown printer: %v", err)
+	}
+	if err := a.PrintLocal("p1", "KITCHEN_TICKET", "گریل", "<p>۱۳۷</p>", 1); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for lan.count() == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if lan.count() != 1 || !a.Idle() {
+		t.Fatalf("printed %d tickets, idle %v", lan.count(), a.Idle())
+	}
+}

@@ -147,6 +147,23 @@ func (s *Server) tillPay(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// tillPrint prints a document on request, or reprints one ticket (§13.8); it answers with the
+// tickets queued, which the order then shows printed or failed.
+func (s *Server) tillPrint(w http.ResponseWriter, r *http.Request) {
+	var in till.PrintInput
+	s.asCashier(w, r, &in, func(t *till.Till, _ till.User) (any, error) {
+		prints, err := t.PrintDocument(r.PathValue("id"), in)
+		return map[string]any{"prints": prints}, err
+	})
+}
+
+// tillPrinters are the printers a ticket can be sent to by hand.
+func (s *Server) tillPrinters(w http.ResponseWriter, r *http.Request) {
+	s.asCashier(w, r, nil, func(t *till.Till, _ till.User) (any, error) {
+		return map[string]any{"printers": t.PrintersFor()}, nil
+	})
+}
+
 func (s *Server) tillFinish(w http.ResponseWriter, r *http.Request) {
 	s.asCashier(w, r, nil, func(t *till.Till, u till.User) (any, error) {
 		return order(t.Finish(r.PathValue("id"), u))

@@ -272,13 +272,26 @@ func cardMessage(res CardResult) string {
 	return "پرداخت به کارتخوان نرسید؛ دوباره امتحان کنید یا نقد بگیرید."
 }
 
-// afterPayment keeps the order and, when a takeaway is paid in full, finishes it (§13.6); the
-// caller holds omu.
+// afterPayment keeps the order, prints its receipt once it is paid, and finishes a takeaway paid
+// in full (§13.6); the caller holds omu.
 func (t *Till) afterPayment(o *Order, by User) error {
-	if o.OrderType == TypeTakeaway && paid(o) && !o.charging() {
-		return t.finish(o, by)
+	// The receipt prints when the order becomes paid (§13.8), before a takeaway finishes with it.
+	var recs []PrintRecord
+	if paid(o) && !o.charging() && !o.receiptPrinted() {
+		if c, err := t.catalog(); err == nil {
+			recs = t.queuePrints(o, t.documentTickets(c, o, DocReceipt, false))
+		}
 	}
-	return t.Store.put(o)
+	var err error
+	if o.OrderType == TypeTakeaway && paid(o) && !o.charging() {
+		err = t.finish(o, by)
+	} else {
+		err = t.Store.put(o)
+	}
+	if err == nil {
+		t.print(o.ID, recs)
+	}
+	return err
 }
 
 // recoverCharges ends card charges a previous run left at the terminal (§4.6): each is UNKNOWN,

@@ -92,7 +92,15 @@ section numbers (§) in the code refer to it.
   (`Agent.ChargeLocal`), written to `till-orders.db` as `RUNNING` first: a restart turns it
   `UNKNOWN` and never charges it again, and an unknown charge counts as paid. A takeaway paid in
   full finishes; the header's *Open orders* lists what is still open, to pay, finish or cancel
-  (with an approver's PIN after the window). Printing comes next (P6).
+  (with an approver's PIN after the window).
+
+  Since 1.9.0: printing offline. Tickets are rendered on the agent by a port of the cloud's
+  renderer (`internal/till/render.go`, held to the cloud's pages in `testdata/tickets`) and
+  printed on the configured printers through the same queue as cloud jobs (`Agent.PrintLocal`).
+  Kitchen chits split by station from the snapshot's routes, with the cloud's labels and copies;
+  voids and cancels print change chits; the receipt prints when the order is paid; a guest bill
+  and copies on request. A ticket that fails stays on the order, shown under *Open orders* with
+  *Reprint*, to its printer or another.
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
   publishes a build, then swaps the binary after checking its SHA-256.
 - **Settings window** (Start-menu and desktop shortcut *Gnext Agent*, the tray, or running the

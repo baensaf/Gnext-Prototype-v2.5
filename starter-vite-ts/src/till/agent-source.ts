@@ -278,7 +278,7 @@ export const agentPosSource: PosSource = {
     park: false,
     stop: false,
     shiftActions: false,
-    receipt: false,
+    receipt: true,
   },
 
   catalog: {
@@ -527,11 +527,14 @@ export const agentPosSource: PosSource = {
     },
   },
 
+  // A copy of the receipt, or any document, on the agent's printers (§13.8). The tickets come back
+  // queued; the order shows them printed or failed.
   printing: {
-    reprintOrder: async () => {
-      throw unavailable();
+    reprintOrder: async (orderId: string, documentType = 'CUSTOMER_RECEIPT', _reason?: string, printerId?: string) => {
+      const { prints } = await tillApi.print(orderId, { document: documentType, printer_id: printerId });
+      return prints.map((p) => ({ id: p.id, document_type: p.document_type, printer_id: p.printer_id, label: p.label, status: p.status === 'PRINTED' ? 'SUCCESS' : p.status, copies: p.copies }));
     },
-  },
+  } as unknown as PosSource['printing'],
 
   useRegisterShift: useAgentRegisterShift,
 };

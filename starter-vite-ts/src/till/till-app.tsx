@@ -118,7 +118,7 @@ function SignedInTill({
       <TillHeader
         state={state}
         user={user}
-        openOrders={openOrders.orders.length}
+        openOrders={openOrders.orders.length + openOrders.troubled.length}
         onOpenOrders={() => {
           openOrders.refresh();
           setOrdersOpen(true);

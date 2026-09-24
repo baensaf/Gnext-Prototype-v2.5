@@ -200,6 +200,17 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 				ResponseCode: out.BankResponseCode, Message: out.Message,
 			}, nil
 		},
+		// Offline tickets use the printer and queue a cloud print.job does (§13.8).
+		Print: func(printerID, documentType, label, html string, copies int) error {
+			return a.PrintLocal(printerID, documentType, label, html, copies)
+		},
+		Printers: func() []till.PrinterInfo {
+			var out []till.PrinterInfo
+			for _, p := range a.Printers() {
+				out = append(out, till.PrinterInfo{ID: p.ID, Code: p.Code, Name: p.Name})
+			}
+			return out
+		},
 	}
 	a = agent.New(agent.Options{
 		Version:       version,

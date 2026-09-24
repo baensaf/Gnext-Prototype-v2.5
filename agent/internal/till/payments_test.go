@@ -201,7 +201,7 @@ func TestADeclinedOrUnstartedChargeLeavesNoPaymentAndAnUnknownOneCountsAsPaid(t 
 
 func TestAChargeInterruptedByARestartIsUnknownAndNeverChargedAgain(t *testing.T) {
 	s := newShop(t)
-	o := s.placed(TypeTakeaway)
+	o := s.printedOrder(s.placed(TypeTakeaway).ID)
 	// The agent stopped with the amount at the terminal: the charge is on disk, RUNNING.
 	raw, _ := json.Marshal(map[string]string{"terminal_id": "pos-1"})
 	o.Payments = append(o.Payments, Payment{ID: "pay-1", MethodID: "m-card", MethodKind: "CARD_POS", Amount: "2695000", Status: PayRunning, Card: raw, At: s.now})

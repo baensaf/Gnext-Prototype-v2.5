@@ -352,6 +352,18 @@
       "cancelTitle": "Cancel order {{number}}",
       "cancelNote": "Reason",
       "approver": "Approved by"
+    },
+    "print": {
+      "kitchen": "Kitchen chit",
+      "receipt": "Receipt",
+      "bill": "Guest bill",
+      "billButton": "Guest bill",
+      "reprint": "Reprint",
+      "failed": "Did not print",
+      "reprintTitle": "Reprint: {{ticket}}",
+      "printer": "Printer",
+      "sent": "Sent to the printer.",
+      "problems": "Tickets that did not print"
     }
   },
   "kiosk": {
