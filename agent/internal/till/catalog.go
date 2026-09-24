@@ -64,6 +64,43 @@ type Catalog struct {
 		Kind string `json:"kind"`
 	} `json:"payment_methods"`
 	DiningTables []Table `json:"dining_tables"`
+	// Printing is where offline tickets go and what they are headed with (§13.11).
+	Printing Printing `json:"printing"`
+}
+
+// Printing is the snapshot's routing of tickets (§13.11), matched in advance by the cloud.
+type Printing struct {
+	Heading struct {
+		BrandName     string `json:"brand_name"`
+		BranchName    string `json:"branch_name"`
+		BranchAddress string `json:"branch_address"`
+		BranchPhone   string `json:"branch_phone"`
+		Calendar      string `json:"calendar"`
+	} `json:"heading"`
+	Groups        []PrinterGroup         `json:"groups"`
+	KitchenRoutes map[string]PrintRoute  `json:"kitchen_routes"`
+	Documents     map[string]*PrintRoute `json:"documents"`
+	Fallback      struct {
+		KitchenTicket *string `json:"KITCHEN_TICKET"`
+		Other         *string `json:"OTHER"`
+	} `json:"fallback"`
+}
+
+// PrinterGroup is a station's printers, in priority order, each with its copies.
+type PrinterGroup struct {
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	TicketTemplate *string `json:"ticket_template"`
+	Printers       []struct {
+		PrinterID string `json:"printer_id"`
+		Copies    int    `json:"copies"`
+	} `json:"printers"`
+}
+
+// PrintRoute sends a document to a printer group, so many times.
+type PrintRoute struct {
+	GroupID string `json:"group_id"`
+	Copies  int    `json:"copies"`
 }
 
 // Table is a dining table of the branch.

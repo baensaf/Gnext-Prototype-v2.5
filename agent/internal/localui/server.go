@@ -124,6 +124,8 @@ func (s *Server) Handler(addr string) http.Handler {
 	mux.HandleFunc("POST /api/till/orders/{id}/send", s.tillSend)
 	mux.HandleFunc("POST /api/till/orders/{id}/payments", s.tillPay)
 	mux.HandleFunc("POST /api/till/orders/{id}/finish", s.tillFinish)
+	mux.HandleFunc("POST /api/till/orders/{id}/print", s.tillPrint)
+	mux.HandleFunc("GET /api/till/printers", s.tillPrinters)
 	mux.HandleFunc("POST /api/till/orders/{id}/cancel", s.tillCancel)
 	mux.HandleFunc("POST /api/till/handover", s.tillHandover)
 	for _, kind := range []string{"printers", "terminals"} {

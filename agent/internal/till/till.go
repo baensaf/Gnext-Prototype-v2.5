@@ -97,6 +97,10 @@ type Till struct {
 	// Charge charges the bound till's card terminal (§13.7), through the agent's driver and queue;
 	// ErrChargeNotStarted means the amount never reached the terminal.
 	Charge func(terminalID, attemptID, amount string) (CardResult, error)
+	// Print prints a ticket on a printer (§13.8), through the agent's printer and queue; nil prints
+	// nothing. Printers lists the printers it can reach.
+	Print    func(printerID, documentType, label, html string, copies int) error
+	Printers func() []PrinterInfo
 
 	once     sync.Once
 	omu      sync.Mutex // orders: one change at a time

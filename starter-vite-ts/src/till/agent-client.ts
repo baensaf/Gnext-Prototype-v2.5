@@ -148,8 +148,24 @@ export type AgentOrder = {
   }[];
   /** Every card charge tried, and how it ended; one that left no payment says why. */
   card_attempts?: { payment_id: string; amount: string; status: string; message?: string; at: string }[];
+  /** Every ticket printed for the order (§13.8): QUEUED at the printer, then PRINTED or FAILED. */
+  prints?: TillPrint[];
   handed_over: boolean;
 };
+
+export type TillPrint = {
+  id: string;
+  document_type: 'KITCHEN_TICKET' | 'CUSTOMER_RECEIPT' | 'GUEST_BILL';
+  label?: string;
+  printer_id?: string;
+  copies: number;
+  status: 'QUEUED' | 'PRINTED' | 'FAILED';
+  error?: string;
+  reprint?: boolean;
+  at: string;
+};
+
+export type TillPrinter = { id: string; code: string; name: string };
 
 export type PlaceInput = {
   order_type: string;
@@ -179,6 +195,10 @@ export const tillApi = {
     agentRequest<{ order: AgentOrder; change: string }>('POST', `/api/till/orders/${encodeURIComponent(id)}/payments`, { kind: 'CASH', tendered }),
   payCard: (id: string, amount: string) =>
     agentRequest<{ order: AgentOrder; payment_id: string }>('POST', `/api/till/orders/${encodeURIComponent(id)}/payments`, { kind: 'CARD', amount }),
+  /** A document on request, or one ticket again (print_id), to its printer or another. */
+  print: (id: string, body: { document?: string; print_id?: string; printer_id?: string }) =>
+    agentRequest<{ prints: TillPrint[] }>('POST', `/api/till/orders/${encodeURIComponent(id)}/print`, body),
+  printers: () => agentRequest<{ printers: TillPrinter[] }>('GET', '/api/till/printers'),
   finish: (id: string) => agentRequest<{ order: AgentOrder }>('POST', `/api/till/orders/${encodeURIComponent(id)}/finish`, {}),
   handover: () => agentRequest<{ dropped: number; handed: number }>('POST', '/api/till/handover', {}),
   /** The settings page's status: the cloud's address, for the way back to the web POS. */

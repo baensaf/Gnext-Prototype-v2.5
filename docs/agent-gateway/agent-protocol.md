@@ -1433,8 +1433,11 @@ what is outstanding unless the cashier types less (to split with cash).
 ### 13.8 Printing
 
 The agent renders offline tickets itself and prints them with the printer it already uses for
-`print.job` (§6.2). A ticket printed offline looks like the one the cloud prints for the same
-order: the same document types, the same templates, the same heading.
+`print.job` (§6.2), on the same per-printer queue. A ticket printed offline looks like the one the
+cloud prints for the same order: the same document types, the same templates, the same heading.
+The agent's renderer (`internal/till/render.go`) is a port of the cloud's `PrintRenderService`;
+`internal/till/testdata/tickets` holds pages the cloud renders for a set of cases, and both sides'
+tests must produce them byte for byte, so neither can change alone.
 
 | Document | When | Where |
 |---|---|---|
@@ -1453,7 +1456,7 @@ Routing comes from the snapshot's `printing` block (§13.11):
 - A receipt or bill goes to its document route's group, else to `fallback.OTHER`.
 
 A ticket that fails stays on the till with **Reprint**, to the same printer or another one the
-cashier picks. Every attempt goes into the order's `prints` (§12.4), `PRINTED` or `FAILED`. A
+cashier picks, for a day after the order ended. Every attempt goes into the order's `prints` (§12.4), `PRINTED` or `FAILED`. A
 reprint is marked as a copy on the paper, as the cloud marks one.
 
 Printing needs a signed-in Windows user (Edge renders the HTML), exactly as online.
@@ -1579,7 +1582,8 @@ ends the previous one. It ends after `auto_logout_minutes` without a request.
 | `POST /api/till/orders/{id}/payments` `{kind: "CASH", tendered}` or `{kind: "CARD", amount?}` | Pay. Cash answers `{order, change}`. A card charge answers `202` `{order, payment_id}` at once; the page follows the order (`GET /api/till/orders/{id}`) until `card_attempts[]` for that payment leaves `RUNNING`: `APPROVED`, `UNKNOWN` (paid; keep the slip), or `DECLINED`, `CANCELLED`, `FAILED` with a `message` and no payment. `amount` defaults to what is outstanding. A takeaway paid in full finishes. |
 | `POST /api/till/orders/{id}/finish` | Finish. |
 | `POST /api/till/orders/{id}/cancel` `{note, approver_id?, pin?}` | Cancel. A cart dropped before the kitchen had it answers `{order: null, dropped: true}`. |
-| `POST /api/till/orders/{id}/print` `{document, printer_id?, print_id?}` | Print a bill, or reprint a failed or lost ticket. |
+| `POST /api/till/orders/{id}/print` `{document?, print_id?, printer_id?}` | Print on request: `GUEST_BILL`, `CUSTOMER_RECEIPT` (a copy, marked, once one printed), or `KITCHEN_TICKET` (every chit again, marked); or `print_id`, one ticket again, marked, to its printer or `printer_id`. Answers `{prints}` queued; the order's `prints` show each `PRINTED` or `FAILED` with the printer's error. |
+| `GET /api/till/printers` | The printers the agent can reach, for a reprint elsewhere. |
 | `POST /api/till/handover` | End `HANDOVER` now (§13.5): `{dropped, handed}`. An order sent to the kitchen whose every line was then voided goes up `CANCELLED`, since the cloud books no order without lines. |
 
 Errors are `{code, detail}`, with `detail` in Persian for the cashier: `TILL_ONLINE`,

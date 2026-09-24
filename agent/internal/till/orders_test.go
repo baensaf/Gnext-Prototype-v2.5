@@ -29,6 +29,17 @@ const ordersJSON = `{
   ],
   "availability": { "stopped": [], "schedules": [], "daily_stock": [ { "product_id": "fries", "variant_id": null, "remaining": 2 } ] },
   "dining_tables": [ { "id": "t12", "area": "سالن", "number": "12", "seats": 4 } ],
+  "printing": {
+    "heading": { "brand_name": "ایران برگر", "branch_name": "ولیعصر", "branch_address": null, "branch_phone": "021-88001234", "calendar": "JALALI" },
+    "groups": [
+      { "id": "g-grill", "name": "گریل", "ticket_template": "DETAILED", "printers": [ { "printer_id": "p-grill", "copies": 1 } ] },
+      { "id": "g-fry", "name": "سرخ‌کن", "ticket_template": null, "printers": [ { "printer_id": "p-fry", "copies": 2 } ] },
+      { "id": "g-counter", "name": "صندوق", "ticket_template": null, "printers": [ { "printer_id": "p-counter", "copies": 1 } ] }
+    ],
+    "kitchen_routes": { "burger": { "group_id": "g-grill", "copies": 1 }, "fries": { "group_id": "g-fry", "copies": 1 } },
+    "documents": { "CUSTOMER_RECEIPT": { "group_id": "g-counter", "copies": 1 }, "GUEST_BILL": null },
+    "fallback": { "KITCHEN_TICKET": "p-kitchen", "OTHER": "p-counter" }
+  },
   "payment_methods": [ { "id": "m-cash", "code": "CASH", "name": "نقد", "kind": "CASH" }, { "id": "m-card", "code": "POS", "name": "کارتخوان", "kind": "CARD_POS" } ],
   "tills": [ { "id": "till-1", "code": "T1", "name": "صندوق ۱", "payment_device_id": "pos-1" } ],
   "open_shifts": [ { "id": "shift-1", "terminal_id": "till-1", "shift_number": "S-1", "business_date": "2026-09-24" } ]
@@ -42,6 +53,9 @@ type shop struct {
 	uploaded []map[string]any
 	failing  bool
 	cloud    int // the POS count in the last heartbeat.ack
+	// printer records what the till printed; failing names a printer that fails, and reach, when
+	// set, the printers the agent can reach.
+	printer *printLog
 	// charge answers the till's card charges; nil means the charge never reaches a terminal.
 	charge func(terminalID, attemptID, amount string) (CardResult, error)
 	till   *Till
@@ -50,7 +64,7 @@ type shop struct {
 }
 
 func newShop(t *testing.T) *shop {
-	s := &shop{t: t, dir: t.TempDir(), now: time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC)}
+	s := &shop{t: t, dir: t.TempDir(), now: time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC), printer: &printLog{}}
 	s.sara = User{ID: "sara", DisplayName: "سارا", Role: "CASHIER"}
 	s.amir = User{ID: "amir", DisplayName: "امیر", Role: "MANAGER"}
 	s.till = s.open()
@@ -91,6 +105,8 @@ func (s *shop) open() *Till {
 		},
 		CloudCallCount: func() (string, int) { return "2026-09-24", s.cloud },
 		ConnectedSince: func() *time.Time { return s.up },
+		Print:          s.printer.print,
+		Printers:       s.printer.reachable,
 		Charge: func(terminalID, attemptID, amount string) (CardResult, error) {
 			if s.charge == nil {
 				return CardResult{}, ErrChargeNotStarted
@@ -280,7 +296,8 @@ func TestVoidingASentLineFollowsTheEditWindow(t *testing.T) {
 
 func TestNothingIsStruckOrCancelledOnceMoneyIsOnTheOrder(t *testing.T) {
 	s := newShop(t)
-	o := s.send(s.add(s.newOrder(), "burger", 1))
+	// Its chits printed first: the test writes the order behind the till's back.
+	o := s.printedOrder(s.send(s.add(s.newOrder(), "burger", 1)).ID)
 	o.Payments = []Payment{{ID: "p1", MethodID: "cash", MethodKind: "CASH", Amount: "1000000", Status: "APPROVED", At: s.now}}
 	_ = s.till.Store.put(o)
 	if _, err := s.till.VoidLine(o.ID, o.Lines[0].ID, s.sara, "amir", "9999"); !Is(err, CodeOrderPaid) {

@@ -240,6 +240,14 @@ func TestTillOrdersOverTheLocalAPI(t *testing.T) {
 		t.Fatalf("cash: %d %s", rec.Code, rec.Body)
 	}
 
+	// Printing (§13.8): this agent has no printer hook, so a bill is refused and the menu is empty.
+	if rec := call(h, "POST", "/api/till/orders/"+res.Order.ID+"/print", `{"document":"GUEST_BILL"}`, session); rec.Code != 409 || !strings.Contains(rec.Body.String(), "NO_PRINTER") {
+		t.Fatalf("print without printers: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(h, "GET", "/api/till/printers", "", session); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"printers":[]`) {
+		t.Fatalf("printers: %d %s", rec.Code, rec.Body)
+	}
+
 	// A cart the kitchen never had is dropped.
 	rec = call(h, "POST", "/api/till/orders", `{"order_type":"TAKEAWAY"}`, session)
 	_ = json.Unmarshal(rec.Body.Bytes(), &res)

@@ -74,6 +74,8 @@ type Order struct {
 	// CardAttempts is every card charge tried on the order and how it ended, so the screen can say
 	// why a charge left no payment. It stays on the till.
 	CardAttempts []CardAttempt `json:"card_attempts"`
+	// Prints is every ticket printed for the order and how it went (§13.8).
+	Prints []PrintRecord `json:"prints"`
 
 	// HandedOver is set once the order went to the upload (§12.5): it has left the till.
 	HandedOver bool       `json:"handed_over"`
@@ -285,9 +287,11 @@ func (t *Till) Place(by User, in PlaceInput) (*Order, error) {
 		return nil, err
 	}
 	o.SentAt = &now
+	recs := t.queuePrints(o, t.kitchenTickets(c, o, chitLines(o.Lines, ""), "", "", o.PlacedAt))
 	if err := t.Store.put(o); err != nil {
 		return nil, err
 	}
+	t.print(o.ID, recs)
 	t.Log.Info("offline order placed and sent to the kitchen", "order", o.ID, "call_number", deref(o.CallNumber), "lines", len(o.Lines), "by", by.ID)
 	return o, nil
 }
@@ -476,6 +480,7 @@ func (t *Till) VoidLine(id, lineID string, by User, approverID, pin string) (*Or
 		return nil, refuse(CodeOrderUnknown, "این ردیف در سفارش نیست.")
 	}
 	l := o.Lines[i]
+	var recs []PrintRecord
 	if l.SentAt != nil {
 		approver, err := t.approval(o, false, approverID, pin)
 		if err != nil {
@@ -486,10 +491,17 @@ func (t *Till) VoidLine(id, lineID string, by User, approverID, pin string) (*Or
 			VoidedBy: by.ID, ApprovedBy: approver, At: t.Now().UTC(),
 		})
 		t.Log.Info("offline order line voided after sending", "order", o.ID, "by", by.ID, "approved_by", deref(approver))
+		if c, err := t.catalog(); err == nil {
+			recs = t.queuePrints(o, t.kitchenTickets(c, o, chitLines([]OrderLine{l}, "VOID"), "AMENDED", "", t.Now()))
+		}
 	}
 	o.Lines = slices.Delete(o.Lines, i, i+1)
 	o.retotal()
-	return o, t.Store.put(o)
+	if err := t.Store.put(o); err != nil {
+		return nil, err
+	}
+	t.print(o.ID, recs)
+	return o, nil
 }
 
 // approval applies the edit rules to a change of something the kitchen has: it returns who
@@ -525,7 +537,7 @@ func (t *Till) approval(o *Order, cancel bool, approverID, pin string) (*string,
 }
 
 // Send gives the order its call number, if it has none, and hands the lines the kitchen has not
-// had yet to it (§13.6). The kitchen chits themselves print from P6.
+// had yet to it (§13.6), and prints their chits (§13.8).
 func (t *Till) Send(id string, by User) (*Order, error) {
 	t.omu.Lock()
 	defer t.omu.Unlock()
@@ -537,6 +549,7 @@ func (t *Till) Send(id string, by User) (*Order, error) {
 		return nil, err
 	}
 	now := t.Now().UTC()
+	first := o.SentAt == nil
 	var fresh []OrderLine
 	for i := range o.Lines {
 		if o.Lines[i].SentAt == nil {
@@ -553,9 +566,18 @@ func (t *Till) Send(id string, by User) (*Order, error) {
 	if o.SentAt == nil {
 		o.SentAt = &now
 	}
+	var recs []PrintRecord
+	if c, err := t.catalog(); err == nil {
+		if first {
+			recs = t.queuePrints(o, t.kitchenTickets(c, o, chitLines(fresh, ""), "", "", o.PlacedAt))
+		} else {
+			recs = t.queuePrints(o, t.kitchenTickets(c, o, chitLines(fresh, "ADD"), "AMENDED", "", now))
+		}
+	}
 	if err := t.Store.put(o); err != nil {
 		return nil, err
 	}
+	t.print(o.ID, recs)
 	t.Log.Info("offline order sent to the kitchen", "order", o.ID, "call_number", deref(o.CallNumber), "lines", len(fresh), "by", by.ID)
 	return o, nil
 }
@@ -623,14 +645,22 @@ func (t *Till) finish(o *Order, by User) error {
 	}
 	now := t.Now().UTC()
 	o.State, o.CompletedAt = StateCompleted, &now
+	var recs []PrintRecord
 	if o.SentAt == nil {
 		for i := range o.Lines {
 			o.Lines[i].SentAt = &now
 		}
 		o.SentAt = &now
+		if c, err := t.catalog(); err == nil {
+			recs = t.queuePrints(o, t.kitchenTickets(c, o, chitLines(o.Lines, ""), "", "", o.PlacedAt))
+		}
 	}
 	t.Log.Info("offline order completed", "order", o.ID, "by", by.ID)
-	return t.end(o)
+	if err := t.end(o); err != nil {
+		return err
+	}
+	t.print(o.ID, recs)
+	return nil
 }
 
 // paid: the payments cover the grand total.
@@ -666,8 +696,16 @@ func (t *Till) Cancel(id string, by User, note, approverID, pin string) (*Order,
 	if note = strings.TrimSpace(note); note != "" {
 		o.CancellationNote = &note
 	}
+	var recs []PrintRecord
+	if c, err := t.catalog(); err == nil {
+		recs = t.queuePrints(o, t.kitchenTickets(c, o, chitLines(o.Lines, "VOID"), "CANCELLED", note, now))
+	}
 	t.Log.Info("offline order cancelled", "order", o.ID, "by", by.ID, "approved_by", deref(approver))
-	return o, t.end(o)
+	if err := t.end(o); err != nil {
+		return nil, err
+	}
+	t.print(o.ID, recs)
+	return o, nil
 }
 
 // end saves an order whose offline life is over and hands it to the upload (§12.4).
@@ -773,9 +811,37 @@ func uploadPayload(o *Order) map[string]any {
 		"call_number": o.CallNumber, "business_date": o.BusinessDate,
 		"placed_at": stamp(&o.PlacedAt), "completed_at": stamp(o.CompletedAt), "cancelled_at": stamp(o.CancelledAt),
 		"cancellation_note": o.CancellationNote, "notes": o.Notes,
-		"lines": lines, "totals": o.Totals, "payments": payments, "prints": []any{},
+		"lines": lines, "totals": o.Totals, "payments": payments, "prints": uploadPrints(o),
 		"voided_lines": voided, "cancelled_by": o.CancelledBy, "approved_by": o.ApprovedBy,
 	}
+}
+
+// uploadPrints is every ticket that printed or failed (§12.4 `prints`, with §13.12's document
+// type, copies and error). One still at the printer goes up with the order's next upload, if any.
+func uploadPrints(o *Order) []map[string]any {
+	kinds := map[string]string{DocKitchen: "KITCHEN", DocReceipt: "RECEIPT", DocBill: "BILL"}
+	out := []map[string]any{}
+	for _, p := range o.Prints {
+		if p.Status == PrintQueued {
+			continue
+		}
+		pm := map[string]any{
+			"printer_id": nilIfEmpty(p.PrinterID), "kind": kinds[p.DocumentType], "document_type": p.DocumentType,
+			"copies": p.Copies, "status": p.Status, "at": stamp(&p.At),
+		}
+		if p.Error != "" {
+			pm["error"] = p.Error
+		}
+		out = append(out, pm)
+	}
+	return out
+}
+
+func nilIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // stamp is a protocol timestamp (§2.1), or nil.
