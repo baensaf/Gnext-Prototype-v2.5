@@ -24,9 +24,27 @@ const CodeNotAvailable = "NOT_AVAILABLE"
 
 // Catalog is what the snapshot says the branch sells (§12.2), ready to check a sale against.
 type Catalog struct {
-	Branch struct {
+	DataVersion string `json:"data_version"`
+	GeneratedAt string `json:"generated_at"`
+	Branch      struct {
 		TimeZone string `json:"time_zone"`
 	} `json:"branch"`
+	Settings struct {
+		CallNumbers struct {
+			POS struct {
+				Start int `json:"start"`
+				End   int `json:"end"`
+			} `json:"POS"`
+		} `json:"call_numbers"`
+		CallNumberIssuedToday struct {
+			BusinessDate string `json:"business_date"`
+			POS          int    `json:"POS"`
+		} `json:"call_number_issued_today"`
+		OrderActions struct {
+			EditWindowMinutes   *int `json:"edit_window_minutes"`
+			CancelWindowMinutes *int `json:"cancel_window_minutes"`
+		} `json:"order_actions"`
+	} `json:"settings"`
 	Categories []struct {
 		ID        string  `json:"id"`
 		ParentID  *string `json:"parent_id"`
@@ -45,12 +63,15 @@ type Catalog struct {
 		Name string `json:"name"`
 		Kind string `json:"kind"`
 	} `json:"payment_methods"`
-	DiningTables []struct {
-		ID     string  `json:"id"`
-		Area   *string `json:"area"`
-		Number string  `json:"number"`
-		Seats  *int    `json:"seats"`
-	} `json:"dining_tables"`
+	DiningTables []Table `json:"dining_tables"`
+}
+
+// Table is a dining table of the branch.
+type Table struct {
+	ID     string  `json:"id"`
+	Area   *string `json:"area"`
+	Number string  `json:"number"`
+	Seats  *int    `json:"seats"`
 }
 
 // Stop is an in-store stop on a product, one size or one add-on, until a time or for good.

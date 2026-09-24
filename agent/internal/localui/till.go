@@ -23,6 +23,14 @@ var tillStatus = map[string]int{
 	till.CodeApprovalRequired: http.StatusForbidden,
 	till.CodeUnauthenticated:  http.StatusUnauthorized,
 	till.CodeNotAvailable:     http.StatusUnprocessableEntity,
+	till.CodeTillOnline:       http.StatusConflict,
+	till.CodeHandover:         http.StatusConflict,
+	till.CodeOrderUnknown:     http.StatusNotFound,
+	till.CodeOrderClosed:      http.StatusConflict,
+	till.CodeOrderPaid:        http.StatusConflict,
+	till.CodeNotPaid:          http.StatusConflict,
+	till.CodeLineSent:         http.StatusConflict,
+	till.CodeInvalid:          http.StatusBadRequest,
 }
 
 // theTill returns the agent's till, or answers that there is none yet.

@@ -1564,16 +1564,18 @@ ends the previous one. It ends after `auto_logout_minutes` without a request.
 | `POST /api/till/binding` `{terminal_id, user_id?, pin?}` | Bind the till (§13.4): with the settings page's manager session, or an approver's PIN. |
 | `GET /api/till/menu` | Categories, products (each with its availability now and the reason when not: `STOPPED`, `OUT_OF_HOURS`, `SOLD_OUT`) and dining tables, from the snapshot. |
 | `POST /api/till/price` `{lines: [{product_id, variant_id, quantity, options[], notes}]}` | Checks and prices lines as one order without keeping it: `{lines, totals}` in the §12.4 shape, or `NOT_AVAILABLE` with `line`, the index of the line refused. The till screen shows only what this says. |
-| `GET /api/till/orders` | Unfinished orders, and today's finished ones for reprints. |
-| `POST /api/till/orders` `{order_type, table_id?, guest_count?}` | New order. |
-| `POST /api/till/orders/{id}/lines` `{product_id, variant_id?, quantity, options[], notes?}` | Add a line. |
+| `GET /api/till/orders` | Unfinished orders, and those that ended in the last day, for reprints. |
+| `POST /api/till/orders` `{order_type, table_id?, guest_count?}` | New order. Order changes answer `{order}`. |
+| `POST /api/till/orders/{id}/info` `{order_type, table_id?, guest_count?}` | Change the order's type, table or guests while it is open. |
+| `POST /api/till/orders/{id}/lines` `{product_id, variant_id?, quantity, options[], notes?}` | Add a line. The same thing again, before the kitchen has it, adds to that line. |
+| `POST /api/till/orders/{id}/lines/{line}/quantity` `{quantity}` | Change how many of a line the kitchen does not have yet (`0` removes it); a sent line is `LINE_SENT`, voided instead. |
 | `POST /api/till/orders/{id}/lines/{line}/void` `{approver_id?, pin?}` | Void a line. |
 | `POST /api/till/orders/{id}/send` | Send to kitchen. |
 | `POST /api/till/orders/{id}/payments` `{kind: "CASH", tendered}` or `{kind: "CARD", amount}` | Pay. A card charge answers `202` at once; the page follows the order until the charge ends. |
 | `POST /api/till/orders/{id}/finish` | Finish. |
-| `POST /api/till/orders/{id}/cancel` `{note, approver_id?, pin?}` | Cancel. |
+| `POST /api/till/orders/{id}/cancel` `{note, approver_id?, pin?}` | Cancel. A cart dropped before the kitchen had it answers `{order: null, dropped: true}`. |
 | `POST /api/till/orders/{id}/print` `{document, printer_id?, print_id?}` | Print a bill, or reprint a failed or lost ticket. |
-| `POST /api/till/handover` | End `HANDOVER` now (§13.5). |
+| `POST /api/till/handover` | End `HANDOVER` now (§13.5): `{dropped, handed}`. An order sent to the kitchen whose every line was then voided goes up `CANCELLED`, since the cloud books no order without lines. |
 
 Errors are `{code, detail}`, with `detail` in Persian for the cashier: `TILL_ONLINE`,
 `HANDOVER` (no new orders), `NOT_ENROLLED`, `NO_SNAPSHOT`, `NO_STAFF`, `NO_TILL`, `NO_SHIFT`,

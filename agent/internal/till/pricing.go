@@ -234,6 +234,37 @@ func (c *Catalog) Price(now time.Time, inputs []LineInput, sold SoldOffline) ([]
 	}, nil
 }
 
+// PriceAdded prices one line joining an order that already holds `held`, whose prices stand as
+// they were charged: the new line is checked on its own, and the order as a whole against
+// per-order limits and today's stock.
+func (c *Catalog) PriceAdded(now time.Time, held []LineInput, add LineInput, sold SoldOffline) (Line, error) {
+	line, _, _, err := c.priceLine(now, add, sold)
+	if err != nil {
+		return Line{}, err
+	}
+	if err := c.checkOrder(append(append([]LineInput{}, held...), add), sold); err != nil {
+		return Line{}, err
+	}
+	return line, nil
+}
+
+// sumLines adds up priced lines (§12.4).
+func sumLines(lines []Line) Totals {
+	subtotal, tax := new(big.Int), new(big.Int)
+	for _, l := range lines {
+		if n, err := rials(l.LineTotal); err == nil {
+			subtotal.Add(subtotal, n)
+		}
+		if n, err := rials(l.Tax); err == nil {
+			tax.Add(tax, n)
+		}
+	}
+	return Totals{
+		Subtotal: subtotal.String(), DeliveryFee: "0", DiscountTotal: "0",
+		TaxTotal: tax.String(), GrandTotal: new(big.Int).Add(subtotal, tax).String(),
+	}
+}
+
 func (c *Catalog) priceLine(now time.Time, in LineInput, sold SoldOffline) (Line, *big.Int, *big.Int, error) {
 	p := c.product(in.ProductID)
 	if p == nil {

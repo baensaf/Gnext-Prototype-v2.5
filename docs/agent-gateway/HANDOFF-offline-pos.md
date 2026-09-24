@@ -10,7 +10,7 @@ Read [`HANDOFF.md`](HANDOFF.md) (v1 and v2 history), [`agent-protocol.md`](agent
 |---|---|
 | v1: printing, card terminals, enrolment, settings page, tray, self-update, installer | Live on gnextdev.ir |
 | v2 §12: branch snapshot, offline order upload, conflict rules, sync status | Merged and deployed (#105–#109). Agent 1.2.0 built by CI, **unpublished** until head office presses Publish |
-| Offline POS: a till that takes orders while the internet is down | Contract §13 agreed (#111). P1 done: cloud (#112), agent 1.3.0 (#113). P2 (till binding, PIN sign-in), agent 1.4.0 (#114). P3 (till screen, catalogue and pricing on the agent), agent 1.5.0: this PR; the order is held in the page until P4. Nothing produces offline orders yet |
+| Offline POS: a till that takes orders while the internet is down | Contract §13 agreed (#111). P1 done: cloud (#112), agent 1.3.0 (#113). P2 (till binding, PIN sign-in), agent 1.4.0 (#114). P3 (till screen, catalogue and pricing on the agent), agent 1.5.0 (#116). P4 (orders on the agent, call numbers, void and cancel, hand-over, upload), agent 1.6.0: this PR. Orders can be sent and cancelled offline; finishing one waits for payments (P5) |
 
 What the offline POS can already rely on:
 

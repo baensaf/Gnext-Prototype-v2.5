@@ -67,8 +67,17 @@ section numbers (§) in the code refer to it.
   name and type the PIN, then categories and products, sizes and add-ons, the order with its type
   and table, and the totals. Availability (stops, selling windows on the branch clock, today's
   stock), add-on rules, the per-order limit and the money (§12.4) are worked out here from the
-  snapshot (`till.Catalog`); the page shows what `/api/till/price` says. The order is held in
-  the page until the till keeps orders itself, with sending, paying and upload (P4 onwards).
+  snapshot (`till.Catalog`); the page shows what the agent says.
+
+  Since 1.6.0: orders live on the agent, in `till-orders.db` (bbolt), and survive a restart. An
+  order is started on the bound till's open shift; lines keep the price they were charged;
+  *Send to kitchen* gives it the next number in the day's POS range, carrying on from the
+  snapshot, the last `heartbeat.ack` and the till's own count; voiding a sent line or cancelling
+  follows the cloud's edit windows, with an approver's PIN after them and never with money on
+  the order. A finished or cancelled order goes to the upload at once. When the link returns the
+  till starts nothing new (`HANDOVER`); after 15 minutes connected, or on *Hand over*, unsent
+  carts are dropped and the rest go up as `OPEN`. The till's own sales count against today's
+  stock. Paying and printing come next (P5, P6).
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
   publishes a build, then swaps the binary after checking its SHA-256.
 - **Settings window** (Start-menu and desktop shortcut *Gnext Agent*, the tray, or running the
