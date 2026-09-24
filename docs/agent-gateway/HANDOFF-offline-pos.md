@@ -10,7 +10,7 @@ Read [`HANDOFF.md`](HANDOFF.md) (v1 and v2 history), [`agent-protocol.md`](agent
 |---|---|
 | v1: printing, card terminals, enrolment, settings page, tray, self-update, installer | Live on gnextdev.ir |
 | v2 §12: branch snapshot, offline order upload, conflict rules, sync status | Merged and deployed (#105–#109). Agent 1.2.0 built by CI, **unpublished** until head office presses Publish |
-| Offline POS: a till that takes orders while the internet is down | Contract §13 agreed (#111). P1 done: cloud (#112), agent 1.3.0 (#113). P2 (till binding, PIN sign-in), agent 1.4.0 (#114). P3 (till screen, catalogue and pricing on the agent), agent 1.5.0 (#116). P4 (orders on the agent, call numbers, void and cancel, hand-over, upload), agent 1.6.0: this PR. Orders can be sent and cancelled offline; finishing one waits for payments (P5) |
+| Offline POS: a till that takes orders while the internet is down | Contract §13 agreed (#111). P1 done: cloud (#112), agent 1.3.0 (#113). P2 (till binding, PIN sign-in), agent 1.4.0 (#114). P3 (till screen, catalogue and pricing on the agent), agent 1.5.0 (#116). P4 (orders on the agent, call numbers, void and cancel, hand-over, upload), agent 1.6.0 (#117). Orders can be sent and cancelled offline; finishing one waits for payments (P5). Next: P4b, the till screen rebuilt from the online POS's own code (decisions 6–10) |
 
 What the offline POS can already rely on:
 
@@ -50,6 +50,42 @@ as the cloud stores them, not bcrypt), §13 wins.
    offline and open tabs that span the outage are out of the first cut. No coupons or
    discounts, and shifts are neither opened nor closed offline (already in §12).
 
+### The till screen is the online POS (confirmed 2026-09-24, after P4)
+
+The user wants the offline front end to be exactly the online POS, not a look-alike. These
+replace the plain HTML/JS screen P3 built. The agent's rules from P2–P4 stay where they are:
+PIN sign-in, catalogue, pricing, orders, call numbers, edit windows and hand-over.
+
+6. **Same code, built into the agent.** The online POS page is built a second time as its own
+   bundle, embedded in the agent and served at `/till`. That page is
+   `starter-vite-ts/src/pages/pos/order.tsx` with `CheckoutModal`, `ApprovalModal`, the stop
+   dialog, the shift bar and the theme.
+   - It reads and writes through a data source: the cloud's APIs online, the agent's
+     `/api/till/*` offline.
+   - There is one copy of the screen, so a change to the POS reaches the offline till with the
+     next agent build.
+   - The plain `till.html`, `till.js` and `till.css` are removed.
+
+   *Not chosen:*
+   - the web POS caching itself in a service worker: it fails on a cold cache, and browsers
+     restrict https pages calling localhost;
+   - redrawing the plain page by hand: it would only ever be close, and it drifts.
+7. **What the till can't do offline is shown disabled, not hidden.** Delivery, customer lookup
+   and new customers, discounts and coupons, and parked orders keep their place on the screen.
+   They are greyed out with *Not available offline* (fa: *در حالت آفلاین در دسترس نیست*), so
+   staff see the layout they know. Decision 5 stands: takeaway and dine-in, cash and card.
+8. **Switch-over stays by hand** (decision 4).
+   - When the web POS can't reach the cloud, it shows a banner with *Open offline till*.
+   - Nothing opens the till or moves a cart on its own.
+   - The till's `HANDOVER` banner links back to the web POS.
+9. **Same language and look as the web POS.**
+   - The same theme, light and dark, and the same `en.json` and `fa.json` with the fa/en
+     switch.
+   - Persian, right to left, by default.
+   - Fonts and icons are bundled; the page loads nothing from the internet.
+10. **Order of work.** P4 was merged as it is. P4b, the screen, comes next, before P5, so
+    payments are built once, on the online `CheckoutModal`.
+
 ## Task list
 
 Ordered by dependency. Cost = token cost; risk = implementation risk.
@@ -61,15 +97,18 @@ Ordered by dependency. Cost = token cost; risk = implementation risk.
 | P2 | **Till binding and offline sign-in**: pick the till on the settings page; PIN check against the snapshot; a local session with a timeout | Med | Med | High |
 | P3 | **Till screen**: Persian, right to left, embedded in the agent like the settings page. Categories and products from the snapshot, sizes and add-ons with the group min/max rules, availability re-checked on the clock (stops, windows, stock), order type, table, cart, totals exactly as §12.4 rounds them | High | Med | Critical |
 | P4 | **Local order store**: open orders survive a restart (bbolt), with add/void lines while open. Call numbers continue the `POS` range from `call_number_issued_today`. A finished or cancelled order goes to `Outbox.Add` | Med | Med | Critical |
-| P5 | **Offline payments**: cash (amount tendered, change); card through the local `payment.Driver` with no cloud command. A charge cut off mid-way is `UNKNOWN`, never charged twice (reuse the journal rules in §4.6) | Med | **High** | Critical |
+| P4b-1 | **POS data source** (frontend only, no agent change). Every call `order.tsx` makes moves behind a `PosDataSource` given by React context: `orderApi`, `catalogApi`, `dineInApi`, `settingsApi`, `paymentApi`, `customerApi`, `deliveryApi`, `discountsApi` and the shift hooks. A `features` list (delivery, customers, discounts, park) tells the screen which buttons to disable (decision 7). Online the source is today's API calls, so the live POS must not change. Check it with the existing tests and a browser run of a takeaway sale, a dine-in sale, a card sale and a cash sale | Med | Med | Critical |
+| P4b-2 | **Till bundle in the agent** (agent 1.7.0). A second Vite entry, `src/till-main.tsx` with base `/till/`, holds the POS page, theme, locales and snackbar, without the cloud's router or sign-in. Sign-in is the agent's PIN, with names from the staff list, drawn in the web POS's style. An agent data source maps `/api/till/*` (menu, price, orders, lines, send, void, cancel, hand-over) to the types the page already uses, and the page shows the prices the agent returns. The shift bar is read-only, since no shift opens or closes offline. CI builds the bundle before the agent job and the agent serves it with `go:embed`; a stub page stands in for local Go builds. Remove `till.html`, `till.js` and `till.css`. Any new local routes go into §13.13 in the same PR. Check the P3 and P4 flows on the new screen in the browser, in fa and en, light and dark | High | Med | Critical |
+| P5 | **Offline payments**: cash (amount tendered, change); card through the local `payment.Driver` with no cloud command. A charge cut off mid-way is `UNKNOWN`, never charged twice (reuse the journal rules in §4.6). The payment screen is the online `CheckoutModal`, through the agent data source (decision 10) | Med | **High** | Critical |
 | P6 | **Offline printing**: kitchen chits split by station, and the receipt once paid. *Recommended:* port the cloud's `print-render.service.ts` `renderDocument` (pure TypeScript, about 400 lines) into the till bundle so tickets look the same, and send the HTML to `printing.Printer.Print` | High | Med | High |
-| P7 | **Switch-over**: the web POS banner when the cloud is unreachable, and the tray/settings entry to the till | Low | Low | Med |
+| P7 | **Switch-over**: the web POS banner with *Open offline till* when the cloud is unreachable (one click, nothing automatic, decision 8); the link back to the web POS from the till's `HANDOVER` banner; the tray and settings entry to the till | Low | Low | Med |
 | P8 | **Upload-side leftovers** (cloud): mark the table occupied for an `OPEN` dine-in order, store option group names on offline lines, and a delivery record if delivery is allowed offline | Low | Low | Med |
 | ✂️ **Recommended cut line.** Then a real test at a branch: pull the network cable, sell, plug back, and check the orders, cash, flags and Moadian in the cloud |||||
 | P9 | Tills on the LAN (listen on the LAN, firewall rule in the installer, pairing) | High | High | Med |
 | P10 | Kitchen screens offline (KDS is a cloud web page; offline the kitchen gets printed chits only) | High | Med | Low |
 
-Most of the cost sits in P3, P5 and P6.
+Most of the cost sits in P4b-2, P5 and P6. P4b replaces P3's plain screen; P3's agent side
+(`till.Catalog`, `/api/till/menu`, `/api/till/price`) stays.
 
 ## v1 items still open (outside the offline POS)
 
@@ -104,6 +143,13 @@ Most of the cost sits in P3, P5 and P6.
   user to press Publish. Keep `en.json` and `fa.json` keys identical for any web POS strings.
 - **Shared local database.** Several sessions use the same Postgres. Don't run a migration that
   drops or renames something other branches still use; CI runs migrations on a fresh database.
+- **The online POS is live.** P4b-1 touches `order.tsx`, which every branch sells on.
+  - The data source must change nothing online.
+  - Ship it as a frontend-only PR, and try the web POS in the browser before merging.
+  - Keep the `en.json` and `fa.json` keys identical.
+- **The till bundle must not reach the internet.** No fonts, images or scripts from a CDN: the
+  agent serves everything from its binary. `localui`'s host and cross-site checks cover
+  `/till/*`.
 - **Known flaky CI test:** `TestBrowserRendererPersianTicket` sometimes times out at 60 s on the
   runner. Re-run the failed job.
 
