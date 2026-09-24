@@ -1596,9 +1596,13 @@ payments), `ORDER_CLOSED`, `TERMINAL_BUSY`, `NO_TERMINAL`, `NO_PAYMENT_METHOD`, 
 ### 13.14 The web POS and the tray
 
 - The web POS shows a banner when its requests to the cloud have failed for 30 s: the internet
-  is down, and on the branch PC the offline till is at `http://127.0.0.1:47800/till` (a link).
-  It does not probe the agent; the link is all it offers.
-- The tray menu gains **Offline till**, which opens `/till` in the settings window.
+  is down, and on the branch PC the offline till is at `http://127.0.0.1:47800/till/` (a link,
+  in a new tab). A request with no answer, or a gateway's 502, 503 or 504, counts as a failure;
+  any other answer clears it, and the banner goes. It does not probe the agent; the link is all
+  it offers, and nothing opens or moves on its own.
+- The tray menu gains **Offline till**, and the installer a Start-menu (and desktop) shortcut
+  **Gnext Offline Till**; both run `gnext-agent till`, which opens `/till/` in a window of its
+  own (WebView2, one per user, as the settings window). The settings page's till card links to it.
 - When the link returns, the offline till shows that it is back and points to the web POS
   (§13.5); orders it hands over appear on the web POS as ordinary open orders.
 

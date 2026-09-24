@@ -32,3 +32,10 @@ func runWindow() int {
 	}
 	return 0
 }
+
+func runTillWindow() int {
+	if err := openBrowser("http://" + uiAddr() + tillPath); err != nil {
+		return 1
+	}
+	return 0
+}

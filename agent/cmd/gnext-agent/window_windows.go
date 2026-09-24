@@ -15,8 +15,25 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// windowTitle names the settings window; a second `open` finds the first by it.
+// A window of the agent's own: the settings page, or the offline till. Each is one per user; a
+// second start finds the first by its title and brings it to the front.
+type windowSpec struct {
+	title  string
+	path   string // on the settings server
+	mutex  string
+	data   string // WebView2's folder, under %LOCALAPPDATA%\Gnext
+	width  uint
+	height uint
+}
+
+// windowTitle names the settings window.
 const windowTitle = "Gnext Agent — عامل شعبه"
+
+var (
+	settingsWindow = windowSpec{title: windowTitle, mutex: `Local\GnextAgentWindow`, data: "agent-window", width: 1120, height: 780}
+	// The till takes a larger window: it is the register the cashier works at all day.
+	tillWindow = windowSpec{title: "صندوق آفلاین — Gnext", path: tillPath, mutex: `Local\GnextTillWindow`, data: "till-window", width: 1366, height: 860}
+)
 
 // appIconID is the icon resource go-winres puts in the exe (winres/winres.json).
 const appIconID = 1
@@ -32,27 +49,33 @@ var (
 // that comes with Windows 10 and 11), so the agent opens like an app rather than a browser
 // tab. One window per user: a second call brings the first to the front. Without WebView2 the
 // page opens in the browser as before.
-func runWindow() int {
+func runWindow() int { return showWindow(settingsWindow) }
+
+// runTillWindow shows the offline till (§13.14) the same way, in a window of its own.
+func runTillWindow() int { return showWindow(tillWindow) }
+
+func showWindow(spec windowSpec) int {
 	runtime.LockOSThread()
-	url := "http://" + uiAddr()
+	base := "http://" + uiAddr()
+	url := base + spec.path
 	ensureTray()
 
-	mutex, err := windows.CreateMutex(nil, false, windows.StringToUTF16Ptr(`Local\GnextAgentWindow`))
+	mutex, err := windows.CreateMutex(nil, false, windows.StringToUTF16Ptr(spec.mutex))
 	if err != nil {
 		if mutex != 0 {
 			windows.CloseHandle(mutex)
 		}
-		raiseWindow()
+		raiseWindow(spec.title)
 		return 0
 	}
 	defer windows.CloseHandle(mutex)
 
-	data := filepath.Join(os.Getenv("LOCALAPPDATA"), "Gnext", "agent-window")
+	data := filepath.Join(os.Getenv("LOCALAPPDATA"), "Gnext", spec.data)
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
 		DataPath:  data,
 		AutoFocus: true,
 		WindowOptions: webview2.WindowOptions{
-			Title: windowTitle, Width: 1120, Height: 780, IconId: appIconID, Center: true,
+			Title: spec.title, Width: spec.width, Height: spec.height, IconId: appIconID, Center: true,
 		},
 	})
 	if w == nil {
@@ -63,14 +86,14 @@ func runWindow() int {
 	}
 	defer w.Destroy()
 
-	if agentAnswers(url) {
+	if agentAnswers(base) {
 		w.Navigate(url)
 	} else {
 		// The page would be the browser's own error; say what is wrong, and load the page
 		// once the agent answers.
 		w.SetHtml(waitingPage)
 		go func() {
-			for !agentAnswers(url) {
+			for !agentAnswers(base) {
 				time.Sleep(2 * time.Second)
 			}
 			w.Dispatch(func() { w.Navigate(url) })
@@ -90,9 +113,9 @@ func agentAnswers(url string) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-// raiseWindow brings the open settings window to the front, restoring it if minimised.
-func raiseWindow() {
-	h, _, _ := procFindWindowW.Call(0, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(windowTitle))))
+// raiseWindow brings an open window of the agent's to the front, restoring it if minimised.
+func raiseWindow(title string) {
+	h, _, _ := procFindWindowW.Call(0, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(title))))
 	if h == 0 {
 		return
 	}
@@ -103,14 +126,19 @@ func raiseWindow() {
 }
 
 // startWindow opens the settings window from the tray, as its own process.
-func startWindow() {
+func startWindow() { startCommand("open") }
+
+// startTill opens the offline till from the tray, as its own process.
+func startTill() { startCommand("till") }
+
+func startCommand(command string) {
 	exe, err := os.Executable()
 	if err != nil {
 		return
 	}
 	// Let the window take the foreground, which Windows otherwise keeps for the tray.
 	procAllowSetForegroundW.Call(^uintptr(0)) // ASFW_ANY
-	_ = exec.Command(exe, "open").Start()
+	_ = exec.Command(exe, command).Start()
 }
 
 // ensureTray brings the tray icon back when the user quit it and then opened the agent: the

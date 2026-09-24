@@ -92,6 +92,7 @@ const (
 
 	cmdOpen      = 1
 	cmdHide      = 2
+	cmdTill      = 3
 	cmdTestPrint = 100 // + the printer's index
 
 	addRetryTimer = 1
@@ -410,6 +411,7 @@ func (t *tray) menu() {
 	}
 	procAppendMenuW.Call(m, mfSeparator, 0, 0)
 	item(m, mfString, cmdOpen, "باز کردن صفحه تنظیمات عامل")
+	item(m, mfString, cmdTill, "صندوق آفلاین")
 	if len(v.Printers) > 0 {
 		sub, _, _ := procCreatePopupMenu.Call()
 		for i, p := range v.Printers {
@@ -430,6 +432,8 @@ func (t *tray) menu() {
 	switch {
 	case cmd == cmdOpen:
 		startWindow()
+	case cmd == cmdTill:
+		startTill()
 	case cmd == cmdHide:
 		procPostMessageW.Call(uintptr(t.hwnd), wmClose, 0, 0)
 	case cmd >= cmdTestPrint && int(cmd-cmdTestPrint) < len(v.Printers):

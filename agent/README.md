@@ -101,6 +101,10 @@ section numbers (§) in the code refer to it.
   voids and cancels print change chits; the receipt prints when the order is paid; a guest bill
   and copies on request. A ticket that fails stays on the order, shown under *Open orders* with
   *Reprint*, to its printer or another.
+
+  Since 1.10.0: `gnext-agent till` opens the till in a window of its own, from the tray menu
+  (*صندوق آفلاین*), the Start menu and desktop (*Gnext Offline Till*) or the settings page. The web
+  POS shows a banner with a link to it once the cloud has not answered for 30 seconds.
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
   publishes a build, then swaps the binary after checking its SHA-256.
 - **Settings window** (Start-menu and desktop shortcut *Gnext Agent*, the tray, or running the
