@@ -110,15 +110,20 @@ export function UsersPage() {
     setDrawerOpen(true);
   };
 
+  const pinInvalid = !!form.pin && !/^\d{4,8}$/.test(form.pin);
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
+    // An empty PIN field keeps the one the account has.
+    const { pin, ...rest } = form;
+    const payload: AdminUserWrite = pin ? { ...rest, pin } : rest;
     try {
       if (editing) {
-        await usersApi.update(editing.id, form);
+        await usersApi.update(editing.id, payload);
         setSuccess(t('users.updated', 'Account updated.'));
       } else {
-        await usersApi.create(form);
+        await usersApi.create(payload);
         setSuccess(t('users.created', 'Account created on the shared demo password.'));
       }
       setDrawerOpen(false);
@@ -218,7 +223,11 @@ export function UsersPage() {
                         <Chip size="small" color="info" label={t('auth.headOffice', 'Head office')} />
                       )}
                     </TableCell>
-                    <TableCell>{user.has_pin ? t('common.yes', 'Yes') : t('common.no', 'No')}</TableCell>
+                    <TableCell>
+                      {APPROVER_ROLES.includes(user.role) && user.has_pin
+                        ? t('common.yes', 'Yes')
+                        : t('common.no', 'No')}
+                    </TableCell>
                     <TableCell>
                       <Chip
                         size="small"
@@ -312,6 +321,23 @@ export function UsersPage() {
               ))}
             </TextField>
 
+            <TextField
+              label={t('users.pin', 'PIN')}
+              type="password"
+              value={form.pin || ''}
+              onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, '').slice(0, 8) })}
+              error={pinInvalid}
+              helperText={
+                pinInvalid
+                  ? t('users.pinInvalid', 'A PIN is 4 to 8 digits.')
+                  : editing?.has_pin
+                    ? t('users.pinKeep', 'Signs this person in at the offline till; an approver also approves with it. Leave empty to keep the current PIN.')
+                    : t('users.pinHelp', 'Signs this person in at the offline till; an approver also approves with it.')
+              }
+              slotProps={{ htmlInput: { inputMode: 'numeric', autoComplete: 'new-password' } }}
+              fullWidth
+            />
+
             {!editing && (
               <Alert severity="info">
                 {t(
@@ -342,7 +368,7 @@ export function UsersPage() {
             )}
 
             <Stack direction="row" spacing={1}>
-              <Button variant="contained" onClick={handleSave} disabled={saving}>
+              <Button variant="contained" onClick={handleSave} disabled={saving || pinInvalid}>
                 {t('common.save', 'Save')}
               </Button>
               <Button onClick={() => setDrawerOpen(false)}>{t('common.cancel', 'Cancel')}</Button>

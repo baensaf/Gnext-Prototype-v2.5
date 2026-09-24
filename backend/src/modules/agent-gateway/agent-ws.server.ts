@@ -8,6 +8,8 @@ import { Repository } from 'typeorm';
 import { WebSocket, WebSocketServer } from 'ws';
 import { Agent } from '../../entities/Agent.entity';
 import { Branch } from '../../entities/Branch.entity';
+import { BusinessDateUtil } from '../../common/utils/business-date.util';
+import { posCallCount } from '../order/call-number';
 import { AgentAuthService, deviceKeyFromHeader } from './agent-auth.service';
 import { AgentConfigService } from './agent-config.service';
 import { AgentConnection } from './agent-connection';
@@ -97,6 +99,10 @@ export class AgentWsServer implements OnApplicationBootstrap, OnApplicationShutd
         touch: (a) => this.auth.touch(a),
         minAgentVersion: process.env.AGENT_MIN_VERSION || null,
         latestRelease: () => this.releases.latest(),
+        callNumbers: async (a) => {
+          const business_date = BusinessDateUtil.today();
+          return { business_date, POS: await posCallCount(this.agentRepo.manager, a.tenant_id, a.branch_id, business_date) };
+        },
         log: (m) => this.logger.warn(m),
       },
     );

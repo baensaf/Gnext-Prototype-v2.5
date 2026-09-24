@@ -49,6 +49,18 @@ export function readCallNumberRanges(value: any): Record<CallChannelGroup, CallN
   return ranges;
 }
 
+/**
+ * How many numbers the branch's POS range has handed out on a business day: the count, not the
+ * last number. The agent's offline till carries on from it (protocol §12.2, §13.9).
+ */
+export async function posCallCount(em: Pick<EntityManager, 'query'>, tenantId: string, branchId: string, businessDate: string): Promise<number> {
+  const rows = await em.query(
+    `SELECT "last_value" FROM "order_call_counter" WHERE "tenant_id" = $1 AND "branch_id" = $2 AND "business_date" = $3 AND "channel_group" = 'POS'`,
+    [tenantId, branchId, businessDate],
+  );
+  return Number(rows?.[0]?.last_value || 0);
+}
+
 /** The n-th number handed out today in a range, wrapping back to its start when it runs out. */
 export function nthInRange(n: number, range: CallNumberRange): number {
   const size = range.end - range.start + 1;

@@ -24,6 +24,25 @@ export interface LineRouteContext {
   stationId?: string;
 }
 
+/** A route as the offline till applies it: the printer group, and the route's copies. */
+export interface OfflineRoute {
+  group_id: string;
+  copies: number;
+}
+
+/** The snapshot's `printing` block without its heading (protocol §13.11). */
+export interface OfflineRouting {
+  groups: Array<{
+    id: string;
+    name: string;
+    ticket_template: 'COMPACT' | 'DETAILED' | null;
+    printers: Array<{ printer_id: string; copies: number }>;
+  }>;
+  kitchen_routes: Record<string, OfflineRoute>;
+  documents: { CUSTOMER_RECEIPT: OfflineRoute | null; GUEST_BILL: OfflineRoute | null };
+  fallback: { KITCHEN_TICKET: string | null; OTHER: string | null };
+}
+
 /** A printer a job goes to, and how many copies that printer prints. */
 export interface RoutedPrinter {
   printer: Printer;
@@ -149,6 +168,58 @@ export class PrintRoutingService {
         ? inBranch.find(isKitchen)
         : inBranch.find((p) => String(p.printer_type || '').toUpperCase().includes('RECEIPT')) ?? inBranch.find((p) => !isKitchen(p)) ?? inBranch[0];
     return fallback ? [{ printer: fallback, copies: routeCopies }] : [];
+  }
+
+  /**
+   * The branch's routing worked out in advance, for the agent's offline till to apply itself
+   * (protocol §13.11): the kitchen route each product would take, the route of each whole-order
+   * document, the printer groups with their members, and the printer each kind of document falls
+   * back to. The till then splits and routes exactly as `PrintQueueService` does online.
+   */
+  async offlineRouting(tenantId: string, branchId: string, productIds: string[]): Promise<OfflineRouting> {
+    const [kitchenRoutes, receiptRoutes, billRoutes, contexts, groups, inBranch] = await Promise.all([
+      this.loadRoutes(tenantId, branchId, 'KITCHEN_TICKET'),
+      this.loadRoutes(tenantId, branchId, 'CUSTOMER_RECEIPT'),
+      this.loadRoutes(tenantId, branchId, 'GUEST_BILL'),
+      this.lineContexts(tenantId, branchId, productIds),
+      this.groupRepo.find({ where: { tenant_id: tenantId, branch_id: branchId }, order: { code: 'ASC', id: 'ASC' } }),
+      this.printerRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, is_active: true }, order: { code: 'ASC', id: 'ASC' } }),
+    ]);
+    const members = groups.length
+      ? await this.memberRepo.find({ where: { group_id: In(groups.map((g) => g.id)) }, order: { priority: 'ASC', printer_id: 'ASC' } })
+      : [];
+    // Online, a group's members are read across the tenant, not only the branch; so here.
+    const memberPrinters = members.length
+      ? await this.printerRepo.find({ where: { id: In([...new Set(members.map((m) => m.printer_id))]), tenant_id: tenantId, is_active: true } })
+      : [];
+    const active = new Set(memberPrinters.map((p) => p.id));
+
+    const kitchen_routes: OfflineRouting['kitchen_routes'] = {};
+    for (const productId of [...new Set(productIds)].sort()) {
+      const route = this.matchRoute(kitchenRoutes, contexts.get(productId) || {});
+      if (route) kitchen_routes[productId] = { group_id: route.printer_group_id, copies: route.copies || 1 };
+    }
+    const documentRoute = (routes: PrintRoute[]): OfflineRoute | null => {
+      const route = this.matchRoute(routes, {});
+      return route ? { group_id: route.printer_group_id, copies: route.copies || 1 } : null;
+    };
+    const isKitchen = (p: Printer) => String(p.printer_type || '').toUpperCase().startsWith('KITCHEN');
+    const other =
+      inBranch.find((p) => String(p.printer_type || '').toUpperCase().includes('RECEIPT')) ?? inBranch.find((p) => !isKitchen(p)) ?? inBranch[0];
+
+    return {
+      groups: groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        ticket_template: g.ticket_template ?? null,
+        printers: members
+          .filter((m) => m.group_id === g.id && active.has(m.printer_id))
+          .map((m) => ({ printer_id: m.printer_id, copies: m.copies || 1 })),
+      })),
+      kitchen_routes,
+      documents: { CUSTOMER_RECEIPT: documentRoute(receiptRoutes), GUEST_BILL: documentRoute(billRoutes) },
+      fallback: { KITCHEN_TICKET: inBranch.find(isKitchen)?.id ?? null, OTHER: other?.id ?? null },
+    };
   }
 
   async groupName(tenantId: string, groupId: string): Promise<string | undefined> {

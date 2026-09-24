@@ -45,6 +45,8 @@ export interface AgentConnectionDeps {
   minAgentVersion?: string | null;
   /** The newest published build, for `welcome.update` and the minimum version it demands. */
   latestRelease?: () => Promise<{ version: string; min_agent_version: string | null } | null>;
+  /** Today's POS call-number count at the agent's branch, for an offline till's `heartbeat.ack` (§13.9). */
+  callNumbers?: (agent: Agent) => Promise<{ business_date: string; POS: number }>;
   heartbeatIntervalS?: number;
   handshakeTimeoutMs?: number;
   log?: (message: string) => void;
@@ -61,13 +63,37 @@ export interface AgentSyncReport {
   reported_at: string;
 }
 
+/** Which till an agent's offline till sells as, and what it still holds (§13.10). */
+export interface AgentTillReport {
+  terminal_id: string | null;
+  mode: 'ONLINE' | 'OFFLINE' | 'HANDOVER';
+  open_orders: number;
+  reported_at: string;
+}
+
 export interface LiveAgentConnectionHandle extends AgentConnectionHandle {
   devices: Map<string, DeviceStatusEntry>;
   lastFrameAt: Date;
   sync?: AgentSyncReport | null;
+  till?: AgentTillReport | null;
 }
 
 const text = (v: unknown, max = 500) => (typeof v === 'string' && v ? v.slice(0, max) : null);
+const TILL_MODES = new Set(['ONLINE', 'OFFLINE', 'HANDOVER']);
+
+/** What the agent said in a heartbeat's `till`, cut to known fields. */
+export function readTillReport(raw: unknown, at = new Date()): AgentTillReport | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const t = raw as Record<string, unknown>;
+  const open = Number(t.open_orders);
+  const id = text(t.terminal_id, 64);
+  return {
+    terminal_id: id && /^[0-9a-f-]{36}$/i.test(id) ? id : null,
+    mode: TILL_MODES.has(t.mode as string) ? (t.mode as AgentTillReport['mode']) : 'ONLINE',
+    open_orders: Number.isInteger(open) && open >= 0 ? open : 0,
+    reported_at: at.toISOString(),
+  };
+}
 
 /** What the agent said in a heartbeat's `sync`, cut to known fields and sizes. */
 export function readSyncReport(raw: unknown, at = new Date()): AgentSyncReport | null {
@@ -242,11 +268,18 @@ export class AgentConnection {
       case 'hello':
         this.sendError('BAD_MESSAGE', 'hello was already received', message.id);
         return;
-      case 'heartbeat':
-        this.send(envelope('heartbeat.ack', { server_time: new Date().toISOString() }, message.id));
+      case 'heartbeat': {
+        const ack: Record<string, unknown> = { server_time: new Date().toISOString() };
+        // The offline till numbers on from here if the link drops before the next beat (§13.9).
+        if (this.deps.callNumbers && this.handle!.capabilities.includes('pos.offline')) {
+          ack.call_numbers = await this.deps.callNumbers(this.agent).catch(() => undefined);
+        }
+        this.send(envelope('heartbeat.ack', ack, message.id));
         if (message.payload?.sync !== undefined) this.handle!.sync = readSyncReport(message.payload.sync);
+        if (message.payload?.till !== undefined) this.handle!.till = readTillReport(message.payload.till);
         await this.deps.touch(this.agent);
         return;
+      }
       case 'device.status':
         this.recordDevices(this.handle!, message.payload.devices);
         this.sendAck(message.id);

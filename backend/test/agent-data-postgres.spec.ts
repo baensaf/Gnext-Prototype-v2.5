@@ -6,6 +6,7 @@ import { get } from 'http';
 import * as request from 'supertest';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
+import { AdminUser } from '../src/entities/AdminUser.entity';
 import { AgentDataSnapshot } from '../src/entities/AgentDataSnapshot.entity';
 import { Branch } from '../src/entities/Branch.entity';
 import { CashierShift } from '../src/entities/CashierShift.entity';
@@ -16,6 +17,10 @@ import { DiningTable } from '../src/entities/DiningTable.entity';
 import { OptionGroup } from '../src/entities/OptionGroup.entity';
 import { OptionItem } from '../src/entities/OptionItem.entity';
 import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
+import { PrintRoute } from '../src/entities/PrintRoute.entity';
+import { Printer } from '../src/entities/Printer.entity';
+import { PrinterGroup } from '../src/entities/PrinterGroup.entity';
+import { PrinterGroupMember } from '../src/entities/PrinterGroupMember.entity';
 import { Product } from '../src/entities/Product.entity';
 import { ProductOptionGroup } from '../src/entities/ProductOptionGroup.entity';
 import { ProductVariant } from '../src/entities/ProductVariant.entity';
@@ -204,6 +209,16 @@ describe('agent branch snapshot (PostgreSQL)', () => {
     expect(body.settings).toEqual({
       call_numbers: { POS: { start: 100, end: 399 } },
       call_number_issued_today: { business_date: BusinessDateUtil.today(), POS: 0 },
+      order_actions: { edit_window_minutes: 10, cancel_window_minutes: 10 },
+      auto_logout_minutes: 0,
+    });
+    // No printers yet: nothing to route to (§13.11).
+    expect(body.printing).toEqual({
+      heading: { brand_name: 'Agent data fixture', branch_name: 'مرکز خرید', branch_address: null, branch_phone: null, calendar: 'JALALI' },
+      groups: [],
+      kitchen_routes: {},
+      documents: { CUSTOMER_RECEIPT: null, GUEST_BILL: null },
+      fallback: { KITCHEN_TICKET: null, OTHER: null },
     });
 
     // Kept for 30 days, so offline orders can be checked against it (§12.6).
@@ -269,5 +284,132 @@ describe('agent branch snapshot (PostgreSQL)', () => {
     await changes.flushNow(tenantId);
     await new Promise((r) => setTimeout(r, 200));
     expect(v1.frames.filter((m) => m.type === 'data.changed')).toHaveLength(0);
+  });
+
+  describe('offline till (§13)', () => {
+    const OFFLINE_TILL = ['print.html', 'data.pull', 'sync.orders', 'pos.offline'];
+    const staff = () => request(app.getHttpServer()).get('/api/v1/agent/data/staff').set('Authorization', `Bearer ${deviceKey}`);
+    const user = (username: string, data: Partial<AdminUser>) =>
+      save<AdminUser>(AdminUser, { tenant_id: tenantId, username, display_name: username, password_hash: 'x', is_active: true, role: 'CASHIER', branch_id: branchId, ...data });
+
+    beforeAll(async () => {
+      ids.sara = (await user('sara', { display_name: 'سارا', pin_hash: '$argon2id$v=19$m=65536,t=3,p=4$c2FyYQ$aGFzaA' })).id;
+      ids.boss = (await user('boss', { display_name: 'امیر', role: 'MANAGER', pin_hash: '$argon2id$v=19$m=65536,t=3,p=4$Ym9zcw$aGFzaA' })).id;
+      await user('nopin', { pin_hash: null as any });
+      await user('gone', { is_active: false, pin_hash: '$argon2id$x' });
+      await user('hq', { role: 'ADMIN', branch_id: null, pin_hash: '$argon2id$x' });
+      await user('root', { role: 'SUPER_ADMIN', pin_hash: '$argon2id$x' });
+    });
+
+    afterAll(async () => {
+      await dataSource.query(`DELETE FROM "printer_group_member" WHERE "group_id" IN (SELECT "id" FROM "printer_group" WHERE "tenant_id" = $1)`, [tenantId]);
+    });
+
+    it('works out the print routing the offline till applies itself', async () => {
+      const grillPrinter = await save<Printer>(Printer, { tenant_id: tenantId, branch_id: branchId, code: 'KIT1', name: 'گریل', printer_type: 'KITCHEN_IMPACT', is_active: true });
+      const counter = await save<Printer>(Printer, { tenant_id: tenantId, branch_id: branchId, code: 'REC1', name: 'صندوق', printer_type: 'THERMAL_RECEIPT', is_active: true });
+      const grill = await save<PrinterGroup>(PrinterGroup, { tenant_id: tenantId, branch_id: branchId, code: 'GRL', name: 'گریل', ticket_template: 'COMPACT' });
+      const front = await save<PrinterGroup>(PrinterGroup, { tenant_id: tenantId, branch_id: branchId, code: 'FRT', name: 'جلو' });
+      await save<PrinterGroupMember>(PrinterGroupMember, { group_id: grill.id, printer_id: grillPrinter.id, priority: 0, copies: 2 });
+      await save<PrinterGroupMember>(PrinterGroupMember, { group_id: front.id, printer_id: counter.id, priority: 0, copies: 1 });
+      // The burger has a route of its own; the fries only the category's.
+      await save<PrintRoute>(PrintRoute, { tenant_id: tenantId, branch_id: branchId, document_type: 'KITCHEN_TICKET', category_id: ids.category, printer_group_id: front.id, copies: 1 });
+      await save<PrintRoute>(PrintRoute, { tenant_id: tenantId, branch_id: branchId, document_type: 'KITCHEN_TICKET', product_id: ids.burger, printer_group_id: grill.id, copies: 3 });
+      await save<PrintRoute>(PrintRoute, { tenant_id: tenantId, branch_id: branchId, document_type: 'CUSTOMER_RECEIPT', printer_group_id: front.id, copies: 1 });
+
+      const { printing } = (await snapshot().expect(200)).body;
+      expect(printing.groups).toEqual([
+        { id: front.id, name: 'جلو', ticket_template: null, printers: [{ printer_id: counter.id, copies: 1 }] },
+        { id: grill.id, name: 'گریل', ticket_template: 'COMPACT', printers: [{ printer_id: grillPrinter.id, copies: 2 }] },
+      ]);
+      expect(printing.kitchen_routes).toEqual({
+        [ids.burger]: { group_id: grill.id, copies: 3 },
+        [ids.fries]: { group_id: front.id, copies: 1 },
+      });
+      expect(printing.documents).toEqual({ CUSTOMER_RECEIPT: { group_id: front.id, copies: 1 }, GUEST_BILL: null });
+      expect(printing.fallback).toEqual({ KITCHEN_TICKET: grillPrinter.id, OTHER: counter.id });
+
+      // A printer switched off leaves its group, as it would online.
+      await dataSource.getRepository(Printer).update({ id: grillPrinter.id }, { is_active: false });
+      const after = (await snapshot().expect(200)).body.printing;
+      expect(after.groups.find((g: any) => g.id === grill.id).printers).toEqual([]);
+      expect(after.fallback.KITCHEN_TICKET).toBeNull();
+      await dataSource.getRepository(Printer).update({ id: grillPrinter.id }, { is_active: true });
+    });
+
+    it('hears of a change to a group member or the brand name, rows that carry no branch of their own', async () => {
+      const [member] = await dataSource.query(
+        `SELECT "group_id", "printer_id" FROM "printer_group_member" WHERE "group_id" IN (SELECT "id" FROM "printer_group" WHERE "tenant_id" = $1) LIMIT 1`,
+        [tenantId],
+      );
+      await changes.flushNow(tenantId);
+      await dataSource.query(`UPDATE "printer_group_member" SET "copies" = "copies" WHERE "group_id" = $1 AND "printer_id" = $2`, [member.group_id, member.printer_id]);
+      await until(() => changes.isWaiting(tenantId));
+
+      await changes.flushNow(tenantId);
+      await dataSource.getRepository(Tenant).update({ id: tenantId }, { name: 'Agent data fixture' });
+      await until(() => changes.isWaiting(tenantId));
+      await changes.flushNow(tenantId);
+    });
+
+    it('serves the staff list only to an agent connected with the offline till', async () => {
+      await staff().expect(403);
+      await connect(['print.html', 'data.pull']);
+      expect((await staff().expect(403)).body.code).toBe('CAPABILITY_REQUIRED');
+    });
+
+    it('lists the branch staff who may sign in, with their PIN hashes, and keeps no copy', async () => {
+      await connect(OFFLINE_TILL);
+      const res = await staff().expect(200);
+      expect(res.headers.etag).toBe(`"${res.body.staff_version}"`);
+      // Only this branch's active users with a PIN, in the till's roles, by name.
+      expect(res.body.users).toEqual([
+        { id: ids.boss, display_name: 'امیر', role: 'MANAGER', pin_hash: '$argon2id$v=19$m=65536,t=3,p=4$Ym9zcw$aGFzaA' },
+        { id: ids.sara, display_name: 'سارا', role: 'CASHIER', pin_hash: '$argon2id$v=19$m=65536,t=3,p=4$c2FyYQ$aGFzaA' },
+      ]);
+      await staff().set('If-None-Match', `"${res.body.staff_version}"`).expect(304);
+
+      // Signing in stamps the user row; that is not a new list.
+      await dataSource.getRepository(AdminUser).update({ id: ids.sara }, { last_login_at: new Date() });
+      await staff().set('If-None-Match', `"${res.body.staff_version}"`).expect(304);
+
+      const kept = await dataSource.query(`SELECT count(*)::int AS n FROM "agent_data_snapshot" WHERE "tenant_id" = $1 AND "body"::text LIKE '%argon2%'`, [tenantId]);
+      expect(kept[0].n).toBe(0);
+    });
+
+    it('tells an offline-till agent when its staff list changes', async () => {
+      const till = await connect(OFFLINE_TILL);
+      const dataVersion = (await snapshot().expect(200)).body.data_version;
+      const staffVersion = (await staff().expect(200)).body.staff_version;
+      await changes.settled();
+
+      await dataSource.getRepository(AdminUser).update({ id: ids.sara }, { pin_hash: '$argon2id$v=19$m=65536,t=3,p=4$bmV3$bmV3' });
+      await until(() => changes.isWaiting(tenantId));
+      await changes.flushNow(tenantId);
+
+      const notice = await till.next((m) => m.type === 'data.changed');
+      expect(notice.payload.data_version).toBe(dataVersion);
+      expect(notice.payload.staff_version).not.toBe(staffVersion);
+      const fetched = await staff().set('If-None-Match', `"${staffVersion}"`).expect(200);
+      expect(fetched.body.staff_version).toBe(notice.payload.staff_version);
+    });
+
+    it('puts the day’s POS call count in heartbeat.ack for an offline till only', async () => {
+      await dataSource.query(
+        `INSERT INTO "order_call_counter" ("tenant_id", "branch_id", "business_date", "channel_group", "last_value") VALUES ($1, $2, $3, 'POS', 41)`,
+        [tenantId, branchId, BusinessDateUtil.today()],
+      );
+      const till = await connect(OFFLINE_TILL);
+      const beat = till.send('heartbeat', { in_flight: 0, unacked_results: 0, till: { terminal_id: ids.till, mode: 'ONLINE', open_orders: 0 } });
+      const ack = await till.next((m) => m.type === 'heartbeat.ack' && m.ref === beat);
+      expect(ack.payload.call_numbers).toEqual({ business_date: BusinessDateUtil.today(), POS: 41 });
+      till.ws.terminate();
+      await till.closed;
+
+      const plain = await connect(['print.html', 'data.pull']);
+      const plainBeat = plain.send('heartbeat', { in_flight: 0, unacked_results: 0 });
+      const plainAck = await plain.next((m) => m.type === 'heartbeat.ack' && m.ref === plainBeat);
+      expect(plainAck.payload.call_numbers).toBeUndefined();
+    });
   });
 });

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AdminUser } from '../../entities/AdminUser.entity';
 import { AgentDataSnapshot } from '../../entities/AgentDataSnapshot.entity';
 import { AgentSyncOrder } from '../../entities/AgentSyncOrder.entity';
 import { Branch } from '../../entities/Branch.entity';
@@ -23,6 +24,7 @@ import { LiveModule } from '../live/live.module';
 import { AuditModule } from '../audit/audit.module';
 import { CashierModule } from '../cashier/cashier.module';
 import { OrderModule } from '../order/order.module';
+import { PrintingModule } from '../printing/printing.module';
 import { AgentSyncController } from './agent-sync.controller';
 import { AgentSyncAdminController } from './agent-sync-admin.controller';
 import { AgentSyncService } from './agent-sync.service';
@@ -51,6 +53,7 @@ import { AgentDataService } from './agent-data.service';
       Terminal,
       CashierShift,
       TenantSetting,
+      AdminUser,
     ]),
     AgentGatewayModule,
     CatalogModule,
@@ -58,6 +61,7 @@ import { AgentDataService } from './agent-data.service';
     AuditModule,
     CashierModule,
     OrderModule,
+    PrintingModule,
   ],
   controllers: [AgentDataController, AgentSyncController, AgentSyncAdminController],
   providers: [AgentDataService, AgentDataChangesService, AgentSyncService],

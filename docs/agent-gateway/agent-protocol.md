@@ -1296,8 +1296,10 @@ Same request rules as the snapshot: auth (§3.4), `If-None-Match: "<staff_versio
   The agent verifies with the same algorithm (`golang.org/x/crypto/argon2`). A PIN is 4 to 8
   digits, as online.
 - The cloud sends `data.changed` (§12.3) when the list changes: a user added, deactivated, moved
-  to another branch, a role or PIN changed. The agent pulls the staff list whenever it pulls the
-  snapshot, with its own `If-None-Match`, so an unchanged list costs a `304`.
+  to another branch, a role or PIN changed. To an agent with `pos.offline` its payload also
+  carries `staff_version`: `{ "expires_at": "…", "data_version": "…", "staff_version": "…" }`.
+  The agent pulls the staff list whenever it pulls the snapshot, with its own `If-None-Match`,
+  so an unchanged list costs a `304`.
 - The agent MUST store the list encrypted with DPAPI (machine scope), in its data folder, and
   MUST NOT log a PIN or a hash. It replaces the list whole, and keeps the last one while offline.
 
