@@ -138,7 +138,7 @@ export function SimulationCenterPage() {
       <CustomBreadcrumbs
         heading={t('simulation.hub.title', 'External Integration Simulation Center')}
         links={[
-          { name: t('nav.dashboard', 'Home'), href: '/app/pos' },
+          { name: t('nav.dashboard', 'Home'), href: '/app/dashboard' },
           { name: t('simulation.breadcrumb', 'Simulation Hub') },
         ]}
         action={
