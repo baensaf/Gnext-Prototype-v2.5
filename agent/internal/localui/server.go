@@ -108,6 +108,9 @@ func (s *Server) Handler(addr string) http.Handler {
 	mux.HandleFunc("POST /api/till/login", s.tillLogin)
 	mux.HandleFunc("POST /api/till/logout", s.tillLogout)
 	mux.HandleFunc("POST /api/till/binding", s.tillBinding)
+	mux.HandleFunc("GET /till", s.tillPage)
+	mux.HandleFunc("GET /api/till/menu", s.tillMenu)
+	mux.HandleFunc("POST /api/till/price", s.tillPrice)
 	for _, kind := range []string{"printers", "terminals"} {
 		mux.HandleFunc("POST /api/"+kind, s.proxy(http.MethodPost, "/"+kind))
 		mux.HandleFunc("PATCH /api/"+kind+"/{id}", s.proxy(http.MethodPatch, "/"+kind+"/{id}"))

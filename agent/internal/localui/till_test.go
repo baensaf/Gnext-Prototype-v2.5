@@ -33,7 +33,10 @@ func testTill(t *testing.T) *till.Till {
 			}}, nil
 		},
 		Snapshot: func() ([]byte, error) {
-			return []byte(`{"tills":[{"id":"till-1","code":"T1","name":"صندوق ۱"}],"open_shifts":[{"id":"sh","terminal_id":"till-1"}]}`), nil
+			return []byte(`{"tills":[{"id":"till-1","code":"T1","name":"صندوق ۱"}],"open_shifts":[{"id":"sh","terminal_id":"till-1"}],
+			  "branch":{"time_zone":"Asia/Tehran"},
+			  "products":[{"id":"cola","name":"کوکا","price":"350000","tax_rate":"0.1000","variants":[],"option_groups":[]}],
+			  "availability":{"stopped":[],"schedules":[],"daily_stock":[{"product_id":"cola","variant_id":null,"remaining":2}]}}`), nil
 		},
 		Connected: func() bool { return false },
 		Log:       slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -102,6 +105,41 @@ func TestTillBindingNeedsAManagerOrAnApproversPIN(t *testing.T) {
 	}
 	if rec := call(h, "POST", "/api/till/binding", `{"terminal_id":"till-1"}`, nil); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"bound_by":"u"`) {
 		t.Fatalf("signed-in manager: %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestTillMenuAndPricesNeedASignedInCashier(t *testing.T) {
+	h := newTestServer(&fakeHost{till: testTill(t)})
+	if rec := call(h, "GET", "/till", "", nil); rec.Code != 200 || !strings.Contains(rec.Body.String(), "صندوق آفلاین") {
+		t.Fatalf("page: %d", rec.Code)
+	}
+	if rec := call(h, "GET", "/api/till/menu", "", nil); rec.Code != 401 {
+		t.Fatalf("menu without a session: %d", rec.Code)
+	}
+	if rec := call(h, "POST", "/api/till/price", `{"lines":[]}`, nil); rec.Code != 401 {
+		t.Fatalf("price without a session: %d", rec.Code)
+	}
+
+	rec := call(h, "POST", "/api/till/login", `{"user_id":"sara","pin":"1111"}`, nil)
+	var login struct{ Token string }
+	_ = json.Unmarshal(rec.Body.Bytes(), &login)
+	session := map[string]string{"X-Gnext-Till-Session": login.Token}
+
+	if rec := call(h, "GET", "/api/till/menu", "", session); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"available":true`) {
+		t.Fatalf("menu: %d %s", rec.Code, rec.Body)
+	}
+	rec = call(h, "POST", "/api/till/price", `{"lines":[{"product_id":"cola","quantity":2}]}`, session)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"grand_total":"770000"`) {
+		t.Fatalf("price: %d %s", rec.Code, rec.Body)
+	}
+	// Only two colas are left today; the refusal says which line.
+	rec = call(h, "POST", "/api/till/price", `{"lines":[{"product_id":"cola","quantity":1},{"product_id":"tea","quantity":1}]}`, session)
+	if rec.Code != 422 || !strings.Contains(rec.Body.String(), `"code":"NOT_AVAILABLE"`) || !strings.Contains(rec.Body.String(), `"line":1`) {
+		t.Fatalf("unknown product: %d %s", rec.Code, rec.Body)
+	}
+	rec = call(h, "POST", "/api/till/price", `{"lines":[{"product_id":"cola","quantity":3}]}`, session)
+	if rec.Code != 422 || !strings.Contains(rec.Body.String(), "مانده") {
+		t.Fatalf("over stock: %d %s", rec.Code, rec.Body)
 	}
 }
 

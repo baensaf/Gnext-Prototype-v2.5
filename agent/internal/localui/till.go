@@ -22,6 +22,7 @@ var tillStatus = map[string]int{
 	till.CodePINLocked:        http.StatusLocked,
 	till.CodeApprovalRequired: http.StatusForbidden,
 	till.CodeUnauthenticated:  http.StatusUnauthorized,
+	till.CodeNotAvailable:     http.StatusUnprocessableEntity,
 }
 
 // theTill returns the agent's till, or answers that there is none yet.
@@ -40,10 +41,68 @@ func tillError(w http.ResponseWriter, err error) {
 		if !ok {
 			status = http.StatusBadRequest
 		}
-		fail(w, status, e.Code, e.Detail)
+		body := map[string]any{"code": e.Code, "detail": e.Detail}
+		if e.Line != nil {
+			body["line"] = *e.Line
+		}
+		writeJSON(w, status, body)
 		return
 	}
 	fail(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+}
+
+// tillUser is who the request's till session belongs to; without one it answers 401.
+func (s *Server) tillUser(w http.ResponseWriter, r *http.Request, t *till.Till) (till.User, bool) {
+	u, ok := t.User(r.Header.Get(tillSessionHeader))
+	if !ok {
+		fail(w, http.StatusUnauthorized, till.CodeUnauthenticated, "دوباره با پین وارد شوید.")
+	}
+	return u, ok
+}
+
+// tillPage serves the till screen (§13.13).
+func (s *Server) tillPage(w http.ResponseWriter, r *http.Request) {
+	http.ServeFileFS(w, r, static, "static/till.html")
+}
+
+// tillMenu is the branch's menu with what sells right now.
+func (s *Server) tillMenu(w http.ResponseWriter, r *http.Request) {
+	t := s.theTill(w)
+	if t == nil {
+		return
+	}
+	if _, ok := s.tillUser(w, r, t); !ok {
+		return
+	}
+	m, err := t.Menu()
+	if err != nil {
+		tillError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, m)
+}
+
+// tillPrice checks and prices the cart as one order; the till screen shows only what this says.
+func (s *Server) tillPrice(w http.ResponseWriter, r *http.Request) {
+	t := s.theTill(w)
+	if t == nil {
+		return
+	}
+	if _, ok := s.tillUser(w, r, t); !ok {
+		return
+	}
+	var in struct {
+		Lines []till.LineInput `json:"lines"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	lines, totals, err := t.Price(in.Lines)
+	if err != nil {
+		tillError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"lines": lines, "totals": totals})
 }
 
 // tillState is the mode, the till and its shift, who may sign in, and who has.

@@ -1,0 +1,95 @@
+/* The offline till: a touch screen at the counter. Colours and base controls come from app.css. */
+body.till { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+/* The layouts below set display; hidden must still win. */
+body.till [hidden] { display: none !important; }
+
+.banner { padding: 10px 24px; background: var(--warn-bg); border-bottom: 1px solid var(--warn-line); }
+.banner a { color: inherit; font-weight: bold; }
+.error-text { color: var(--danger); margin: 8px 0 0; }
+
+/* Sign-in */
+.signin { flex: 1; overflow: auto; padding: 32px 24px; max-width: 760px; width: 100%; margin: 0 auto; text-align: center; }
+.staff { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.staff button {
+  font: inherit; font-size: 16px; padding: 18px 12px; border-radius: 14px; cursor: pointer;
+  background: var(--card); color: var(--text); border: 1px solid var(--line);
+}
+.staff button small { display: block; color: var(--muted); font-size: 12px; }
+.pin { max-width: 300px; margin: 0 auto; }
+.pin-name { font-size: 18px; font-weight: bold; margin: 0 0 12px; }
+.pin input { text-align: center; font-size: 24px; letter-spacing: 8px; margin-bottom: 12px; }
+/* A keypad reads left to right, 1 at the top left, as on a card terminal. */
+.keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; direction: ltr; }
+.keys button {
+  font: inherit; font-size: 22px; padding: 14px 0; border-radius: 12px; cursor: pointer;
+  background: var(--card); color: var(--text); border: 1px solid var(--line);
+}
+.keys button.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); font-size: 16px; }
+
+/* Selling */
+.sell { flex: 1; min-height: 0; display: grid; grid-template-columns: 170px minmax(0, 1fr) 380px; }
+.categories { overflow: auto; padding: 12px; border-left: 1px solid var(--line); background: var(--card); }
+.categories button {
+  display: block; width: 100%; text-align: right; font: inherit; padding: 12px; margin-bottom: 6px; cursor: pointer;
+  border-radius: 10px; border: 1px solid transparent; background: none; color: var(--text);
+}
+.categories button.on { background: var(--ok-bg); color: var(--ok-ink); font-weight: bold; }
+
+.products-wrap { min-height: 0; display: flex; flex-direction: column; padding: 12px 16px; }
+.products-wrap input[type=search] { margin: 0 0 12px; }
+.products { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; align-content: start; }
+.product {
+  font: inherit; text-align: right; min-height: 96px; padding: 12px; border-radius: 14px; cursor: pointer;
+  background: var(--card); color: var(--text); border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between;
+}
+.product:hover { border-color: var(--primary); }
+.product .name { font-weight: bold; }
+.product .price { color: var(--muted); font-size: 13px; }
+.product.off { opacity: .45; cursor: not-allowed; }
+.product.off:hover { border-color: var(--line); }
+.product .why { font-size: 12px; color: var(--bad-ink); }
+
+.order { min-height: 0; display: flex; flex-direction: column; padding: 12px 16px; border-right: 1px solid var(--line); background: var(--card); }
+.order-type { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+.order-type button {
+  font: inherit; padding: 10px; border-radius: 10px; cursor: pointer; background: var(--bg); color: var(--text); border: 1px solid var(--line);
+}
+.order-type button.on { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
+.dine-in { display: grid; grid-template-columns: 1fr 110px; gap: 8px; }
+.lines { flex: 1; overflow: auto; list-style: none; margin: 0; padding: 0; }
+.lines li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.lines li.bad { background: var(--bad-bg); }
+.line-head { display: flex; justify-content: space-between; gap: 8px; }
+.line-head .name { font-weight: bold; }
+.line-sub { color: var(--muted); font-size: 12px; }
+.line-tools { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.line-tools .btn { padding: 0 10px; }
+.empty { text-align: center; margin: 24px 0; }
+.totals { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 12px 0; }
+.totals dt { color: var(--muted); }
+.totals dd { margin: 0; text-align: left; }
+.totals .grand { font-size: 18px; font-weight: bold; color: var(--text); }
+.order-actions { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 8px; }
+.order-actions .btn { padding: 12px 8px; }
+
+/* The product dialog */
+#dlg-product { width: min(560px, calc(100vw - 32px)); }
+.group { margin: 12px 0; }
+.group h3 { font-size: 14px; margin: 0 0 6px; }
+.group h3 small { color: var(--muted); font-weight: normal; }
+.choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.choice {
+  font: inherit; padding: 8px 12px; border-radius: 10px; cursor: pointer; background: var(--bg); color: var(--text); border: 1px solid var(--line);
+}
+.choice.on { background: var(--ok-bg); color: var(--ok-ink); border-color: var(--ok-ink); }
+.choice:disabled { opacity: .45; cursor: not-allowed; }
+.choice small { color: var(--muted); }
+.qty-row { align-items: center; justify-content: space-between; margin: 12px 0; }
+.stepper { display: flex; align-items: center; gap: 8px; }
+.stepper button { font: inherit; font-size: 18px; width: 40px; height: 40px; border-radius: 10px; cursor: pointer; background: var(--bg); color: var(--text); border: 1px solid var(--line); }
+.stepper output { min-width: 32px; text-align: center; font-size: 18px; }
+
+@media (max-width: 1000px) {
+  .sell { grid-template-columns: 110px minmax(0, 1fr) 300px; }
+  .products { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}
