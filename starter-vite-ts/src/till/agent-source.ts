@@ -18,6 +18,8 @@ import type {
 
 import i18n from 'src/locales/i18n';
 
+import { toast } from 'src/components/snackbar';
+
 import { tillApi, agentError } from './agent-client';
 import { useAgentRegisterShift } from './till-context';
 
@@ -175,6 +177,7 @@ function toOrder(o: AgentOrder, m: Menu | null): OrderHeader {
     grand_total: o.totals.grand_total,
     total_amount: o.totals.grand_total,
     paid_total: paid.toString(),
+    paid_amount: paid.toString(),
     due_amount: due.toString(),
     outstanding_total: due.toString(),
     notes: o.notes || undefined,
@@ -189,6 +192,23 @@ function toOrder(o: AgentOrder, m: Menu | null): OrderHeader {
 
 async function currentMenu(): Promise<Menu | null> {
   return menu().catch(() => null);
+}
+
+// ---- card charges: the agent answers at once and charges in the background ----
+
+const CARD_KINDS = ['CARD_POS', 'CARD', 'POS'];
+
+/** Follows the order until the charge has left the terminal: the customer, then the bank. */
+async function chargeEnded(orderId: string, paymentId: string): Promise<AgentOrder> {
+  const deadline = Date.now() + 5 * 60_000;
+  for (;;) {
+    const { order } = await tillApi.order(orderId);
+    const attempt = order.card_attempts?.find((a) => a.payment_id === paymentId);
+    if (!attempt || attempt.status !== 'RUNNING') return order;
+    // The agent always ends a charge, UNKNOWN at worst; this only stops a screen left waiting.
+    if (Date.now() > deadline) return order;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
 }
 
 // ---- carts: the screen makes a draft and submits it; the agent takes the whole cart at once ----
@@ -410,22 +430,46 @@ export const agentPosSource: PosSource = {
         payment_number: String(i + 1),
         method_id: p.method_id,
         method_kind: p.method_kind,
-        status: (p.status === 'APPROVED' ? 'SUCCEEDED' : p.status) as PaymentRecord['status'],
+        // A charge at the terminal, or one whose result the terminal never gave (UNKNOWN: it counts
+        // as paid, and the cloud resolves it after upload), shows as still in progress.
+        status: p.status === 'APPROVED' ? 'SUCCEEDED' : 'PROCESSING',
         amount: p.amount,
         currency_code: 'IRR',
+        reference: p.card?.rrn,
         business_date: order.business_date,
+        failure_message: p.status === 'UNKNOWN' ? i18n.t('pos.offline.cardUnknown') : undefined,
         initiated_at: p.at,
         recorded_at: p.at,
       }));
     },
-    // Taking money offline comes with the agent's payments (P5).
-    postPayment: async () => {
-      throw agentError(422, 'NOT_AVAILABLE_OFFLINE', i18n.t('pos.offline.paymentsLater'));
+    // Cash or card by the method the screen chose (§13.7). The screen already keeps change for cash
+    // it was handed, so the agent is given what is paid.
+    postPayment: async (data: { order_id: string; payment_method_id: string; amount: string }) => {
+      const method = (await menu()).payment_methods.find((m) => m.id === data.payment_method_id);
+      const kind = (method?.kind || '').toUpperCase();
+      if (kind === 'CASH') {
+        const { order } = await tillApi.payCash(data.order_id, String(rials(data.amount)));
+        return { payment: undefined as unknown as PaymentRecord, order: toOrder(order, await currentMenu()) };
+      }
+      if (!CARD_KINDS.includes(kind)) throw unavailable();
+      const started = await tillApi.payCard(data.order_id, String(rials(data.amount)));
+      const order = await chargeEnded(data.order_id, started.payment_id);
+      const attempt = order.card_attempts?.find((a) => a.payment_id === started.payment_id);
+      if (attempt?.status === 'RUNNING') {
+        throw agentError(409, 'TERMINAL_BUSY', i18n.t('pos.offline.cardStillRunning'));
+      }
+      if (attempt?.status === 'UNKNOWN') {
+        toast.warning(attempt.message || i18n.t('pos.offline.cardUnknown'), { duration: 20000 });
+      } else if (attempt?.status !== 'APPROVED') {
+        throw agentError(402, attempt?.status || 'FAILED', attempt?.message || i18n.t('pos.offline.cardFailed'));
+      }
+      return { payment: undefined as unknown as PaymentRecord, order: toOrder(order, await currentMenu()) };
     },
+    // No refunds offline; the cloud handles money after upload.
     voidPayment: async () => {
-      throw agentError(422, 'NOT_AVAILABLE_OFFLINE', i18n.t('pos.offline.paymentsLater'));
+      throw unavailable();
     },
-  },
+  } as unknown as PosSource['payments'],
 
   customers: {
     getCustomers: async () => [],

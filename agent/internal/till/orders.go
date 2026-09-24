@@ -71,6 +71,9 @@ type Order struct {
 	Voided   []VoidedLine `json:"voided_lines"`
 	Totals   Totals       `json:"totals"`
 	Payments []Payment    `json:"payments"`
+	// CardAttempts is every card charge tried on the order and how it ended, so the screen can say
+	// why a charge left no payment. It stays on the till.
+	CardAttempts []CardAttempt `json:"card_attempts"`
 
 	// HandedOver is set once the order went to the upload (§12.5): it has left the till.
 	HandedOver bool       `json:"handed_over"`
@@ -95,17 +98,6 @@ type VoidedLine struct {
 	VoidedBy    string    `json:"voided_by"`
 	ApprovedBy  *string   `json:"approved_by"`
 	At          time.Time `json:"at"`
-}
-
-// Payment is money taken on the order (§12.4). The till takes payments from P5.
-type Payment struct {
-	ID         string          `json:"id"`
-	MethodID   string          `json:"method_id"`
-	MethodKind string          `json:"method_kind"`
-	Amount     Money           `json:"amount"`
-	Status     string          `json:"status"`
-	Card       json.RawMessage `json:"card,omitempty"`
-	At         time.Time       `json:"at"`
 }
 
 func (o *Order) unfinished() bool { return o.State == StateOpen && !o.HandedOver }
@@ -612,14 +604,22 @@ func (t *Till) Finish(id string, by User) (*Order, error) {
 	if err != nil {
 		return nil, err
 	}
+	return o, t.finish(o, by)
+}
+
+// finish completes an order and hands it to the upload; the caller holds omu.
+func (t *Till) finish(o *Order, by User) error {
 	if len(o.Lines) == 0 {
-		return nil, refuse(CodeInvalid, "سفارش خالی را نمی‌توان بست؛ آن را لغو کنید.")
+		return refuse(CodeInvalid, "سفارش خالی را نمی‌توان بست؛ آن را لغو کنید.")
+	}
+	if o.charging() {
+		return refuse(CodeTerminalBusy, "پرداخت کارتی این سفارش هنوز تمام نشده است.")
 	}
 	if !paid(o) {
-		return nil, refuse(CodeNotPaid, "سفارش هنوز کامل پرداخت نشده است.")
+		return refuse(CodeNotPaid, "سفارش هنوز کامل پرداخت نشده است.")
 	}
 	if err := t.number(o); err != nil {
-		return nil, err
+		return err
 	}
 	now := t.Now().UTC()
 	o.State, o.CompletedAt = StateCompleted, &now
@@ -630,23 +630,12 @@ func (t *Till) Finish(id string, by User) (*Order, error) {
 		o.SentAt = &now
 	}
 	t.Log.Info("offline order completed", "order", o.ID, "by", by.ID)
-	return o, t.end(o)
+	return t.end(o)
 }
 
 // paid: the payments cover the grand total.
 func paid(o *Order) bool {
-	total, err := rials(o.Totals.GrandTotal)
-	if err != nil {
-		return false
-	}
-	sum := total.Sign() == 0
-	got := int64(0)
-	for _, p := range o.Payments {
-		if n, err := rials(p.Amount); err == nil {
-			got += n.Int64()
-		}
-	}
-	return sum || got >= total.Int64()
+	return outstanding(o).Sign() == 0
 }
 
 // Cancel ends an order nobody paid for (§13.6). One the kitchen never had and that has no
@@ -724,7 +713,8 @@ func (t *Till) Handover() (dropped, handed int, err error) {
 		return 0, 0, err
 	}
 	for _, o := range all {
-		if !o.unfinished() {
+		// An order at the card terminal goes up once the charge has ended (the next tend).
+		if !o.unfinished() || o.charging() {
 			continue
 		}
 		switch {

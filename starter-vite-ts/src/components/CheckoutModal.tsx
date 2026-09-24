@@ -121,6 +121,11 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     }
   }, [open, orderId, loadData]);
 
+  // The change shown is the last cash payment's on this order; the next order starts without it.
+  useEffect(() => {
+    setChangeDue(null);
+  }, [orderId]);
+
   const handleAddPayment = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!orderId || !selectedMethodId || !payAmount) return;

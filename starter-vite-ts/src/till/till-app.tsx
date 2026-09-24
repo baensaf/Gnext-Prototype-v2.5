@@ -7,7 +7,8 @@ import { useMemo, useState, useEffect, useCallback } from 'react';
 import LogoutIcon from '@mui/icons-material/Logout';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
 import CloudDoneIcon from '@mui/icons-material/CloudDone';
-import { Box, Chip, Alert, Stack, Button, Tooltip, Container, Typography, IconButton, CircularProgress } from '@mui/material';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import { Box, Chip, Alert, Badge, Stack, Button, Tooltip, Container, Typography, IconButton, CircularProgress } from '@mui/material';
 
 import { PosOrderPage } from 'src/pages/pos/order';
 import { useAuthStore } from 'src/store/useAuthStore';
@@ -21,6 +22,7 @@ import { useSettingsContext } from 'src/components/settings';
 import { TillSignIn } from './sign-in';
 import { TillContext } from './till-context';
 import { agentPosSource } from './agent-source';
+import { useOpenOrders, OpenOrdersDrawer } from './open-orders';
 import { tillApi, setTillToken, onTillSignedOut } from './agent-client';
 
 // ----------------------------------------------------------------------
@@ -89,24 +91,74 @@ export function TillApp() {
     <TillContext.Provider value={{ state, refresh }}>
       <BranchContext.Provider value={branch}>
         <PosSourceProvider source={agentPosSource}>
-          <TillHeader state={state} user={user} onSignedOut={() => setUser(null)} />
-          <Container maxWidth={false} sx={{ py: 2 }}>
-            {unreachable && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {unreachable}
-              </Alert>
-            )}
-            <ModeBanner state={state} onHandedOver={refresh} />
-            {state.mode === 'ONLINE' ? null : <PosOrderPage />}
-          </Container>
+          <SignedInTill state={state} user={user} unreachable={unreachable} refresh={refresh} onSignedOut={() => setUser(null)} />
         </PosSourceProvider>
       </BranchContext.Provider>
     </TillContext.Provider>
   );
 }
 
+function SignedInTill({
+  state,
+  user,
+  unreachable,
+  refresh,
+  onSignedOut,
+}: {
+  state: TillState;
+  user: TillUser;
+  unreachable: string | null;
+  refresh: () => Promise<void>;
+  onSignedOut: () => void;
+}) {
+  const [ordersOpen, setOrdersOpen] = useState(false);
+  const openOrders = useOpenOrders(ordersOpen);
+  return (
+    <>
+      <TillHeader
+        state={state}
+        user={user}
+        openOrders={openOrders.orders.length}
+        onOpenOrders={() => {
+          openOrders.refresh();
+          setOrdersOpen(true);
+        }}
+        onSignedOut={onSignedOut}
+      />
+      <Container maxWidth={false} sx={{ py: 2 }}>
+        {unreachable && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {unreachable}
+          </Alert>
+        )}
+        <ModeBanner
+          state={state}
+          onHandedOver={async () => {
+            await refresh();
+            await openOrders.refresh();
+          }}
+        />
+        {state.mode === 'ONLINE' ? null : <PosOrderPage />}
+      </Container>
+      <OpenOrdersDrawer open={ordersOpen} onClose={() => setOrdersOpen(false)} {...openOrders} />
+    </>
+  );
+}
+
 /** Where the web POS has its dashboard header: the till, the mode, who is selling, and the switches. */
-function TillHeader({ state, user, onSignedOut }: { state: TillState; user: TillUser; onSignedOut: () => void }) {
+function TillHeader({
+  state,
+  user,
+  openOrders,
+  onOpenOrders,
+  onSignedOut,
+}: {
+  state: TillState;
+  user: TillUser;
+  openOrders: number;
+  onOpenOrders: () => void;
+  onSignedOut: () => void;
+}) {
   const { t } = useTranslation();
   const signOut = async () => {
     try {
@@ -136,6 +188,19 @@ function TillHeader({ state, user, onSignedOut }: { state: TillState; user: Till
         label={t(`till.mode.${state.mode}`)}
       />
       <Box sx={{ flexGrow: 1 }} />
+      <Button
+        size="small"
+        variant="outlined"
+        onClick={onOpenOrders}
+        startIcon={
+          <Badge badgeContent={openOrders} color="warning">
+            <ReceiptLongIcon fontSize="small" />
+          </Badge>
+        }
+        sx={{ fontWeight: 600 }}
+      >
+        {t('till.orders.title')}
+      </Button>
       <Chip size="small" variant="outlined" label={user.display_name} />
       <LanguageToggle />
       <SettingsButton />

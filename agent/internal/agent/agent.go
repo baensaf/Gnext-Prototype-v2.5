@@ -516,6 +516,47 @@ func (a *Agent) runCharge(env protocol.Envelope, ch protocol.PaymentCharge, t pr
 	a.finish(env.ID, protocol.TypePaymentResult, paymentResult(ch.PaymentID, ch.AttemptID, ch.TerminalID, out, started))
 }
 
+// Refusals of ChargeLocal before the terminal is touched.
+var (
+	// ErrNoTerminal: the terminal is not in the config, not active, or its driver is not in this build.
+	ErrNoTerminal = errors.New("no active terminal with a supported driver")
+	// ErrUpdating: the agent is about to swap its binary and takes no new charge.
+	ErrUpdating = errors.New("the agent is updating")
+)
+
+// ChargeLocal charges a terminal for the offline till (§13.7): the same driver and per-device
+// queue as a cloud payment.charge, with no cloud command. The caller records the charge as
+// RUNNING on disk first (§4.6). It returns once the terminal has answered or the charge timed
+// out; only the errors above mean the amount never reached the terminal.
+func (a *Agent) ChargeLocal(terminalID, attemptID, amount string) (payment.Outcome, error) {
+	if a.updating.Load() {
+		return payment.Outcome{}, ErrUpdating
+	}
+	t, ok := findTerminal(a.cfg.Load(), terminalID)
+	var drv payment.Driver
+	if ok && t.Active {
+		drv = a.o.NewDriver(t)
+	}
+	if drv == nil {
+		return payment.Outcome{}, ErrNoTerminal
+	}
+	done := make(chan payment.Outcome, 1)
+	a.running.Add(1) // an update waits for it (Idle)
+	a.queue(t.ID) <- func() {
+		defer a.running.Add(-1)
+		timeout := time.Duration(max(t.ChargeTimeoutS, 90)) * time.Second
+		ctx, cancel := context.WithTimeout(context.Background(), timeout+15*time.Second)
+		defer cancel()
+		out, err := drv.Charge(ctx, payment.ChargeRequest{AttemptID: attemptID, Amount: amount, Timeout: timeout})
+		if err != nil {
+			// Once the amount may have reached the terminal, only UNKNOWN is honest (§7.3).
+			out = payment.Outcome{Status: protocol.PayUnknown, ErrorCode: protocol.ErrBadResponse, Message: err.Error()}
+		}
+		done <- out
+	}
+	return <-done, nil
+}
+
 func (a *Agent) runQuery(env protocol.Envelope, q protocol.PaymentQuery, drv payment.Driver) {
 	if !a.begin(env.ID) {
 		return
