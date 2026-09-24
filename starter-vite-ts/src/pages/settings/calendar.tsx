@@ -11,6 +11,7 @@ import { useCalendarStore, formatCalendarDateTime } from 'src/utils/calendar';
 
 import { settingsApi } from 'src/api/settingsApi';
 import { useAuthStore } from 'src/store/useAuthStore';
+import { useBranchContextOptional } from 'src/contexts/branch-context';
 
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
@@ -24,7 +25,10 @@ const WEEK_DAYS = [6, 0, 1, 2, 3, 4, 5];
  */
 export function CalendarSettingsPage() {
   const { t } = useTranslation();
-  const isHeadOffice = useAuthStore((state) => state.user?.isHeadOffice) !== false;
+  // Changed only by a head-office account with the header at head office, as Moadian is:
+  // inside a branch the screen is that branch's view of a chain setting.
+  const atHeadOffice = useBranchContextOptional()?.isHeadOffice ?? true;
+  const isHeadOffice = useAuthStore((state) => state.user?.isHeadOffice) !== false && atHeadOffice;
   const applyCalendar = useCalendarStore((state) => state.setCalendar);
 
   const [calendar, setCalendar] = useState<CalendarSystem>('JALALI');

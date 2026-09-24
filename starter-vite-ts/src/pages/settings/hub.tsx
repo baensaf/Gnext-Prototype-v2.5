@@ -1,4 +1,4 @@
-import type { SettingItem, SettingScope } from 'src/config/settings-catalogue';
+import type { SettingScope } from 'src/config/settings-catalogue';
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,21 +27,21 @@ import {
 
 import { RouterLink } from 'src/routes/components';
 
+import { useWorkspaceScope } from 'src/contexts/branch-context';
 import { useIsSettingOnOffer, useSettingsCatalogue } from 'src/config/settings-catalogue';
 
 export function SettingsHubPage() {
   const theme = useTheme();
   const { t } = useTranslation();
   const categories = useSettingsCatalogue();
-  const isOnOffer = useIsSettingOnOffer();
+  const onOffer = useIsSettingOnOffer();
+  // Inside a branch an organization card can be read but not changed there; "Organization"
+  // alone left staff to open the card to find that out.
+  const atHeadOffice = useWorkspaceScope()?.isHeadOffice ?? true;
   const [searchQuery, setSearchQuery] = useState('');
   const [scopeFilter, setScopeFilter] = useState<SettingScope | 'ALL'>('ALL');
   const isRtl = theme.direction === 'rtl';
 
-  // The sidebar already hides what a role cannot open, and what does not belong in the scope
-  // the header is set to. Offering it here anyway made the hub the one place that promised
-  // a page the menu had taken away.
-  const onOffer = (item: SettingItem) => isOnOffer(item.path);
   // Inside a branch everything left is per-branch, so a filter with one live option is noise.
   const offeredScopes = new Set(categories.flatMap((c) => c.items.filter(onOffer).map((i) => i.scope)));
   const showScopeFilter = offeredScopes.size > 1;
@@ -287,9 +287,11 @@ export function SettingsHubPage() {
                                   )
                                 }
                                 label={
-                                  item.scope === 'ORG'
-                                    ? t('settings.hub.scope.org', 'Organization')
-                                    : t('settings.hub.scope.branch', 'Per Branch')
+                                  item.scope === 'BRANCH'
+                                    ? t('settings.hub.scope.branch', 'Per Branch')
+                                    : atHeadOffice
+                                      ? t('settings.hub.scope.org', 'Organization')
+                                      : t('settings.hub.scope.orgViewOnly', 'Set at head office')
                                 }
                                 size="small"
                                 sx={{ fontSize: '0.65rem', fontWeight: 700, height: 20 }}

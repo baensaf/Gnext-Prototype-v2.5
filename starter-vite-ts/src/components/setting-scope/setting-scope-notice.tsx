@@ -62,7 +62,7 @@ export function SettingScopeNotice({
             )
           : t(
               'settings.scope.chainWideReadOnly',
-              'This is decided for the whole chain at head office. Your account works at {{branch}}, so this screen is read-only.',
+              'This is decided for the whole chain at head office, so it is read-only inside {{branch}}.',
               { branch: branchName || '' }
             )}
       </Alert>
