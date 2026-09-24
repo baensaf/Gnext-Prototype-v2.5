@@ -522,6 +522,10 @@ func TestSavedConfigIsUsedWhileTheCloudIsUnreachable(t *testing.T) {
 	if err := h.agent.TestPrint(ctx, "p1"); err != nil {
 		t.Fatalf("test print from the saved config: %v", err)
 	}
+	// The printer counts a job once it has read the whole connection.
+	for deadline := time.Now().Add(5 * time.Second); lan.count() == 0 && time.Now().Before(deadline); {
+		time.Sleep(20 * time.Millisecond)
+	}
 	if lan.count() != 1 {
 		t.Fatalf("printer received %d jobs, want 1", lan.count())
 	}
