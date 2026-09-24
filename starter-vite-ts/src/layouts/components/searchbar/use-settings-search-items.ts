@@ -17,7 +17,7 @@ export function useSettingsSearchItems(): OutputItem[] {
 
   return catalogue.flatMap((category) =>
     category.items
-      .filter((item) => isOnOffer(item.path))
+      .filter(isOnOffer)
       .map((item) => ({
         title: item.title,
         path: item.path,

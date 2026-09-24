@@ -41,6 +41,12 @@ export interface SettingItem {
   path: string;
   /** ORG is defined once at head office and inherited; BRANCH is set per location. */
   scope: SettingScope;
+  /**
+   * A card that is only a setting at head office. Inside a branch the page behind it is
+   * something else (Moadian: that branch's invoices, already under Reports & Compliance),
+   * so the hub leaves it out there rather than promise a setting the branch cannot change.
+   */
+  headOfficeScopeOnly?: boolean;
   tags: string[];
   title: string;
 }
@@ -282,6 +288,7 @@ export function useSettingsCatalogue(): SettingCategory[] {
         {
           id: 'moadian',
           scope: 'ORG',
+          headOfficeScopeOnly: true,
           title: t('settings.hub.items.moadian.title', 'Moadian e-invoicing'),
           description: t(
             'settings.hub.items.moadian.description',
@@ -377,9 +384,12 @@ export function useSettingsCatalogue(): SettingCategory[] {
  * the header is set to. Offering a card the menu had taken away made a promise the page
  * then refused.
  */
-export function useIsSettingOnOffer(): (path: string) => boolean {
+export function useIsSettingOnOffer(): (item: SettingItem) => boolean {
   const role = useAuthStore((state) => state.user?.role);
   const isHeadOffice = useIsHeadOffice();
   const workspace = useWorkspaceScope();
-  return (path) => canReachPath(role, path, isHeadOffice) && fitsWorkspace(path, workspace);
+  return (item) =>
+    canReachPath(role, item.path, isHeadOffice) &&
+    fitsWorkspace(item.path, workspace) &&
+    !(item.headOfficeScopeOnly && workspace && !workspace.isHeadOffice);
 }

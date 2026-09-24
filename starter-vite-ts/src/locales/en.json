@@ -3109,7 +3109,8 @@
       "scope": {
         "all": "All",
         "org": "Organization",
-        "branch": "Per Branch"
+        "branch": "Per Branch",
+        "orgViewOnly": "Set at head office"
       }
     },
     "scope": {
@@ -3118,7 +3119,7 @@
       "branchOverride": "{{branch}} overrides head office for this group.",
       "resetToOrg": "Follow head office",
       "chainWide": "Decided once for the whole chain at head office. There is no per-branch version of this.",
-      "chainWideReadOnly": "This is decided for the whole chain at head office. Your account works at {{branch}}, so this screen is read-only."
+      "chainWideReadOnly": "This is decided for the whole chain at head office, so it is read-only inside {{branch}}."
     },
     "branchOverrides": {
       "title": "Branch Overrides",
