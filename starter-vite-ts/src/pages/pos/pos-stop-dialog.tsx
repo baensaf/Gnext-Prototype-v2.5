@@ -25,8 +25,8 @@ import {
 
 import { fDateTime } from 'src/utils/format-time';
 
-import { catalogApi } from 'src/api/catalogApi';
 import { useAuthStore } from 'src/store/useAuthStore';
+import { usePosSource } from 'src/contexts/pos-source';
 import { isApproverRole } from 'src/config/role-access';
 
 /** The reasons a register picks from; OTHER asks for a few words. */
@@ -54,6 +54,7 @@ const isLive = (a: ProductAvailability) => a.is_suspended && (!a.suspended_until
  */
 export function PosStopDialog({ product, branchId, availabilities, onClose, onDone }: Props) {
   const { t } = useTranslation();
+  const pos = usePosSource();
   const approver = isApproverRole(useAuthStore((state) => state.user?.role));
   const [sizes, setSizes] = useState<ProductVariant[]>([]);
   const [variantId, setVariantId] = useState(WHOLE);
@@ -73,11 +74,11 @@ export function PosStopDialog({ product, branchId, availabilities, onClose, onDo
     setError(null);
     setSizes([]);
     if (!product) return;
-    catalogApi
+    pos.catalog
       .getProductVariants(product.id)
       .then((list) => setSizes((list || []).filter((v) => v.is_active !== false)))
       .catch(() => setSizes([]));
-  }, [product]);
+  }, [product, pos]);
 
   if (!product) return null;
 
@@ -95,7 +96,7 @@ export function PosStopDialog({ product, branchId, availabilities, onClose, onDo
   const stop = async () => {
     setBusy(true);
     try {
-      await catalogApi.posStop({
+      await pos.catalog.posStop({
         productId: product.id,
         variantId: variantId || null,
         until,
@@ -114,7 +115,7 @@ export function PosStopDialog({ product, branchId, availabilities, onClose, onDo
   const resume = async () => {
     setBusy(true);
     try {
-      await catalogApi.posResume({ productId: product.id, variantId: variantId || null, branchId, approverPin: needsPin ? pin.trim() : undefined });
+      await pos.catalog.posResume({ productId: product.id, variantId: variantId || null, branchId, approverPin: needsPin ? pin.trim() : undefined });
       onDone(t('pos.stop.resumed', { name: product.name }));
     } catch (err: any) {
       fail(err);

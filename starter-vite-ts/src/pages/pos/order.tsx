@@ -82,20 +82,12 @@ import {
 import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 
-import { orderApi } from 'src/api/orderApi';
-import { dineInApi } from 'src/api/dineInApi';
-import { paymentApi } from 'src/api/paymentApi';
-import { catalogApi } from 'src/api/catalogApi';
-import { settingsApi } from 'src/api/settingsApi';
-import { customerApi } from 'src/api/customerApi';
-import { deliveryApi } from 'src/api/deliveryApi';
-import { discountsApi } from 'src/api/discountsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
+import { usePosSource, PosFeatureGate } from 'src/contexts/pos-source';
 
 import { CheckoutModal } from 'src/components/CheckoutModal';
 import { toast, showErrorToast } from 'src/components/snackbar';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
-import { useRegisterShift } from 'src/components/shift/use-register-shift';
 import { PosShiftBar, PosShiftGate } from 'src/components/shift/pos-shift';
 
 import { PosStopDialog } from './pos-stop-dialog';
@@ -140,8 +132,11 @@ export function PosOrderPage() {
   const { t } = useTranslation();
 
   const { selectedBranchId, setSelectedBranchId } = useBranchContext();
+  // The cloud for the web POS; the branch agent for the offline till.
+  const pos = usePosSource();
+  const { features } = pos;
   // The register this device is and the shift open on it; the till stays shut without one.
-  const register = useRegisterShift();
+  const register = pos.useRegisterShift();
   // A shift whose business day has ended sells nothing more: it is counted and closed first.
   const shiftBlocked = !register.shift || register.dayEnded;
   const [categories, setCategories] = useState<Category[]>([]);
@@ -207,7 +202,7 @@ export function PosOrderPage() {
     try {
       setCreatingCustomer(true);
       setCustomerError(null);
-      const created = await customerApi.createCustomer({
+      const created = await pos.customers.createCustomer({
         code: newCustMobile.trim(),
         first_name: newCustFirstName.trim(),
         last_name: newCustLastName.trim(),
@@ -215,7 +210,7 @@ export function PosOrderPage() {
         // No credit limit: credit is granted centrally, by head office, not at the counter.
         email: newCustEmail.trim() || undefined,
       });
-      const updatedList = await customerApi.getCustomers();
+      const updatedList = await pos.customers.getCustomers();
       setCustomers(updatedList);
       setSelectedCustomerId(created.id);
       setNewCustFirstName('');
@@ -310,24 +305,24 @@ export function PosOrderPage() {
     try {
       setLoadingHeldOrders(true);
       const bId = branchId || selectedBranchId;
-      const orders = await orderApi.getOrders({ branchId: bId || undefined, state: 'DRAFT' });
+      const orders = await pos.orders.getOrders({ branchId: bId || undefined, state: 'DRAFT' });
       setHeldOrders(orders);
     } catch {
       // ignore
     } finally {
       setLoadingHeldOrders(false);
     }
-  }, [selectedBranchId]);
+  }, [selectedBranchId, pos]);
 
   const loadInitialData = async () => {
     try {
       setLoadingInitialData(true);
       // Today's stops load with the stock counts below, for the selected branch.
       const [cList, pList, custs, tList] = await Promise.all([
-        catalogApi.getCategories(),
-        catalogApi.getProducts(),
-        customerApi.getCustomers(),
-        dineInApi.getTables(undefined, selectedBranchId).catch(() => [] as DiningTable[]),
+        pos.catalog.getCategories(),
+        pos.catalog.getProducts(),
+        pos.customers.getCustomers(),
+        pos.tables.getTables(undefined, selectedBranchId).catch(() => [] as DiningTable[]),
       ]);
       // Categories taken off the menu hold no sellable products; showing them (and opening on
       // one) left the cashier looking at an empty grid.
@@ -358,32 +353,32 @@ export function PosOrderPage() {
   // time the dialog opens. An empty list is a legitimate answer: the dialog simply shows no
   // chips, and the cashier types.
   useEffect(() => {
-    catalogApi
+    pos.catalog
       .getNoteTemplates('ORDER')
       .then(setNoteTemplates)
       .catch(() => setNoteTemplates([]));
-  }, []);
+  }, [pos]);
 
   // Selling windows open and close, and items get 86'd from other screens, while the register
   // sits open, so the grid checks each minute. Stops are this branch's plus chain-wide ones.
   useEffect(() => {
     const refresh = () => {
-      catalogApi
+      pos.catalog
         .getOffScheduleProducts(selectedBranchId || undefined)
         .then((list) => setOffSchedule(new Map(list.map((o) => [o.product_id, o.windows]))))
         .catch(() => setOffSchedule(new Map()));
-      catalogApi
+      pos.catalog
         .getAvailabilities(selectedBranchId || undefined)
         // A stop on one channel (Snappfood only) leaves the item on sale at the counter.
         .then((list) => setAvailabilities(list.filter((a) => !a.channel)))
         .catch(() => undefined);
-      catalogApi
+      pos.catalog
         .getBranchPrices(selectedBranchId || undefined)
         .then((sheet) => setBranchPrices(new Map(sheet.items.map((i) => [`${i.product_id}:${i.variant_id || ''}`, i.price]))))
         .catch(() => undefined);
     };
     const refreshStock = () =>
-      catalogApi
+      pos.catalog
         .getDailyStock(selectedBranchId || undefined)
         .then(setDailyStock)
         .catch(() => setDailyStock([]));
@@ -395,7 +390,7 @@ export function PosOrderPage() {
       window.clearInterval(timer);
       window.clearInterval(stockTimer);
     };
-  }, [selectedBranchId]);
+  }, [selectedBranchId, pos]);
 
   useEffect(() => {
     if (selectedBranchId) {
@@ -416,7 +411,7 @@ export function PosOrderPage() {
       ? deliveryRestoreRef.current.addressId
       : undefined;
     if (!restoreAddressId) setSelectedDeliveryAddressId('');
-    customerApi.getAddresses(selectedCustomerId)
+    pos.customers.getAddresses(selectedCustomerId)
       .then((addresses) => {
         if (cancelled) return;
         setCustomerAddresses(addresses);
@@ -429,7 +424,7 @@ export function PosOrderPage() {
       .catch(() => !cancelled && setDeliveryOptionsError('Unable to load this customer’s delivery addresses.'))
       .finally(() => !cancelled && setDeliveryOptionsLoading(false));
     return () => { cancelled = true; };
-  }, [orderType, selectedCustomerId]);
+  }, [orderType, selectedCustomerId, pos]);
 
   useEffect(() => {
     if (orderType !== 'DELIVERY' || !selectedBranchId) {
@@ -442,7 +437,7 @@ export function PosOrderPage() {
     setDeliveryOptionsError(null);
     const restoreZoneId = deliveryRestoreRef.current.zoneId;
     if (!restoreZoneId) setSelectedDeliveryZoneId('');
-    deliveryApi.getZones(selectedBranchId)
+    pos.delivery.getZones(selectedBranchId)
       .then((zones) => {
         if (cancelled) return;
         const activeZones = zones.filter((zone) => zone.is_active && zone.branch_id === selectedBranchId);
@@ -452,7 +447,7 @@ export function PosOrderPage() {
       .catch(() => !cancelled && setDeliveryOptionsError('Unable to load delivery zones for this branch.'))
       .finally(() => !cancelled && setDeliveryOptionsLoading(false));
     return () => { cancelled = true; };
-  }, [orderType, selectedBranchId]);
+  }, [orderType, selectedBranchId, pos]);
 
   useEffect(() => {
     if (orderType !== 'DELIVERY' || !selectedDeliveryAddressId || deliveryZones.length === 0 || selectedDeliveryZoneId) return;
@@ -469,9 +464,9 @@ export function PosOrderPage() {
     setCheckedOptionIds([]);
     try {
       const [vList, groups] = await Promise.all([
-        catalogApi.getProductVariants(p.id).catch(() => [] as ProductVariant[]),
+        pos.catalog.getProductVariants(p.id).catch(() => [] as ProductVariant[]),
         // A product offers only the add-on groups attached to it; the register refuses any other choice.
-        catalogApi
+        pos.catalog
           .getProductById(p.id)
           .then((full) => (full.optionGroups || []) as OptionGroup[])
           .catch(() => [] as OptionGroup[]),
@@ -672,13 +667,13 @@ export function PosOrderPage() {
     }
     try {
       setAddingAddress(true);
-      const created = await customerApi.createAddress(selectedCustomerId, {
+      const created = await pos.customers.createAddress(selectedCustomerId, {
         title: newAddress.title.trim(),
         address_text: newAddress.address_text.trim(),
         postal_code: newAddress.postal_code.trim() || undefined,
         is_default: newAddress.is_default,
       });
-      const addresses = await customerApi.getAddresses(selectedCustomerId);
+      const addresses = await pos.customers.getAddresses(selectedCustomerId);
       setCustomerAddresses(addresses);
       setSelectedDeliveryAddressId(created.id);
       setSelectedDeliveryZoneId('');
@@ -727,9 +722,9 @@ export function PosOrderPage() {
 
       let draft: OrderHeader;
       if (activeDraftOrderId) {
-        draft = await orderApi.updateDraft(activeDraftOrderId, orderPayload);
+        draft = await pos.orders.updateDraft(activeDraftOrderId, orderPayload);
       } else {
-        draft = await orderApi.createOrder(orderPayload);
+        draft = await pos.orders.createOrder(orderPayload);
       }
 
       setHoldSuccessMessage(`Order #${draft.order_number} held successfully in Drafts.`);
@@ -750,7 +745,7 @@ export function PosOrderPage() {
   const handleResumeOrder = async (order: OrderHeader) => {
     try {
       setResumingOrderId(order.id);
-      const fullOrder = await orderApi.getOrderById(order.id);
+      const fullOrder = await pos.orders.getOrderById(order.id);
       deliveryRestoreRef.current = {
         customerId: fullOrder.customer_id,
         addressId: fullOrder.customer_address_id,
@@ -785,7 +780,7 @@ export function PosOrderPage() {
         if ((item as any).variant_id) {
           const variants = prod.variants?.length
             ? prod.variants
-            : await catalogApi.getProductVariants(item.product_id).catch(() => [] as ProductVariant[]);
+            : await pos.catalog.getProductVariants(item.product_id).catch(() => [] as ProductVariant[]);
           selectedVariant = variants.find((variant) => variant.id === (item as any).variant_id);
           if (!selectedVariant) {
             selectedVariant = {
@@ -845,7 +840,7 @@ export function PosOrderPage() {
     setDiscardReasonCodeId('');
     if (discardReasonCodes.length === 0) {
       try {
-        const codes = await settingsApi.getReasonCodes();
+        const codes = await pos.settings.getReasonCodes();
         setDiscardReasonCodes(codes.filter((c) => c.is_active));
       } catch (err: any) {
         showErrorToast(err, 'Failed to load reason codes');
@@ -864,7 +859,7 @@ export function PosOrderPage() {
 
   const discardHeldOrder = async (orderId: string, reasonCodeId?: string): Promise<boolean> => {
     try {
-      await orderApi.cancelOrder(orderId, reasonCodeId, 'Discarded from held drafts');
+      await pos.orders.cancelOrder(orderId, reasonCodeId, 'Discarded from held drafts');
       if (activeDraftOrderId === orderId) {
         handleClearCart();
       } else if (selectedBranchId) {
@@ -935,7 +930,7 @@ export function PosOrderPage() {
         };
       }
 
-      const quoteRes = await discountsApi.quoteDiscounts(payload);
+      const quoteRes = await pos.discounts.quoteDiscounts(payload);
 
       const discAmount = MoneyUtil.format(quoteRes.discountTotal || '0', 2);
       setAppliedDiscountAmount(discAmount);
@@ -972,7 +967,7 @@ export function PosOrderPage() {
         setAppliedCouponCode('');
       }
     }
-  }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType, selectedDeliveryZoneId, deliveryZones, priceOf]);
+  }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType, selectedDeliveryZoneId, deliveryZones, priceOf, pos]);
 
   useEffect(() => {
     evaluateQuote();
@@ -1140,18 +1135,18 @@ export function PosOrderPage() {
 
       let draftId: string;
       if (activeDraftOrderId) {
-        const updated = await orderApi.updateDraft(activeDraftOrderId, orderPayload);
+        const updated = await pos.orders.updateDraft(activeDraftOrderId, orderPayload);
         draftId = updated.id;
       } else {
-        const draft = await orderApi.createOrder(orderPayload);
+        const draft = await pos.orders.createOrder(orderPayload);
         draftId = draft.id;
       }
 
       const submitPayload = buildSubmitPayload();
-      const submitted = await orderApi.submitOrder(draftId, submitPayload);
+      const submitted = await pos.orders.submitOrder(draftId, submitPayload);
 
       // Instantly query active payment methods to find POS / CARD
-      const pms = await settingsApi.getPaymentMethods();
+      const pms = await pos.settings.getPaymentMethods();
       const activeMethods = pms.filter((m) => m.is_active);
       const preferredPos =
         activeMethods.find(
@@ -1164,7 +1159,7 @@ export function PosOrderPage() {
         ) || activeMethods[0];
 
       if (preferredPos) {
-        const payRes = await paymentApi.postPayment({
+        const payRes = await pos.payments.postPayment({
           order_id: submitted.id,
           payment_method_id: preferredPos.id,
           amount: submitted.due_amount || submitted.total_amount || '0',
@@ -1188,6 +1183,7 @@ export function PosOrderPage() {
       setTerminalPayLoading(false);
     }
   }, [
+    pos,
     cart,
     selectedBranchId,
     approvalRequired,
@@ -1246,15 +1242,15 @@ export function PosOrderPage() {
 
       let draftId: string;
       if (activeDraftOrderId) {
-        const updated = await orderApi.updateDraft(activeDraftOrderId, orderPayload);
+        const updated = await pos.orders.updateDraft(activeDraftOrderId, orderPayload);
         draftId = updated.id;
       } else {
-        const draft = await orderApi.createOrder(orderPayload);
+        const draft = await pos.orders.createOrder(orderPayload);
         draftId = draft.id;
       }
 
       const submitPayload = buildSubmitPayload();
-      const submitted = await orderApi.submitOrder(draftId, submitPayload);
+      const submitted = await pos.orders.submitOrder(draftId, submitPayload);
 
       setPlacedOrder(submitted);
       setCheckoutModalOpen(true);
@@ -1268,6 +1264,7 @@ export function PosOrderPage() {
       showErrorToast(err, msg);
     }
   }, [
+    pos,
     cart,
     selectedBranchId,
     approvalRequired,
@@ -1315,13 +1312,14 @@ export function PosOrderPage() {
       // F4: Toggle Held Orders Drawer
       if (e.key === 'F4') {
         e.preventDefault();
-        setHeldOrdersDrawerOpen((prev) => !prev);
+        if (features.park) setHeldOrdersDrawerOpen((prev) => !prev);
         return;
       }
 
       // F6: Open Manual Discount Modal
       if (e.key === 'F6') {
         e.preventDefault();
+        if (!features.discounts) return;
         if (cart.length > 0) {
           setManualDiscountModalOpen(true);
         } else {
@@ -1373,6 +1371,7 @@ export function PosOrderPage() {
     addAddressOpen,
     searchQuery,
     shiftBlocked,
+    features,
   ]);
 
   // Product Filtering (Search + Category)
@@ -1623,10 +1622,11 @@ export function PosOrderPage() {
                           aria-disabled={isSuspended}
                           onContextMenu={(e) => {
                             e.preventDefault();
-                            setStopProduct(p);
+                            if (features.stop) setStopProduct(p);
                           }}
                           onPointerDown={() => {
                             longPress.current.fired = false;
+                            if (!features.stop) return;
                             longPress.current.timer = window.setTimeout(() => {
                               longPress.current.fired = true;
                               setStopProduct(p);
@@ -1676,9 +1676,12 @@ export function PosOrderPage() {
                             handleOpenProductOptions(p);
                           }}
                         >
+                          {/* Offline there is no stop to take: the button shows, disabled, where it always is. */}
                           <IconButton
                             size="small"
                             aria-label={t('pos.stop.open', { name: p.name })}
+                            disabled={!features.stop}
+                            title={features.stop ? undefined : t('pos.offline.unavailable')}
                             onPointerDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1759,11 +1762,12 @@ export function PosOrderPage() {
                   Active Cart ({cart.reduce((s, i) => s + i.quantity, 0)} items)
                 </Typography>
                 <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-                  <Tooltip title="View and resume held draft orders">
+                  <PosFeatureGate off={!features.park} title="View and resume held draft orders">
                     <Button
                       size="small"
                       color="warning"
                       variant="outlined"
+                      disabled={!features.park}
                       startIcon={
                         <Badge
                           badgeContent={heldOrders.length}
@@ -1782,7 +1786,7 @@ export function PosOrderPage() {
                     >
                       Held
                     </Button>
-                  </Tooltip>
+                  </PosFeatureGate>
                   {cart.length > 0 && (
                     <Button
                       size="small"
@@ -1848,14 +1852,17 @@ export function PosOrderPage() {
                     <TakeoutDiningIcon sx={{ fontSize: 18 }} />
                     {t('pos.takeaway')}
                   </ToggleButton>
-                  <ToggleButton value="DELIVERY">
-                    <DeliveryDiningIcon sx={{ fontSize: 18 }} />
-                    {t('pos.delivery')}
-                  </ToggleButton>
+                  <PosFeatureGate off={!features.delivery} grow>
+                    <ToggleButton value="DELIVERY" disabled={!features.delivery}>
+                      <DeliveryDiningIcon sx={{ fontSize: 18 }} />
+                      {t('pos.delivery')}
+                    </ToggleButton>
+                  </PosFeatureGate>
                 </ToggleButtonGroup>
 
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  <FormControl fullWidth size="small">
+                  <PosFeatureGate off={!features.customers} grow>
+                  <FormControl fullWidth size="small" disabled={!features.customers}>
                     <InputLabel>{t('pos.customer')}</InputLabel>
                     <Select
                       inputRef={customerSelectRef}
@@ -1885,10 +1892,12 @@ export function PosOrderPage() {
                       ))}
                     </Select>
                   </FormControl>
+                  </PosFeatureGate>
 
-                  <Tooltip title={t('pos.quickRegisterCustomer')}>
+                  <PosFeatureGate off={!features.customers} title={t('pos.quickRegisterCustomer')}>
                     <IconButton
                       color="primary"
+                      disabled={!features.customers}
                       onClick={() => {
                         setCustomerError(null);
                         setQuickAddCustomerOpen(true);
@@ -1909,7 +1918,7 @@ export function PosOrderPage() {
                     >
                       <PersonAddIcon fontSize="small" />
                     </IconButton>
-                  </Tooltip>
+                  </PosFeatureGate>
 
                   <Tooltip title={orderNotes ? "Edit Order / Kitchen Note" : "Add Order / Kitchen Note"}>
                     <IconButton
@@ -2251,8 +2260,10 @@ export function PosOrderPage() {
 
               {/* Compact Coupon Code & Manual Discount Bar */}
               <Stack direction="row" spacing={1} sx={{ mb: 1.25, alignItems: 'center' }}>
+                <PosFeatureGate off={!features.discounts} grow>
                 <TextField
                   size="small"
+                  disabled={!features.discounts}
                   placeholder="Coupon Code"
                   value={couponInput}
                   onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
@@ -2275,6 +2286,7 @@ export function PosOrderPage() {
                     },
                   }}
                 />
+                </PosFeatureGate>
                 <Button
                   variant={appliedCouponCode && appliedCouponCode === couponInput.trim() ? 'contained' : 'outlined'}
                   color={appliedCouponCode && appliedCouponCode === couponInput.trim() ? 'success' : 'primary'}
@@ -2285,11 +2297,12 @@ export function PosOrderPage() {
                 >
                   {appliedCouponCode && appliedCouponCode === couponInput.trim() ? 'Applied' : 'Apply'}
                 </Button>
-                <Tooltip title="Configure Cashier Manual Discount in modal">
+                <PosFeatureGate off={!features.discounts} title="Configure Cashier Manual Discount in modal">
                   <Button
                     variant={appliedManualDiscount ? 'contained' : 'outlined'}
                     color={appliedManualDiscount ? 'warning' : 'inherit'}
                     size="small"
+                    disabled={!features.discounts}
                     startIcon={<LocalOfferIcon fontSize="small" />}
                   onClick={() => setManualDiscountModalOpen(true)}
                   aria-keyshortcuts="F6"
@@ -2297,7 +2310,7 @@ export function PosOrderPage() {
                   >
                     {appliedManualDiscount ? 'Discount (Active)' : 'Discount'}
                   </Button>
-                </Tooltip>
+                </PosFeatureGate>
               </Stack>
 
               {/* Discount Feedback / Active Discount Chip */}
@@ -2398,16 +2411,18 @@ export function PosOrderPage() {
                 </Button>
 
                 <Stack direction="row" spacing={1.5}>
+                  <PosFeatureGate off={!features.park}>
                   <Button
                     variant="outlined"
                     color="warning"
-                    disabled={cart.length === 0 || holdingOrder}
+                    disabled={!features.park || cart.length === 0 || holdingOrder}
                     onClick={handleHoldOrder}
                     startIcon={holdingOrder ? <CircularProgress size={18} color="inherit" /> : <PauseIcon />}
                     sx={{ fontWeight: 'bold', py: 1, flexShrink: 0 }}
                   >
                     {holdingOrder ? 'Holding…' : 'Hold'}
                   </Button>
+                  </PosFeatureGate>
                   <Button
                     variant="outlined"
                     color="inherit"
@@ -3060,7 +3075,7 @@ export function PosOrderPage() {
         onDone={(message) => {
           setStopProduct(null);
           toast.success(message);
-          catalogApi
+          pos.catalog
             .getAvailabilities(selectedBranchId || undefined)
             .then((list) => setAvailabilities(list.filter((a) => !a.channel)))
             .catch(() => undefined);
