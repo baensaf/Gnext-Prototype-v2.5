@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -46,6 +47,8 @@ const ordersJSON = `{
 }`
 
 type shop struct {
+	// clockMu guards now: tickets print on their own goroutine, which reads the clock.
+	clockMu  sync.Mutex
 	t        *testing.T
 	dir      string
 	now      time.Time
@@ -92,7 +95,7 @@ func (s *shop) open() *Till {
 		Snapshot:  func() ([]byte, error) { return []byte(ordersJSON), nil },
 		Connected: func() bool { return s.up != nil },
 		Log:       slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Now:       func() time.Time { return s.now },
+		Now:       s.clock,
 		Store:     store,
 		Upload: func(p json.RawMessage) error {
 			if s.failing {
@@ -114,6 +117,19 @@ func (s *shop) open() *Till {
 			return s.charge(terminalID, attemptID, amount)
 		},
 	}
+}
+
+// clock is the shop's time; advance moves it on.
+func (s *shop) clock() time.Time {
+	s.clockMu.Lock()
+	defer s.clockMu.Unlock()
+	return s.now
+}
+
+func (s *shop) advance(d time.Duration) {
+	s.clockMu.Lock()
+	defer s.clockMu.Unlock()
+	s.now = s.now.Add(d)
 }
 
 func (s *shop) newOrder() *Order {
@@ -274,14 +290,14 @@ func TestVoidingASentLineFollowsTheEditWindow(t *testing.T) {
 	o = s.send(s.add(o, "burger", 2))
 
 	// Within 10 minutes the cashier alone may strike a line; the kitchen's copy is kept for the audit.
-	s.now = s.now.Add(9 * time.Minute)
+	s.advance(9 * time.Minute)
 	o, err := s.till.VoidLine(o.ID, o.Lines[1].ID, s.sara, "", "")
 	if err != nil || len(o.Lines) != 2 || len(o.Voided) != 1 || o.Voided[0].ApprovedBy != nil || o.Voided[0].ProductName != "سیب‌زمینی" {
 		t.Fatalf("void within the window: %+v, %v", o, err)
 	}
 
 	// After it: an approver's PIN, not a cashier's.
-	s.now = s.now.Add(2 * time.Minute)
+	s.advance(2 * time.Minute)
 	if _, err := s.till.VoidLine(o.ID, o.Lines[0].ID, s.sara, "", ""); !Is(err, CodeApprovalRequired) {
 		t.Fatalf("no PIN: %v", err)
 	}
@@ -322,7 +338,7 @@ func TestCancellingAnUnsentCartDropsItAndASentOneIsUploaded(t *testing.T) {
 	}
 
 	o := s.send(s.add(s.newOrder(), "burger", 1))
-	s.now = s.now.Add(6 * time.Minute) // past the 5-minute cancel window
+	s.advance(6 * time.Minute) // past the 5-minute cancel window
 	if _, err := s.till.Cancel(o.ID, s.sara, "مشتری رفت", "", ""); !Is(err, CodeApprovalRequired) {
 		t.Fatalf("late cancel without a PIN: %v", err)
 	}
@@ -344,7 +360,7 @@ func TestAPaidOrderFinishesAndIsUploadedInTheSection12Shape(t *testing.T) {
 	o := s.add(s.newOrder(), "burger", 2)
 	o.Payments = []Payment{{ID: "p1", MethodID: "cash", MethodKind: "CASH", Amount: "5390000", Status: "APPROVED", At: s.now}}
 	_ = s.till.Store.put(o)
-	s.now = s.now.Add(3 * time.Minute)
+	s.advance(3 * time.Minute)
 
 	o, err := s.till.Finish(o.ID, s.sara)
 	if err != nil || o.State != StateCompleted || o.CallNumber == nil || o.SentAt == nil {
@@ -400,12 +416,12 @@ func TestOnlineTheTillTakesNothingAndInHandoverNothingNew(t *testing.T) {
 	}
 
 	// 14 minutes connected: nothing yet. 15: the orders go.
-	s.now = s.now.Add(14 * time.Minute)
+	s.advance(14 * time.Minute)
 	s.till.tend()
 	if len(s.uploaded) != 0 {
 		t.Fatal("handed over before 15 minutes")
 	}
-	s.now = s.now.Add(time.Minute)
+	s.advance(time.Minute)
 	s.till.tend()
 	if len(s.uploaded) != 2 {
 		t.Fatalf("uploaded %d orders, want 2", len(s.uploaded))

@@ -143,7 +143,7 @@ func TestTheReceiptPrintsWhenPaidAndGoesUpWithTheChits(t *testing.T) {
 
 func TestAFailedChitIsReprintedMarkedOnAnotherPrinter(t *testing.T) {
 	s := newShop(t)
-	s.printer.failing = "p-fry"
+	s.printer.set(func(l *printLog) { l.failing = "p-fry" })
 	o := s.printedOrder(s.placedWith(LineInput{ProductID: "fries", Quantity: 1}).ID)
 	if len(o.Prints) != 1 || o.Prints[0].Status != PrintFailed || !strings.Contains(o.Prints[0].Error, "PAPER_OUT") {
 		t.Fatalf("failed chit = %+v", o.Prints)
@@ -197,14 +197,14 @@ func TestAChangeToAnOrderTheKitchenHasReachesOnlyItsStation(t *testing.T) {
 func TestATicketFallsBackAndFailsWhenNothingCanPrintIt(t *testing.T) {
 	s := newShop(t)
 	// The grill's printer is off: its chit goes to the kitchen fallback, as the cloud's would.
-	s.printer.reach = []PrinterInfo{{ID: "p-fry"}, {ID: "p-kitchen"}, {ID: "p-counter"}}
+	s.printer.set(func(l *printLog) { l.reach = []PrinterInfo{{ID: "p-fry"}, {ID: "p-kitchen"}, {ID: "p-counter"}} })
 	o := s.printedOrder(s.placedWith(LineInput{ProductID: "burger", Quantity: 1}).ID)
 	if len(o.Prints) != 1 || o.Prints[0].PrinterID != "p-kitchen" || o.Prints[0].Status != PrintPrinted {
 		t.Fatalf("fallback = %+v", o.Prints)
 	}
 
 	// No printer reachable at all: the chit is kept FAILED for a reprint.
-	s.printer.reach = []PrinterInfo{}
+	s.printer.set(func(l *printLog) { l.reach = []PrinterInfo{} })
 	o = s.printedOrder(s.placedWith(LineInput{ProductID: "burger", Quantity: 1}).ID)
 	if len(o.Prints) != 1 || o.Prints[0].Status != PrintFailed || o.Prints[0].HTML == "" {
 		t.Fatalf("no printer = %+v", o.Prints)
@@ -248,4 +248,11 @@ func (s *shop) placedWith(lines ...LineInput) *Order {
 		s.t.Fatal(err)
 	}
 	return o
+}
+
+// set changes the test's printers under their lock: tickets print on their own goroutine.
+func (l *printLog) set(change func(*printLog)) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	change(l)
 }
