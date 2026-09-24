@@ -22,7 +22,7 @@ export function SettingsButton({ sx, ...other }: IconButtonProps) {
       whileTap={varTap(0.96)}
       whileHover={varHover(1.04)}
       transition={transitionTap()}
-      aria-label={t('common.settings', 'Settings')}
+      aria-label={t('common.appearance', 'Appearance')}
       onClick={settings.onToggleDrawer}
       sx={[{ p: 0, width: 40, height: 40 }, ...(Array.isArray(sx) ? sx : [sx])]}
       {...other}

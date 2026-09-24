@@ -122,7 +122,7 @@
   },
   "common": {
     "languages": "Languages",
-    "settings": "Settings",
+    "appearance": "Appearance",
     "jwt": "JWT Authentication",
     "signInTitle": "Sign in to your account",
     "usernameLabel": "Username",

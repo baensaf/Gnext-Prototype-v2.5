@@ -122,7 +122,7 @@
   },
   "common": {
     "languages": "انتخاب زبان",
-    "settings": "تنظیمات پوسته",
+    "appearance": "ظاهر و نمایش",
     "jwt": "احراز هویت JWT",
     "signInTitle": "ورود به حساب کاربری",
     "usernameLabel": "نام کاربری",

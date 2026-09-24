@@ -1,6 +1,7 @@
 import type { SettingsState, SettingsDrawerProps } from '../types';
 
 import { useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { hasKeys, varAlpha } from 'minimal-shared/utils';
 
 import Box from '@mui/material/Box';
@@ -30,6 +31,7 @@ import { NavColorOptions, NavLayoutOptions } from './nav-layout-option';
 // ----------------------------------------------------------------------
 
 export function SettingsDrawer({ sx, defaultSettings }: SettingsDrawerProps) {
+  const { t } = useTranslation();
   const settings = useSettingsContext();
   const { mode, setMode, colorScheme } = useColorScheme();
 
@@ -67,8 +69,10 @@ export function SettingsDrawer({ sx, defaultSettings }: SettingsDrawerProps) {
         alignItems: 'center',
       }}
     >
+      {/* Theme, layout and fonts for this browser. The business's settings are the Settings
+          Hub, and two things both called "Settings" sent people to the wrong one. */}
       <Typography variant="h6" sx={{ flexGrow: 1 }}>
-        Settings
+        {t('common.appearance', 'Appearance')}
       </Typography>
 
       <FullScreenButton />
