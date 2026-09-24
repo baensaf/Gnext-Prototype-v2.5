@@ -16,11 +16,13 @@ import { BusinessDayCloseDto, BusinessDayReopenDto } from './dtos/shift.dto';
 
 import { MoneyUtil } from '../../common/utils/money.util';
 import {
-  BusinessDateUtil,
   ORDER_BUSINESS_DATE_EXPR,
+  REFUND_BUSINESS_DATE_EXPR,
   NON_REVENUE_ORDER_STATES,
   REVENUE_ORDER_PREDICATE,
 } from '../../common/utils/business-date.util';
+import { loadBusinessClock } from '../../common/utils/business-clock';
+import { addDays, isBusinessDate, toMinutes } from '../../common/utils/business-day';
 import {
   OPEN_ORDER_STATES,
   FINISHED_ORDER_STATES,
@@ -32,6 +34,16 @@ import {
 } from './open-orders';
 
 export type { OpenOrderIssue, DayCloseOpenOrder } from './open-orders';
+
+/** How a close came about. A person closing a day decides about its open orders; auto-close does not. */
+export interface DayCloseOptions {
+  /** Closed by the system after the cutoff, once the day's shifts were counted. */
+  automatic?: boolean;
+  /** Leave open orders dated before this day alone (auto-close never reaches into old days). */
+  ordersFrom?: string | null;
+  /** The instant to judge "has this day happened" against (tests; auto-close passes its own). */
+  now?: Date;
+}
 
 export interface DayCloseOpenOrders {
   /** Paid and handed over in all but name; closing the day completes them. */
@@ -99,14 +111,97 @@ export class BusinessDayService {
     };
   }
 
-  async closeBusinessDay(tenantId: string, dto: BusinessDayCloseDto, userId?: string, correlationId?: string) {
+  /**
+   * Which business day it is at a branch and when it turns over. The screens ask rather than
+   * work it out, because the cutoff, the hours and the time zone are the branch's.
+   */
+  async getCurrentBusinessDay(tenantId: string, branchId?: string | null) {
+    const clock = await loadBusinessClock(this.dataSource.manager, tenantId, branchId);
+    return { branchId: branchId || null, ...clock.describe() };
+  }
+
+  /**
+   * What the branch's current rule would have dated differently, over a window of past days.
+   * Read only: stored dates are what reports, closes and call numbers were built on, and they
+   * stay as they are. This is how a manager sees what the overnight business day would have
+   * moved (a sale at 01:30 that the midnight rule put on the next day) before deciding
+   * whether anything needs correcting by hand.
+   */
+  async reviewStoredDates(tenantId: string, query: { branchId?: string; from?: string; to?: string }) {
+    if (!query.branchId) throw new BadRequestException('branchId is required');
+    const clock = await loadBusinessClock(this.dataSource.manager, tenantId, query.branchId);
+    const today = clock.today();
+    const to = isBusinessDate(query.to) ? query.to : addDays(today, -1);
+    const from = isBusinessDate(query.from) ? query.from : addDays(to, -89);
+    if (from > to) throw new BadRequestException('from must not be after to');
+
+    const zone = clock.policy.timeZone;
+    const cutoff = toMinutes(clock.policy.cutoff);
+    const underRule = (ts: string) => `((${ts} AT TIME ZONE $3) - make_interval(mins => $4))::date::text`;
+    const params = [tenantId, query.branchId, zone, cutoff, clock.startOf(from), clock.endOf(to)];
+    const run = async (sql: string) => {
+      const rows: any[] = await this.dataSource.query(`${sql} ORDER BY at ASC LIMIT 501`, params);
+      return { count: rows.length > 500 ? '500+' : rows.length, rows: rows.slice(0, 500) };
+    };
+
+    const orders = await run(`
+      SELECT o.id, o.order_number AS reference, o.placed_at AS at,
+             ${ORDER_BUSINESS_DATE_EXPR('o')} AS stored_date, ${underRule('o.placed_at')} AS rule_date
+        FROM order_header o
+       WHERE o.tenant_id = $1 AND o.branch_id = $2 AND o.placed_at BETWEEN $5 AND $6
+         AND ${ORDER_BUSINESS_DATE_EXPR('o')} <> ${underRule('o.placed_at')}`);
+    const payments = await run(`
+      SELECT p.id, p.payment_number AS reference, p.initiated_at AS at,
+             p.business_date AS stored_date, ${underRule('p.initiated_at')} AS rule_date
+        FROM payment p JOIN order_header o ON o.id = p.order_id
+       WHERE p.tenant_id = $1 AND o.branch_id = $2 AND p.initiated_at BETWEEN $5 AND $6
+         AND p.business_date <> ${underRule('p.initiated_at')}`);
+    const refunds = await run(`
+      SELECT r.id, r.refund_number AS reference, r.initiated_at AS at,
+             ${REFUND_BUSINESS_DATE_EXPR('r')} AS stored_date, ${underRule('r.initiated_at')} AS rule_date
+        FROM refund r JOIN order_header o ON o.id = r.order_id
+       WHERE r.tenant_id = $1 AND o.branch_id = $2 AND r.initiated_at BETWEEN $5 AND $6
+         AND ${REFUND_BUSINESS_DATE_EXPR('r')} <> ${underRule('r.initiated_at')}`);
+    const shifts = await run(`
+      SELECT s.id, s.shift_number AS reference, s.opened_at AS at,
+             s.business_date AS stored_date, ${underRule('s.opened_at')} AS rule_date
+        FROM cashier_shift s
+       WHERE s.tenant_id = $1 AND s.branch_id = $2 AND s.opened_at BETWEEN $5 AND $6
+         AND s.business_date <> ${underRule('s.opened_at')}`);
+
+    return {
+      branchId: query.branchId,
+      from,
+      to,
+      rule: { cutoff: clock.policy.cutoff, timeZone: zone },
+      changesStoredDates: false,
+      orders,
+      payments,
+      refunds,
+      shifts,
+    };
+  }
+
+  /**
+   * Closing a day is optional housekeeping, not a gate: the date moves on at the cutoff and a
+   * new shift opens on the new day whether or not anyone has closed the last one. By default
+   * the system closes a day itself once it has ended and its shifts are counted (auto-close).
+   */
+  async closeBusinessDay(
+    tenantId: string,
+    dto: BusinessDayCloseDto,
+    userId?: string,
+    correlationId?: string,
+    options: DayCloseOptions = {},
+  ) {
     // "not-a-date" went through as a date and was answered with 41 open orders; 2026-12-31
     // closed a day that had not happened yet, so nothing could be sold on it.
     const date = dto.businessDate;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) {
       throw new BadRequestException('businessDate must be a date written YYYY-MM-DD');
     }
-    if (date > BusinessDateUtil.today()) {
+    const clock = await loadBusinessClock(this.dataSource.manager, tenantId, dto.branchId);
+    if (date > clock.today(options.now)) {
       throw new BadRequestException(`Business day ${date} has not happened yet and cannot be closed`);
     }
     return await this.dataSource.transaction(async (em) => {
@@ -143,12 +238,18 @@ export class BusinessDayService {
 
       // Orders nobody closed off. Most kitchens never tap "handed over", so a paid order is
       // completed here; one still owing money or not yet finished needs a person to decide.
-      const openOrders = await this.findOpenOrders(em, tenantId, dto.branchId, dto.businessDate, currencyCode);
+      const openOrders = await this.findOpenOrders(em, tenantId, dto.branchId, dto.businessDate, currencyCode, options.ordersFrom);
       const { toComplete, needsDecision } = this.sortOpenOrders(
         openOrders,
         await ordersAwaitingCourier(em, tenantId, openOrders),
       );
-      const carryOverReason = dto.carryOverReason?.trim() || null;
+      // Nobody is there to decide at 04:00: auto-close carries what is still owed or unfinished
+      // over to the next day, and says so, rather than leaving the day open.
+      const carryOverReason =
+        dto.carryOverReason?.trim() ||
+        (options.automatic
+          ? `Carried over automatically when business day ${dto.businessDate} closed after its ${clock.policy.cutoff} cutoff`
+          : null);
 
       if (needsDecision.length > 0 && !carryOverReason) {
         throw new ConflictException({
@@ -199,6 +300,7 @@ export class BusinessDayService {
           orderCount,
           autoCompletedOrders: toComplete.length,
           carriedOverOrders: needsDecision.length,
+          ...(options.automatic ? { closedAutomatically: true } : {}),
           ...(needsDecision.length > 0 ? { carryOverReason } : {}),
         },
       };
@@ -212,7 +314,7 @@ export class BusinessDayService {
         tenantId,
         actorType: userId ? 'ADMIN' : 'SYSTEM',
         actorId: userId,
-        action: 'BUSINESS_DAY_CLOSED',
+        action: options.automatic ? 'BUSINESS_DAY_AUTO_CLOSED' : 'BUSINESS_DAY_CLOSED',
         entityType: 'BusinessDayClose',
         entityId: savedClose.id,
         correlationId,
@@ -278,17 +380,18 @@ export class BusinessDayService {
     branchId: string,
     businessDate: string,
     currencyCode: string,
+    ordersFrom?: string | null,
   ): Promise<OrderHeader[]> {
-    return await em
+    const qb = em
       .createQueryBuilder(OrderHeader, 'o')
       .where('o.tenant_id = :tenantId', { tenantId })
       .andWhere('o.branch_id = :branchId', { branchId })
       .andWhere('o.currency_code = :currencyCode', { currencyCode })
       .andWhere(`${ORDER_BUSINESS_DATE_EXPR('o')} <= :businessDate`, { businessDate })
       .andWhere('o.state IN (:...openStates)', { openStates: OPEN_ORDER_STATES })
-      .andWhere('o.status NOT IN (:...finishedStates)', { finishedStates: FINISHED_ORDER_STATES })
-      .orderBy('o.placed_at', 'ASC')
-      .getMany();
+      .andWhere('o.status NOT IN (:...finishedStates)', { finishedStates: FINISHED_ORDER_STATES });
+    if (ordersFrom) qb.andWhere(`${ORDER_BUSINESS_DATE_EXPR('o')} >= :ordersFrom`, { ordersFrom });
+    return await qb.orderBy('o.placed_at', 'ASC').getMany();
   }
 
   private sortOpenOrders(orders: OrderHeader[], awaitingCourier: Set<string> = new Set()) {

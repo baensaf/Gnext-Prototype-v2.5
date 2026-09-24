@@ -18,7 +18,7 @@ import { Payment } from '../../entities/Payment.entity';
 import { Customer } from '../../entities/Customer.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
-import { BusinessDateUtil } from '../../common/utils/business-date.util';
+import { loadBusinessClock } from '../../common/utils/business-clock';
 import { normalizePhone } from '../customer/customer.service';
 import { KdsService } from '../kds/kds.service';
 import { PrintQueueService } from '../printing/print-queue.service';
@@ -541,7 +541,7 @@ export class KioskService {
       amount: MoneyUtil.format(amount, 4),
       status: 'SUCCEEDED',
       reference: refNum,
-      business_date: BusinessDateUtil.today(),
+      business_date: (await loadBusinessClock(this.paymentRepo.manager, tenantId, order.branch_id)).today(),
       idempotency_key: data.idempotency_key || null,
     });
     const savedPayment = await this.paymentRepo.save(payment);

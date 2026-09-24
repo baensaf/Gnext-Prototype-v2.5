@@ -14,6 +14,7 @@ import { RegisterNotice } from './register-notice';
 import { OpenShiftDialog } from './open-shift-dialog';
 import { CloseShiftDialog } from './close-shift-dialog';
 import { DeviceTerminalDialog } from './device-terminal-dialog';
+import { BusinessDayEndedAlert } from './business-day-ended-alert';
 
 // ----------------------------------------------------------------------
 
@@ -44,7 +45,7 @@ export function PosShiftBar({ register }: { register: RegisterShiftState }) {
         </Typography>
         <Chip
           size="small"
-          color={shift.state === 'OPEN' ? 'success' : 'warning'}
+          color={shift.state === 'OPEN' && !register.dayEnded ? 'success' : 'warning'}
           label={
             <span>
               {t('shift.bar.shift', 'Shift')} <span dir="ltr">#{shift.shift_number}</span>
@@ -73,6 +74,8 @@ export function PosShiftBar({ register }: { register: RegisterShiftState }) {
           {t('shift.close.title', 'Close shift')}
         </Button>
       </Paper>
+
+      <BusinessDayEndedAlert register={register} />
 
       <CloseShiftDialog
         open={closeOpen}

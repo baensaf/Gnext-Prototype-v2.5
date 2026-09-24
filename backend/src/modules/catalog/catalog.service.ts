@@ -20,6 +20,7 @@ import { assetUrl } from '../../common/utils/asset-url.util';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { describeWindows, isOnSchedule, isValidTime, localClock, parseDays } from '../../common/utils/availability-schedule.util';
 import { BUSINESS_TIME_ZONE, BusinessDateUtil, ORDER_BUSINESS_DATE_EXPR } from '../../common/utils/business-date.util';
+import { loadBusinessClock } from '../../common/utils/business-clock';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
 import { PriceListService } from './price-lists.service';
@@ -1347,7 +1348,16 @@ export class CatalogService {
 
   // Today's stock: how many of an item a branch has left to sell
 
-  async getDailyStock(tenantId: string, branchId: string, date: string = BusinessDateUtil.today()) {
+  /**
+   * The business day a stock count belongs to: the branch's, turning over at its cutoff, so a
+   * count set for the evening still holds at 01:00 and starts afresh with the next day.
+   */
+  private async stockDay(tenantId: string, branchId: string, at: Date = new Date()): Promise<string> {
+    return (await loadBusinessClock(this.stockRepo.manager, tenantId, branchId)).today(at);
+  }
+
+  async getDailyStock(tenantId: string, branchId: string, date?: string) {
+    date = date || (await this.stockDay(tenantId, branchId));
     const rows = await this.stockRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, business_date: date } });
     const out = [];
     for (const row of rows) {
@@ -1365,7 +1375,7 @@ export class CatalogService {
     correlationId: string,
   ) {
     if (!branchId) throw new BadRequestException("Stock is a branch's count; pick a branch first");
-    const date = BusinessDateUtil.today();
+    const date = await this.stockDay(tenantId, branchId);
     for (const entry of entries || []) {
       const where = {
         tenant_id: tenantId,
@@ -1476,7 +1486,7 @@ export class CatalogService {
     }
 
     if (!branchId) return;
-    const date = BusinessDateUtil.today(at);
+    const date = await this.stockDay(tenantId, branchId, at);
     const reader = em || this.stockRepo.manager;
     const allCounts = em
       ? await this.lockStockCounts(em, tenantId, branchId, date, [...byProduct.keys()])
@@ -1507,7 +1517,7 @@ export class CatalogService {
     const optionItems = new Set(live.filter((r) => r.option_item_id).map((r) => r.option_item_id as string));
     for (const off of await this.getOffScheduleProducts(tenantId, branchId, at)) products.add(off.product_id);
     if (branchId) {
-      for (const row of await this.getDailyStock(tenantId, branchId, BusinessDateUtil.today(at))) {
+      for (const row of await this.getDailyStock(tenantId, branchId, await this.stockDay(tenantId, branchId, at))) {
         if (row.remaining > 0) continue;
         if (row.variant_id) variants.add(row.variant_id);
         else products.add(row.product_id);
@@ -1547,7 +1557,7 @@ export class CatalogService {
     }
 
     if (order.branch_id) {
-      const date = BusinessDateUtil.today();
+      const date = await this.stockDay(tenantId, order.branch_id);
       // Locked until the order's transaction commits, so a second register selling the same
       // item waits here and then sees this line as sold (audit C11).
       const counts = await this.lockStockCounts(em, tenantId, order.branch_id, date, [product.id]);

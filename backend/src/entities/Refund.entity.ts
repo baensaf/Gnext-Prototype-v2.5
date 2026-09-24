@@ -85,6 +85,13 @@ export class Refund {
   @CreateDateColumn({ type: 'timestamptz' })
   initiated_at: Date;
 
+  /**
+   * The business day the money went back on, stamped when the refund is made. Null on
+   * refunds made before it was stamped; REFUND_BUSINESS_DATE_EXPR reads those the old way.
+   */
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  business_date: string | null;
+
   @Column({ type: 'timestamptz', nullable: true })
   posted_at: Date;
 

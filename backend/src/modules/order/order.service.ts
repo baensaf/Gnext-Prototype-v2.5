@@ -53,7 +53,7 @@ import {
 import Decimal from 'decimal.js';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
-import { BusinessDateUtil } from '../../common/utils/business-date.util';
+import { loadBusinessClock } from '../../common/utils/business-clock';
 import {
   SNAPPFOOD_DELAY_REASON_ID,
   SNAPPFOOD_REPORT_WINDOW_MINUTES,
@@ -795,15 +795,27 @@ export class OrderService {
       order.outstanding_total = quoteRes.grandTotal;
       order.due_amount = quoteRes.grandTotal;
 
-      // Stamp the operating day the order belongs to. Without this, business_date stays
+      // Stamp the business day the order belongs to: the branch's day at the moment it is
+      // placed, by the same cutoff rule every channel uses. Without this, business_date stays
       // NULL on every POS order and closeBusinessDay — which aggregates on business_date —
-      // reports nothing. Prefer the open shift's date so the order, the shift and the day
-      // close agree by construction rather than by coincidence of clock.
+      // reports nothing. A shift whose day has ended takes no new sale, so the order, its
+      // shift and the day close agree by construction rather than by coincidence of clock.
       if (!order.business_date) {
+        const today = (await loadBusinessClock(em, tenantId, order.branch_id)).today();
         const shiftForOrder = order.shift_id
           ? await em.findOne(CashierShift, { where: { id: order.shift_id, tenant_id: tenantId } })
           : null;
-        order.business_date = shiftForOrder?.business_date || BusinessDateUtil.today();
+        if (shiftForOrder?.business_date && String(shiftForOrder.business_date).slice(0, 10) < today) {
+          throw new ConflictException({
+            code: 'SHIFT_BUSINESS_DAY_ENDED',
+            title: 'Business Day Ended',
+            detail:
+              `Shift ${shiftForOrder.shift_number || ''} belongs to business day ${shiftForOrder.business_date}, which has ended. ` +
+              'Count and close it, then open a new shift to keep selling.',
+            context: { shiftId: shiftForOrder.id, shiftBusinessDate: shiftForOrder.business_date, businessDate: today },
+          });
+        }
+        order.business_date = today;
       }
 
       // Determine state transition: POS/KIOSK can move directly to CONFIRMED
@@ -929,7 +941,7 @@ export class OrderService {
     order.state = 'CONFIRMED';
     order.status = 'CONFIRMED';
     order.submitted_at = order.submitted_at || new Date();
-    order.business_date = order.business_date || BusinessDateUtil.today();
+    order.business_date = order.business_date || (await loadBusinessClock(this.dataSource.manager, tenantId, order.branch_id)).today();
     await this.orderRepo.save(order);
     await assignCallNumber(this.dataSource.manager, order);
 
@@ -2312,7 +2324,7 @@ export class OrderService {
       );
     }
 
-    const today = BusinessDateUtil.today();
+    const today = (await loadBusinessClock(this.dataSource.manager, tenantId, order.branch_id)).today();
     if (order.business_date && String(order.business_date) !== String(today)) {
       throw new BadRequestException(
         `Order ${order.order_number} belongs to business day ${order.business_date} and cannot be reopened on ${today}.`,
@@ -2358,7 +2370,8 @@ export class OrderService {
     // adding the same items in a different order cannot deadlock on them line by line.
     if (order.branch_id) {
       const productIds = itemsDto.map((i) => i.product_id).filter(Boolean);
-      await this.catalogService.lockStockCounts(em, tenantId, order.branch_id, BusinessDateUtil.today(), productIds);
+      const stockDay = (await loadBusinessClock(em, tenantId, order.branch_id)).today();
+      await this.catalogService.lockStockCounts(em, tenantId, order.branch_id, stockDay, productIds);
     }
     for (const itemDto of itemsDto) {
       try {

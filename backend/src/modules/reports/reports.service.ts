@@ -38,13 +38,23 @@ import { ReportExportJob } from '../../entities/ReportExportJob.entity';
 import { ApprovalRequest } from '../../entities/ApprovalRequest.entity';
 import { ApprovalDecision } from '../../entities/ApprovalDecision.entity';
 import { AdminUser } from '../../entities/AdminUser.entity';
+import { loadBusinessClock } from '../../common/utils/business-clock';
 import { MoneyUtil } from '../../common/utils/money.util';
 import {
   BusinessDateUtil,
   ORDER_BUSINESS_DATE_EXPR,
+  REFUND_BUSINESS_DATE_EXPR,
   NON_REVENUE_ORDER_STATES,
   REVENUE_ORDER_PREDICATE,
 } from '../../common/utils/business-date.util';
+
+/**
+ * The business date a row was stamped with, or for a row written before stamping existed, the
+ * date it has always been reported under (its timestamp's calendar date on the chain's clock).
+ */
+function storedDate(row: { business_date?: string | null }, at?: Date | string | null): string {
+  return row?.business_date || BusinessDateUtil.fromDate(at) || '—';
+}
 
 @Injectable()
 export class ReportsService {
@@ -163,17 +173,15 @@ export class ReportsService {
     return branchId ? { branch_id: branchId } : {};
   }
 
-  // A day in a report is a day on the restaurants' clock, from its midnight to the next.
-  private applyDateFilter(query: any, dateColumn: string, startDate?: string, endDate?: string) {
-    if (startDate && endDate) {
-      const start = BusinessDateUtil.startOfDay(startDate);
-      const end = BusinessDateUtil.endOfDay(endDate);
-      query.andWhere(`${dateColumn} BETWEEN :startDate AND :endDate`, { startDate: start, endDate: end });
-    } else if (startDate) {
-      query.andWhere(`${dateColumn} >= :startDate`, { startDate: BusinessDateUtil.startOfDay(startDate) });
-    } else if (endDate) {
-      query.andWhere(`${dateColumn} <= :endDate`, { endDate: BusinessDateUtil.endOfDay(endDate) });
-    }
+  /**
+   * A day in a report is a business day: what was stamped on the row when it happened, by its
+   * branch's cutoff (a sale at 01:30 belongs to the night before). Reading the stamp rather
+   * than re-deriving it from a timestamp keeps history exactly as it was reported, and lets
+   * branches in different time zones share one report.
+   */
+  private applyStoredDateFilter(query: any, dateExpr: string, startDate?: string, endDate?: string) {
+    if (startDate) query.andWhere(`${dateExpr} >= :sdStart`, { sdStart: startDate });
+    if (endDate) query.andWhere(`${dateExpr} <= :sdEnd`, { sdEnd: endDate });
   }
 
   async queryReport(tenantId: string, reportCode: string, filters: any = {}, actor?: UserScope) {
@@ -409,7 +417,15 @@ export class ReportsService {
       case 'product-sales': {
         const qb = this.orderItemRepo.createQueryBuilder('i')
           .where('i.tenant_id = :tenantId', { tenantId });
-        this.applyDateFilter(qb, 'i.created_at', startDate, endDate);
+        // A line sells on its order's business day.
+        if (startDate || endDate) {
+          const dated = this.orderRepo
+            .createQueryBuilder('dated_o')
+            .select('dated_o.id')
+            .where('dated_o.tenant_id = :tenantId', { tenantId });
+          this.applyBusinessDateFilter(dated, 'dated_o', startDate, endDate);
+          qb.andWhere(`i.order_id IN (${dated.getQuery()})`, dated.getParameters());
+        }
         this.applyBranchViaOrder(qb, 'i', branchId);
 
         const items = await qb.getMany();        let totalQty = '0.0000';
@@ -470,7 +486,7 @@ export class ReportsService {
       case 'payments-by-method': {
         const qb = this.paymentRepo.createQueryBuilder('p')
           .where('p.tenant_id = :tenantId', { tenantId });
-        this.applyDateFilter(qb, 'p.initiated_at', startDate, endDate);
+        this.applyStoredDateFilter(qb, 'p.business_date', startDate, endDate);
         this.applyBranchViaOrder(qb, 'p', branchId);
 
         const payments = await qb.getMany();
@@ -481,7 +497,7 @@ export class ReportsService {
         const refundQb = this.refundRepo.createQueryBuilder('r')
           .where('r.tenant_id = :tenantId', { tenantId })
           .andWhere('r.status IN (:...refundDone)', { refundDone: ['SUCCEEDED', 'COMPLETED'] });
-        this.applyDateFilter(refundQb, 'r.initiated_at', startDate, endDate);
+        this.applyStoredDateFilter(refundQb, REFUND_BUSINESS_DATE_EXPR('r'), startDate, endDate);
         this.applyBranchViaOrder(refundQb, 'r', branchId);
         const refunds = await refundQb.getMany();
 
@@ -592,7 +608,7 @@ export class ReportsService {
             return {
               order_id: o.id,
               order_number: o.order_number,
-              date: o.placed_at ? BusinessDateUtil.fromDate(o.placed_at) : '—',
+              date: storedDate(o, o.placed_at),
               branch_id: o.branch_id,
               total_amount: totStr,
               paid_amount: paidStr,
@@ -616,7 +632,7 @@ export class ReportsService {
         const qb = this.paymentRepo.createQueryBuilder('p')
           .where('p.tenant_id = :tenantId', { tenantId })
           .andWhere('(p.method_kind = :mk OR p.device_id IS NOT NULL)', { mk: 'MOBILE_POS' });
-        this.applyDateFilter(qb, 'p.initiated_at', startDate, endDate);
+        this.applyStoredDateFilter(qb, 'p.business_date', startDate, endDate);
         this.applyBranchViaOrder(qb, 'p', branchId);
 
         const payments = await qb.getMany();
@@ -632,7 +648,7 @@ export class ReportsService {
           return {
             payment_id: p.id,
             order_id: p.order_id,
-            date: p.initiated_at ? BusinessDateUtil.fromDate(p.initiated_at) : '—',
+            date: storedDate(p, p.initiated_at),
             device_id: p.device_id || 'MOBILE_POS_DEV_1',
             reference_number: p.reference || 'REF-POS-100',
             amount: amtStr,
@@ -655,7 +671,7 @@ export class ReportsService {
       case 'alternative-refunds': {
         const qb = this.refundRepo.createQueryBuilder('r')
           .where('r.tenant_id = :tenantId', { tenantId });
-        this.applyDateFilter(qb, 'r.initiated_at', startDate, endDate);
+        this.applyStoredDateFilter(qb, REFUND_BUSINESS_DATE_EXPR('r'), startDate, endDate);
         this.applyBranchViaOrder(qb, 'r', branchId);
 
         const refunds = await qb.getMany();
@@ -670,7 +686,7 @@ export class ReportsService {
             return {
               refund_id: r.id,
               order_id: r.order_id,
-              date: r.initiated_at ? BusinessDateUtil.fromDate(r.initiated_at) : '—',
+              date: storedDate(r, r.initiated_at),
               original_method: 'CASH',
               target_method: r.method_kind || 'BANK_TRANSFER',
               amount: amtStr,
@@ -841,7 +857,7 @@ export class ReportsService {
 
             return {
               shift_id: s.id,
-              date: s.closed_at ? BusinessDateUtil.fromDate(s.closed_at) : '—',
+              date: storedDate(s, s.closed_at),
               branch_id: s.branch_id,
               cashier_id: s.opened_by || 'CASHIER-1',
               expected_cash: MoneyUtil.format(s.expected_cash || '0', 2),
@@ -883,7 +899,7 @@ export class ReportsService {
 
           return {
             entry_id: e.id,
-            date: e.posted_at ? BusinessDateUtil.fromDate(e.posted_at) : '—',
+            date: storedDate(e, e.posted_at),
             account_id: e.account_id,
             type: e.entry_type || 'PURCHASE',
             order_id: e.order_id || '—',
@@ -920,7 +936,7 @@ export class ReportsService {
           totalUsage = MoneyUtil.add(totalUsage, amtStr, 2);
 
           return {
-            date: e.posted_at ? BusinessDateUtil.fromDate(e.posted_at) : '—',
+            date: storedDate(e, e.posted_at),
             account_id: e.account_id,
             order_id: e.order_id || '—',
             purchase_amount: amtStr,
@@ -1007,8 +1023,8 @@ export class ReportsService {
             phone: c.mobile || '—',
             order_count: cOrders.length,
             gross_sales: grossStr,
-            first_order_date: cOrders.length > 0 ? BusinessDateUtil.fromDate(cOrders[cOrders.length - 1].placed_at) : '—',
-            last_order_date: cOrders.length > 0 ? BusinessDateUtil.fromDate(cOrders[0].placed_at) : '—',
+            first_order_date: cOrders.length > 0 ? storedDate(cOrders[cOrders.length - 1], cOrders[cOrders.length - 1].placed_at) : '—',
+            last_order_date: cOrders.length > 0 ? storedDate(cOrders[0], cOrders[0].placed_at) : '—',
           };
         });
 
@@ -1037,7 +1053,7 @@ export class ReportsService {
             order_id: o.id,
             external_id: (o as any).external_id || `SNAPP-${o.order_number}`,
             order_number: o.order_number,
-            date: o.placed_at ? BusinessDateUtil.fromDate(o.placed_at) : '—',
+            date: storedDate(o, o.placed_at),
             status: o.status,
             total_amount: amtStr,
             reconciliation_status: 'MATCHED',
@@ -1100,7 +1116,7 @@ export class ReportsService {
           return {
             attendance_id: a.id,
             courier_id: a.courier_id,
-            date: a.checked_in_at ? BusinessDateUtil.fromDate(a.checked_in_at) : '—',
+            date: (a as any).date || storedDate({}, a.checked_in_at),
             check_in: a.checked_in_at ? new Date(a.checked_in_at).toLocaleTimeString() : '—',
             check_out: a.checked_out_at ? new Date(a.checked_out_at).toLocaleTimeString() : '—',
             status: a.status || 'CHECKED_IN',
@@ -1215,7 +1231,7 @@ export class ReportsService {
 
           return {
             order_number: o.order_number,
-            date: o.placed_at ? BusinessDateUtil.fromDate(o.placed_at) : '—',
+            date: storedDate(o, o.placed_at),
             taxable_amount: subStr,
             tax_rate: '9.0%',
             tax_amount: taxStr,
@@ -1594,8 +1610,12 @@ export class ReportsService {
     });
     const alerts = await this.getAlerts(tenantId, branchId);
 
-    const todayStr = BusinessDateUtil.today();
-    const todayOrders = orders.filter((o) => o.placed_at && BusinessDateUtil.fromDate(o.placed_at) === todayStr);
+    // Today is each branch's own business day, by its cutoff and on its own clock.
+    const todayAt = new Map<string, string>();
+    for (const id of new Set(orders.map((o) => o.branch_id))) {
+      todayAt.set(id, (await loadBusinessClock(this.orderRepo.manager, tenantId, id)).today());
+    }
+    const todayOrders = orders.filter((o) => o.placed_at && storedDate(o, o.placed_at) === todayAt.get(o.branch_id));
     const salesToday = todayOrders.reduce((sum, o) => MoneyUtil.add(sum, o.total_amount || '0', 2), '0.00');
     const openOrders = orders.filter((o) => o.status === 'SUBMITTED' || o.status === 'ACCEPTED' || o.status === 'IN_PREPARATION');
     const openAlerts = alerts.filter((a) => !a.acknowledged);

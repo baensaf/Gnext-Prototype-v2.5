@@ -24,7 +24,7 @@ import { AuditWriter } from '../audit/audit-writer.service';
 import { ShiftService } from '../cashier/shift.service';
 import { OrderTransitionRecorder } from '../order-lifecycle/order-transition-recorder.service';
 import { MoneyUtil } from '../../common/utils/money.util';
-import { BusinessDateUtil } from '../../common/utils/business-date.util';
+import { BusinessClock, loadBusinessClock } from '../../common/utils/business-clock';
 import { normalizePhone } from '../customer/customer.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
@@ -147,6 +147,11 @@ export class DeliveryService {
   }
 
   /** A blank amount means "not set", which is different from zero. */
+  /** Today's business day at a branch (or the chain's, when there is none). */
+  private async businessToday(tenantId: string, branchId?: string | null): Promise<string> {
+    return (await loadBusinessClock(this.orderRepo?.manager, tenantId, branchId)).today();
+  }
+
   private static optionalAmount(value?: string | number | null): string | null {
     if (value === null || value === undefined || String(value).trim() === '') return null;
     return MoneyUtil.format(value, 4);
@@ -158,10 +163,10 @@ export class DeliveryService {
     if (branchId) where.branch_id = branchId;
     const couriers = await this.courierRepo.find({ where, order: { name: 'ASC' } });
 
-    const todayStr = BusinessDateUtil.today();
     const enriched = [];
 
     for (const c of couriers) {
+      const todayStr = await this.businessToday(tenantId, c.branch_id);
       const attendance = await this.attendanceRepo.findOne({
         where: { tenant_id: tenantId, courier_id: c.id, date: todayStr },
         order: { created_at: 'DESC' },
@@ -194,7 +199,7 @@ export class DeliveryService {
     const c = await this.courierRepo.findOne({ where: { tenant_id: tenantId, id } });
     if (!c) throw new NotFoundException(`Courier ${id} not found`);
 
-    const todayStr = BusinessDateUtil.today();
+    const todayStr = await this.businessToday(tenantId, c.branch_id);
     const attendance = await this.attendanceRepo.findOne({
       where: { tenant_id: tenantId, courier_id: c.id, date: todayStr },
       order: { created_at: 'DESC' },
@@ -326,7 +331,7 @@ export class DeliveryService {
       }
 
       const attendance = await this.attendanceRepo.findOne({
-        where: { tenant_id: tenantId, courier_id: courierId, date: BusinessDateUtil.today() },
+        where: { tenant_id: tenantId, courier_id: courierId, date: await this.businessToday(tenantId, courier.branch_id) },
       });
       if (attendance && attendance.status !== 'CHECKED_OUT') {
         throw refuse('COURIER_ON_SHIFT', `${courier.name} is still checked in at their current branch. Check them out there first.`);
@@ -475,7 +480,9 @@ export class DeliveryService {
       });
     }
 
-    const todayStr = BusinessDateUtil.today();
+    // The courier's business day, not the calendar's: a rider checked in at 20:00 is still on
+    // tonight's roster at 01:00.
+    const todayStr = await this.businessToday(tenantId, data.branch_id || courier.branch_id);
     let attendance = await this.attendanceRepo.findOne({
       where: { tenant_id: tenantId, courier_id: data.courier_id, date: todayStr },
     });
@@ -538,7 +545,8 @@ export class DeliveryService {
   }
 
   async setCourierAvailability(tenantId: string, courierId: string, availabilityStatus: 'AVAILABLE' | 'BUSY' | 'OFF_LINE', actorId?: string) {
-    const todayStr = BusinessDateUtil.today();
+    const rider = await this.courierRepo.findOne({ where: { tenant_id: tenantId, id: courierId } });
+    const todayStr = await this.businessToday(tenantId, rider?.branch_id);
     let attendance = await this.attendanceRepo.findOne({
       where: { tenant_id: tenantId, courier_id: courierId, date: todayStr },
     });
@@ -767,7 +775,7 @@ export class DeliveryService {
       });
     }
 
-    const todayStr = BusinessDateUtil.today();
+    const todayStr = await this.businessToday(tenantId, courier.branch_id);
     const attendance = await this.attendanceRepo.findOne({
       where: { tenant_id: tenantId, courier_id: courierId, date: todayStr },
     });
@@ -1607,6 +1615,7 @@ export class DeliveryService {
     const posMethod = collections.some((c) => MoneyUtil.greaterThan(c.pos, '0')) ? await this.activeMethod(tenantId, ['MOBILE_POS', 'CARD_POS', 'NETWORK_POS', 'CARD']) : null;
     const courier = await this.courierRepo.findOne({ where: { id: settlement.courier_id, tenant_id: tenantId } });
 
+    const settledOn = await this.businessToday(tenantId, settlement.branch_id);
     const saved = await this.orderRepo.manager.transaction(async (em) => {
       let seq = 0;
       for (const c of collections) {
@@ -1627,7 +1636,8 @@ export class DeliveryService {
               currency_code: order.currency_code || 'IRR',
               reference: settlement.settlement_number,
               shift_id: drawer?.id ?? null,
-              business_date: order.business_date || BusinessDateUtil.today(),
+              // The day the courier handed the money over, by the branch's cutoff.
+              business_date: settledOn,
               idempotency_key: `cod:${settlement.id}:${order.id}:${method.kind}`,
               posted_at: new Date(),
             }),
@@ -1859,7 +1869,12 @@ export class DeliveryService {
       .filter((b) => SELLING_BRANCH_TYPES.includes(b.branch_type))
       .filter((b) => b.is_active);
 
-    const today = BusinessDateUtil.today();
+    // "Today" is each branch's own business day: its cutoff, on its own clock.
+    const clocks = new Map<string, BusinessClock>();
+    for (const b of branches) clocks.set(b.id, await loadBusinessClock(this.orderRepo.manager, tenantId, b.id));
+    const chainClock = await loadBusinessClock(this.orderRepo.manager, tenantId);
+    const clockOf = (branchId: string) => clocks.get(branchId) ?? chainClock;
+    const today = chainClock.today();
     const lateBefore = new Date(Date.now() - DeliveryService.LATE_AFTER_MINUTES * 60_000);
 
     // One join instead of a query per delivery: getDeliveries() reads the order row by row
@@ -1889,9 +1904,10 @@ export class DeliveryService {
       .getRawMany();
 
     const couriers = await this.courierRepo.find({ where: { tenant_id: tenantId, is_active: true } });
-    const attendance = await this.attendanceRepo.find({
-      where: { tenant_id: tenantId, date: today, status: 'CHECKED_IN' },
-    });
+    const todays = [...new Set([today, ...[...clocks.values()].map((c) => c.today())])];
+    const attendance = (
+      await this.attendanceRepo.find({ where: { tenant_id: tenantId, date: In(todays), status: 'CHECKED_IN' } })
+    ).filter((a) => a.date === clockOf(a.branch_id).today());
 
     type Bucket = {
       in_flight: number;
@@ -1926,7 +1942,8 @@ export class DeliveryService {
       const state = DeliveryService.effectiveDeliveryState(row.state, row.order_state, row.order_status);
 
       if (state === 'DELIVERED') {
-        if (BusinessDateUtil.fromDate(row.delivered_at) === today) bucket.delivered_today += 1;
+        const clock = clockOf(row.branch_id);
+        if (clock.dateOf(row.delivered_at) === clock.today()) bucket.delivered_today += 1;
         continue;
       }
       if (state === 'FAILED') {

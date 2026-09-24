@@ -33,6 +33,7 @@ import { AgentRegistryService } from '../src/modules/agent-gateway/agent-registr
 import { AgentPaymentsService } from '../src/modules/payment/agent-payments.service';
 import { AgentSyncService, parseOrder } from '../src/modules/agent-data/agent-sync.service';
 import { BusinessDateUtil } from '../src/common/utils/business-date.util';
+import { BusinessClock } from '../src/common/utils/business-day';
 import { AgentSyncAdminController } from '../src/modules/agent-data/agent-sync-admin.controller';
 import { HEAD_OFFICE_ONLY_KEY } from '../src/common/decorators/roles.decorator';
 import { deleteTenantData } from './utils/tenant-teardown';
@@ -47,7 +48,10 @@ describe('agent offline order upload (PostgreSQL)', () => {
   let deviceKey: string;
   let dataVersion: string;
   const ids: Record<string, string> = {};
-  const today = BusinessDateUtil.today();
+  // The business day the fixture's orders were placed on (09:42 in Tehran), by the 04:00 cutoff.
+  // Fixed rather than read off the clock: the orders carry a fixed placing time, and a date
+  // taken from the day the suite runs would disagree with it on every other day.
+  const today = BusinessClock.fromConfig({}, 'Asia/Tehran').dateAt('2026-09-24T06:12:40.000Z');
 
   const save = <T>(entity: any, data: Partial<T>) =>
     dataSource.getRepository<T>(entity).save(dataSource.getRepository<T>(entity).create(data as any) as any) as Promise<any>;
@@ -285,7 +289,13 @@ describe('agent offline order upload (PostgreSQL)', () => {
     const closedShift = await save(CashierShift, {
       tenant_id: tenantId, branch_id: branchId, terminal_id: ids.till, user_id: ids.cashier, shift_number: 'S-0000', state: 'CLOSED', business_date: '2026-09-20',
     });
-    const lateShift = offlineOrder({ call_number: 162, shift_id: closedShift.id, business_date: '2026-09-20' });
+    const lateShift = offlineOrder({
+      call_number: 162,
+      shift_id: closedShift.id,
+      business_date: '2026-09-20',
+      placed_at: '2026-09-20T10:00:00.000Z',
+      completed_at: '2026-09-20T10:05:00.000Z',
+    });
     await save(BusinessDayClose, { tenant_id: tenantId, branch_id: branchId, business_date: '2026-09-20', status: 'CLOSED' } as any);
 
     await save(DailyStock, { tenant_id: tenantId, branch_id: branchId, product_id: ids.fries, variant_id: ids.large, business_date: today, quantity: 1 });
@@ -309,6 +319,18 @@ describe('agent offline order upload (PostgreSQL)', () => {
     const removed = offlineOrder({ call_number: 164 }, [{ product: ids.fries, name: 'سیب‌زمینی', variant: ids.large, variantName: 'بزرگ', unit: '1500000', qty: 1, rate: '0.0000' }]);
     expect((await upload([removed]).expect(200)).body.results[0]).toMatchObject({ result: 'ACCEPTED', flags: expect.arrayContaining(['ITEM_REMOVED']) });
     await dataSource.getRepository(Product).update({ id: ids.fries }, { is_active: true });
+  });
+
+  it("flags an order the till dated other than by the branch's 04:00 cutoff, and keeps the till's date", async () => {
+    // 01:30 in Tehran on the 25th is still the 24th's business day.
+    const night = { placed_at: '2026-09-24T22:00:00.000Z', completed_at: '2026-09-24T22:05:00.000Z' };
+    const byCutoff = offlineOrder({ call_number: 165, business_date: '2026-09-24', ...night });
+    const byCalendar = offlineOrder({ call_number: 166, business_date: '2026-09-25', ...night });
+    const res = (await upload([byCutoff, byCalendar]).expect(200)).body.results;
+    expect(res[0]).toMatchObject({ result: 'ACCEPTED' });
+    expect(res[0].flags).not.toContain('BUSINESS_DATE_DIFFERS');
+    expect(res[1]).toMatchObject({ result: 'ACCEPTED', flags: expect.arrayContaining(['BUSINESS_DATE_DIFFERS']) });
+    expect((await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: byCalendar.id })).business_date).toBe('2026-09-25');
   });
 
   it('books a cancelled order without payments, and an open one for the POS to finish', async () => {

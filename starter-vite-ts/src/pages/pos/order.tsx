@@ -142,7 +142,8 @@ export function PosOrderPage() {
   const { selectedBranchId, setSelectedBranchId } = useBranchContext();
   // The register this device is and the shift open on it; the till stays shut without one.
   const register = useRegisterShift();
-  const shiftBlocked = !register.shift;
+  // A shift whose business day has ended sells nothing more: it is counted and closed first.
+  const shiftBlocked = !register.shift || register.dayEnded;
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeTab, setActiveTab] = useState<string>('');
   const [products, setProducts] = useState<Product[]>([]);
@@ -1462,7 +1463,7 @@ export function PosOrderPage() {
         </Alert>
       )}
 
-      {shiftBlocked ? <PosShiftGate register={register} /> : <PosShiftBar register={register} />}
+      {shiftBlocked && !register.dayEnded ? <PosShiftGate register={register} /> : <PosShiftBar register={register} />}
 
       {/* Hidden rather than unmounted while no shift is open, so a half-built cart survives
           a shift being opened in the middle of it. */}

@@ -1,7 +1,7 @@
 import { EntityManager, IsNull } from 'typeorm';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
-import { BusinessDateUtil } from '../../common/utils/business-date.util';
+import { loadBusinessClock } from '../../common/utils/business-clock';
 
 /**
  * The number a branch calls an order by, as Iranian counters do (HAMI and the like): 2–3
@@ -77,9 +77,9 @@ export async function assignCallNumber(em: EntityManager, order: OrderHeader): P
   // A caller without a real entity manager (a unit test's fake) simply gets no number.
   if (typeof em?.query !== 'function' || typeof em?.findOne !== 'function') return null;
   const group = callChannelGroup(order.channel);
-  // The operating day the order was stamped with (its shift's), so a shop open past midnight
-  // does not start again at 100 in the middle of service.
-  const businessDate = String(order.business_date || BusinessDateUtil.today()).slice(0, 10);
+  // The business day the order was stamped with, which turns over at the branch's cutoff, so
+  // a shop open past midnight does not start again at 100 in the middle of service.
+  const businessDate = String(order.business_date || (await loadBusinessClock(em, order.tenant_id, order.branch_id)).today()).slice(0, 10);
 
   const setting = await em.findOne(TenantSetting, {
     where: { tenant_id: order.tenant_id, key: CALL_NUMBER_SETTING_KEY, branch_id: IsNull() },

@@ -68,6 +68,7 @@ import { MoadianInvoicesPage } from 'src/pages/moadian/moadian-invoices';
 import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
 import { BranchOverridesPage } from 'src/pages/settings/branch-overrides';
 import { ShiftPolicySettingsPage } from 'src/pages/settings/shift-policy';
+import { BusinessDaySettingsPage } from 'src/pages/settings/business-day';
 import { CustomerProfilePage } from 'src/pages/customers/customer-profile';
 import { IncomingOrdersProvider } from 'src/contexts/incoming-orders-context';
 import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
@@ -201,6 +202,7 @@ export const routesSection: RouteObject[] = [
       { path: 'settings/general', element: <GeneralSettingsPage /> },
       { path: 'settings/order-workflow', element: <OrderWorkflowSettingsPage /> },
       { path: 'settings/shift-policy', element: <ShiftPolicySettingsPage /> },
+      { path: 'settings/business-day', element: <BusinessDaySettingsPage /> },
       { path: 'settings/courier-pay', element: <CourierPaySettingsPage /> },
       { path: 'settings/calendar', element: <CalendarSettingsPage /> },
       { path: 'settings/branch-overrides', element: <BranchOverridesPage /> },

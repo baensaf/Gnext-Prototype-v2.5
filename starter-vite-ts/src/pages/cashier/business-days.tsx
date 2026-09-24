@@ -39,6 +39,7 @@ import { DayCloseOrders } from 'src/components/shift/day-close-orders';
 
 import { shiftApi } from '../../api/shiftApi';
 import { ServerDataGrid } from '../../components/server-data-grid';
+import { businessDayApi, type DateReview, type CurrentBusinessDay } from '../../api/businessDayApi';
 
 const errorText = (err: any, fallback: string) =>
   err?.response?.data?.message || err?.detail || err?.message || fallback;
@@ -80,6 +81,31 @@ export function BusinessDaysPage() {
   // Reopen Dialog State
   const [selectedDay, setSelectedDay] = useState<BusinessDayClose | null>(null);
   const [reopenReason, setReopenReason] = useState<string>('');
+
+  // The branch's business day now, and what the cutoff rule would have dated differently.
+  const [currentDay, setCurrentDay] = useState<CurrentBusinessDay | null>(null);
+  const [review, setReview] = useState<DateReview | null>(null);
+  const [reviewing, setReviewing] = useState<boolean>(false);
+
+  useEffect(() => {
+    setReview(null);
+    businessDayApi
+      .getCurrent(branchId || undefined)
+      .then(setCurrentDay)
+      .catch(() => setCurrentDay(null));
+  }, [branchId]);
+
+  const handleReview = async () => {
+    if (!branchId) return;
+    setReviewing(true);
+    try {
+      setReview(await businessDayApi.getDateReview({ branchId }));
+    } catch (err: any) {
+      setError(errorText(err, t('cashier.dateReview.failed', 'Could not review the stored dates')));
+    } finally {
+      setReviewing(false);
+    }
+  };
 
   const fetchBusinessDays = useCallback(async () => {
     setLoading(true);
@@ -202,12 +228,17 @@ export function BusinessDaysPage() {
       headerName: t('common.status', 'Status'),
       width: 130,
       renderCell: (params) => (
-        <Chip
-          size="small"
-          label={params.value}
-          color={params.value === 'CLOSED' ? 'default' : 'warning'}
-          variant={params.value === 'CLOSED' ? 'filled' : 'outlined'}
-        />
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', height: '100%' }}>
+          <Chip
+            size="small"
+            label={params.value}
+            color={params.value === 'CLOSED' ? 'default' : 'warning'}
+            variant={params.value === 'CLOSED' ? 'filled' : 'outlined'}
+          />
+          {params.row.totals?.closedAutomatically && (
+            <Chip size="small" variant="outlined" color="info" label={t('cashier.autoClosed', 'Auto')} />
+          )}
+        </Stack>
       ),
     },
     // The day's figures sit beside its status, ahead of the timestamps: at the end of the row
@@ -307,6 +338,16 @@ export function BusinessDaysPage() {
           <Typography variant="body2" color="text.secondary">
             {t('cashier.businessDaysSubtitle', 'End-of-day store closures, branch reconciliation, and supervisor reopen authorizations')}
           </Typography>
+          {currentDay && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {t('cashier.currentDay', 'Business day now: {{date}} · turns over at {{cutoff}} · hours {{opens}}–{{closes}}', {
+                date: fDate(currentDay.businessDate),
+                cutoff: currentDay.cutoff,
+                opens: currentDay.operatingHours.opensAt,
+                closes: currentDay.operatingHours.closesAt,
+              })}
+            </Typography>
+          )}
         </Box>
         <Stack sx={{ flexDirection: 'row', gap: 1.5 }}>
           <IconButton onClick={fetchBusinessDays} title={t('common.refresh', 'Refresh')}>
@@ -318,10 +359,22 @@ export function BusinessDaysPage() {
             startIcon={<LockIcon />}
             onClick={openDialog}
           >
-            {t('cashier.closeDay', 'Close Business Day (EOD)')}
+            {t('cashier.closeDayEarly', 'Close a day now')}
           </Button>
         </Stack>
       </Stack>
+
+      <Alert severity="info" sx={{ mb: 3 }}>
+        {currentDay?.autoClose === false
+          ? t(
+              'cashier.autoCloseOff',
+              'The date moves on at the cutoff by itself and new shifts open on the new day. Automatic closing is off for this branch, so close each day here once its drawers are counted.'
+            )
+          : t(
+              'cashier.autoCloseOn',
+              'The date moves on at the cutoff by itself and new shifts open on the new day. Each day closes on its own once every shift on it is counted; close one here only to finish it early.'
+            )}
+      </Alert>
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
@@ -378,6 +431,51 @@ export function BusinessDaysPage() {
         </Grid>
       </Grid>
 
+      {branchId && (
+        <Card sx={{ mb: 3 }}>
+          <CardHeader
+            title={t('cashier.dateReview.title', 'Check past dates against the cutoff')}
+            subheader={t(
+              'cashier.dateReview.subtitle',
+              'Lists orders, payments, refunds and shifts from the last 90 days whose stored date the current cutoff would have given differently — usually sales after midnight dated to the next day. Nothing is changed.'
+            )}
+            action={
+              <Button variant="outlined" onClick={handleReview} disabled={reviewing}>
+                {t('cashier.dateReview.run', 'Check')}
+              </Button>
+            }
+          />
+          {review && (
+            <CardContent sx={{ pt: 0 }}>
+              <Typography variant="body2">
+                {t(
+                  'cashier.dateReview.result',
+                  '{{from}} to {{to}}: {{orders}} orders, {{payments}} payments, {{refunds}} refunds and {{shifts}} shifts are stored on a date the {{cutoff}} cutoff would not give them. They keep their stored dates.',
+                  {
+                    from: fDate(review.from),
+                    to: fDate(review.to),
+                    orders: review.orders.count,
+                    payments: review.payments.count,
+                    refunds: review.refunds.count,
+                    shifts: review.shifts.count,
+                    cutoff: review.rule.cutoff,
+                  }
+                )}
+              </Typography>
+              {review.orders.rows.length > 0 && (
+                <Stack spacing={0.25} sx={{ mt: 1.5, maxHeight: 200, overflow: 'auto' }}>
+                  {review.orders.rows.slice(0, 50).map((row) => (
+                    <Typography key={row.id} variant="caption" dir="ltr">
+                      {row.reference} · {fDateTime(row.at)} · {fDate(row.stored_date)} → {fDate(row.rule_date)}
+                    </Typography>
+                  ))}
+                </Stack>
+              )}
+            </CardContent>
+          )}
+        </Card>
+      )}
+
       {/* Main Ledger Table */}
       <ServerDataGrid
         rows={businessDays}
@@ -395,6 +493,10 @@ export function BusinessDaysPage() {
             {t(
               'cashier.closeDayWarning',
               'Every drawer at the branch must be counted down first. Closing the day fixes the branch’s sales for that date.'
+            )}{' '}
+            {t(
+              'cashier.closeDayOptional',
+              'You do not need to do this for the date to move on or to open the next shift.'
             )}
           </Typography>
           <Stack spacing={2} sx={{ mt: 1 }}>

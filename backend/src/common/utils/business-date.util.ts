@@ -12,8 +12,13 @@ export const BUSINESS_TIME_ZONE = process.env.BUSINESS_TIME_ZONE || 'Asia/Tehran
  * between local midnight and 03:30 would be stamped to the previous day, so a shift
  * opened in the evening and closed after midnight would straddle two business dates.
  *
- * These helpers resolve the date on the business clock (BUSINESS_TIME_ZONE), whatever
- * zone the server itself runs in.
+ * These helpers resolve the calendar date, midnight to midnight, on the chain's clock
+ * (BUSINESS_TIME_ZONE), whatever zone the server itself runs in. They name documents
+ * (ORD-20260922-…), bound date-only price changes and discount windows, and read dates
+ * stamped before the overnight business day.
+ *
+ * They are NOT the business day a sale belongs to: that turns over at the branch's cutoff
+ * (04:00 by default), not at midnight. Use loadBusinessClock (business-clock.ts) for it.
  */
 export class BusinessDateUtil {
   /** Today on the business clock, as YYYY-MM-DD (en-CA formats as an ISO date). */
@@ -63,14 +68,19 @@ export class BusinessDateUtil {
 /**
  * The operating day an order belongs to, as SQL. business_date is stamped at submit;
  * the fallback covers orders written before that existed so reports and day closes
- * bucket them identically instead of one silently dropping them. The fallback reads the
- * placement time on the business clock, not the database session's.
+ * bucket them identically instead of one silently dropping them. Those orders predate the
+ * overnight business day, so the fallback reads them as they were always read: the
+ * placement time's calendar date on the chain's clock. Changing it would re-date history.
  *
  * Every query that reports on sales revenue MUST use this expression and
  * NON_REVENUE_ORDER_STATES together, or the figures will not cross-foot.
  */
 export const ORDER_BUSINESS_DATE_EXPR = (alias: string) =>
   `COALESCE(${alias}.business_date, (${alias}.placed_at AT TIME ZONE '${BUSINESS_TIME_ZONE.replace(/'/g, '')}')::date::text)`;
+
+/** The same for a refund: stamped since the overnight business day, read the old way before. */
+export const REFUND_BUSINESS_DATE_EXPR = (alias: string) =>
+  `COALESCE(${alias}.business_date, (${alias}.initiated_at AT TIME ZONE '${BUSINESS_TIME_ZONE.replace(/'/g, '')}')::date::text)`;
 
 /**
  * Order states that are not revenue: cancelled and rejected never counted, drafts were never

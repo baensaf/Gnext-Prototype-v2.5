@@ -17,12 +17,27 @@ type CalendarState = {
   calendar: CalendarSystem;
   /** 0 = Sunday … 6 = Saturday. The Iranian week starts on Saturday. */
   weekStartsOn: number;
+  /**
+   * When the business day turns over (HH:MM), from the BUSINESS_DAY setting. A sale at 01:30
+   * belongs to the day before. The server decides every stored date; this only picks the
+   * "today" a screen starts on.
+   */
+  businessDayCutoff: string;
   setCalendar: (value: { calendar?: string; weekStartsOn?: number } | null | undefined) => void;
+  setBusinessDay: (value: { cutoff?: string } | null | undefined) => void;
 };
+
+const DEFAULT_CUTOFF = '04:00';
 
 export const useCalendarStore = create<CalendarState>((set) => ({
   calendar: 'JALALI',
   weekStartsOn: 6,
+  businessDayCutoff: DEFAULT_CUTOFF,
+  setBusinessDay: (value) =>
+    set({
+      businessDayCutoff:
+        typeof value?.cutoff === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value.cutoff) ? value.cutoff : DEFAULT_CUTOFF,
+    }),
   setCalendar: (value) =>
     set({
       calendar: value?.calendar === 'GREGORIAN' ? 'GREGORIAN' : 'JALALI',
@@ -87,10 +102,20 @@ export function formatCalendarDateTime(value: Date | string | number): string {
   return `${p.year}/${p.month}/${p.day} ${p.hour}:${p.minute}`;
 }
 
-/** A timestamp's business day as the API's YYYY-MM-DD (always Gregorian digits). */
+/**
+ * A timestamp's business day as the API's YYYY-MM-DD (always Gregorian digits): its date on
+ * the business clock, less a day before the cutoff, so 01:30 belongs to the night before.
+ */
 export function businessDate(value: Date | string | number = new Date()): string {
   const at = toDate(value) ?? new Date();
-  return at.toLocaleDateString('en-CA', { timeZone: BUSINESS_TIME_ZONE });
+  const [h, m] = useCalendarStore.getState().businessDayCutoff.split(':').map(Number);
+  const f = new Intl.DateTimeFormat('en-US', { timeZone: BUSINESS_TIME_ZONE, hourCycle: 'h23', hour: '2-digit', minute: '2-digit' });
+  const clock = f.formatToParts(at);
+  const minute = Number(clock.find((p) => p.type === 'hour')?.value) * 60 + Number(clock.find((p) => p.type === 'minute')?.value);
+  const day = at.toLocaleDateString('en-CA', { timeZone: BUSINESS_TIME_ZONE });
+  if (minute >= h * 60 + m) return day;
+  const [y, mo, d] = day.split('-').map(Number);
+  return new Date(Date.UTC(y, mo - 1, d - 1)).toISOString().slice(0, 10);
 }
 
 /** Today's business day as YYYY-MM-DD. */
