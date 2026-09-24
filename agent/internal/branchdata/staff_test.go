@@ -105,8 +105,10 @@ func TestKeeperPullsTheStaffListWithTheSnapshot(t *testing.T) {
 		return []byte(staffBody), "s1", nil
 	})
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go k.Run(ctx)
+	done := make(chan struct{})
+	go func() { k.Run(ctx); close(done) }()
+	// Stop the keeper before the temporary folder is removed: it may still be writing.
+	defer func() { cancel(); <-done }()
 	k.Trigger()
 	select {
 	case <-pulled:
