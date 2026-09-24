@@ -43,6 +43,29 @@ func TestSnapshotSendsTheVersionHeldAndUnzips(t *testing.T) {
 	}
 }
 
+func TestStaffReadsItsOwnVersionField(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/agent/data/staff" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Header.Get("If-None-Match") == `"s1"` {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		_, _ = w.Write([]byte(`{"staff_version":"s1","users":[]}`))
+	}))
+	defer srv.Close()
+	c := &Client{Server: srv.URL, Key: "gak_test"}
+
+	if _, version, err := c.Staff(context.Background(), ""); err != nil || version != "s1" {
+		t.Fatalf("Staff = %q, %v", version, err)
+	}
+	if _, _, err := c.Staff(context.Background(), "s1"); !errors.Is(err, ErrNotModified) {
+		t.Fatalf("Staff with the version held = %v, want ErrNotModified", err)
+	}
+}
+
 func TestSnapshotWithoutAVersionIsRefused(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"products":[]}`))

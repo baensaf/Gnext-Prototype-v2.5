@@ -34,15 +34,23 @@ type fakeCloud struct {
 	config protocol.Config
 	// closeWith, when set, closes each new socket with that code right after welcome.
 	closeWith websocket.StatusCode
+	// heartbeatS is welcome's heartbeat interval (20 s unless a test needs beats sooner).
+	heartbeatS int
+	// callNumbers, when set, goes in every heartbeat.ack.
+	callNumbers *protocol.CallNumbers
 
 	mu    sync.Mutex
 	conn  *websocket.Conn
 	inbox chan protocol.Envelope
+	beats chan protocol.Envelope
 	conns chan struct{}
 }
 
 func newFakeCloud(t *testing.T, cfg protocol.Config) *fakeCloud {
-	fc := &fakeCloud{t: t, config: cfg, inbox: make(chan protocol.Envelope, 100), conns: make(chan struct{}, 10)}
+	fc := &fakeCloud{
+		t: t, config: cfg, heartbeatS: 20,
+		inbox: make(chan protocol.Envelope, 100), beats: make(chan protocol.Envelope, 100), conns: make(chan struct{}, 10),
+	}
 	fc.srv = httptest.NewServer(http.HandlerFunc(fc.serve))
 	t.Cleanup(fc.srv.Close)
 	return fc
@@ -74,7 +82,7 @@ func (fc *fakeCloud) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	fc.sendOn(c, protocol.TypeWelcome, hello.ID, map[string]any{
 		"protocol_version": 1, "session_id": "s", "server_time": protocol.Now(time.Now()),
-		"heartbeat_interval_s": 20, "branch": map[string]string{"id": "b", "name": "Test"},
+		"heartbeat_interval_s": fc.heartbeatS, "branch": map[string]string{"id": "b", "name": "Test"},
 		"config": fc.config,
 	})
 	if fc.closeWith != 0 {
@@ -97,9 +105,15 @@ func (fc *fakeCloud) serve(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(env.Type, ".result") {
 			fc.sendOn(c, protocol.TypeAck, env.ID, protocol.Ack{OK: true})
 		}
-		if env.Type != protocol.TypeHeartbeat {
-			fc.inbox <- env
+		if env.Type == protocol.TypeHeartbeat {
+			fc.sendOn(c, protocol.TypeHeartbeatAck, env.ID, protocol.HeartbeatAck{ServerTime: protocol.Now(time.Now()), CallNumbers: fc.callNumbers})
+			select {
+			case fc.beats <- env:
+			default:
+			}
+			continue
 		}
+		fc.inbox <- env
 	}
 }
 
@@ -267,12 +281,18 @@ func start(t *testing.T, dir string, cloud *fakeCloud, drv *stubDriver) *harness
 
 func startWithKey(t *testing.T, dir string, cloud *fakeCloud, drv *stubDriver, key string) *harness {
 	t.Helper()
+	return startWith(t, dir, cloud, drv, key, nil)
+}
+
+// startWith starts an agent, letting the test change its options first.
+func startWith(t *testing.T, dir string, cloud *fakeCloud, drv *stubDriver, key string, tweak func(*Options)) *harness {
+	t.Helper()
 	j, err := journal.Open(filepath.Join(dir, "journal.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	h := &harness{cloud: cloud, journal: j, driver: drv, done: make(chan error, 1), dataChanged: make(chan struct{}, 10)}
-	h.agent = New(Options{
+	opts := Options{
 		Version: "1.0.0",
 		WSURL:   cloud.wsURL(),
 		Headers: http.Header{"Authorization": {"Bearer " + key}},
@@ -288,7 +308,11 @@ func startWithKey(t *testing.T, dir string, cloud *fakeCloud, drv *stubDriver, k
 		DataChanged:  func() { h.dataChanged <- struct{}{} },
 		ResultResend: 300 * time.Millisecond,
 		BackoffMax:   200 * time.Millisecond,
-	})
+	}
+	if tweak != nil {
+		tweak(&opts)
+	}
+	h.agent = New(opts)
 	ctx, cancel := context.WithCancel(context.Background())
 	h.cancel = cancel
 	go func() { h.done <- h.agent.Run(ctx) }()
@@ -482,6 +506,92 @@ func TestUnknownKeyStops(t *testing.T) {
 		t.Fatal("agent kept retrying after 401")
 	}
 	h.cancel()
+}
+
+// An agent restarted with the internet down still reaches its printers (§13.2).
+func TestSavedConfigIsUsedWhileTheCloudIsUnreachable(t *testing.T) {
+	lan := newPrinterLAN(t)
+	cloud := newFakeCloud(t, protocol.Config{})
+	cloud.srv.Close() // nothing answers
+	saved := testConfig(lan)
+	h := startWith(t, t.TempDir(), cloud, &stubDriver{}, "gak_test", func(o *Options) { o.SavedConfig = &saved })
+	defer h.stop(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := h.agent.TestPrint(ctx, "p1"); err != nil {
+		t.Fatalf("test print from the saved config: %v", err)
+	}
+	if lan.count() != 1 {
+		t.Fatalf("printer received %d jobs, want 1", lan.count())
+	}
+}
+
+func TestEveryConfigFromTheCloudIsHandedOnToKeep(t *testing.T) {
+	lan := newPrinterLAN(t)
+	cloud := newFakeCloud(t, testConfig(lan))
+	kept := make(chan *protocol.Config, 10)
+	stale := protocol.Config{ConfigVersion: 0}
+	h := startWith(t, t.TempDir(), cloud, &stubDriver{}, "gak_test", func(o *Options) {
+		o.SavedConfig = &stale
+		o.ConfigChanged = func(c *protocol.Config) { kept <- c }
+	})
+	defer h.stop(t)
+	cloud.waitConnected()
+
+	select {
+	case c := <-kept:
+		if c.ConfigVersion != 1 || len(c.Printers) != 1 || c.Printers[0].ID != "p1" {
+			t.Fatalf("kept config = %+v, want the welcome's", c)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("welcome's config was not handed on")
+	}
+
+	cloud.command("cmd-cfg", protocol.TypeConfigUpdated, map[string]any{"config_version": 2, "printers": []any{}, "terminals": []any{}})
+	select {
+	case c := <-kept:
+		if c.ConfigVersion != 2 {
+			t.Fatalf("kept config version = %d, want 2", c.ConfigVersion)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("config.updated was not handed on")
+	}
+}
+
+func TestHeartbeatCarriesTheTillAndItsAckTheCallCount(t *testing.T) {
+	lan := newPrinterLAN(t)
+	cloud := newFakeCloud(t, testConfig(lan))
+	cloud.heartbeatS = 1
+	cloud.callNumbers = &protocol.CallNumbers{BusinessDate: "2026-09-24", POS: 41}
+	counts := make(chan protocol.CallNumbers, 10)
+	h := startWith(t, t.TempDir(), cloud, &stubDriver{}, "gak_test", func(o *Options) {
+		o.TillStatus = func() any { return map[string]any{"terminal_id": nil, "mode": "ONLINE", "open_orders": 0} }
+		o.CallNumbers = func(n protocol.CallNumbers) { counts <- n }
+	})
+	defer h.stop(t)
+	cloud.waitConnected()
+
+	select {
+	case beat := <-cloud.beats:
+		var hb struct {
+			Till map[string]any `json:"till"`
+		}
+		_ = json.Unmarshal(beat.Payload, &hb)
+		if hb.Till["mode"] != "ONLINE" || hb.Till["open_orders"] != float64(0) {
+			t.Fatalf("heartbeat till = %v", hb.Till)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no heartbeat")
+	}
+	select {
+	case n := <-counts:
+		if n != (protocol.CallNumbers{BusinessDate: "2026-09-24", POS: 41}) {
+			t.Fatalf("call count = %+v", n)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("heartbeat.ack's call count was not passed on")
+	}
 }
 
 func TestDataChangedIsAckedAndPassedOn(t *testing.T) {

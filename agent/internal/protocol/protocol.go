@@ -35,7 +35,7 @@ const (
 )
 
 // Capabilities this build advertises in hello.
-var Capabilities = []string{"print.html", "payment.charge", "payment.query", "data.pull", "sync.orders"}
+var Capabilities = []string{"print.html", "payment.charge", "payment.query", "data.pull", "sync.orders", "pos.offline"}
 
 // Ack and envelope error codes (§8.1).
 const (
@@ -151,10 +151,21 @@ type Heartbeat struct {
 	UnackedResults int `json:"unacked_results"`
 	// Sync is the branch snapshot and offline-order backlog (§12.7).
 	Sync any `json:"sync,omitempty"`
+	// Till is which till the offline till sells as, and what it holds (§13.10).
+	Till any `json:"till,omitempty"`
 }
 
 type HeartbeatAck struct {
 	ServerTime string `json:"server_time"`
+	// CallNumbers is the day's POS call count, sent to an agent with pos.offline (§13.9).
+	CallNumbers *CallNumbers `json:"call_numbers,omitempty"`
+}
+
+// CallNumbers is how many POS call numbers the cloud has handed out on a business day: the
+// count, not the last number (§12.2, §13.9).
+type CallNumbers struct {
+	BusinessDate string `json:"business_date"`
+	POS          int    `json:"POS"`
 }
 
 // Config is the branch hardware list (§6.1).

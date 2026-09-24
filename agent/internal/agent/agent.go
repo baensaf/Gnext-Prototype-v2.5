@@ -36,6 +36,16 @@ type Options struct {
 	DataChanged func()
 	// SyncStatus, when set, is sent in every heartbeat (§12.7).
 	SyncStatus func() any
+	// TillStatus, when set, is sent in every heartbeat as `till` (§13.10).
+	TillStatus func() any
+	// CallNumbers is called with the POS call count each heartbeat.ack carries (§13.9).
+	CallNumbers func(protocol.CallNumbers)
+
+	// SavedConfig is the config kept from the last run, used until the cloud sends one, so an
+	// agent restarted while offline still reaches its devices (§13.2).
+	SavedConfig *protocol.Config
+	// ConfigChanged is called with every config the cloud sends, to keep it on disk.
+	ConfigChanged func(*protocol.Config)
 
 	// Timings, overridable in tests.
 	HandshakeTimeout time.Duration
@@ -104,7 +114,11 @@ func New(o Options) *Agent {
 		probeCh:   make(chan struct{}, 1),
 		updateCh:  make(chan struct{}, 1),
 	}
-	a.cfg.Store(&protocol.Config{})
+	if o.SavedConfig != nil {
+		a.cfg.Store(o.SavedConfig)
+	} else {
+		a.cfg.Store(&protocol.Config{})
+	}
 	return a
 }
 
@@ -290,6 +304,9 @@ func (a *Agent) heartbeat(ctx context.Context, c *websocket.Conn, interval time.
 		if a.o.SyncStatus != nil {
 			hb.Sync = a.o.SyncStatus()
 		}
+		if a.o.TillStatus != nil {
+			hb.Till = a.o.TillStatus()
+		}
 		a.send(protocol.TypeHeartbeat, "", hb)
 	}
 }
@@ -310,6 +327,9 @@ func (a *Agent) handle(data []byte) {
 		var p protocol.HeartbeatAck
 		if json.Unmarshal(env.Payload, &p) == nil {
 			a.applyClock(p.ServerTime)
+			if p.CallNumbers != nil && a.o.CallNumbers != nil {
+				a.o.CallNumbers(*p.CallNumbers)
+			}
 		}
 		a.lastBeat.Store(time.Now().UnixNano())
 	case protocol.TypeAck:
@@ -691,6 +711,9 @@ func (a *Agent) now() time.Time { return time.Now().Add(time.Duration(a.offset.L
 
 func (a *Agent) setConfig(c *protocol.Config) {
 	a.cfg.Store(c)
+	if a.o.ConfigChanged != nil {
+		a.o.ConfigChanged(c)
+	}
 	select {
 	case a.probeCh <- struct{}{}:
 	default:
