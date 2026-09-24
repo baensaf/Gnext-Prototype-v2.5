@@ -194,6 +194,9 @@
     "scopeChain": "All branches"
   },
   "pos": {
+    "offline": {
+      "unavailable": "Not available offline"
+    },
     "options": {
       "title": "Configure {{name}}",
       "variant": "Choose a size",

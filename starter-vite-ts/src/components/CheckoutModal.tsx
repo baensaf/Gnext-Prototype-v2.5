@@ -43,10 +43,7 @@ import {
 import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 
-import { kdsApi } from 'src/api/kdsApi';
-import { orderApi } from 'src/api/orderApi';
-import { paymentApi } from 'src/api/paymentApi';
-import { settingsApi } from 'src/api/settingsApi';
+import { usePosSource, PosFeatureGate } from 'src/contexts/pos-source';
 
 import { toast, showErrorToast } from 'src/components/snackbar';
 import { UnconfirmedChargeActions } from 'src/components/payment-terminal/unconfirmed-charge-actions';
@@ -67,6 +64,7 @@ interface CheckoutModalProps {
 export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: CheckoutModalProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const pos = usePosSource();
 
   const [order, setOrder] = useState<OrderHeader | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -86,11 +84,11 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     if (!orderId) return;
     setLoading(true);
     try {
-      const o = await orderApi.getOrderById(orderId);
+      const o = await pos.orders.getOrderById(orderId);
       setOrder(o);
       setPayAmount(wholeRials(o.due_amount || o.outstanding_total));
 
-      const pms = await settingsApi.getPaymentMethods();
+      const pms = await pos.settings.getPaymentMethods();
       const activeMethods = pms.filter((m) => m.is_active);
       setPaymentMethods(activeMethods);
 
@@ -107,7 +105,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         setSelectedMethodId(preferredPos ? preferredPos.id : activeMethods[0].id);
       }
 
-      const pays = await paymentApi.getOrderPayments(orderId);
+      const pays = await pos.payments.getOrderPayments(orderId);
       setPayments(pays);
       setError(null);
     } catch (err: any) {
@@ -115,7 +113,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     } finally {
       setLoading(false);
     }
-  }, [orderId]);
+  }, [orderId, pos]);
 
   useEffect(() => {
     if (open && orderId) {
@@ -132,7 +130,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     const overTendered = method?.kind === 'CASH' && MoneyUtil.greaterThan(payAmount, due);
     try {
       setLoading(true);
-      const res = await paymentApi.postPayment({
+      const res = await pos.payments.postPayment({
         order_id: orderId,
         payment_method_id: selectedMethodId,
         amount: overTendered ? due : payAmount,
@@ -151,7 +149,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         );
       }
 
-      const updatedPays = await paymentApi.getOrderPayments(orderId);
+      const updatedPays = await pos.payments.getOrderPayments(orderId);
       setPayments(updatedPays);
       toast.success(t('pos.paymentSuccess', 'Payment recorded successfully'));
 
@@ -171,8 +169,8 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     if (!orderId) return;
     try {
       setLoading(true);
-      await paymentApi.voidPayment(paymentId);
-      const updatedPays = await paymentApi.getOrderPayments(orderId);
+      await pos.payments.voidPayment(paymentId);
+      const updatedPays = await pos.payments.getOrderPayments(orderId);
       setPayments(updatedPays);
       setError(null);
       toast.success(t('pos.paymentVoided', 'Payment attempt voided'));
@@ -202,7 +200,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
 
       try {
         setTerminalProcessing(true);
-        const res = await paymentApi.postPayment({
+        const res = await pos.payments.postPayment({
           order_id: orderId,
           payment_method_id: matchedMethod.id,
           amount: order.due_amount || '0',
@@ -213,7 +211,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         setPayAmount(wholeRials(res.order?.due_amount));
         setRefNumber('');
 
-        const updatedPays = await paymentApi.getOrderPayments(orderId);
+        const updatedPays = await pos.payments.getOrderPayments(orderId);
         setPayments(updatedPays);
         toast.success(t('pos.paymentSuccess', 'Payment recorded successfully'));
 
@@ -228,7 +226,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         setTerminalProcessing(false);
       }
     },
-    [order, orderId, paymentMethods, t, onPaymentComplete]
+    [order, orderId, paymentMethods, t, onPaymentComplete, pos]
   );
 
   // Hotkeys: F8 = Cash, F9 = Terminal POS
@@ -277,7 +275,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const handlePrintReceipt = async () => {
     if (!orderId) return;
     try {
-      const jobs = await kdsApi.reprintOrder(orderId, 'CUSTOMER_RECEIPT', t('pos.printReceipt', 'Print Receipt'));
+      const jobs = await pos.printing.reprintOrder(orderId, 'CUSTOMER_RECEIPT', t('pos.printReceipt', 'Print Receipt'));
       if (!Array.isArray(jobs) || jobs.length === 0 || jobs.every((j) => j.status === 'FAILED')) {
         throw new Error(t('pos.receiptFailed', 'The receipt could not be sent to a printer'));
       }
@@ -609,15 +607,18 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
 
       <DialogActions sx={{ px: 3, pb: 2 }}>
         {isFullyPaid && (
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<PrintIcon />}
-            onClick={handlePrintReceipt}
-            sx={{ fontWeight: 'bold' }}
-          >
-            {t('pos.printReceipt', 'Print Receipt')}
-          </Button>
+          <PosFeatureGate off={!pos.features.receipt}>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<PrintIcon />}
+              onClick={handlePrintReceipt}
+              disabled={!pos.features.receipt}
+              sx={{ fontWeight: 'bold' }}
+            >
+              {t('pos.printReceipt', 'Print Receipt')}
+            </Button>
+          </PosFeatureGate>
         )}
         <Button onClick={onClose}>{t('common.close', 'Close')}</Button>
       </DialogActions>

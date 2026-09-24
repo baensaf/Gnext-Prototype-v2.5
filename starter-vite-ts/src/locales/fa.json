@@ -194,6 +194,9 @@
     "scopeChain": "همه شعب"
   },
   "pos": {
+    "offline": {
+      "unavailable": "در حالت آفلاین در دسترس نیست"
+    },
     "options": {
       "title": "انتخاب‌های {{name}}",
       "variant": "انتخاب اندازه",
