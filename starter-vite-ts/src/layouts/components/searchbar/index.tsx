@@ -1,5 +1,6 @@
 import type { BoxProps } from '@mui/material/Box';
 import type { Breakpoint } from '@mui/material/styles';
+import type { OutputItem } from './utils';
 import type { NavSectionProps } from 'src/components/nav-section';
 
 import { useTranslation } from 'react-i18next';
@@ -7,7 +8,7 @@ import parse from 'autosuggest-highlight/parse';
 import match from 'autosuggest-highlight/match';
 import { varAlpha } from 'minimal-shared/utils';
 import { useBoolean } from 'minimal-shared/hooks';
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
 import MenuList from '@mui/material/MenuList';
@@ -31,11 +32,17 @@ import { applyFilter, flattenNavSections } from './utils';
 
 export type SearchbarProps = BoxProps & {
   data?: NavSectionProps['data'];
+  /** Destinations with no sidebar link, searched alongside it; a path already there is skipped. */
+  extraItems?: OutputItem[];
 };
+
+// Windows and Linux use Ctrl where macOS uses Cmd, so a ⌘K hint and a metaKey-only listener
+// promised a shortcut most of this app's desks could not press.
+const isApple = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 const breakpoint: Breakpoint = 'sm';
 
-export function Searchbar({ data: navItems = [], sx, ...other }: SearchbarProps) {
+export function Searchbar({ data: navItems = [], extraItems = [], sx, ...other }: SearchbarProps) {
   const { t } = useTranslation();
   const theme = useTheme();
   const smUp = useMediaQuery(theme.breakpoints.up(breakpoint));
@@ -50,7 +57,7 @@ export function Searchbar({ data: navItems = [], sx, ...other }: SearchbarProps)
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      if (event.metaKey && event.key.toLowerCase() === 'k') {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         onToggle();
         setSearchQuery('');
@@ -71,16 +78,15 @@ export function Searchbar({ data: navItems = [], sx, ...other }: SearchbarProps)
     setSearchQuery(event.target.value);
   }, []);
 
-  const formattedNavItems = flattenNavSections(navItems);
+  const navEntries = flattenNavSections(navItems);
+  const navPaths = new Set(navEntries.map((item) => item.path));
+  const formattedNavItems = [
+    ...navEntries,
+    ...extraItems.filter((item) => !navPaths.has(item.path)),
+  ];
 
-  const dataFiltered = useMemo(
-    () =>
-      applyFilter({
-        inputData: formattedNavItems,
-        query: searchQuery,
-      }),
-    [formattedNavItems, searchQuery]
-  );
+  // Both inputs are rebuilt on every render by their owners, so memoising here saved nothing.
+  const dataFiltered = applyFilter({ inputData: formattedNavItems, query: searchQuery });
 
   const notFound = searchQuery && !dataFiltered.length;
 
@@ -132,7 +138,7 @@ export function Searchbar({ data: navItems = [], sx, ...other }: SearchbarProps)
           display: { xs: 'none', [breakpoint]: 'inline-flex' },
         }}
       >
-        ⌘K
+        {isApple ? '⌘K' : 'Ctrl K'}
       </Label>
     </Box>
   );
