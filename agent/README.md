@@ -61,7 +61,14 @@ section numbers (§) in the code refer to it.
   sign-in by name and PIN checked here against the staff list (argon2, as the cloud stores it),
   five wrong PINs lock that user for 15 minutes; one session at a time, ended after the tenant's
   auto-logout time. Local API under `/api/till/*` (§13.13). Heartbeats carry `till` with the
-  bound till and the mode. The till screen and its orders come next (P3–P4).
+  bound till and the mode.
+
+  Since 1.5.0: the till screen at `http://127.0.0.1:47800/till` (Persian, right to left): pick a
+  name and type the PIN, then categories and products, sizes and add-ons, the order with its type
+  and table, and the totals. Availability (stops, selling windows on the branch clock, today's
+  stock), add-on rules, the per-order limit and the money (§12.4) are worked out here from the
+  snapshot (`till.Catalog`); the page shows what `/api/till/price` says. The order is held in
+  the page until the till keeps orders itself, with sending, paying and upload (P4 onwards).
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
   publishes a build, then swaps the binary after checking its SHA-256.
 - **Settings window** (Start-menu and desktop shortcut *Gnext Agent*, the tray, or running the

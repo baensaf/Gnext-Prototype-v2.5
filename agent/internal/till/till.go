@@ -42,6 +42,8 @@ const (
 type Error struct {
 	Code   string
 	Detail string
+	// Line is the order line the refusal is about, when it is about one.
+	Line *int
 }
 
 func (e *Error) Error() string { return e.Code + ": " + e.Detail }
@@ -83,6 +85,8 @@ type Till struct {
 	Log       *slog.Logger
 	// Now is the clock, overridable in tests.
 	Now func() time.Time
+	// Sold counts what the till sold offline today, against today's stock (the till's orders, P4).
+	Sold SoldOffline
 
 	once     sync.Once
 	mu       sync.Mutex

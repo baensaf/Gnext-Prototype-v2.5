@@ -1562,7 +1562,8 @@ ends the previous one. It ends after `auto_logout_minutes` without a request.
 | `GET /api/till/state` | Mode, bound till and shift, snapshot age, the staff names (no hashes), who is signed in. |
 | `POST /api/till/login` `{user_id, pin}` / `POST /api/till/logout` | Sign in or out. |
 | `POST /api/till/binding` `{terminal_id, user_id?, pin?}` | Bind the till (§13.4): with the settings page's manager session, or an approver's PIN. |
-| `GET /api/till/menu` | Categories and products from the snapshot, each with its availability now. |
+| `GET /api/till/menu` | Categories, products (each with its availability now and the reason when not: `STOPPED`, `OUT_OF_HOURS`, `SOLD_OUT`) and dining tables, from the snapshot. |
+| `POST /api/till/price` `{lines: [{product_id, variant_id, quantity, options[], notes}]}` | Checks and prices lines as one order without keeping it: `{lines, totals}` in the §12.4 shape, or `NOT_AVAILABLE` with `line`, the index of the line refused. The till screen shows only what this says. |
 | `GET /api/till/orders` | Unfinished orders, and today's finished ones for reprints. |
 | `POST /api/till/orders` `{order_type, table_id?, guest_count?}` | New order. |
 | `POST /api/till/orders/{id}/lines` `{product_id, variant_id?, quantity, options[], notes?}` | Add a line. |
