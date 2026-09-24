@@ -159,7 +159,7 @@ export function SimulationLogsPage() {
       <CustomBreadcrumbs
         heading={t('simulation.logs.title', 'Integration Webhook & Audit Explorer')}
         links={[
-          { name: t('nav.dashboard', 'Home'), href: '/app/pos' },
+          { name: t('nav.dashboard', 'Home'), href: '/app/dashboard' },
           { name: t('simulation.breadcrumb', 'Simulation Hub'), href: '/app/simulation' },
           { name: t('simulation.logs.title', 'Audit Logs') },
         ]}

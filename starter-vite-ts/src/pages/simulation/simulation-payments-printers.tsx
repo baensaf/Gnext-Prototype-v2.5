@@ -274,7 +274,7 @@ export function SimulationPaymentsPrintersPage() {
       <CustomBreadcrumbs
         heading={t('simulation.hardware.title', 'Hardware Failure & Response Simulator')}
         links={[
-          { name: t('nav.dashboard', 'Home'), href: '/app/pos' },
+          { name: t('nav.dashboard', 'Home'), href: '/app/dashboard' },
           { name: t('simulation.breadcrumb', 'Simulation Hub'), href: '/app/simulation' },
           { name: t('simulation.hardware.title', 'Payments & Printers') },
         ]}
