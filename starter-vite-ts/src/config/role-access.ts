@@ -255,6 +255,13 @@ export function isApproverRole(role?: string | null): boolean {
   return APPROVER_ROLES.includes((role || '').toUpperCase());
 }
 
+/** Senior enough to run a site. Mirrors the server's MANAGER_AND_ABOVE. */
+export const MANAGER_AND_ABOVE = ['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER'];
+
+export function isManagerOrAbove(role?: string | null): boolean {
+  return MANAGER_AND_ABOVE.includes((role || '').toUpperCase());
+}
+
 export function homePathForRole(role?: string | null): string {
   return accessForRole(role)?.home ?? '/app/dashboard';
 }

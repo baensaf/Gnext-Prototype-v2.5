@@ -2,6 +2,7 @@ import { Controller, Get, Post, Patch, Delete, Param, Body, Query, Req, Header }
 import { Request } from 'express';
 import { OrderService } from './order.service';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
+import { Roles, MANAGER_AND_ABOVE } from '../../common/decorators/roles.decorator';
 import {
   OrderCreateDto,
   OrderUpdateDto,
@@ -54,8 +55,10 @@ export class OrdersController {
   }
 
   // The same filters as the list, as a spreadsheet. Declared before ':id' so the router does
-  // not take "export" for an order id.
+  // not take "export" for an order id. The whole book with customers' mobiles is for a
+  // manager or head office, not every register.
   @Get('export')
+  @Roles(...MANAGER_AND_ABOVE)
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="orders.csv"')
   async exportOrders(@Query() query: any, @Req() req: Request) {
@@ -146,7 +149,7 @@ export class OrdersController {
   @Post(':id/quote')
   async getQuote(@Param('id') id: string, @Body() body: OrderQuoteRequestDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.orderService.getQuote(tenantId, id, body);
+    return await this.orderService.getQuote(tenantId, id, body, (req as any).userRole);
   }
 
   @Post(':id/submit')
@@ -154,7 +157,7 @@ export class OrdersController {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
-    return await this.orderService.submitOrder(tenantId, id, body, userId, correlationId);
+    return await this.orderService.submitOrder(tenantId, id, body, userId, correlationId, (req as any).userRole);
   }
 
   @Post(':id/confirm')
