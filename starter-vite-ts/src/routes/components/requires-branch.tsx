@@ -33,12 +33,17 @@ export function RequiresBranch({ children, rollup }: RequiresBranchProps) {
 
   if (!branchScope) return <>{children}</>;
 
-  const { isHeadOffice, branches, loading, setSelectedBranchId } = branchScope;
+  const { isHeadOffice, branches, selectedBranch, setSelectedBranchId } = branchScope;
 
-  // Before the first branch list the scope is still being settled; rendering the page now
-  // would fire its requests unfiltered. A later refresh keeps the list, so it never unmounts.
-  if (loading && branches.length === 0) return null;
-  if (!isHeadOffice) return <>{children}</>;
+  if (!isHeadOffice) {
+    // No branch yet means the list has not arrived (the provider reports "not loading" while
+    // signed out, just before it starts), and the page's first requests would go out with
+    // no branch on them. A later refresh keeps the old list, so this never unmounts a page.
+    return selectedBranch ? <>{children}</> : null;
+  }
+  // A saved head-office scope is known before the list is; wait for it rather than flash
+  // "no branch can run this page".
+  if (branches.length === 0) return null;
 
   // A till has no place in a production kitchen, so only branches that run this page.
   const fitting = branches.filter((branch) =>
