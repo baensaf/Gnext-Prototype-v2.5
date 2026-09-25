@@ -622,12 +622,12 @@ export class OrderService {
     });
   }
 
-  async getQuote(tenantId: string, id: string, request?: OrderQuoteRequestDto) {
+  async getQuote(tenantId: string, id: string, request?: OrderQuoteRequestDto, callerRole?: string | null) {
     const order = await this.getOrderById(tenantId, id);
-    return await this.evaluateOrderQuote(tenantId, order, request);
+    return await this.evaluateOrderQuote(tenantId, order, request, callerRole);
   }
 
-  private async evaluateOrderQuote(tenantId: string, order: OrderHeader, request?: OrderQuoteRequestDto) {
+  private async evaluateOrderQuote(tenantId: string, order: OrderHeader, request?: OrderQuoteRequestDto, callerRole?: string | null) {
     const couponCode = request?.couponCode || order.coupon_code;
 
     const draftItems = (order.items || []).filter(isActiveLine).map((i) => {
@@ -655,7 +655,7 @@ export class OrderService {
       },
       manualDiscount: request?.manualDiscount,
       couponCode: couponCode || undefined,
-    });
+    }, callerRole);
 
     return {
       orderId: order.id,
@@ -665,7 +665,7 @@ export class OrderService {
     };
   }
 
-  async submitOrder(tenantId: string, id: string, dto: OrderSubmitDto, userId?: string, correlationId?: string) {
+  async submitOrder(tenantId: string, id: string, dto: OrderSubmitDto, userId?: string, correlationId?: string, callerRole?: string | null) {
     const res = await this.dataSource.transaction(async (em) => {
       const order = await em.findOne(OrderHeader, {
         where: { id, tenant_id: tenantId },
@@ -739,7 +739,20 @@ export class OrderService {
         },
         manualDiscount: submittedManualDiscount,
         couponCode: order.coupon_code || undefined,
-      });
+      }, callerRole);
+
+      // A discount the cashier typed is given or the order is not sent. Charging full price
+      // was safe, but the customer was told one total and billed another without a word.
+      if (dto.manualDiscount && MoneyUtil.greaterThan(dto.manualDiscount.value || '0', '0')) {
+        const manual = quoteRes.consideredDiscounts.find((d) => d.source === 'MANUAL');
+        if (manual?.status !== 'APPLIED') {
+          throw new BadRequestException({
+            statusCode: 400,
+            code: quoteRes.approvalRequired ? 'DISCOUNT_APPROVAL_REQUIRED' : 'MANUAL_DISCOUNT_REFUSED',
+            message: quoteRes.approvalReason || manual?.rejectionReason || 'The manual discount was not applied',
+          });
+        }
+      }
 
       // A coupon is the one discount with a use limit, so its redemption is counted here,
       // inside the transaction. Before this passed the coupon, only the hidden campaign

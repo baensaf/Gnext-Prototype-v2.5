@@ -65,7 +65,7 @@ export type PosSource = {
   customers: Pick<typeof customerApi, 'getCustomers' | 'createCustomer' | 'getAddresses' | 'createAddress'>;
   delivery: Pick<typeof deliveryApi, 'getZones'>;
   /** The live quote: tax, delivery fee and any discount on the cart. */
-  discounts: Pick<typeof discountsApi, 'quoteDiscounts'>;
+  discounts: Pick<typeof discountsApi, 'quoteDiscounts' | 'getManualDiscountLimits'>;
   approvals: Pick<typeof approvalApi, 'createRequest' | 'approveRequest' | 'verifyPin'>;
   printing: Pick<typeof kdsApi, 'reprintOrder'>;
   /**

@@ -486,6 +486,9 @@ export const agentPosSource: PosSource = {
 
   // The live quote: the tax the agent will charge, line by line (§12.4). No discounts offline.
   discounts: {
+    getManualDiscountLimits: async () => {
+      throw unavailable();
+    },
     quoteDiscounts: async (payload: {
       orderDraft: { items: { productId: string; variantId?: string; unitPrice: string; quantity: string }[] };
     }) => {
