@@ -82,13 +82,14 @@ export class ApprovalController {
   @Get('requests')
   async getPendingRequests(@Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.approvalService.getPendingRequests(tenantId);
+    // A branch account sees its own staff's requests; head office the chain's.
+    return await this.approvalService.getPendingRequests(tenantId, (req as any).userBranchId ?? null);
   }
 
   @Get('requests/:id')
   async getRequestById(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.approvalService.getRequestById(tenantId, id);
+    return await this.approvalService.getRequestById(tenantId, id, (req as any).userBranchId ?? null);
   }
 
   @Post('requests')

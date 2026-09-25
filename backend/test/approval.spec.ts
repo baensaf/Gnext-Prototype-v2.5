@@ -24,7 +24,7 @@ describe('ApprovalService (Unit)', () => {
     requestRepo = { findOne: jest.fn(), find: jest.fn(), count: jest.fn().mockResolvedValue(0), create: jest.fn(), save: jest.fn() };
     decisionRepo = { find: jest.fn().mockResolvedValue([]), create: jest.fn(), save: jest.fn() };
     pinLogRepo = { count: jest.fn().mockResolvedValue(0), create: jest.fn(), save: jest.fn() };
-    userRepo = { findOne: jest.fn() };
+    userRepo = { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]) };
     auditWriter = { write: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -41,6 +41,40 @@ describe('ApprovalService (Unit)', () => {
     }).compile();
 
     service = module.get<ApprovalService>(ApprovalService);
+  });
+
+  describe('branch scope', () => {
+    const requests = [
+      { id: 'r-own', requester_user_id: 'u-cashier-a', status: 'APPROVED', expires_at: new Date(Date.now() + 60000) },
+      { id: 'r-other', requester_user_id: 'u-cashier-b', status: 'APPROVED', expires_at: new Date(Date.now() + 60000) },
+    ];
+
+    beforeEach(() => {
+      requestRepo.find.mockResolvedValue(requests);
+      userRepo.find.mockImplementation(({ where }: any) =>
+        Promise.resolve(
+          [
+            { id: 'u-cashier-a', branch_id: 'b-a' },
+            { id: 'u-cashier-b', branch_id: 'b-b' },
+          ].filter((u) => JSON.stringify(where.id).includes(u.id)),
+        ),
+      );
+    });
+
+    it("lists only the branch's own staff's requests to a branch account", async () => {
+      const list = await service.getPendingRequests('t-1', 'b-a');
+      expect(list.map((r: any) => r.id)).toEqual(['r-own']);
+    });
+
+    it("lists the chain's requests to head office", async () => {
+      const list = await service.getPendingRequests('t-1', null);
+      expect(list.map((r: any) => r.id)).toEqual(['r-own', 'r-other']);
+    });
+
+    it("will not show a branch account another branch's request", async () => {
+      requestRepo.findOne.mockResolvedValue(requests[1]);
+      await expect(service.getRequestById('t-1', 'r-other', 'b-a')).rejects.toThrow('Approval request not found');
+    });
   });
 
   it('should evaluate action threshold correctly (below limit passes, above limit requires approval)', async () => {
