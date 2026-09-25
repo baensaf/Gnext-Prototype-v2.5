@@ -421,6 +421,13 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       await expect(add(['opt-cola', 'opt-fries', 'opt-bacon'])).rejects.toMatchObject({ response: expect.objectContaining({ message: 'Bacon is not a choice in Burger Meal' }) });
     });
 
+    it('refuses a choice that no longer exists instead of dropping it', async () => {
+      await expect(add(['opt-cola', 'opt-fries', 'opt-gone'])).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'OPTION_NOT_FOUND', details: { product_id: 'p-combo', option_item_id: 'opt-gone' } }),
+      });
+      expect(mockEntityManager.save).not.toHaveBeenCalledWith(OrderItem, expect.anything());
+    });
+
     it('refuses a combo whose chosen drink is off sale', async () => {
       catalogService.getSuspension.mockImplementation((_t: string, productId: string) =>
         Promise.resolve({ isSuspended: productId === 'p-cola', reason: productId === 'p-cola' ? 'Out of stock' : null }),
