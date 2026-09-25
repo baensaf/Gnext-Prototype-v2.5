@@ -1184,6 +1184,7 @@ number silently.
 | `business_date` is not closed | Closed: booked on that date anyway, flag `DAY_CLOSED` |
 | `business_date` is the one the branch's cutoff gives `placed_at` | Otherwise booked on the till's date anyway, flag `BUSINESS_DATE_DIFFERS` |
 | Daily stock covers it | Otherwise stock goes below zero, flag `STOCK_NEGATIVE` |
+| `table_id`, if any, is one of this branch's tables | Otherwise booked without a table, flag `TABLE_UNKNOWN` (staff seat an open one again) |
 | A card payment is `APPROVED` with an `rrn` | `UNKNOWN`: the payment is `PROCESSING` with `needs_terminal_check`, and a manager resolves it as today (§10) |
 
 A booked order:
@@ -1543,12 +1544,21 @@ The snapshot (§12.2) gains, for every agent (a v1.2 agent ignores them):
 
 | Field | Means |
 |---|---|
-| `lines[].options[].group_name` | The option group's name, kept on the cloud's order line (today it is left empty). |
-| `voided_lines` | Lines voided after the kitchen had them (a voided line is otherwise left out, §12.4): `{ product_name, variant_name, quantity, line_total, voided_by, approved_by, at }`. Audited with the order, not booked. |
-| `cancelled_by`, `approved_by` | Who cancelled the order, and who approved it when the edit rules asked. |
-| `prints[].document_type`, `prints[].copies`, `prints[].error` | What was printed, and why an attempt failed. |
+| `lines[].options[].group_name` | The option group's name, kept on the cloud's order line as the till sold it. Without it, the group's name in the cloud stands in. |
+| `voided_lines` | Lines voided after the kitchen had them (a voided line is otherwise left out, §12.4): `{ product_name, variant_name, quantity, line_total, voided_by, approved_by, at }`. Kept in the order's history and audit, not booked. |
+| `cancelled_by`, `approved_by` | Who cancelled the order, and who approved it when the edit rules asked. Kept in the order's history and audit; the history names `cancelled_by` for a cancelled order. |
+| `prints[].document_type`, `prints[].copies`, `prints[].error` | What was printed, and why an attempt failed. `prints` is kept in the order's history and audit. |
 
-For an `OPEN` dine-in order the cloud also marks its table occupied when it books it (P8).
+A `voided_lines` or `prints` that is not a list of objects, or a `cancelled_by` or
+`approved_by` that is not a UUID, holds the order as `INVALID_ORDER`.
+
+The cloud books a dine-in order with its table's number. An `OPEN` one keeps its table
+occupied on the floor plan until staff finish it on the web POS, like a check rung up there;
+no table session is opened for it. A table that is not one of the branch's is dropped and
+flagged `TABLE_UNKNOWN` (§12.6).
+
+Delivery is not sold offline (§13.1), so an upload never needs a delivery record. The field
+`delivery_zone_id` stays in §12.4's shape, and the till sends `null`.
 
 ### 13.13 The till's local API
 

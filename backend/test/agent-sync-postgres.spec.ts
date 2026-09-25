@@ -12,12 +12,15 @@ import { CashMovement } from '../src/entities/CashMovement.entity';
 import { CashierShift } from '../src/entities/CashierShift.entity';
 import { Category } from '../src/entities/Category.entity';
 import { DailyStock } from '../src/entities/DailyStock.entity';
+import { DiningArea } from '../src/entities/DiningArea.entity';
+import { DiningTable } from '../src/entities/DiningTable.entity';
 import { KitchenTicket } from '../src/entities/KitchenTicket.entity';
 import { OptionGroup } from '../src/entities/OptionGroup.entity';
 import { OptionItem } from '../src/entities/OptionItem.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { OrderItem } from '../src/entities/OrderItem.entity';
 import { OrderItemOption } from '../src/entities/OrderItemOption.entity';
+import { OrderStateEvent } from '../src/entities/OrderStateEvent.entity';
 import { Payment } from '../src/entities/Payment.entity';
 import { PaymentAttempt } from '../src/entities/PaymentAttempt.entity';
 import { PaymentDevice } from '../src/entities/PaymentDevice.entity';
@@ -34,6 +37,7 @@ import { AgentPaymentsService } from '../src/modules/payment/agent-payments.serv
 import { AgentSyncService, parseOrder } from '../src/modules/agent-data/agent-sync.service';
 import { BusinessDateUtil } from '../src/common/utils/business-date.util';
 import { BusinessClock } from '../src/common/utils/business-day';
+import { DineInService } from '../src/modules/dine-in/dine-in.service';
 import { AgentSyncAdminController } from '../src/modules/agent-data/agent-sync-admin.controller';
 import { HEAD_OFFICE_ONLY_KEY } from '../src/common/decorators/roles.decorator';
 import { deleteTenantData } from './utils/tenant-teardown';
@@ -133,6 +137,12 @@ describe('agent offline order upload (PostgreSQL)', () => {
     ids.device = (await save(PaymentDevice, { tenant_id: tenantId, branch_id: branchId, code: 'POS1', name: 'Saman', is_active: true } as any)).id;
     ids.till = (await save(Terminal, { tenant_id: tenantId, branch_id: branchId, code: 'T1', name: 'صندوق ۱', terminal_type: 'CASHIER', is_active: true })).id;
     ids.shift = (await save(CashierShift, { tenant_id: tenantId, branch_id: branchId, terminal_id: ids.till, user_id: ids.cashier, shift_number: 'S-0001', state: 'OPEN', business_date: today })).id;
+    const hall = await save(DiningArea, { tenant_id: tenantId, branch_id: branchId, code: 'HALL', name: 'سالن', sort_order: 1, is_active: true });
+    ids.table = (await save(DiningTable, { tenant_id: tenantId, dining_area_id: hall.id, code: 'T12', table_number: '12', seating_capacity: 4, is_active: true })).id;
+    // Another branch's table, which this branch's till could never have sold on.
+    const otherBranch = await save(Branch, { tenant_id: tenantId, code: 'ASY2', name: 'Other branch', is_active: true, time_zone: 'Asia/Tehran' });
+    const otherHall = await save(DiningArea, { tenant_id: tenantId, branch_id: otherBranch.id, code: 'HALL2', name: 'سالن', sort_order: 1, is_active: true });
+    ids.otherTable = (await save(DiningTable, { tenant_id: tenantId, dining_area_id: otherHall.id, code: 'T1', table_number: '1', seating_capacity: 4, is_active: true })).id;
 
     const { code } = await moduleRef.get(AgentRegistryService).createEnrolmentCode(tenantId, branchId, {});
     const enrolled = await moduleRef.get(AgentEnrolmentService).enrol({ code, machine: { hostname: 'ASY-PC' } }, { clientKey: 'test', wsUrl: '' });
@@ -185,7 +195,8 @@ describe('agent offline order upload (PostgreSQL)', () => {
     expect(Number(items[0].quantity)).toBe(2);
     expect(Number(items[0].line_total)).toBe(5600000);
     const options = await dataSource.getRepository(OrderItemOption).find({ where: { order_item_id: items[0].id } });
-    expect(options).toEqual([expect.objectContaining({ option_item_id: ids.cola, option_item_name: 'کوکا' })]);
+    // Sent without its group's name, as agents before 1.6.0 do: the group's name here stands in.
+    expect(options).toEqual([expect.objectContaining({ option_item_id: ids.cola, option_item_name: 'کوکا', option_group_name: 'نوشیدنی' })]);
 
     const payment = await dataSource.getRepository(Payment).findOneByOrFail({ id: order.payments[0].id });
     expect(payment).toMatchObject({ status: 'SUCCEEDED', method_kind: 'CASH', shift_id: ids.shift, business_date: today });
@@ -206,12 +217,13 @@ describe('agent offline order upload (PostgreSQL)', () => {
     expect(await dataSource.getRepository(AuditEvent).count({ where: { tenant_id: tenantId, action: 'ORDER_OFFLINE_SYNCED', entity_id: order.id } })).toBe(1);
   });
 
-  // The agent's till (1.6.0) sends §13.12's additions: they are taken without complaint.
-  it("accepts an order in the offline till's own shape, with its additions", async () => {
+  // The agent's till (1.6.0) sends §13.12's additions.
+  it("accepts an order in the offline till's own shape, and keeps its additions", async () => {
+    // The till's own group name is kept over today's, like the line's other names.
     const order = offlineOrder({ call_number: 139 }, [
       {
         product: ids.burger, name: 'چیزبرگر', unit: '2450000', qty: 1, rate: '0.1000',
-        options: [{ option_item_id: ids.cola, name: 'کوکا', group_name: 'نوشیدنی', price_delta: '350000' }],
+        options: [{ option_item_id: ids.cola, name: 'کوکا', group_name: 'نوشابه', price_delta: '350000' }],
       },
     ]);
     order.voided_lines = [
@@ -219,9 +231,22 @@ describe('agent offline order upload (PostgreSQL)', () => {
     ];
     order.cancelled_by = null;
     order.approved_by = null;
+    order.prints = [{ printer_id: null, kind: 'KITCHEN', document_type: 'KITCHEN_TICKET', copies: 1, status: 'PRINTED', at: '2026-09-24T06:12:43.000Z' }];
     delete order.payments[0].card; // a cash payment carries no card block at all
     const res = await upload([order]).expect(200);
     expect(res.body.results).toEqual([{ id: order.id, result: 'ACCEPTED', order_number: expect.stringMatching(/^ORD-/), flags: [] }]);
+
+    const item = await dataSource.getRepository(OrderItem).findOneByOrFail({ order_id: order.id });
+    expect(await dataSource.getRepository(OrderItemOption).findOneByOrFail({ order_item_id: item.id })).toMatchObject({ option_group_name: 'نوشابه' });
+    // The voided line and what printed stay with the order's history and audit, not its lines.
+    expect(await dataSource.getRepository(OrderItem).count({ where: { order_id: order.id } })).toBe(1);
+    const event = await dataSource.getRepository(OrderStateEvent).findOneByOrFail({ order_id: order.id });
+    expect(event.snapshot).toMatchObject({
+      voided_lines: [expect.objectContaining({ product_name: 'سیب‌زمینی', voided_by: ids.cashier })],
+      prints: [expect.objectContaining({ kind: 'KITCHEN', document_type: 'KITCHEN_TICKET' })],
+    });
+    const audit = await dataSource.getRepository(AuditEvent).findOneByOrFail({ tenant_id: tenantId, action: 'ORDER_OFFLINE_SYNCED', entity_id: order.id });
+    expect(JSON.stringify(audit)).toContain('سیب‌زمینی');
   });
 
   it('answers DUPLICATE for a resend, and holds a different order under the same id', async () => {
@@ -352,15 +377,38 @@ describe('agent offline order upload (PostgreSQL)', () => {
   });
 
   it('books a cancelled order without payments, and an open one for the POS to finish', async () => {
-    const cancelled = offlineOrder({ call_number: 170, state: 'CANCELLED', completed_at: null, cancelled_at: '2026-09-24T06:14:00.000Z', cancellation_note: 'guest left', payments: [] });
-    const open = offlineOrder({ call_number: 171, state: 'OPEN', order_type: 'DINE_IN', completed_at: null, guest_count: 3, payments: [] });
+    const manager = randomUUID();
+    const cancelled = offlineOrder({
+      call_number: 170, state: 'CANCELLED', completed_at: null, cancelled_at: '2026-09-24T06:14:00.000Z', cancellation_note: 'guest left', payments: [],
+      cancelled_by: ids.cashier, approved_by: manager,
+    });
+    const open = offlineOrder({ call_number: 171, state: 'OPEN', order_type: 'DINE_IN', table_id: ids.table, completed_at: null, guest_count: 3, payments: [] });
     const res = (await upload([cancelled, open]).expect(200)).body.results;
-    expect(res.map((r: any) => r.result)).toEqual(['ACCEPTED', 'ACCEPTED']);
+    expect(res.map((r: any) => [r.result, r.flags])).toEqual([['ACCEPTED', []], ['ACCEPTED', []]]);
 
     expect(await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: cancelled.id })).toMatchObject({ state: 'CANCELLED' });
+    const cancelEvent = await dataSource.getRepository(OrderStateEvent).findOneByOrFail({ order_id: cancelled.id });
+    expect(cancelEvent).toMatchObject({ to_state: 'CANCELLED', occurred_by: ids.cashier, reason_text: 'guest left' });
+    expect(cancelEvent.snapshot).toMatchObject({ cancelled_by: ids.cashier, approved_by: manager });
+
     const openRow = await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: open.id });
-    expect(openRow).toMatchObject({ state: 'CONFIRMED', order_type: 'DINE_IN', guest_count: 3 });
+    expect(openRow).toMatchObject({ state: 'CONFIRMED', order_type: 'DINE_IN', guest_count: 3, table_id: ids.table, table_number: '12' });
     expect(Number(openRow.outstanding_total)).toBe(Number(open.totals.grand_total));
+    // The table the guests are still at shows occupied by that order on the floor plan.
+    const floor = await moduleRef.get(DineInService).getFloorPlan(tenantId, branchId);
+    expect(floor.tables.find((t: any) => t.id === ids.table)).toMatchObject({ status: 'OCCUPIED', active_order_id: open.id, guest_count: 3, open_check_count: 1 });
+  });
+
+  it('books an order on a table the branch does not have without the table, and flags it', async () => {
+    const elsewhere = offlineOrder({ call_number: 172, state: 'OPEN', order_type: 'DINE_IN', table_id: ids.otherTable, completed_at: null, guest_count: 2, payments: [] });
+    const gone = offlineOrder({ call_number: 173, order_type: 'DINE_IN', table_id: randomUUID(), guest_count: 2 });
+    const res = (await upload([elsewhere, gone]).expect(200)).body.results;
+    expect(res.map((r: any) => [r.result, r.flags])).toEqual([['ACCEPTED', ['TABLE_UNKNOWN']], ['ACCEPTED', ['TABLE_UNKNOWN']]]);
+    for (const o of [elsewhere, gone]) {
+      expect(await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: o.id })).toMatchObject({ table_id: null, table_number: null });
+    }
+    const floor = await moduleRef.get(DineInService).getFloorPlan(tenantId);
+    expect(floor.tables.find((t: any) => t.id === ids.otherTable)).toMatchObject({ status: 'AVAILABLE' });
   });
 
   it('holds an order it cannot place, and books it on retry once the cause is fixed', async () => {
@@ -414,5 +462,7 @@ describe('agent offline order upload (PostgreSQL)', () => {
     expect(() => parseOrder({ ...ok, totals: { ...ok.totals, discount_total: '1000' } })).toThrow(/discounts/);
     expect(() => parseOrder({ ...ok, lines: [{ ...ok.lines[0], quantity: '1.5' }] })).toThrow(/quantity/);
     expect(() => parseOrder({ ...ok, payments: [{ ...ok.payments[0], status: 'UNKNOWN' }] })).toThrow(/card/);
+    expect(() => parseOrder({ ...ok, voided_lines: 'x' })).toThrow(/voided_lines/);
+    expect(() => parseOrder({ ...ok, cancelled_by: 'someone' })).toThrow(/cancelled_by/);
   });
 });

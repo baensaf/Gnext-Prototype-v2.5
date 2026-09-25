@@ -3796,7 +3796,8 @@
           "SHIFT_CLOSED": "شیفت قبلاً بسته شده",
           "DAY_CLOSED": "روز قبلاً بسته شده",
           "STOCK_NEGATIVE": "موجودی زیر صفر",
-          "BUSINESS_DATE_DIFFERS": "تاریخ مغایر با ساعت پایان روز"
+          "BUSINESS_DATE_DIFFERS": "تاریخ مغایر با ساعت پایان روز",
+          "TABLE_UNKNOWN": "میز در این شعبه نیست"
         }
       }
     }
