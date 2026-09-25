@@ -1,4 +1,5 @@
-import type { TillUser, TillState } from './agent-client';
+import type { FormEvent, ReactNode } from 'react';
+import type { TillUser, TillState, TillCloud } from './agent-client';
 import type { BranchContextValue } from 'src/contexts/branch-context';
 
 import { useTranslation } from 'react-i18next';
@@ -8,7 +9,22 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
 import CloudDoneIcon from '@mui/icons-material/CloudDone';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import { Box, Chip, Alert, Badge, Stack, Button, Tooltip, Container, Typography, IconButton, CircularProgress } from '@mui/material';
+import {
+  Box,
+  Card,
+  Chip,
+  Alert,
+  Badge,
+  Stack,
+  Button,
+  Tooltip,
+  Container,
+  TextField,
+  Typography,
+  IconButton,
+  AlertTitle,
+  CircularProgress,
+} from '@mui/material';
 
 import { PosOrderPage } from 'src/pages/pos/order';
 import { useAuthStore } from 'src/store/useAuthStore';
@@ -24,17 +40,20 @@ import { TillContext } from './till-context';
 import { agentPosSource } from './agent-source';
 import { useOpenOrders, OpenOrdersDrawer } from './open-orders';
 import { tillApi, setTillToken, onTillSignedOut } from './agent-client';
+import { adoptCloudSession, TILL_CLOUD_CHANGED, tillCloudPosSource, forgetCloudSession } from './cloud-source';
 
 // ----------------------------------------------------------------------
 
 /**
- * The offline till: the web POS's register, selling through the branch agent while the internet
- * is down (HANDOFF-offline-pos.md, decisions 6–9). The agent says who may sign in, which till
- * and shift it sells on, and whether the link is back.
+ * The till on the branch PC: the web POS's register, all the time (agent-protocol.md §16).
+ * While the cloud answers it sells through the cloud, its calls passed on by the agent; while
+ * it does not, through the agent itself (§13). The agent says who may sign in, which till and
+ * shift it sells on, and which of the two it is now.
  */
 export function TillApp() {
   const [state, setState] = useState<TillState | null>(null);
   const [user, setUser] = useState<TillUser | null>(null);
+  const [cloud, setCloud] = useState<TillCloud | null>(null);
   const [unreachable, setUnreachable] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -42,6 +61,7 @@ export function TillApp() {
       const res = await tillApi.state();
       setState(res.state);
       setUser(res.user);
+      setCloud(res.cloud ?? null);
       setUnreachable(null);
     } catch (err: any) {
       setUnreachable(err.detail || err.message);
@@ -49,12 +69,18 @@ export function TillApp() {
   }, []);
 
   useEffect(() => {
-    onTillSignedOut(() => setUser(null));
+    onTillSignedOut(() => {
+      setUser(null);
+      forgetCloudSession();
+    });
     refresh();
-    // The mode changes when the link comes and goes; the shift when a new snapshot arrives.
-    const timer = window.setInterval(refresh, 15_000);
+    // The mode changes when the link comes and goes (§16.6 asks every 5 s), and at once when a
+    // cloud call finds the cloud gone or the session ended; the shift when a snapshot arrives.
+    const timer = window.setInterval(refresh, 5_000);
+    window.addEventListener(TILL_CLOUD_CHANGED, refresh);
     return () => {
       window.clearInterval(timer);
+      window.removeEventListener(TILL_CLOUD_CHANGED, refresh);
       onTillSignedOut(null);
     };
   }, [refresh]);
@@ -85,14 +111,32 @@ export function TillApp() {
     );
   }
 
-  if (!user) return <TillSignIn state={state} onSignedIn={setUser} />;
+  if (!user) {
+    return (
+      <TillSignIn
+        state={state}
+        onSignedIn={(signedIn) => {
+          setUser(signedIn);
+          refresh();
+        }}
+      />
+    );
+  }
 
   return (
     <TillContext.Provider value={{ state, refresh }}>
       <BranchContext.Provider value={branch}>
-        <PosSourceProvider source={agentPosSource}>
-          <SignedInTill state={state} user={user} unreachable={unreachable} refresh={refresh} onSignedOut={() => setUser(null)} />
-        </PosSourceProvider>
+        <SignedInTill
+          state={state}
+          user={user}
+          cloud={cloud}
+          unreachable={unreachable}
+          refresh={refresh}
+          onSignedOut={() => {
+            setUser(null);
+            forgetCloudSession();
+          }}
+        />
       </BranchContext.Provider>
     </TillContext.Provider>
   );
@@ -101,18 +145,48 @@ export function TillApp() {
 function SignedInTill({
   state,
   user,
+  cloud,
   unreachable,
   refresh,
   onSignedOut,
 }: {
   state: TillState;
   user: TillUser;
+  cloud: TillCloud | null;
   unreachable: string | null;
   refresh: () => Promise<void>;
   onSignedOut: () => void;
 }) {
   const [ordersOpen, setOrdersOpen] = useState(false);
   const openOrders = useOpenOrders(ordersOpen);
+
+  // Through the cloud whenever it answers and the cashier has a session there (§16.5); through
+  // the agent otherwise. Online without a session, the PIN is asked for first (§16.6).
+  const online = state.mode !== 'OFFLINE';
+  const session = online ? (cloud?.session ?? null) : null;
+  const sessionUser = session?.user.id ?? null;
+  const [adopted, setAdopted] = useState<string | null>(null);
+  useEffect(() => {
+    if (session) adoptCloudSession(session, state);
+    setAdopted(sessionUser);
+    // The session's user and the bound till are what the web app's screens read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionUser, state.till?.id, state.branch?.id]);
+
+  const source = session ? tillCloudPosSource : agentPosSource;
+  const ready = !session || adopted === sessionUser;
+
+  let register: ReactNode = null;
+  if (online && !session) register = <CloudPin onDone={refresh} />;
+  else if (ready) {
+    register = (
+      <PosSourceProvider source={source}>
+        {/* A new screen for each source: its data and its shift hook are the source's own. */}
+        <PosOrderPage key={source.kind} />
+      </PosSourceProvider>
+    );
+  }
+
   return (
     <>
       <TillHeader
@@ -138,7 +212,7 @@ function SignedInTill({
             await openOrders.refresh();
           }}
         />
-        {state.mode === 'ONLINE' ? null : <PosOrderPage />}
+        {register}
       </Container>
       <OpenOrdersDrawer open={ordersOpen} onClose={() => setOrdersOpen(false)} {...openOrders} />
     </>
@@ -238,23 +312,22 @@ function LanguageToggle() {
 }
 
 /**
- * The link is back (§13.5). ONLINE: the till takes nothing; the web POS sells. HANDOVER: orders
- * still open here are finished here or handed over, and nothing new starts.
+ * Which side a new order goes to (§16.7). OFFLINE: this PC, with what it cannot do paused.
+ * ONLINE: the cloud, nothing to say. HANDOVER: the cloud, while the orders taken offline are
+ * finished here or handed over.
  */
 function ModeBanner({ state, onHandedOver }: { state: TillState; onHandedOver: () => Promise<void> }) {
   const { t } = useTranslation();
-  const [webPos, setWebPos] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (state.mode === 'OFFLINE') return;
-    tillApi
-      .status()
-      .then((s) => setWebPos(s.server ? `${s.server.replace(/\/$/, '')}/app/pos` : null))
-      .catch(() => setWebPos(null));
-  }, [state.mode]);
-
-  if (state.mode === 'OFFLINE') return null;
+  if (state.mode === 'ONLINE') return null;
+  if (state.mode === 'OFFLINE') {
+    return (
+      <Alert severity="warning" icon={<CloudOffIcon />} sx={{ mb: 2 }}>
+        {t('till.offline')}
+      </Alert>
+    );
+  }
 
   const handOver = async () => {
     setBusy(true);
@@ -269,30 +342,78 @@ function ModeBanner({ state, onHandedOver }: { state: TillState; onHandedOver: (
     }
   };
 
-  const openWebPos = webPos ? (
-    <Button color="inherit" size="small" href={webPos} target="_blank" rel="noopener">
-      {t('till.openWebPos')}
-    </Button>
-  ) : null;
-
-  return state.mode === 'ONLINE' ? (
-    <Alert severity="success" sx={{ mb: 2 }} action={openWebPos}>
-      {t('till.online')}
-    </Alert>
-  ) : (
+  return (
     <Alert
-      severity="warning"
+      severity="info"
       sx={{ mb: 2 }}
       action={
-        <Stack direction="row" spacing={1}>
-          <Button color="inherit" size="small" variant="outlined" disabled={busy} onClick={handOver}>
-            {t('till.handoverButton')}
-          </Button>
-          {openWebPos}
-        </Stack>
+        <Button color="inherit" size="small" variant="outlined" disabled={busy} onClick={handOver}>
+          {t('till.handoverButton')}
+        </Button>
       }
     >
       {t('till.handover')}
     </Alert>
+  );
+}
+
+/**
+ * The cloud answers again but the cashier has no session there: signed in while offline, or the
+ * session ended. The agent never keeps a PIN, so it asks for it once (§16.6).
+ */
+function CloudPin({ onDone }: { onDone: () => Promise<void> }) {
+  const { t } = useTranslation();
+  const [pin, setPin] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!pin) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await tillApi.cloudLogin(pin);
+      await onDone();
+    } catch (err: any) {
+      setError(err.detail || err.message);
+    } finally {
+      setPin('');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Stack sx={{ alignItems: 'center', pt: 6 }}>
+      <Card component="form" onSubmit={submit} sx={{ width: '100%', maxWidth: 420, p: 4, borderRadius: 3 }}>
+        <Stack spacing={2.5}>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+            <CloudDoneIcon color="success" />
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              {t('till.cloudPin.title')}
+            </Typography>
+          </Stack>
+          <Typography variant="body2" color="text.secondary">
+            {t('till.cloudPin.body')}
+          </Typography>
+          {error && (
+            <Alert severity="error">
+              <AlertTitle sx={{ mb: 0 }}>{error}</AlertTitle>
+            </Alert>
+          )}
+          <TextField
+            autoFocus
+            label={t('till.signIn.pin')}
+            type="password"
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+            slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 8, dir: 'ltr' } }}
+          />
+          <Button type="submit" variant="contained" size="large" disabled={busy || pin.length < 4}>
+            {busy ? <CircularProgress size={22} /> : t('till.cloudPin.submit')}
+          </Button>
+        </Stack>
+      </Card>
+    </Stack>
   );
 }

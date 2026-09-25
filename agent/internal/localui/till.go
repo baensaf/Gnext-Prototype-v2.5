@@ -68,7 +68,7 @@ func tillError(w http.ResponseWriter, err error) {
 
 // tillUser is who the request's till session belongs to; without one it answers 401.
 func (s *Server) tillUser(w http.ResponseWriter, r *http.Request, t *till.Till) (till.User, bool) {
-	u, ok := t.User(r.Header.Get(tillSessionHeader))
+	u, ok := t.User(tillToken(r))
 	if !ok {
 		fail(w, http.StatusUnauthorized, till.CodeUnauthenticated, "دوباره با پین وارد شوید.")
 	}
@@ -150,13 +150,23 @@ func (s *Server) tillState(w http.ResponseWriter, r *http.Request) {
 	if t == nil {
 		return
 	}
+	token := tillToken(r)
 	var user *till.User
-	if u, ok := t.User(r.Header.Get(tillSessionHeader)); ok {
+	if u, ok := t.User(token); ok {
 		user = &u
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"state": t.State(), "user": user})
+	st := t.State()
+	reachable, since := t.Reachable()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"state": st,
+		"user":  user,
+		// §16.5: whether the till sells through the cloud, and the cashier's cloud session.
+		"cloud": map[string]any{"reachable": reachable, "since": since.UTC(), "session": cloudSessionView(s.cloudFor(t, token))},
+	})
 }
 
+// tillLogin signs the cashier in by PIN (§13.13), and while the cloud answers also to the
+// cloud with the same PIN (§16.6).
 func (s *Server) tillLogin(w http.ResponseWriter, r *http.Request) {
 	t := s.theTill(w)
 	if t == nil {
@@ -174,12 +184,23 @@ func (s *Server) tillLogin(w http.ResponseWriter, r *http.Request) {
 		tillError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"token": token, "user": user})
+	session, refused, err := s.signInToCloud(r.Context(), t, in.UserID, in.PIN)
+	if refused {
+		t.Logout(token)
+		cloudError(w, err)
+		return
+	}
+	s.keepCloud(token, session)
+	setTillCookie(w, token)
+	writeJSON(w, http.StatusOK, map[string]any{"token": token, "user": user, "cloud_session": cloudSessionView(session)})
 }
 
 func (s *Server) tillLogout(w http.ResponseWriter, r *http.Request) {
 	if t := s.theTill(w); t != nil {
-		t.Logout(r.Header.Get(tillSessionHeader))
+		token := tillToken(r)
+		t.Logout(token)
+		s.dropCloud(token)
+		setTillCookie(w, "")
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	}
 }

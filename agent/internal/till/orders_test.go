@@ -403,7 +403,8 @@ func TestOnlineTheTillTakesNothingAndInHandoverNothingNew(t *testing.T) {
 	struck := s.send(s.add(s.newOrder(), "fries", 1))
 	struck, _ = s.till.VoidLine(struck.ID, struck.Lines[0].ID, s.sara, "", "")
 
-	up := s.now
+	// A session the till trusts: it has lasted the 10 s §16.5 asks for.
+	up := s.now.Add(-reachAfter)
 	s.up = &up
 	if s.till.Mode() != ModeHandover {
 		t.Fatalf("mode = %s", s.till.Mode())

@@ -102,6 +102,16 @@ section numbers (§) in the code refer to it.
   and copies on request. A ticket that fails stays on the order, shown under *Open orders* with
   *Reprint*, to its printer or another.
 
+  Since 1.11.0 (§16): the till sells online too, and is the branch PC's register all the time.
+  Signing in by PIN also gets the cashier a cloud session (`pos.till`, `POST
+  /api/v1/agent/local/pin-login`), which the agent keeps and the page never sees. The page's
+  cloud calls go to `/api/v1/*` on the agent, which passes them on with that session, its CSRF
+  token and the bound till (`internal/localui/cloud.go`); the till session rides in a header or
+  the `gnext_till` cookie, for Server-Sent Events. The till sells through the cloud while it is
+  reachable (`till.Reachable`: the WebSocket session has lasted 10 s and no proxied request found
+  the cloud gone in the last 30 s) and through the agent otherwise; with the link back and no
+  cloud session it asks for the PIN once (`POST /api/till/cloud-login`).
+
   Since 1.10.0: `gnext-agent till` opens the till in a window of its own, from the tray menu
   (*صندوق آفلاین*), the Start menu and desktop (*Gnext Offline Till*) or the settings page. The web
   POS shows a banner with a link to it once the cloud has not answered for 30 seconds.

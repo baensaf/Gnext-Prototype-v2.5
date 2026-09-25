@@ -216,6 +216,38 @@ func (c *Client) LocalLogin(ctx context.Context, username, password string) (str
 	return out.SessionToken, out.User, err
 }
 
+// TillSession is a cloud session for the cashier signed in at the till (§16.3). The page is
+// given User and Tenant; the token and CSRF token stay in the agent.
+type TillSession struct {
+	Token  string          `json:"session_token"`
+	CSRF   string          `json:"csrf_token"`
+	User   json.RawMessage `json:"user"`
+	Tenant json.RawMessage `json:"tenant"`
+}
+
+// TillLogin asks the cloud for a session for the till's cashier, with the PIN they typed.
+func (c *Client) TillLogin(ctx context.Context, userID, pin string) (TillSession, error) {
+	var out TillSession
+	err := c.do(ctx, http.MethodPost, "/api/v1/agent/local/pin-login", map[string]string{"user_id": userID, "pin": pin}, &out)
+	return out, err
+}
+
+// TillLogout ends a till cashier's cloud session.
+func (c *Client) TillLogout(ctx context.Context, session string) error {
+	return c.Local(ctx, http.MethodPost, "/logout", session, nil, nil)
+}
+
+// Forward sends one request of the till's proxy (§16.4) to the cloud as it is: the caller builds
+// it with the cashier's session and without the device key. Redirects are not followed, and the
+// caller's context bounds it.
+func (c *Client) Forward(req *http.Request) (*http.Response, error) {
+	rt := http.DefaultTransport
+	if c.HTTP != nil && c.HTTP.Transport != nil {
+		rt = c.HTTP.Transport
+	}
+	return rt.RoundTrip(req)
+}
+
 // Local calls a device-management route under /api/v1/agent/local as the signed-in user.
 func (c *Client) Local(ctx context.Context, method, path, session string, in, out any) error {
 	return c.doWith(ctx, method, "/api/v1/agent/local"+path, in, out, http.Header{sessionHeader: {session}})

@@ -318,7 +318,7 @@
     }
   },
   "till": {
-    "title": "Offline till",
+    "title": "Till",
     "signIn": {
       "who": "Who is selling?",
       "pin": "PIN",
@@ -330,11 +330,15 @@
       "HANDOVER": "Internet back",
       "ONLINE": "Online"
     },
-    "online": "The internet is back. Take orders on the online POS.",
-    "handover": "The internet is back. Finish the orders still open here, or hand them over to the online POS; new orders go on the online POS.",
+    "offline": "No internet: selling on this PC. Delivery, customers, discounts and parked orders are paused.",
+    "handover": "The internet is back and new orders go online. Finish the orders taken offline under Open orders, or hand them over.",
+    "cloudPin": {
+      "title": "The internet is back",
+      "body": "Type your PIN to go on selling online.",
+      "submit": "Continue online"
+    },
     "handoverButton": "Hand over",
     "handedOver": "{{handed}} orders handed over; {{dropped}} unsent carts dropped.",
-    "openWebPos": "Open the online POS",
     "problems": {
       "NO_SNAPSHOT": "The branch menu has not come from the server yet.",
       "NO_STAFF": "The staff list has not come from the server yet, so nobody can sign in.",

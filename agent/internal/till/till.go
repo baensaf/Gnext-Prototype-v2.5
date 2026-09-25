@@ -109,6 +109,7 @@ type Till struct {
 	session  *session
 	failures map[string][]time.Time
 	locked   map[string]time.Time
+	reach    reach
 }
 
 type session struct {
@@ -182,10 +183,10 @@ func (t *Till) readSnapshot() (*snapshot, error) {
 	return &s, nil
 }
 
-// Mode is whether the till may sell now (§13.5): OFFLINE without a session; HANDOVER with one
-// while unfinished offline orders remain; ONLINE otherwise.
+// Mode is whether the till may sell now (§13.5, §16.5): OFFLINE while the cloud does not answer;
+// HANDOVER once it does while unfinished offline orders remain; ONLINE otherwise.
 func (t *Till) Mode() string {
-	if t.Connected == nil || !t.Connected() {
+	if ok, _ := t.Reachable(); !ok {
 		return ModeOffline
 	}
 	if t.openOrders() > 0 {

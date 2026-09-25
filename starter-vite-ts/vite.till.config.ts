@@ -11,6 +11,9 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   base: '/till/',
+  // The till calls the cloud only through the agent that serves it (§16.4): same origin, always,
+  // whatever VITE_SERVER_URL the web app is built with.
+  define: { 'import.meta.env.VITE_SERVER_URL': JSON.stringify('') },
   // The web app's public folder holds its images and demo assets; the till bundles only the
   // fonts it imports.
   publicDir: false,
