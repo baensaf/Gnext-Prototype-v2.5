@@ -1,8 +1,9 @@
 # Orders Directory IA audit, benchmarked against restaurant POS order lists
 
 > **Status:** every item in §5 (1–13), the Kanban removal and the Refunds fix shipped in
-> PR #93 on MUI X DataGrid, deployed 2026-09-23. Still open: a cancelled order with a
-> total of 0 reads "Fully paid" in the payment column.
+> PR #93 on MUI X DataGrid, deployed 2026-09-23. The last open item, a cancelled order with
+> a total of 0 reading "Fully paid", is fixed in PR #133 (it now reads "Not charged").
+> **This audit is closed; the code it describes has changed.**
 
 2026-09-23, against `origin/main` at `aead9ff`. Scope is the **Orders Directory** only
 (`/app/orders`, `starter-vite-ts/src/pages/orders/workflow.tsx`): the table, its filters,

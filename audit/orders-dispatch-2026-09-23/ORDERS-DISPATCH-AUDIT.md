@@ -1,5 +1,9 @@
 # Order Management & Dispatch audit, 2026-09-23
 
+> **Status 2026-09-25: closed.** OD1–OD9 and OD11 shipped in #93–#98. OD12 (any cashier could
+> export the order book) is fixed in #133: export is for managers and head office. OD10 is
+> left as designed. The code this audit describes has changed; don't work from it.
+
 **Scope:** order to door. That covers the order lifecycle (create, send, edit, cancel, reopen, type
 change, search, refund lookup, export), incoming-order acceptance, the kitchen hand-off, delivery
 dispatch (board, assign, reassign, depart, complete, fail, requeue) and COD settlement. Dine-in
