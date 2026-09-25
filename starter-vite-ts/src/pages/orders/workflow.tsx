@@ -927,6 +927,10 @@ export function OrdersWorkflowPage() {
         <Typography color="error.main" sx={{ display: 'block', fontWeight: 700 }} variant="caption">
           <span dir="ltr">{t('orders.table.due', { amount: MoneyUtil.formatCurrency(order.due_amount) })} IRR</span>
         </Typography>
+      ) : !MoneyUtil.greaterThan(order.paid_amount || order.paid_total || '0', '0') ? (
+        // Nothing owed and nothing taken (a cancelled order, or one discounted to zero) was
+        // never paid, so it does not read as settled.
+        <Chip label={t('orders.table.notCharged')} size="small" sx={{ fontSize: 9, height: 18 }} variant="outlined" />
       ) : (
         <Chip color="success" label={t('orders.table.fullyPaid')} size="small" sx={{ fontSize: 9, height: 18 }} />
       )}
