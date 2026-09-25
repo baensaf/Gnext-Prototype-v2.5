@@ -67,7 +67,18 @@ export interface CouponValidationResult {
   calculatedAmount: string;
 }
 
+/** What the signed-in account may discount without a pin, and the ceiling nobody passes. */
+export interface ManualDiscountLimits {
+  role: string;
+  own: { pct: string; maxFixed: string };
+  ceiling: { pct: string; maxFixed: string };
+}
+
 export const discountsApi = {
+  getManualDiscountLimits: async (): Promise<ManualDiscountLimits> => {
+    const res = await httpClient.get('/api/v1/discount-limits');
+    return res.data;
+  },
   getCoupons: async (): Promise<Coupon[]> => {
     const res = await httpClient.get('/api/v1/coupons');
     return res.data;

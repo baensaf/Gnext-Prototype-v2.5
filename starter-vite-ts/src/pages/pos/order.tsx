@@ -2,8 +2,8 @@ import type { OrderHeader } from 'src/api/orderApi';
 import type { DiningTable } from 'src/api/dineInApi';
 import type { ReasonCode } from 'src/api/settingsApi';
 import type { DeliveryZone } from 'src/api/deliveryApi';
-import type { ManualDiscount } from 'src/api/discountsApi';
 import type { Customer, CustomerAddress } from 'src/api/customerApi';
+import type { ManualDiscount, ManualDiscountLimits } from 'src/api/discountsApi';
 import type {
   Product,
   Category,
@@ -136,6 +136,7 @@ export function PosOrderPage() {
   // The cloud for the web POS; the branch agent for the offline till.
   const pos = usePosSource();
   const { features } = pos;
+
   // The register this device is and the shift open on it; the till stays shut without one.
   const register = pos.useRegisterShift();
   // A shift whose business day has ended sells nothing more: it is counted and closed first.
@@ -278,6 +279,26 @@ export function PosOrderPage() {
   const [manualDiscountModalOpen, setManualDiscountModalOpen] = useState(false);
   const [manualCalcType, setManualCalcType] = useState<'PERCENTAGE' | 'FIXED_AMOUNT'>('PERCENTAGE');
   const [manualValue, setManualValue] = useState<string>('');
+  // Head office's Discount Authorizations, as the server applies them to this account. The
+  // defaults are the server's own until they load.
+  const [discountLimits, setDiscountLimits] = useState<ManualDiscountLimits>({
+    role: 'CASHIER',
+    own: { pct: '10', maxFixed: '50000' },
+    ceiling: { pct: '30', maxFixed: '300000' },
+  });
+  const overOwnLimit =
+    (manualCalcType === 'PERCENTAGE' && Number(manualValue) > Number(discountLimits.own.pct)) ||
+    (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > Number(discountLimits.own.maxFixed));
+
+  useEffect(() => {
+    if (!features.discounts) return;
+    pos.discounts
+      .getManualDiscountLimits()
+      .then(setDiscountLimits)
+      // The server still decides; the defaults only mean the pin may be asked for late.
+      .catch(() => undefined);
+  }, [features.discounts, pos]);
+
   const [manualReasonCode, setManualReasonCode] = useState<string>('CUSTOMER_SATISFACTION');
   const [manualApprovalRequestId, setManualApprovalRequestId] = useState<string | undefined>(undefined);
   const [appliedManualDiscount, setAppliedManualDiscount] = useState<ManualDiscount | null>(null);
@@ -1005,28 +1026,24 @@ export function PosOrderPage() {
       return;
     }
 
-    if (manualCalcType === 'PERCENTAGE' && Number(manualValue) > 30) {
-      const msg = 'Percentage discount exceeds maximum policy ceiling of 30%';
+    if (manualCalcType === 'PERCENTAGE' && Number(manualValue) > Number(discountLimits.ceiling.pct)) {
+      const msg = `Percentage discount exceeds maximum policy ceiling of ${discountLimits.ceiling.pct}%`;
       setError(msg);
       toast.error(msg);
       return;
     }
 
-    if (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > 300000) {
-      const msg = 'Fixed discount exceeds maximum policy ceiling of 300,000 IRR';
+    if (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > Number(discountLimits.ceiling.maxFixed)) {
+      const msg = `Fixed discount exceeds maximum policy ceiling of ${MoneyUtil.formatCurrency(discountLimits.ceiling.maxFixed)} IRR`;
       setError(msg);
       toast.error(msg);
       return;
     }
 
-    const exceedsCashierLimit =
-      (manualCalcType === 'PERCENTAGE' && Number(manualValue) > 10) ||
-      (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > 50000);
-
-    if (exceedsCashierLimit) {
+    if (overOwnLimit) {
       // Prompt Manager PIN authorization immediately
       setApprovalReason(
-        `Manual discount ${manualValue}${manualCalcType === 'PERCENTAGE' ? '%' : ' IRR'} exceeds standard Cashier limit (10% / 50,000 IRR). Manager PIN authorization required.`
+        `Manual discount ${manualValue}${manualCalcType === 'PERCENTAGE' ? '%' : ' IRR'} exceeds your limit (${discountLimits.own.pct}% / ${MoneyUtil.formatCurrency(discountLimits.own.maxFixed)} IRR). Manager PIN authorization required.`
       );
       setManualDiscountModalOpen(false);
       setApprovalModalOpen(true);
@@ -2515,7 +2532,7 @@ export function PosOrderPage() {
                         label={`${pct}%`}
                         size="small"
                         variant={manualValue === pct ? 'filled' : 'outlined'}
-                        color={Number(pct) > 10 ? 'warning' : 'primary'}
+                        color={Number(pct) > Number(discountLimits.own.pct) ? 'warning' : 'primary'}
                         onClick={() => {
                           handleSelectPreset(pct);
                           setError(null);
@@ -2529,7 +2546,7 @@ export function PosOrderPage() {
                         label={`${MoneyUtil.formatCurrency(amt)}`}
                         size="small"
                         variant={manualValue === amt ? 'filled' : 'outlined'}
-                        color={Number(amt) > 50000 ? 'warning' : 'primary'}
+                        color={Number(amt) > Number(discountLimits.own.maxFixed) ? 'warning' : 'primary'}
                         onClick={() => {
                           handleSelectPreset(amt);
                           setError(null);
@@ -2546,17 +2563,14 @@ export function PosOrderPage() {
                     display: 'block',
                     mt: 1,
                     fontWeight: 600,
-                    color:
-                      (manualCalcType === 'PERCENTAGE' && Number(manualValue) > 10) ||
-                      (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > 50000)
+                    color: overOwnLimit
                         ? 'warning.main'
                         : 'success.main',
                   }}
                 >
-                  {(manualCalcType === 'PERCENTAGE' && Number(manualValue) > 10) ||
-                  (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > 50000)
+                  {overOwnLimit
                     ? '🔒 Requires Manager PIN authorization on Apply'
-                    : '✓ Within standard Cashier authorization limit'}
+                    : '✓ Within your authorization limit'}
                 </Typography>
               )}
             </Box>
@@ -2587,24 +2601,13 @@ export function PosOrderPage() {
           <Button onClick={() => setManualDiscountModalOpen(false)}>Cancel</Button>
           <Button
             variant="contained"
-            color={
-              (manualCalcType === 'PERCENTAGE' && Number(manualValue) > 10) ||
-              (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > 50000)
-                ? 'warning'
-                : 'primary'
-            }
-            startIcon={
-              (manualCalcType === 'PERCENTAGE' && Number(manualValue) > 10) ||
-              (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > 50000) ? (
-                <LockOpenIcon />
-              ) : undefined
-            }
+            color={overOwnLimit ? 'warning' : 'primary'}
+            startIcon={overOwnLimit ? <LockOpenIcon /> : undefined}
             onClick={handleApplyManualDiscount}
             disabled={!manualValue || Number(manualValue) <= 0}
             sx={{ fontWeight: 'bold' }}
           >
-            {(manualCalcType === 'PERCENTAGE' && Number(manualValue) > 10) ||
-            (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > 50000)
+            {overOwnLimit
               ? 'Authorize & Apply (PIN)'
               : 'Apply to Cart'}
           </Button>

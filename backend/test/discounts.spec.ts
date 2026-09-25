@@ -300,13 +300,41 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
       const result = await evaluationService.evaluateQuote('t-1', {
         orderDraft: { items: [{ productId: 'p-1', unitPrice: '250000.0000', quantity: '1', taxRate: '0.0900' }] },
         manualDiscount: { calculation_type: 'PERCENTAGE', value: '30.0000' },
-        userRole: 'MANAGER',
-      } as any);
+      }, 'MANAGER');
 
       expect(result.discountTotal).toBe('75000.0000');
       expect(result.items[0].discountTotal).toBe('75000.0000');
       expect(result.taxTotal).toBe('15750.0000');
       expect(result.grandTotal).toBe('190750.0000');
+    });
+
+    // The register read its own copy of these (10% / 50,000 and a 30% / 300,000 ceiling), so a
+    // change at head office left the POS and the server disagreeing.
+    it("answers the caller's own limit and the ceiling from head office's Discount Authorizations", async () => {
+      settingRepo.find.mockResolvedValue([
+        { key: 'DISCOUNT_AUTHORIZATIONS', branch_id: null, value: { cashierMaxPct: 5, cashierMaxFixed: 20000, managerMaxPct: 40, managerMaxFixed: 2000000 } },
+      ]);
+
+      await expect(evaluationService.getManualDiscountLimits('t-1', 'cashier')).resolves.toEqual({
+        role: 'CASHIER',
+        own: { pct: '5', maxFixed: '20000' },
+        ceiling: { pct: '40', maxFixed: '2000000' },
+      });
+      await expect(evaluationService.getManualDiscountLimits('t-1', 'MANAGER')).resolves.toMatchObject({ own: { pct: '40', maxFixed: '2000000' } });
+    });
+
+    it("holds a discount to the signed-in account's role, not one named in the request", async () => {
+      const quote = (role?: string) =>
+        evaluationService.evaluateQuote('t-1', {
+          orderDraft: { items: [{ productId: 'p-1', unitPrice: '100000.0000', quantity: '1' }] },
+          manualDiscount: { calculation_type: 'PERCENTAGE', value: '20.0000' },
+        }, role);
+
+      expect((await quote()).approvalRequired).toBe(true);
+      expect((await quote('CASHIER')).approvalRequired).toBe(true);
+      const manager = await quote('MANAGER');
+      expect(manager.approvalRequired).toBe(false);
+      expect(manager.discountTotal).toBe('20000.0000');
     });
 
     it('spreads a fixed deduction over the discountable lines and leaves NEVER_DISCOUNT lines whole', async () => {

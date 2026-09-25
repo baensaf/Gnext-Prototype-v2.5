@@ -68,9 +68,38 @@ export class DiscountEvaluationService {
     private readonly productRepo?: Repository<Product>,
   ) {}
 
+  /**
+   * How much manual discount a role may give alone, and the ceiling nobody may pass even
+   * with a manager's pin. Head office sets both under Discount Authorizations; the register
+   * reads the same figures so it asks for a pin exactly when this would.
+   */
+  async getManualDiscountLimits(tenantId: string, role?: string | null) {
+    const settings = await this.settingRepo.find({ where: { tenant_id: tenantId } });
+    // Who may authorise a discount is chain-wide policy, so this reads the organization
+    // row explicitly rather than whichever row happens to come back first.
+    const authSettings =
+      pickSettingValue(settings.filter((s) => s.key === 'DISCOUNT_AUTHORIZATIONS')) ||
+      pickSettingValue(settings.filter((s) => s.key === 'DISCOUNTS')) ||
+      {};
+    const byRole: Record<string, { pct: string; maxFixed: string }> = {
+      CASHIER: { pct: String(authSettings.cashierMaxPct ?? 10), maxFixed: String(authSettings.cashierMaxFixed ?? 50000) },
+      SUPERVISOR: { pct: String(authSettings.supervisorMaxPct ?? 20), maxFixed: String(authSettings.supervisorMaxFixed ?? 150000) },
+      MANAGER: { pct: String(authSettings.managerMaxPct ?? 30), maxFixed: String(authSettings.managerMaxFixed ?? 300000) },
+      ADMIN: { pct: String(authSettings.adminMaxPct ?? 100), maxFixed: String(authSettings.adminMaxFixed ?? 10000000) },
+    };
+    const roleName = (role || 'CASHIER').toUpperCase();
+    return {
+      role: roleName,
+      own: byRole[roleName] || byRole.CASHIER,
+      ceiling: byRole.MANAGER,
+    };
+  }
+
   async evaluateQuote(
     tenantId: string,
     request: DiscountQuoteRequestDto,
+    /** The signed-in account's role, which sets how much it may discount without a pin. */
+    callerRole?: string | null,
   ): Promise<DiscountQuoteResult> {
     const { orderDraft, manualDiscount, couponCode } = request;
     const currencyCode = orderDraft.currencyCode || 'IRR';
@@ -132,25 +161,11 @@ export class DiscountEvaluationService {
     let singleDiscountApplied = false;
 
     // Load discount authorization policy settings
-    const settings = await this.settingRepo.find({ where: { tenant_id: tenantId } });
-    // Who may authorise a discount is chain-wide policy, so this reads the organization
-    // row explicitly rather than whichever row happens to come back first.
-    const authSettings =
-      pickSettingValue(settings.filter((s) => s.key === 'DISCOUNT_AUTHORIZATIONS')) ||
-      pickSettingValue(settings.filter((s) => s.key === 'DISCOUNTS')) ||
-      {};
-    const userRole = (request as any).userRole || 'CASHIER';
-
-    const defaultRoleLimits: Record<string, { pct: string; maxFixed: string }> = {
-      CASHIER: { pct: String(authSettings.cashierMaxPct ?? 10), maxFixed: String(authSettings.cashierMaxFixed ?? 50000) },
-      SUPERVISOR: { pct: String(authSettings.supervisorMaxPct ?? 20), maxFixed: String(authSettings.supervisorMaxFixed ?? 150000) },
-      MANAGER: { pct: String(authSettings.managerMaxPct ?? 30), maxFixed: String(authSettings.managerMaxFixed ?? 300000) },
-      ADMIN: { pct: String(authSettings.adminMaxPct ?? 100), maxFixed: String(authSettings.adminMaxFixed ?? 10000000) },
-    };
-
-    const currentLimit = defaultRoleLimits[userRole.toUpperCase()] || defaultRoleLimits.CASHIER;
-    const policyMaxPct = defaultRoleLimits.MANAGER.pct;
-    const policyMaxFixed = defaultRoleLimits.MANAGER.maxFixed;
+    const limits = await this.getManualDiscountLimits(tenantId, callerRole);
+    const userRole = limits.role;
+    const currentLimit = limits.own;
+    const policyMaxPct = limits.ceiling.pct;
+    const policyMaxFixed = limits.ceiling.maxFixed;
 
     // A. Workflow 3: Manual Cashier Discount Evaluation (Highest Precedence)
     if (manualDiscount && MoneyUtil.greaterThan(manualDiscount.value, '0')) {

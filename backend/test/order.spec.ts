@@ -238,6 +238,36 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       ).rejects.toThrow(ConflictException);
     });
 
+    // Submitting used to charge full price without a word when the cashier's discount needed a
+    // pin nobody gave: the customer was told one total and billed another.
+    it('refuses to send an order whose manual discount was not applied, and prices it for the caller', async () => {
+      orderRepo.findOne.mockResolvedValue({
+        id: 'ord-1',
+        tenant_id: 't-1',
+        branch_id: 'b-1',
+        channel: 'POS',
+        order_type: 'TAKEAWAY',
+        currency_code: 'IRR',
+        quote_version: 'v1',
+        state: 'DRAFT',
+        items: [{ product_id: 'p-1', unit_price: '100000.0000', quantity: '1' }],
+      });
+      discountEngine.evaluateQuote.mockResolvedValueOnce({
+        subtotal: '100000.0000',
+        discountTotal: '0.0000',
+        taxTotal: '0.0000',
+        grandTotal: '100000.0000',
+        consideredDiscounts: [],
+        approvalRequired: true,
+        approvalReason: 'Manual discount 20% exceeds CASHIER limit of 10%. Manager approval required.',
+      });
+
+      await expect(
+        service.submitOrder('t-1', 'ord-1', { manualDiscount: { calculation_type: 'PERCENTAGE', value: '20' } } as any, 'u-1', 'c-1', 'CASHIER'),
+      ).rejects.toMatchObject({ response: expect.objectContaining({ code: 'DISCOUNT_APPROVAL_REQUIRED' }) });
+      expect(discountEngine.evaluateQuote).toHaveBeenCalledWith('t-1', expect.anything(), 'CASHIER');
+    });
+
     it('should return existing order idempotently if already submitted', async () => {
       const submittedOrder = {
         id: 'ord-submitted',

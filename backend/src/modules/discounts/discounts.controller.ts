@@ -30,7 +30,14 @@ export class DiscountsController {
   @Post('discount-quotes')
   async evaluateQuote(@Body() body: DiscountQuoteRequestDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.discountsService.evaluateQuote(tenantId, body);
+    return await this.discountsService.evaluateQuote(tenantId, body, (req as any).userRole);
+  }
+
+  /** What the signed-in account may discount alone, and the ceiling, for the register to ask for a pin. */
+  @Get('discount-limits')
+  async getManualDiscountLimits(@Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.discountsService.getManualDiscountLimits(tenantId, (req as any).userRole);
   }
 
   // Customer Discounts (Workflow 1)

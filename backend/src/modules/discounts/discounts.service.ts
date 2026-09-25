@@ -74,8 +74,12 @@ export class DiscountsService {
     };
   }
 
-  async evaluateQuote(tenantId: string, request: DiscountQuoteRequestDto): Promise<DiscountQuoteResult> {
-    return await this.evaluationService.evaluateQuote(tenantId, request);
+  async evaluateQuote(tenantId: string, request: DiscountQuoteRequestDto, callerRole?: string | null): Promise<DiscountQuoteResult> {
+    return await this.evaluationService.evaluateQuote(tenantId, request, callerRole);
+  }
+
+  async getManualDiscountLimits(tenantId: string, callerRole?: string | null) {
+    return await this.evaluationService.getManualDiscountLimits(tenantId, callerRole);
   }
 
   // Customer Discounts (Workflow 1)
