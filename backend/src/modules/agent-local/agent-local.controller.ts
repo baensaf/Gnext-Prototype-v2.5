@@ -31,6 +31,13 @@ export class AgentLocalController {
     return this.local.login(this.agent(req), body, clientAddress(req), (req as any).correlationId);
   }
 
+  /** A cloud session for a cashier signing in at the agent's till, by PIN (§16.3). */
+  @Post('pin-login')
+  @HttpCode(200)
+  pinLogin(@Body() body: unknown, @Req() req: Request) {
+    return this.local.pinLogin(this.agent(req), body, clientAddress(req), (req as any).correlationId);
+  }
+
   @Post('logout')
   @HttpCode(200)
   logout(@Headers(LOCAL_SESSION_HEADER) session: string) {
