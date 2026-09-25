@@ -484,6 +484,8 @@ export function PosOrderPage() {
   }, [orderType, selectedDeliveryAddressId, customerAddresses, deliveryZones, selectedDeliveryZoneId]);
 
   const handleOpenProductOptions = async (p: Product) => {
+    // A new tap is a new attempt: the last one's "could not load" does not stay up.
+    setError(null);
     setSelectedProduct(p);
     setCheckedOptionIds([]);
     // A failed read is not "no sizes, no add-ons": ringing the dish up bare would only be
