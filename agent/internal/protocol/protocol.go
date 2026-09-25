@@ -35,7 +35,7 @@ const (
 )
 
 // Capabilities this build advertises in hello.
-var Capabilities = []string{"print.html", "payment.charge", "payment.query", "data.pull", "sync.orders", "pos.offline"}
+var Capabilities = []string{"print.html", "payment.charge", "payment.query", "data.pull", "sync.orders", "pos.offline", "pos.till"}
 
 // Ack and envelope error codes (§8.1).
 const (

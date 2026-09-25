@@ -1852,10 +1852,12 @@ arrives. Then:
 | `HANDOVER` | It is reachable again and the agent still holds unfinished offline orders | The cloud | Finished on the agent; handed over as §13.5 says |
 
 The cloud is **reachable** when the agent's WebSocket session has lasted **10 s**, and no proxied
-request has found the cloud unreachable since the later of the session's start and the last
-proxied request that got an answer. It is **unreachable** from the moment the session drops, or
-a proxied request gets no answer. So a cashier's request that finds the cloud gone switches the
-till at once, without waiting for the heartbeat to notice.
+request has found the cloud unreachable in the last **30 s** since the later of the session's
+start and the last proxied request that got an answer. It is **unreachable** from the moment the
+session drops, or a proxied request gets no answer. So a cashier's request that finds the cloud
+gone switches the till at once, without waiting for the heartbeat to notice; and a failure on the
+HTTP side alone, with the session still up, holds the till offline for 30 s, not for the rest of
+the day.
 
 `HANDOVER` no longer stops the till selling: new orders go to the cloud; only the agent refuses
 new orders of its own (`HANDOVER`, as §13.13 says).

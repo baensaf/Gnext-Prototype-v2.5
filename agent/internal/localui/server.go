@@ -63,6 +63,8 @@ type Server struct {
 	session  string
 	user     *cloud.LocalUser
 	lastUsed time.Time
+	// tillCloud is the till cashier's cloud session (§16.3), with the till session it belongs to.
+	tillCloud *cloudSession
 }
 
 // ListenAndServe serves until ctx ends.
@@ -128,6 +130,12 @@ func (s *Server) Handler(addr string) http.Handler {
 	mux.HandleFunc("GET /api/till/printers", s.tillPrinters)
 	mux.HandleFunc("POST /api/till/orders/{id}/cancel", s.tillCancel)
 	mux.HandleFunc("POST /api/till/handover", s.tillHandover)
+	// The till online (§16); see cloud.go. Methods named, since "/api/v1/" and "GET /" would
+	// each be the more specific for a GET and the mux refuses such a pair.
+	mux.HandleFunc("POST /api/till/cloud-login", s.tillCloudLogin)
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		mux.HandleFunc(method+" /api/v1/", s.cloudProxy)
+	}
 	for _, kind := range []string{"printers", "terminals"} {
 		mux.HandleFunc("POST /api/"+kind, s.proxy(http.MethodPost, "/"+kind))
 		mux.HandleFunc("PATCH /api/"+kind+"/{id}", s.proxy(http.MethodPatch, "/"+kind+"/{id}"))

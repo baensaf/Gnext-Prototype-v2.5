@@ -12,8 +12,12 @@ import { MotionLazy } from 'src/components/animate/motion-lazy';
 import { SettingsDrawer, defaultSettings, SettingsProvider } from 'src/components/settings';
 
 import { TillApp } from './till-app';
+import { installTillHttp } from './cloud-source';
 
 // ----------------------------------------------------------------------
+
+// Online, the register's cloud calls go to the agent on this PC, which passes them on (§16.4).
+installTillHttp();
 
 // The offline till, served by the branch agent at http://127.0.0.1:47800/till/. It is the web
 // POS's own register under the same theme, settings and languages, with nothing loaded from the

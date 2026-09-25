@@ -41,8 +41,11 @@ export type PosFeature =
  * way: the web POS talks to the cloud, the offline till to the branch agent's /api/till.
  */
 export type PosSource = {
-  /** `cloud` is the web POS; `agent` is the offline till served by the branch agent. */
-  kind: 'cloud' | 'agent';
+  /**
+   * `cloud` is the web POS; `agent` is the till on the branch PC selling offline through the
+   * agent; `till` is that till online, the cloud's calls passed on by the agent (§16).
+   */
+  kind: 'cloud' | 'agent' | 'till';
   features: Record<PosFeature, boolean>;
   catalog: Pick<
     typeof catalogApi,

@@ -1,6 +1,8 @@
 // The branch agent's local till API (agent-protocol.md §13.13), as the offline till screen
 // calls it: same origin, the page's own header on every change, and the till session.
 
+import type { UserState, TenantState } from 'src/store/useAuthStore';
+
 // ----------------------------------------------------------------------
 
 /** A refusal from the agent: `{code, detail}`, with `detail` in Persian for the cashier. */
@@ -28,6 +30,11 @@ export function setTillToken(next: string | null) {
   } catch {
     // Storage blocked: the session lasts until the page is reloaded.
   }
+}
+
+/** The till session, for the page's cloud calls through the agent (§16.4). */
+export function getTillToken(): string | null {
+  return token;
 }
 
 /** Called when the agent no longer knows the session (auto-logout, another sign-in). */
@@ -65,6 +72,12 @@ export function agentError(status: number, code: string, detail: string): AgentE
 // ---- the agent's shapes ----------------------------------------------
 
 export type TillUser = { id: string; display_name: string; role: string };
+
+/** The cashier's cloud session as the page sees it (§16.3): who, never the token. */
+export type CloudSession = { user: UserState; tenant: TenantState | null };
+
+/** Whether the till sells through the cloud (§16.5), and the cashier's cloud session. */
+export type TillCloud = { reachable: boolean; since: string; session: CloudSession | null };
 
 export type TillState = {
   mode: 'ONLINE' | 'OFFLINE' | 'HANDOVER';
@@ -176,9 +189,14 @@ export type PlaceInput = {
 };
 
 export const tillApi = {
-  state: () => agentRequest<{ state: TillState; user: TillUser | null }>('GET', '/api/till/state'),
+  state: () => agentRequest<{ state: TillState; user: TillUser | null; cloud?: TillCloud }>('GET', '/api/till/state'),
   login: (userId: string, pin: string) =>
-    agentRequest<{ token: string; user: TillUser }>('POST', '/api/till/login', { user_id: userId, pin }),
+    agentRequest<{ token: string; user: TillUser; cloud_session?: CloudSession | null }>('POST', '/api/till/login', {
+      user_id: userId,
+      pin,
+    }),
+  /** The PIN again, for a cloud session when the link is back or the last one ended (§16.6). */
+  cloudLogin: (pin: string) => agentRequest<{ cloud_session: CloudSession }>('POST', '/api/till/cloud-login', { pin }),
   logout: () => agentRequest<{ ok: boolean }>('POST', '/api/till/logout', {}),
   menu: () => agentRequest<Menu>('GET', '/api/till/menu'),
   orders: () => agentRequest<{ orders: AgentOrder[] }>('GET', '/api/till/orders'),
