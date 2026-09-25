@@ -321,6 +321,9 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
         ceiling: { pct: '40', maxFixed: '2000000' },
       });
       await expect(evaluationService.getManualDiscountLimits('t-1', 'MANAGER')).resolves.toMatchObject({ own: { pct: '40', maxFixed: '2000000' } });
+      // A system administrator or owner is head office, not a register.
+      await expect(evaluationService.getManualDiscountLimits('t-1', 'SUPER_ADMIN')).resolves.toMatchObject({ own: { pct: '100' } });
+      await expect(evaluationService.getManualDiscountLimits('t-1', 'OWNER')).resolves.toMatchObject({ own: { pct: '100' } });
     });
 
     it("holds a discount to the signed-in account's role, not one named in the request", async () => {
