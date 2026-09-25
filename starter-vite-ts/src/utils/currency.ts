@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 import { useAuthStore } from 'src/store/useAuthStore';
 
 /**
@@ -6,4 +8,14 @@ import { useAuthStore } from 'src/store/useAuthStore';
  */
 export function useCurrencyCode(): string {
   return useAuthStore((state) => state.tenant?.baseCurrency) || 'IRR';
+}
+
+/**
+ * The currency as a word in the interface language, for labels such as "Amount (…)": rials
+ * read as ریال in Persian, and any other currency by its code.
+ */
+export function useCurrencyLabel(): string {
+  const code = useCurrencyCode();
+  const { i18n } = useTranslation();
+  return i18n.language?.startsWith('fa') && code === 'IRR' ? 'ریال' : code;
 }

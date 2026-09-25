@@ -28,6 +28,7 @@ import {
 
 import { fDate } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
+import { useCurrencyLabel } from 'src/utils/currency';
 
 import { httpClient as axios } from 'src/api/httpClient';
 import { catalogApi, type Product } from 'src/api/catalogApi';
@@ -56,6 +57,7 @@ interface CouponsPageProps {
 }
 
 export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
+  const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
 
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -242,7 +244,7 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
               </Box>
               <Box sx={{ flex: 1, width: '100%' }}>
                 <TextField
-                  label={t('coupons.simulatedSubtotal', 'Simulated Subtotal (IRR)')}
+                  label={t('coupons.simulatedSubtotal', 'Simulated Subtotal ({{currency}})', { currency: currencyLabel })}
                   type="number"
                   fullWidth
                   size="small"
@@ -261,7 +263,7 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
           {validationResult && (
             <Alert severity="success" sx={{ mt: 2, borderRadius: 2 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                {t('coupons.couponValid', 'Coupon VALID! Applied Discount: -{{amount}} IRR', {
+                {t('coupons.couponValid', 'Coupon VALID! Applied Discount: -{{amount}} {{currency}}', { currency: currencyLabel,
                   amount: MoneyUtil.formatCurrency(validationResult.calculatedAmount),
                 })}
               </Typography>
@@ -464,7 +466,7 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
               <TextField
                 fullWidth
                 type="number"
-                label={t('coupons.minSubtotalLabel', 'Minimum Purchase Subtotal (IRR)')}
+                label={t('coupons.minSubtotalLabel', 'Minimum Purchase Subtotal ({{currency}})', { currency: currencyLabel })}
                 value={minSubtotal}
                 onChange={(e) => setMinSubtotal(e.target.value)}
                 placeholder="100000"
@@ -473,7 +475,7 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
               <TextField
                 fullWidth
                 type="number"
-                label={t('coupons.maxCapLabel', 'Maximum Discount Cap (IRR)')}
+                label={t('coupons.maxCapLabel', 'Maximum Discount Cap ({{currency}})', { currency: currencyLabel })}
                 value={maxCap}
                 onChange={(e) => setMaxCap(e.target.value)}
                 placeholder="50000"

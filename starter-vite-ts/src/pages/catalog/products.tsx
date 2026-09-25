@@ -44,6 +44,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { useCurrencyCode } from 'src/utils/currency';
 import { percentToTaxRate, taxRateToPercent } from 'src/utils/tax-rate';
 
 import { catalogApi } from 'src/api/catalogApi';
@@ -57,17 +58,18 @@ import { ImageUploader } from 'src/components/ImageUploader';
 const DEFAULT_TAX_PERCENT = '9';
 
 /** A product's price, or the range of its sizes' prices when it is sold in sizes. */
-const priceLabel = (p: Product) => {
+const priceLabel = (p: Product, currency: string) => {
   const sizes = p.variants || [];
-  if (!sizes.length) return `${MoneyUtil.formatCurrency(p.base_price)} IRR`;
+  if (!sizes.length) return `${MoneyUtil.formatCurrency(p.base_price)} ${currency}`;
   const prices = sizes.map((v) => Number(v.base_price || 0));
   const [low, high] = [Math.min(...prices), Math.max(...prices)];
   return low === high
-    ? `${MoneyUtil.formatCurrency(low)} IRR`
-    : `${MoneyUtil.formatCurrency(low)} – ${MoneyUtil.formatCurrency(high)} IRR`;
+    ? `${MoneyUtil.formatCurrency(low)} ${currency}`
+    : `${MoneyUtil.formatCurrency(low)} – ${MoneyUtil.formatCurrency(high)} ${currency}`;
 };
 
 export function ProductsPage() {
+  const currency = useCurrencyCode();
   const navigate = useNavigate();
   const { t } = useTranslation();
 
@@ -339,7 +341,7 @@ export function ProductsPage() {
                       </TableCell>
                       <TableCell>{catObj ? catObj.name : '—'}</TableCell>
                       <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                        <span dir="ltr">{priceLabel(p)}</span>
+                        <span dir="ltr">{priceLabel(p, currency)}</span>
                       </TableCell>
                       <TableCell align="center">{p.variants?.length || '—'}</TableCell>
                       <TableCell align="center">
@@ -464,7 +466,7 @@ export function ProductsPage() {
                 onChange={(e) => setBasePrice(e.target.value)}
                 slotProps={{
                   htmlInput: { min: 0, step: 1 },
-                  input: { endAdornment: <InputAdornment position="end">IRR</InputAdornment> },
+                  input: { endAdornment: <InputAdornment position="end">{currency}</InputAdornment> },
                 }}
               />
 

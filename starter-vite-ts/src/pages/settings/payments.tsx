@@ -35,6 +35,8 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { useCurrencyCode } from 'src/utils/currency';
+
 import { settingsApi } from 'src/api/settingsApi';
 import { useIsHeadOffice } from 'src/store/useAuthStore';
 import { useBranchContext } from 'src/contexts/branch-context';
@@ -43,6 +45,7 @@ import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function PaymentSettingsPage() {
+  const currency = useCurrencyCode();
   const { t } = useTranslation();
   // Tender types have no branch dimension: one set for the chain, written at head office.
   const isHeadOffice = useIsHeadOffice();
@@ -59,7 +62,7 @@ export function PaymentSettingsPage() {
   const [formCode, setFormCode] = useState('');
   const [formName, setFormName] = useState('');
   const [formKind, setFormKind] = useState('CARD');
-  const [formCurrency, setFormCurrency] = useState('IRR');
+  const [formCurrency, setFormCurrency] = useState(currency);
   const [formRequiresRef, setFormRequiresRef] = useState(false);
   const [formRequiresDevice, setFormRequiresDevice] = useState(true);
   const [formAllowsRefund, setFormAllowsRefund] = useState(true);
@@ -89,7 +92,7 @@ export function PaymentSettingsPage() {
     setFormCode('');
     setFormName('');
     setFormKind('CARD');
-    setFormCurrency('IRR');
+    setFormCurrency(currency);
     setFormRequiresRef(false);
     setFormRequiresDevice(true);
     setFormAllowsRefund(true);
@@ -103,7 +106,7 @@ export function PaymentSettingsPage() {
     setFormCode(m.code);
     setFormName(m.name);
     setFormKind(m.kind);
-    setFormCurrency(m.currency_code || 'IRR');
+    setFormCurrency(m.currency_code || currency);
     setFormRequiresRef(m.requires_reference);
     setFormRequiresDevice(m.requires_device);
     setFormAllowsRefund(m.allows_refund);
@@ -239,7 +242,7 @@ export function PaymentSettingsPage() {
                       }
                     />
                   </TableCell>
-                  <TableCell>{m.currency_code || 'IRR'}</TableCell>
+                  <TableCell>{m.currency_code || currency}</TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={0.5}>
                       {m.requires_device && (

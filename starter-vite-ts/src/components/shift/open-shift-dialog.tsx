@@ -18,6 +18,8 @@ import {
   DialogActions,
 } from '@mui/material';
 
+import { useCurrencyLabel } from 'src/utils/currency';
+
 import { shiftApi } from 'src/api/shiftApi';
 
 // ----------------------------------------------------------------------
@@ -34,6 +36,7 @@ type Props = {
 
 /** Counting the float into a drawer. The only thing asked is how much went in. */
 export function OpenShiftDialog({ open, onClose, terminal, branchName, defaultFloat, onOpened }: Props) {
+  const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
   const [openingFloat, setOpeningFloat] = useState(defaultFloat);
   const [submitting, setSubmitting] = useState(false);
@@ -82,7 +85,7 @@ export function OpenShiftDialog({ open, onClose, terminal, branchName, defaultFl
             </Box>
             {error && <Alert severity="error">{error}</Alert>}
             <TextField
-              label={t('shift.open.float', 'Opening float (IRR)')}
+              label={t('shift.open.float', 'Opening float ({{currency}})', { currency: currencyLabel })}
               helperText={t('shift.open.floatHelp', 'The cash counted into the drawer before the first sale.')}
               type="number"
               required

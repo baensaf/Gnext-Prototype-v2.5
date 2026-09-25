@@ -22,6 +22,7 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
+import { useCurrencyCode } from 'src/utils/currency';
 
 import { catalogApi } from 'src/api/catalogApi';
 import { useBranchContext } from 'src/contexts/branch-context';
@@ -33,6 +34,7 @@ import { CalendarDateField } from 'src/components/calendar-date-field';
  * put them back, and the sales the register and kiosk refused meanwhile (valued at base price).
  */
 export function StopReportPage() {
+  const currency = useCurrencyCode();
   const { t } = useTranslation();
   const { selectedBranchId } = useBranchContext();
 
@@ -106,7 +108,7 @@ export function StopReportPage() {
             {stat(t('catalog.stopReport.stops'), report.totals.stops)}
             {stat(t('catalog.stopReport.hoursOff'), report.totals.hours)}
             {stat(t('catalog.stopReport.refused'), report.totals.refused)}
-            {stat(t('catalog.stopReport.lost'), `${MoneyUtil.formatCurrency(report.totals.estimated_lost)} IRR`)}
+            {stat(t('catalog.stopReport.lost'), `${MoneyUtil.formatCurrency(report.totals.estimated_lost)} ${currency}`)}
           </Grid>
 
           <Card sx={{ mb: 3 }}>
@@ -136,7 +138,7 @@ export function StopReportPage() {
                         <TableCell align="center">{i.hours}</TableCell>
                         <TableCell align="center">{i.refused ? `${i.refused} (${i.refused_quantity})` : '—'}</TableCell>
                         <TableCell align="right">
-                          <span dir="ltr">{MoneyUtil.isZero(i.estimated_lost) ? '—' : `${MoneyUtil.formatCurrency(i.estimated_lost)} IRR`}</span>
+                          <span dir="ltr">{MoneyUtil.isZero(i.estimated_lost) ? '—' : `${MoneyUtil.formatCurrency(i.estimated_lost)} ${currency}`}</span>
                         </TableCell>
                       </TableRow>
                     ))}

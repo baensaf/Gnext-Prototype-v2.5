@@ -36,6 +36,7 @@ import {
 
 import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
+import { useCurrencyCode, useCurrencyLabel } from 'src/utils/currency';
 
 import { toast } from 'src/components/snackbar';
 import { CheckoutModal } from 'src/components/CheckoutModal';
@@ -208,6 +209,8 @@ type Props = {
  * orders beside the register, in the drawer the web POS uses for held carts.
  */
 export function OpenOrdersDrawer({ open, onClose, orders, troubled, loading, refresh }: Props) {
+  const currency = useCurrencyCode();
+  const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
   const [payingId, setPayingId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<AgentOrder | null>(null);
@@ -304,11 +307,11 @@ export function OpenOrdersDrawer({ open, onClose, orders, troubled, loading, ref
                     </Box>
                     <Box sx={{ textAlign: 'end' }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                        {MoneyUtil.formatCurrency(o.totals.grand_total)} IRR
+                        {MoneyUtil.formatCurrency(o.totals.grand_total)} {currency}
                       </Typography>
                       {!paid && (
                         <Typography variant="caption" color="warning.main" sx={{ fontWeight: 600 }}>
-                          {t('till.orders.due', { amount: MoneyUtil.formatCurrency(outstanding.toString()) })}
+                          {t('till.orders.due', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(outstanding.toString()) })}
                         </Typography>
                       )}
                     </Box>

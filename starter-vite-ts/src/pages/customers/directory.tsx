@@ -49,6 +49,7 @@ import { paths } from 'src/routes/paths';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
+import { useCurrencyCode } from 'src/utils/currency';
 
 import {
   customerApi
@@ -58,6 +59,7 @@ import { ServerDataGrid } from 'src/components/server-data-grid';
 import { CalendarDateField } from 'src/components/calendar-date-field';
 
 export function CustomersPage() {
+  const currency = useCurrencyCode();
   const navigate = useNavigate();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -316,7 +318,7 @@ export function CustomersPage() {
                 <Stack spacing={0.5} sx={{ alignItems: 'flex-start', py: 1 }}>
                   <Chip
                     icon={<AccountBalanceWalletIcon sx={{ '&&': { fontSize: 16 } }} />}
-                    label={`${MoneyUtil.formatCurrency(walletBal)} IRR`}
+                    label={`${MoneyUtil.formatCurrency(walletBal)} ${currency}`}
                     color={isPositive ? 'success' : 'default'}
                     size="small"
                     onClick={() => handleOpenCredit(c)}
@@ -324,7 +326,7 @@ export function CustomersPage() {
                     sx={{ fontWeight: 600, cursor: 'pointer' }}
                   />
                   <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                    Limit: {MoneyUtil.formatCurrency(credLim)} IRR
+                    Limit: {MoneyUtil.formatCurrency(credLim)} {currency}
                   </Typography>
                 </Stack>
               );
@@ -476,7 +478,7 @@ export function CustomersPage() {
               />
 
               <TextField
-                label="Assigned Credit Line / Overdraft Limit (IRR)"
+                label={`Assigned Credit Line / Overdraft Limit (${currency})`}
                 type="number"
                 fullWidth
                 value={creditLimit}
@@ -507,7 +509,7 @@ export function CustomersPage() {
                       Available Wallet Balance
                     </Typography>
                     <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'success.main', mt: 0.5 }}>
-                      {MoneyUtil.formatCurrency(creditAccount.current_balance)} IRR
+                      {MoneyUtil.formatCurrency(creditAccount.current_balance)} {currency}
                     </Typography>
                   </CardContent>
                 </Card>
@@ -519,7 +521,7 @@ export function CustomersPage() {
                       Assigned Credit Limit
                     </Typography>
                     <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 0.5 }}>
-                      {MoneyUtil.formatCurrency(creditAccount.credit_limit)} IRR
+                      {MoneyUtil.formatCurrency(creditAccount.credit_limit)} {currency}
                     </Typography>
                   </CardContent>
                 </Card>
@@ -533,7 +535,7 @@ export function CustomersPage() {
                     <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main', mt: 0.5 }}>
                       {MoneyUtil.formatCurrency(
                         MoneyUtil.add(creditAccount.current_balance || '0', creditAccount.credit_limit || '0'),
-                      )} IRR
+                      )} {currency}
                     </Typography>
                   </CardContent>
                 </Card>
@@ -563,7 +565,7 @@ export function CustomersPage() {
 
               <TextField
                 size="small"
-                label="Amount (IRR)"
+                label={`Amount (${currency})`}
                 type="number"
                 value={txAmount}
                 onChange={(e) => setTxAmount(e.target.value)}
@@ -599,7 +601,7 @@ export function CustomersPage() {
                 <TableRow>
                   <TableCell>Date</TableCell>
                   <TableCell>Type</TableCell>
-                  <TableCell align="right">Amount (IRR)</TableCell>
+                  <TableCell align="right">Amount ({currency})</TableCell>
                   <TableCell>Note</TableCell>
                 </TableRow>
               </TableHead>
@@ -615,7 +617,7 @@ export function CustomersPage() {
                       />
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                      {MoneyUtil.formatCurrency(t.amount)} IRR
+                      {MoneyUtil.formatCurrency(t.amount)} {currency}
                     </TableCell>
                     <TableCell>{t.note || (t as any).reason_text || (t as any).reference || '—'}</TableCell>
                   </TableRow>

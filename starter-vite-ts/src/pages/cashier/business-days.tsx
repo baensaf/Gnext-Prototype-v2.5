@@ -29,6 +29,7 @@ import {
   DialogActions,
 } from '@mui/material';
 
+import { useCurrencyCode } from 'src/utils/currency';
 import { fDate , fDateTime } from 'src/utils/format-time';
 import { businessDate as businessDayOf } from 'src/utils/calendar';
 
@@ -54,6 +55,7 @@ const nextBusinessDate = (date: string) => {
 };
 
 export function BusinessDaysPage() {
+  const currency = useCurrencyCode();
   const { t } = useTranslation();
 
   const [businessDays, setBusinessDays] = useState<BusinessDayClose[]>([]);
@@ -132,14 +134,14 @@ export function BusinessDaysPage() {
     }
     setOpenOrdersLoading(true);
     try {
-      setOpenOrders(await shiftApi.getDayCloseOpenOrders({ branchId, businessDate, currencyCode: 'IRR' }));
+      setOpenOrders(await shiftApi.getDayCloseOpenOrders({ branchId, businessDate, currencyCode: currency }));
     } catch (err: any) {
       setOpenOrders(null);
       setCloseError(errorText(err, t('cashier.openOrders.loadFailed', 'Could not check the open orders')));
     } finally {
       setOpenOrdersLoading(false);
     }
-  }, [branchId, businessDate, t]);
+  }, [branchId, businessDate, t, currency]);
 
   // Closing a day this branch has already closed would only be refused, so say so up front.
   const alreadyClosed = businessDays.some(
@@ -172,7 +174,7 @@ export function BusinessDaysPage() {
       await shiftApi.closeBusinessDay({
         branchId,
         businessDate,
-        currencyCode: 'IRR',
+        currencyCode: currency,
         ...(carryingOver ? { carryOverReason: carryOverReason.trim() } : {}),
       });
       setSuccess(t('cashier.dayClosed', 'Business day {{date}} closed', { date: businessDate }));
@@ -256,7 +258,7 @@ export function BusinessDaysPage() {
         return (
           <Typography variant="caption">
             {t('cashier.ordersCount', 'Orders')}: {totals.orderCount ?? 0} · {t('cashier.sales', 'Sales')}:{' '}
-            <span dir="ltr">{Number(totals.grossSales || totals.totalSales || 0).toLocaleString()} IRR</span>
+            <span dir="ltr">{Number(totals.grossSales || totals.totalSales || 0).toLocaleString()} {currency}</span>
           </Typography>
         );
       },

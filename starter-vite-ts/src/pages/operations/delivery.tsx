@@ -54,6 +54,7 @@ import { paths } from 'src/routes/paths';
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
 import { useLiveRefresh } from 'src/utils/use-live-refresh';
+import { useCurrencyCode, useCurrencyLabel } from 'src/utils/currency';
 
 import { tenantApi } from 'src/api/tenantApi';
 import { settingsApi } from 'src/api/settingsApi';
@@ -138,6 +139,8 @@ function DispatchDetails({ delivery, now }: { delivery: Delivery; now: number })
 }
 
 export function DeliveryPage() {
+  const currencyLabel = useCurrencyLabel();
+  const currency = useCurrencyCode();
   const { t } = useTranslation();
   // A cashier checks couriers in and out at the counter; taking one onto the roster is the
   // manager's (the API refuses a register account).
@@ -355,7 +358,7 @@ export function DeliveryPage() {
     mode === 'DELIVERY_FEE' ? null : (
       <TextField
         fullWidth
-        label={t(mode === 'FLAT' ? 'delivery.modals.addCourier.compensationFlat' : 'delivery.modals.addCourier.compensationFallback')}
+        label={t(mode === 'FLAT' ? 'delivery.modals.addCourier.compensationFlat' : 'delivery.modals.addCourier.compensationFallback', { currency: currencyLabel })}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
@@ -806,7 +809,7 @@ export function DeliveryPage() {
                             completed; until then what the rider must bring back is what the
                             customer still owes. */}
                         <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                          {t('delivery.card.toCollect', 'To collect')}: {MoneyUtil.formatCurrency((del as any).outstanding_total || '0')} IRR
+                          {t('delivery.card.toCollect', 'To collect')}: {MoneyUtil.formatCurrency((del as any).outstanding_total || '0')} {currency}
                         </Typography>
                       </Stack>
 
@@ -863,7 +866,7 @@ export function DeliveryPage() {
                         />
                       </Stack>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                        {t('delivery.card.courier')}: {del.courier_name} | {t('delivery.card.compensation')}: {MoneyUtil.formatCurrency(del.compensation_amount)} IRR
+                        {t('delivery.card.courier')}: {del.courier_name} | {t('delivery.card.compensation')}: {MoneyUtil.formatCurrency(del.compensation_amount)} {currency}
                       </Typography>
 
                       {del.state === 'FAILED' && (
@@ -939,7 +942,7 @@ export function DeliveryPage() {
                           {c.pay_mode !== 'DELIVERY_FEE' && (
                             <Typography variant="caption" color="text.secondary">
                               {t(c.pay_mode === 'ZONE_RATE' ? 'delivery.payRules.zoneFallback' : 'delivery.payRules.flatAmount', {
-                                amount: `${MoneyUtil.formatCurrency(c.compensation_per_delivery || '0')} IRR`,
+                                amount: `${MoneyUtil.formatCurrency(c.compensation_per_delivery || '0')} ${currency}`,
                               })}
                             </Typography>
                           )}
@@ -1166,7 +1169,7 @@ export function DeliveryPage() {
               {t('delivery.modals.complete.description', { orderNumber: selectedDeliveryForComplete?.order_number })}
             </Typography>
             <Typography variant="body2">
-              {t('delivery.modals.complete.owedLabel')}: <strong>{MoneyUtil.formatCurrency(owedOnDelivery)} IRR</strong>
+              {t('delivery.modals.complete.owedLabel')}: <strong>{MoneyUtil.formatCurrency(owedOnDelivery)} {currency}</strong>
             </Typography>
             <Alert severity="info">{t('delivery.modals.complete.settleNote')}</Alert>
           </Stack>
@@ -1310,14 +1313,14 @@ export function DeliveryPage() {
             <Stack spacing={2} sx={{ pt: 1 }}>
               <TextField label={t('delivery.modals.addZone.name')} value={zoneEdit.name} onChange={(e) => setZoneEdit({ ...zoneEdit, name: e.target.value })} fullWidth />
               <TextField
-                label={t('delivery.modals.addZone.fee')}
+                label={t('delivery.modals.addZone.fee', { currency: currencyLabel })}
                 value={zoneEdit.fee}
                 onChange={(e) => setZoneEdit({ ...zoneEdit, fee: e.target.value })}
                 slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
                 fullWidth
               />
               <TextField
-                label={t('delivery.modals.addZone.courierPay')}
+                label={t('delivery.modals.addZone.courierPay', { currency: currencyLabel })}
                 helperText={t('delivery.modals.addZone.courierPayHelp')}
                 value={zoneEdit.courier_pay}
                 onChange={(e) => setZoneEdit({ ...zoneEdit, courier_pay: e.target.value })}
@@ -1367,9 +1370,9 @@ export function DeliveryPage() {
           <Stack spacing={2} sx={{ pt: 1 }}>
             <TextField label={t('delivery.modals.addZone.code')} value={zoneForm.code} onChange={(e) => setZoneForm({ ...zoneForm, code: e.target.value })} fullWidth />
             <TextField label={t('delivery.modals.addZone.name')} value={zoneForm.name} onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })} fullWidth />
-            <TextField label={t('delivery.modals.addZone.fee')} value={zoneForm.fee} onChange={(e) => setZoneForm({ ...zoneForm, fee: e.target.value })} fullWidth />
+            <TextField label={t('delivery.modals.addZone.fee', { currency: currencyLabel })} value={zoneForm.fee} onChange={(e) => setZoneForm({ ...zoneForm, fee: e.target.value })} fullWidth />
             <TextField
-              label={t('delivery.modals.addZone.courierPay')}
+              label={t('delivery.modals.addZone.courierPay', { currency: currencyLabel })}
               helperText={t('delivery.modals.addZone.courierPayHelp')}
               value={zoneForm.courier_pay}
               onChange={(e) => setZoneForm({ ...zoneForm, courier_pay: e.target.value })}

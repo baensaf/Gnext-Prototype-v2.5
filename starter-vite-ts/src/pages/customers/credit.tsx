@@ -45,6 +45,7 @@ import { useParams } from 'src/routes/hooks';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
+import { useCurrencyCode, useCurrencyLabel } from 'src/utils/currency';
 
 import { creditApi } from 'src/api/creditApi';
 import { customerApi } from 'src/api/customerApi';
@@ -52,6 +53,8 @@ import { customerApi } from 'src/api/customerApi';
 import { CalendarDateField } from 'src/components/calendar-date-field';
 
 export function CustomerCreditPage() {
+  const currency = useCurrencyCode();
+  const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
   const { id: routeAccountId } = useParams();
 
@@ -96,7 +99,7 @@ export function CustomerCreditPage() {
   const [newCustomerId, setNewCustomerId] = useState('');
   const [newAccountMode, setNewAccountMode] = useState<'FINITE' | 'UNLIMITED' | 'POLICY'>('FINITE');
   const [newAccountLimit, setNewAccountLimit] = useState('10000000');
-  const [newAccountCurrency, setNewAccountCurrency] = useState('IRR');
+  const [newAccountCurrency, setNewAccountCurrency] = useState(currency);
   const [newAccountPolicyNote, setNewAccountPolicyNote] = useState('Corporate credit account');
 
   // Statement Detail Modal
@@ -414,7 +417,7 @@ export function CustomerCreditPage() {
               {t('credit.totalLimit', 'Total Approved Credit Limit')}
             </Typography>
             <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 0.5, color: 'primary.main' }}>
-              {MoneyUtil.formatCurrency(totalApprovedLimit)} IRR
+              {MoneyUtil.formatCurrency(totalApprovedLimit)} {currency}
             </Typography>
           </Card>
         </Grid>
@@ -425,7 +428,7 @@ export function CustomerCreditPage() {
               {t('credit.totalBalance', 'Total Current Balance (Deposits)')}
             </Typography>
             <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 0.5, color: 'success.main' }}>
-              +{MoneyUtil.formatCurrency(totalCurrentBalance)} IRR
+              +{MoneyUtil.formatCurrency(totalCurrentBalance)} {currency}
             </Typography>
           </Card>
         </Grid>
@@ -436,7 +439,7 @@ export function CustomerCreditPage() {
               {t('credit.totalDebt', 'Total Outstanding Debt')}
             </Typography>
             <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 0.5, color: 'error.main' }}>
-              -{MoneyUtil.formatCurrency(totalOutstandingDebt)} IRR
+              -{MoneyUtil.formatCurrency(totalOutstandingDebt)} {currency}
             </Typography>
           </Card>
         </Grid>
@@ -447,7 +450,7 @@ export function CustomerCreditPage() {
               {t('credit.totalAvailable', 'Total Available Purchasing Credit')}
             </Typography>
             <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 0.5, color: 'info.main' }}>
-              {MoneyUtil.formatCurrency(totalAvailableCredit)} IRR
+              {MoneyUtil.formatCurrency(totalAvailableCredit)} {currency}
             </Typography>
           </Card>
         </Grid>
@@ -609,7 +612,7 @@ export function CustomerCreditPage() {
                           />
                         </TableCell>
                         <TableCell>
-                          <Chip label={row.currency_code || 'IRR'} size="small" />
+                          <Chip label={row.currency_code || currency} size="small" />
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'medium' }}>
                           {row.mode === 'UNLIMITED' ? '∞' : MoneyUtil.formatCurrency(row.credit_limit || '0')}
@@ -713,13 +716,13 @@ export function CustomerCreditPage() {
                   <Grid size={{ xs: 6 }}>
                     <Typography variant="caption" color="text.secondary">Current Balance:</Typography>
                     <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                      {MoneyUtil.formatCurrency(selectedAccount?.current_balance || '0')} {selectedAccount?.currency_code || 'IRR'}
+                      {MoneyUtil.formatCurrency(selectedAccount?.current_balance || '0')} {selectedAccount?.currency_code || currency}
                     </Typography>
                   </Grid>
                   <Grid size={{ xs: 6 }}>
                     <Typography variant="caption" color="text.secondary">Credit Limit:</Typography>
                     <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                      {MoneyUtil.formatCurrency(selectedAccount?.credit_limit || '0')} {selectedAccount?.currency_code || 'IRR'}
+                      {MoneyUtil.formatCurrency(selectedAccount?.credit_limit || '0')} {selectedAccount?.currency_code || currency}
                     </Typography>
                   </Grid>
                 </Grid>
@@ -727,13 +730,13 @@ export function CustomerCreditPage() {
 
               <TextField
                 size="small"
-                label={t('credit.repayDialog.amount', 'Repayment Amount (IRR)')}
+                label={t('credit.repayDialog.amount', 'Repayment Amount ({{currency}})', { currency: currencyLabel })}
                 type="number"
                 required
                 fullWidth
                 value={repayAmount}
                 onChange={(e) => setRepayAmount(e.target.value)}
-                helperText={`Preview: ${MoneyUtil.formatCurrency(repayAmount || '0')} IRR`}
+                helperText={`Preview: ${MoneyUtil.formatCurrency(repayAmount || '0')} ${currency}`}
               />
 
               <TextField
@@ -975,7 +978,7 @@ export function CustomerCreditPage() {
               (statementData?.customer ? `${statementData.customer.first_name} ${statementData.customer.last_name}` : '')}{' '}
             ({statementData?.customer?.code || ''})
           </Box>
-          <Chip label={statementData?.currencyCode || statementData?.currency_code || 'IRR'} size="small" color="primary" />
+          <Chip label={statementData?.currencyCode || statementData?.currency_code || currency} size="small" color="primary" />
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           {statementLoading ? (
@@ -1001,7 +1004,7 @@ export function CustomerCreditPage() {
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                       {MoneyUtil.formatCurrency(statementData.credit_account?.credit_limit || statementData.account?.credit_limit || '0')}{' '}
-                      {statementData.currencyCode || 'IRR'}
+                      {statementData.currencyCode || currency}
                     </Typography>
                   </Grid>
                   <Grid size={{ xs: 6, md: 3 }}>
@@ -1018,7 +1021,7 @@ export function CustomerCreditPage() {
                       }}
                     >
                       {MoneyUtil.formatCurrency(statementData.credit_account?.current_balance || statementData.account?.current_balance || '0')}{' '}
-                      {statementData.currencyCode || 'IRR'}
+                      {statementData.currencyCode || currency}
                     </Typography>
                   </Grid>
                   <Grid size={{ xs: 6, md: 3 }}>
@@ -1029,7 +1032,7 @@ export function CustomerCreditPage() {
                       {MoneyUtil.formatCurrency(
                         statementData.credit_account?.availableCredit || statementData.credit_account?.available_credit || '0'
                       )}{' '}
-                      {statementData.currencyCode || 'IRR'}
+                      {statementData.currencyCode || currency}
                     </Typography>
                   </Grid>
                 </Grid>
@@ -1051,7 +1054,7 @@ export function CustomerCreditPage() {
                               {t('credit.statementModal.agingCard0_30', 'Current (0–30 Days)')}
                             </Typography>
                             <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mt: 0.5, color: 'info.main' }}>
-                              {MoneyUtil.formatCurrency(agingInfo?.current || '0')} IRR
+                              {MoneyUtil.formatCurrency(agingInfo?.current || '0')} {currency}
                             </Typography>
                           </Card>
                         </Grid>
@@ -1061,7 +1064,7 @@ export function CustomerCreditPage() {
                               {t('credit.statementModal.agingCard31_60', '31–60 Days')}
                             </Typography>
                             <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mt: 0.5, color: 'warning.main' }}>
-                              {MoneyUtil.formatCurrency(agingInfo?.days31_60 || '0')} IRR
+                              {MoneyUtil.formatCurrency(agingInfo?.days31_60 || '0')} {currency}
                             </Typography>
                           </Card>
                         </Grid>
@@ -1071,7 +1074,7 @@ export function CustomerCreditPage() {
                               {t('credit.statementModal.agingCard61_90', '61–90 Days')}
                             </Typography>
                             <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mt: 0.5, color: 'error.light' }}>
-                              {MoneyUtil.formatCurrency(agingInfo?.days61_90 || '0')} IRR
+                              {MoneyUtil.formatCurrency(agingInfo?.days61_90 || '0')} {currency}
                             </Typography>
                           </Card>
                         </Grid>
@@ -1081,7 +1084,7 @@ export function CustomerCreditPage() {
                               {t('credit.statementModal.agingCard90Plus', '90+ Days')}
                             </Typography>
                             <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mt: 0.5, color: 'error.main' }}>
-                              {MoneyUtil.formatCurrency(agingInfo?.days90Plus || '0')} IRR
+                              {MoneyUtil.formatCurrency(agingInfo?.days90Plus || '0')} {currency}
                             </Typography>
                           </Card>
                         </Grid>
@@ -1183,7 +1186,7 @@ export function CustomerCreditPage() {
                                 }}
                               >
                                 {isNegative ? `-${MoneyUtil.formatCurrency(MoneyUtil.abs(tx.amount))}` : `+${MoneyUtil.formatCurrency(tx.amount)}`}{' '}
-                                {tx.currency_code || 'IRR'}
+                                {tx.currency_code || currency}
                               </TableCell>
                               <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                                 {MoneyUtil.formatCurrency(tx.balance_after || '0')}

@@ -35,12 +35,15 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { useCurrencyCode, useCurrencyLabel } from 'src/utils/currency';
 
 import { catalogApi } from 'src/api/catalogApi';
 
 import { OptionGroupEditDialog } from './option-group-edit-dialog';
 
 export function OptionsPage() {
+  const currency = useCurrencyCode();
+  const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
 
   const [optionGroups, setOptionGroups] = useState<OptionGroup[]>([]);
@@ -247,8 +250,8 @@ export function OptionsPage() {
                           <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                             <span dir="ltr">
                               {MoneyUtil.greaterThan(item.price_delta || '0', '0')
-                                ? `+${MoneyUtil.formatCurrency(item.price_delta)} IRR`
-                                : '0 IRR'}
+                                ? `+${MoneyUtil.formatCurrency(item.price_delta)} ${currency}`
+                                : `0 ${currency}`}
                             </span>
                           </TableCell>
                         </TableRow>
@@ -367,7 +370,7 @@ export function OptionsPage() {
               onChange={(e) => setItemName(e.target.value)}
             />
             <TextField
-              label={t('catalog.optionsPage.priceDelta')}
+              label={t('catalog.optionsPage.priceDelta', { currency: currencyLabel })}
               type="number"
               required
               fullWidth

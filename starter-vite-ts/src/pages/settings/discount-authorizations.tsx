@@ -13,6 +13,8 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { useCurrencyLabel } from 'src/utils/currency';
+
 import { httpClient as axios } from 'src/api/httpClient';
 import { DashboardContent } from 'src/layouts/dashboard';
 import { useIsHeadOffice } from 'src/store/useAuthStore';
@@ -38,6 +40,7 @@ interface DiscountAuthorizationsPageProps {
 }
 
 export default function DiscountAuthorizationsPage({ isEmbedded = false }: DiscountAuthorizationsPageProps) {
+  const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
   // DISCOUNT_AUTHORIZATIONS is not on the overridable list, so this is the chain's single
   // policy and the server refuses a branch account writing it.
@@ -165,11 +168,11 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                 />
                 <TextField
                   type="number"
-                  label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction (IRR)')}
+                  label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction ({{currency}})', { currency: currencyLabel })}
                   value={policy.cashierMaxFixed}
                   onChange={(e) => setPolicy({ ...policy, cashierMaxFixed: Number(e.target.value) })}
                   disabled={!isHeadOffice}
-                  helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} IRR', { amount: '50,000' })}
+                  helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} {{currency}}', { currency: currencyLabel, amount: '50,000' })}
                 />
               </Stack>
             </Card>
@@ -196,11 +199,11 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                 />
                 <TextField
                   type="number"
-                  label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction (IRR)')}
+                  label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction ({{currency}})', { currency: currencyLabel })}
                   value={policy.supervisorMaxFixed}
                   onChange={(e) => setPolicy({ ...policy, supervisorMaxFixed: Number(e.target.value) })}
                   disabled={!isHeadOffice}
-                  helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} IRR', { amount: '150,000' })}
+                  helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} {{currency}}', { currency: currencyLabel, amount: '150,000' })}
                 />
               </Stack>
             </Card>
@@ -227,11 +230,11 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                 />
                 <TextField
                   type="number"
-                  label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction (IRR)')}
+                  label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction ({{currency}})', { currency: currencyLabel })}
                   value={policy.managerMaxFixed}
                   onChange={(e) => setPolicy({ ...policy, managerMaxFixed: Number(e.target.value) })}
                   disabled={!isHeadOffice}
-                  helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} IRR', { amount: '300,000' })}
+                  helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} {{currency}}', { currency: currencyLabel, amount: '300,000' })}
                 />
               </Stack>
             </Card>
