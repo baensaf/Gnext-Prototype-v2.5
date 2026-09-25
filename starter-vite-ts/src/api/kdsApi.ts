@@ -67,9 +67,9 @@ export interface PrintRoute {
   id: string;
   branch_id?: string;
   document_type: string;
-  product_id?: string;
-  category_id?: string;
-  station_id?: string;
+  product_id?: string | null;
+  category_id?: string | null;
+  station_id?: string | null;
   printer_group_id: string;
   priority: number;
   copies: number;

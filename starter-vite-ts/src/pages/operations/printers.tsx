@@ -373,9 +373,11 @@ export function PrintersPage() {
       printer_group_id: routeForm.printer_group_id,
       priority: Number(routeForm.priority) || 1,
       copies: Number(routeForm.copies) || 1,
-      product_id: routeForm.selector_type === 'PRODUCT' ? routeForm.product_id || undefined : undefined,
-      category_id: routeForm.selector_type === 'CATEGORY' ? routeForm.category_id || undefined : undefined,
-      station_id: routeForm.selector_type === 'STATION' ? routeForm.station_id || undefined : undefined,
+      // null, not undefined: JSON drops undefined, and the server keeps a selector it is not
+      // sent, so a route changed from one product to every product stayed on the product.
+      product_id: routeForm.selector_type === 'PRODUCT' ? routeForm.product_id || null : null,
+      category_id: routeForm.selector_type === 'CATEGORY' ? routeForm.category_id || null : null,
+      station_id: routeForm.selector_type === 'STATION' ? routeForm.station_id || null : null,
     };
 
     try {
