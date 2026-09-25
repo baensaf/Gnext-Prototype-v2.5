@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -24,13 +26,16 @@ type windowSpec struct {
 	data   string // WebView2's folder, under %LOCALAPPDATA%\Gnext
 	width  uint
 	height uint
+	// reopen: after an update the window closes and opens again from the new binary, so the
+	// old one is not kept in use (§9). Not the till: its page holds the cart being rung up.
+	reopen string
 }
 
 // windowTitle names the settings window.
 const windowTitle = "Gnext Agent — عامل شعبه"
 
 var (
-	settingsWindow = windowSpec{title: windowTitle, mutex: `Local\GnextAgentWindow`, data: "agent-window", width: 1120, height: 780}
+	settingsWindow = windowSpec{title: windowTitle, mutex: `Local\GnextAgentWindow`, data: "agent-window", width: 1120, height: 780, reopen: "open"}
 	// The till takes a larger window: it is the register the cashier works at all day.
 	tillWindow = windowSpec{title: "صندوق آفلاین — Gnext", path: tillPath, mutex: `Local\GnextTillWindow`, data: "till-window", width: 1366, height: 860}
 )
@@ -68,7 +73,8 @@ func showWindow(spec windowSpec) int {
 		raiseWindow(spec.title)
 		return 0
 	}
-	defer windows.CloseHandle(mutex)
+	release := sync.OnceFunc(func() { windows.CloseHandle(mutex) })
+	defer release()
 
 	data := filepath.Join(os.Getenv("LOCALAPPDATA"), "Gnext", spec.data)
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
@@ -84,7 +90,25 @@ func showWindow(spec windowSpec) int {
 		}
 		return 0
 	}
-	defer w.Destroy()
+	destroy := sync.OnceFunc(w.Destroy)
+	defer destroy()
+
+	// Taken now: once an update has moved this binary aside, the path is the new one's.
+	exe, _ := os.Executable()
+	var updated atomic.Bool
+	if spec.reopen != "" {
+		started, _ := os.Stat(exe)
+		go func() {
+			for {
+				time.Sleep(5 * time.Second)
+				if st, err := fetchTrayStatus(); err == nil && st.Version != "" && st.Version != version && replaced(exe, started) {
+					updated.Store(true)
+					w.Dispatch(w.Terminate)
+					return
+				}
+			}
+		}()
+	}
 
 	if agentAnswers(base) {
 		w.Navigate(url)
@@ -100,6 +124,14 @@ func showWindow(spec windowSpec) int {
 		}()
 	}
 	w.Run()
+	if updated.Load() {
+		// Close first: the new window's process finds this one by its mutex and would only
+		// bring it to the front.
+		destroy()
+		release()
+		procAllowSetForegroundW.Call(^uintptr(0)) // ASFW_ANY
+		_ = exec.Command(exe, spec.reopen).Start()
+	}
 	return 0
 }
 

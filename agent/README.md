@@ -106,7 +106,9 @@ section numbers (§) in the code refer to it.
   (*صندوق آفلاین*), the Start menu and desktop (*Gnext Offline Till*) or the settings page. The web
   POS shows a banner with a link to it once the cloud has not answered for 30 seconds.
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
-  publishes a build, then swaps the binary after checking its SHA-256.
+  publishes a build, then swaps the binary after checking its SHA-256. Since 1.10.2 an old
+  binary still held by an open window no longer blocks the next update (§9), and the settings
+  window reopens itself on the new binary.
 - **Settings window** (Start-menu and desktop shortcut *Gnext Agent*, the tray, or running the
   exe): the page on `http://127.0.0.1:47800` in a window of its own, drawn by WebView2, the Edge
   engine in Windows 10 and 11 (in the browser if it is missing). One window per user; opening it

@@ -831,14 +831,20 @@ If `version` is greater than the agent's own (semver comparison):
 2. Download to `%ProgramData%\Gnext\Agent\updates\gnext-agent-<version>.exe`.
 3. Check `size` and `sha256`. On mismatch, delete the file, log it, and try again at the next
    check. Never run a file that fails the check.
-4. Rename the running `gnext-agent.exe` to `gnext-agent.old.exe` (Windows allows renaming a
-   running executable), move the new file into its place.
+4. Rename the running `gnext-agent.exe` to `gnext-agent.old-<running version>.exe` (Windows
+   allows renaming a running executable), move the new file into its place. A file already
+   under that name that cannot be removed (a window opened before an earlier update still runs
+   from it) is left alone, and the name gets a number: `gnext-agent.old-1.10.2-2.exe`.
 5. Close the WebSocket with `1001` and exit with code `3`. The service recovery settings
    (§3.1) restart the service on the new binary.
-6. The new binary deletes `gnext-agent.old.exe` once it has received a `welcome`.
+6. The new binary deletes every `gnext-agent.old*.exe` it can once it has received a
+   `welcome`; one still in use goes at a later `welcome`. The settings window closes and opens
+   again from the new binary when it sees the agent report the new version. The offline till
+   window does not, since its page holds the cart being rung up; it lets go of the old binary
+   when the cashier closes it.
 
-If the new binary fails to start three times, an administrator restores
-`gnext-agent.old.exe` by hand. Automatic rollback is not in v1.
+If the new binary fails to start three times, an administrator restores the newest
+`gnext-agent.old-<version>.exe` by hand. Automatic rollback is not in v1.
 
 No code signing in v1; the SHA-256 comes over the authenticated TLS channel.
 
