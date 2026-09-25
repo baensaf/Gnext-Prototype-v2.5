@@ -237,6 +237,8 @@
     "directTerminalPay": "Direct Terminal Pay (PC-POS)",
     "itemSuspended": "86'd",
     "itemSuspendedNotice": "{{name}} is 86'd and cannot be ordered.",
+    "productLoadFailed": "Could not load the sizes and add-ons for {{name}}. Check the connection and tap it again.",
+    "groupUnfillable": "{{name}} cannot be sold right now: its {{group}} group has fewer choices on offer than it needs.",
     "itemOffSchedule": "Only {{windows}}",
     "itemOffScheduleNotice": "{{name}} is only sold {{windows}}.",
     "customer": "Customer",

@@ -463,61 +463,73 @@ export function PosOrderPage() {
   const handleOpenProductOptions = async (p: Product) => {
     setSelectedProduct(p);
     setCheckedOptionIds([]);
+    // A failed read is not "no sizes, no add-ons": ringing the dish up bare would only be
+    // refused at submit, after the cart is built. Say so here; tapping the tile tries again.
+    let vList: ProductVariant[];
+    let groups: OptionGroup[];
     try {
-      const [vList, groups] = await Promise.all([
-        pos.catalog.getProductVariants(p.id).catch(() => [] as ProductVariant[]),
+      [vList, groups] = await Promise.all([
+        pos.catalog.getProductVariants(p.id),
         // A product offers only the add-on groups attached to it; the register refuses any other choice.
-        pos.catalog
-          .getProductById(p.id)
-          .then((full) => (full.optionGroups || []) as OptionGroup[])
-          .catch(() => [] as OptionGroup[]),
+        pos.catalog.getProductById(p.id).then((full) => (full.optionGroups || []) as OptionGroup[]),
       ]);
-
-      // A variant or add-on taken off sale today is not offered; nor is an add-on this
-      // product leaves out of its group.
-      const live = availabilities.filter(
-        (a) => a.is_suspended && (!a.suspended_until || new Date(a.suspended_until) > new Date())
-      );
-      const stoppedVariants = new Set(live.filter((a) => a.product_id === p.id && a.variant_id).map((a) => a.variant_id));
-      const stoppedAddons = new Set(live.filter((a) => a.option_item_id).map((a) => a.option_item_id));
-      const soldOutVariants = new Set(
-        dailyStock.filter((s) => s.product_id === p.id && s.variant_id && s.remaining <= 0).map((s) => s.variant_id)
-      );
-      const onSale = (vList || []).filter((v) => !stoppedVariants.has(v.id) && !soldOutVariants.has(v.id));
-      if ((vList || []).length > 0 && onSale.length === 0) {
-        setError(t('pos.itemSuspendedNotice', { name: p.name }));
-        return;
-      }
-      const offered = (groups || []).map((g) => ({
-        ...g,
-        items: (g.items || []).filter(
-          (i) => !(g.excluded_item_ids || []).includes(i.id) && !stoppedAddons.has(i.id)
-        ),
-      }));
-
-      setProductVariants(onSale);
-      setOptionGroups(offered);
-      // The catalogue's default choices start ticked (a combo's usual drink), up to what each
-      // group allows, so the common order is one tap.
-      setCheckedOptionIds(
-        offered.flatMap((g) =>
-          (g.items || [])
-            .filter((i) => i.is_default)
-            .slice(0, g.max_selection && g.max_selection > 0 ? g.max_selection : undefined)
-            .map((i) => i.id)
-        )
-      );
-
-      const defaultVariant = onSale.find((v) => v.is_default) || onSale[0];
-      setSelectedVariantId(defaultVariant?.id || '');
-
-      if (onSale.length > 1 || offered.length > 0) {
-        setOptionDialogOpen(true);
-      } else {
-        addToCart(p, defaultVariant, []);
-      }
     } catch {
-      addToCart(p, undefined, []);
+      setSelectedProduct(null);
+      setError(t('pos.productLoadFailed', { name: p.name }));
+      return;
+    }
+    // A variant or add-on taken off sale today is not offered; nor is an add-on this
+    // product leaves out of its group.
+    const live = availabilities.filter(
+      (a) => a.is_suspended && (!a.suspended_until || new Date(a.suspended_until) > new Date())
+    );
+    const stoppedVariants = new Set(live.filter((a) => a.product_id === p.id && a.variant_id).map((a) => a.variant_id));
+    const stoppedAddons = new Set(live.filter((a) => a.option_item_id).map((a) => a.option_item_id));
+    const soldOutVariants = new Set(
+      dailyStock.filter((s) => s.product_id === p.id && s.variant_id && s.remaining <= 0).map((s) => s.variant_id)
+    );
+    const onSale = (vList || []).filter((v) => !stoppedVariants.has(v.id) && !soldOutVariants.has(v.id));
+    if ((vList || []).length > 0 && onSale.length === 0) {
+      setError(t('pos.itemSuspendedNotice', { name: p.name }));
+      return;
+    }
+    const offered = (groups || []).map((g) => ({
+      ...g,
+      items: (g.items || []).filter(
+        (i) => !(g.excluded_item_ids || []).includes(i.id) && !stoppedAddons.has(i.id)
+      ),
+    }));
+    // A group that needs more choices than are left on offer (the rest excluded or 86'd)
+    // can never be filled; the register would refuse the line whatever the cashier picks.
+    const unfillable = offered.find(
+      (g) => (g.items || []).length < Math.max(g.min_selection || 0, g.is_required ? 1 : 0)
+    );
+    if (unfillable) {
+      setSelectedProduct(null);
+      setError(t('pos.groupUnfillable', { name: p.name, group: unfillable.name }));
+      return;
+    }
+
+    setProductVariants(onSale);
+    setOptionGroups(offered);
+    // The catalogue's default choices start ticked (a combo's usual drink), up to what each
+    // group allows, so the common order is one tap.
+    setCheckedOptionIds(
+      offered.flatMap((g) =>
+        (g.items || [])
+          .filter((i) => i.is_default)
+          .slice(0, g.max_selection && g.max_selection > 0 ? g.max_selection : undefined)
+          .map((i) => i.id)
+      )
+    );
+
+    const defaultVariant = onSale.find((v) => v.is_default) || onSale[0];
+    setSelectedVariantId(defaultVariant?.id || '');
+
+    if (onSale.length > 1 || offered.length > 0) {
+      setOptionDialogOpen(true);
+    } else {
+      addToCart(p, defaultVariant, []);
     }
   };
 

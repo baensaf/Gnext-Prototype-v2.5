@@ -237,6 +237,8 @@
     "directTerminalPay": "پرداخت سریع کارتخوان (PC-POS)",
     "itemSuspended": "توقف فروش",
     "itemSuspendedNotice": "فروش {{name}} متوقف شده است و قابل سفارش نیست.",
+    "productLoadFailed": "اندازه‌ها و افزودنی‌های {{name}} بارگیری نشد. اتصال را بررسی کنید و دوباره روی آن بزنید.",
+    "groupUnfillable": "{{name}} فعلاً قابل فروش نیست: گروه {{group}} کمتر از حداقل لازم گزینه دارد.",
     "itemOffSchedule": "فقط {{windows}}",
     "itemOffScheduleNotice": "{{name}} فقط در ساعات {{windows}} فروخته می‌شود.",
     "customer": "مشتری",
