@@ -602,17 +602,46 @@ func (t *Till) number(o *Order) error {
 			floor = max(floor, n)
 		}
 	}
+	t.mu.Lock()
+	floor = max(floor, t.cloudSeen[o.BusinessDate])
+	t.mu.Unlock()
 	n, err := t.Store.nextCall(o.BusinessDate, floor)
 	if err != nil {
 		return err
 	}
-	start, end := c.Settings.CallNumbers.POS.Start, c.Settings.CallNumbers.POS.End
-	if start < 1 || end < start {
-		start, end = 100, 399 // the cloud's default POS range
-	}
+	start, end := posRange(c)
 	number := start + (n-1)%(end-start+1)
 	o.CallNumber = &number
 	return nil
+}
+
+func posRange(c *Catalog) (start, end int) {
+	start, end = c.Settings.CallNumbers.POS.Start, c.Settings.CallNumbers.POS.End
+	if start < 1 || end < start {
+		start, end = 100, 399 // the cloud's default POS range
+	}
+	return start, end
+}
+
+// NoteCloudOrder records the call number the cloud gave an order this till placed online
+// (§16.4), so an order taken offline right after does not get it again: the heartbeat that
+// would tell the agent may not come before the link drops.
+func (t *Till) NoteCloudOrder(businessDate string, callNumber int) {
+	c, err := t.catalog()
+	if err != nil || businessDate == "" {
+		return
+	}
+	start, end := posRange(c)
+	if callNumber < start || callNumber > end {
+		return // another range: not a register order
+	}
+	n := callNumber - start + 1
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.cloudSeen == nil {
+		t.cloudSeen = map[string]int{}
+	}
+	t.cloudSeen[businessDate] = max(t.cloudSeen[businessDate], n)
 }
 
 // Finish ends a paid order (§13.6) and hands it to the upload.

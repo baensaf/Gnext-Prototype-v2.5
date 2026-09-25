@@ -92,6 +92,8 @@ type Till struct {
 	Upload func(payload json.RawMessage) error
 	// CloudCallCount is the POS call count from the last heartbeat.ack (§13.9), and its date.
 	CloudCallCount func() (businessDate string, count int)
+	// Backlog is how many offline orders still wait to be uploaded (§12.7); nil counts none.
+	Backlog func() int
 	// ConnectedSince is when the current session with the cloud began, or nil offline.
 	ConnectedSince func() *time.Time
 	// Charge charges the bound till's card terminal (§13.7), through the agent's driver and queue;
@@ -110,6 +112,8 @@ type Till struct {
 	failures map[string][]time.Time
 	locked   map[string]time.Time
 	reach    reach
+	// cloudSeen is the highest POS count, by business date, of the orders this till placed online.
+	cloudSeen map[string]int
 }
 
 type session struct {

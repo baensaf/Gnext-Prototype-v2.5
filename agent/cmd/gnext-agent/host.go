@@ -188,6 +188,8 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 		ConnectedSince: func() *time.Time { return a.Status().ConnectedSince },
 		Store:          h.orders,
 		Upload:         h.upload,
+		// The upload backlog, for the till's "orders being sent" (§16.7).
+		Backlog:        func() int { return h.outbox.Status().PendingOrders },
 		CloudCallCount: h.cloudCallCount,
 		// Offline card charges use the terminal's driver and queue, with no cloud command (§13.7).
 		Charge: func(terminalID, attemptID, amount string) (till.CardResult, error) {

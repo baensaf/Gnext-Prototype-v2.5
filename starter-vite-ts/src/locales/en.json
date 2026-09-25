@@ -311,6 +311,19 @@
     "callNumber": "Number",
     "orderSubmitted": "Order {{number}} sent to the kitchen",
     "orderSubmittedPaid": "Order {{number}} paid and sent to the kitchen",
+    "carry": {
+      "toAgent": "The cart moved to this PC. Check it before sending.",
+      "toCloud": "The cart moved online. Check it before sending.",
+      "deliveryToTakeaway": "Delivery is not sold offline: the order is now takeaway.",
+      "refused": "Some items cannot be sold offline. Remove them before sending.",
+      "removeButton": "Remove",
+      "removeRefused": "Remove the items marked unavailable before sending the order.",
+      "uncertain": "The last send got no answer from the server: this order may already be in the kitchen. Check with the kitchen before sending it again.",
+      "uncertainTitle": "Send this order again?",
+      "uncertainBody": "The server did not answer when this order was sent, so it may already be in the kitchen. Send it again only if the kitchen does not have it.",
+      "uncertainConfirm": "The kitchen does not have it: send",
+      "reached": "Order {{number}} had reached the kitchen before the internet went. The cart was cleared."
+    },
     "offlineTill": {
       "title": "The internet is down",
       "body": "Gnext cannot be reached. On the branch PC, keep selling on the offline till; its orders come here when the internet is back.",
@@ -337,6 +350,9 @@
       "body": "Type your PIN to go on selling online.",
       "submit": "Continue online"
     },
+    "wentOffline": "The internet is down. The till goes on selling on this PC.",
+    "backOnline": "The internet is back. New orders go online.",
+    "sending": "{{count}} orders taken offline are being sent to the server.",
     "handoverButton": "Hand over",
     "handedOver": "{{handed}} orders handed over; {{dropped}} unsent carts dropped.",
     "problems": {

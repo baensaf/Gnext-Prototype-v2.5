@@ -205,6 +205,26 @@ func (s *Server) tillCloudLogin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// isSubmit is the web POS's place: POST /api/v1/orders/{id}/submit.
+func isSubmit(r *http.Request) bool {
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	return r.Method == http.MethodPost && len(parts) == 5 && parts[0] == "api" && parts[1] == "v1" && parts[2] == "orders" && parts[4] == "submit"
+}
+
+// noteCallNumber tells the till the call number the cloud gave an order it placed.
+func noteCallNumber(t *till.Till, body []byte) {
+	var order struct {
+		CallNumber   json.Number `json:"call_number"`
+		BusinessDate string      `json:"business_date"`
+	}
+	if json.Unmarshal(body, &order) != nil {
+		return
+	}
+	if n, err := order.CallNumber.Int64(); err == nil && order.BusinessDate != "" {
+		t.NoteCloudOrder(order.BusinessDate[:min(len(order.BusinessDate), 10)], int(n))
+	}
+}
+
 // cloudProxy passes the till page's cloud calls on with the cashier's session (§16.4).
 func (s *Server) cloudProxy(w http.ResponseWriter, r *http.Request) {
 	t := s.theTill(w)
@@ -293,6 +313,18 @@ func (s *Server) cloudProxy(w http.ResponseWriter, r *http.Request) {
 		if !hopHeaders[http.CanonicalHeaderKey(k)] {
 			w.Header()[k] = v
 		}
+	}
+	if isSubmit(r) && resp.StatusCode/100 == 2 {
+		// An order this till placed in the cloud: its call number is one the till must not give
+		// again offline, should the link drop before the next heartbeat says so (§13.9).
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		noteCallNumber(t, body)
+		w.WriteHeader(resp.StatusCode)
+		_, _ = w.Write(body)
+		if err != nil {
+			s.Log.Warn("the cloud's answer to a place was cut short", "err", err)
+		}
+		return
 	}
 	w.WriteHeader(resp.StatusCode)
 	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {

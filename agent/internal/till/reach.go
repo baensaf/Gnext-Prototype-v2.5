@@ -65,3 +65,11 @@ func (t *Till) Reachable() (bool, time.Time) {
 	}
 	return ok, r.since
 }
+
+// PendingUploads is how many offline orders still wait to reach the cloud (§16.7).
+func (t *Till) PendingUploads() int {
+	if t.Backlog == nil {
+		return 0
+	}
+	return t.Backlog()
+}

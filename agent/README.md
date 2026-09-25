@@ -102,6 +102,10 @@ section numbers (§) in the code refer to it.
   and copies on request. A ticket that fails stays on the order, shown under *Open orders* with
   *Reprint*, to its printer or another.
 
+  Since 1.10.0: `gnext-agent till` opens the till in a window of its own, from the tray menu
+  (*صندوق آفلاین*), the Start menu and desktop (*Gnext Offline Till*) or the settings page. The web
+  POS shows a banner with a link to it once the cloud has not answered for 30 seconds.
+
   Since 1.11.0 (§16): the till sells online too, and is the branch PC's register all the time.
   Signing in by PIN also gets the cashier a cloud session (`pos.till`, `POST
   /api/v1/agent/local/pin-login`), which the agent keeps and the page never sees. The page's
@@ -112,9 +116,14 @@ section numbers (§) in the code refer to it.
   the cloud gone in the last 30 s) and through the agent otherwise; with the link back and no
   cloud session it asks for the PIN once (`POST /api/till/cloud-login`).
 
-  Since 1.10.0: `gnext-agent till` opens the till in a window of its own, from the tray menu
-  (*صندوق آفلاین*), the Start menu and desktop (*Gnext Offline Till*) or the settings page. The web
-  POS shows a banner with a link to it once the cloud has not answered for 30 seconds.
+  Since 1.11.1 (§16.6, §16.7): switching carries the cart. The page keeps the unplaced cart and
+  starts the register on the other side from it: toward the agent a delivery becomes takeaway and
+  each line is checked by `/api/till/price`, a refused one stays marked for the cashier to take
+  off; toward the cloud it goes as it is. A place the cloud never answered is held, marked *may
+  already be in the kitchen*, and sent offline only once the cashier confirms; back on the cloud
+  the till looks the draft up and drops the cart if the kitchen has it. The till says each switch,
+  and how many offline orders are still being sent. The agent reads the call number off each
+  order the till places online, so offline numbering never repeats one.
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
   publishes a build, then swaps the binary after checking its SHA-256. Since 1.10.2 an old
   binary still held by an open window no longer blocks the next update (§9), and the settings
