@@ -74,9 +74,8 @@ func (u *Updater) Check(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("stage new binary: %w", err)
 	}
-	old := OldPath(exe)
-	_ = os.Remove(old)
-	if err := os.Rename(exe, old); err != nil {
+	old, err := setAside(exe, u.Version)
+	if err != nil {
 		_ = os.Remove(staged)
 		return fmt.Errorf("move running binary aside: %w", err)
 	}
@@ -117,18 +116,44 @@ func (u *Updater) download(ctx context.Context, rel *cloud.Release) (string, err
 	return path, nil
 }
 
-// OldPath is where the previous binary is kept until the new one gets a welcome.
-func OldPath(exe string) string {
-	return strings.TrimSuffix(exe, filepath.Ext(exe)) + ".old" + filepath.Ext(exe)
+// OldPath is where the binary of version is kept once an update replaces it, until the new one
+// gets a welcome.
+func OldPath(exe, version string) string {
+	return strings.TrimSuffix(exe, filepath.Ext(exe)) + ".old-" + version + filepath.Ext(exe)
 }
 
-// Cleanup deletes the previous binary once the new one is known to work.
+// setAside moves the running binary out of the way of the new one. A binary set aside earlier
+// can still be in use: a settings or till window opened before that update runs from it until
+// it closes, and Windows neither deletes nor replaces a file a process runs from. Such a file
+// gets a numbered neighbour instead of blocking every update after it.
+func setAside(exe, version string) (string, error) {
+	var err error
+	for i := 1; i <= 20; i++ {
+		old := OldPath(exe, version)
+		if i > 1 {
+			old = OldPath(exe, fmt.Sprintf("%s-%d", version, i))
+		}
+		_ = os.Remove(old)
+		if err = os.Rename(exe, old); err == nil {
+			return old, nil
+		}
+	}
+	return "", err
+}
+
+// Cleanup deletes the binaries earlier updates set aside, once the new one is known to work.
+// One still in use stays until a later cleanup finds it free.
 func Cleanup(exe string) {
 	if exe == "" {
 		exe, _ = os.Executable()
 	}
-	if exe != "" {
-		_ = os.Remove(OldPath(exe))
+	if exe == "" {
+		return
+	}
+	// ".old*" also finds "gnext-agent.old.exe", the name agents before 1.10.2 used.
+	stale, _ := filepath.Glob(strings.TrimSuffix(exe, filepath.Ext(exe)) + ".old*" + filepath.Ext(exe))
+	for _, f := range stale {
+		_ = os.Remove(f)
 	}
 }
 

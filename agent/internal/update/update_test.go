@@ -84,12 +84,48 @@ func TestCheckInstallsVerifiedRelease(t *testing.T) {
 	if got, _ := os.ReadFile(exe); string(got) != "new binary" || !restarted {
 		t.Fatalf("exe = %q, restarted = %v", got, restarted)
 	}
-	if got, _ := os.ReadFile(OldPath(exe)); string(got) != "old" {
+	if got, _ := os.ReadFile(OldPath(exe, "1.0.0")); string(got) != "old" {
 		t.Fatalf("old binary not kept: %q", got)
 	}
 	Cleanup(exe)
-	if _, err := os.Stat(OldPath(exe)); !os.IsNotExist(err) {
+	if _, err := os.Stat(OldPath(exe, "1.0.0")); !os.IsNotExist(err) {
 		t.Fatal("old binary not cleaned up")
+	}
+}
+
+// A binary an earlier update set aside may still be in use (a window opened before it), and
+// Windows refuses to delete or replace it. The update must go ahead anyway. A non-empty folder
+// under that name stands in for the locked file: neither Remove nor Rename can take its place.
+func TestCheckInstallsPastABinaryStillInUse(t *testing.T) {
+	body := []byte("new binary")
+	sum := sha256.Sum256(body)
+	srv := releaseServer(t, body, hex.EncodeToString(sum[:]))
+	restarted := false
+	u, exe := newUpdater(t, srv, &restarted)
+	locked := OldPath(exe, "1.0.0")
+	if err := os.MkdirAll(filepath.Join(locked, "in-use"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	legacy := filepath.Join(filepath.Dir(exe), "gnext-agent.old.exe")
+	if err := os.WriteFile(legacy, []byte("older"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := u.Check(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(exe); string(got) != "new binary" || !restarted {
+		t.Fatalf("exe = %q, restarted = %v", got, restarted)
+	}
+	if got, _ := os.ReadFile(OldPath(exe, "1.0.0-2")); string(got) != "old" {
+		t.Fatalf("old binary not set aside beside the one in use: %q", got)
+	}
+	Cleanup(exe)
+	if _, err := os.Stat(OldPath(exe, "1.0.0-2")); !os.IsNotExist(err) {
+		t.Fatal("old binary not cleaned up")
+	}
+	if _, err := os.Stat(legacy); !os.IsNotExist(err) {
+		t.Fatal("binary set aside under the pre-1.10.2 name not cleaned up")
 	}
 }
 
