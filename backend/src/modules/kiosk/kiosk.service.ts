@@ -139,6 +139,9 @@ export class KioskService {
         };
       }).filter((g) => g.id);
 
+      // A group needing more choices than are left on offer can never be filled, and checkout
+      // would refuse the dish whatever the guest picks.
+      const fillable = groups.every((g) => g.items.length >= Math.max(g.min_selection || 0, g.is_required ? 1 : 0));
       const own = variants.filter((v) => v.product_id === p.id);
       const onSale = own.filter((v) => !off.products.has(p.id) && !off.variants.has(v.id));
       return {
@@ -147,7 +150,7 @@ export class KioskService {
         option_groups: groups,
         variants: onSale.map((v) => ({ ...v, price: inStorePrice(listed, p, v) })),
         // Stays on the screen greyed out, so a guest sees it exists but is off today.
-        is_available: !off.products.has(p.id) && (own.length === 0 || onSale.length > 0),
+        is_available: fillable && !off.products.has(p.id) && (own.length === 0 || onSale.length > 0),
       };
     });
 
