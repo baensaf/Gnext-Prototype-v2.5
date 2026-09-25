@@ -50,9 +50,9 @@ import { useScopedBranchId } from 'src/contexts/branch-context';
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
-import { AgentReleasesCard } from './agent-releases-card';
 import { AgentHealthDrawer } from './agent-health-drawer';
 import { AgentSyncOrdersCard } from './agent-sync-orders-card';
+import { AgentReleasesCard, compareAgentVersions } from './agent-releases-card';
 
 const CODE_STATE_COLOR: Record<EnrolmentCodeState, 'info' | 'success' | 'default' | 'warning'> = {
   PENDING: 'info',
@@ -86,6 +86,7 @@ export function AgentsPage() {
   const [revokeReason, setRevokeReason] = useState('');
   const [cancelTarget, setCancelTarget] = useState<EnrolmentCode | null>(null);
   const [healthAgent, setHealthAgent] = useState<BranchAgent | null>(null);
+  const [latestPublished, setLatestPublished] = useState<string | null>(null);
 
   const errorText = useCallback(
     (err: any, fallbackKey: string, fallback: string) => err?.detail || err?.message || t(fallbackKey, fallback),
@@ -317,7 +318,17 @@ export function AgentsPage() {
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell>{a.agent_version ? <code>{a.agent_version}</code> : '—'}</TableCell>
+                    <TableCell>
+                      {a.agent_version ? <code>{a.agent_version}</code> : '—'}
+                      {a.status === 'ACTIVE' &&
+                        a.agent_version &&
+                        latestPublished &&
+                        compareAgentVersions(a.agent_version, latestPublished) < 0 && (
+                          <Typography variant="caption" color="warning.main" component="div">
+                            {t('operations.agents.behindLatest', 'Newest published: {{v}}', { v: latestPublished })}
+                          </Typography>
+                        )}
+                    </TableCell>
                     <TableCell>
                       {a.status === 'ACTIVE' ? (
                         a.connected ? (
@@ -520,7 +531,7 @@ export function AgentsPage() {
 
       <AgentSyncOrdersCard branchId={branchId || undefined} />
 
-      <AgentReleasesCard />
+      <AgentReleasesCard onLatestPublished={setLatestPublished} />
 
       <AgentHealthDrawer
         agentId={healthAgent?.id ?? null}
