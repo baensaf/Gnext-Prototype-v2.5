@@ -34,6 +34,8 @@ describe('CatalogService (Unit)', () => {
   let auditWriter: any;
   let hoursRepo: any;
   let stockRepo: any;
+  let groupRepo: any;
+  let itemRepo: any;
 
   beforeEach(async () => {
     prodRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), softRemove: jest.fn() };
@@ -59,7 +61,9 @@ describe('CatalogService (Unit)', () => {
     };
     scheduleRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn(), create: jest.fn((d) => d), save: jest.fn((d) => Promise.resolve(d)), delete: jest.fn() };
     auditWriter = { write: jest.fn() };
-    hoursRepo = { find: jest.fn().mockResolvedValue([]) };
+    groupRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn((g) => Promise.resolve(g)) };
+    itemRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), softRemove: jest.fn() };
+    hoursRepo ={ find: jest.fn().mockResolvedValue([]) };
     stockRepo = { find: jest.fn().mockResolvedValue([]), manager: { query: jest.fn().mockResolvedValue([{ sold: 0 }]) } };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -68,8 +72,8 @@ describe('CatalogService (Unit)', () => {
         { provide: getRepositoryToken(Category), useValue: { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() } },
         { provide: getRepositoryToken(Product), useValue: prodRepo },
         { provide: getRepositoryToken(ProductVariant), useValue: variantRepo },
-        { provide: getRepositoryToken(OptionGroup), useValue: { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() } },
-        { provide: getRepositoryToken(OptionItem), useValue: { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() } },
+        { provide: getRepositoryToken(OptionGroup), useValue: groupRepo },
+        { provide: getRepositoryToken(OptionItem), useValue: itemRepo },
         { provide: getRepositoryToken(ProductOptionGroup), useValue: prodGroupRepo },
         { provide: getRepositoryToken(PriceGroup), useValue: { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() } },
         { provide: getRepositoryToken(Menu), useValue: menuRepo },
@@ -296,6 +300,49 @@ describe('CatalogService (Unit)', () => {
       availRepo.find.mockResolvedValue([{ product_id: 'p-fr', variant_id: 'v-l', branch_id: 'b-1', is_suspended: true, suspended_until: null, reason: 'No large boxes' }]);
       await expect(service.assertBasketSellable('t-1', 'b-1', [line(1, 'v-l')])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'PRODUCT_SUSPENDED' }) });
       await expect(service.assertBasketSellable('t-1', 'b-1', [line(1, 'v-s')])).resolves.toBeUndefined();
+    });
+  });
+
+  describe('a required add-on group always has enough choices on offer', () => {
+    const bread = { id: 'g-bread', name: 'Bread', min_selection: 1, max_selection: 1, is_required: true };
+    const items = [{ id: 'i-white' }, { id: 'i-brown' }];
+    const unfillable = expect.objectContaining({ response: expect.objectContaining({ code: 'OPTION_GROUP_UNFILLABLE' }) });
+
+    beforeEach(() => {
+      groupRepo.findOne.mockResolvedValue({ ...bread });
+      itemRepo.find.mockResolvedValue(items);
+      prodRepo.findOne.mockResolvedValue({ id: 'p-1', name: 'Burger' });
+    });
+
+    it('refuses leaving out every choice on a product', async () => {
+      prodGroupRepo.findOne.mockResolvedValue({ product_id: 'p-1', option_group_id: 'g-bread' });
+      await expect(service.setExcludedOptionItems('t-1', 'p-1', 'g-bread', ['i-white', 'i-brown'], 'c')).rejects.toEqual(unfillable);
+      expect(prodGroupRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('allows leaving out all but one', async () => {
+      prodGroupRepo.findOne.mockResolvedValue({ product_id: 'p-1', option_group_id: 'g-bread' });
+      prodGroupRepo.save.mockImplementation((l: any) => Promise.resolve(l));
+      await expect(service.setExcludedOptionItems('t-1', 'p-1', 'g-bread', ['i-white'], 'c')).resolves.toMatchObject({ excluded_item_ids: ['i-white'] });
+    });
+
+    it('refuses raising the minimum above what a product offers', async () => {
+      prodGroupRepo.find.mockResolvedValue([{ product_id: 'p-1', excluded_item_ids: ['i-white'] }]);
+      await expect(service.updateOptionGroup('t-1', 'g-bread', { min_selection: 2, max_selection: 2 }, 'c')).rejects.toEqual(unfillable);
+      expect(groupRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("refuses archiving a product's last choice", async () => {
+      itemRepo.findOne.mockResolvedValue({ id: 'i-brown' });
+      prodGroupRepo.find.mockResolvedValue([{ product_id: 'p-1', excluded_item_ids: ['i-white'] }]);
+      await expect(service.archiveOptionItem('t-1', 'g-bread', 'i-brown', 'c')).rejects.toEqual(unfillable);
+      expect(itemRepo.softRemove).not.toHaveBeenCalled();
+    });
+
+    it('refuses attaching a required group with no choices', async () => {
+      prodGroupRepo.findOne.mockResolvedValue(null);
+      itemRepo.find.mockResolvedValue([]);
+      await expect(service.attachOptionGroupToProduct('t-1', 'p-1', 'g-bread', 0, 'c')).rejects.toEqual(unfillable);
     });
   });
 

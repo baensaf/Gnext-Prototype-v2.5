@@ -260,7 +260,7 @@ export function KioskPage() {
   // A group the guest must choose from (a burger's bread), as the order is checked.
   const isRequiredGroup = (group: { min_selection?: number; is_required?: boolean }) => groupLimits(group).min > 0;
   const missingGroup = customizingProduct?.option_groups?.find(
-    (g) => g.items.length > 0 && (selectedOptionsMap[g.id]?.length || 0) < Math.min(groupLimits(g).min, g.items.length)
+    (g) => (selectedOptionsMap[g.id]?.length || 0) < groupLimits(g).min
   );
   /** "Pick up to 3", "Pick 2", "Pick 1 to 3": shown when a group takes more than one. */
   const pickHint = (group: { min_selection?: number; max_selection?: number; is_required?: boolean }) => {

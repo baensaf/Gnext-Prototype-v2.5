@@ -744,9 +744,43 @@ export class CatalogService {
     return saved;
   }
 
+  /**
+   * No product may carry a group that asks for more choices than it offers: the register and
+   * the kiosk would refuse the dish whatever was picked. Checked against the group as it would
+   * be after the change — its minimum, its items less any being archived, and each product's
+   * left-out items. Items 86'd for the day are not counted here; the sale screens deal with those.
+   */
+  private async assertGroupFillable(
+    tenantId: string,
+    groupId: string,
+    change: { min?: number; isRequired?: boolean; removingItemId?: string; link?: { product_id: string; excluded_item_ids?: string[] | null } } = {},
+  ) {
+    const group = await this.groupRepo.findOne({ where: { id: groupId, tenant_id: tenantId } });
+    if (!group) throw new NotFoundException('Option group not found');
+    const min = Math.max(change.min ?? group.min_selection ?? 0, (change.isRequired ?? group.is_required) ? 1 : 0);
+    if (min === 0) return;
+    const items = (await this.itemRepo.find({ where: { tenant_id: tenantId, option_group_id: groupId } }))
+      .filter((i) => i.id !== change.removingItemId);
+    const links = change.link
+      ? [change.link]
+      : await this.prodGroupRepo.find({ where: { tenant_id: tenantId, option_group_id: groupId } });
+    for (const link of links) {
+      const left = new Set(link.excluded_item_ids || []);
+      const offered = items.filter((i) => !left.has(i.id)).length;
+      if (offered >= min) continue;
+      const product = await this.prodRepo.findOne({ where: { id: link.product_id, tenant_id: tenantId } });
+      throw new BadRequestException({
+        statusCode: 400,
+        code: 'OPTION_GROUP_UNFILLABLE',
+        message: `${product?.name || 'A product'} would offer ${offered} ${group.name} choice${offered === 1 ? '' : 's'} but needs ${min}`,
+      });
+    }
+  }
+
   async attachOptionGroupToProduct(tenantId: string, productId: string, optionGroupId: string, sortOrder: number = 0, correlationId: string) {
     let link = await this.prodGroupRepo.findOne({ where: { tenant_id: tenantId, product_id: productId, option_group_id: optionGroupId } });
     if (!link) {
+      await this.assertGroupFillable(tenantId, optionGroupId, { link: { product_id: productId } });
       link = this.prodGroupRepo.create({ tenant_id: tenantId, product_id: productId, option_group_id: optionGroupId, sort_order: sortOrder });
       await this.prodGroupRepo.save(link);
     }
@@ -1276,6 +1310,7 @@ export class CatalogService {
     if (min < 0 || max < min) {
       throw new BadRequestException(`Invalid modifier selections. min_selection (${min}) must be >= 0 and <= max_selection (${max}).`);
     }
+    await this.assertGroupFillable(tenantId, id, { min, isRequired: data.is_required ?? min > 0 });
     const before = { ...group };
     if (data.name !== undefined) group.name = data.name;
     group.min_selection = min;
@@ -1324,6 +1359,7 @@ export class CatalogService {
   async archiveOptionItem(tenantId: string, groupId: string, itemId: string, correlationId: string) {
     const item = await this.itemRepo.findOne({ where: { id: itemId, option_group_id: groupId, tenant_id: tenantId } });
     if (!item) throw new NotFoundException('Option item not found');
+    await this.assertGroupFillable(tenantId, groupId, { removingItemId: itemId });
     await this.itemRepo.softRemove(item);
     await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'OPTION_ITEM_ARCHIVED', entityType: 'OptionItem', entityId: itemId, correlationId });
     return { success: true };
@@ -1342,6 +1378,7 @@ export class CatalogService {
     const items = await this.itemRepo.find({ where: { tenant_id: tenantId, option_group_id: optionGroupId } });
     const known = new Set(items.map((i) => i.id));
     link.excluded_item_ids = [...new Set(excludedItemIds || [])].filter((id) => known.has(id));
+    await this.assertGroupFillable(tenantId, optionGroupId, { link });
     const saved = await this.prodGroupRepo.save(link);
     await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'PRODUCT_OPTION_ITEMS_SET', entityType: 'Product', entityId: productId, correlationId, details: { optionGroupId, excluded: link.excluded_item_ids } });
     return saved;
