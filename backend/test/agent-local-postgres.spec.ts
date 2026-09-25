@@ -12,6 +12,7 @@ import { Printer } from '../src/entities/Printer.entity';
 import { PaymentDevice } from '../src/entities/PaymentDevice.entity';
 import { AgentEnrolmentService } from '../src/modules/agent-gateway/agent-enrolment.service';
 import { AgentRegistryService } from '../src/modules/agent-gateway/agent-registry.service';
+import { AgentSessionsService } from '../src/modules/agent-gateway/agent-sessions.service';
 import { deleteTenantData } from './utils/tenant-teardown';
 
 // The agent's local settings page manages its branch's devices through the cloud: the device
@@ -26,6 +27,7 @@ describe('agent local settings API (PostgreSQL)', () => {
   let otherBranchId: string;
   let key: string;
   const userIds: string[] = [];
+  const tillUserIds: string[] = [];
   const password = 'Local-UI-test-1';
   const stamp = Date.now();
 
@@ -140,5 +142,115 @@ describe('agent local settings API (PostgreSQL)', () => {
     expect((await agentCall('post', '/logout', session)).status).toBe(200);
     expect((await agentCall('post', '/printers', session).send({ code: 'X', name: 'X', connection: null })).status).toBe(401);
     expect(await dataSource.getRepository(AdminUser).countBy({ id: In(userIds) })).toBe(4);
+  });
+
+  // §16.3: the till on the branch PC signs its cashier in to the cloud with the PIN they typed.
+  describe('till sign-in by PIN', () => {
+    const staff: Record<string, string> = {};
+    const pinLogin = (user: string, pin: string) => agentCall('post', '/pin-login').send({ user_id: staff[user], pin });
+    let capabilities: string[] = ['pos.offline', 'pos.till'];
+
+    beforeAll(async () => {
+      const agentId = (await dataSource.query(`SELECT id FROM agent WHERE tenant_id = $1`, [tenantId]))[0].id;
+      jest
+        .spyOn(moduleRef.get(AgentSessionsService), 'get')
+        .mockImplementation((id: string) => (id === agentId ? ({ capabilities } as any) : undefined));
+      const pin = await argon2.hash('4321');
+      for (const [name, data] of [
+        ['sara', { role: 'CASHIER', branch_id: branchId, pin_hash: pin }],
+        ['nopin', { role: 'CASHIER', branch_id: branchId, pin_hash: null }],
+        ['elsewhere', { role: 'CASHIER', branch_id: otherBranchId, pin_hash: pin }],
+        ['hq-pin', { role: 'ADMIN', branch_id: null, pin_hash: pin }],
+        ['gone', { role: 'CASHIER', branch_id: branchId, pin_hash: pin, is_active: false }],
+        ['kitchen', { role: 'KITCHEN', branch_id: branchId, pin_hash: pin }],
+      ] as const) {
+        const repo = dataSource.getRepository(AdminUser);
+        const user: AdminUser = await repo.save(
+          repo.create({
+            tenant_id: tenantId,
+            username: `alu-pin-${name}-${stamp}@fixture`,
+            display_name: name,
+            password_hash: 'x',
+            is_active: true,
+            ...data,
+          } as Partial<AdminUser>),
+        );
+        staff[name] = user.id;
+        tillUserIds.push(user.id);
+      }
+    });
+
+    afterAll(async () => {
+      jest.restoreAllMocks();
+      await dataSource.query(`DELETE FROM session WHERE user_id = ANY($1)`, [tillUserIds]).catch(() => undefined);
+    });
+
+    beforeEach(() => dataSource.query(`DELETE FROM pin_attempt_log WHERE tenant_id = $1`, [tenantId]));
+
+    it("opens an ordinary cloud session for the branch's cashier, and audits it", async () => {
+      const res = await pinLogin('sara', '4321');
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        session_token: expect.any(String),
+        csrf_token: expect.any(String),
+        user: { id: staff.sara, role: 'CASHIER', branchId, isHeadOffice: false },
+        tenant: { id: tenantId, baseCurrency: 'IRR' },
+      });
+      // The session works on the cloud's own routes, as a web POS sign-in does.
+      const me = await request(http).get('/api/v1/auth/me').set('Authorization', `Bearer ${res.body.session_token}`);
+      expect(me.status).toBe(200);
+      expect(me.body.user.id).toBe(staff.sara);
+
+      const [audit] = await dataSource.query(
+        `SELECT details FROM audit_event WHERE tenant_id = $1 AND actor_id = $2 AND action = 'AUTH_LOGIN_SUCCESS' ORDER BY created_at DESC LIMIT 1`,
+        [tenantId, staff.sara],
+      );
+      expect(audit.details).toMatchObject({ method: 'TILL_PIN' });
+      expect(JSON.stringify(audit.details)).not.toContain('4321');
+    });
+
+    it('signs in only who the staff list carries, and never by a default PIN', async () => {
+      for (const who of ['nopin', 'elsewhere', 'hq-pin', 'gone', 'kitchen']) {
+        const res = await pinLogin(who, who === 'nopin' ? '1234' : '4321');
+        expect([who, res.status, res.body.code]).toEqual([who, 403, 'FORBIDDEN_ROLE']);
+      }
+      expect((await agentCall('post', '/pin-login').send({ user_id: staff.sara, pin: '12' })).status).toBe(400);
+      expect((await request(http).post('/api/v1/agent/local/pin-login').send({ user_id: staff.sara, pin: '4321' })).status).toBe(401);
+    });
+
+    it('needs an agent connected with pos.till', async () => {
+      capabilities = ['pos.offline'];
+      try {
+        expect((await pinLogin('sara', '4321')).body.code).toBe('CAPABILITY_REQUIRED');
+      } finally {
+        capabilities = ['pos.offline', 'pos.till'];
+      }
+    });
+
+    it('locks a user after five wrong PINs, whatever the next PIN is', async () => {
+      for (let i = 0; i < 5; i++) {
+        const res = await pinLogin('sara', '0000');
+        expect([res.status, res.body.code]).toEqual([401, 'PIN_WRONG']);
+      }
+      const locked = await pinLogin('sara', '4321');
+      expect([locked.status, locked.body.code]).toEqual([423, 'PIN_LOCKED']);
+      const [failed] = await dataSource.query(
+        `SELECT count(*)::int AS n FROM audit_event WHERE tenant_id = $1 AND actor_id = $2 AND action = 'AUTH_LOGIN_FAILED'`,
+        [tenantId, staff.sara],
+      );
+      expect(failed.n).toBe(5);
+    });
+
+    it('locks the whole branch after twenty wrong till PINs across its users', async () => {
+      // Four wrong PINs for each of five users of the branch: none is locked on their own.
+      const branchUsers = [staff.sara, staff.nopin, staff.gone, staff.kitchen, userIds[0]];
+      await dataSource.query(
+        `INSERT INTO pin_attempt_log (tenant_id, user_id, action, is_success)
+           SELECT $1, u, 'TILL_SIGN_IN', false FROM unnest($2::uuid[]) AS u, generate_series(1, 4)`,
+        [tenantId, branchUsers],
+      );
+      const res = await pinLogin('sara', '4321');
+      expect([res.status, res.body.code]).toEqual([423, 'TILL_SIGN_IN_LOCKED']);
+    });
   });
 });

@@ -1,18 +1,37 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  HttpException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { MoreThan, Repository } from 'typeorm';
+import * as argon2 from 'argon2';
 import { Agent } from '../../entities/Agent.entity';
 import { AdminUser } from '../../entities/AdminUser.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
+import { PinAttemptLog } from '../../entities/PinAttemptLog.entity';
 import { Printer } from '../../entities/Printer.entity';
 import { MANAGER_AND_ABOVE } from '../../common/decorators/roles.decorator';
 import { parseDeviceConnection } from '../../common/utils/device-connection.util';
-import { isHeadOfficeUser } from '../../common/utils/user-scope.util';
+import { isHeadOfficeUser, isValidPin } from '../../common/utils/user-scope.util';
 import { AuthService } from '../auth/auth.service';
 import { SessionService } from '../auth/session.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { AgentConfigService } from '../agent-gateway/agent-config.service';
+import { AgentSessionsService } from '../agent-gateway/agent-sessions.service';
+import { OFFLINE_TILL_ROLES } from '../agent-data/agent-data.service';
 import { AGENT_TERMINAL_DRIVERS } from '../payment/agent-payments.service';
+
+/** The PIN log's action for a till sign-in (agent-protocol.md §16.3). */
+export const TILL_SIGN_IN = 'TILL_SIGN_IN';
+const PIN_WINDOW_MS = 15 * 60 * 1000;
+/** Wrong PINs for one user, any kind, before that user is locked for the window. */
+const USER_PIN_LIMIT = 5;
+/** Wrong till sign-in PINs across a branch before every user of it is locked for the window. */
+const BRANCH_PIN_LIMIT = 20;
 
 /** Who is signed in to an agent's local settings page. */
 export type LocalActor = { agent: Agent; user: AdminUser; correlationId?: string };
@@ -42,11 +61,105 @@ export class AgentLocalService {
     @InjectRepository(AdminUser) private readonly userRepo: Repository<AdminUser>,
     @InjectRepository(Printer) private readonly printerRepo: Repository<Printer>,
     @InjectRepository(PaymentDevice) private readonly deviceRepo: Repository<PaymentDevice>,
+    @InjectRepository(PinAttemptLog) private readonly pinLogRepo: Repository<PinAttemptLog>,
     private readonly auth: AuthService,
     private readonly sessions: SessionService,
     private readonly audit: AuditWriter,
     private readonly agentConfig: AgentConfigService,
+    private readonly agentSessions: AgentSessionsService,
   ) {}
+
+  /**
+   * A cloud session for the cashier signing in at the agent's till, by their PIN (§16.3). The
+   * user must be one the staff list carries (§13.3), so nobody gets a session here who could
+   * not sign in offline. There is no default PIN. Wrong PINs lock the user, and enough of them
+   * across the branch lock the whole branch, so a device key alone cannot walk the staff list.
+   */
+  async pinLogin(agent: Agent, body: any, ip?: string, correlationId?: string) {
+    if (!this.agentSessions.get(agent.id)?.capabilities.includes('pos.till')) {
+      throw new ForbiddenException({
+        code: 'CAPABILITY_REQUIRED',
+        title: 'Online till not advertised',
+        detail: 'Only an agent connected with the pos.till capability may sign cashiers in.',
+      });
+    }
+    const userId = String(body?.user_id ?? '');
+    const pin = String(body?.pin ?? '');
+    if (!/^[0-9a-f-]{36}$/i.test(userId) || !isValidPin(pin)) throw bad('Choose a user and enter their PIN (4 to 8 digits).');
+
+    const user = await this.userRepo.findOneBy({ id: userId });
+    const role = (user?.role || '').toUpperCase();
+    if (
+      !user ||
+      !user.is_active ||
+      user.tenant_id !== agent.tenant_id ||
+      user.branch_id !== agent.branch_id ||
+      !OFFLINE_TILL_ROLES.includes(role) ||
+      !user.pin_hash
+    ) {
+      throw new ForbiddenException({
+        code: 'FORBIDDEN_ROLE',
+        title: 'Not Permitted',
+        detail: "Only this branch's staff with a PIN can sign in at its till.",
+      });
+    }
+
+    const windowStart = new Date(Date.now() - PIN_WINDOW_MS);
+    const branchFailures = await this.pinLogRepo
+      .createQueryBuilder('l')
+      .where('l.tenant_id = :tenant AND l.action = :action AND l.is_success = false AND l.attempted_at > :since', {
+        tenant: agent.tenant_id,
+        action: TILL_SIGN_IN,
+        since: windowStart,
+      })
+      .andWhere('l.user_id IN (SELECT u.id FROM admin_user u WHERE u.tenant_id = :tenant AND u.branch_id = :branch)', {
+        branch: agent.branch_id,
+      })
+      .getCount();
+    if (branchFailures >= BRANCH_PIN_LIMIT) {
+      throw new HttpException(
+        { code: 'TILL_SIGN_IN_LOCKED', title: 'Too Many Wrong PINs', detail: 'Too many wrong PINs at this branch. Try again in 15 minutes.' },
+        423, // Locked
+      );
+    }
+    const userFailures = await this.pinLogRepo.count({
+      where: { tenant_id: agent.tenant_id, user_id: user.id, is_success: false, attempted_at: MoreThan(windowStart) },
+    });
+    if (userFailures >= USER_PIN_LIMIT) {
+      throw new HttpException(
+        { code: 'PIN_LOCKED', title: 'Too Many Wrong PINs', detail: 'Five wrong PINs. This user is locked for 15 minutes.' },
+        423, // Locked
+      );
+    }
+
+    let ok = false;
+    try {
+      ok = await argon2.verify(user.pin_hash, pin);
+    } catch {
+      ok = false;
+    }
+    await this.pinLogRepo.save(this.pinLogRepo.create({ tenant_id: agent.tenant_id, user_id: user.id, action: TILL_SIGN_IN, is_success: ok }));
+    if (!ok) {
+      await this.audit.write({
+        tenantId: agent.tenant_id,
+        actorType: 'ADMIN',
+        actorId: user.id,
+        action: 'AUTH_LOGIN_FAILED',
+        correlationId: correlationId || '00000000-0000-0000-0000-000000000000',
+        ip,
+        details: { method: 'TILL_PIN', agent_id: agent.id, reason: 'PIN_WRONG' },
+      });
+      throw new UnauthorizedException({ code: 'PIN_WRONG', title: 'Wrong PIN', detail: 'The PIN is wrong.' });
+    }
+
+    const result = await this.auth.openSession(user, {
+      ip,
+      userAgent: `gnext-till/${agent.id}`,
+      correlationId,
+      details: { method: 'TILL_PIN', agent_id: agent.id },
+    });
+    return { session_token: result.sessionToken, csrf_token: result.csrfToken, user: result.user, tenant: result.tenant };
+  }
 
   /** Signs a user in for the agent's page. Only someone who may manage this branch gets a session. */
   async login(agent: Agent, body: any, ip?: string, correlationId?: string) {

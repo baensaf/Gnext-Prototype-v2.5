@@ -59,7 +59,19 @@ export class AuthService {
       });
     }
 
-    // Update last_login_at
+    return this.openSession(user, { ip, userAgent, correlationId, details: { username } });
+  }
+
+  /**
+   * Signs in a user whose credentials the caller has already checked: a new session, the
+   * login stamp and audit, and the answer `login` gives. The offline till's PIN sign-in
+   * (agent-protocol.md §16.3) comes here too, so both hand out the same kind of session.
+   */
+  async openSession(
+    user: AdminUser,
+    opts: { ip?: string; userAgent?: string; correlationId?: string; details?: Record<string, unknown> },
+  ) {
+    const { ip, userAgent, correlationId } = opts;
     user.last_login_at = new Date();
     await this.userRepo.save(user);
 
@@ -74,7 +86,7 @@ export class AuthService {
       action: 'AUTH_LOGIN_SUCCESS',
       correlationId: correlationId || '00000000-0000-0000-0000-000000000000',
       ip,
-      details: { username },
+      details: opts.details ?? {},
     });
 
     return {
