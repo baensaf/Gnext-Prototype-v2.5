@@ -432,7 +432,22 @@ async function loadTill() {
     );
   }
   $('#t-bind').disabled = t.tills.length === 0;
+  $('#t-autostart').checked = !!t.binding && t.binding.open_at_sign_in !== false;
+  $('#t-autostart').disabled = !t.binding;
 }
+
+// A preference of this PC, changed by the manager signed in here (§16.8).
+$('#t-autostart').addEventListener('change', async (e) => {
+  const on = e.target.checked;
+  try {
+    await api('POST', '/api/till/open-at-sign-in', { on });
+    toast(on ? 'صندوق هنگام ورود به ویندوز باز می‌شود.' : 'صندوق هنگام ورود به ویندوز باز نمی‌شود.');
+  } catch (err) {
+    e.target.checked = !on;
+    toast(err.message, true);
+  }
+  loadTill();
+});
 
 // A manager signed in here chooses directly; otherwise an approver's PIN does, which works
 // with the internet down.

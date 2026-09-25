@@ -1,11 +1,13 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, IsNull, Not, Repository } from 'typeorm';
+import { AdminUser } from '../../entities/AdminUser.entity';
 import { Agent } from '../../entities/Agent.entity';
+import { CashierShift } from '../../entities/CashierShift.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { AgentCommandsService } from './agent-commands.service';
-import { AgentRegistryService } from './agent-registry.service';
+import { AgentRegistryService, AgentView } from './agent-registry.service';
 import { AgentSessionsService } from './agent-sessions.service';
 import { AgentSyncReport, LiveAgentConnectionHandle } from './agent-connection';
 
@@ -27,6 +29,16 @@ export function syncWarnings(sync: AgentSyncReport, now = new Date()): string[] 
   return out;
 }
 const SWEEP_INTERVAL_MS = 30_000;
+
+/** The roles the offline till's staff list carries (§13.3); kept in step with agent-data. */
+const TILL_ROLES = ['CASHIER', 'SUPERVISOR', 'MANAGER', 'ADMIN', 'OWNER'];
+
+/**
+ * Whether a branch could sell offline if the internet went now (agent-protocol.md §16.8), and
+ * what is missing. Said while the agent is online, so it is fixed before it matters.
+ */
+export type OfflineReadiness = { ready: boolean; problems: OfflineProblem[] };
+export type OfflineProblem = 'AGENT_TOO_OLD' | 'NO_TILL' | 'NO_SHIFT' | 'NO_STAFF' | 'SNAPSHOT_STALE' | 'UPLOADS_WAITING';
 export const AGENT_OFFLINE_ALERT = 'AGENT_OFFLINE';
 
 /**
@@ -47,6 +59,8 @@ export class AgentHealthService implements OnApplicationBootstrap, OnApplication
     @InjectRepository(Agent) private readonly agentRepo: Repository<Agent>,
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
     @InjectRepository(OperationalAlert) private readonly alertRepo: Repository<OperationalAlert>,
+    @InjectRepository(CashierShift) private readonly shiftRepo: Repository<CashierShift>,
+    @InjectRepository(AdminUser) private readonly userRepo: Repository<AdminUser>,
     private readonly sessions: AgentSessionsService,
     private readonly commands: AgentCommandsService,
     private readonly registry: AgentRegistryService,
@@ -112,6 +126,37 @@ export class AgentHealthService implements OnApplicationBootstrap, OnApplication
     } catch (err: any) {
       this.logger.error(`agent health sweep failed: ${err?.message || err}`);
     }
+  }
+
+  /**
+   * Offline readiness for each connected, active agent; an agent not connected gets null: what
+   * it last said may be stale, and its being away is shown already.
+   */
+  async offlineReadiness(tenantId: string, agents: AgentView[], now = new Date()): Promise<Map<string, OfflineReadiness | null>> {
+    const out = new Map<string, OfflineReadiness | null>();
+    for (const agent of agents) {
+      const live = this.sessions.get(agent.id) as LiveAgentConnectionHandle | undefined;
+      if (agent.status !== 'ACTIVE' || !live) {
+        out.set(agent.id, null);
+        continue;
+      }
+      const problems: OfflineProblem[] = [];
+      if (!live.capabilities.includes('pos.till')) problems.push('AGENT_TOO_OLD');
+      const terminalId = live.till?.terminal_id ?? null;
+      if (!terminalId) problems.push('NO_TILL');
+      else if ((await this.shiftRepo.count({ where: { tenant_id: tenantId, terminal_id: terminalId, state: 'OPEN' as any } })) === 0) {
+        problems.push('NO_SHIFT');
+      }
+      const staff = await this.userRepo.count({
+        where: { tenant_id: tenantId, branch_id: agent.branch_id, is_active: true, pin_hash: Not(IsNull()), role: In(TILL_ROLES) },
+      });
+      if (staff === 0) problems.push('NO_STAFF');
+      const pulled = live.sync?.data_pulled_at ? new Date(live.sync.data_pulled_at).getTime() : 0;
+      if (now.getTime() - pulled > SNAPSHOT_STALE_AFTER_MS) problems.push('SNAPSHOT_STALE');
+      if ((live.sync?.pending_orders ?? 0) > 0) problems.push('UPLOADS_WAITING');
+      out.set(agent.id, { ready: problems.length === 0, problems });
+    }
+    return out;
   }
 
   /** Everything the health screen shows for one agent. */

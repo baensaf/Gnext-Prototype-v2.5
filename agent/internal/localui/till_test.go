@@ -263,3 +263,34 @@ func TestTillRoutesAnswerNotEnrolledWithoutATill(t *testing.T) {
 		t.Fatalf("state: %d %s", rec.Code, rec.Body)
 	}
 }
+
+// §16.8: the till opens when someone signs in to Windows, unless the manager turned it off; the
+// choice survives choosing the till again.
+func TestTheTillOpensAtSignInUnlessTheManagerTurnsItOff(t *testing.T) {
+	var seen []string
+	srv := fakeCloud(t, &seen)
+	tt := testTill(t)
+	h := newTestServer(&fakeHost{till: tt, cloud: &cloud.Client{Server: srv.URL, Key: "gak_k"}})
+
+	if tt.OpensAtSignIn() {
+		t.Fatal("opens with no till chosen")
+	}
+	if rec := call(h, "POST", "/api/till/binding", `{"terminal_id":"till-1","user_id":"amir","pin":"9999"}`, nil); rec.Code != 200 {
+		t.Fatalf("binding: %d %s", rec.Code, rec.Body)
+	}
+	if !tt.OpensAtSignIn() {
+		t.Fatal("a chosen till does not open at sign-in by default")
+	}
+	if rec := call(h, "POST", "/api/till/open-at-sign-in", `{"on":false}`, nil); rec.Code != 401 {
+		t.Fatalf("nobody signed in: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(h, "POST", "/api/login", `{"username":"m","password":"right"}`, nil); rec.Code != 200 {
+		t.Fatalf("sign-in: %d", rec.Code)
+	}
+	if rec := call(h, "POST", "/api/till/open-at-sign-in", `{"on":false}`, nil); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"open_at_sign_in":false`) {
+		t.Fatalf("turn off: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(h, "POST", "/api/till/binding", `{"terminal_id":"till-1"}`, nil); rec.Code != 200 || tt.OpensAtSignIn() {
+		t.Fatalf("rebinding turned it back on: %d %s", rec.Code, rec.Body)
+	}
+}

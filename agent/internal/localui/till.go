@@ -208,6 +208,31 @@ func (s *Server) tillLogout(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// tillOpenAtSignIn turns the till window at Windows sign-in on or off (§16.8): a preference of
+// this PC, set by the manager signed in on the settings page.
+func (s *Server) tillOpenAtSignIn(w http.ResponseWriter, r *http.Request) {
+	t := s.theTill(w)
+	if t == nil {
+		return
+	}
+	if s.currentUser() == nil {
+		fail(w, http.StatusUnauthorized, till.CodeUnauthenticated, "برای این تغییر، مدیر با حساب جی‌نکست وارد شود.")
+		return
+	}
+	var in struct {
+		On bool `json:"on"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	b, err := t.SetOpenAtSignIn(in.On)
+	if err != nil {
+		tillError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"binding": b})
+}
+
 // tillBinding chooses which till the agent sells as (§13.4): by the manager signed in on this
 // settings page, or, with nobody signed in, by an approver's PIN.
 func (s *Server) tillBinding(w http.ResponseWriter, r *http.Request) {

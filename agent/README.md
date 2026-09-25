@@ -124,6 +124,10 @@ section numbers (§) in the code refer to it.
   the till looks the draft up and drops the cart if the kitchen has it. The till says each switch,
   and how many offline orders are still being sent. The agent reads the call number off each
   order the till places online, so offline numbering never repeats one.
+
+  Since 1.11.2 (§16.8): the till opens when a Windows user signs in, when a till is bound and
+  the settings page's *باز شدن صندوق هنگام ورود به ویندوز* is on (the default; `open_at_sign_in`
+  in `till.json`, changed by the manager signed in there).
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
   publishes a build, then swaps the binary after checking its SHA-256. Since 1.10.2 an old
   binary still held by an open window no longer blocks the next update (§9), and the settings

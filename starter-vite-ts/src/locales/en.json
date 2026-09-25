@@ -3669,6 +3669,18 @@
       "noAgents": "No agent has enrolled for this selection yet.",
       "statusActive": "Active",
       "statusRevoked": "Revoked",
+      "offlineReady": {
+        "ready": "Ready to sell offline",
+        "notReady": "Not ready offline: {{count}}",
+        "problems": {
+          "AGENT_TOO_OLD": "The agent is older than 1.11: publish the newest build",
+          "NO_TILL": "No till is chosen on the agent",
+          "NO_SHIFT": "The agent's till has no open shift",
+          "NO_STAFF": "Nobody at this branch has a PIN",
+          "SNAPSHOT_STALE": "The menu copy on the PC is over 30 minutes old",
+          "UPLOADS_WAITING": "Orders taken offline are still being sent"
+        }
+      },
       "behindLatest": "Newest published: {{v}}",
       "neverSeen": "Never",
       "revoke": "Revoke",

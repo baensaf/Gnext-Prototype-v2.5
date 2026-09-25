@@ -1932,12 +1932,17 @@ and at once after a `CLOUD_UNREACHABLE`:
 
 - The agent opens the till window when a Windows user signs in, if a till is bound and the
   settings page's *Open the till at sign-in* (on by default) is on. Kept in `till.json` as
-  `open_at_sign_in`.
+  `open_at_sign_in`, set by `POST /api/till/open-at-sign-in {on}` with the settings page's
+  manager session. Not at the service's own start: after an update that would pull a till
+  already open to the front, mid-sale.
 - The web POS's offline banner (§13.14) stays, for every other device.
 - **Branch Agents** shows, per agent, whether the branch is **ready to sell offline**, while it
   is online: the agent advertises `pos.till`; a till is bound and has an open shift; the staff
   list has at least one user; the snapshot is under 30 minutes old; the upload backlog is empty.
   Each missing piece is named, so it is fixed before the internet goes, not during.
+  `GET /api/v1/agents` gives each agent `offline_ready`: `null` while it is not connected, else
+  `{ ready, problems }` with `AGENT_TOO_OLD`, `NO_TILL`, `NO_SHIFT`, `NO_STAFF`,
+  `SNAPSHOT_STALE`, `UPLOADS_WAITING`.
 
 ### 16.9 Not in this step
 

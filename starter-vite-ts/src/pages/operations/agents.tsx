@@ -332,7 +332,30 @@ export function AgentsPage() {
                     <TableCell>
                       {a.status === 'ACTIVE' ? (
                         a.connected ? (
-                          <Chip size="small" color="success" label={t('operations.agents.statusOnline', 'Online')} />
+                          <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
+                            <Chip size="small" color="success" label={t('operations.agents.statusOnline', 'Online')} />
+                            {a.offline_ready && (
+                              // §16.8: could this branch sell offline if the internet went now?
+                              <Tooltip
+                                title={a.offline_ready.problems
+                                  .map((p) => t(`operations.agents.offlineReady.problems.${p}`, p))
+                                  .join(' · ')}
+                              >
+                                <Chip
+                                  size="small"
+                                  variant="outlined"
+                                  color={a.offline_ready.ready ? 'success' : 'warning'}
+                                  label={
+                                    a.offline_ready.ready
+                                      ? t('operations.agents.offlineReady.ready', 'Ready to sell offline')
+                                      : t('operations.agents.offlineReady.notReady', 'Not ready offline: {{count}}', {
+                                          count: a.offline_ready.problems.length,
+                                        })
+                                  }
+                                />
+                              </Tooltip>
+                            )}
+                          </Stack>
                         ) : (
                           <Chip size="small" color="warning" label={t('operations.agents.statusOffline', 'Offline')} />
                         )
