@@ -75,6 +75,8 @@ describe('PrintingModule (Unit & Integration)', () => {
 
   const T = 't-1';
   const BR = 'br-1';
+  /** A printer the branch agent drives. */
+  const TCP = { kind: 'tcp', host: '192.168.1.90', port: 9100 };
 
   beforeEach(async () => {
     printerRepo = fakeRepo();
@@ -566,12 +568,68 @@ describe('PrintingModule (Unit & Integration)', () => {
 
     it('prints on retry once the branch has a printer', async () => {
       const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-300', 'KITCHEN_TICKET');
-      printer('prn-kitchen', { printer_type: 'KITCHEN_IMPACT' });
+      printer('prn-kitchen', { printer_type: 'KITCHEN_IMPACT', agent_connection: TCP });
 
       const res = await queueService.retryJob(T, job.id, {});
 
+      expect(res.job.printer_id).toBe('prn-kitchen');
       expect(res.attempt.printer_id).toBe('prn-kitchen');
-      expect(res.job.status).toBe('SUCCESS');
+      expect(res.job.status).toBe('PROCESSING');
+    });
+
+    // The audit of 2026-09-24: a failed grill chit, retried, was routed as though it were a
+    // receipt and went to whichever kitchen printer came first — the bar's.
+    it('routes a failed station chit through its own group, to every printer the group has now', async () => {
+      product('p-burger', 'cat-burgers');
+      group('grp-grill', 'Grill', []);
+      route({ document_type: 'KITCHEN_TICKET', category_id: 'cat-burgers', printer_group_id: 'grp-grill' });
+      const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-300', 'KITCHEN_TICKET');
+      expect(job.status).toBe('FAILED');
+      expect(job.printer_group_id).toBe('grp-grill');
+
+      printer('prn-bar', { code: 'A', printer_type: 'KITCHEN_IMPACT', agent_connection: TCP });
+      printer('prn-grill-1', { code: 'B', printer_type: 'KITCHEN_IMPACT', agent_connection: TCP });
+      printer('prn-grill-2', { code: 'C', printer_type: 'KITCHEN_IMPACT', agent_connection: TCP });
+      memberRepo.rows.push(
+        { group_id: 'grp-grill', printer_id: 'prn-grill-1', priority: 1, copies: 1 },
+        { group_id: 'grp-grill', printer_id: 'prn-grill-2', priority: 2, copies: 1 },
+      );
+
+      const res = await queueService.retryJob(T, job.id, {});
+
+      expect(res.jobs.map((j) => j.printer_id)).toEqual(['prn-grill-1', 'prn-grill-2']);
+      expect(res.jobs[0].id).toBe(job.id);
+      expect(res.jobs[1].rendered_html).toBe(job.rendered_html);
+      expect(agentPrinting.send).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // A retry used to fall through to the simulator for any printer the agent does not drive,
+  // and mark the job printed: a chit nobody saw, reported as on the rail.
+  describe('retrying where nothing can print', () => {
+    beforeEach(() => {
+      order('ord-500', [line('l-1', 'p-burger', 'Burger')]);
+    });
+
+    it('refuses a printer the branch agent does not drive, and leaves the job failed', async () => {
+      printer('prn-sim');
+      const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-500');
+      job.status = 'FAILED';
+      const attempts = attemptRepo.rows.length;
+
+      await expect(queueService.retryJob(T, job.id, {})).rejects.toThrow(/not connected to the branch agent/);
+      expect(job.status).toBe('FAILED');
+      expect(attemptRepo.rows).toHaveLength(attempts);
+    });
+
+    it('refuses a job whose printer has been removed', async () => {
+      printer('prn-gone', { agent_connection: TCP });
+      const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-500');
+      job.status = 'FAILED';
+      printerRepo.rows.splice(printerRepo.rows.findIndex((p) => p.id === 'prn-gone'), 1);
+
+      await expect(queueService.retryJob(T, job.id, {})).rejects.toThrow(/has been removed/);
+      expect(job.status).toBe('FAILED');
     });
   });
 

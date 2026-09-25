@@ -16,7 +16,7 @@ import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { Payment } from '../../entities/Payment.entity';
 import { CALENDAR_SETTING_KEY, readCalendar } from '../../common/utils/calendar.util';
 import { markAsReprint, PrintRenderService, RenderDocOptions, TicketTemplate } from './print-render.service';
-import { PrintRoutingService } from './print-routing.service';
+import { PrintRoutingService, RoutedPrinter } from './print-routing.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { AgentPrintingService } from './agent-printing.service';
 
@@ -544,15 +544,14 @@ export class PrintQueueService {
   // Handle simulation outcome
   async processSimulationOutcome(
     tenantId: string,
-    data: { printJobId: string; scenarioId?: string; outcome: 'SUCCESS' | 'FAILED'; useFallback?: boolean; printerId?: string },
-    fromRetry = false,
+    data: { printJobId: string; scenarioId?: string; outcome: 'SUCCESS' | 'FAILED'; useFallback?: boolean },
   ) {
     const job = await this.jobRepo.findOne({ where: { id: data.printJobId, tenant_id: tenantId } });
     if (!job) throw new NotFoundException(`Print job ${data.printJobId} not found`);
 
     // A real printer reports its own result through the agent. Marking its job printed by hand
     // would tell the kitchen a chit is on the rail that never came out.
-    if (!fromRetry && job.printer_id) {
+    if (job.printer_id) {
       const current = await this.printerRepo.findOne({ where: { id: job.printer_id, tenant_id: tenantId } });
       if (current?.agent_connection) {
         throw new BadRequestException('This job went to a real printer through the branch agent; its outcome cannot be simulated.');
@@ -562,7 +561,7 @@ export class PrintQueueService {
     const attemptsCount = await this.attemptRepo.count({ where: { job_id: job.id } });
     const attemptNo = attemptsCount + 1;
 
-    let targetPrinterId = data.printerId || job.printer_id;
+    let targetPrinterId = job.printer_id;
 
     if (data.outcome === 'FAILED' && data.useFallback && job.printer_id) {
       const printer = await this.printerRepo.findOne({ where: { id: job.printer_id, tenant_id: tenantId } });
@@ -609,71 +608,124 @@ export class PrintQueueService {
     return { job: savedJob, attempt };
   }
 
-  // Retry a failed job
-  async retryJob(tenantId: string, jobId: string, data: { scenarioId?: string; useFallback?: boolean; reason?: string }) {
+  /**
+   * Send a failed job to its printer again, for real.
+   *
+   * A retry only ever goes through the branch agent. A printer that is gone or has no agent
+   * connection is refused with the reason, never marked printed: the queue saying "printed"
+   * for a chit that never came out is the one outcome worse than a failure.
+   */
+  async retryJob(tenantId: string, jobId: string, data: { useFallback?: boolean; reason?: string }) {
     const job = await this.jobRepo.findOne({ where: { id: jobId, tenant_id: tenantId } });
     if (!job) throw new NotFoundException(`Print job ${jobId} not found`);
 
-    // A job that failed for want of a route gets one now, if the branch has added a printer
-    // since; otherwise say what is missing rather than "Printer ID is required".
-    if (!job.printer_id) {
-      const { printers } = await this.routingService.resolvePrintersForRoute({
-        tenantId,
-        branchId: job.branch_id,
-        documentType: job.document_type,
-      });
-      if (!printers[0]) {
-        throw new BadRequestException(
-          `No printer is routed for ${job.document_type} at this branch. Add a printer and a print route, then retry.`,
-        );
+    const targets = await this.retryTargets(tenantId, job, data.useFallback);
+    const offline = targets.find((t) => !t.printer.agent_connection);
+    if (offline) {
+      throw new BadRequestException(
+        `Printer ${offline.printer.name} is not connected to the branch agent, so a retry cannot print on it. Set up its connection, or reprint the job to a connected printer.`,
+      );
+    }
+
+    const pending = await this.agentPrinting.pendingAttempt(tenantId, job.id);
+    if (pending) {
+      // Still waiting. Only a job that never reached the agent can be taken back and resent;
+      // otherwise a retry could print the chit twice.
+      const withdrawn = pending.agent_command_id
+        ? await this.agentPrinting.withdraw(pending, 'Retried from the print queue')
+        : false;
+      if (!withdrawn) {
+        throw new BadRequestException('This job is still with the branch agent. Wait for it to finish or fail, then retry.');
       }
-      job.printer_id = printers[0].id;
+    }
+
+    // A job routed afresh takes the first printer; every other printer in the group gets a job
+    // of its own, as it would have had the group been working when the order was placed.
+    const [first, ...others] = targets;
+    if (!job.printer_id) {
+      job.printer_id = first.printer.id;
+      job.copies = first.copies;
       await this.jobRepo.save(job);
     }
 
-    // A printer the agent drives is retried for real: a new attempt goes to the agent.
-    let targetId = job.printer_id;
-    if (data.useFallback) {
-      const current = await this.printerRepo.findOne({ where: { id: job.printer_id, tenant_id: tenantId } });
-      if (current?.fallback_printer_id) targetId = current.fallback_printer_id;
+    const attemptNo = (await this.attemptRepo.count({ where: { job_id: job.id } })) + 1;
+    const { job: sent, attempt } = await this.agentPrinting.send(tenantId, job, first.printer, attemptNo);
+    await this.auditRetry(tenantId, sent, attemptNo, first.printer, data.reason);
+
+    const jobs = [sent];
+    for (const target of others) {
+      const extra = await this.jobRepo.save(
+        this.jobRepo.create({
+          tenant_id: job.tenant_id,
+          branch_id: job.branch_id,
+          document_type: job.document_type,
+          entity_type: job.entity_type,
+          entity_id: job.entity_id,
+          printer_id: target.printer.id,
+          printer_group_id: job.printer_group_id,
+          label: job.label,
+          status: 'QUEUED',
+          copies: target.copies,
+          rendered_html: job.rendered_html,
+          is_reprint: job.is_reprint,
+          reason: job.reason,
+          created_by: job.created_by,
+        }),
+      );
+      const { job: sentExtra } = await this.agentPrinting.send(tenantId, extra, target.printer, 1);
+      await this.auditRetry(tenantId, sentExtra, 1, target.printer, data.reason);
+      jobs.push(sentExtra);
     }
-    const target = await this.printerRepo.findOne({ where: { id: targetId, tenant_id: tenantId } });
-    if (target?.agent_connection) {
-      const pending = await this.agentPrinting.pendingAttempt(tenantId, job.id);
-      if (pending) {
-        // Still waiting. Only a job that never reached the agent can be taken back and resent;
-        // otherwise a retry could print the chit twice.
-        const withdrawn = pending.agent_command_id
-          ? await this.agentPrinting.withdraw(pending, 'Retried from the print queue')
-          : false;
-        if (!withdrawn) {
-          throw new BadRequestException('This job is still with the branch agent. Wait for it to finish or fail, then retry.');
-        }
+    return { job: sent, attempt, jobs };
+  }
+
+  /**
+   * Where a retry prints. A job with a printer goes back to that printer, or to its fallback
+   * when asked. A job with none — nothing was reachable when it was made — is routed again as
+   * it first was: through its station's printer group when it had one, so the grill's chit
+   * reaches the grill and every printer the group has gained since; otherwise on the route
+   * with no selector.
+   */
+  private async retryTargets(tenantId: string, job: PrintJob, useFallback?: boolean): Promise<RoutedPrinter[]> {
+    if (job.printer_id) {
+      const current = await this.printerRepo.findOne({ where: { id: job.printer_id, tenant_id: tenantId } });
+      if (!current) {
+        throw new BadRequestException('The printer this job went to has been removed. Reprint the job to another printer.');
       }
-      const attemptNo = (await this.attemptRepo.count({ where: { job_id: job.id } })) + 1;
-      const { job: sent, attempt } = await this.agentPrinting.send(tenantId, job, target, attemptNo);
-      await this.auditWriter.write({
-        tenantId,
-        actorType: 'ADMIN',
-        action: 'PRINT_JOB_RETRIED',
-        entityType: 'PrintJob',
-        entityId: job.id,
-        correlationId: 'corr-print-retry',
-        details: { attemptNo, printerId: target.id, via: 'AGENT', reason: data.reason },
-      });
-      return { job: sent, attempt };
+      let printer = current;
+      if (useFallback && current.fallback_printer_id) {
+        const fallback = await this.printerRepo.findOne({ where: { id: current.fallback_printer_id, tenant_id: tenantId } });
+        if (!fallback) {
+          throw new BadRequestException(`The fallback printer of ${current.name} has been removed. Reprint the job to another printer.`);
+        }
+        printer = fallback;
+      }
+      if (!printer.is_active) throw new BadRequestException(`Printer ${printer.name} is not in service`);
+      return [{ printer, copies: job.copies || 1 }];
     }
 
-    return await this.processSimulationOutcome(
+    const route = job.printer_group_id
+      ? ({ printer_group_id: job.printer_group_id, copies: job.copies || 1 } as PrintRoute)
+      : this.routingService.matchRoute(await this.routingService.loadRoutes(tenantId, job.branch_id, job.document_type), {});
+    const routed = await this.routingService.printersForRoute(tenantId, job.branch_id, route, job.document_type);
+    if (routed.length === 0) {
+      throw new BadRequestException(
+        `No printer is routed for ${job.document_type} at this branch. Add a printer and a print route, then retry.`,
+      );
+    }
+    return routed;
+  }
+
+  private async auditRetry(tenantId: string, job: PrintJob, attemptNo: number, printer: Printer, reason?: string) {
+    await this.auditWriter.write({
       tenantId,
-      {
-        printJobId: job.id,
-        scenarioId: data.scenarioId,
-        outcome: 'SUCCESS',
-        printerId: targetId,
-      },
-      true,
-    );
+      actorType: 'ADMIN',
+      action: 'PRINT_JOB_RETRIED',
+      entityType: 'PrintJob',
+      entityId: job.id,
+      correlationId: 'corr-print-retry',
+      details: { attemptNo, printerId: printer.id, via: 'AGENT', reason },
+    });
   }
 
   // List print jobs with filters & paging

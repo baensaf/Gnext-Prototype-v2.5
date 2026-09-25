@@ -363,6 +363,10 @@ export class PrintersController {
     );
   }
 
+  // Marking a job printed or failed by hand is a manager's call, and only on their own
+  // branch's jobs. The job id rides in the body, where the branch guard would not look unless told.
+  @BranchOwned(PrintJob, { body: 'printJobId' })
+  @Roles(...MANAGER_AND_ABOVE)
   @Post('simulation/printers/outcome')
   async processOutcome(@Body() body: { printJobId: string; scenarioId?: string; outcome: 'SUCCESS' | 'FAILED'; useFallback?: boolean }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

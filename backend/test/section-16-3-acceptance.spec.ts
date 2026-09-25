@@ -515,9 +515,11 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     });
     expect(failOutcome.attempt.status).toBe('FAILED');
 
-    // Retry Print Job -> Diverts to Fallback Backup Printer with SUCCESS
-    const retryOutcome = await printQueueService.retryJob(tenantId, printJob.id, { useFallback: true });
-    expect(retryOutcome.job.status).toBe('SUCCESS');
+    // A retry goes only through the branch agent. These printers are the simulator's, so it is
+    // refused with the reason rather than reported printed.
+    await expect(printQueueService.retryJob(tenantId, printJob.id, { useFallback: true })).rejects.toThrow(
+      /not connected to the branch agent/,
+    );
 
     // Step 7: Close Cashier Shift
     const closedShift = await shiftService.closeShift(
@@ -1242,9 +1244,11 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     });
     expect(failOutcome.attempt.status).toBe('FAILED');
 
-    // Retry print job with fallback thermal printer
-    const retryOutcome = await printQueueService.retryJob(tenantId, printJob.id, { useFallback: true });
-    expect(retryOutcome.job.status).toBe('SUCCESS');
+    // A retry goes only through the branch agent. These printers are the simulator's, so it is
+    // refused with the reason rather than reported printed.
+    await expect(printQueueService.retryJob(tenantId, printJob.id, { useFallback: true })).rejects.toThrow(
+      /not connected to the branch agent/,
+    );
 
     // Revert identity policy to OPTIONAL
     identitySetting.value = 'OPTIONAL' as any;
