@@ -748,21 +748,23 @@ export class CatalogService {
     tenantId: string,
     groupId: string,
     change: { min?: number; isRequired?: boolean; removingItemId?: string; link?: { product_id: string; excluded_item_ids?: string[] | null } } = {},
+    /** Inside a transaction, so the check sees the group as it is about to be committed. */
+    em: EntityManager = this.groupRepo.manager,
   ) {
-    const group = await this.groupRepo.findOne({ where: { id: groupId, tenant_id: tenantId } });
+    const group = await em.findOne(OptionGroup, { where: { id: groupId, tenant_id: tenantId } });
     if (!group) throw new NotFoundException('Option group not found');
     const min = Math.max(change.min ?? group.min_selection ?? 0, (change.isRequired ?? group.is_required) ? 1 : 0);
     if (min === 0) return;
-    const items = (await this.itemRepo.find({ where: { tenant_id: tenantId, option_group_id: groupId } }))
+    const items = (await em.find(OptionItem, { where: { tenant_id: tenantId, option_group_id: groupId } }))
       .filter((i) => i.id !== change.removingItemId);
     const links = change.link
       ? [change.link]
-      : await this.prodGroupRepo.find({ where: { tenant_id: tenantId, option_group_id: groupId } });
+      : await em.find(ProductOptionGroup, { where: { tenant_id: tenantId, option_group_id: groupId } });
     for (const link of links) {
       const left = new Set(link.excluded_item_ids || []);
       const offered = items.filter((i) => !left.has(i.id)).length;
       if (offered >= min) continue;
-      const product = await this.prodRepo.findOne({ where: { id: link.product_id, tenant_id: tenantId } });
+      const product = await em.findOne(Product, { where: { id: link.product_id, tenant_id: tenantId } });
       throw new BadRequestException({
         statusCode: 400,
         code: 'OPTION_GROUP_UNFILLABLE',
@@ -1190,6 +1192,102 @@ export class CatalogService {
     const saved = await this.groupRepo.save(group);
     await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'OPTION_GROUP_UPDATED', entityType: 'OptionGroup', entityId: id, correlationId, beforeData: before, afterData: saved });
     return saved;
+  }
+
+  /**
+   * The group editor's Save: its rules, its items (new, changed, reordered) and the items it
+   * drops, all or nothing. Saved call by call, a failure halfway left a new minimum live
+   * without the choices meant to go with it. The finished group is checked against every
+   * product that carries it before anything commits.
+   */
+  async saveOptionGroup(
+    tenantId: string,
+    id: string,
+    data: {
+      name?: string;
+      min_selection?: number;
+      max_selection?: number;
+      items?: Array<{ id?: string; name: string; price_delta?: string; sort_order?: number }>;
+      removed_item_ids?: string[];
+    },
+    correlationId: string,
+  ) {
+    const now = new Date();
+    const result = await this.groupRepo.manager.transaction(async (em) => {
+      const group = await em.findOne(OptionGroup, { where: { id, tenant_id: tenantId } });
+      if (!group) throw new NotFoundException('Option group not found');
+      const before = { ...group };
+      const min = data.min_selection ?? group.min_selection;
+      const max = data.max_selection ?? group.max_selection;
+      if (min < 0 || max < min) {
+        throw new BadRequestException(`Invalid modifier selections. min_selection (${min}) must be >= 0 and <= max_selection (${max}).`);
+      }
+      if (data.name !== undefined) group.name = data.name;
+      group.min_selection = min;
+      group.max_selection = max;
+      // Snappfood has only min/max; a minimum above zero is what "required" means.
+      group.is_required = min > 0;
+      await em.save(OptionGroup, group);
+
+      const existing = await em.find(OptionItem, { where: { tenant_id: tenantId, option_group_id: id } });
+      const byId = new Map(existing.map((i) => [i.id, i]));
+      for (const [index, input] of (data.items || []).entries()) {
+        const name = (input.name || '').trim();
+        if (!name) continue;
+        const price = MoneyUtil.format(input.price_delta || '0');
+        const sortOrder = input.sort_order ?? index;
+        if (!input.id) {
+          await em.save(OptionItem, em.create(OptionItem, {
+            tenant_id: tenantId,
+            option_group_id: id,
+            code: `${group.code}-${now.getTime().toString(36).toUpperCase()}${index}`,
+            name,
+            price_delta: price,
+            is_default: false,
+            sort_order: sortOrder,
+          }));
+          continue;
+        }
+        const item = byId.get(input.id);
+        if (!item) throw new NotFoundException(`Option item ${input.id} is not in this group`);
+        const priceChanged = !MoneyUtil.equals(item.price_delta || '0', price);
+        if (item.name === name && !priceChanged && item.sort_order === sortOrder) continue;
+        item.name = name;
+        item.price_delta = price;
+        item.sort_order = sortOrder;
+        await em.save(OptionItem, item);
+        // As in updateOptionItem: a typed price ends a dated one in force, or the sweep puts it back.
+        if (priceChanged) {
+          await em
+            .createQueryBuilder()
+            .update(PriceEntry)
+            .set({ effective_to: now })
+            .where('tenant_id = :tenantId AND modifier_option_id = :itemId AND product_id IS NULL', { tenantId, itemId: item.id })
+            .andWhere('price_group_id IS NULL AND branch_id IS NULL AND channel IS NULL AND order_type IS NULL')
+            .andWhere('effective_from <= :now AND (effective_to IS NULL OR effective_to > :now)', { now })
+            .execute();
+        }
+      }
+      for (const itemId of data.removed_item_ids || []) {
+        const item = byId.get(itemId);
+        if (item) await em.softRemove(OptionItem, item);
+      }
+
+      await this.assertGroupFillable(tenantId, id, {}, em);
+      const items = await em.find(OptionItem, { where: { tenant_id: tenantId, option_group_id: id }, order: { sort_order: 'ASC' } });
+      return { before, saved: { ...group, items } };
+    });
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'OPTION_GROUP_SAVED',
+      entityType: 'OptionGroup',
+      entityId: id,
+      correlationId,
+      beforeData: result.before,
+      afterData: result.saved,
+    });
+    return result.saved;
   }
 
   async archiveOptionGroup(tenantId: string, id: string, correlationId: string) {

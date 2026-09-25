@@ -73,33 +73,17 @@ export function OptionGroupEditDialog({
     setSaving(true);
     setError(null);
     try {
-      // New choices go in before a higher minimum, and removed ones come out after a lower one:
-      // the server refuses a group that asks for more choices than a product offers.
-      const original = new Map((group.items || []).map((i) => [i.id, i]));
-      for (const [index, item] of items.entries()) {
-        if (!item.name.trim()) continue;
-        if (!item.id) {
-          await catalogApi.createOptionItem(group.id, {
-            code: `${group.code}-${Date.now().toString(36).toUpperCase()}${index}`,
-            name: item.name,
-            price_delta: item.price || '0',
-            sort_order: index,
-          });
-          continue;
-        }
-        const was = original.get(item.id);
-        if (was && (was.name !== item.name || Number(was.price_delta) !== Number(item.price || 0) || was.sort_order !== index)) {
-          await catalogApi.updateOptionItem(group.id, item.id, { name: item.name, price_delta: item.price || '0', sort_order: index });
-        }
-      }
-      await catalogApi.updateOptionGroup(group.id, {
+      // One save, all or nothing: a failure part way no longer leaves new rules live without
+      // the choices that go with them.
+      await catalogApi.saveOptionGroup(group.id, {
         name,
         min_selection: parseInt(min, 10) || 0,
         max_selection: parseInt(max, 10) || 0,
+        items: items
+          .map((item, index) => ({ id: item.id, name: item.name, price_delta: item.price || '0', sort_order: index }))
+          .filter((item) => item.name.trim()),
+        removed_item_ids: removed,
       });
-      for (const id of removed) {
-        await catalogApi.deleteOptionItem(group.id, id);
-      }
       onSaved();
     } catch (err: any) {
       setError(err.detail || err.message || t('catalog.optionsPage.errors.saveGroupFailed', 'Could not save the add-on group'));

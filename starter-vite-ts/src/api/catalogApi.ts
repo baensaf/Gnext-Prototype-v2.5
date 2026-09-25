@@ -373,6 +373,20 @@ export const catalogApi = {
     const res = await httpClient.patch(`/api/v1/option-groups/${id}`, data);
     return res.data;
   },
+  /** The group editor's Save: rules, items and removals in one transaction. */
+  saveOptionGroup: async (
+    id: string,
+    data: {
+      name: string;
+      min_selection: number;
+      max_selection: number;
+      items: { id?: string; name: string; price_delta: string; sort_order: number }[];
+      removed_item_ids: string[];
+    }
+  ): Promise<OptionGroup> => {
+    const res = await httpClient.put(`/api/v1/option-groups/${id}`, data);
+    return res.data;
+  },
   deleteOptionGroup: async (id: string): Promise<void> => {
     await httpClient.delete(`/api/v1/option-groups/${id}`);
   },
