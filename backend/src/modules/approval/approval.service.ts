@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, ForbiddenException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan, DataSource } from 'typeorm';
+import { Repository, MoreThan, DataSource, In } from 'typeorm';
 import * as argon2 from 'argon2';
 import { ApprovalRule } from '../../entities/ApprovalRule.entity';
 import { ApprovalRequest } from '../../entities/ApprovalRequest.entity';
@@ -353,10 +353,32 @@ export class ApprovalService {
     return saved;
   }
 
-  async getPendingRequests(tenantId: string) {
+  /**
+   * A request belongs to the branch of the person who asked. A request has no branch of its
+   * own, so a branch account sees, and decides, only those its own staff raised; head office
+   * (no branch) sees the chain's.
+   */
+  private async requesterBranches(tenantId: string, requests: ApprovalRequest[]) {
+    const ids = [...new Set(requests.map((r) => r.requester_user_id))];
+    if (!ids.length) return new Map<string, string | null>();
+    const users = await this.userRepo.find({ where: { tenant_id: tenantId, id: In(ids) }, withDeleted: true });
+    return new Map(users.map((u) => [u.id, u.branch_id ?? null]));
+  }
+
+  private async assertRequestInBranch(tenantId: string, req: ApprovalRequest, branchId?: string | null) {
+    if (!branchId) return;
+    const branches = await this.requesterBranches(tenantId, [req]);
+    if (branches.get(req.requester_user_id) !== branchId) throw new NotFoundException('Approval request not found');
+  }
+
+  async getPendingRequests(tenantId: string, branchId?: string | null) {
     const now = new Date();
     // Auto-expire requests older than 10 mins
-    const requests = await this.requestRepo.find({ where: { tenant_id: tenantId }, order: { created_at: 'DESC' } });
+    let requests = await this.requestRepo.find({ where: { tenant_id: tenantId }, order: { created_at: 'DESC' } });
+    if (branchId) {
+      const branches = await this.requesterBranches(tenantId, requests);
+      requests = requests.filter((r) => branches.get(r.requester_user_id) === branchId);
+    }
     for (const r of requests) {
       if (r.status === 'PENDING' && new Date(r.expires_at) < now) {
         r.status = 'EXPIRED';
@@ -366,9 +388,10 @@ export class ApprovalService {
     return requests;
   }
 
-  async getRequestById(tenantId: string, id: string) {
+  async getRequestById(tenantId: string, id: string, branchId?: string | null) {
     const req = await this.requestRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!req) throw new NotFoundException('Approval request not found');
+    await this.assertRequestInBranch(tenantId, req, branchId);
     const decisions = await this.decisionRepo.find({ where: { tenant_id: tenantId, request_id: id }, order: { step_number: 'ASC' } });
     return { ...req, decisions };
   }
@@ -429,6 +452,9 @@ export class ApprovalService {
       });
 
       if (!req) throw new NotFoundException('Approval request not found');
+      // A branch approver decides only their own staff's requests.
+      const approver = await this.userRepo.findOne({ where: { id: approverUserId, tenant_id: tenantId } });
+      await this.assertRequestInBranch(tenantId, req, approver?.branch_id);
 
       if (req.status !== 'PENDING') {
         throw new ConflictException(`Cannot approve request in status ${req.status}`);
@@ -496,6 +522,9 @@ export class ApprovalService {
       });
 
       if (!req) throw new NotFoundException('Approval request not found');
+      // A branch approver decides only their own staff's requests.
+      const approver = await this.userRepo.findOne({ where: { id: approverUserId, tenant_id: tenantId } });
+      await this.assertRequestInBranch(tenantId, req, approver?.branch_id);
 
       const decision = decRepoTx.create({
         tenant_id: tenantId,
