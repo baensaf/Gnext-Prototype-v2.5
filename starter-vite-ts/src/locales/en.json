@@ -75,7 +75,6 @@
     "categories": "Categories",
     "products": "Products Catalog",
     "modifiers": "Modifiers",
-    "menus": "Menus Composer",
     "availability": "Availability & Suspensions",
     "importExport": "Import & Export",
     "pricing": "Branch Prices",
@@ -1675,7 +1674,6 @@
     "categories": "Categories",
     "products": "Products",
     "modifiers": "Modifiers & Options",
-    "menus": "Menus Composer",
     "availability": "Availability Suspensions",
     "importExport": "Import & Export Wizard",
     "productDetailPage": {
@@ -1798,46 +1796,6 @@
           "CURRENT": "Current",
           "ENDED": "Ended"
         }
-      }
-    },
-    "menusPage": {
-      "title": "Menus Composer",
-      "subtitle": "Create and manage branch-specific and channel-specific menu catalogs",
-      "newMenu": "New Menu",
-      "refresh": "Refresh",
-      "code": "Menu Code",
-      "name": "Menu Name",
-      "branch": "Target Branch",
-      "allBranches": "All Branches (Global)",
-      "channel": "Distribution Channel",
-      "channels": {
-        "ALL": "All Channels",
-        "POS": "POS Register",
-        "DELIVERY": "Online Delivery",
-        "KIOSK": "Dine-In Kiosk"
-      },
-      "itemsAttached": "Attached Items",
-      "actions": "Actions",
-      "manageItems": "Manage Items",
-      "createDrawerTitle": "Create New Menu",
-      "submitCreate": "Create Menu",
-      "attachDrawerTitle": "Manage Menu Items — {{name}}",
-      "product": "Product",
-      "priceOverride": "Price Override",
-      "noItems": "No items attached to this menu yet.",
-      "addProductTitle": "Add Product to Menu",
-      "selectProduct": "Select Product",
-      "overridePricePlaceholder": "Override Base Price (Leave empty for default)",
-      "attachProduct": "Attach Product",
-      "deleteConfirm": "Are you sure you want to remove \"{{name}}\" from this menu?",
-      "deleteMenuConfirm": "Are you sure you want to delete menu \"{{name}}\"?",
-      "errors": {
-        "loadFailed": "Failed to load menu composer data",
-        "createFailed": "Failed to create menu",
-        "deleteFailed": "Failed to delete menu",
-        "attachFailed": "Failed to attach product to menu",
-        "detachFailed": "Failed to remove product from menu",
-        "selectProduct": "Please select a product"
       }
     },
     "productsPage": {
@@ -3017,11 +2975,6 @@
           "title": "Printers & Print Routing",
           "description": "Network receipt printers, kitchen ticket routing, print templates, and queue failover.",
           "badge": "Station Routing"
-        },
-        "menus": {
-          "title": "Menus & Catalog Composer",
-          "description": "Menu categories, default product availability, modifier groups, and combo options.",
-          "badge": "Catalog Core"
         },
         "pricing": {
           "title": "Price Book & Groups",

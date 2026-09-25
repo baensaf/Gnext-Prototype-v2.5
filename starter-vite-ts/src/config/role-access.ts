@@ -99,7 +99,6 @@ const CHAIN_ONLY_PATHS = [
   // Products stays open too, read-only, because you cannot 86 what you cannot see.
   '/app/catalog/categories',
   '/app/catalog/modifiers',
-  '/app/catalog/menus',
   '/app/pricing',
   // Discounts are the chain's for the same reason the menu is: a coupon and a negotiated
   // customer rate carry no branch column, so a branch editing one is editing everybody's.

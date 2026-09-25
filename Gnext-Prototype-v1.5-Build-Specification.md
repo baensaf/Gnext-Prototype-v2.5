@@ -73,7 +73,7 @@ Source terminology is preserved semantically as follows: **shortage/overage** is
 | Source area | Phase 1 features | Class | Prototype decision |
 |---|---|---:|---|
 | Organization | Tenant/company | S | One seeded tenant; editable profile/settings, no tenant CRUD or switching. |
-| Organization | Branches; branch configuration; branch-specific menus; branch-specific prices; price groups; branch operating hours | F | Full CRUD/configuration and effective-dated relationships. |
+| Organization | Branches; branch configuration; branch-specific menus (through availability and branch price lists; no separate menu composer); branch-specific prices; price groups; branch operating hours | F | Full CRUD/configuration and effective-dated relationships. |
 | Organization | Branch heartbeat; online/offline status; last successful sync; branch agent version and health | M | Controlled by simulator and shown in operations dashboard. |
 | Users/permissions | User management; roles and permissions; branch-scoped access; POS/cashier permissions; manager approvals; discount permission; maximum percentage/fixed deduction; refund/cancellation; edit; reprint; credit limits; shift-closing permission | S | One login has all permissions; persisted policy thresholds and named simulated approver profiles demonstrate enforcement. User/role CRUD is X; full RBAC is D. |
 | Users/permissions | Audit logs | F | Append-only audit records and history UI. |
@@ -1009,6 +1009,8 @@ Where a table uses the compact form `GET/POST/PATCH/DELETE /resource[/:id]`, it 
 
 ### 8.4 Catalog and menus
 
+**Menus retired (2026-09-25).** The catalog is the live menu: categories, products, availability (86, selling windows, daily stock) and branch price lists decide what each branch and channel sells and at what price. The separate menu composer and its `/menus` endpoints were removed because no register, kiosk or channel ever read them. The `menu`, `menu_category` and `menu_product` tables remain in the schema, unused.
+
 All standard catalog list endpoints filter `q,isActive,includeArchived` plus stated FKs and sort `code,name,sortOrder,updatedAt` as applicable.
 
 | Method / URL | Purpose; request → response | Validation / errors | Side effects / audit |
@@ -1030,9 +1032,6 @@ All standard catalog list endpoints filter `q,isActive,includeArchived` plus sta
 | `PATCH /products/:id/availability/:ruleId` / `DELETE ...` | update/archive | matching product | Audit/outbox. |
 | `POST /products/:id/suspend` | `{branchId?,channel?,until,reason}` → rule | future until, reason | Creates availability rule; audit/outbox. |
 | `POST /products/:id/resume` | `{availabilityRuleId}` → product availability | current suspension exists | Ends rule now; audit/outbox. |
-| `GET /menus` / `POST /menus` | paged menus / create menu | filters branch/channel/effectiveAt; no overlap | Audit/outbox. |
-| `GET /menus/:id` / `PATCH /menus/:id` / `DELETE /menus/:id` | detail/update/archive | date/menu constraints | Audit/outbox. |
-| `PUT /menus/:id/composition` | `{version,categories:[{categoryId,sortOrder,displayNameOverride?,products:[{productId,sortOrder,isFeatured}]}]}` → MenuDetail | active products/categories; no duplicates | Atomic replace/audit/outbox. |
 | `GET /tax-rules` / `POST /tax-rules` | paged/list tax rules / create | rate/range; filters activeAt | Audit. |
 | `PATCH /tax-rules/:id` / `DELETE ...` | update/archive | used historic rule not deleted | Audit. |
 | `GET /packaging-rules` / `POST /packaging-rules` | list/create | amount/currency/range | Audit. |
@@ -1287,8 +1286,6 @@ The raw simulated Snappfood webhook endpoint is `POST /simulated-webhooks/snappf
   /catalog/products
   /catalog/products/:productId
   /catalog/modifiers
-  /catalog/menus
-  /catalog/menus/:menuId
   /catalog/availability
   /catalog/import-export
   /pricing/price-book
@@ -1321,7 +1318,7 @@ The raw simulated Snappfood webhook endpoint is `POST /simulated-webhooks/snappf
   /settings/data-reset
 ```
 
-Primary navigation groups, in order: **Live Operations** (Dashboard, POS, Dine-in, KDS, Incoming Orders, Delivery, Cashier, Orders, Kiosk preview, Payments, Refunds, Print Queue), **Business Management** (Catalog, Prices, Customers & Credit, Discounts & Loyalty), **Reports & Compliance** (Reports, Audit, Moadian, Monitoring, Branch Agents, head-office roll-ups), **Settings & System** (Settings Hub, Users & Roles), **Simulation Sandbox**. The header scope is either head office or one branch. An unconfined account with no saved choice starts at head office. Each scope shows its own menu: head office shows the chain's screens and hides the ones that run one site; a branch shows its own screens and hides the chain's. A site-only page opened at head office by its address asks which branch to open it in. Organization settings that a branch can see are read-only there and labelled "Set at head office". The header search covers the sidebar and the Settings Hub cards. Menus Composer (`/app/catalog/menus`) stays routable but has no menu link while no selling channel reads menus. A persistent **SIMULATED ENVIRONMENT** banner appears on simulator, kiosk hardware status, external payment, print, branch-status, and sync pages.
+Primary navigation groups, in order: **Live Operations** (Dashboard, POS, Dine-in, KDS, Incoming Orders, Delivery, Cashier, Orders, Kiosk preview, Payments, Refunds, Print Queue), **Business Management** (Catalog, Prices, Customers & Credit, Discounts & Loyalty), **Reports & Compliance** (Reports, Audit, Moadian, Monitoring, Branch Agents, head-office roll-ups), **Settings & System** (Settings Hub, Users & Roles), **Simulation Sandbox**. The header scope is either head office or one branch. An unconfined account with no saved choice starts at head office. Each scope shows its own menu: head office shows the chain's screens and hides the ones that run one site; a branch shows its own screens and hides the chain's. A site-only page opened at head office by its address asks which branch to open it in. Organization settings that a branch can see are read-only there and labelled "Set at head office". The header search covers the sidebar and the Settings Hub cards. A persistent **SIMULATED ENVIRONMENT** banner appears on simulator, kiosk hardware status, external payment, print, branch-status, and sync pages.
 
 ### 9.2 Layout and reusable components
 
@@ -1407,8 +1404,6 @@ Every page below must implement skeleton, domain empty state, filtered empty sta
 | `/app/catalog/products` **Products** | Grid image/code/SKU/name/category/type/base price/availability/discount eligibility/active. Filters category/type/branch/channel/availability/q. Actions create/edit/archive/suspend/resume/export. | product/price/availability endpoints. Server pagination; effective price/availability context displayed, not guessed. |
 | `/app/catalog/products/:id` **Product editor** | Tabs General (codes, translations, image, tax/packaging, discount flags), Variants, Modifier groups, Combo components, Availability, Prices, History. Save each tab with version. | product child/config/prices/audit endpoints. Min/max and combo constraints inline/backend; history remains after archive. |
 | `/app/catalog/modifiers` **Modifiers** | Group cards/grid code/name/min/max/free/required/products/active; editor options code/name/translations/sort and price link. | modifier CRUD/prices. Cannot configure impossible selection; POS enforces exact rule. |
-| `/app/catalog/menus` **Menus** | Grid code/name/branch/channel/effective range/categories/products/status; filters. Create. | menus endpoints. Overlap errors point to conflicting menu. |
-| `/app/catalog/menus/:id` **Menu composer** | Metadata plus two-pane category/product composer; server product search; selected list with sort/featured; preview branch/channel/time. Unsaved guard. | menu composition. Save all-or-nothing; archived/unavailable products warned; effective preview matches POS. |
 | `/app/catalog/availability` **Availability schedule** | Branch/channel/time filters; grid product/category/base status/specific rule/suspended until/reason. Bulk selection may create same rule for selected products (max 200). | availability/suspend/resume endpoints. Specificity explanation visible; resumes only selected rule. |
 | `/app/catalog/import-export` **Catalog data exchange** | Upload CSV, choose Catalog/Customer shortcut, map columns, preview valid/error rows, commit create/upsert, download result/export. | import/export endpoints. No commit with errors in all-or-nothing mode; row errors identify line/field; UTF-8 Persian round-trip. |
 | `/app/pricing/price-book` **Price book** | Context bar branch/group/channel/order type/currency/effective time; grid product/variant/resolved price/source/effective dates; row detail alternatives. Create/supersede price. | price list/resolve/create/patch. Display chosen precedence; no overlap; money exact. |

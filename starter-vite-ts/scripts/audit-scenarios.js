@@ -126,7 +126,6 @@ const ALL_ROUTES = Array.from(new Set([
   '/app/catalog/categories',
   '/app/catalog/products',
   '/app/catalog/modifiers',
-  '/app/catalog/menus',
   '/app/catalog/availability',
   '/app/catalog/import-export',
   '/app/discounts/campaigns',

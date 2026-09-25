@@ -7,9 +7,6 @@ import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { OptionGroup } from '../../entities/OptionGroup.entity';
 import { OptionItem } from '../../entities/OptionItem.entity';
 import { ProductOptionGroup } from '../../entities/ProductOptionGroup.entity';
-import { Menu } from '../../entities/Menu.entity';
-import { MenuCategory } from '../../entities/MenuCategory.entity';
-import { MenuProduct } from '../../entities/MenuProduct.entity';
 import { ProductAvailability } from '../../entities/ProductAvailability.entity';
 import { AvailabilitySchedule } from '../../entities/AvailabilitySchedule.entity';
 import { Branch } from '../../entities/Branch.entity';
@@ -76,9 +73,6 @@ export class CatalogService {
     @InjectRepository(OptionGroup) private readonly groupRepo: Repository<OptionGroup>,
     @InjectRepository(OptionItem) private readonly itemRepo: Repository<OptionItem>,
     @InjectRepository(ProductOptionGroup) private readonly prodGroupRepo: Repository<ProductOptionGroup>,
-    @InjectRepository(Menu) private readonly menuRepo: Repository<Menu>,
-    @InjectRepository(MenuCategory) private readonly menuCatRepo: Repository<MenuCategory>,
-    @InjectRepository(MenuProduct) private readonly menuProdRepo: Repository<MenuProduct>,
     @InjectRepository(ProductAvailability) private readonly availRepo: Repository<ProductAvailability>,
     @InjectRepository(AvailabilitySchedule) private readonly scheduleRepo: Repository<AvailabilitySchedule>,
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
@@ -785,130 +779,6 @@ export class CatalogService {
       await this.prodGroupRepo.save(link);
     }
     return link;
-  }
-
-  // Menus Management
-  async getMenus(tenantId: string, branchId?: string, channel?: string) {
-    const where: any = { tenant_id: tenantId };
-    if (branchId) where.branch_id = branchId;
-    if (channel && channel !== 'ALL') where.channel = channel;
-    const menus = await this.menuRepo.find({ where, order: { code: 'ASC' } });
-
-    const result = [];
-    for (const menu of menus) {
-      const categories = await this.menuCatRepo.find({ where: { tenant_id: tenantId, menu_id: menu.id }, order: { sort_order: 'ASC' } });
-      const products = await this.menuProdRepo.find({ where: { tenant_id: tenantId, menu_id: menu.id }, order: { sort_order: 'ASC' } });
-      result.push({ ...menu, categories, products });
-    }
-    return result;
-  }
-
-  async getMenuById(tenantId: string, id: string) {
-    const menu = await this.menuRepo.findOne({ where: { id, tenant_id: tenantId } });
-    if (!menu) throw new NotFoundException('Menu not found');
-    const categories = await this.menuCatRepo.find({ where: { tenant_id: tenantId, menu_id: id }, order: { sort_order: 'ASC' } });
-    const products = await this.menuProdRepo.find({ where: { tenant_id: tenantId, menu_id: id }, order: { sort_order: 'ASC' } });
-    return { ...menu, categories, products };
-  }
-
-  async createMenu(tenantId: string, data: { code: string; name: string; branch_id?: string; channel?: string; valid_from?: Date; valid_to?: Date }, correlationId: string) {
-    const code = data.code.toUpperCase();
-    const existing = await this.menuRepo.findOne({ where: { tenant_id: tenantId, code } });
-    if (existing) throw new ConflictException(`Menu with code ${code} already exists`);
-
-    const menu = this.menuRepo.create({
-      tenant_id: tenantId,
-      code,
-      name: data.name,
-      branch_id: data.branch_id || null,
-      channel: data.channel || 'ALL',
-      valid_from: data.valid_from || null,
-      valid_to: data.valid_to || null,
-      is_active: true,
-    });
-
-    const saved = await this.menuRepo.save(menu);
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'MENU_CREATED',
-      entityType: 'Menu',
-      entityId: saved.id,
-      correlationId,
-      afterData: saved,
-    });
-
-    return saved;
-  }
-
-  async updateMenu(tenantId: string, id: string, data: Partial<Menu>, correlationId: string) {
-    const menu = await this.menuRepo.findOne({ where: { id, tenant_id: tenantId } });
-    if (!menu) throw new NotFoundException('Menu not found');
-    Object.assign(menu, data);
-    const saved = await this.menuRepo.save(menu);
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'MENU_UPDATED',
-      entityType: 'Menu',
-      entityId: id,
-      correlationId,
-      afterData: saved,
-    });
-
-    return saved;
-  }
-
-  async deleteMenu(tenantId: string, id: string, correlationId: string) {
-    const menu = await this.menuRepo.findOne({ where: { id, tenant_id: tenantId } });
-    if (!menu) throw new NotFoundException('Menu not found');
-    await this.menuRepo.softRemove(menu);
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'MENU_DELETED',
-      entityType: 'Menu',
-      entityId: id,
-      correlationId,
-    });
-
-    return { success: true };
-  }
-
-  async addCategoryToMenu(tenantId: string, menuId: string, categoryId: string, sortOrder: number = 0) {
-    let link = await this.menuCatRepo.findOne({ where: { tenant_id: tenantId, menu_id: menuId, category_id: categoryId } });
-    if (!link) {
-      link = this.menuCatRepo.create({ tenant_id: tenantId, menu_id: menuId, category_id: categoryId, sort_order: sortOrder });
-    } else {
-      link.sort_order = sortOrder;
-    }
-    return await this.menuCatRepo.save(link);
-  }
-
-  async removeProductFromMenu(tenantId: string, menuId: string, productId: string) {
-    await this.menuProdRepo.delete({ tenant_id: tenantId, menu_id: menuId, product_id: productId });
-    return { success: true };
-  }
-
-  async addProductToMenu(tenantId: string, menuId: string, productId: string, categoryId?: string, sortOrder: number = 0, overridePrice?: string) {
-    let link = await this.menuProdRepo.findOne({ where: { tenant_id: tenantId, menu_id: menuId, product_id: productId } });
-    if (!link) {
-      link = this.menuProdRepo.create({
-        tenant_id: tenantId,
-        menu_id: menuId,
-        product_id: productId,
-        category_id: categoryId || null,
-        sort_order: sortOrder,
-        override_price: overridePrice ? MoneyUtil.format(overridePrice) : null,
-      });
-    } else {
-      link.sort_order = sortOrder;
-      if (overridePrice !== undefined) link.override_price = overridePrice ? MoneyUtil.format(overridePrice) : null;
-    }
-    return await this.menuProdRepo.save(link);
   }
 
   // Product Availability & Temporary Suspension

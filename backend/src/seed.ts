@@ -784,7 +784,7 @@ export async function runSeed() {
     [tenant.id, `${HISTORY_PREFIX}%`],
   );
 
-  // 10. What head office and a branch manager work with day to day: menus, a branch price
+  // 10. What head office and a branch manager work with day to day: a branch price
   // list, a bank account and card terminal, Valiasr's kitchen, closed days and more.
   await seedAdminDemo(AppDataSource, tenant.id, branchByCode, branchManager?.id ?? null);
 

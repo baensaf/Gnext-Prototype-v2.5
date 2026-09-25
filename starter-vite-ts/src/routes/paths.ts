@@ -61,8 +61,6 @@ export const paths = {
       products: `${ROOTS.APP}/catalog/products`,
       productDetail: (id: string) => `${ROOTS.APP}/catalog/products/${id}`,
       modifiers: `${ROOTS.APP}/catalog/modifiers`,
-      menus: `${ROOTS.APP}/catalog/menus`,
-      menuDetail: (id: string) => `${ROOTS.APP}/catalog/menus/${id}`,
       availability: `${ROOTS.APP}/catalog/availability`,
       stock: `${ROOTS.APP}/catalog/stock`,
       stopReport: `${ROOTS.APP}/catalog/availability/report`,

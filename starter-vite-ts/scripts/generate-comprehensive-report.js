@@ -19,7 +19,7 @@ const MODULES_MAP = {
   'نمایشگر آشپزخانه (KDS)': ['/app/kds', '/app/operations/kds-configuration'],
   'مدیریت شیفت و روز کاری صندوق (Cashier & Shifts)': ['/app/cashier/shifts', '/app/cashier/business-days'],
   'سفارش‌های تحویلی، پیک و تسویه‌حساب (Delivery & Couriers)': ['/app/delivery/orders', '/app/delivery/couriers', '/app/delivery/settlements'],
-  'کاتالوگ کالاها، دسته‌بندی و واردات/صادرات (Catalog & Import/Export)': ['/app/catalog/products', '/app/catalog/categories', '/app/catalog/modifiers', '/app/catalog/menus', '/app/catalog/availability', '/app/catalog/import-export'],
+  'کاتالوگ کالاها، دسته‌بندی و واردات/صادرات (Catalog & Import/Export)': ['/app/catalog/products', '/app/catalog/categories', '/app/catalog/modifiers', '/app/catalog/availability', '/app/catalog/import-export'],
   'قیمت‌گذاری، گروه‌های قیمتی و تغییر دسته‌جمعی (Pricing & Bulk Update)': ['/app/pricing/price-book', '/app/pricing/price-groups', '/app/pricing/bulk-update'],
   'مشتریان، گروه‌ها، اعتبار و باشگاه مشتریان (Customers & Club)': ['/app/customers', '/app/credit/accounts', '/app/customer-club/wallet', '/app/customer-club/discounts'],
   'تخفیف‌ها، کوپن‌ها و کمپین‌ها (Discounts & Campaigns)': ['/app/discounts/campaigns', '/app/discounts/coupons'],

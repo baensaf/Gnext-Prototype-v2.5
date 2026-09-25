@@ -9,9 +9,6 @@ import { ProductOptionGroup } from '../../entities/ProductOptionGroup.entity';
 import { PriceGroup } from '../../entities/PriceGroup.entity';
 import { PriceGroupBranch } from '../../entities/PriceGroupBranch.entity';
 import { PriceEntry } from '../../entities/PriceEntry.entity';
-import { Menu } from '../../entities/Menu.entity';
-import { MenuCategory } from '../../entities/MenuCategory.entity';
-import { MenuProduct } from '../../entities/MenuProduct.entity';
 import { ProductAvailability } from '../../entities/ProductAvailability.entity';
 import { AvailabilitySchedule } from '../../entities/AvailabilitySchedule.entity';
 import { Branch } from '../../entities/Branch.entity';
@@ -43,9 +40,6 @@ import { ApprovalModule } from '../approval/approval.module';
       PriceEntry,
       PriceBulkJob,
       AuditEvent,
-      Menu,
-      MenuCategory,
-      MenuProduct,
       ProductAvailability,
       AvailabilitySchedule,
       Branch,
