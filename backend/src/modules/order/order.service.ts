@@ -2442,7 +2442,17 @@ export class OrderService {
         const chosen: Array<{ optItem: OptionItem; optDto: any }> = [];
         for (const optDto of itemDto.options || []) {
           const optItem = await this.optionItemRepo.findOne({ where: { id: optDto.option_item_id, tenant_id: tenantId } });
-          if (optItem) chosen.push({ optItem, optDto });
+          // A choice removed since the screen loaded is refused, as at the kiosk: dropping it
+          // quietly would send the line to the kitchen and the bill without what was asked for.
+          if (!optItem) {
+            throw new BadRequestException({
+              statusCode: 400,
+              code: 'OPTION_NOT_FOUND',
+              message: `An add-on on ${product.name} is no longer offered; choose it again`,
+              details: { product_id: product.id, option_item_id: optDto.option_item_id },
+            });
+          }
+          chosen.push({ optItem, optDto });
         }
         const groupNames = await this.checkChoices(tenantId, product, chosen.map((c) => c.optItem), em);
         await this.catalogService.assertLineSellable(em, tenantId, order, product, variant?.id || null, qty, chosen.map((c) => c.optItem));
