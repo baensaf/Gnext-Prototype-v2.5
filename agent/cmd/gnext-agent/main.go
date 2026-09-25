@@ -176,7 +176,7 @@ func run(ctx context.Context, console io.Writer) int {
 		}
 	}()
 
-	go launchTrays(ctx, log)
+	go launchTrays(ctx, log, h.tillOpensAtSignIn)
 
 	code := h.supervise(ctx)
 	if code == exitRestart {

@@ -66,6 +66,9 @@ type Binding struct {
 	TerminalID string    `json:"terminal_id"`
 	BoundBy    string    `json:"bound_by"`
 	BoundAt    time.Time `json:"bound_at"`
+	// OpenAtSignIn is whether the till window opens when a Windows user signs in (§16.8); unset
+	// means yes.
+	OpenAtSignIn *bool `json:"open_at_sign_in,omitempty"`
 }
 
 // User is who is signed in: never their PIN hash.
@@ -223,6 +226,9 @@ func (t *Till) Bind(terminalID, by string) (Binding, error) {
 		return Binding{}, refuse(CodeUnknownTill, "این صندوق در فهرست صندوق‌های شعبه نیست.")
 	}
 	b := Binding{TerminalID: terminalID, BoundBy: by, BoundAt: t.Now().UTC()}
+	if old := t.Binding(); old != nil {
+		b.OpenAtSignIn = old.OpenAtSignIn
+	}
 	if err := writeJSON(t.Path, b); err != nil {
 		return Binding{}, err
 	}
@@ -230,6 +236,30 @@ func (t *Till) Bind(terminalID, by string) (Binding, error) {
 	t.binding = &b
 	t.mu.Unlock()
 	t.Log.Info("offline till bound", "terminal", terminalID, "by", by)
+	return b, nil
+}
+
+// OpensAtSignIn reports whether the till window should open when a Windows user signs in: a
+// till is bound, and nobody turned it off (§16.8).
+func (t *Till) OpensAtSignIn() bool {
+	b := t.Binding()
+	return b != nil && (b.OpenAtSignIn == nil || *b.OpenAtSignIn)
+}
+
+// SetOpenAtSignIn turns the till window at sign-in on or off.
+func (t *Till) SetOpenAtSignIn(on bool) (Binding, error) {
+	t.init()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.binding == nil {
+		return Binding{}, refuse(CodeNoTill, "اول صندوق را انتخاب کنید.")
+	}
+	b := *t.binding
+	b.OpenAtSignIn = &on
+	if err := writeJSON(t.Path, b); err != nil {
+		return Binding{}, err
+	}
+	t.binding = &b
 	return b, nil
 }
 

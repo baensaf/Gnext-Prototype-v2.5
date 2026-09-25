@@ -99,6 +99,14 @@ func (h *host) upload(payload json.RawMessage) error {
 	return nil
 }
 
+// tillOpensAtSignIn is whether the till window opens when a Windows user signs in (§16.8).
+func (h *host) tillOpensAtSignIn() bool {
+	h.mu.Lock()
+	t := h.till
+	h.mu.Unlock()
+	return t != nil && t.OpensAtSignIn()
+}
+
 // State implements localui.Host.
 func (h *host) State() localui.State {
 	h.mu.Lock()

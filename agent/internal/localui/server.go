@@ -110,6 +110,7 @@ func (s *Server) Handler(addr string) http.Handler {
 	mux.HandleFunc("POST /api/till/login", s.tillLogin)
 	mux.HandleFunc("POST /api/till/logout", s.tillLogout)
 	mux.HandleFunc("POST /api/till/binding", s.tillBinding)
+	mux.HandleFunc("POST /api/till/open-at-sign-in", s.tillOpenAtSignIn)
 	mux.Handle("GET /till", http.RedirectHandler("/till/", http.StatusMovedPermanently))
 	mux.HandleFunc("GET /till/", s.tillScreen)
 	mux.HandleFunc("GET /api/till/menu", s.tillMenu)

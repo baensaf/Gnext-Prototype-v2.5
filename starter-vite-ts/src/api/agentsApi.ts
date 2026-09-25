@@ -22,6 +22,11 @@ export interface BranchAgent {
   revoke_reason?: string | null;
   /** Whether the agent holds a live connection to the cloud right now. */
   connected?: boolean;
+  /** Whether its branch could sell offline if the internet went now (§16.8); null when away. */
+  offline_ready?: {
+    ready: boolean;
+    problems: ('AGENT_TOO_OLD' | 'NO_TILL' | 'NO_SHIFT' | 'NO_STAFF' | 'SNAPSHOT_STALE' | 'UPLOADS_WAITING')[];
+  } | null;
 }
 
 export interface AgentDeviceStatus {

@@ -22,7 +22,7 @@ func openBrowser(url string) error { return exec.Command("xdg-open", url).Start(
 
 func runTray() int { println("the tray is Windows only"); return 2 }
 
-func launchTrays(context.Context, *slog.Logger) {}
+func launchTrays(context.Context, *slog.Logger, func() bool) {}
 
 func attachConsole() {}
 

@@ -36,10 +36,14 @@ export class AgentRegistryController {
     @Query('branchId') branchId?: string,
     @Query('includeRevoked') includeRevoked?: string,
   ) {
-    return await this.registry.listAgents((req as any).tenantId, {
+    const tenantId = (req as any).tenantId;
+    const agents = await this.registry.listAgents(tenantId, {
       branchId: branchId || undefined,
       includeRevoked: includeRevoked === 'true',
     });
+    // §16.8: whether each branch could sell offline if the internet went now.
+    const readiness = await this.health.offlineReadiness(tenantId, agents);
+    return agents.map((a) => ({ ...a, offline_ready: readiness.get(a.id) ?? null }));
   }
 
   @Get('enrolment-codes')
