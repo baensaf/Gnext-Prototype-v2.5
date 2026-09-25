@@ -35,11 +35,30 @@ import { toast, showErrorToast } from 'src/components/snackbar';
 
 const formatSize = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
+/** Orders agent versions (major.minor.patch) numerically, as the cloud and the agent do. */
+export function compareAgentVersions(a: string, b: string) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i += 1) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0) ? 1 : -1;
+  }
+  return 0;
+}
+
+const newest = (rows: AgentReleaseRow[]) =>
+  rows.reduce<AgentReleaseRow | null>((top, r) => (!top || compareAgentVersions(r.version, top.version) > 0 ? r : top), null);
+
+type Props = {
+  /** Told the newest published version (or null) whenever the list loads. */
+  onLatestPublished?: (version: string | null) => void;
+};
+
 /**
  * Builds of the branch agent. Agents check for the newest published one on start and every
- * hour, and at once when a build is published while they are online.
+ * hour, and at once when a build is published while they are online. CI uploads every new
+ * build unpublished, so a newer build waiting to be published is called out above the list.
  */
-export function AgentReleasesCard() {
+export function AgentReleasesCard({ onLatestPublished }: Props) {
   const { t } = useTranslation();
   const [rows, setRows] = useState<AgentReleaseRow[]>([]);
   const [open, setOpen] = useState(false);
@@ -52,16 +71,25 @@ export function AgentReleasesCard() {
 
   const load = useCallback(async () => {
     try {
-      setRows(await agentsApi.listReleases());
+      const list = await agentsApi.listReleases();
+      setRows(list);
       setError(null);
+      onLatestPublished?.(newest(list.filter((r) => r.published))?.version ?? null);
     } catch (err: any) {
       setError(err?.detail || err?.message || t('operations.agents.releases.loadError', 'Could not load agent releases'));
     }
-  }, [t]);
+  }, [t, onLatestPublished]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const latestPublished = newest(rows.filter((r) => r.published));
+  const waiting = newest(rows);
+  const unpublishedNewer =
+    waiting && !waiting.published && (!latestPublished || compareAgentVersions(waiting.version, latestPublished.version) > 0)
+      ? waiting
+      : null;
 
   const handleUpload = async () => {
     if (!file) return;
@@ -113,6 +141,29 @@ export function AgentReleasesCard() {
       {error && (
         <Alert severity="error" sx={{ mx: 2 }}>
           {error}
+        </Alert>
+      )}
+      {unpublishedNewer && (
+        <Alert
+          severity="warning"
+          sx={{ mx: 2, mb: 1 }}
+          action={
+            <Button color="inherit" size="small" onClick={() => toggle(unpublishedNewer)} disabled={busy}>
+              {t('operations.agents.releases.publish', 'Publish')}
+            </Button>
+          }
+        >
+          {latestPublished
+            ? t(
+                'operations.agents.releases.unpublishedNewer',
+                'Build {{v}} is uploaded but not published. Agents stay on {{current}} until you publish it.',
+                { v: unpublishedNewer.version, current: latestPublished.version }
+              )
+            : t(
+                'operations.agents.releases.unpublishedNewerNone',
+                'Build {{v}} is uploaded but not published. No agent can update until you publish it.',
+                { v: unpublishedNewer.version }
+              )}
         </Alert>
       )}
       <TableContainer>
