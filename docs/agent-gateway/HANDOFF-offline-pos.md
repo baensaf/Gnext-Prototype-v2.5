@@ -10,7 +10,7 @@ Read [`HANDOFF.md`](HANDOFF.md) (v1 and v2 history), [`agent-protocol.md`](agent
 |---|---|
 | v1: printing, card terminals, enrolment, settings page, tray, self-update, installer | Live on gnextdev.ir |
 | v2 §12: branch snapshot, offline order upload, conflict rules, sync status | Merged and deployed (#105–#109). Agent 1.2.0 built by CI, **unpublished** until head office presses Publish |
-| Offline POS: a till that takes orders while the internet is down | Contract §13 agreed (#111). P1 done: cloud (#112), agent 1.3.0 (#113). P2 (till binding, PIN sign-in), agent 1.4.0 (#114). P3 (till screen, catalogue and pricing on the agent), agent 1.5.0 (#116). P4 (orders on the agent, call numbers, void and cancel, hand-over, upload), agent 1.6.0 (#117). P4b-1 (the web POS reads and writes through a data source, #120). P4b-2 (the till screen is the web POS's own register, embedded in the agent), agent 1.7.0 (#121). P5 (cash and card offline, open orders), agent 1.8.0 (#122). P6 (kitchen chits by station, receipts, bills, reprints), agent 1.9.0 (#123). P7 (the web POS banner, the till window from the tray, Start menu and settings page), agent 1.10.0 (#124). P8 (the cloud keeps the table, add-on group names, voided lines and who cancelled), cloud only: this PR. Next: the branch test at the cut line |
+| Offline POS: a till that takes orders while the internet is down | Contract §13 agreed (#111). P1 done: cloud (#112), agent 1.3.0 (#113). P2 (till binding, PIN sign-in), agent 1.4.0 (#114). P3 (till screen, catalogue and pricing on the agent), agent 1.5.0 (#116). P4 (orders on the agent, call numbers, void and cancel, hand-over, upload), agent 1.6.0 (#117). P4b-1 (the web POS reads and writes through a data source, #120). P4b-2 (the till screen is the web POS's own register, embedded in the agent), agent 1.7.0 (#121). P5 (cash and card offline, open orders), agent 1.8.0 (#122). P6 (kitchen chits by station, receipts, bills, reprints), agent 1.9.0 (#123). P7 (the web POS banner, the till window from the tray, Start menu and settings page), agent 1.10.0 (#124). P8 (the cloud keeps the table, add-on group names, voided lines and who cancelled), cloud only (#128). Next: the till online, L0–L4 below |
 
 What the offline POS can already rely on:
 
@@ -106,6 +106,22 @@ Ordered by dependency. Cost = token cost; risk = implementation risk.
 | ✂️ **Recommended cut line.** Then a real test at a branch: pull the network cable, sell, plug back, and check the orders, cash, flags and Moadian in the cloud |||||
 | P9 | Tills on the LAN (listen on the LAN, firewall rule in the installer, pairing) | High | High | Med |
 | P10 | Kitchen screens offline (KDS is a cloud web page; offline the kitchen gets printed chits only) | High | Med | Low |
+
+### The till online (local-first, confirmed 2026-09-25)
+
+The user wants the cashier on the branch PC to use the till all the time: through the cloud while
+it answers, through the agent while it does not, on the same screen, told each time. Contract:
+§16 of `agent-protocol.md`. The user chose PIN sign-in online too (the agent gets a cloud session
+with the PIN and never keeps it), the unplaced cart carried across a switch, and merging each PR
+once CI is green.
+
+| # | Task | Cost | Risk | Importance |
+|---|---|---|---|---|
+| L0 | **Contract §16**: sign-in by PIN, the cloud path through the agent, modes, switching and the cart, what the cashier sees | Low | Low | Critical, blocks the rest |
+| L1 | **Cloud**: `POST /api/v1/agent/local/pin-login` (§16.3) for an agent with `pos.till`, with the per-user and per-branch PIN limits and the audit | Med | Med | Critical |
+| L2 | **Agent and till online** (agent 1.11.0): `pos.till`; a cloud session on sign-in and `cloud-login`; the `/api/v1/*` proxy with the cookie; reachability from the session and the proxy; `cloud` in the state. The till page sells through the cloud source when `ONLINE`, with every feature, the register fixed to the bound till | High | **High** | Critical |
+| L3 | **Automatic switch** (agent 1.11.x): the page switches on the mode, carries the cart both ways, marks lines refused on the other side, holds a place that got no answer, the PIN prompt on return, the bar and toasts | High | **High** | Critical |
+| L4 | **Register on the branch PC**: open the till at sign-in (`open_at_sign_in`), and *ready to sell offline* on Branch Agents | Med | Low | High |
 
 Most of the cost sits in P4b-2, P5 and P6. P4b replaces P3's plain screen; P3's agent side
 (`till.Catalog`, `/api/till/menu`, `/api/till/price`) stays.
