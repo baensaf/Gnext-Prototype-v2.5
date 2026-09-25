@@ -496,6 +496,26 @@ describe('PrintingModule (Unit & Integration)', () => {
     expect(outcomeRes.attempt.printer_id).toBe('prn-backup');
   });
 
+  // The Test button used to show "printed cleanly" without sending anything.
+  describe('a test page', () => {
+    it('goes to the printer through the branch agent, as a job the queue shows', async () => {
+      printer('prn-counter', { name: 'Counter', agent_connection: { kind: 'tcp', host: '192.168.1.90', port: 9100 } });
+
+      const job = await queueService.testPrint(T, 'prn-counter', 'user-1');
+
+      expect(job).toMatchObject({ document_type: 'TEST_PRINT', printer_id: 'prn-counter', branch_id: BR, status: 'PROCESSING' });
+      expect(job.rendered_html).toContain('Counter');
+      expect(agentPrinting.send).toHaveBeenCalledWith(T, job, expect.objectContaining({ id: 'prn-counter' }), 1);
+    });
+
+    it('is refused for a printer the agent does not drive', async () => {
+      printer('prn-sim', { name: 'Simulated' });
+
+      await expect(queueService.testPrint(T, 'prn-sim')).rejects.toThrow(/not connected to the branch agent/);
+      expect(jobRepo.rows).toHaveLength(0);
+    });
+  });
+
   describe('a real printer behind the branch agent', () => {
     beforeEach(() => {
       order('ord-400', [line('l-1', 'p-burger', 'Burger')]);

@@ -3322,7 +3322,8 @@
       "CUSTOMER_RECEIPT": "Customer receipt",
       "KITCHEN_TICKET": "Kitchen ticket",
       "COURIER_SLIP": "Courier slip",
-      "GUEST_BILL": "Guest bill"
+      "GUEST_BILL": "Guest bill",
+      "TEST_PRINT": "Test page"
     },
     "statuses": {
       "QUEUED": "Queued",
@@ -3535,7 +3536,7 @@
       "formActive": "Device Status Active",
       "formDocType": "Document Type",
       "formPrinterGroup": "Target Printer Group",
-      "formPriority": "Routing Priority (1=Highest)",
+      "formPriority": "Priority (higher wins between equally specific routes)",
       "formCopies": "Number of Copies",
       "createPrinterBtn": "Create Printer Device",
       "editPrinterBtn": "Save Printer Changes",
@@ -3558,7 +3559,12 @@
       "selectProduct": "Select Product Item",
       "selectStation": "Select Kitchen Station",
       "testPrint": "Test Slip",
-      "testPrintSuccess": "Simulated test slip printed cleanly on {{name}}",
+      "testPrintSending": "Sending a test page to {{name}}…",
+      "testPrintSuccess": "{{name}} printed the test page.",
+      "testPrintFailed": "{{name}} did not print the test page: {{reason}}",
+      "testPrintNoAnswer": "No answer from {{name}} yet. The print queue will show the result.",
+      "testPrintError": "Could not send the test page.",
+      "unusedDocType": "{{name}} (nothing prints this)",
       "types": {
         "THERMAL_RECEIPT": "Thermal Customer Receipt (80mm)",
         "KITCHEN_IMPACT": "Kitchen Impact / Dot Matrix (80mm)",
@@ -3569,7 +3575,9 @@
         "KITCHEN_TICKET": "Kitchen Preparation Ticket",
         "ITEM_LABEL": "Individual Cup / Item Label",
         "DELIVERY_SLIP": "Courier Delivery Manifest",
-        "SHIFT_REPORT": "Cashier Shift Closure Report"
+        "SHIFT_REPORT": "Cashier Shift Closure Report",
+        "GUEST_BILL": "Guest Bill",
+        "COURIER_SLIP": "Courier Slip"
       },
       "connection": {
         "kind": "Connection",
@@ -3584,7 +3592,8 @@
         "serialPort": "Serial port",
         "baud": "Baud rate",
         "agentHelp": "Jobs for this printer go to the branch agent. While the agent is offline they wait in the print queue.",
-        "agentChip": "Agent"
+        "agentChip": "Agent",
+        "notSupported": "The branch agent cannot print through this connection yet. Connect the printer to the network and choose Network printer (TCP)."
       },
       "loadError": "Could not load the printers.",
       "cycleError": "A printer cannot fall back to itself.",

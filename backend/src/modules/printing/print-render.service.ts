@@ -118,6 +118,24 @@ export class PrintRenderService {
         : template === 'COMPACT' && opts.documentType !== 'COURIER_SLIP'
           ? this.compactReceipt(opts)
           : this.customerDocument(opts);
+    return this.page(body);
+  }
+
+  /**
+   * The page a printer prints when it is set up: which printer this is, so a counter with three
+   * printers can tell which one answered, and the full paper width, so a narrow roll shows.
+   */
+  renderTestPage(printerName: string, branchName?: string, at: Date = new Date()): string {
+    return this.page(`<div class="inv">چاپ آزمایشی</div>
+<div class="c title">${this.esc(printerName)}</div>
+${branchName ? `<div class="c small">${this.esc(branchName)}</div>` : ''}
+<hr/>
+<div class="c">اگر این برگه خوانا است، چاپگر درست کار می‌کند.</div>
+<div class="box">&nbsp;</div>
+<div class="c small">${this.date({ documentType: 'TEST_PRINT', orderNumber: '', items: [], placedAt: at })}</div>`);
+  }
+
+  private page(body: string): string {
     return `<!DOCTYPE html>
 <html dir="rtl" lang="fa">
 <head>

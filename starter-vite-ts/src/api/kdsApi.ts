@@ -276,6 +276,11 @@ export const kdsApi = {
     const res = await httpClient.get('/api/v1/print-jobs', { params });
     return res.data;
   },
+  /** Sends a test page through the branch agent; poll the returned job for the printer's answer. */
+  testPrint: async (printerId: string): Promise<PrintJob> => {
+    const res = await httpClient.post(`/api/v1/printers/${printerId}/test-print`);
+    return res.data;
+  },
   getPrintJobById: async (id: string): Promise<PrintJob> => {
     const res = await httpClient.get(`/api/v1/print-jobs/${id}`);
     return res.data;

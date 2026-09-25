@@ -33,6 +33,7 @@ import {
   FormControl,
   DialogContent,
   DialogActions,
+  TablePagination,
 } from '@mui/material';
 
 import { fDateTime } from 'src/utils/format-time';
@@ -41,7 +42,7 @@ import { useLiveRefresh } from 'src/utils/use-live-refresh';
 import { kdsApi } from 'src/api/kdsApi';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 
-const DOC_TYPES = ['CUSTOMER_RECEIPT', 'KITCHEN_TICKET', 'COURIER_SLIP', 'GUEST_BILL'];
+const DOC_TYPES = ['CUSTOMER_RECEIPT', 'KITCHEN_TICKET', 'COURIER_SLIP', 'GUEST_BILL', 'TEST_PRINT'];
 const STATUSES = ['QUEUED', 'PROCESSING', 'SUCCESS', 'FAILED'];
 
 export function PrintQueuePage() {
@@ -49,7 +50,10 @@ export function PrintQueuePage() {
   // The header's branch: a cashier looking for a missing chit wants this branch's printers.
   const [branchId] = useScopedBranchId();
   const [jobs, setJobs] = useState<PrintJob[]>([]);
-  const [_total, setTotal] = useState(0);
+  const [total, setTotal] = useState(0);
+  // Newest first, a page at a time: last night's failed chit is a page or two back, not gone.
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [docTypeFilter, setDocTypeFilter] = useState<string>('');
   const [_loading, setLoading] = useState(true);
@@ -77,6 +81,8 @@ export function PrintQueuePage() {
         branchId: branchId || undefined,
         status: statusFilter || undefined,
         documentType: docTypeFilter || undefined,
+        limit: rowsPerPage,
+        offset: page * rowsPerPage,
       });
       setJobs(res.items);
       setTotal(res.total);
@@ -86,7 +92,7 @@ export function PrintQueuePage() {
     } finally {
       setLoading(false);
     }
-  }, [branchId, statusFilter, docTypeFilter]);
+  }, [branchId, statusFilter, docTypeFilter, page, rowsPerPage]);
 
   useEffect(() => {
     loadData();
@@ -190,7 +196,7 @@ export function PrintQueuePage() {
         <Stack direction="row" spacing={2}>
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel>{t('printQueue.filterStatus', 'Status')}</InputLabel>
-            <Select value={statusFilter} label={t('printQueue.filterStatus', 'Status')} onChange={(e) => setStatusFilter(e.target.value)}>
+            <Select value={statusFilter} label={t('printQueue.filterStatus', 'Status')} onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}>
               <MenuItem value="">{t('printQueue.allStatuses', 'All Statuses')}</MenuItem>
               {STATUSES.map((s) => (
                 <MenuItem key={s} value={s}>{statusLabel(s)}</MenuItem>
@@ -200,7 +206,7 @@ export function PrintQueuePage() {
 
           <FormControl size="small" sx={{ minWidth: 200 }}>
             <InputLabel>{t('printQueue.filterDocType', 'Document Type')}</InputLabel>
-            <Select value={docTypeFilter} label={t('printQueue.filterDocType', 'Document Type')} onChange={(e) => setDocTypeFilter(e.target.value)}>
+            <Select value={docTypeFilter} label={t('printQueue.filterDocType', 'Document Type')} onChange={(e) => { setDocTypeFilter(e.target.value); setPage(0); }}>
               <MenuItem value="">{t('printQueue.allDocTypes', 'All Document Types')}</MenuItem>
               {DOC_TYPES.map((d) => (
                 <MenuItem key={d} value={d}>{docTypeLabel(d)}</MenuItem>
@@ -316,6 +322,18 @@ export function PrintQueuePage() {
             </TableBody>
           </Table>
         </Box>
+        <TablePagination
+          component="div"
+          count={total}
+          page={page}
+          rowsPerPage={rowsPerPage}
+          rowsPerPageOptions={[25, 50, 100]}
+          onPageChange={(_, next) => setPage(next)}
+          onRowsPerPageChange={(e) => {
+            setRowsPerPage(parseInt(e.target.value, 10));
+            setPage(0);
+          }}
+        />
       </Card>
 
       {/* Rendered HTML Preview Modal */}

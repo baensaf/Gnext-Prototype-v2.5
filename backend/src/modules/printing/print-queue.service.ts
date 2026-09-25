@@ -262,6 +262,53 @@ export class PrintQueueService {
     return [await this.printOn(tenantId, copy, destination, { isReprint: true, userId })];
   }
 
+  /**
+   * Print a test page on one printer, through the branch agent, and hand back the job so the
+   * caller can watch it settle. The job is in the print queue like any other, so a test that
+   * failed says why there. A printer the agent does not drive has nothing to test.
+   */
+  async testPrint(tenantId: string, printerId: string, userId?: string): Promise<PrintJob> {
+    const printer = await this.printerRepo.findOne({ where: { id: printerId, tenant_id: tenantId } });
+    if (!printer) throw new NotFoundException(`Printer ${printerId} not found`);
+    if (!printer.agent_connection) {
+      throw new BadRequestException(
+        `Printer ${printer.name} is not connected to the branch agent. Set up its connection, then test it.`,
+      );
+    }
+    const branch = await this.orderRepo.manager
+      ?.findOne(Branch, { where: { id: printer.branch_id, tenant_id: tenantId } })
+      .catch(() => null);
+
+    const job = await this.jobRepo.save(
+      this.jobRepo.create({
+        tenant_id: tenantId,
+        branch_id: printer.branch_id,
+        document_type: 'TEST_PRINT',
+        entity_type: 'Printer',
+        entity_id: printer.id,
+        printer_id: printer.id,
+        label: printer.name,
+        status: 'QUEUED',
+        copies: 1,
+        rendered_html: this.renderService.renderTestPage(printer.name, branch?.name),
+        is_reprint: false,
+        created_by: userId || null,
+      }),
+    );
+    const { job: sent } = await this.agentPrinting.send(tenantId, job, printer, 1);
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      actorId: userId,
+      action: 'PRINT_TEST_SENT',
+      entityType: 'PrintJob',
+      entityId: sent.id,
+      correlationId: 'corr-print-test',
+      details: { printerId: printer.id },
+    });
+    return sent;
+  }
+
   private async loadOrder(tenantId: string, orderId: string) {
     const order = await this.orderRepo.findOne({
       where: { id: orderId, tenant_id: tenantId },
