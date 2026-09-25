@@ -912,7 +912,11 @@ export function OrdersWorkflowPage() {
     return <Typography variant="body2">{t('orders.table.counter')}</Typography>;
   };
 
-  const renderPayment = (order: OrderListRow) => (
+  const renderPayment = (order: OrderListRow) => {
+    const paidNothing = !MoneyUtil.greaterThan(order.paid_amount || order.paid_total || '0', '0');
+    // A cancelled order owes nothing, whatever its total; with nothing taken it was never charged.
+    const cancelled = order.status === 'CANCELLED' || order.status === 'REJECTED';
+    return (
     <Box>
       <Typography color="success.main" sx={{ display: 'block', fontWeight: 600 }} variant="caption">
         <span dir="ltr">{t('orders.table.paid', { amount: MoneyUtil.formatCurrency(order.paid_amount || order.paid_total || '0') })} {currency}</span>
@@ -925,11 +929,11 @@ export function OrdersWorkflowPage() {
             {t('orders.table.refunded', { amount: MoneyUtil.formatCurrency(order.refunded_total || '0') })} {currency}
           </span>
         </Typography>
-      ) : MoneyUtil.greaterThan(order.due_amount || '0', '0') ? (
+      ) : !cancelled && MoneyUtil.greaterThan(order.due_amount || '0', '0') ? (
         <Typography color="error.main" sx={{ display: 'block', fontWeight: 700 }} variant="caption">
           <span dir="ltr">{t('orders.table.due', { amount: MoneyUtil.formatCurrency(order.due_amount) })} {currency}</span>
         </Typography>
-      ) : !MoneyUtil.greaterThan(order.paid_amount || order.paid_total || '0', '0') ? (
+      ) : paidNothing ? (
         // Nothing owed and nothing taken (a cancelled order, or one discounted to zero) was
         // never paid, so it does not read as settled.
         <Chip label={t('orders.table.notCharged')} size="small" sx={{ fontSize: 9, height: 18 }} variant="outlined" />
@@ -937,7 +941,8 @@ export function OrdersWorkflowPage() {
         <Chip color="success" label={t('orders.table.fullyPaid')} size="small" sx={{ fontSize: 9, height: 18 }} />
       )}
     </Box>
-  );
+    );
+  };
 
   const columns: GridColDef<OrderListRow>[] = [
     {
