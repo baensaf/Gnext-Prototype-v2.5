@@ -9,6 +9,7 @@ import { CustomerDiscount } from '../../entities/CustomerDiscount.entity';
 import { ApprovalRequest } from '../../entities/ApprovalRequest.entity';
 import { Product } from '../../entities/Product.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { HEAD_OFFICE_ROLES } from '../../common/utils/user-scope.util';
 import { DiscountQuoteRequestDto, QuoteItemDto, ManualDiscountDto } from './dtos/discounts.dto';
 
 export interface ConsideredDiscount {
@@ -90,7 +91,8 @@ export class DiscountEvaluationService {
     const roleName = (role || 'CASHIER').toUpperCase();
     return {
       role: roleName,
-      own: byRole[roleName] || byRole.CASHIER,
+      // Head office's other roles carry the administrator's limit; anything unknown is a register.
+      own: byRole[roleName] || (HEAD_OFFICE_ROLES.includes(roleName) ? byRole.ADMIN : byRole.CASHIER),
       ceiling: byRole.MANAGER,
     };
   }
