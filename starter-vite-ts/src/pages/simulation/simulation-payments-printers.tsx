@@ -31,6 +31,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { useCurrencyLabel } from 'src/utils/currency';
 
 import { kdsApi } from 'src/api/kdsApi';
 import { tenantApi } from 'src/api/tenantApi';
@@ -39,6 +40,7 @@ import { httpClient as axios } from 'src/api/httpClient';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function SimulationPaymentsPrintersPage() {
+  const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
   const [tab, setTab] = useState<'POS' | 'PRINTERS' | 'GATEWAY' | 'HISTORY'>('POS');
 
@@ -366,7 +368,7 @@ export function SimulationPaymentsPrintersPage() {
 
                       <Stack direction="row" spacing={2}>
                         <TextField
-                          label={t('simulation.hardware.pos.amount', 'Amount (IRR)')}
+                          label={t('simulation.hardware.pos.amount', 'Amount ({{currency}})', { currency: currencyLabel })}
                           size="small"
                           fullWidth
                           value={posAmount}
@@ -546,7 +548,7 @@ export function SimulationPaymentsPrintersPage() {
                       />
 
                       <TextField
-                        label={t('simulation.hardware.gateway.amount', 'Transaction Amount (IRR)')}
+                        label={t('simulation.hardware.gateway.amount', 'Transaction Amount ({{currency}})', { currency: currencyLabel })}
                         size="small"
                         fullWidth
                         value={gatewayAmount}

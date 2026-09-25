@@ -34,6 +34,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { useCurrencyLabel } from 'src/utils/currency';
 import { fDate , fTime, fDateTime } from 'src/utils/format-time';
 
 import { shiftApi } from 'src/api/shiftApi';
@@ -61,6 +62,7 @@ function Line({ label, value, color, strong }: { label: string; value: string; c
  * register. While the shift is open a cashier sees it blind, as the count will be.
  */
 export function ShiftDetailPage() {
+  const currencyLabel = useCurrencyLabel();
   const params = useParams<{ id?: string; shiftId?: string }>();
   const id = params.id || params.shiftId;
   const navigate = useNavigate();
@@ -240,7 +242,7 @@ export function ShiftDetailPage() {
                   <TableRow>
                     <TableCell>{t('shift.detail.time', 'Time')}</TableCell>
                     <TableCell>{t('shift.detail.movement', 'Movement')}</TableCell>
-                    <TableCell align="right">{t('shift.movement.amount', 'Amount (IRR)')}</TableCell>
+                    <TableCell align="right">{t('shift.movement.amount', 'Amount ({{currency}})', { currency: currencyLabel })}</TableCell>
                     <TableCell>{t('shift.detail.reason', 'Reason / reference')}</TableCell>
                   </TableRow>
                 </TableHead>

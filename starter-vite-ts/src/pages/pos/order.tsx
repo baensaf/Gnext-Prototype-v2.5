@@ -81,7 +81,7 @@ import {
 
 import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
-import { useCurrencyCode } from 'src/utils/currency';
+import { useCurrencyCode, useCurrencyLabel } from 'src/utils/currency';
 
 import { useBranchContext } from 'src/contexts/branch-context';
 import { usePosSource, PosFeatureGate } from 'src/contexts/pos-source';
@@ -131,6 +131,7 @@ function formatRejectionReason(reason?: string, fallback: string = 'Discount was
 }
 
 export function PosOrderPage() {
+  const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
   const currency = useCurrencyCode();
 
@@ -2181,7 +2182,7 @@ export function PosOrderPage() {
                           <Select value={selectedDeliveryZoneId} label={t('pos.deliveryContext.zoneLabel')} onChange={(e) => setSelectedDeliveryZoneId(e.target.value)}>
                             {deliveryZones.map((zone) => (
                               <MenuItem key={zone.id} value={zone.id}>
-                                {t('pos.deliveryContext.zoneOption', {
+                                {t('pos.deliveryContext.zoneOption', { currency: currencyLabel,
                                   name: zone.name,
                                   fee: MoneyUtil.formatCurrency(zone.fee),
                                   minutes: zone.estimated_minutes,
@@ -2392,16 +2393,16 @@ export function PosOrderPage() {
               <Stack spacing={0.75} sx={{ mb: 2, mt: 'auto' }}>
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                   <Typography variant="body2" color="text.secondary">{t('pos.totals.subtotal')}</Typography>
-                  <Typography variant="body2">{t('pos.amountIrr', { amount: MoneyUtil.formatCurrency(cartSubtotal) })}</Typography>
+                  <Typography variant="body2">{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(cartSubtotal) })}</Typography>
                 </Stack>
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                   <Typography variant="body2" color="text.secondary">{t('pos.totals.tax')}</Typography>
-                  <Typography variant="body2">{t('pos.amountIrr', { amount: MoneyUtil.formatCurrency(cartTax) })}</Typography>
+                  <Typography variant="body2">{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(cartTax) })}</Typography>
                 </Stack>
                 {orderType === 'DELIVERY' && (
                   <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">{t('pos.totals.delivery')}</Typography>
-                    <Typography variant="body2">{t('pos.amountIrr', { amount: MoneyUtil.formatCurrency(quotedDeliveryFee) })}</Typography>
+                    <Typography variant="body2">{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(quotedDeliveryFee) })}</Typography>
                   </Stack>
                 )}
                 {MoneyUtil.greaterThan(appliedDiscountAmount, '0') && (
@@ -2410,7 +2411,7 @@ export function PosOrderPage() {
                       {t('pos.totals.discount')}
                     </Typography>
                     <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold' }}>
-                      -{t('pos.amountIrr', { amount: MoneyUtil.formatCurrency(appliedDiscountAmount) })}
+                      -{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(appliedDiscountAmount) })}
                     </Typography>
                   </Stack>
                 )}
@@ -2418,7 +2419,7 @@ export function PosOrderPage() {
                 <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', pt: 0.5 }}>
                   <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t('pos.totals.totalDue')}</Typography>
                   <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                    {t('pos.amountIrr', { amount: MoneyUtil.formatCurrency(cartTotalDue) })}
+                    {t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(cartTotalDue) })}
                   </Typography>
                 </Stack>
               </Stack>

@@ -20,6 +20,8 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { useCurrencyLabel } from 'src/utils/currency';
+
 import { settingsApi } from 'src/api/settingsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 
@@ -39,6 +41,7 @@ const SHIFT_POLICY_DEFAULTS: ShiftPolicy = {
  * what is saved here is what a cashier meets at close.
  */
 export function ShiftPolicySettingsPage() {
+  const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
   const { selectedBranchId, selectedBranch } = useBranchContext();
 
@@ -173,7 +176,7 @@ export function ShiftPolicySettingsPage() {
             <TextField
               fullWidth
               type="number"
-              label={t('settings.shiftPolicy.floatLabel', 'Default opening float (IRR)')}
+              label={t('settings.shiftPolicy.floatLabel', 'Default opening float ({{currency}})', { currency: currencyLabel })}
               helperText={t(
                 'settings.shiftPolicy.floatHelp',
                 'Offered when a shift is opened. The cashier still enters what they actually counted into the drawer.'
@@ -186,7 +189,7 @@ export function ShiftPolicySettingsPage() {
             <TextField
               fullWidth
               type="number"
-              label={t('settings.shiftPolicy.toleranceLabel', 'Variance tolerance (IRR)')}
+              label={t('settings.shiftPolicy.toleranceLabel', 'Variance tolerance ({{currency}})', { currency: currencyLabel })}
               helperText={t(
                 'settings.shiftPolicy.toleranceHelp',
                 'The largest over or short a drawer may close on without a manager PIN. Any difference at all still needs a reason. Zero sends every difference to a manager.'

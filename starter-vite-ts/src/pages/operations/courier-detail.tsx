@@ -28,6 +28,7 @@ import { paths } from 'src/routes/paths';
 
 import { fDate } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
+import { useCurrencyCode } from 'src/utils/currency';
 
 import { deliveryApi } from 'src/api/deliveryApi';
 import { profilesApi } from 'src/api/profilesApi';
@@ -64,6 +65,7 @@ const AVAILABILITY_KEY: Record<string, string> = {
 };
 
 export function CourierDetailPage() {
+  const tenantCurrency = useCurrencyCode();
   const params = useParams<{ id?: string; courierId?: string }>();
   const id = params.id || params.courierId;
   const { t } = useTranslation();
@@ -130,7 +132,7 @@ export function CourierDetailPage() {
   }
 
   const { courier, stats } = profile;
-  const currency = courier.currency_code || 'IRR';
+  const currency = courier.currency_code || tenantCurrency;
   const cashDiscrepancy = MoneyUtil.sum(profile.settlements.map((s) => s.cash_discrepancy_amount || '0'));
   const attendanceStatus = courier.attendance?.status || 'CHECKED_OUT';
   const availability = courier.attendance?.availability_status || 'OFF_LINE';

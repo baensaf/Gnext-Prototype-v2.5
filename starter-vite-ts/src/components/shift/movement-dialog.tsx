@@ -16,6 +16,8 @@ import {
   DialogActions,
 } from '@mui/material';
 
+import { useCurrencyLabel } from 'src/utils/currency';
+
 import { shiftApi } from 'src/api/shiftApi';
 import { settingsApi } from 'src/api/settingsApi';
 
@@ -37,6 +39,7 @@ type Props = {
  * spent; a pay-in tops the drawer up.
  */
 export function MovementDialog({ open, onClose, shiftId, type, onPosted }: Props) {
+  const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
   const [reasonCodes, setReasonCodes] = useState<ReasonCode[]>([]);
   const [amount, setAmount] = useState('');
@@ -104,7 +107,7 @@ export function MovementDialog({ open, onClose, shiftId, type, onPosted }: Props
             <Alert severity="info">{help}</Alert>
             {error && <Alert severity="error">{error}</Alert>}
             <TextField
-              label={t('shift.movement.amount', 'Amount (IRR)')}
+              label={t('shift.movement.amount', 'Amount ({{currency}})', { currency: currencyLabel })}
               type="number"
               required
               fullWidth

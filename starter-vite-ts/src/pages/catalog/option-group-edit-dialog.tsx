@@ -20,6 +20,8 @@ import {
   DialogActions,
 } from '@mui/material';
 
+import { useCurrencyLabel } from 'src/utils/currency';
+
 import { catalogApi } from 'src/api/catalogApi';
 
 import { AmountInWords } from 'src/components/amount-in-words';
@@ -46,6 +48,7 @@ export function OptionGroupEditDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [min, setMin] = useState('0');
@@ -139,7 +142,7 @@ export function OptionGroupEditDialog({
                 />
                 <Box sx={{ flex: 1 }}>
                   <TextField
-                    label={t('catalog.optionsPage.priceDelta')}
+                    label={t('catalog.optionsPage.priceDelta', { currency: currencyLabel })}
                     type="number"
                     value={item.price}
                     onChange={(e) => patchItem(index, { price: e.target.value })}

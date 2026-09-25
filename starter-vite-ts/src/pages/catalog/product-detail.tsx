@@ -56,6 +56,7 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
+import { useCurrencyCode, useCurrencyLabel } from 'src/utils/currency';
 import { wholeRials, percentToTaxRate, taxRateToPercent } from 'src/utils/tax-rate';
 
 import { catalogApi } from 'src/api/catalogApi';
@@ -68,6 +69,8 @@ import { ProductPhotos } from './product-photos';
 import { ProductPriceHistory } from './product-price-history';
 
 export function ProductDetailPage() {
+  const currencyLabel = useCurrencyLabel();
+  const currency = useCurrencyCode();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -454,13 +457,13 @@ export function ProductDetailPage() {
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
-                      label={t('catalog.productDetailPage.general.basePrice')}
+                      label={t('catalog.productDetailPage.general.basePrice', { currency: currencyLabel })}
                       type="number"
                       value={basePrice}
                       onChange={(e) => setBasePrice(e.target.value)}
                       slotProps={{
                         htmlInput: { min: 0, step: 1 },
-                        input: { endAdornment: <InputAdornment position="end">IRR</InputAdornment> },
+                        input: { endAdornment: <InputAdornment position="end">{currency}</InputAdornment> },
                       }}
                       fullWidth
                       required
@@ -475,7 +478,7 @@ export function ProductDetailPage() {
                       onChange={(e) => setContainerPrice(e.target.value)}
                       slotProps={{
                         htmlInput: { min: 0, step: 1 },
-                        input: { endAdornment: <InputAdornment position="end">IRR</InputAdornment> },
+                        input: { endAdornment: <InputAdornment position="end">{currency}</InputAdornment> },
                       }}
                       helperText={t(
                         'catalog.productDetailPage.general.containerPriceHelp',
@@ -640,7 +643,7 @@ export function ProductDetailPage() {
                 {t('catalog.productDetailPage.variants.noVariantsTitle')}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                {t('catalog.productDetailPage.variants.noVariantsDesc', { price: MoneyUtil.formatCurrency(basePrice) })}
+                {t('catalog.productDetailPage.variants.noVariantsDesc', { currency: currencyLabel, price: MoneyUtil.formatCurrency(basePrice) })}
               </Typography>
               <Button variant="outlined" startIcon={<AddIcon />} onClick={handleOpenAddVariant}>
                 {t('catalog.productDetailPage.variants.createFirst')}
@@ -681,7 +684,7 @@ export function ProductDetailPage() {
                       <TableCell>{v.sku || '—'}</TableCell>
                       <TableCell>{v.barcode || '—'}</TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>
-                        <span dir="ltr">{MoneyUtil.formatCurrency(v.base_price)} IRR</span>
+                        <span dir="ltr">{MoneyUtil.formatCurrency(v.base_price)} {currency}</span>
                       </TableCell>
                       <TableCell align="right">
                         <IconButton
@@ -800,7 +803,7 @@ export function ProductDetailPage() {
                             <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                               <span dir="ltr">
                                 {Number(item.price_delta) > 0
-                                  ? `+${MoneyUtil.formatCurrency(item.price_delta)} IRR`
+                                  ? `+${MoneyUtil.formatCurrency(item.price_delta)} ${currency}`
                                   : t('catalog.productDetailPage.modifiers.free')}
                               </span>
                             </Typography>
@@ -877,7 +880,7 @@ export function ProductDetailPage() {
                   onChange={(e) => setVarPrice(e.target.value)}
                   slotProps={{
                     htmlInput: { min: 0, step: 1 },
-                    input: { endAdornment: <InputAdornment position="end">IRR</InputAdornment> },
+                    input: { endAdornment: <InputAdornment position="end">{currency}</InputAdornment> },
                   }}
                   fullWidth
                   required

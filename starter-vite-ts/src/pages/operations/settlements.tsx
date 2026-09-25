@@ -30,6 +30,7 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
+import { useCurrencyCode } from 'src/utils/currency';
 
 import { httpClient as axios } from 'src/api/httpClient';
 import { useBranchContext } from 'src/contexts/branch-context';
@@ -85,6 +86,7 @@ interface CourierSettlementsPageProps {
 }
 
 export function CourierSettlementsPage({ hideHeader = false }: CourierSettlementsPageProps = {}) {
+  const currency = useCurrencyCode();
   const { t } = useTranslation();
   const [tabValue, setTabValue] = useState(0);
 
@@ -353,7 +355,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                         {t('settlements.overview.expectedCash')}
                       </Typography>
                       <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }} dir="ltr">
-                        {MoneyUtil.formatCurrency(summary.expected_cash || 0)} IRR
+                        {MoneyUtil.formatCurrency(summary.expected_cash || 0)} {currency}
                       </Typography>
                     </Stack>
                     <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
@@ -361,7 +363,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                         {t('settlements.overview.expectedPos')}
                       </Typography>
                       <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }} dir="ltr">
-                        {MoneyUtil.formatCurrency(summary.expected_pos || 0)} IRR
+                        {MoneyUtil.formatCurrency(summary.expected_pos || 0)} {currency}
                       </Typography>
                     </Stack>
                     <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
@@ -369,7 +371,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                         {t('settlements.overview.totalDeliveryFees')}
                       </Typography>
                       <Typography variant="body2" dir="ltr">
-                        {MoneyUtil.formatCurrency(summary.total_delivery_fees || 0)} IRR
+                        {MoneyUtil.formatCurrency(summary.total_delivery_fees || 0)} {currency}
                       </Typography>
                     </Stack>
                   </Stack>
@@ -422,15 +424,15 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                       {b.courier_name} ({b.courier_code})
                     </TableCell>
                     <TableCell>{getStatusChip(b.status)}</TableCell>
-                    <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(b.expected_cash_amount || 0)} IRR</TableCell>
-                    <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(b.actual_cash_amount || 0)} IRR</TableCell>
+                    <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(b.expected_cash_amount || 0)} {currency}</TableCell>
+                    <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(b.actual_cash_amount || 0)} {currency}</TableCell>
                     <TableCell align="right" dir="ltr" sx={{ color: MoneyUtil.lessThan(b.cash_discrepancy_amount || '0', '0') ? 'error.main' : 'text.primary' }}>
-                      {MoneyUtil.formatCurrency(b.cash_discrepancy_amount || 0)} IRR
+                      {MoneyUtil.formatCurrency(b.cash_discrepancy_amount || 0)} {currency}
                     </TableCell>
-                    <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(b.expected_pos_amount || 0)} IRR</TableCell>
-                    <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(b.actual_pos_amount || 0)} IRR</TableCell>
+                    <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(b.expected_pos_amount || 0)} {currency}</TableCell>
+                    <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(b.actual_pos_amount || 0)} {currency}</TableCell>
                     <TableCell align="right" dir="ltr" sx={{ fontWeight: 'bold' }}>
-                      {MoneyUtil.formatCurrency(b.net_settlement_amount || 0)} IRR
+                      {MoneyUtil.formatCurrency(b.net_settlement_amount || 0)} {currency}
                     </TableCell>
                     <TableCell align="center">
                       <Stack direction="row" spacing={1} sx={{ justifyContent: 'center' }}>
@@ -485,7 +487,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                       <Typography variant="caption" color="text.secondary">
                         {tile.label}
                       </Typography>
-                      <Typography variant="h6" dir="ltr">{MoneyUtil.formatCurrency(tile.value || 0)} IRR</Typography>
+                      <Typography variant="h6" dir="ltr">{MoneyUtil.formatCurrency(tile.value || 0)} {currency}</Typography>
                     </Paper>
                   </Grid>
                 ))}
@@ -512,8 +514,8 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                         <TableCell>{l.order_number}</TableCell>
                         <TableCell>{l.delivery_status}</TableCell>
                         <TableCell>{l.payment_method_code}</TableCell>
-                        <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(l.expected_cash || 0)} IRR</TableCell>
-                        <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(l.expected_pos || 0)} IRR</TableCell>
+                        <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(l.expected_cash || 0)} {currency}</TableCell>
+                        <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(l.expected_pos || 0)} {currency}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -553,10 +555,10 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                         {t('settlements.detailModal.expectedActualCash')}
                       </Typography>
                       <Typography variant="body1" sx={{ fontWeight: 'bold' }} dir="ltr">
-                        {MoneyUtil.formatCurrency(activeSettlementDetail.expected_cash_amount || 0)} / {MoneyUtil.formatCurrency(activeSettlementDetail.actual_cash_amount || 0)} IRR
+                        {MoneyUtil.formatCurrency(activeSettlementDetail.expected_cash_amount || 0)} / {MoneyUtil.formatCurrency(activeSettlementDetail.actual_cash_amount || 0)} {currency}
                       </Typography>
                       <Typography variant="caption" dir="ltr" color={MoneyUtil.notEqual(activeSettlementDetail.cash_discrepancy_amount || '0', '0') ? 'error.main' : 'success.main'}>
-                        {t('settlements.detailModal.discrepancy')}: {MoneyUtil.formatCurrency(activeSettlementDetail.cash_discrepancy_amount || 0)} IRR
+                        {t('settlements.detailModal.discrepancy')}: {MoneyUtil.formatCurrency(activeSettlementDetail.cash_discrepancy_amount || 0)} {currency}
                       </Typography>
                     </Paper>
                   </Grid>
@@ -567,10 +569,10 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                         {t('settlements.detailModal.expectedActualPos')}
                       </Typography>
                       <Typography variant="body1" sx={{ fontWeight: 'bold' }} dir="ltr">
-                        {MoneyUtil.formatCurrency(activeSettlementDetail.expected_pos_amount || 0)} / {MoneyUtil.formatCurrency(activeSettlementDetail.actual_pos_amount || 0)} IRR
+                        {MoneyUtil.formatCurrency(activeSettlementDetail.expected_pos_amount || 0)} / {MoneyUtil.formatCurrency(activeSettlementDetail.actual_pos_amount || 0)} {currency}
                       </Typography>
                       <Typography variant="caption" dir="ltr" color={MoneyUtil.notEqual(activeSettlementDetail.pos_discrepancy_amount || '0', '0') ? 'error.main' : 'success.main'}>
-                        {t('settlements.detailModal.discrepancy')}: {MoneyUtil.formatCurrency(activeSettlementDetail.pos_discrepancy_amount || 0)} IRR
+                        {t('settlements.detailModal.discrepancy')}: {MoneyUtil.formatCurrency(activeSettlementDetail.pos_discrepancy_amount || 0)} {currency}
                       </Typography>
                     </Paper>
                   </Grid>
@@ -580,8 +582,8 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                       <Typography variant="caption" color="text.secondary">
                         {t('settlements.detailModal.compensationsAdjustments')}
                       </Typography>
-                      <Typography variant="body2" dir="ltr">{t('settlements.detailModal.comp')} {MoneyUtil.formatCurrency(activeSettlementDetail.total_compensation_amount || 0)} IRR</Typography>
-                      <Typography variant="body2" dir="ltr">{t('settlements.detailModal.adj')} {MoneyUtil.formatCurrency(activeSettlementDetail.total_adjustment_amount || 0)} IRR</Typography>
+                      <Typography variant="body2" dir="ltr">{t('settlements.detailModal.comp')} {MoneyUtil.formatCurrency(activeSettlementDetail.total_compensation_amount || 0)} {currency}</Typography>
+                      <Typography variant="body2" dir="ltr">{t('settlements.detailModal.adj')} {MoneyUtil.formatCurrency(activeSettlementDetail.total_adjustment_amount || 0)} {currency}</Typography>
                     </Paper>
                   </Grid>
 
@@ -589,7 +591,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                     <Paper sx={{ p: 2, bgcolor: 'primary.light', color: 'primary.contrastText' }}>
                       <Typography variant="caption">{t('settlements.detailModal.netSettlementTotal')}</Typography>
                       <Typography variant="h5" sx={{ fontWeight: 'bold' }} dir="ltr">
-                        {MoneyUtil.formatCurrency(activeSettlementDetail.net_settlement_amount || 0)} IRR
+                        {MoneyUtil.formatCurrency(activeSettlementDetail.net_settlement_amount || 0)} {currency}
                       </Typography>
                     </Paper>
                   </Grid>
@@ -655,7 +657,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                           </TableCell>
                           <TableCell sx={{ fontWeight: 'bold' }}>{line.order_number}</TableCell>
                           <TableCell>{line.delivery_status}</TableCell>
-                          <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(lineOwed(line))} IRR</TableCell>
+                          <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(lineOwed(line))} {currency}</TableCell>
                           <TableCell align="right">
                             {['DRAFT', 'UNDER_REVIEW'].includes(activeSettlementDetail.status) ? (
                               <TextField
@@ -666,7 +668,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                                 slotProps={{ htmlInput: { style: { textAlign: 'right', padding: '4px 8px' } } }}
                               />
                             ) : (
-                              <span dir="ltr">{MoneyUtil.formatCurrency(line.actual_pos || 0)} IRR</span>
+                              <span dir="ltr">{MoneyUtil.formatCurrency(line.actual_pos || 0)} {currency}</span>
                             )}
                           </TableCell>
                           <TableCell align="right">
@@ -679,7 +681,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                                 slotProps={{ htmlInput: { style: { textAlign: 'right', padding: '4px 8px' } } }}
                               />
                             ) : (
-                              <span dir="ltr">{MoneyUtil.formatCurrency(line.actual_cash || 0)} IRR</span>
+                              <span dir="ltr">{MoneyUtil.formatCurrency(line.actual_cash || 0)} {currency}</span>
                             )}
                           </TableCell>
                           <TableCell>{paidByLabel(line)}</TableCell>
@@ -736,14 +738,14 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
 
                 <Box sx={{ my: 3 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{t('settlements.statementModal.summary')}</Typography>
-                  <Typography>{t('settlements.statementModal.expectedCash')} {MoneyUtil.formatCurrency(statementData.summary?.expected_cash_amount || 0)} IRR</Typography>
-                  <Typography>{t('settlements.statementModal.actualCash')}   {MoneyUtil.formatCurrency(statementData.summary?.actual_cash_amount || 0)} IRR</Typography>
-                  <Typography>{t('settlements.statementModal.cashDisc')}     {MoneyUtil.formatCurrency(statementData.summary?.cash_discrepancy_amount || 0)} IRR</Typography>
-                  <Typography>{t('settlements.statementModal.expectedPos')}  {MoneyUtil.formatCurrency(statementData.summary?.expected_pos_amount || 0)} IRR</Typography>
-                  <Typography>{t('settlements.statementModal.actualPos')}    {MoneyUtil.formatCurrency(statementData.summary?.actual_pos_amount || 0)} IRR</Typography>
-                  <Typography>{t('settlements.statementModal.posDisc')}      {MoneyUtil.formatCurrency(statementData.summary?.pos_discrepancy_amount || 0)} IRR</Typography>
+                  <Typography>{t('settlements.statementModal.expectedCash')} {MoneyUtil.formatCurrency(statementData.summary?.expected_cash_amount || 0)} {currency}</Typography>
+                  <Typography>{t('settlements.statementModal.actualCash')}   {MoneyUtil.formatCurrency(statementData.summary?.actual_cash_amount || 0)} {currency}</Typography>
+                  <Typography>{t('settlements.statementModal.cashDisc')}     {MoneyUtil.formatCurrency(statementData.summary?.cash_discrepancy_amount || 0)} {currency}</Typography>
+                  <Typography>{t('settlements.statementModal.expectedPos')}  {MoneyUtil.formatCurrency(statementData.summary?.expected_pos_amount || 0)} {currency}</Typography>
+                  <Typography>{t('settlements.statementModal.actualPos')}    {MoneyUtil.formatCurrency(statementData.summary?.actual_pos_amount || 0)} {currency}</Typography>
+                  <Typography>{t('settlements.statementModal.posDisc')}      {MoneyUtil.formatCurrency(statementData.summary?.pos_discrepancy_amount || 0)} {currency}</Typography>
                   <Typography sx={{ mt: 1, fontWeight: 'bold' }}>
-                    {t('settlements.statementModal.netTotal')} {MoneyUtil.formatCurrency(statementData.summary?.net_settlement_amount || 0)} IRR
+                    {t('settlements.statementModal.netTotal')} {MoneyUtil.formatCurrency(statementData.summary?.net_settlement_amount || 0)} {currency}
                   </Typography>
                 </Box>
               </Paper>

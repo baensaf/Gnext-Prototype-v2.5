@@ -20,6 +20,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { useCurrencyCode } from 'src/utils/currency';
 
 import { httpClient as axios } from 'src/api/httpClient';
 import { DashboardContent } from 'src/layouts/dashboard';
@@ -46,6 +47,7 @@ interface WalletCashbackPageProps {
 }
 
 export default function WalletCashbackPage({ isEmbedded = false }: WalletCashbackPageProps) {
+  const currency = useCurrencyCode();
   const { t } = useTranslation();
 
   const [accounts, setAccounts] = useState<CreditAccount[]>([]);
@@ -165,7 +167,7 @@ export default function WalletCashbackPage({ isEmbedded = false }: WalletCashbac
         <Grid size={{ xs: 12, md: 4 }}>
           <Card sx={{ p: 3, bgcolor: 'background.neutral' }}>
             <Typography variant="overline">{t('wallet.totalWalletBalance', 'Total Net Wallet Credit Balance')}</Typography>
-            <Typography variant="h3">{MoneyUtil.formatCurrency(totalBalance)} {t('common.irr', 'IRR')}</Typography>
+            <Typography variant="h3">{MoneyUtil.formatCurrency(totalBalance)} {currency}</Typography>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>

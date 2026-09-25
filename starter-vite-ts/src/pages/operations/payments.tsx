@@ -32,6 +32,7 @@ import {
 
 import { fDate } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
+import { useCurrencyCode } from 'src/utils/currency';
 
 import { tenantApi } from 'src/api/tenantApi';
 import { paymentApi } from 'src/api/paymentApi';
@@ -42,6 +43,7 @@ import { useScopedBranchId } from 'src/contexts/branch-context';
 import { TerminalAgentDialog } from 'src/components/payment-terminal/terminal-agent-dialog';
 
 export function PaymentsPage() {
+  const currency = useCurrencyCode();
   // Settlement accounts are the chain's — one list, no branch column — so only head office adds one.
   const canAddAccount = useAuthStore((state) => state.user?.isHeadOffice) !== false;
   const { t } = useTranslation();
@@ -97,7 +99,7 @@ export function PaymentsPage() {
               method_kind: l.payload_json?.method_kind || l.payload_json?.method || 'CARD_PRESENT',
               status: (l.payload_json?.status || 'SUCCEEDED') as any,
               amount: l.payload_json?.amount || '0',
-              currency_code: l.payload_json?.currency_code || 'IRR',
+              currency_code: l.payload_json?.currency_code || currency,
               business_date: l.created_at || new Date().toISOString(),
               recorded_at: l.created_at || new Date().toISOString(),
               initiated_at: l.created_at || new Date().toISOString(),
@@ -115,7 +117,7 @@ export function PaymentsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currency]);
 
   useEffect(() => {
     loadData();

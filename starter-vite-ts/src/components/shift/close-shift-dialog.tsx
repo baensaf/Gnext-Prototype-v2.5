@@ -23,6 +23,7 @@ import {
 
 import { fDate } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
+import { useCurrencyLabel } from 'src/utils/currency';
 
 import { shiftApi } from 'src/api/shiftApi';
 import { paymentApi } from 'src/api/paymentApi';
@@ -74,6 +75,7 @@ function Row({ label, value, color, strong }: { label: string; value: string; co
  * Closing the last drawer open at the branch offers a manager the day close straight after.
  */
 export function CloseShiftDialog({ open, onClose, shiftId, shiftNumber, onClosed }: Props) {
+  const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
   const approver = isApproverRole(useAuthStore((state) => state.user?.role));
 
@@ -503,7 +505,7 @@ export function CloseShiftDialog({ open, onClose, shiftId, shiftNumber, onClosed
                 )}
 
                 <TextField
-                  label={t('shift.close.counted', 'Counted cash (IRR)')}
+                  label={t('shift.close.counted', 'Counted cash ({{currency}})', { currency: currencyLabel })}
                   type="number"
                   required
                   fullWidth

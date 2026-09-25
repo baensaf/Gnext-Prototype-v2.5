@@ -40,6 +40,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { useCurrencyCode } from 'src/utils/currency';
 
 import { orderApi } from 'src/api/orderApi';
 import { dineInApi } from 'src/api/dineInApi';
@@ -49,6 +50,7 @@ import { Label } from 'src/components/label';
 import { CheckoutModal } from 'src/components/CheckoutModal';
 
 export function DineInPage() {
+  const currency = useCurrencyCode();
   const { t } = useTranslation();
   const [branchId] = useScopedBranchId();
 
@@ -446,7 +448,7 @@ export function DineInPage() {
                         </Stack>
                         {tbl.grand_total && (
                           <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main', direction: 'ltr', unicodeBidi: 'isolate' }}>
-                            {MoneyUtil.formatCurrency(tbl.grand_total)} IRR
+                            {MoneyUtil.formatCurrency(tbl.grand_total)} {currency}
                           </Typography>
                         )}
                       </Stack>
@@ -601,7 +603,7 @@ export function DineInPage() {
               .filter((tbl) => tbl.id !== selectedTable?.id && tbl.active_order_id)
               .map((tbl) => (
                 <MenuItem key={tbl.id} value={tbl.active_order_id!}>
-                  {t('dineIn.table', 'Table')} {tbl.table_number} — #{tbl.order_number} ({MoneyUtil.formatCurrency(tbl.grand_total || '0')} IRR)
+                  {t('dineIn.table', 'Table')} {tbl.table_number} — #{tbl.order_number} ({MoneyUtil.formatCurrency(tbl.grand_total || '0')} {currency})
                 </MenuItem>
               ))}
           </TextField>
