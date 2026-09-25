@@ -137,8 +137,6 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.catalogSubmenu', 'Catalog'),
           path: '/app/catalog/products',
           icon: ICONS.catalog,
-          // Menus Composer (/app/catalog/menus) is left out: no register, kiosk or channel
-          // reads menus yet, so a menu built there changes nothing.
           children: [
             {
               title: t('nav.products', 'Products Catalog'),

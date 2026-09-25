@@ -339,68 +339,6 @@ export class CatalogController {
     );
   }
 
-  // Menus
-  @Get('menus')
-  async getMenus(@Query('branchId') branchId: string, @Query('channel') channel: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.catalogService.getMenus(tenantId, branchId, channel);
-  }
-
-  @Get('menus/:id')
-  async getMenuById(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.catalogService.getMenuById(tenantId, id);
-  }
-
-  @HeadOfficeOnly()
-  @Post('menus')
-  async createMenu(@Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.catalogService.createMenu(tenantId, body, correlationId);
-  }
-
-  @HeadOfficeOnly()
-  @Patch('menus/:id')
-  async updateMenu(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.catalogService.updateMenu(tenantId, id, body, correlationId);
-  }
-
-  @HeadOfficeOnly()
-  @Delete('menus/:id')
-  async deleteMenu(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.catalogService.deleteMenu(tenantId, id, correlationId);
-  }
-
-  @HeadOfficeOnly()
-  @Post('menus/:id/categories')
-  async addCategoryToMenu(@Param('id') id: string, @Body() body: { categoryId: string; sortOrder?: number }, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.catalogService.addCategoryToMenu(tenantId, id, body.categoryId, body.sortOrder);
-  }
-
-  @HeadOfficeOnly()
-  @Post('menus/:id/products')
-  async addProductToMenu(
-    @Param('id') id: string,
-    @Body() body: { productId: string; categoryId?: string; sortOrder?: number; overridePrice?: string },
-    @Req() req: Request,
-  ) {
-    const tenantId = (req as any).tenantId;
-    return await this.catalogService.addProductToMenu(tenantId, id, body.productId, body.categoryId, body.sortOrder, body.overridePrice);
-  }
-
-  @HeadOfficeOnly()
-  @Delete('menus/:id/products/:productId')
-  async removeProductFromMenu(@Param('id') id: string, @Param('productId') productId: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.catalogService.removeProductFromMenu(tenantId, id, productId);
-  }
-
   // Availability & Suspension
   @Get('availability')
   async getAvailabilities(@Query('branchId') branchId: string, @Req() req: Request) {

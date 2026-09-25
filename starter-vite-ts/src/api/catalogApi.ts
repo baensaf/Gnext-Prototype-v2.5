@@ -174,35 +174,6 @@ export interface PriceHistoryRow {
   status: 'UPCOMING' | 'CURRENT' | 'ENDED' | null;
 }
 
-export interface MenuCategory {
-  id: string;
-  menu_id: string;
-  category_id: string;
-  sort_order: number;
-}
-
-export interface MenuProduct {
-  id: string;
-  menu_id: string;
-  product_id: string;
-  category_id?: string;
-  sort_order: number;
-  override_price?: string;
-}
-
-export interface Menu {
-  id: string;
-  code: string;
-  name: string;
-  branch_id?: string;
-  channel: string;
-  is_active: boolean;
-  valid_from?: string;
-  valid_to?: string;
-  categories?: MenuCategory[];
-  products?: MenuProduct[];
-}
-
 /** A stop on many items or branches: a category (with sub-categories) or products; branches empty = chain-wide (head office). */
 export interface BulkStopRequest {
   categoryId?: string;
@@ -490,38 +461,6 @@ export const catalogApi = {
   ): Promise<ChannelPriceSheet> => {
     const res = await httpClient.put('/api/v1/catalog/channel-prices', { channel, productId, variantId, amount, branchId: branchId || null });
     return res.data;
-  },
-
-  // Menus
-  getMenus: async (branchId?: string, channel?: string): Promise<Menu[]> => {
-    const res = await httpClient.get('/api/v1/menus', { params: { branchId, channel } });
-    return res.data;
-  },
-  getMenuById: async (id: string): Promise<Menu> => {
-    const res = await httpClient.get(`/api/v1/menus/${id}`);
-    return res.data;
-  },
-  createMenu: async (data: Partial<Menu>): Promise<Menu> => {
-    const res = await httpClient.post('/api/v1/menus', data);
-    return res.data;
-  },
-  updateMenu: async (id: string, data: Partial<Menu>): Promise<Menu> => {
-    const res = await httpClient.patch(`/api/v1/menus/${id}`, data);
-    return res.data;
-  },
-  deleteMenu: async (id: string): Promise<void> => {
-    await httpClient.delete(`/api/v1/menus/${id}`);
-  },
-  addCategoryToMenu: async (id: string, categoryId: string, sortOrder: number = 0): Promise<any> => {
-    const res = await httpClient.post(`/api/v1/menus/${id}/categories`, { categoryId, sortOrder });
-    return res.data;
-  },
-  addProductToMenu: async (id: string, productId: string, categoryId?: string, sortOrder: number = 0, overridePrice?: string): Promise<any> => {
-    const res = await httpClient.post(`/api/v1/menus/${id}/products`, { productId, categoryId, sortOrder, overridePrice });
-    return res.data;
-  },
-  removeProductFromMenu: async (id: string, productId: string): Promise<void> => {
-    await httpClient.delete(`/api/v1/menus/${id}/products/${productId}`);
   },
 
   // Availability & Suspension

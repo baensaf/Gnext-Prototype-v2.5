@@ -6,7 +6,7 @@ import { BusinessDateUtil } from '../common/utils/business-date.util';
  * What head office and a branch manager work with that the rest of the seed never laid down.
  *
  * Walking through a day of admin work on 2026-09-22 found screens with nothing on them: no
- * menus, no branch price list, no bank account or card terminal, no kitchen stations at
+ * branch price list, no bank account or card terminal, no kitchen stations at
  * Valiasr, no closed business days, every Moadian invoice accepted and no duplicate customer
  * to merge. Each block below is idempotent and only adds what is missing, so re-running the
  * seed on the VPS leaves anybody's own changes alone.
@@ -54,33 +54,6 @@ export async function seedAdminDemo(
   const products: any[] = categoryIds.length
     ? await productRepo.find({ where: { tenant_id: tenantId, is_active: true, category_id: In(categoryIds) }, order: { code: 'ASC' } })
     : [];
-
-  // Menus: the full menu every channel sells, and the shorter one sent to Snappfood (no kids'
-  // packs or minis, which travel badly).
-  const menuRepo = ds.getRepository('Menu');
-  const menuCategoryRepo = ds.getRepository('MenuCategory');
-  const menuProductRepo = ds.getRepository('MenuProduct');
-  const menus = [
-    { code: 'MENU-MAIN', name: 'منوی اصلی ایران برگر', channel: 'ALL', skip: [] as string[] },
-    { code: 'MENU-SNAPPFOOD', name: 'منوی اسنپ‌فود', channel: 'DELIVERY', skip: ['IB-KIDS', 'IB-MINI'] },
-  ];
-  for (const m of menus) {
-    if (await menuRepo.findOne({ where: { tenant_id: tenantId, code: m.code }, withDeleted: true })) continue;
-    const menu: any = await menuRepo.save(
-      menuRepo.create({ tenant_id: tenantId, code: m.code, name: m.name, channel: m.channel, branch_id: null, is_active: true }),
-    );
-    const included = categories.filter((c) => !m.skip.includes(c.code));
-    for (const [i, c] of included.entries()) {
-      await menuCategoryRepo.save(menuCategoryRepo.create({ tenant_id: tenantId, menu_id: menu.id, category_id: c.id, sort_order: i }));
-    }
-    const includedIds = new Set(included.map((c) => c.id));
-    for (const [i, p] of products.filter((p) => includedIds.has(p.category_id)).entries()) {
-      await menuProductRepo.save(
-        menuProductRepo.create({ tenant_id: tenantId, menu_id: menu.id, product_id: p.id, category_id: p.category_id, sort_order: i, override_price: null }),
-      );
-    }
-    console.log(`Seeded Menu: ${m.name}`);
-  }
 
   // A branch price list. The Shiraz shops sell burgers and sandwiches a little under Tehran's
   // prices; everything else is at the base price. The figures are the demo's, not the chain's.

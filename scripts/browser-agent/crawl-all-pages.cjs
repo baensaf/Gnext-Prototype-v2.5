@@ -24,7 +24,6 @@ const ALL_ROUTES = [
   { name: "Catalog Categories", path: "/app/catalog/categories" },
   { name: "Catalog Products", path: "/app/catalog/products" },
   { name: "Catalog Modifiers / Options", path: "/app/catalog/modifiers" },
-  { name: "Catalog Menus", path: "/app/catalog/menus" },
   { name: "Catalog Availability (86)", path: "/app/catalog/availability" },
   { name: "Catalog Import/Export", path: "/app/catalog/import-export" },
   { name: "Pricing Price Book", path: "/app/pricing/price-book" },

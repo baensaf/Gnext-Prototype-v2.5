@@ -11,7 +11,6 @@ import { AppShell } from 'src/layouts/AppShell';
 import { KioskPage } from 'src/pages/pos/kiosk';
 import { KdsPage } from 'src/pages/operations/kds';
 import { PosOrderPage } from 'src/pages/pos/order';
-import { MenusPage } from 'src/pages/catalog/menus';
 import { DashboardPage } from 'src/pages/dashboard';
 import { ReceiptPage } from 'src/pages/pos/receipt';
 import { UsersPage } from 'src/pages/settings/users';
@@ -162,8 +161,6 @@ export const routesSection: RouteObject[] = [
       { path: 'catalog/products', element: <ProductsPage /> },
       { path: 'catalog/products/:id', element: <ProductDetailPage /> },
       { path: 'catalog/modifiers', element: <OptionsPage /> },
-      { path: 'catalog/menus', element: <MenusPage /> },
-      { path: 'catalog/menus/:id', element: <MenusPage /> },
       { path: 'catalog/availability', element: <AvailabilityPage /> },
       { path: 'catalog/stock', element: <DailyStockPage /> },
       { path: 'catalog/availability/report', element: <StopReportPage /> },
