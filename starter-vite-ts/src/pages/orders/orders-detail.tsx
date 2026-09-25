@@ -31,6 +31,7 @@ import { paths } from 'src/routes/paths';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
+import { useCurrencyCode } from 'src/utils/currency';
 
 import { httpClient as axios } from 'src/api/httpClient';
 import { useWorkspaceScope } from 'src/contexts/branch-context';
@@ -43,6 +44,7 @@ export function OrdersDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const currency = useCurrencyCode();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -231,8 +233,8 @@ export function OrdersDetailPage() {
                     <TableRow key={idx}>
                       <TableCell>{item.product_name || item.name || 'Item'}</TableCell>
                       <TableCell align="right">{item.quantity || 1}</TableCell>
-                      <TableCell align="right"><span dir="ltr">{MoneyUtil.formatCurrency(item.unit_price || '0')} IRR</span></TableCell>
-                      <TableCell align="right"><span dir="ltr">{MoneyUtil.formatCurrency(item.line_total || item.total_amount || '0')} IRR</span></TableCell>
+                      <TableCell align="right"><span dir="ltr">{MoneyUtil.formatCurrency(item.unit_price || '0')} {currency}</span></TableCell>
+                      <TableCell align="right"><span dir="ltr">{MoneyUtil.formatCurrency(item.line_total || item.total_amount || '0')} {currency}</span></TableCell>
                     </TableRow>
                   ))}
                   {(!order.items || order.items.length === 0) && (
@@ -256,24 +258,24 @@ export function OrdersDetailPage() {
             <Stack spacing={1.5}>
               <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Typography color="text.secondary">{t('orders.subtotal', 'Subtotal')}</Typography>
-                <Typography dir="ltr">{MoneyUtil.formatCurrency(order.subtotal_amount || '0')} IRR</Typography>
+                <Typography dir="ltr">{MoneyUtil.formatCurrency(order.subtotal_amount || '0')} {currency}</Typography>
               </Stack>
               <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Typography color="text.secondary">{t('orders.tax', 'Tax (9%)')}</Typography>
-                <Typography dir="ltr">{MoneyUtil.formatCurrency(order.tax_amount || '0')} IRR</Typography>
+                <Typography dir="ltr">{MoneyUtil.formatCurrency(order.tax_amount || '0')} {currency}</Typography>
               </Stack>
               <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Typography color="text.secondary">{t('orders.discount', 'Discount')}</Typography>
-                <Typography dir="ltr">{MoneyUtil.formatCurrency(order.discount_amount || '0')} IRR</Typography>
+                <Typography dir="ltr">{MoneyUtil.formatCurrency(order.discount_amount || '0')} {currency}</Typography>
               </Stack>
               <Divider />
               <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Typography variant="subtitle1">{t('orders.totalAmount', 'Total Amount')}</Typography>
-                <Typography variant="subtitle1" dir="ltr">{MoneyUtil.formatCurrency(order.total_amount || '0')} IRR</Typography>
+                <Typography variant="subtitle1" dir="ltr">{MoneyUtil.formatCurrency(order.total_amount || '0')} {currency}</Typography>
               </Stack>
               <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Typography color="success.main">{t('orders.paidAmount', 'Paid Amount')}</Typography>
-                <Typography color="success.main" dir="ltr">{MoneyUtil.formatCurrency(order.paid_amount || '0')} IRR</Typography>
+                <Typography color="success.main" dir="ltr">{MoneyUtil.formatCurrency(order.paid_amount || '0')} {currency}</Typography>
               </Stack>
             </Stack>
           </Card>

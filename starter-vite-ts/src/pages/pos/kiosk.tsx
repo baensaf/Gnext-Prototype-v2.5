@@ -26,6 +26,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { useCurrencyCode } from 'src/utils/currency';
 
 import { useAuthStore } from 'src/store/useAuthStore';
 import { httpClient as axios } from 'src/api/httpClient';
@@ -110,6 +111,7 @@ interface CartItem {
 
 export function KioskPage() {
   const { t, i18n } = useTranslation();
+  const currency = useCurrencyCode();
   const branchScope = useBranchContextOptional();
   const [kioskTerminal, setKioskTerminal] = useState<KioskTerminal | null>(() => readKioskTerminal());
   const [deviceDialogOpen, setDeviceDialogOpen] = useState(false);
@@ -542,7 +544,7 @@ export function KioskPage() {
               color="primary"
               onClick={() => setCartDrawerOpen(true)}
             >
-              🛒 Cart ({MoneyUtil.formatCurrency(calculateTotal())} IRR)
+              🛒 Cart ({MoneyUtil.formatCurrency(calculateTotal())} {currency})
             </Button>
           </Badge>
         </Stack>
@@ -664,7 +666,7 @@ export function KioskPage() {
                       </Typography>
                       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
                         <Typography variant="h6" color="primary.main" sx={{ fontWeight: 'bold' }}>
-                          {MoneyUtil.formatCurrency(shownPrice(product))} IRR
+                          {MoneyUtil.formatCurrency(shownPrice(product))} {currency}
                         </Typography>
                         {product.is_available === false ? (
                           <Chip size="small" label="Sold out" />
@@ -695,7 +697,7 @@ export function KioskPage() {
                   {MoneyUtil.formatCurrency(
                     shownPrice((customizingProduct.variants || []).find((v) => v.id === selectedVariantId) || customizingProduct)
                   )}{' '}
-                  IRR
+                  {currency}
                 </Typography>
 
                 {(customizingProduct.variants || []).length > 0 && (
@@ -707,7 +709,7 @@ export function KioskPage() {
                       {(customizingProduct.variants || []).map((v) => (
                         <Chip
                           key={v.id}
-                          label={`${v.name} — ${MoneyUtil.formatCurrency(shownPrice(v))} IRR`}
+                          label={`${v.name} — ${MoneyUtil.formatCurrency(shownPrice(v))} ${currency}`}
                           color={v.id === selectedVariantId ? 'primary' : 'default'}
                           variant={v.id === selectedVariantId ? 'filled' : 'outlined'}
                           onClick={() => setSelectedVariantId(v.id)}
@@ -749,7 +751,7 @@ export function KioskPage() {
                                 {item.name}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
-                                +{MoneyUtil.formatCurrency(item.price)} IRR
+                                +{MoneyUtil.formatCurrency(item.price)} {currency}
                               </Typography>
                             </Paper>
                           </Grid>
@@ -806,13 +808,13 @@ export function KioskPage() {
                     </Typography>
                     {item.options.map((opt, idx) => (
                       <Typography key={idx} variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        + {opt.option_item_name} ({MoneyUtil.formatCurrency(opt.additional_price)} IRR)
+                        + {opt.option_item_name} ({MoneyUtil.formatCurrency(opt.additional_price)} {currency})
                       </Typography>
                     ))}
                   </Box>
                   <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                      {MoneyUtil.formatCurrency(item.line_total)} IRR
+                      {MoneyUtil.formatCurrency(item.line_total)} {currency}
                     </Typography>
                     <IconButton color="error" onClick={() => handleRemoveCartItem(item.cart_id)}>
                       ✕
@@ -826,18 +828,18 @@ export function KioskPage() {
               <Stack spacing={1}>
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">Subtotal:</Typography>
-                  <Typography>{MoneyUtil.formatCurrency(calculateSubtotal())} IRR</Typography>
+                  <Typography>{MoneyUtil.formatCurrency(calculateSubtotal())} {currency}</Typography>
                 </Stack>
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">Tax (9%):</Typography>
-                  <Typography>{MoneyUtil.formatCurrency(calculateTax())} IRR</Typography>
+                  <Typography>{MoneyUtil.formatCurrency(calculateTax())} {currency}</Typography>
                 </Stack>
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                   <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                     Total:
                   </Typography>
                   <Typography variant="h6" color="primary.main" sx={{ fontWeight: 'bold' }}>
-                    {MoneyUtil.formatCurrency(calculateTotal())} IRR
+                    {MoneyUtil.formatCurrency(calculateTotal())} {currency}
                   </Typography>
                 </Stack>
               </Stack>
@@ -853,7 +855,7 @@ export function KioskPage() {
             disabled={cart.length === 0 || loading}
             onClick={handleProceedToPayment}
           >
-            Pay Now ({MoneyUtil.formatCurrency(calculateTotal())} IRR)
+            Pay Now ({MoneyUtil.formatCurrency(calculateTotal())} {currency})
           </Button>
         </DialogActions>
       </Dialog>
@@ -898,7 +900,7 @@ export function KioskPage() {
                 {t('kiosk.receipt.reference', 'Card reference')}: {receiptData.reference_number || '—'}
               </Typography>
               <Typography sx={{ mt: 1, fontWeight: 'bold', display: 'block' }}>
-                {t('kiosk.receipt.paid', 'Paid')}: {MoneyUtil.formatCurrency(receiptData.total_paid)} IRR
+                {t('kiosk.receipt.paid', 'Paid')}: {MoneyUtil.formatCurrency(receiptData.total_paid)} {currency}
               </Typography>
               <Typography color="success.main" sx={{ fontWeight: 'bold', mt: 2, display: 'block' }}>
                 {receiptData.status === 'WAITING_FOR_STAFF'

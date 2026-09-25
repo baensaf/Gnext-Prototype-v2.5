@@ -32,6 +32,7 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
+import { useCurrencyCode } from 'src/utils/currency';
 
 import { orderApi } from 'src/api/orderApi';
 import { refundApi } from 'src/api/refundApi';
@@ -45,6 +46,7 @@ const APPROVER_ROLES = ['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER', 'SUPERVISOR'
 
 export function RefundsPage() {
   const { t } = useTranslation();
+  const currency = useCurrencyCode();
   const [branchId] = useScopedBranchId();
   const role = useAuthStore((state) => state.user?.role);
   const canApprove = APPROVER_ROLES.includes((role || '').toUpperCase());
@@ -225,7 +227,7 @@ export function RefundsPage() {
                     />
                   </TableCell>
                   <TableCell sx={{ fontWeight: 'bold', color: 'error.main' }}>
-                    -{MoneyUtil.formatCurrency(r.total_refund_amount)} IRR
+                    -{MoneyUtil.formatCurrency(r.total_refund_amount)} {currency}
                   </TableCell>
                   <TableCell>
                     <Chip label={r.status} color={r.status === 'APPROVED' ? 'success' : 'default'} size="small" />
@@ -254,7 +256,7 @@ export function RefundsPage() {
                 <strong>Refund Type:</strong> {selectedRefund.refund_type}
               </Typography>
               <Typography variant="body2">
-                <strong>Total Amount Refunded:</strong> {MoneyUtil.formatCurrency(selectedRefund.total_refund_amount)} IRR
+                <strong>Total Amount Refunded:</strong> {MoneyUtil.formatCurrency(selectedRefund.total_refund_amount)} {currency}
               </Typography>
               <Typography variant="body2">
                 <strong>Note / Reason:</strong> {selectedRefund.note || 'None'}
@@ -269,7 +271,7 @@ export function RefundsPage() {
                     Method ID: <code>{a.payment_method_id}</code>
                   </Typography>
                   <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold' }}>
-                    Amount Reversed: -{MoneyUtil.formatCurrency(a.amount_refunded)} IRR
+                    Amount Reversed: -{MoneyUtil.formatCurrency(a.amount_refunded)} {currency}
                   </Typography>
                 </Paper>
               ))}

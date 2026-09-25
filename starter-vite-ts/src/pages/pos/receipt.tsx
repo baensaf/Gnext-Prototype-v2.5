@@ -17,10 +17,12 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
+import { useCurrencyCode } from 'src/utils/currency';
 
 import { paymentApi } from 'src/api/paymentApi';
 
 export function ReceiptPage() {
+  const currency = useCurrencyCode();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
@@ -152,18 +154,18 @@ export function ReceiptPage() {
         <Stack spacing={0.5} sx={{ mb: 2 }}>
           <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
             <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>Subtotal:</Typography>
-            <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>{MoneyUtil.formatCurrency(totals.subtotal_amount)} IRR</Typography>
+            <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>{MoneyUtil.formatCurrency(totals.subtotal_amount)} {currency}</Typography>
           </Stack>
 
           <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
             <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>VAT:</Typography>
-            <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>{MoneyUtil.formatCurrency(totals.tax_amount)} IRR</Typography>
+            <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>{MoneyUtil.formatCurrency(totals.tax_amount)} {currency}</Typography>
           </Stack>
 
           {MoneyUtil.greaterThan(totals.discount_amount, '0') && (
             <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
               <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>Discount:</Typography>
-              <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>-{MoneyUtil.formatCurrency(totals.discount_amount)} IRR</Typography>
+              <Typography variant="caption" sx={{ fontFamily: 'inherit' }}>-{MoneyUtil.formatCurrency(totals.discount_amount)} {currency}</Typography>
             </Stack>
           )}
 
@@ -172,7 +174,7 @@ export function ReceiptPage() {
           <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
             <Typography variant="body2" sx={{ fontFamily: 'inherit', fontWeight: 'bold' }}>TOTAL:</Typography>
             <Typography variant="body2" sx={{ fontFamily: 'inherit', fontWeight: 'bold' }}>
-              {MoneyUtil.formatCurrency(totals.total_amount)} IRR
+              {MoneyUtil.formatCurrency(totals.total_amount)} {currency}
             </Typography>
           </Stack>
         </Stack>
@@ -189,7 +191,7 @@ export function ReceiptPage() {
                   {t.payment_method_name} {t.reference_number ? `(${t.reference_number})` : ''}
                 </Typography>
                 <Typography variant="caption" sx={{ fontFamily: 'inherit', fontWeight: 'bold' }}>
-                  {MoneyUtil.formatCurrency(t.amount)} IRR
+                  {MoneyUtil.formatCurrency(t.amount)} {currency}
                 </Typography>
               </Stack>
             ))}

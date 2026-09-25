@@ -42,6 +42,7 @@ import {
 
 import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
+import { useCurrencyCode } from 'src/utils/currency';
 
 import { usePosSource, PosFeatureGate } from 'src/contexts/pos-source';
 
@@ -63,6 +64,7 @@ interface CheckoutModalProps {
 
 export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: CheckoutModalProps) {
   const { t } = useTranslation();
+  const currency = useCurrencyCode();
   const navigate = useNavigate();
   const pos = usePosSource();
 
@@ -149,7 +151,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       if (overTendered) {
         // Screens that close this dialog once the order is settled would hide the alert.
         toast.warning(
-          `${t('pos.changeDue', 'Change to give back')}: ${MoneyUtil.formatCurrency(MoneyUtil.subtract(payAmount, due))} IRR`,
+          `${t('pos.changeDue', 'Change to give back')}: ${MoneyUtil.formatCurrency(MoneyUtil.subtract(payAmount, due))} ${currency}`,
           { duration: 15000 }
         );
       }
@@ -320,7 +322,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
           <Stack spacing={2} sx={{ mb: 2, mt: 1 }}>
             {changeDue && (
               <Alert severity="warning" sx={{ py: 1.5, fontWeight: 700, fontSize: '1.1rem' }}>
-                {t('pos.changeDue', 'Change to give back')}: {MoneyUtil.formatCurrency(changeDue)} IRR
+                {t('pos.changeDue', 'Change to give back')}: {MoneyUtil.formatCurrency(changeDue)} {currency}
               </Alert>
             )}
             {/* Financial Summary Box */}
@@ -330,7 +332,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                   {t('orders.totalAmount', 'Total Amount')}:
                 </Typography>
                 <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                  {MoneyUtil.formatCurrency(order.total_amount)} IRR
+                  {MoneyUtil.formatCurrency(order.total_amount)} {currency}
                 </Typography>
               </Stack>
               <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1 }}>
@@ -338,7 +340,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                   {t('orders.paidAmount', 'Paid Amount')}:
                 </Typography>
                 <Typography variant="body2" color="success.main" sx={{ fontWeight: 'bold' }}>
-                  {MoneyUtil.formatCurrency(order.paid_amount)} IRR
+                  {MoneyUtil.formatCurrency(order.paid_amount)} {currency}
                 </Typography>
               </Stack>
               <Divider sx={{ my: 1 }} />
@@ -350,7 +352,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                   variant="h5"
                   sx={{ fontWeight: 'bold', color: isFullyPaid ? 'success.main' : 'error.main' }}
                 >
-                  {MoneyUtil.formatCurrency(order.due_amount)} IRR
+                  {MoneyUtil.formatCurrency(order.due_amount)} {currency}
                 </Typography>
               </Stack>
             </Paper>
@@ -385,7 +387,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                 >
                   {terminalProcessing
                     ? 'ارسال به کارتخوان و ثبت تراکنش...'
-                    : `پرداخت با کارتخوان بانکی (PC-POS) — ${MoneyUtil.formatCurrency(order.due_amount)} IRR`}
+                    : `پرداخت با کارتخوان بانکی (PC-POS) — ${MoneyUtil.formatCurrency(order.due_amount)} ${currency}`}
                 </Button>
 
                 {/* Secondary Fast Cash */}
@@ -437,7 +439,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                     <Grid size={{ xs: 12, sm: 6 }}>
                       <TextField
                         size="small"
-                        label={t('payments.amount', 'Amount (IRR)')}
+                        label={`${t('payments.amount', 'Amount')} (${currency})`}
                         type="number"
                         required
                         fullWidth
@@ -543,7 +545,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                     disabled={loading || !payAmount}
                     sx={{ fontWeight: 'bold', py: 1 }}
                   >
-                    {loading ? <CircularProgress size={20} /> : `ثبت پرداخت بخش انتخابی (${MoneyUtil.formatCurrency(payAmount || '0')} IRR)`}
+                    {loading ? <CircularProgress size={20} /> : `ثبت پرداخت بخش انتخابی (${MoneyUtil.formatCurrency(payAmount || '0')} ${currency})`}
                   </Button>
                 </Box>
               </Box>
@@ -580,7 +582,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                           <TableRow key={p.id}>
                             <TableCell>{fTime(p.recorded_at)}</TableCell>
                             <TableCell align="right" sx={{ fontWeight: 'bold', color: statusColor === 'success' ? 'success.main' : 'text.secondary' }}>
-                              {MoneyUtil.formatCurrency(p.amount)} IRR
+                              {MoneyUtil.formatCurrency(p.amount)} {currency}
                             </TableCell>
                             <TableCell>{p.reference_number || p.reference || '—'}</TableCell>
                             <TableCell>
