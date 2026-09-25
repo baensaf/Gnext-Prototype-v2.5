@@ -6,7 +6,7 @@ import type { UserState, TenantState } from 'src/store/useAuthStore';
 // ----------------------------------------------------------------------
 
 /** A refusal from the agent: `{code, detail}`, with `detail` in Persian for the cashier. */
-export type AgentError = Error & { code: string; detail: string; status: number };
+export type AgentError = Error & { code: string; detail: string; status: number; line?: number };
 
 const SESSION_KEY = 'gnext_till_session';
 
@@ -56,6 +56,8 @@ export async function agentRequest<T>(method: 'GET' | 'POST', path: string, body
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = agentError(res.status, data.code || 'ERROR', data.detail || res.statusText);
+    // A refused cart names the line it refused (§13.13).
+    if (typeof data.line === 'number') err.line = data.line;
     if (res.status === 401 && err.code === 'UNAUTHENTICATED') {
       setTillToken(null);
       onSignedOut?.();
@@ -77,7 +79,13 @@ export type TillUser = { id: string; display_name: string; role: string };
 export type CloudSession = { user: UserState; tenant: TenantState | null };
 
 /** Whether the till sells through the cloud (§16.5), and the cashier's cloud session. */
-export type TillCloud = { reachable: boolean; since: string; session: CloudSession | null };
+export type TillCloud = {
+  reachable: boolean;
+  since: string;
+  session: CloudSession | null;
+  /** Offline orders still on their way to the cloud (§16.7). */
+  pending_uploads?: number;
+};
 
 export type TillState = {
   mode: 'ONLINE' | 'OFFLINE' | 'HANDOVER';
@@ -199,6 +207,8 @@ export const tillApi = {
   cloudLogin: (pin: string) => agentRequest<{ cloud_session: CloudSession }>('POST', '/api/till/cloud-login', { pin }),
   logout: () => agentRequest<{ ok: boolean }>('POST', '/api/till/logout', {}),
   menu: () => agentRequest<Menu>('GET', '/api/till/menu'),
+  /** Checks and prices lines as one order, keeping nothing; a refusal names the line. */
+  price: (lines: PlaceInput['lines']) => agentRequest<{ lines: unknown[]; totals: unknown }>('POST', '/api/till/price', { lines }),
   orders: () => agentRequest<{ orders: AgentOrder[] }>('GET', '/api/till/orders'),
   order: (id: string) => agentRequest<{ order: AgentOrder }>('GET', `/api/till/orders/${encodeURIComponent(id)}`),
   place: (input: PlaceInput) => agentRequest<{ order: AgentOrder }>('POST', '/api/till/orders/place', input),

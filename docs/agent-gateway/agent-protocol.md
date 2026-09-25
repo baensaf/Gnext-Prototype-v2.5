@@ -1479,7 +1479,11 @@ number continues from the highest count the agent knows for that date:
 - `call_number_issued_today` in the snapshot;
 - `call_numbers` in the last `heartbeat.ack` (below), which is at most one heartbeat old when the
   link drops, so the offline till does not repeat numbers the web POS gave just before;
-- the numbers the till itself gave offline.
+- the numbers the till itself gave offline;
+- with `pos.till`, the numbers the cloud gave the orders the till placed through the agent (§16.4):
+  the agent reads `call_number` and `business_date` off each `POST /api/v1/orders/{id}/submit`
+  answer it passes on, so an order taken offline right after one placed online does not repeat
+  its number when the link drops before the next heartbeat.
 
 The count maps to a number as the cloud maps it (`start + (n − 1) mod size`), wrapping at the end
 of the range. On upload, the cloud raises its counter to at least the offline numbers (§12.6).
@@ -1835,6 +1839,8 @@ not followed.
 30 s is cut off; `GET /api/v1/live/stream` (Server-Sent Events) is exempt and flushed as it
 arrives. Then:
 
+- a `POST /api/v1/orders/{id}/submit` the cloud accepted: the agent notes its call number
+  (§13.9);
 - the cloud answered `401`: the agent forgets that cloud session (the till session stays) and
   answers `401 CLOUD_SIGN_IN_REQUIRED`;
 - no answer (connection refused, DNS, TLS, timeout) or the cloud's gateway answered `502`,

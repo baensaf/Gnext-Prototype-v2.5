@@ -1,9 +1,11 @@
 import type { FormEvent, ReactNode } from 'react';
+import type { CarriedCart } from 'src/pages/pos/order';
+import type { PosSource } from 'src/contexts/pos-source';
 import type { TillUser, TillState, TillCloud } from './agent-client';
 import type { BranchContextValue } from 'src/contexts/branch-context';
 
 import { useTranslation } from 'react-i18next';
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useRef, useMemo, useState, useEffect, useCallback } from 'react';
 
 import LogoutIcon from '@mui/icons-material/Logout';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
@@ -35,6 +37,7 @@ import { SettingsButton } from 'src/layouts/components/settings-button';
 import { toast } from 'src/components/snackbar';
 import { useSettingsContext } from 'src/components/settings';
 
+import { carryTo } from './carry';
 import { TillSignIn } from './sign-in';
 import { TillContext } from './till-context';
 import { agentPosSource } from './agent-source';
@@ -157,6 +160,7 @@ function SignedInTill({
   refresh: () => Promise<void>;
   onSignedOut: () => void;
 }) {
+  const { t } = useTranslation();
   const [ordersOpen, setOrdersOpen] = useState(false);
   const openOrders = useOpenOrders(ordersOpen);
 
@@ -176,14 +180,54 @@ function SignedInTill({
   const source = session ? tillCloudPosSource : agentPosSource;
   const ready = !session || adopted === sessionUser;
 
+  // §16.6: on a switch the register is a new screen on the other side, starting from the cart
+  // the old one had, made ready for the new side.
+  const lastCart = useRef<CarriedCart | null>(null);
+  const onCartChange = useCallback((cart: CarriedCart) => {
+    lastCart.current = cart;
+  }, []);
+  const [mounted, setMounted] = useState<{ kind: PosSource['kind']; carried: CarriedCart | null }>(() => ({
+    kind: source.kind,
+    carried: null,
+  }));
+  useEffect(() => {
+    if (mounted.kind === source.kind) return undefined;
+    let live = true;
+    const next = source.kind === 'agent' ? 'agent' : 'till';
+    carryTo(next, lastCart.current).then((carried) => {
+      if (!live) return;
+      lastCart.current = null;
+      setMounted({ kind: source.kind, carried });
+    });
+    return () => {
+      live = false;
+    };
+  }, [source.kind, mounted.kind]);
+
+  // Said each time the till changes side (§16.7).
+  const lastMode = useRef(state.mode);
+  useEffect(() => {
+    const was = lastMode.current;
+    lastMode.current = state.mode;
+    if (was === state.mode) return;
+    if (state.mode === 'OFFLINE') toast.warning(t('till.wentOffline'), { duration: 10000 });
+    else if (was === 'OFFLINE') toast.success(t('till.backOnline'), { duration: 10000 });
+  }, [state.mode, t]);
+
   let register: ReactNode = null;
   if (online && !session) register = <CloudPin onDone={refresh} />;
-  else if (ready) {
+  else if (ready && mounted.kind === source.kind) {
     register = (
       <PosSourceProvider source={source}>
         {/* A new screen for each source: its data and its shift hook are the source's own. */}
-        <PosOrderPage key={source.kind} />
+        <PosOrderPage key={source.kind} carried={mounted.carried} onCartChange={onCartChange} />
       </PosSourceProvider>
+    );
+  } else {
+    register = (
+      <Stack sx={{ alignItems: 'center', py: 6 }}>
+        <CircularProgress />
+      </Stack>
     );
   }
 
@@ -207,6 +251,7 @@ function SignedInTill({
         )}
         <ModeBanner
           state={state}
+          pendingUploads={cloud?.pending_uploads ?? 0}
           onHandedOver={async () => {
             await refresh();
             await openOrders.refresh();
@@ -316,11 +361,26 @@ function LanguageToggle() {
  * ONLINE: the cloud, nothing to say. HANDOVER: the cloud, while the orders taken offline are
  * finished here or handed over.
  */
-function ModeBanner({ state, onHandedOver }: { state: TillState; onHandedOver: () => Promise<void> }) {
+function ModeBanner({
+  state,
+  pendingUploads,
+  onHandedOver,
+}: {
+  state: TillState;
+  pendingUploads: number;
+  onHandedOver: () => Promise<void>;
+}) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
 
-  if (state.mode === 'ONLINE') return null;
+  if (state.mode === 'ONLINE') {
+    // Back online: the orders taken offline are on their way to the cloud, until none are left.
+    return pendingUploads > 0 ? (
+      <Alert severity="success" icon={<CloudDoneIcon />} sx={{ mb: 2 }}>
+        {t('till.sending', { count: pendingUploads })}
+      </Alert>
+    ) : null;
+  }
   if (state.mode === 'OFFLINE') {
     return (
       <Alert severity="warning" icon={<CloudOffIcon />} sx={{ mb: 2 }}>

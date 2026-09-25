@@ -161,7 +161,10 @@ func (s *Server) tillState(w http.ResponseWriter, r *http.Request) {
 		"state": st,
 		"user":  user,
 		// §16.5: whether the till sells through the cloud, and the cashier's cloud session.
-		"cloud": map[string]any{"reachable": reachable, "since": since.UTC(), "session": cloudSessionView(s.cloudFor(t, token))},
+		"cloud": map[string]any{
+			"reachable": reachable, "since": since.UTC(), "session": cloudSessionView(s.cloudFor(t, token)),
+			"pending_uploads": t.PendingUploads(),
+		},
 	})
 }
 

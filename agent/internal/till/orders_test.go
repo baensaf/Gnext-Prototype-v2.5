@@ -284,6 +284,18 @@ func TestCallNumbersCarryOnFromTheHighestCountKnownAndWrap(t *testing.T) {
 	}
 }
 
+// §16.4: the till placed an order online a moment before the link dropped, and no heartbeat
+// told the agent its number since. The next offline order does not get that number again.
+func TestAnOrderPlacedOnlineJustBeforeTheDropKeepsItsNumber(t *testing.T) {
+	s := newShop(t)
+	s.till.NoteCloudOrder("2026-09-24", 101) // count 2 in 100–102
+	s.till.NoteCloudOrder("2026-09-24", 100) // an older one changes nothing
+	s.till.NoteCloudOrder("2026-09-24", 999) // another range: not a register order
+	if o := s.send(s.add(s.newOrder(), "burger", 1)); *o.CallNumber != 102 {
+		t.Fatalf("offline number after the cloud's 101 = %d", *o.CallNumber)
+	}
+}
+
 func TestVoidingASentLineFollowsTheEditWindow(t *testing.T) {
 	s := newShop(t)
 	o := s.send(s.add(s.add(s.newOrder(), "burger", 1), "fries", 1))
