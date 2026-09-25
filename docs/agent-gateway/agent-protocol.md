@@ -1253,7 +1253,9 @@ orders §12 accepts.
 
 ### 13.1 Decisions
 
-Confirmed by the product owner on 2026-09-24:
+Confirmed by the product owner on 2026-09-24. §16 (2026-09-25) makes the till the branch PC's
+register online too, and replaces decisions 2 and 4: sign-in by PIN also opens a cloud session,
+and the till switches by itself.
 
 1. **Where.** The till runs on the branch PC only, at `http://127.0.0.1:47800/till`, in the
    agent's settings window or a browser on that PC. One offline till a branch. Tills on the
@@ -1349,7 +1351,7 @@ their PIN. The agent keeps the choice in its data folder until it is changed.
 
 | Mode | When | The till |
 |---|---|---|
-| `ONLINE` | The agent has a WebSocket session and holds no unfinished offline order | Sells nothing. Shows a link to the web POS. |
+| `ONLINE` | The agent has a WebSocket session and holds no unfinished offline order | Sells nothing of its own. With `pos.till` (§16.5) the till sells through the cloud. |
 | `OFFLINE` | The agent has no session (never had one since start, or lost it) | Sells. |
 | `HANDOVER` | The agent has a session again and still holds unfinished offline orders | Starts no new order. Unfinished orders can be continued: lines added, sent, paid, finished, cancelled. |
 
@@ -1683,6 +1685,17 @@ Offline POS (§13), for an agent that advertises `pos.offline`:
 - [ ] Hand-over uploads open orders as `OPEN`, drops unpaid carts the kitchen never had, and
       the cloud books each order once.
 
+The till online (§16), for an agent that advertises `pos.till`:
+
+- [ ] Signing in online opens a cloud session; the page never sees its token; signing out or
+      the idle timeout ends it.
+- [ ] A proxied request carries the session, the CSRF token and the bound till, and nothing the
+      page set; `/api/v1/agent/*` and `/api/v1/auth/*` (but `GET me`) are refused.
+- [ ] Pulling the cable mid-sale switches the till to `OFFLINE` on the next request, keeps the
+      cart, and the order sells on the agent; plugging it back asks for the PIN only when the
+      cloud session is gone, and the next order goes to the cloud.
+- [ ] A place that got no answer is not sent offline without the cashier confirming it.
+
 ## 15. Decisions and open questions
 
 Decided by the product owner (2026-09-17):
@@ -1703,3 +1716,222 @@ Still open:
 
 4. **Arvan WebSocket**: WebSocket must be enabled for the domain in the Arvan panel, and its
    idle timeout must exceed 20 s. nginx already forwards upgrade headers on `/api/`.
+
+## 16. The till online (local-first, v2 third step)
+
+Status: **agreed** (product owner, 2026-09-25). Protocol version stays **1**: one new cloud
+route, a local proxy, new optional fields, switched on by a capability.
+
+§13 built a till that sells only while the internet is down, beside the web POS. Here the till
+becomes the branch PC's register **all the time**. While the cloud answers, it sells through the
+cloud with everything the web POS can do. When the cloud stops answering, it tells the cashier
+and goes on selling through the agent (§13), on the same screen. When the cloud is back, it
+tells the cashier again and goes back to the cloud. The cashier never changes screen.
+
+### 16.1 Decisions
+
+Confirmed by the product owner on 2026-09-25. They replace §13.1 decisions 2 and 4 and §13.5's
+`ONLINE` row; the rest of §13 holds.
+
+1. **One register.** On the branch PC the cashier uses the till (`http://127.0.0.1:47800/till/`,
+   the *Gnext Offline Till* window) online and offline. The web POS stays for every other device.
+2. **Online, the cloud is the source of truth.** An order rung up while the cloud answers is
+   the cloud's from the first request, exactly as on the web POS: the kitchen screens, the other
+   registers, delivery and reports see it at once. The agent's order book (§13.6) is used only
+   while the cloud does not answer.
+3. **Sign-in by PIN, online too.** The cashier signs in once, by name and PIN. The agent checks
+   the PIN against the staff list (§13.3), and while the cloud answers it also gets the cashier a
+   cloud session with that PIN (§16.3). The agent never keeps a PIN.
+4. **Switching is automatic, and said.** The till moves between the cloud and the agent by
+   itself (§16.5) and tells the cashier each time (§16.7).
+5. **The cart goes along.** A cart not yet placed moves to the other side as it is, when the till
+   switches (§16.6).
+6. **Online, everything.** Delivery, customers, discounts, parked orders, 86, shift open and
+   close: whatever the cashier's role may do on the web POS. Offline, §13.15 still holds.
+
+### 16.2 Capability
+
+| Capability | Means |
+|---|---|
+| `pos.till` | The agent's till sells online through the cloud (§16), and may ask for a PIN session (§16.3). Requires `pos.offline`. |
+
+The cloud serves `POST /api/v1/agent/local/pin-login` only to an agent whose live session
+advertised `pos.till`, as it serves the staff list (§13.3).
+
+### 16.3 Cloud session by PIN: `POST /api/v1/agent/local/pin-login`
+
+Device key (§3.4), as every `/api/v1/agent/local` route. Body `{ "user_id": "…", "pin": "1234" }`.
+
+The cloud checks, and answers `403 FORBIDDEN_ROLE` or `401 PIN_WRONG` otherwise:
+
+- the user is active, in the agent's tenant, **with the agent's branch** as their branch, in a
+  role the staff list carries (`CASHIER`, `SUPERVISOR`, `MANAGER`, `ADMIN`, `OWNER`), and has a
+  PIN: the staff list's rule (§13.3), so nobody gets a session here who could not sign in
+  offline;
+- the PIN matches `pin_hash` (argon2). There is **no** default PIN, unlike the approval
+  fallback.
+
+Wrong PINs:
+
+- are counted in `pin_attempt_log` (action `TILL_SIGN_IN`), with the approval PINs. Five wrong
+  PINs for one user in 15 minutes answer `423 PIN_LOCKED` for that user until the window passes,
+  whatever the PIN;
+- 20 wrong `TILL_SIGN_IN` PINs across the branch's users in 15 minutes answer `423
+  TILL_SIGN_IN_LOCKED` for every user of that branch until the window passes: a stolen device key
+  cannot walk the staff list;
+- each is audited `AUTH_LOGIN_FAILED` with `{ method: "TILL_PIN", agent_id, reason }`. Neither
+  the PIN nor its hash is logged.
+
+On success the cloud opens an ordinary session for the user, as `POST /api/v1/auth/login`
+does (user agent `gnext-till/<agent id>`), sets `last_login_at`, audits `AUTH_LOGIN_SUCCESS`
+with `{ method: "TILL_PIN", agent_id }`, and answers `200`:
+
+```json
+{
+  "session_token": "…", "csrf_token": "…",
+  "user": { "id": "…", "username": "…", "displayName": "…", "role": "CASHIER",
+            "tenantId": "…", "branchId": "…", "isHeadOffice": false, "preferredLocale": "fa" },
+  "tenant": { "id": "…", "code": "…", "name": "…", "baseCurrency": "IRR", "defaultLocale": "fa" }
+}
+```
+
+`user` and `tenant` are `POST /api/v1/auth/login`'s shapes, so the till fills the web app's
+sign-in state with them. The session ends like any other: idle timeout, sign-out
+(`POST /api/v1/agent/local/logout` with it in `X-Gnext-User-Session`), or deactivating the user.
+
+### 16.4 The cloud path through the agent
+
+The till page talks only to the agent. The agent passes the page's cloud calls on, with the
+cashier's cloud session, so the page never holds a cloud credential and the browser never calls
+the internet (no mixed content, no local-network prompt).
+
+**Route.** `/api/v1/*` on the settings server (`127.0.0.1:47800`), every method, is proxied to the
+cloud's same path. §13.13's local-only rules hold: a foreign `Host` is refused, and a request
+that changes something needs `X-Gnext-Local: 1` and a local `Origin`.
+
+**Who may use it.** A request needs the till session (§13.13), sent as `X-Gnext-Till-Session`
+or as the cookie `gnext_till` that `POST /api/till/login` also sets (`HttpOnly`, `SameSite=Strict`,
+`Path=/`), since an `EventSource` cannot send a header. Without it: `401 UNAUTHENTICATED`. With
+it, but no cloud session for it: `401 CLOUD_SIGN_IN_REQUIRED`.
+
+**Not passed on.** `/api/v1/agent/*` (the agent's own routes), and `/api/v1/auth/*` except
+`GET /api/v1/auth/me`: `403 NOT_PROXIED`. The till signs in and out through §13.13.
+
+**Request.** The agent sends the page's method, path, query and body (at most 1 MB) with the
+page's `Content-Type`, `Accept`, `Accept-Language`, `X-Correlation-Id` and `X-Skip-Toast`
+headers, and sets:
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <session_token>` |
+| `X-CSRF-Token` | the session's `csrf_token` |
+| `X-Terminal-Id` | the bound till (§13.4), so cash lands in its drawer as on the web POS |
+| `User-Agent` | `gnext-agent/<version> till` |
+
+Anything else the page sent (cookies, `Authorization`, `X-Gnext-*`) is dropped. Redirects are
+not followed.
+
+**Answer.** The cloud's status, body and headers, less `Set-Cookie`. A request that takes over
+30 s is cut off; `GET /api/v1/live/stream` (Server-Sent Events) is exempt and flushed as it
+arrives. Then:
+
+- the cloud answered `401`: the agent forgets that cloud session (the till session stays) and
+  answers `401 CLOUD_SIGN_IN_REQUIRED`;
+- no answer (connection refused, DNS, TLS, timeout) or the cloud's gateway answered `502`,
+  `503` or `504`: the agent answers `502 CLOUD_UNREACHABLE`, and marks the cloud unreachable
+  (§16.5).
+
+### 16.5 Modes
+
+§13.5's modes, with the cloud's reachability decided by the agent:
+
+| Mode | When | New orders go to | The agent's own orders |
+|---|---|---|---|
+| `ONLINE` | The cloud is reachable | The cloud, through §16.4 | None |
+| `OFFLINE` | It is not | The agent (§13.6) | Taken, sent, paid, finished |
+| `HANDOVER` | It is reachable again and the agent still holds unfinished offline orders | The cloud | Finished on the agent; handed over as §13.5 says |
+
+The cloud is **reachable** when the agent's WebSocket session has lasted **10 s**, and no proxied
+request has found the cloud unreachable since the later of the session's start and the last
+proxied request that got an answer. It is **unreachable** from the moment the session drops, or
+a proxied request gets no answer. So a cashier's request that finds the cloud gone switches the
+till at once, without waiting for the heartbeat to notice.
+
+`HANDOVER` no longer stops the till selling: new orders go to the cloud; only the agent refuses
+new orders of its own (`HANDOVER`, as §13.13 says).
+
+`GET /api/till/state` adds:
+
+```json
+{ "cloud": { "reachable": true, "since": "2026-09-25T10:12:03Z",
+             "session": { "user": { … }, "tenant": { … } } } }
+```
+
+`session` is `null` when the signed-in user has no cloud session; `user` and `tenant` are
+§16.3's, for a page that reloads. `since` is when `reachable` last changed.
+
+### 16.6 Signing in, and switching
+
+**Sign-in** (`POST /api/till/login {user_id, pin}`):
+
+1. The agent checks the PIN against the staff list (§13.3). A wrong or locked PIN is refused
+   there; the cloud is not asked.
+2. If the cloud is reachable, the agent asks it for a session (§16.3) with the same PIN, and
+   keeps it with the till session. If the cloud refuses (`PIN_WRONG`, `PIN_LOCKED`,
+   `FORBIDDEN_ROLE`: a stale staff list), the sign-in is refused with the cloud's code. If the
+   cloud does not answer, the cashier is signed in offline, and the till is `OFFLINE`.
+3. The answer adds `cloud_session` (`{user, tenant}` or `null`).
+
+**Back online without a cloud session** (signed in offline, or the session ended): the page asks
+for the PIN again, once, and sends `POST /api/till/cloud-login {pin}` for the signed-in user, which
+does step 2. Until then the till sells nothing new; the cart waits.
+
+**Sign-out** and the till's idle timeout end the cloud session too (`POST
+/api/v1/agent/local/logout`), and clear the cookie.
+
+**Switching** is done by the page, on the mode in `GET /api/till/state`, which it asks every 5 s
+and at once after a `CLOUD_UNREACHABLE`:
+
+- `ONLINE`/`HANDOVER` → `OFFLINE`: the register starts selling through the agent. The unplaced
+  cart moves to the agent. Every line is re-priced by `POST /api/till/price`; a line the agent
+  refuses stays on the cart marked with the reason, for the cashier to take off. What does not
+  exist offline is taken off the cart with a notice: the customer and delivery address (a
+  delivery order becomes takeaway, and the cashier is told), discounts and coupons. Parked
+  orders, and orders already placed in the cloud, stay in the cloud.
+- `OFFLINE` → `ONLINE`/`HANDOVER`: once the cloud session is there (above), the register sells
+  through the cloud. The unplaced cart moves to the cloud as it is and is quoted there; a line
+  the cloud refuses is marked the same way.
+- A **place** the cloud may have received but never answered (the answer was `CLOUD_UNREACHABLE`
+  after the request went out): the cart stays, marked *may already be in the kitchen*, and
+  sending it offline needs the cashier to confirm it. When the cloud is back, the till looks the
+  order up by its draft id (`GET /api/v1/orders/{id}`) and drops the cart if the cloud has it
+  submitted.
+- A **card charge** running in the cloud when the link drops stays the cloud's: the agent's
+  journal delivers its result after reconnect (§4.6). The order waits in the cloud; the till
+  says so and tells the cashier to keep the slip.
+
+### 16.7 What the cashier sees
+
+- **Offline**: an amber bar across the top, *No internet — selling on this PC. Delivery,
+  customers, discounts and parked orders are paused*, and the controls §13.15 leaves out
+  disabled, as §13 draws them. A toast when it starts.
+- **Back**: a toast *Internet is back*, the PIN prompt if needed, then the bar turns green for a
+  moment, *Online again — N offline orders are being sent*, from the upload backlog (§12.7)
+  until it is empty.
+- The bar says which side a new order goes to, always, so nobody wonders.
+
+### 16.8 The till as the register
+
+- The agent opens the till window when a Windows user signs in, if a till is bound and the
+  settings page's *Open the till at sign-in* (on by default) is on. Kept in `till.json` as
+  `open_at_sign_in`.
+- The web POS's offline banner (§13.14) stays, for every other device.
+- **Branch Agents** shows, per agent, whether the branch is **ready to sell offline**, while it
+  is online: the agent advertises `pos.till`; a till is bound and has an open shift; the staff
+  list has at least one user; the snapshot is under 30 minutes old; the upload backlog is empty.
+  Each missing piece is named, so it is fixed before the internet goes, not during.
+
+### 16.9 Not in this step
+
+Tills on the LAN (every register on the agent: §13.15); KDS offline; an order placed in the cloud
+finished on the agent while offline; installing updates only outside business hours.
