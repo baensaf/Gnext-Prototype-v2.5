@@ -19,8 +19,9 @@ import { FileAsset } from '../../entities/FileAsset.entity';
 import { assetUrl } from '../../common/utils/asset-url.util';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { describeWindows, isOnSchedule, isValidTime, localClock, parseDays } from '../../common/utils/availability-schedule.util';
-import { BUSINESS_TIME_ZONE, BusinessDateUtil, ORDER_BUSINESS_DATE_EXPR } from '../../common/utils/business-date.util';
+import { BUSINESS_TIME_ZONE, BusinessDateUtil } from '../../common/utils/business-date.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
+import { addDays } from '../../common/utils/business-day';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
 import { PriceListService } from './price-lists.service';
@@ -1421,20 +1422,28 @@ export class CatalogService {
       .getMany();
   }
 
-  /** Units of a product (or one variant of it) on today's live orders at a branch. */
+  /**
+   * Units of a product (or one variant of it) on a business day's live orders at a branch.
+   * An order is stamped with its business day only when it is submitted or paid; until then (a
+   * draft, a kiosk order awaiting its card) it belongs to the day its placement falls in on the
+   * same branch clock as the count. Not the calendar date ORDER_BUSINESS_DATE_EXPR falls back
+   * to: between midnight and the cutoff that is tomorrow, and the night's open orders would
+   * not count against the day's stock.
+   */
   private async soldOn(em: EntityManager, tenantId: string, branchId: string, date: string, productId: string, variantId?: string | null) {
-    const params: unknown[] = [tenantId, branchId, date, productId];
+    const clock = await loadBusinessClock(this.stockRepo.manager, tenantId, branchId);
+    const params: unknown[] = [tenantId, branchId, date, productId, clock.startOf(date), clock.startOf(addDays(date, 1))];
     let variantClause = '';
     if (variantId) {
       params.push(variantId);
-      variantClause = `AND i.variant_id = $5`;
+      variantClause = `AND i.variant_id = $7`;
     }
     const rows = await em.query(
       `SELECT COALESCE(SUM(i.quantity), 0) AS sold
          FROM order_item i
          JOIN order_header h ON h.id = i.order_id
         WHERE h.tenant_id = $1 AND h.branch_id = $2
-          AND ${ORDER_BUSINESS_DATE_EXPR('h')} = $3
+          AND (h.business_date = $3 OR (h.business_date IS NULL AND h.placed_at >= $5 AND h.placed_at < $6))
           AND h.state NOT IN ('CANCELLED', 'REJECTED')
           AND h.deleted_at IS NULL
           AND i.state = 'ACTIVE' AND i.product_id = $4 ${variantClause}`,

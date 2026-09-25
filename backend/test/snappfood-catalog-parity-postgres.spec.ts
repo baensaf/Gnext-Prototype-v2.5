@@ -14,6 +14,7 @@ import { OptionGroup } from '../src/entities/OptionGroup.entity';
 import { OptionItem } from '../src/entities/OptionItem.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { deleteTenantData } from './utils/tenant-teardown';
+import { clearOfDayTurnover } from './utils/day-turnover';
 
 // What Snappfood's vendor panel lets a restaurant say about its menu, against the real
 // database: today's stock, a stop on one variant, an add-on left off one product, and a
@@ -63,6 +64,9 @@ describe('Snappfood-style menu controls (PostgreSQL)', () => {
     ketchup = (await save(OptionItem, { tenant_id: tenantId, option_group_id: groupId, code: 'SFP-KETCHUP', name: 'Ketchup', price_delta: '5000.0000' })).id;
     await catalog.attachOptionGroupToProduct(tenantId, sandwich, groupId, 0, 'test');
   });
+
+  // Today's count and the sales against it must fall on one business day.
+  beforeEach(() => clearOfDayTurnover(dataSource, tenantId, branchId), 15_000);
 
   afterAll(async () => {
     await deleteTenantData(dataSource, tenantId);
