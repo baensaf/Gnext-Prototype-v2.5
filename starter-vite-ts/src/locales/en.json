@@ -502,6 +502,7 @@
       "due": "Due: {{amount}}",
       "refunded": "Refunded: {{amount}}",
       "fullyPaid": "FULLY PAID",
+      "notCharged": "NOT CHARGED",
       "empty": "No orders found matching your filter criteria.",
       "branch": "Branch",
       "channel": "Channel",
