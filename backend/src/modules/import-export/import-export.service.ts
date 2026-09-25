@@ -625,6 +625,13 @@ export class ImportExportService {
       'import_job',
     ];
 
+    // Child tables with no tenant_id of their own, scoped through the parent row that has one.
+    // Each child is listed before its parent above, so the parent rows are still there to join on.
+    const tenantScopeViaParent: Record<string, { parent: string; foreignKey: string }> = {
+      import_row: { parent: 'import_job', foreignKey: 'job_id' },
+      courier_settlement_line: { parent: 'courier_settlement', foreignKey: 'settlement_id' },
+    };
+
     const clearedTables: string[] = [];
 
     await this.dataSource.transaction(async (manager) => {
@@ -646,8 +653,16 @@ export class ImportExportService {
         );
         if (cols && cols.length > 0) {
           await manager.query(`DELETE FROM "${table}" WHERE tenant_id = $1`, [tenantId]);
+        } else if (tenantScopeViaParent[table]) {
+          // An unscoped DELETE here emptied the table for every tenant: one tenant's reset
+          // wiped another's staged import rows between validateJob and executeJob.
+          const { parent, foreignKey } = tenantScopeViaParent[table];
+          await manager.query(
+            `DELETE FROM "${table}" WHERE "${foreignKey}" IN (SELECT id FROM "${parent}" WHERE tenant_id = $1)`,
+            [tenantId],
+          );
         } else {
-          await manager.query(`DELETE FROM "${table}"`);
+          throw new Error(`System reset cannot scope table "${table}" to a tenant`);
         }
         clearedTables.push(table);
       }
