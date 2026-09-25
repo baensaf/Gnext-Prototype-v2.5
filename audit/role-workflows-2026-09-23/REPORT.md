@@ -1,5 +1,9 @@
 # Role workflow validation — 2026-09-23
 
+> **Status 2026-09-25.** Remaining issues 1 (hard-coded POS discount limits) and 2 (an
+> unapproved manual discount dropped on submit) are fixed in #133; issue 5 (approval requests
+> visible across branches) in #132. Issues 3, 4, 6 and 7 are unchanged.
+
 55 daily workflows were run against the API as the three demo accounts. Each scenario covers a
 common task plus its edge cases, invalid inputs and branch or role boundaries. Bugs were fixed
 and the full set was run again on the final code.
