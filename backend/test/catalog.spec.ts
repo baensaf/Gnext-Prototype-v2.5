@@ -63,7 +63,24 @@ describe('CatalogService (Unit)', () => {
     auditWriter = { write: jest.fn() };
     groupRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn((g) => Promise.resolve(g)) };
     itemRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), softRemove: jest.fn() };
-    hoursRepo ={ find: jest.fn().mockResolvedValue([]) };
+    // The add-on group checks and the group editor's save run through an entity manager (a
+    // transaction), which hands each entity to its repository mock.
+    const repoFor = (entity: any): any =>
+      entity === OptionGroup ? groupRepo : entity === OptionItem ? itemRepo : entity === ProductOptionGroup ? prodGroupRepo : prodRepo;
+    const em: any = {
+      findOne: (entity: any, opts: any) => repoFor(entity).findOne(opts),
+      find: (entity: any, opts: any) => repoFor(entity).find(opts),
+      save: (entity: any, value: any) => repoFor(entity).save(value),
+      softRemove: (entity: any, value: any) => repoFor(entity).softRemove(value),
+      create: (_entity: any, value: any) => ({ ...value }),
+      createQueryBuilder: () => {
+        const qb: any = { update: () => qb, set: () => qb, where: () => qb, andWhere: () => qb, execute: jest.fn() };
+        return qb;
+      },
+    };
+    em.transaction = (work: any) => work(em);
+    groupRepo.manager = em;
+    hoursRepo = { find: jest.fn().mockResolvedValue([]) };
     stockRepo = { find: jest.fn().mockResolvedValue([]), manager: { query: jest.fn().mockResolvedValue([{ sold: 0 }]) } };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -343,6 +360,55 @@ describe('CatalogService (Unit)', () => {
       prodGroupRepo.findOne.mockResolvedValue(null);
       itemRepo.find.mockResolvedValue([]);
       await expect(service.attachOptionGroupToProduct('t-1', 'p-1', 'g-bread', 0, 'c')).rejects.toEqual(unfillable);
+    });
+
+    describe("the group editor's save", () => {
+      const group = { ...bread, code: 'BREAD' };
+
+      beforeEach(() => {
+        groupRepo.findOne.mockImplementation(() => Promise.resolve({ ...group }));
+        itemRepo.save.mockImplementation((i: any) => Promise.resolve(i));
+      });
+
+      it('saves the rules, a new choice, a renamed one and a removal together', async () => {
+        itemRepo.find.mockResolvedValue([
+          { id: 'i-white', name: 'White', price_delta: '0.0000', sort_order: 0 },
+          { id: 'i-brown', name: 'Brown', price_delta: '0.0000', sort_order: 1 },
+        ]);
+
+        await service.saveOptionGroup(
+          't-1',
+          'g-bread',
+          {
+            name: 'Bun',
+            min_selection: 1,
+            max_selection: 1,
+            items: [
+              { id: 'i-white', name: 'White bun', price_delta: '0', sort_order: 0 },
+              { name: 'Rye', price_delta: '20000', sort_order: 1 },
+            ],
+            removed_item_ids: ['i-brown'],
+          },
+          'c',
+        );
+
+        expect(groupRepo.save).toHaveBeenCalledWith(expect.objectContaining({ name: 'Bun', min_selection: 1, is_required: true }));
+        expect(itemRepo.save).toHaveBeenCalledWith(expect.objectContaining({ id: 'i-white', name: 'White bun' }));
+        expect(itemRepo.save).toHaveBeenCalledWith(expect.objectContaining({ name: 'Rye', price_delta: '20000.0000', option_group_id: 'g-bread' }));
+        expect(itemRepo.softRemove).toHaveBeenCalledWith(expect.objectContaining({ id: 'i-brown' }));
+        expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'OPTION_GROUP_SAVED' }));
+      });
+
+      it('refuses the whole save when the finished group would leave a product short', async () => {
+        // After the removal only White is left, and the product leaves White out.
+        itemRepo.find.mockResolvedValue([{ id: 'i-white', name: 'White', price_delta: '0.0000', sort_order: 0 }]);
+        prodGroupRepo.find.mockResolvedValue([{ product_id: 'p-1', excluded_item_ids: ['i-white'] }]);
+
+        await expect(
+          service.saveOptionGroup('t-1', 'g-bread', { min_selection: 1, max_selection: 1, items: [], removed_item_ids: ['i-brown'] }, 'c'),
+        ).rejects.toEqual(unfillable);
+        expect(auditWriter.write).not.toHaveBeenCalled();
+      });
     });
   });
 

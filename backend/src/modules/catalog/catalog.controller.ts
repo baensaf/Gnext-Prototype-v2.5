@@ -204,6 +204,13 @@ export class CatalogController {
     return await this.catalogService.updateOptionGroup((req as any).tenantId, id, body, (req as any).correlationId);
   }
 
+  /** The group editor's Save: rules, items and removals in one transaction. */
+  @HeadOfficeOnly()
+  @Put('option-groups/:id')
+  async saveOptionGroup(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+    return await this.catalogService.saveOptionGroup((req as any).tenantId, id, body, (req as any).correlationId);
+  }
+
   @HeadOfficeOnly()
   @Delete('option-groups/:id')
   async archiveOptionGroup(@Param('id') id: string, @Req() req: Request) {
