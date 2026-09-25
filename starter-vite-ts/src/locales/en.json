@@ -1730,7 +1730,10 @@
         "cancel": "Cancel",
         "saveVariant": "Save Variant",
         "savingVariant": "Saving...",
-        "deleteConfirm": "Are you sure you want to archive this variant?"
+        "deleteConfirm": "Are you sure you want to archive this variant?",
+        "editAria": "Edit {{name}}",
+        "deleteAria": "Delete {{name}}",
+        "defaultMovesHint": "To change the default, make another size the default."
       },
       "modifiers": {
         "title": "Attached Modifiers & Option Groups",
@@ -1749,7 +1752,8 @@
         "attachButton": "Attach Group",
         "attachingButton": "Attaching...",
         "detach": "Remove from this product",
-        "detachConfirm": "Take this add-on group off this product?"
+        "detachConfirm": "Take this add-on group off this product?",
+        "offerAria": "Offer {{name}} on this product"
       },
       "messages": {
         "saved": "Product details saved successfully",

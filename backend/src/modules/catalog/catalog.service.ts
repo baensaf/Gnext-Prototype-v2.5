@@ -564,6 +564,17 @@ export class CatalogService {
       data.base_price = MoneyUtil.format(data.base_price);
     }
 
+    // A product sold in sizes has exactly one default, the size the register and kiosk start
+    // on. It moves by making another size the default, never by switching this one off, or
+    // the sale screens fall back to whichever size happens to sort first.
+    if (data.is_default === false && variant.is_default) {
+      throw new BadRequestException({
+        statusCode: 400,
+        code: 'VARIANT_DEFAULT_REQUIRED',
+        message: 'A product sold in sizes keeps one default. Make another size the default instead.',
+      });
+    }
+
     if (data.is_default === true) {
       await this.variantRepo.update(
         { tenant_id: tenantId, product_id: productId },
@@ -571,8 +582,22 @@ export class CatalogService {
       );
     }
 
+    // Taking the default off sale hands the default to the next active size.
+    const handOver = data.is_active === false && variant.is_default;
+    if (handOver) data.is_default = false;
+
     Object.assign(variant, data);
     const saved = await this.variantRepo.save(variant);
+    if (handOver) {
+      const next = await this.variantRepo.findOne({
+        where: { tenant_id: tenantId, product_id: productId, is_active: true },
+        order: { sort_order: 'ASC' },
+      });
+      if (next && next.id !== variantId) {
+        next.is_default = true;
+        await this.variantRepo.save(next);
+      }
+    }
     if (data.base_price && !MoneyUtil.equals(before.base_price, saved.base_price)) await this.endDatedBasePrice(tenantId, productId, variantId);
 
     await this.auditWriter.write({

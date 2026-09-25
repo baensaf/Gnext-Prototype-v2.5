@@ -684,10 +684,20 @@ export function ProductDetailPage() {
                         <span dir="ltr">{MoneyUtil.formatCurrency(v.base_price)} IRR</span>
                       </TableCell>
                       <TableCell align="right">
-                        <IconButton size="small" color="primary" onClick={() => handleOpenEditVariant(v)}>
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          onClick={() => handleOpenEditVariant(v)}
+                          aria-label={t('catalog.productDetailPage.variants.editAria', { name: v.name })}
+                        >
                           <EditIcon fontSize="small" />
                         </IconButton>
-                        <IconButton size="small" color="error" onClick={() => handleDeleteVariant(v.id)}>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleDeleteVariant(v.id)}
+                          aria-label={t('catalog.productDetailPage.variants.deleteAria', { name: v.name })}
+                        >
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </TableCell>
@@ -800,6 +810,7 @@ export function ProductDetailPage() {
                               checked={!(group.excluded_item_ids || []).includes(item.id)}
                               disabled={!canAuthor}
                               onChange={(e) => handleToggleOptionItem(group, item.id, e.target.checked)}
+                              slotProps={{ input: { 'aria-label': t('catalog.productDetailPage.modifiers.offerAria', { name: item.name }) } }}
                             />
                           </Stack>
                         </Stack>
@@ -887,11 +898,18 @@ export function ProductDetailPage() {
                     <Switch
                       checked={varIsDefault}
                       onChange={(e) => setVarIsDefault(e.target.checked)}
+                      // The default moves by making another size the default, never by switching it off here.
+                      disabled={!!editingVariant?.is_default}
                       color="primary"
                     />
                   }
                   label={t('catalog.productDetailPage.variants.setDefaultSwitch')}
                 />
+                {editingVariant?.is_default && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    {t('catalog.productDetailPage.variants.defaultMovesHint')}
+                  </Typography>
+                )}
               </Grid>
             </Grid>
           </DialogContent>

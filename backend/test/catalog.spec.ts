@@ -166,6 +166,28 @@ describe('CatalogService (Unit)', () => {
       expect(list).toHaveLength(2);
       expect(list[0].code).toBe('VAR-CHB-SGL');
     });
+
+    // Switching the default off left a product with none, and the sale screens started on
+    // whichever size sorted first.
+    it('will not switch the default size off; another size has to become the default', async () => {
+      variantRepo.findOne.mockResolvedValue({ id: 'var-1', product_id: 'prod-burger', is_default: true, is_active: true, base_price: '100.0000' });
+
+      await expect(service.updateProductVariant('t-1', 'prod-burger', 'var-1', { is_default: false }, 'c')).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'VARIANT_DEFAULT_REQUIRED' }),
+      });
+      expect(variantRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('hands the default to the next active size when the default is taken off sale', async () => {
+      variantRepo.findOne
+        .mockResolvedValueOnce({ id: 'var-1', product_id: 'prod-burger', is_default: true, is_active: true, base_price: '100.0000' })
+        .mockResolvedValueOnce({ id: 'var-2', product_id: 'prod-burger', is_default: false, is_active: true });
+
+      await service.updateProductVariant('t-1', 'prod-burger', 'var-1', { is_active: false }, 'c');
+
+      expect(variantRepo.save).toHaveBeenCalledWith(expect.objectContaining({ id: 'var-1', is_active: false, is_default: false }));
+      expect(variantRepo.save).toHaveBeenCalledWith(expect.objectContaining({ id: 'var-2', is_default: true }));
+    });
   });
 
   // HAMI audit gap: time-of-day menus. Tehran is UTC+03:30, so 05:00Z is 08:30 and 09:00Z is 12:30.
