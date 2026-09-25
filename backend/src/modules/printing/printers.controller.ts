@@ -147,6 +147,14 @@ export class PrintersController {
     return { success: true };
   }
 
+  /** A test page through the branch agent. The job it returns settles when the printer answers. */
+  @BranchOwned(Printer)
+  @Roles(...MANAGER_AND_ABOVE)
+  @Post('printers/:id/test-print')
+  async testPrint(@Param('id') id: string, @Req() req: Request) {
+    return await this.queueService.testPrint((req as any).tenantId, id, (req as any).userId);
+  }
+
   // 2. Printer Groups CRUD
   @Get('printer-groups')
   async getGroups(@Query('branchId') branchId: string, @Req() req: Request) {

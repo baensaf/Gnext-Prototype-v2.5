@@ -82,6 +82,8 @@ export function PrintersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [testSuccessMsg, setTestSuccessMsg] = useState<string | null>(null);
+  // The printer whose test page is out, so its button cannot send a second one meanwhile.
+  const [testingId, setTestingId] = useState<string | null>(null);
 
   // Deletion confirm dialog state
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -112,6 +114,9 @@ export function PrintersPage() {
 
   // How the branch agent reaches the printer, kept apart from the form the API takes as is.
   const [connForm, setConnForm] = useState<ConnectionForm>(EMPTY_CONNECTION);
+  // The connection the printer was saved with. Windows and serial are offered only to a printer
+  // that already has one, so editing it does not silently lose the setting.
+  const [savedConnKind, setSavedConnKind] = useState<ConnectionForm['kind']>('none');
 
   // Group Modals (Add / Edit)
   const [groupModalOpen, setGroupModalOpen] = useState(false);
@@ -188,6 +193,7 @@ export function PrintersPage() {
       branch_id: getActiveBranchId(),
     });
     setConnForm(EMPTY_CONNECTION);
+    setSavedConnKind('none');
     setPrinterModalOpen(true);
   };
 
@@ -203,7 +209,9 @@ export function PrintersPage() {
       is_active: pr.is_active !== false,
       branch_id: (pr as any).branch_id || getActiveBranchId(),
     });
-    setConnForm(toConnectionForm(pr.agent_connection));
+    const conn = toConnectionForm(pr.agent_connection);
+    setConnForm(conn);
+    setSavedConnKind(conn.kind);
     setPrinterModalOpen(true);
   };
 
@@ -236,8 +244,43 @@ export function PrintersPage() {
     }
   };
 
-  const handleTestPrintSlip = (printer: PrinterDevice) => {
-    setTestSuccessMsg(t('operations.printers.testPrintSuccess', 'Simulated test slip printed cleanly on {{name}}', { name: printer.name }));
+  // The test page goes through the branch agent like any job; the answer is the printer's own,
+  // so the page waits for it (the agent gives a printer 60 seconds) rather than assume success.
+  const handleTestPrintSlip = async (printer: PrinterDevice) => {
+    const name = printer.name;
+    setTestingId(printer.id);
+    setTestSuccessMsg(t('operations.printers.testPrintSending', 'Sending a test page to {{name}}…', { name }));
+    try {
+      const sent = await kdsApi.testPrint(printer.id);
+      const deadline = Date.now() + 75_000;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const job = await kdsApi.getPrintJobById(sent.id);
+        if (job.status === 'SUCCESS') {
+          setTestSuccessMsg(t('operations.printers.testPrintSuccess', '{{name}} printed the test page.', { name }));
+          return;
+        }
+        if (job.status === 'FAILED') {
+          const last = (job as any).attempts?.at(-1);
+          setTestSuccessMsg(null);
+          setError(
+            t('operations.printers.testPrintFailed', '{{name}} did not print the test page: {{reason}}', {
+              name,
+              reason: last?.error_message || last?.error_code || '-',
+            })
+          );
+          return;
+        }
+      }
+      setTestSuccessMsg(
+        t('operations.printers.testPrintNoAnswer', 'No answer from {{name}} yet. The print queue will show the result.', { name })
+      );
+    } catch (err: any) {
+      setTestSuccessMsg(null);
+      setError(err.detail || err.message || t('operations.printers.testPrintError', 'Could not send the test page.'));
+    } finally {
+      setTestingId(null);
+    }
   };
 
   // GROUP HANDLERS
@@ -586,6 +629,7 @@ export function PrintersPage() {
                               color="info"
                               size="small"
                               title={t('operations.printers.testPrint', 'Test Slip')}
+                              disabled={testingId === pr.id}
                               onClick={() => handleTestPrintSlip(pr)}
                             >
                               <PlayArrowIcon />
@@ -856,8 +900,13 @@ export function PrintersPage() {
               >
                 <MenuItem value="none">{t('operations.printers.connection.none', 'Simulated (no branch agent)')}</MenuItem>
                 <MenuItem value="tcp">{t('operations.printers.connection.tcp', 'Network printer (TCP)')}</MenuItem>
-                <MenuItem value="windows">{t('operations.printers.connection.windows', 'Printer installed in Windows')}</MenuItem>
-                <MenuItem value="serial">{t('operations.printers.connection.serial', 'Serial port')}</MenuItem>
+                {/* The branch agent prints over TCP only; see Supported() in agent/internal/printing. */}
+                {savedConnKind === 'windows' && (
+                  <MenuItem value="windows">{t('operations.printers.connection.windows', 'Printer installed in Windows')}</MenuItem>
+                )}
+                {savedConnKind === 'serial' && (
+                  <MenuItem value="serial">{t('operations.printers.connection.serial', 'Serial port')}</MenuItem>
+                )}
               </Select>
             </FormControl>
             {connForm.kind === 'none' && (
@@ -927,7 +976,15 @@ export function PrintersPage() {
                 </FormControl>
               </Stack>
             )}
-            {connForm.kind !== 'none' && (
+            {(connForm.kind === 'windows' || connForm.kind === 'serial') && (
+              <Alert severity="warning">
+                {t(
+                  'operations.printers.connection.notSupported',
+                  'The branch agent cannot print through this connection yet. Connect the printer to the network and choose Network printer (TCP).'
+                )}
+              </Alert>
+            )}
+            {connForm.kind === 'tcp' && (
               <Alert severity="info">
                 {t(
                   'operations.printers.connection.agentHelp',
@@ -1102,11 +1159,19 @@ export function PrintersPage() {
                 label={t('operations.printers.formDocType', 'Document Type')}
                 onChange={(e) => setRouteForm({ ...routeForm, document_type: e.target.value })}
               >
-                <MenuItem value="CUSTOMER_RECEIPT">{t('operations.printers.docTypes.CUSTOMER_RECEIPT', 'Customer Sales Receipt')}</MenuItem>
-                <MenuItem value="KITCHEN_TICKET">{t('operations.printers.docTypes.KITCHEN_TICKET', 'Kitchen Preparation Ticket')}</MenuItem>
-                <MenuItem value="ITEM_LABEL">{t('operations.printers.docTypes.ITEM_LABEL', 'Individual Cup / Item Label')}</MenuItem>
-                <MenuItem value="DELIVERY_SLIP">{t('operations.printers.docTypes.DELIVERY_SLIP', 'Courier Delivery Manifest')}</MenuItem>
-                <MenuItem value="SHIFT_REPORT">{t('operations.printers.docTypes.SHIFT_REPORT', 'Cashier Shift Closure Report')}</MenuItem>
+                {ROUTE_DOC_TYPES.map((type) => (
+                  <MenuItem key={type} value={type}>
+                    {t(`operations.printers.docTypes.${type}`, type)}
+                  </MenuItem>
+                ))}
+                {/* A route saved for a type nothing prints stays visible, so it can be moved. */}
+                {!ROUTE_DOC_TYPES.includes(routeForm.document_type) && (
+                  <MenuItem value={routeForm.document_type} disabled>
+                    {t('operations.printers.unusedDocType', '{{name}} (nothing prints this)', {
+                      name: t(`operations.printers.docTypes.${routeForm.document_type}`, routeForm.document_type),
+                    })}
+                  </MenuItem>
+                )}
               </Select>
             </FormControl>
 
@@ -1191,7 +1256,7 @@ export function PrintersPage() {
                 fullWidth
               />
               <TextField
-                label={t('operations.printers.formPriority', 'Priority (1=Highest)')}
+                label={t('operations.printers.formPriority', 'Priority (higher wins between equally specific routes)')}
                 type="number"
                 value={routeForm.priority}
                 onChange={(e) => setRouteForm({ ...routeForm, priority: Number(e.target.value) })}
@@ -1256,6 +1321,9 @@ type ConnectionForm = {
   serialPort: string;
   baud: string;
 };
+
+/** The documents the system prints, so the only ones a route can usefully name. */
+const ROUTE_DOC_TYPES = ['CUSTOMER_RECEIPT', 'KITCHEN_TICKET', 'GUEST_BILL', 'COURIER_SLIP'];
 
 const BAUD_RATES = ['9600', '19200', '38400', '57600', '115200'];
 
