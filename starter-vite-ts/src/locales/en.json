@@ -3806,7 +3806,8 @@
           "SHIFT_CLOSED": "Shift already closed",
           "DAY_CLOSED": "Day already closed",
           "STOCK_NEGATIVE": "Stock below zero",
-          "BUSINESS_DATE_DIFFERS": "Dated differently from the cutoff"
+          "BUSINESS_DATE_DIFFERS": "Dated differently from the cutoff",
+          "TABLE_UNKNOWN": "Table not in this branch"
         }
       }
     }

@@ -8,6 +8,9 @@ import { AgentSyncOrder } from '../../entities/AgentSyncOrder.entity';
 import { BusinessDayClose } from '../../entities/BusinessDayClose.entity';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import { CashierShift } from '../../entities/CashierShift.entity';
+import { DiningArea } from '../../entities/DiningArea.entity';
+import { DiningTable } from '../../entities/DiningTable.entity';
+import { OptionGroup } from '../../entities/OptionGroup.entity';
 import { OptionItem } from '../../entities/OptionItem.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
@@ -56,7 +59,7 @@ interface OfflineLine {
   variant_name: string | null;
   quantity: string;
   unit_price: string;
-  options: Array<{ option_item_id: string; name: string; price_delta: string }>;
+  options: Array<{ option_item_id: string; name: string; group_name: string | null; price_delta: string }>;
   tax_rate: string;
   line_total: string;
   tax: string;
@@ -80,6 +83,8 @@ interface OfflineOrder {
   created_by: string | null;
   order_type: string;
   table_id: string | null;
+  /** The table's number, looked up when the order is checked. */
+  table_number?: string | null;
   guest_count: number | null;
   delivery_zone_id: string | null;
   call_number: number | null;
@@ -92,6 +97,11 @@ interface OfflineOrder {
   lines: OfflineLine[];
   totals: { subtotal: string; delivery_fee: string; discount_total: string; tax_total: string; grand_total: string };
   payments: OfflinePayment[];
+  /** §13.12: kept in the order's history and audit, not booked. */
+  voided_lines: Array<Record<string, unknown>>;
+  cancelled_by: string | null;
+  approved_by: string | null;
+  prints: Array<Record<string, unknown>>;
 }
 
 class Hold extends Error {
@@ -353,6 +363,14 @@ export class AgentSyncService {
     const productById = new Map<string, Product>(products.map((p) => [p.id, p]));
     const variantById = new Map<string, ProductVariant>(variants.map((v) => [v.id, v]));
     const optionById = new Map<string, OptionItem>(options.map((o) => [o.id, o]));
+    // An add-on keeps the group name the till sold it under; an agent older than 1.6.0 sends
+    // none, and the group's name here stands in for it.
+    const groupIds = [...new Set(options.map((o) => o.option_group_id).filter(Boolean))];
+    const groups: OptionGroup[] = groupIds.length ? await em.find(OptionGroup, { where: { id: In(groupIds), tenant_id: tenantId }, withDeleted: true }) : [];
+    const groupName = new Map(groups.map((g) => [g.id, g.name]));
+    for (const line of order.lines) {
+      for (const o of line.options) o.group_name ??= groupName.get(optionById.get(o.option_item_id)?.option_group_id ?? '') ?? null;
+    }
     for (const line of order.lines) {
       const product = productById.get(line.product_id);
       if (!product) throw new Hold('PRICE_MISMATCH', `Product ${line.product_id} was never on this menu`);
@@ -384,6 +402,22 @@ export class AgentSyncService {
     // sold it, but one the rule would not give its placing time is for a person to look at.
     const clock = await loadBusinessClock(em, tenantId, branchId);
     if (clock.dateOf(order.placed_at) !== order.business_date) flags.add('BUSINESS_DATE_DIFFERS');
+
+    // The table must be one of this branch's. An open dine-in order on it keeps it occupied on
+    // the floor plan until staff finish it; one the branch no longer has is booked without a
+    // table, for a person to seat.
+    if (order.table_id) {
+      const table = await em
+        .createQueryBuilder(DiningTable, 't')
+        .innerJoin(DiningArea, 'a', 'a.id = t.dining_area_id')
+        .where('t.id = :id AND t.tenant_id = :tenantId AND a.branch_id = :branchId', { id: order.table_id, tenantId, branchId })
+        .getOne();
+      if (table) order.table_number = table.table_number;
+      else {
+        flags.add('TABLE_UNKNOWN');
+        order.table_id = null;
+      }
+    }
 
     // Payment methods must be real ones.
     const methodIds = [...new Set(order.payments.map((p) => p.method_id))];
@@ -429,6 +463,7 @@ export class AgentSyncService {
         status: state,
         currency_code: 'IRR',
         table_id: order.table_id,
+        table_number: order.table_number ?? null,
         guest_count: order.guest_count,
         delivery_zone_id: order.delivery_zone_id,
         business_date: order.business_date,
@@ -489,7 +524,7 @@ export class AgentSyncService {
             tenant_id: tenantId,
             order_item_id: item.id,
             option_item_id: opt.option_item_id,
-            option_group_name: '',
+            option_group_name: (opt.group_name ?? '').slice(0, 160),
             option_item_name: opt.name.slice(0, 160),
             price_delta: money(opt.price_delta),
           } as Partial<OrderItemOption>),
@@ -507,8 +542,14 @@ export class AgentSyncService {
         action: 'OFFLINE_SYNC',
         reason_text: order.cancellation_note,
         occurred_at: placedAt,
-        occurred_by: order.created_by,
-        snapshot: { source: AGENT_OFFLINE_SOURCE, agent_id: row.agent_id, data_version: order.data_version, flags: row.flags },
+        occurred_by: order.cancelled_by ?? order.created_by,
+        snapshot: {
+          source: AGENT_OFFLINE_SOURCE,
+          agent_id: row.agent_id,
+          data_version: order.data_version,
+          flags: row.flags,
+          ...tillRecord(order),
+        },
       } as Partial<OrderStateEvent>),
     );
 
@@ -584,7 +625,7 @@ export class AgentSyncService {
       entityId: header.id,
       branchId,
       correlationId: row.id,
-      details: { agent_id: row.agent_id, order_number: orderNumber, state, data_version: order.data_version },
+      details: { agent_id: row.agent_id, order_number: orderNumber, state, data_version: order.data_version, ...tillRecord(order) },
     });
     return orderNumber;
   }
@@ -603,6 +644,19 @@ export class AgentSyncService {
       [tenantId, branchId, businessDate, n],
     );
   }
+}
+
+/**
+ * What the till recorded beyond the order itself (§13.12): lines voided after the kitchen had
+ * them, who cancelled and who approved, and what printed. Kept with the order's history, not booked.
+ */
+function tillRecord(order: OfflineOrder) {
+  return {
+    voided_lines: order.voided_lines,
+    cancelled_by: order.cancelled_by,
+    approved_by: order.approved_by,
+    prints: order.prints,
+  };
 }
 
 /** The price the till charged must be one its snapshot gave it. */
@@ -662,6 +716,7 @@ export function parseOrder(raw: Record<string, any>): OfflineOrder {
       options: (l.options ?? []).map((o: any, j: number) => ({
         option_item_id: uuidOrNull(o?.option_item_id, `line ${i + 1} option ${j + 1}`) ?? bad(`line ${i + 1}: option ${j + 1} has no id`),
         name: str(o?.name) ?? '',
+        group_name: str(o?.group_name),
         price_delta: amount(o?.price_delta, `line ${i + 1} option ${j + 1} price_delta`),
       })),
       tax_rate: typeof l.tax_rate === 'string' && /^\d+(\.\d+)?$/.test(l.tax_rate) ? l.tax_rate : bad(`line ${i + 1}: tax_rate is not a decimal`),
@@ -689,6 +744,12 @@ export function parseOrder(raw: Record<string, any>): OfflineOrder {
   const callNumber = raw.call_number === null || raw.call_number === undefined ? null : Number(raw.call_number);
   if (callNumber !== null && (!Number.isInteger(callNumber) || callNumber < 1)) bad('call_number is not a positive whole number');
   const guests = raw.guest_count === null || raw.guest_count === undefined ? null : Number(raw.guest_count);
+  // Records kept for people to read, not booked: taken as they come, within reason.
+  const records = (v: unknown, name: string) => {
+    if (v === undefined || v === null) return [];
+    if (!Array.isArray(v) || v.some((x) => !x || typeof x !== 'object' || Array.isArray(x))) bad(`${name} must be a list of objects`);
+    return (v as Array<Record<string, unknown>>).slice(0, 200);
+  };
 
   return {
     id: String(raw.id).toLowerCase(),
@@ -717,5 +778,9 @@ export function parseOrder(raw: Record<string, any>): OfflineOrder {
       grand_total: amount(raw.totals.grand_total, 'totals.grand_total'),
     },
     payments,
+    voided_lines: records(raw.voided_lines, 'voided_lines'),
+    cancelled_by: uuidOrNull(raw.cancelled_by, 'cancelled_by'),
+    approved_by: uuidOrNull(raw.approved_by, 'approved_by'),
+    prints: records(raw.prints, 'prints'),
   };
 }
