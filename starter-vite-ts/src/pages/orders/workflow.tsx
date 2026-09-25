@@ -92,7 +92,9 @@ import { orderApi } from 'src/api/orderApi';
 import { refundApi } from 'src/api/refundApi';
 import { paymentApi } from 'src/api/paymentApi';
 import { settingsApi } from 'src/api/settingsApi';
+import { useAuthStore } from 'src/store/useAuthStore';
 import { httpClient as axios } from 'src/api/httpClient';
+import { isManagerOrAbove } from 'src/config/role-access';
 import { useBranchContext, useScopedBranchId } from 'src/contexts/branch-context';
 
 import { CheckoutModal } from 'src/components/CheckoutModal';
@@ -224,6 +226,8 @@ export function OrdersWorkflowPage() {
   // order is the branch's to move, take payment on, print or cancel. So here it is a list to
   // read: details and receipts, and none of the buttons that change an order.
   const readOnly = isHeadOffice;
+  // The whole order book, customers' mobiles included, is a manager's to download.
+  const canExport = isManagerOrAbove(useAuthStore((state) => state.user?.role));
   const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
   // Only head office ever sees more than one, and only there does the column mean anything.
   const showBranchColumn = !branchId && branches.length > 1;
@@ -1144,6 +1148,7 @@ export function OrdersWorkflowPage() {
         </Box>
 
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+          {canExport && (
           <Button
             disabled={exporting || total === 0}
             onClick={handleExport}
@@ -1152,6 +1157,7 @@ export function OrdersWorkflowPage() {
           >
             {t('orders.export')}
           </Button>
+          )}
           <Button onClick={() => loadData()} startIcon={<RefreshIcon />} variant="outlined">
             {t('orders.refresh')}
           </Button>
