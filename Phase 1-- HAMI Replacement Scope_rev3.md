@@ -5,7 +5,7 @@
 - Tenant/company
 - Branches
 - Branch configuration
-- Branch-specific menus
+- Branch-specific menus, through per-branch availability (86, selling windows, daily stock) and branch price lists on the one chain catalog; there is no separate menu composer
 - Branch-specific prices
 - Price groups
 - Branch operating hours
@@ -462,7 +462,16 @@
 
 - Centralized settings engine under Dashboard / Settings
 - Tenant-level configuration
-- No branch-level overrides in Phase 1
+- Branch-level overrides only for a fixed list of setting groups (decided 2026-09-25). Everything else is set once at head office and inherited by every branch, and a group added later stays chain-wide until it is deliberately opened up. A branch manager may override these for their own branch, and head office for any branch; clearing an override returns the branch to the chain value:
+  - Tax (local tax treatment)
+  - POS (how the register behaves)
+  - Order actions (cashier order-edit and cancellation windows)
+  - Order workflow (including incoming-order acceptance)
+  - Kiosk customer identity policy
+  - Shift policy (drawer float and count)
+  - Courier pay (new-courier pay rule, pay for a failed ride)
+  - Business day (turnover time and opening hours)
+- Discount authorizations, financial settings, loyalty economics and all other groups are chain-wide and cannot be overridden by a branch
 - Configurable order lifecycle and allowed actions by order state
 - Configurable order cancellation stages
 - Configurable cashier order-edit time window in minutes
