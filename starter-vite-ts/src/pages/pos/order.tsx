@@ -81,6 +81,7 @@ import {
 
 import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
+import { useCurrencyCode } from 'src/utils/currency';
 
 import { useBranchContext } from 'src/contexts/branch-context';
 import { usePosSource, PosFeatureGate } from 'src/contexts/pos-source';
@@ -131,6 +132,7 @@ function formatRejectionReason(reason?: string, fallback: string = 'Discount was
 
 export function PosOrderPage() {
   const { t } = useTranslation();
+  const currency = useCurrencyCode();
 
   const { selectedBranchId, setSelectedBranchId } = useBranchContext();
   // The cloud for the web POS; the branch agent for the offline till.
@@ -979,7 +981,7 @@ export function PosOrderPage() {
 
       if (applied) {
         const approvedBadge = appliedManualDiscount?.approvalRequestId ? ' [Manager Approved]' : '';
-        const msg = `Applied ${applied.name}${approvedBadge}: -${MoneyUtil.formatCurrency(discAmount)} IRR`;
+        const msg = `Applied ${applied.name}${approvedBadge}: -${MoneyUtil.formatCurrency(discAmount)} ${currency}`;
         setDiscountMessage(msg);
         setError(null);
         if (appliedCouponCode) {
@@ -1001,7 +1003,7 @@ export function PosOrderPage() {
         setAppliedCouponCode('');
       }
     }
-  }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType, selectedDeliveryZoneId, deliveryZones, priceOf, pos]);
+  }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType, selectedDeliveryZoneId, deliveryZones, priceOf, pos, currency]);
 
   useEffect(() => {
     evaluateQuote();
@@ -1046,7 +1048,7 @@ export function PosOrderPage() {
     }
 
     if (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > Number(discountLimits.ceiling.maxFixed)) {
-      const msg = `Fixed discount exceeds maximum policy ceiling of ${MoneyUtil.formatCurrency(discountLimits.ceiling.maxFixed)} IRR`;
+      const msg = `Fixed discount exceeds maximum policy ceiling of ${MoneyUtil.formatCurrency(discountLimits.ceiling.maxFixed)} ${currency}`;
       setError(msg);
       toast.error(msg);
       return;
@@ -1055,7 +1057,7 @@ export function PosOrderPage() {
     if (overOwnLimit) {
       // Prompt Manager PIN authorization immediately
       setApprovalReason(
-        `Manual discount ${manualValue}${manualCalcType === 'PERCENTAGE' ? '%' : ' IRR'} exceeds your limit (${discountLimits.own.pct}% / ${MoneyUtil.formatCurrency(discountLimits.own.maxFixed)} IRR). Manager PIN authorization required.`
+        `Manual discount ${manualValue}${manualCalcType === 'PERCENTAGE' ? '%' : ` ${currency}`} exceeds your limit (${discountLimits.own.pct}% / ${MoneyUtil.formatCurrency(discountLimits.own.maxFixed)} ${currency}). Manager PIN authorization required.`
       );
       setManualDiscountModalOpen(false);
       setApprovalModalOpen(true);
@@ -1473,7 +1475,7 @@ export function PosOrderPage() {
               {t('pos.callNumber', 'Number')}: <strong style={{ fontSize: '1.4em' }}>{placedOrder.call_number}</strong>
             </>
           ) : null}{' '}
-          | <code>{placedOrder.order_number}</code> | {MoneyUtil.formatCurrency(placedOrder.total_amount)} IRR
+          | <code>{placedOrder.order_number}</code> | {MoneyUtil.formatCurrency(placedOrder.total_amount)} {currency}
         </Alert>
       )}
 
@@ -1772,7 +1774,7 @@ export function PosOrderPage() {
                             </Typography>
                           </Box>
                           <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main', mt: 1 }}>
-                            {MoneyUtil.formatCurrency(priceOf(p))} IRR
+                            {MoneyUtil.formatCurrency(priceOf(p))} {currency}
                           </Typography>
                         </Paper>
                       </Grid>
@@ -2268,7 +2270,7 @@ export function PosOrderPage() {
                               </Typography>
                             )}
                             <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main', mt: 0.25, display: 'block' }}>
-                              {MoneyUtil.formatCurrency(item.lineSubtotal)} IRR
+                              {MoneyUtil.formatCurrency(item.lineSubtotal)} {currency}
                             </Typography>
                           </Box>
 
@@ -2514,14 +2516,14 @@ export function PosOrderPage() {
                   % Percent
                 </ToggleButton>
                 <ToggleButton value="FIXED_AMOUNT" sx={{ fontWeight: 600, px: 1.5 }}>
-                  IRR Fixed
+                  {currency} Fixed
                 </ToggleButton>
               </ToggleButtonGroup>
 
               <TextField
                 size="small"
                 type="number"
-                placeholder={manualCalcType === 'PERCENTAGE' ? 'e.g. 10 (%)' : 'e.g. 50000 (IRR)'}
+                placeholder={manualCalcType === 'PERCENTAGE' ? 'e.g. 10 (%)' : `e.g. 50000 (${currency})`}
                 value={manualValue}
                 onChange={(e) => {
                   setManualValue(e.target.value);
@@ -2700,7 +2702,7 @@ export function PosOrderPage() {
                             ),
                             '0',
                           )
-                    )} IRR
+                    )} {currency}
                   </Typography>
                 </Stack>
 
@@ -2821,7 +2823,7 @@ export function PosOrderPage() {
                           sx={{ m: 0 }}
                         />
                         <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                          {MoneyUtil.formatCurrency(selectedProduct ? priceOf(selectedProduct, v) : v.base_price)} IRR
+                          {MoneyUtil.formatCurrency(selectedProduct ? priceOf(selectedProduct, v) : v.base_price)} {currency}
                         </Typography>
                       </Paper>
                     </Grid>
@@ -2869,7 +2871,7 @@ export function PosOrderPage() {
                       // A free choice ("no onions") shows no price; "+0 IRR" read as a charge.
                       label={
                         MoneyUtil.greaterThan(item.price_delta || '0', '0')
-                          ? `${item.name} (+${MoneyUtil.formatCurrency(item.price_delta)} IRR)`
+                          ? `${item.name} (+${MoneyUtil.formatCurrency(item.price_delta)} ${currency})`
                           : item.name
                       }
                       sx={{ display: 'block', mb: 0.5 }}
