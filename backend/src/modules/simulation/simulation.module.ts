@@ -1,6 +1,8 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AgentSyncOrder } from '../../entities/AgentSyncOrder.entity';
 import { IntegrationLog } from '../../entities/IntegrationLog.entity';
+import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { Product } from '../../entities/Product.entity';
@@ -32,6 +34,9 @@ import { CustomerModule } from '../customer/customer.module';
       PaymentMethod,
       CustomerPhone,
       CustomerAddress,
+      // A Snappfood order the till took while the cloud was away is matched here (§17.7).
+      AgentSyncOrder,
+      OrderStateEvent,
     ]),
     AuditModule,
     // Snappfood's customer becomes a customer record.

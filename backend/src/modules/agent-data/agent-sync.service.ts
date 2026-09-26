@@ -8,6 +8,11 @@ import { AgentSyncOrder } from '../../entities/AgentSyncOrder.entity';
 import { BusinessDayClose } from '../../entities/BusinessDayClose.entity';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import { CashierShift } from '../../entities/CashierShift.entity';
+import { Courier } from '../../entities/Courier.entity';
+import { CustomerAddress } from '../../entities/CustomerAddress.entity';
+import { Delivery } from '../../entities/Delivery.entity';
+import { DeliveryAssignment } from '../../entities/DeliveryAssignment.entity';
+import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
 import { DiningArea } from '../../entities/DiningArea.entity';
 import { DiningTable } from '../../entities/DiningTable.entity';
 import { OptionGroup } from '../../entities/OptionGroup.entity';
@@ -25,11 +30,13 @@ import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { inStorePrice } from '../../common/utils/price-list.util';
+import { applyChannelRule } from '../../common/utils/channel-price.util';
+import { TILL_EXPEDITIONS, sameSnappfoodLines, snappfoodOrderNumber } from '../../common/utils/snappfood-order.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { CatalogService } from '../catalog/catalog.service';
 import { PriceListService } from '../catalog/price-lists.service';
 import { ShiftService } from '../cashier/shift.service';
-import { CALL_NUMBER_SETTING_KEY, readCallNumberRanges } from '../order/call-number';
+import { CALL_NUMBER_SETTING_KEY, CallChannelGroup, readCallNumberRanges } from '../order/call-number';
 import { OrderSequenceService } from '../order/order-sequence.service';
 import { bookSucceededPayment } from '../payment/payment-settlement';
 import { AgentDataService, BranchSnapshot } from './agent-data.service';
@@ -48,7 +55,20 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const RIALS = /^\d+$/;
 const STATES = new Set(['COMPLETED', 'CANCELLED', 'OPEN']);
-const ORDER_TYPES = new Set(['TAKEAWAY', 'DINE_IN', 'DELIVERY']);
+// AGGREGATOR: a Snappfood order the till took while the cloud was away (§17.6).
+const ORDER_TYPES = new Set(['TAKEAWAY', 'DINE_IN', 'DELIVERY', 'AGGREGATOR']);
+const SNAPPFOOD_CODE = /^[A-Za-z0-9-]{3,40}$/;
+/** The product id a Snappfood line gets when Snappfood named no product of ours. */
+const NO_PRODUCT = '00000000-0000-0000-0000-000000000001';
+
+/** What the till knew of a Snappfood order, from Snappfood's panel (§17.4). */
+interface TillSnappfood {
+  code: string;
+  expedition: 'DELIVERY' | 'RIDER' | 'PICKUP';
+  payment: 'ONLINE' | 'CASH';
+  customer: { name: string | null; phone: string | null; address: string | null } | null;
+  courier_id: string | null;
+}
 
 /** The order as the till recorded it (§12.4), once its shape has been checked. */
 interface OfflineLine {
@@ -79,7 +99,8 @@ interface OfflineOrder {
   data_version: string | null;
   state: 'COMPLETED' | 'CANCELLED' | 'OPEN';
   terminal_id: string | null;
-  shift_id: string;
+  /** Null only for a Snappfood order, which lands in no drawer (§17.6). */
+  shift_id: string | null;
   created_by: string | null;
   order_type: string;
   table_id: string | null;
@@ -102,6 +123,8 @@ interface OfflineOrder {
   cancelled_by: string | null;
   approved_by: string | null;
   prints: Array<Record<string, unknown>>;
+  /** A Snappfood order (§17.6); null for the till's own sales. */
+  snappfood: TillSnappfood | null;
 }
 
 class Hold extends Error {
@@ -293,7 +316,9 @@ export class AgentSyncService {
     try {
       const order = parseOrder(row.payload);
       const flags = await this.check(row, order);
-      const orderNumber = await this.dataSource.transaction((em) => this.createOrder(em, row, order));
+      const orderNumber = await this.dataSource.transaction((em) =>
+        order.snappfood ? this.bookSnappfood(em, row, order, flags) : this.createOrder(em, row, order),
+      );
       row.status = 'ACCEPTED';
       row.flags = flags;
       row.error = null;
@@ -344,10 +369,12 @@ export class AgentSyncService {
     const paid = order.payments.reduce((s, p) => s.plus(d(p.amount)), d(0));
     if (paid.greaterThan(d(t.grand_total))) throw new Hold('TOTAL_MISMATCH', 'More was paid than the order came to');
 
-    // The prices the till was given.
+    // The prices the till was given: the in-store ones, or Snappfood's for a Snappfood order.
     const snapshot = order.data_version ? await this.data.findServed(tenantId, branchId, order.data_version) : null;
     if (!snapshot) flags.add('SNAPSHOT_UNKNOWN');
+    else if (order.snappfood) checkAgainstSnappfoodPrices(order, snapshot);
     else checkAgainstSnapshot(order, snapshot);
+    const sheet = order.snappfood ? await this.catalog.getChannelPriceSheet(tenantId, 'SNAPPFOOD', branchId) : null;
 
     // Today's catalog: what changed or went since.
     const productIds = [...new Set(order.lines.map((l) => l.product_id))];
@@ -384,18 +411,28 @@ export class AgentSyncService {
         flags.add('ITEM_REMOVED');
         continue;
       }
-      const price = rial(d(inStorePrice(listed, product, variant ?? null)));
+      // Today's price where the till sold it: in store, or on Snappfood's price sheet.
+      const todays = sheet
+        ? sheet.items.find((r) => r.product_id === line.product_id && (r.variant_id ?? null) === (line.variant_id ?? null))?.price
+        : inStorePrice(listed, product, variant ?? null);
+      const addOn = (o: OfflineLine['options'][number]) => {
+        const delta = optionById.get(o.option_item_id)!.price_delta || 0;
+        return rial(d(sheet ? applyChannelRule(delta, sheet.rule) : delta));
+      };
       const changed =
-        !price.equals(d(line.unit_price)) ||
+        todays === undefined ||
+        !rial(d(todays)).equals(d(line.unit_price)) ||
         !d(product.tax_rate || 0).equals(d(line.tax_rate)) ||
-        line.options.some((o) => !rial(d(optionById.get(o.option_item_id)!.price_delta || 0)).equals(d(o.price_delta)));
+        line.options.some((o) => !addOn(o).equals(d(o.price_delta)));
       if (changed) flags.add('PRICE_CHANGED');
     }
 
-    // The shift and the day it belongs to.
-    const shift = await em.findOne(CashierShift, { where: { id: order.shift_id, tenant_id: tenantId } });
-    if (!shift || shift.branch_id !== branchId) throw new Hold('SHIFT_UNKNOWN', 'The shift is not one of this branch');
-    if (shift.state !== 'OPEN') flags.add('SHIFT_CLOSED');
+    // The shift and the day it belongs to. A Snappfood order is no register sale: it has no shift.
+    if (!order.snappfood) {
+      const shift = await em.findOne(CashierShift, { where: { id: order.shift_id!, tenant_id: tenantId } });
+      if (!shift || shift.branch_id !== branchId) throw new Hold('SHIFT_UNKNOWN', 'The shift is not one of this branch');
+      if (shift.state !== 'OPEN') flags.add('SHIFT_CLOSED');
+    }
     const dayClosed = await em.findOne(BusinessDayClose, { where: { tenant_id: tenantId, branch_id: branchId, business_date: order.business_date, status: 'CLOSED' } });
     if (dayClosed) flags.add('DAY_CLOSED');
     // Every channel dates a sale by the branch's cutoff. The till's date is kept, as the branch
@@ -442,7 +479,9 @@ export class AgentSyncService {
   /** Books the order as the till recorded it. Returns its order number. */
   private async createOrder(em: EntityManager, row: AgentSyncOrder, order: OfflineOrder): Promise<string> {
     const { tenant_id: tenantId, branch_id: branchId } = row;
-    const orderNumber = await this.sequences.generateOrderNumber(tenantId, em);
+    // A Snappfood order keeps the number every record of it shares (§17.7).
+    const sf = order.snappfood;
+    const orderNumber = sf ? snappfoodOrderNumber(sf.code) : await this.sequences.generateOrderNumber(tenantId, em);
     const placedAt = new Date(order.placed_at);
     const state = order.state === 'OPEN' ? 'CONFIRMED' : order.state;
     const t = order.totals;
@@ -458,7 +497,7 @@ export class AgentSyncService {
         order_number: orderNumber,
         call_number: order.call_number,
         order_type: order.order_type,
-        channel: 'POS',
+        channel: sf ? 'AGGREGATOR' : 'POS',
         state,
         status: state,
         currency_code: 'IRR',
@@ -481,13 +520,22 @@ export class AgentSyncService {
         paid_amount: '0.0000',
         outstanding_total: money(t.grand_total),
         due_amount: money(t.grand_total),
-        notes: order.notes,
+        notes: sf ? tillSnappfoodNotes(order) : order.notes,
         submitted_at: placedAt,
         completed_at: order.completed_at ? new Date(order.completed_at) : null,
         cancelled_at: order.cancelled_at ? new Date(order.cancelled_at) : null,
         placed_at: placedAt,
         created_by: order.created_by,
         source: AGENT_OFFLINE_SOURCE,
+        // Accepted when the till placed it; Snappfood's own record is still to come.
+        ...(sf
+          ? {
+              accepted_at: state === 'CONFIRMED' ? placedAt : null,
+              aggregator_expedition: TILL_EXPEDITIONS[sf.expedition],
+              aggregator_match: 'TILL_ONLY',
+              aggregator_match_at: new Date(),
+            }
+          : {}),
       } as Partial<OrderHeader>),
     );
 
@@ -605,7 +653,7 @@ export class AgentSyncService {
         payment.posted_at = at;
         await em.save(Payment, payment);
         orderRow = (await em.findOne(OrderHeader, { where: { id: header.id } }))!;
-        if ((p.method_kind || 'CASH') === 'CASH') {
+        if ((p.method_kind || 'CASH') === 'CASH' && order.shift_id) {
           await this.shifts.recordCashPaymentMovement(tenantId, order.shift_id, payment.id, payment.amount, order.created_by || undefined, em);
         }
       } else {
@@ -614,7 +662,7 @@ export class AgentSyncService {
       }
     }
 
-    if (order.call_number) await this.raiseCallCounter(em, tenantId, branchId, order.business_date, order.call_number);
+    if (order.call_number) await this.raiseCallCounter(em, tenantId, branchId, order.business_date, order.call_number, sf ? 'ONLINE' : 'POS');
 
     await this.auditWriter.writeInTransaction(em, {
       tenantId,
@@ -630,18 +678,202 @@ export class AgentSyncService {
     return orderNumber;
   }
 
-  /** The day's POS counter moves up to at least the numbers the till handed out offline. */
-  private async raiseCallCounter(em: EntityManager, tenantId: string, branchId: string, businessDate: string, callNumber: number) {
+  /**
+   * The day's counter moves up to at least the numbers the till handed out offline: POS for its
+   * own sales, ONLINE for the Snappfood orders it took (§17.5).
+   */
+  private async raiseCallCounter(
+    em: EntityManager,
+    tenantId: string,
+    branchId: string,
+    businessDate: string,
+    callNumber: number,
+    group: CallChannelGroup = 'POS',
+  ) {
     const setting = await em.findOne(TenantSetting, { where: { tenant_id: tenantId, key: CALL_NUMBER_SETTING_KEY, branch_id: IsNull() } });
-    const range = readCallNumberRanges(setting?.value).POS;
+    const range = readCallNumberRanges(setting?.value)[group];
     if (callNumber < range.start || callNumber > range.end) return;
     const n = callNumber - range.start + 1;
     await em.query(
       `INSERT INTO "order_call_counter" ("tenant_id", "branch_id", "business_date", "channel_group", "last_value")
-       VALUES ($1, $2, $3, 'POS', $4)
+       VALUES ($1, $2, $3, $5, $4)
        ON CONFLICT ("tenant_id", "branch_id", "business_date", "channel_group")
        DO UPDATE SET "last_value" = GREATEST("order_call_counter"."last_value", EXCLUDED."last_value")`,
-      [tenantId, branchId, businessDate, n],
+      [tenantId, branchId, businessDate, n, group],
+    );
+  }
+
+  /**
+   * A Snappfood order the till took while the cloud was away (§17.7). With no order of its code
+   * yet, it is booked from the till and waits for Snappfood's record (`TILL_ONLY`). With one
+   * already there (pulled, or brought by the webhook while only the branch was cut off),
+   * Snappfood's lines and money stand, and the till adds what Snappfood cannot know.
+   */
+  private async bookSnappfood(em: EntityManager, row: AgentSyncOrder, order: OfflineOrder, flags: string[]): Promise<string> {
+    const sf = order.snappfood!;
+    const existing = await em
+      .createQueryBuilder(OrderHeader, 'o')
+      .setLock('pessimistic_write')
+      .where('o.tenant_id = :tenantId AND o.order_number = :number', { tenantId: row.tenant_id, number: snappfoodOrderNumber(sf.code) })
+      .getOne();
+    if (!existing) {
+      const orderNumber = await this.createOrder(em, row, order);
+      const header = (await em.findOne(OrderHeader, { where: { id: order.id } }))!;
+      await this.placeOnDeliveryBoard(em, header, order, flags);
+      return orderNumber;
+    }
+    if (existing.branch_id !== row.branch_id) throw new Hold('INVALID_ORDER', `Snappfood order ${sf.code} belongs to another branch`);
+    return await this.matchTillToSnappfood(em, row, order, existing, flags);
+  }
+
+  /** The till's record joins Snappfood's, already in the cloud (§17.7). */
+  private async matchTillToSnappfood(em: EntityManager, row: AgentSyncOrder, order: OfflineOrder, existing: OrderHeader, flags: string[]): Promise<string> {
+    const { tenant_id: tenantId, branch_id: branchId } = row;
+    const placedAt = new Date(order.placed_at);
+    const items = await em.find(OrderItem, { where: { tenant_id: tenantId, order_id: existing.id, state: 'ACTIVE' } });
+    const theirs = items.map((i) => ({ product_id: i.product_id === NO_PRODUCT ? null : i.product_id, product_name: i.product_name, quantity: i.quantity }));
+    if (!sameSnappfoodLines(order.lines, theirs)) flags.push('SNAPPFOOD_DIFFERS');
+    const tillCancelled = order.state === 'CANCELLED';
+    const cloudCancelled = ['CANCELLED', 'REJECTED'].includes(existing.state);
+    if (tillCancelled !== cloudCancelled) flags.push('SNAPPFOOD_CANCELLED');
+    // Accepted in the cloud as well as on the till: both kitchens' tickets may have gone out.
+    if (!existing.aggregator_match && !['PENDING_ACCEPTANCE', 'CANCELLED', 'REJECTED'].includes(existing.state)) {
+      flags.push('SNAPPFOOD_ACCEPTED_TWICE');
+    }
+
+    const fromState = existing.state;
+    if (existing.state === 'PENDING_ACCEPTANCE' && !tillCancelled) {
+      existing.state = 'CONFIRMED';
+      existing.status = 'CONFIRMED';
+      existing.accepted_at = placedAt;
+      existing.submitted_at = existing.submitted_at || placedAt;
+    }
+    if (!existing.call_number && order.call_number) {
+      existing.call_number = order.call_number;
+      existing.business_date = existing.business_date || order.business_date;
+      await this.raiseCallCounter(em, tenantId, branchId, order.business_date, order.call_number, 'ONLINE');
+    }
+    existing.source = existing.source || AGENT_OFFLINE_SOURCE;
+    existing.aggregator_match = 'MATCHED';
+    existing.aggregator_match_at = new Date();
+    await em.save(OrderHeader, existing);
+
+    await em.save(
+      OrderStateEvent,
+      em.create(OrderStateEvent, {
+        tenant_id: tenantId,
+        order_id: existing.id,
+        from_state: fromState,
+        to_state: existing.state,
+        action: 'OFFLINE_SYNC_MATCHED',
+        occurred_at: placedAt,
+        occurred_by: order.cancelled_by ?? order.created_by,
+        snapshot: {
+          source: AGENT_OFFLINE_SOURCE,
+          agent_id: row.agent_id,
+          till_order_id: order.id,
+          snappfood: order.snappfood,
+          till_lines: order.lines.map((l) => ({ product_name: l.product_name, variant_name: l.variant_name, quantity: l.quantity, line_total: l.line_total })),
+          flags,
+          ...tillRecord(order),
+        },
+      } as Partial<OrderStateEvent>),
+    );
+    await this.placeOnDeliveryBoard(em, existing, order, flags);
+    await this.auditWriter.writeInTransaction(em, {
+      tenantId,
+      actorType: order.created_by ? 'ADMIN' : 'SYSTEM',
+      actorId: order.created_by ?? undefined,
+      action: 'ORDER_OFFLINE_SYNCED',
+      entityType: 'Order',
+      entityId: existing.id,
+      branchId,
+      correlationId: row.id,
+      details: { agent_id: row.agent_id, order_number: existing.order_number, matched: true, till_order_id: order.id, flags, ...tillRecord(order) },
+    });
+    return existing.order_number;
+  }
+
+  /**
+   * A Snappfood order the store delivers itself goes on the delivery board, with the courier the
+   * till picked (§17.1 decision 6). The address is Snappfood's when its record is in, else the
+   * one typed on the till. The courier was chosen at the counter, so they are assigned whether or
+   * not they checked in here; delivered, failed and their cash are recorded on Dispatch.
+   */
+  private async placeOnDeliveryBoard(em: EntityManager, header: OrderHeader, order: OfflineOrder, flags: string[]) {
+    const sf = order.snappfood!;
+    if (sf.expedition !== 'DELIVERY' || ['CANCELLED', 'REJECTED', 'COMPLETED'].includes(header.state)) return;
+    const tenantId = header.tenant_id;
+    const placedAt = new Date(order.placed_at);
+    const reason = 'Snappfood order taken on the till while the cloud was away';
+    let delivery = await em.findOne(Delivery, { where: { tenant_id: tenantId, order_id: header.id } });
+    if (!delivery) {
+      const address = header.customer_address_id
+        ? await em.findOne(CustomerAddress, { where: { id: header.customer_address_id, tenant_id: tenantId } })
+        : null;
+      delivery = await em.save(
+        Delivery,
+        em.create(Delivery, {
+          tenant_id: tenantId,
+          order_id: header.id,
+          zone_id: null,
+          courier_id: null,
+          state: 'UNASSIGNED',
+          fee: header.delivery_fee || '0.0000',
+          currency_code: header.currency_code || 'IRR',
+          address_snapshot: address
+            ? {
+                address_id: address.id,
+                title: address.title,
+                address_text: address.address_text,
+                postal_code: address.postal_code || null,
+                customer_id: header.customer_id,
+              }
+            : {
+                address_text: sf.customer?.address ?? null,
+                customer_name: sf.customer?.name ?? null,
+                phone: sf.customer?.phone ?? null,
+                typed_on_till: true,
+              },
+        } as Partial<Delivery>),
+      );
+      await em.save(
+        DeliveryEvent,
+        em.create(DeliveryEvent, { tenant_id: tenantId, delivery_id: delivery.id, from_state: 'NONE', to_state: 'UNASSIGNED', reason, occurred_by: order.created_by }),
+      );
+    }
+    if (!sf.courier_id || delivery.courier_id || delivery.state !== 'UNASSIGNED') return;
+    const courier = await em.findOne(Courier, { where: { id: sf.courier_id, tenant_id: tenantId, branch_id: header.branch_id, is_active: true } });
+    if (!courier) {
+      flags.push('COURIER_UNKNOWN');
+      return;
+    }
+    delivery.courier_id = courier.id;
+    delivery.state = 'ASSIGNED';
+    delivery.assigned_at = placedAt;
+    await em.save(Delivery, delivery);
+    await em.save(
+      DeliveryEvent,
+      em.create(DeliveryEvent, {
+        tenant_id: tenantId,
+        delivery_id: delivery.id,
+        from_state: 'UNASSIGNED',
+        to_state: 'ASSIGNED',
+        reason: `Assigned to ${courier.name} on the till`,
+        occurred_by: order.created_by,
+      }),
+    );
+    await em.save(
+      DeliveryAssignment,
+      em.create(DeliveryAssignment, {
+        tenant_id: tenantId,
+        order_id: header.id,
+        courier_id: courier.id,
+        status: 'ASSIGNED',
+        assigned_at: placedAt,
+        delivery_fee: delivery.fee || '0.00',
+        tip_amount: '0.00',
+      }),
     );
   }
 }
@@ -656,6 +888,66 @@ function tillRecord(order: OfflineOrder) {
     cancelled_by: order.cancelled_by,
     approved_by: order.approved_by,
     prints: order.prints,
+  };
+}
+
+/**
+ * A Snappfood order's notes, as the cloud writes them for one the webhook brought: who, where,
+ * how it travels and how it was paid, here as the cashier typed them from Snappfood's panel.
+ */
+function tillSnappfoodNotes(order: OfflineOrder): string {
+  const sf = order.snappfood!;
+  return [
+    `Snappfood order ${sf.code} (typed on the till while the cloud was away)`,
+    sf.customer?.name && `Customer: ${sf.customer.name}`,
+    sf.customer?.phone && `Phone: ${sf.customer.phone}`,
+    sf.customer?.address && `Address: ${sf.customer.address}`,
+    `Delivery: ${TILL_EXPEDITIONS[sf.expedition]}`,
+    `Payment: ${sf.payment}`,
+    order.notes && `Note: ${order.notes}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** A Snappfood order's prices must be the ones its snapshot gave for Snappfood (§17.6). */
+function checkAgainstSnappfoodPrices(order: OfflineOrder, snapshot: BranchSnapshot) {
+  if (!snapshot.snappfood) throw new Hold('PRICE_MISMATCH', "The till's snapshot has no Snappfood prices");
+  const products = new Map<string, any>((snapshot.products || []).map((p: any) => [p.id, p]));
+  const prices = new Map<string, string>((snapshot.snappfood.prices || []).map((p: any) => [`${p.product_id}:${p.variant_id ?? ''}`, p.price]));
+  const addOns = new Map<string, string>((snapshot.snappfood.add_ons || []).map((a: any) => [a.option_item_id, a.price_delta]));
+  for (const [i, line] of order.lines.entries()) {
+    const p = products.get(line.product_id);
+    if (!p) throw new Hold('PRICE_MISMATCH', `Line ${i + 1}: the till's snapshot has no such product`);
+    const price = prices.get(`${line.product_id}:${line.variant_id ?? ''}`);
+    if (price === undefined || !d(price).equals(d(line.unit_price))) {
+      throw new Hold('PRICE_MISMATCH', `Line ${i + 1}: charged ${line.unit_price}, Snappfood's price in the snapshot is ${price ?? 'nothing'}`);
+    }
+    if (!d(p.tax_rate).equals(d(line.tax_rate))) throw new Hold('PRICE_MISMATCH', `Line ${i + 1}: tax rate differs from the snapshot`);
+    for (const o of line.options) {
+      if (!addOns.has(o.option_item_id) || !d(addOns.get(o.option_item_id)).equals(d(o.price_delta))) {
+        throw new Hold('PRICE_MISMATCH', `Line ${i + 1}: an add-on's Snappfood price differs from the snapshot`);
+      }
+    }
+  }
+}
+
+/** The Snappfood block of an uploaded order (§17.6). */
+function parseSnappfood(raw: any, bad: (why: string) => never, uuidOrNull: (v: unknown, name: string) => string | null): TillSnappfood {
+  if (!raw || typeof raw !== 'object') bad('a Snappfood order needs its snappfood block');
+  const code = typeof raw.code === 'string' ? raw.code.trim() : '';
+  if (!SNAPPFOOD_CODE.test(code)) bad('snappfood.code must be 3 to 40 letters, digits or -');
+  if (!Object.prototype.hasOwnProperty.call(TILL_EXPEDITIONS, raw.expedition)) bad('snappfood.expedition must be DELIVERY, RIDER or PICKUP');
+  const payment = raw.payment ?? 'ONLINE';
+  if (payment !== 'ONLINE' && payment !== 'CASH') bad('snappfood.payment must be ONLINE or CASH');
+  const text = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+  const c = raw.customer && typeof raw.customer === 'object' ? raw.customer : null;
+  return {
+    code,
+    expedition: raw.expedition,
+    payment,
+    customer: c ? { name: text(c.name, 120), phone: text(c.phone, 40), address: text(c.address, 500) } : null,
+    courier_id: uuidOrNull(raw.courier_id, 'snappfood.courier_id'),
   };
 }
 
@@ -690,10 +982,17 @@ export function parseOrder(raw: Record<string, any>): OfflineOrder {
   const time = (v: unknown, name: string) => (typeof v === 'string' && !Number.isNaN(Date.parse(v)) ? v : bad(`${name} is not a time`));
 
   if (!STATES.has(raw.state)) bad('state must be COMPLETED, CANCELLED or OPEN');
-  if (!ORDER_TYPES.has(raw.order_type)) bad('order_type must be TAKEAWAY, DINE_IN or DELIVERY');
+  if (!ORDER_TYPES.has(raw.order_type)) bad('order_type must be TAKEAWAY, DINE_IN, DELIVERY or AGGREGATOR');
   if (typeof raw.business_date !== 'string' || !DATE.test(raw.business_date)) bad('business_date is not YYYY-MM-DD');
+  // A Snappfood order (§17.6): no shift, no payments, and never finished on the till.
+  const isSnappfood = raw.order_type === 'AGGREGATOR';
+  if (isSnappfood !== (raw.channel === 'AGGREGATOR')) bad('a Snappfood order has channel and order_type AGGREGATOR');
+  if (!isSnappfood && raw.snappfood !== undefined && raw.snappfood !== null) bad('only a Snappfood order has a snappfood block');
+  if (isSnappfood && raw.state === 'COMPLETED') bad('a Snappfood order goes up OPEN or CANCELLED');
+  if (isSnappfood && (raw.payments || []).length) bad('a Snappfood order carries no payments');
   const shiftId = uuidOrNull(raw.shift_id, 'shift_id');
-  if (!shiftId) bad('shift_id is required');
+  if (!shiftId && !isSnappfood) bad('shift_id is required');
+  const snappfood = isSnappfood ? parseSnappfood(raw.snappfood, bad, uuidOrNull) : null;
   if (!Array.isArray(raw.lines) || raw.lines.length === 0) bad('an order needs lines');
   if (!raw.totals || typeof raw.totals !== 'object') bad('totals are missing');
   if (raw.payments !== undefined && !Array.isArray(raw.payments)) bad('payments must be a list');
@@ -756,7 +1055,7 @@ export function parseOrder(raw: Record<string, any>): OfflineOrder {
     data_version: str(raw.data_version),
     state: raw.state,
     terminal_id: uuidOrNull(raw.terminal_id, 'terminal_id'),
-    shift_id: shiftId!,
+    shift_id: shiftId,
     created_by: uuidOrNull(raw.created_by, 'created_by'),
     order_type: raw.order_type,
     table_id: uuidOrNull(raw.table_id, 'table_id'),
@@ -782,5 +1081,6 @@ export function parseOrder(raw: Record<string, any>): OfflineOrder {
     cancelled_by: uuidOrNull(raw.cancelled_by, 'cancelled_by'),
     approved_by: uuidOrNull(raw.approved_by, 'approved_by'),
     prints: records(raw.prints, 'prints'),
+    snappfood,
   };
 }

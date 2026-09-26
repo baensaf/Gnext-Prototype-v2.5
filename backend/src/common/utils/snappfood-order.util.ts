@@ -53,3 +53,33 @@ export function reportWindowEndsAt(order: Pick<OrderHeader, 'accepted_at'>): Dat
   if (!order.accepted_at) return null;
   return new Date(new Date(order.accepted_at).getTime() + SNAPPFOOD_REPORT_WINDOW_MINUTES * 60000);
 }
+
+/** How the till names the way a Snappfood order travels (protocol §17.4), as Snappfood does. */
+export const TILL_EXPEDITIONS: Record<string, string> = { DELIVERY: 'DELIVERY', RIDER: 'ZF_EXPRESS', PICKUP: 'PICKUP' };
+
+/** The order number every record of one Snappfood order shares (§17.7). */
+export function snappfoodOrderNumber(code: string): string {
+  return `SNP-${code}`;
+}
+
+/**
+ * Whether two records of a Snappfood order hold the same dishes in the same quantities: the
+ * till's and Snappfood's (§17.7). Snappfood's lines name a product but no size or add-on, so a
+ * line is its product (or, without one, its name) and its quantity.
+ */
+export function sameSnappfoodLines(
+  a: Array<{ product_id?: string | null; product_name?: string | null; quantity: unknown }>,
+  b: Array<{ product_id?: string | null; product_name?: string | null; quantity: unknown }>,
+): boolean {
+  const count = (lines: typeof a) => {
+    const byKey = new Map<string, number>();
+    for (const l of lines) {
+      const key = l.product_id || `name:${l.product_name ?? ''}`;
+      byKey.set(key, (byKey.get(key) ?? 0) + Number(l.quantity));
+    }
+    return byKey;
+  };
+  const x = count(a);
+  const y = count(b);
+  return x.size === y.size && [...x].every(([k, q]) => y.get(k) === q);
+}

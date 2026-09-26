@@ -7,6 +7,8 @@ import { AgentDataSnapshot } from '../../entities/AgentDataSnapshot.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { CashierShift } from '../../entities/CashierShift.entity';
 import { Category } from '../../entities/Category.entity';
+import { Courier } from '../../entities/Courier.entity';
+import { CourierAttendance } from '../../entities/CourierAttendance.entity';
 import { DeliveryZone } from '../../entities/DeliveryZone.entity';
 import { DiningArea } from '../../entities/DiningArea.entity';
 import { DiningTable } from '../../entities/DiningTable.entity';
@@ -26,9 +28,10 @@ import { MoneyUtil } from '../../common/utils/money.util';
 import { parseDays } from '../../common/utils/availability-schedule.util';
 import { inStorePrice } from '../../common/utils/price-list.util';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
+import { applyChannelRule } from '../../common/utils/channel-price.util';
 import { CatalogService } from '../catalog/catalog.service';
 import { PriceListService } from '../catalog/price-lists.service';
-import { CALL_NUMBER_SETTING_KEY, posCallCount, readCallNumberRanges } from '../order/call-number';
+import { CALL_NUMBER_SETTING_KEY, callCount, readCallNumberRanges } from '../order/call-number';
 import { resolveOrderActionConfig } from '../order/order-edit-policy';
 import { PrintRoutingService } from '../printing/print-routing.service';
 
@@ -84,6 +87,8 @@ export class AgentDataService {
     @InjectRepository(CashierShift) private readonly shifts: Repository<CashierShift>,
     @InjectRepository(TenantSetting) private readonly settings: Repository<TenantSetting>,
     @InjectRepository(AdminUser) private readonly users: Repository<AdminUser>,
+    @InjectRepository(Courier) private readonly couriers: Repository<Courier>,
+    @InjectRepository(CourierAttendance) private readonly attendance: Repository<CourierAttendance>,
     private readonly catalog: CatalogService,
     private readonly priceLists: PriceListService,
     private readonly routing: PrintRoutingService,
@@ -241,16 +246,26 @@ export class AgentDataService {
         windows: [...ws].sort(byId).map((w) => ({ days: parseDays(w.days_of_week), from: w.start_time, to: w.end_time })),
       }));
 
-    const [methods, areas, zones, tills, openShifts, settingRows, issued, routing] = await Promise.all([
+    const [methods, areas, zones, tills, openShifts, settingRows, issued, issuedOnline, routing, sheet, couriers, attendance] = await Promise.all([
       this.paymentMethods.find({ where: { tenant_id: tenantId, is_active: true }, order: { sort_order: 'ASC', code: 'ASC' } }),
       this.areas.find({ where: { tenant_id: tenantId, branch_id: branchId, is_active: true }, order: { sort_order: 'ASC', id: 'ASC' } }),
       this.zones.find({ where: { tenant_id: tenantId, branch_id: branchId, is_active: true, deleted_at: IsNull() }, order: { name: 'ASC', id: 'ASC' } }),
       this.terminals.find({ where: { tenant_id: tenantId, branch_id: branchId, is_active: true, deleted_at: IsNull() }, order: { code: 'ASC', id: 'ASC' } }),
       this.shifts.find({ where: { tenant_id: tenantId, branch_id: branchId, state: 'OPEN' }, order: { opened_at: 'ASC', id: 'ASC' } }),
       this.settings.find({ where: { tenant_id: tenantId, key: In([CALL_NUMBER_SETTING_KEY, 'ORDER_ACTIONS', 'SYSTEM', CALENDAR_SETTING_KEY]) } }),
-      posCallCount(this.settings.manager, tenantId, branchId, businessDate),
+      callCount(this.settings.manager, tenantId, branchId, businessDate, 'POS'),
+      callCount(this.settings.manager, tenantId, branchId, businessDate, 'ONLINE'),
       this.routing.offlineRouting(tenantId, branchId, products.map((p) => p.id)),
+      this.catalog.getChannelPriceSheet(tenantId, 'SNAPPFOOD', branchId),
+      this.couriers.find({ where: { tenant_id: tenantId, branch_id: branchId, is_active: true }, order: { name: 'ASC', id: 'ASC' } }),
+      this.attendance.find({ where: { tenant_id: tenantId, branch_id: branchId, date: businessDate } }),
     ]);
+    // Who is on shift now: each courier's latest record today.
+    const latestAttendance = new Map<string, CourierAttendance>();
+    for (const a of attendance) {
+      const seen = latestAttendance.get(a.courier_id);
+      if (!seen || new Date(a.created_at) > new Date(seen.created_at)) latestAttendance.set(a.courier_id, a);
+    }
     // Each key as it applies at this branch: its own override, else head office's value.
     const setting = (key: string) =>
       pickSettingValue(
@@ -266,6 +281,7 @@ export class AgentDataService {
       ? await this.tables.find({ where: { tenant_id: tenantId, dining_area_id: In(areaIds), is_active: true }, order: { table_number: 'ASC', id: 'ASC' } })
       : [];
     const areaName = new Map(areas.map((a) => [a.id, a.name]));
+    const ranges = readCallNumberRanges(orgSetting(CALL_NUMBER_SETTING_KEY));
 
     return {
       branch: {
@@ -276,8 +292,8 @@ export class AgentDataService {
         time_zone: branch.time_zone || 'Asia/Tehran',
       },
       settings: {
-        call_numbers: { POS: readCallNumberRanges(orgSetting(CALL_NUMBER_SETTING_KEY)).POS },
-        call_number_issued_today: { business_date: businessDate, POS: issued },
+        call_numbers: { POS: ranges.POS, ONLINE: ranges.ONLINE },
+        call_number_issued_today: { business_date: businessDate, POS: issued, ONLINE: issuedOnline },
         order_actions: {
           edit_window_minutes: orderActions.editWindowMinutes,
           cancel_window_minutes: orderActions.cancelWindowMinutes,
@@ -332,6 +348,22 @@ export class AgentDataService {
         },
         ...routing,
       },
+      // What a Snappfood order costs, for the till to take one while the cloud is away (§17.3):
+      // the channel price sheet, and each add-on at the channel's markup.
+      snappfood: {
+        prices: sheet.items
+          .map((r) => ({ product_id: r.product_id, variant_id: r.variant_id ?? null, price: rial(r.price) }))
+          .sort((a, b) => `${a.product_id}:${a.variant_id}`.localeCompare(`${b.product_id}:${b.variant_id}`)),
+        add_ons: [...items]
+          .sort(byId)
+          .map((i) => ({ option_item_id: i.id, price_delta: rial(applyChannelRule(i.price_delta || 0, sheet.rule)) })),
+      },
+      couriers: couriers.map((c) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone ?? null,
+        checked_in: latestAttendance.get(c.id)?.status === 'CHECKED_IN',
+      })),
     };
   }
 }

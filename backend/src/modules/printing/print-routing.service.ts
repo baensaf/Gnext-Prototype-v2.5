@@ -39,7 +39,7 @@ export interface OfflineRouting {
     printers: Array<{ printer_id: string; copies: number }>;
   }>;
   kitchen_routes: Record<string, OfflineRoute>;
-  documents: { CUSTOMER_RECEIPT: OfflineRoute | null; GUEST_BILL: OfflineRoute | null };
+  documents: { CUSTOMER_RECEIPT: OfflineRoute | null; GUEST_BILL: OfflineRoute | null; COURIER_SLIP: OfflineRoute | null };
   fallback: { KITCHEN_TICKET: string | null; OTHER: string | null };
 }
 
@@ -177,10 +177,11 @@ export class PrintRoutingService {
    * back to. The till then splits and routes exactly as `PrintQueueService` does online.
    */
   async offlineRouting(tenantId: string, branchId: string, productIds: string[]): Promise<OfflineRouting> {
-    const [kitchenRoutes, receiptRoutes, billRoutes, contexts, groups, inBranch] = await Promise.all([
+    const [kitchenRoutes, receiptRoutes, billRoutes, slipRoutes, contexts, groups, inBranch] = await Promise.all([
       this.loadRoutes(tenantId, branchId, 'KITCHEN_TICKET'),
       this.loadRoutes(tenantId, branchId, 'CUSTOMER_RECEIPT'),
       this.loadRoutes(tenantId, branchId, 'GUEST_BILL'),
+      this.loadRoutes(tenantId, branchId, 'COURIER_SLIP'),
       this.lineContexts(tenantId, branchId, productIds),
       this.groupRepo.find({ where: { tenant_id: tenantId, branch_id: branchId }, order: { code: 'ASC', id: 'ASC' } }),
       this.printerRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, is_active: true }, order: { code: 'ASC', id: 'ASC' } }),
@@ -217,7 +218,12 @@ export class PrintRoutingService {
           .map((m) => ({ printer_id: m.printer_id, copies: m.copies || 1 })),
       })),
       kitchen_routes,
-      documents: { CUSTOMER_RECEIPT: documentRoute(receiptRoutes), GUEST_BILL: documentRoute(billRoutes) },
+      documents: {
+        CUSTOMER_RECEIPT: documentRoute(receiptRoutes),
+        GUEST_BILL: documentRoute(billRoutes),
+        // A Snappfood order the store delivers itself, taken while the cloud was away (§17.4).
+        COURIER_SLIP: documentRoute(slipRoutes),
+      },
       fallback: { KITCHEN_TICKET: inBranch.find(isKitchen)?.id ?? null, OTHER: other?.id ?? null },
     };
   }

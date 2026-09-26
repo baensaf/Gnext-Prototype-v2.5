@@ -50,15 +50,27 @@ export function readCallNumberRanges(value: any): Record<CallChannelGroup, CallN
 }
 
 /**
- * How many numbers the branch's POS range has handed out on a business day: the count, not the
- * last number. The agent's offline till carries on from it (protocol §12.2, §13.9).
+ * How many numbers one of the branch's ranges has handed out on a business day: the count, not
+ * the last number. The agent's offline till carries on from it: POS for its own sales (protocol
+ * §12.2, §13.9), ONLINE for the Snappfood orders it takes (§17.5).
  */
-export async function posCallCount(em: Pick<EntityManager, 'query'>, tenantId: string, branchId: string, businessDate: string): Promise<number> {
+export async function callCount(
+  em: Pick<EntityManager, 'query'>,
+  tenantId: string,
+  branchId: string,
+  businessDate: string,
+  group: CallChannelGroup,
+): Promise<number> {
   const rows = await em.query(
-    `SELECT "last_value" FROM "order_call_counter" WHERE "tenant_id" = $1 AND "branch_id" = $2 AND "business_date" = $3 AND "channel_group" = 'POS'`,
-    [tenantId, branchId, businessDate],
+    `SELECT "last_value" FROM "order_call_counter" WHERE "tenant_id" = $1 AND "branch_id" = $2 AND "business_date" = $3 AND "channel_group" = $4`,
+    [tenantId, branchId, businessDate, group],
   );
   return Number(rows?.[0]?.last_value || 0);
+}
+
+/** The POS range's count (§13.9). */
+export function posCallCount(em: Pick<EntityManager, 'query'>, tenantId: string, branchId: string, businessDate: string): Promise<number> {
+  return callCount(em, tenantId, branchId, businessDate, 'POS');
 }
 
 /** The n-th number handed out today in a range, wrapping back to its start when it runs out. */
