@@ -465,6 +465,15 @@ export function AgentsPage() {
             </Stack>
           ) : (
             <Stack spacing={2} sx={{ pt: 1 }}>
+              {/* A branch chosen in the header is the code's branch; only head office picks one. */}
+              {branchId ? (
+                <TextField
+                  fullWidth
+                  label={t('operations.agents.filterBranch', 'Branch')}
+                  value={branchLabel(branchId)}
+                  slotProps={{ input: { readOnly: true } }}
+                />
+              ) : (
               <FormControl fullWidth required>
                 <InputLabel>{t('operations.agents.filterBranch', 'Branch')}</InputLabel>
                 <Select
@@ -481,6 +490,7 @@ export function AgentsPage() {
                     ))}
                 </Select>
               </FormControl>
+              )}
               {codeBranchHasAgent && (
                 <Alert severity="info">
                   {t(
