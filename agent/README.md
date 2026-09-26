@@ -35,7 +35,8 @@ section numbers (§) in the code refer to it.
     without a response code is `UNKNOWN`. Response `00` is approved; other codes are declined, or
     cancelled when the description says so. `payment.query` is not supported: Saman's inquiry
     needs the RRN, which an unknown charge does not have. Status is checked every 5 minutes, never
-    during a charge.
+    during a charge. An agent update replaces only `gnext-agent.exe`: a new bridge reaches a PC
+    when the installer runs there again (an enrolled agent keeps its enrolment).
   - `fake`: amounts ending in `0` are approved, `1` declined, `2` time out (`UNKNOWN`; a later
     *Check terminal* finds them approved), `3` cancelled on the terminal.
 - **Branch snapshot** (§12.2): keeps a copy of what the branch sells, at its prices, in

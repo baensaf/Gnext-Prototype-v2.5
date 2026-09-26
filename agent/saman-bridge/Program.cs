@@ -122,10 +122,7 @@ namespace Gnext.SamanBridge
             try
             {
                 string media = (req.media ?? "lan").ToLowerInvariant();
-                bool selected = media == "com"
-                    ? factory.SetCom(req.com ?? "")
-                    : factory.SetLan(req.ip ?? "");
-                if (!selected)
+                if (!SelectTerminal(factory, req, media))
                     return Fail("connect", media == "com" ? "cannot open " + req.com : "cannot reach " + req.ip);
 
                 int timeout = req.timeout_s > 0 ? req.timeout_s : 90;
@@ -149,6 +146,10 @@ namespace Gnext.SamanBridge
                         if (probe == null || probe.ResponseCode != "00")
                             return Fail("connect", Describe(probe, "terminal did not answer the connection test"));
 
+                        // The SDK ends every LAN operation by forgetting the terminal's IP and port,
+                        // so the purchase has to select the terminal again.
+                        if (!SelectTerminal(factory, req, media))
+                            return Fail("connect", media == "com" ? "cannot open " + req.com : "cannot reach " + req.ip);
                         factory.Initialization(ResponseLanguage.Persian, timeout, AsyncType.Sync);
                         PosResult r;
                         try
@@ -161,8 +162,10 @@ namespace Gnext.SamanBridge
                         {
                             return Fail("send", ex.GetType().Name + ": " + ex.Message);
                         }
+                        // PcStarterPurchase returns null only before it sends the amount (no
+                        // connection, or arguments it refused), so the terminal never saw it.
                         if (r == null)
-                            return Fail("send", "no result from the terminal");
+                            return Fail("connect", "the purchase did not reach the terminal");
                         return Done(Result(r));
                     }
 
@@ -187,6 +190,11 @@ namespace Gnext.SamanBridge
             {
                 try { factory.Dispose(); } catch { }
             }
+        }
+
+        private static bool SelectTerminal(PcPosFactory factory, Request req, string media)
+        {
+            return media == "com" ? factory.SetCom(req.com ?? "") : factory.SetLan(req.ip ?? "");
         }
 
         private static string Describe(PosResult r, string fallback)
