@@ -117,6 +117,16 @@ describe('incoming order policy', () => {
       expect(orderService.acceptIncomingOrder).toHaveBeenCalledWith('t-1', 'o-1', { prepMinutes: 25 }, undefined, undefined);
     });
 
+    it('leaves an order waiting for staff when it would go straight through but no shift is open', async () => {
+      orderRepo.findOne.mockResolvedValue(pending());
+      settingRows = [branchSetting({ acceptance: { AGGREGATOR: 'AUTO' } })];
+      orderService.acceptIncomingOrder.mockRejectedValue(new ConflictException({ code: 'NO_OPEN_SHIFT' }));
+
+      const accepted = await service.applyOnArrival('t-1', 'o-1');
+
+      expect(accepted).toBeNull();
+    });
+
     it('rejects an order left past the time limit, alerts its branch, and leaves a younger one alone', async () => {
       orderRepo.find.mockResolvedValue([
         pending({ placed_at: minutesAgo(6) }),
@@ -144,6 +154,19 @@ describe('incoming order policy', () => {
 
       expect(orderService.acceptIncomingOrder).toHaveBeenCalledWith('t-1', 'o-1', { prepMinutes: 20 });
       expect(orderService.rejectUnanswered).not.toHaveBeenCalled();
+    });
+
+    it('rejects instead of accepting an unanswered order when no shift is open, and says why', async () => {
+      orderRepo.find.mockResolvedValue([pending({ placed_at: minutesAgo(6) })]);
+      settingRows = [branchSetting({ timeoutAction: 'ACCEPT' })];
+      orderService.acceptIncomingOrder.mockRejectedValue(new ConflictException({ code: 'NO_OPEN_SHIFT' }));
+
+      const handled = await service.expireOverdue(NOW);
+
+      expect(handled).toBe(1);
+      expect(orderService.rejectUnanswered).toHaveBeenCalledWith('t-1', 'o-1', 5);
+      const [alert] = alertRepo.save.mock.calls[0];
+      expect(alert.message).toContain('No shift was open');
     });
 
     it('skips an order a cashier answered while the sweep was running, without an alert', async () => {

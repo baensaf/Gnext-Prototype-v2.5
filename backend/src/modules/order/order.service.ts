@@ -1112,6 +1112,9 @@ export class OrderService {
           message: `Order ${order.order_number} is awaiting acceptance; accept or reject it`,
         });
       }
+      if (action.toUpperCase() === 'ACCEPT') {
+        await this.assertShiftOpenAtBranch(em, tenantId, order);
+      }
 
       const targetState = this.mapActionToTargetState(action);
       // Once the store has accepted a Snappfood order, only Snappfood cancels it, and a
@@ -1167,6 +1170,29 @@ export class OrderService {
       });
 
       return order;
+    });
+  }
+
+  /**
+   * An incoming order is accepted only while the branch is trading: a shift open there, on
+   * today's business day. With every drawer shut nobody is on hand to cook it, Snappfood is
+   * promised a time the store cannot keep, and the order belongs to no shift's takings.
+   */
+  private async assertShiftOpenAtBranch(em: EntityManager, tenantId: string, order: OrderHeader) {
+    const open = await em.find(CashierShift, {
+      where: [
+        { tenant_id: tenantId, branch_id: order.branch_id, state: 'OPEN' },
+        { tenant_id: tenantId, branch_id: order.branch_id, state: 'CLOSING_REVIEW' },
+      ],
+    });
+    if (open.length) {
+      const today = (await loadBusinessClock(em, tenantId, order.branch_id)).today();
+      if (open.some((shift) => !shift.business_date || String(shift.business_date).slice(0, 10) >= today)) return;
+    }
+    throw new ConflictException({
+      code: 'NO_OPEN_SHIFT',
+      title: 'No Shift Open',
+      detail: `No shift is open at this branch, so order ${order.order_number} cannot be accepted. Open a shift first, or reject the order.`,
     });
   }
 

@@ -7,7 +7,8 @@ import { OrderService } from '../src/modules/order/order.service';
 import { OrderSequenceService } from '../src/modules/order/order-sequence.service';
 import { DiscountEvaluationService } from '../src/modules/discounts/discount-evaluation.service';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
-import { OrderItem } from '../src/entities/OrderItem.entity';
+import { CashierShift } from '../src/entities/CashierShift.entity';
+import { OrderItem }from '../src/entities/OrderItem.entity';
 import { OrderItemOption } from '../src/entities/OrderItemOption.entity';
 import { OrderAdjustment } from '../src/entities/OrderAdjustment.entity';
 import { OrderNote } from '../src/entities/OrderNote.entity';
@@ -65,7 +66,8 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
       create: jest.fn((_entity, data) => ({ ...data })),
       save: jest.fn((_entity, data) => Promise.resolve(data)),
       findOne: jest.fn((_entity, options) => orderRepo.findOne(options)),
-      find: jest.fn(() => Promise.resolve([])),
+      // A shift is open at the branch, so an accept goes through.
+      find: jest.fn((entity) => Promise.resolve(entity === CashierShift ? [{ id: 'shift-1', state: 'OPEN' }] : [])),
       getRepository: jest.fn(),
     };
     kdsService = {
