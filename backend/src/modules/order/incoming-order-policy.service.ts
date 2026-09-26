@@ -26,6 +26,11 @@ function prepMinutesFor(order: OrderHeader, policy: IncomingOrderPolicy): number
   return isAggregatorOrder(order) ? Math.min(policy.defaultPrepMinutes, maxPromiseMinutes(order)) : policy.defaultPrepMinutes;
 }
 
+/** The accept was refused because no shift is open at the branch. */
+function isNoOpenShift(err: unknown): boolean {
+  return err instanceof ConflictException && (err.getResponse() as { code?: string })?.code === 'NO_OPEN_SHIFT';
+}
+
 /** How often the time limit is checked, so an order can overrun its limit by up to this much. */
 const SWEEP_MS = 15000;
 
@@ -63,13 +68,20 @@ export class IncomingOrderPolicyService implements OnApplicationBootstrap, OnMod
     const policy = await this.policyFor(tenantId, order.branch_id);
     if (acceptanceFor(policy, order.channel) !== 'AUTO') return null;
 
-    return await this.orderService.acceptIncomingOrder(
-      tenantId,
-      orderId,
-      { prepMinutes: prepMinutesFor(order, policy) },
-      undefined,
-      correlationId,
-    );
+    try {
+      return await this.orderService.acceptIncomingOrder(
+        tenantId,
+        orderId,
+        { prepMinutes: prepMinutesFor(order, policy) },
+        undefined,
+        correlationId,
+      );
+    } catch (err) {
+      // With no shift open it waits in the queue like any other, until a shift opens or the
+      // time limit answers it.
+      if (isNoOpenShift(err)) return null;
+      throw err;
+    }
   }
 
   /**
@@ -90,10 +102,18 @@ export class IncomingOrderPolicyService implements OnApplicationBootstrap, OnMod
       const deadline = new Date(order.placed_at).getTime() + policy.timeoutMinutes * 60000;
       if (now.getTime() < deadline) continue;
 
+      let accepted = false;
       try {
         if (policy.timeoutAction === 'ACCEPT') {
-          await this.orderService.acceptIncomingOrder(order.tenant_id, order.id, { prepMinutes: prepMinutesFor(order, policy) });
-        } else {
+          try {
+            await this.orderService.acceptIncomingOrder(order.tenant_id, order.id, { prepMinutes: prepMinutesFor(order, policy) });
+            accepted = true;
+          } catch (err) {
+            // Nobody is on shift to cook it, so it is turned down instead.
+            if (!isNoOpenShift(err)) throw err;
+          }
+        }
+        if (!accepted) {
           await this.orderService.rejectUnanswered(order.tenant_id, order.id, policy.timeoutMinutes);
         }
       } catch (err) {
@@ -113,10 +133,9 @@ export class IncomingOrderPolicyService implements OnApplicationBootstrap, OnMod
           type: 'INCOMING_ORDER_EXPIRED',
           severity: 'WARNING',
           title: `Order ${order.order_number} was not answered within ${policy.timeoutMinutes} min`,
-          message:
-            policy.timeoutAction === 'ACCEPT'
-              ? 'Accepted automatically and sent to the kitchen.'
-              : `Rejected automatically${fromSnappfood ? '; Snappfood was told' : ''}.`,
+          message: accepted
+            ? 'Accepted automatically and sent to the kitchen.'
+            : `${policy.timeoutAction === 'ACCEPT' ? 'No shift was open, so it was rejected' : 'Rejected automatically'}${fromSnappfood ? '; Snappfood was told' : ''}.`,
           acknowledged: false,
         }),
       );

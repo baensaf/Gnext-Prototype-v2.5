@@ -7,7 +7,8 @@ import { OrderService } from '../src/modules/order/order.service';
 import { OrderSequenceService } from '../src/modules/order/order-sequence.service';
 import { DiscountEvaluationService } from '../src/modules/discounts/discount-evaluation.service';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
-import { OrderItem } from '../src/entities/OrderItem.entity';
+import { CashierShift } from '../src/entities/CashierShift.entity';
+import { OrderItem }from '../src/entities/OrderItem.entity';
 import { OrderItemOption } from '../src/entities/OrderItemOption.entity';
 import { OrderAdjustment } from '../src/entities/OrderAdjustment.entity';
 import { OrderNote } from '../src/entities/OrderNote.entity';
@@ -39,6 +40,7 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
   let kdsService: any;
   let printQueueService: any;
   let simulationService: any;
+  let openShifts: any[];
 
   const pendingOrder = (overrides: Record<string, any> = {}) => ({
     id: 'order-1',
@@ -56,12 +58,14 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
     em.save.mock.calls.filter(([entity]: any[]) => entity === OrderStateEvent).map(([, data]: any[]) => data);
 
   beforeEach(async () => {
+    openShifts = [{ id: 'shift-1', branch_id: 'b-1', state: 'OPEN' }];
     orderRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
     em = {
       create: jest.fn((_entity, data) => ({ ...data })),
       save: jest.fn((_entity, data) => Promise.resolve(data)),
       findOne: jest.fn((_entity, options) => orderRepo.findOne(options)),
-      find: jest.fn(() => Promise.resolve([])),
+      // A shift is open at the branch unless a test shuts it.
+      find: jest.fn((entity) => Promise.resolve(entity === CashierShift ? openShifts : [])),
       getRepository: jest.fn(),
     };
     kdsService = { generateTicketsForOrder: jest.fn().mockResolvedValue([]) };
@@ -184,6 +188,38 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
       expect(kdsService.generateTicketsForOrder).not.toHaveBeenCalled();
       expect(printQueueService.enqueueOrderPrintJobs).not.toHaveBeenCalled();
       expect(simulationService.notifyAccepted).not.toHaveBeenCalled();
+    });
+
+    it('is refused with no shift open at the branch, and nothing reaches the kitchen or Snappfood', async () => {
+      openShifts = [];
+      orderRepo.findOne.mockResolvedValue(pendingOrder());
+
+      const refused = await service.acceptIncomingOrder('t-1', 'order-1', { prepMinutes: 25 }).catch((e) => e);
+
+      expect(refused).toBeInstanceOf(ConflictException);
+      expect(refused.getResponse()).toEqual(expect.objectContaining({ code: 'NO_OPEN_SHIFT' }));
+      expect(em.save).not.toHaveBeenCalled();
+      expect(kdsService.generateTicketsForOrder).not.toHaveBeenCalled();
+      expect(printQueueService.enqueueOrderPrintJobs).not.toHaveBeenCalled();
+      expect(simulationService.notifyAccepted).not.toHaveBeenCalled();
+    });
+
+    it("is refused when the only open shift belongs to a business day that has ended", async () => {
+      openShifts = [{ id: 'shift-old', branch_id: 'b-1', state: 'OPEN', business_date: '2020-01-01' }];
+      orderRepo.findOne.mockResolvedValue(pendingOrder());
+
+      const refused = await service.acceptIncomingOrder('t-1', 'order-1', { prepMinutes: 25 }).catch((e) => e);
+
+      expect(refused.getResponse()).toEqual(expect.objectContaining({ code: 'NO_OPEN_SHIFT' }));
+    });
+
+    it('can still be rejected with no shift open', async () => {
+      openShifts = [];
+      orderRepo.findOne.mockResolvedValue(pendingOrder());
+
+      const result = await service.rejectIncomingOrder('t-1', 'order-1', { reasonId: 113 }, 'user-1');
+
+      expect(result.state).toBe('REJECTED');
     });
 
     it('does not call Snappfood for an order that did not come from Snappfood', async () => {
