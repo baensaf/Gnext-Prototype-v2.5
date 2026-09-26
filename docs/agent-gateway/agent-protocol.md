@@ -1235,7 +1235,8 @@ missing product is restored).
 The offline POS step (§13): signing in offline, rendering tickets on the agent, and serving the
 till screen. For later, if at all: coupons, discounts,
 refunds and customer lookup offline; opening or closing shifts offline. Snappfood orders keep
-arriving in the cloud while a branch is offline, and wait there.
+arriving in the cloud while a branch is offline, and wait there; while the cloud itself is away,
+the till takes them (§17).
 
 v3: replay protection, batch signing, key rotation, back-pressure, resumable uploads of very
 large backlogs.
@@ -1634,7 +1635,7 @@ Delivery, courier slips and zones; coupons, discounts and manual prices; refunds
 cancellations; customer lookup and credit; kitchen screens (the kitchen gets chits only); a
 cash drawer; opening, closing or counting a shift; more than one till; seeing or changing orders
 that were open in the cloud before the outage. Tills on the LAN (listening beyond 127.0.0.1, a
-firewall rule, pairing) are a later step.
+firewall rule, pairing) are a later step. §17 adds Snappfood orders, with courier slips.
 
 ## 14. Conformance checklist for the agent
 
@@ -1699,6 +1700,18 @@ The till online (§16), for an agent that advertises `pos.till`:
       cart, and the order sells on the agent; plugging it back asks for the PIN only when the
       cloud session is gone, and the next order goes to the cloud.
 - [ ] A place that got no answer is not sent offline without the cashier confirming it.
+
+Snappfood orders offline (§17), for an agent that advertises `pos.snappfood`:
+
+- [ ] The Snappfood order type shows only in `OFFLINE`, needs a code, and refuses one the till
+      already holds.
+- [ ] A line is priced from the snapshot's `snappfood` block; a stopped or sold-out item gets a
+      warning, not a refusal.
+- [ ] Placing prints the kitchen chits and, for the store's own courier, the courier slip with
+      the address and the courier's name; the number comes from the `ONLINE` range without
+      repeating one the cloud gave.
+- [ ] Hand-over uploads it `OPEN` with no payments, and the cloud books it once, whether
+      Snappfood's record came before it or after.
 
 ## 15. Decisions and open questions
 
@@ -1921,7 +1934,7 @@ and at once after a `CLOUD_UNREACHABLE`:
 ### 16.7 What the cashier sees
 
 - **Offline**: an amber bar across the top, *No internet — selling on this PC. Delivery,
-  customers, discounts and parked orders are paused*, and the controls §13.15 leaves out
+  customers, discounts and parked orders are paused* (Snappfood orders are typed in, §17.4), and the controls §13.15 leaves out
   disabled, as §13 draws them. A toast when it starts.
 - **Back**: a toast *Internet is back*, the PIN prompt if needed, then the bar turns green for a
   moment, *Online again — N offline orders are being sent*, from the upload backlog (§12.7)
@@ -1948,3 +1961,250 @@ and at once after a `CLOUD_UNREACHABLE`:
 
 Tills on the LAN (every register on the agent: §13.15); KDS offline; an order placed in the cloud
 finished on the agent while offline; installing updates only outside business hours.
+
+## 17. Snappfood orders while the cloud is away (v2, fourth step)
+
+Status: **agreed** (product owner, 2026-09-26). Protocol version stays **1**: new optional
+snapshot and upload fields, one new capability, and cloud-side matching.
+
+The cloud runs in a datacenter inside the country, so a national outage does not cut a branch off
+it. The datacenter itself has bad spells instead, sometimes for two days: up for an hour, down for
+the next. While the cloud is away, Snappfood keeps taking orders, and the branch sees them on
+Snappfood's own vendor panel. Today they never reach Gnext: no kitchen chit, no courier slip, no
+sale in the books. This section lets the cashier ring such an order up on the till, and has the
+cloud fetch Snappfood's own record once it is back and pair the two, so each Snappfood order is
+booked **once**, with Snappfood's lines and money.
+
+Phone delivery orders are not part of it: offline they still become takeaway (§16.6).
+
+### 17.1 Decisions
+
+Confirmed by the product owner on 2026-09-26.
+
+1. **Every Snappfood order ends up in Gnext.** While the cloud answers, nothing changes: the
+   webhook brings it. While it does not, the cashier types it on the till (§17.4), which prints
+   its kitchen chit and, for the store's own courier, its courier slip.
+2. **The cloud pulls what it missed.** Once it answers again it fetches Snappfood's orders for
+   the branch (§17.8) and pairs each with the till's order of the same code. It does so every few
+   minutes, so each short window of service catches up on its own.
+3. **The Snappfood order code is required** on the till. It is how the two records meet.
+4. **Snappfood's version is booked.** Snappfood owns the lines and the money. Where the till's
+   order says something else, Snappfood's stands and the order is flagged for a person
+   (`SNAPPFOOD_DIFFERS`).
+5. **A pulled order with no till order never prints.** It goes to *Missed while offline*
+   (§17.9), where a manager says it was made or links it to a till order whose code was mistyped.
+6. **Couriers: assign and slip.** For an order the store delivers itself, the cashier picks one
+   of the branch's couriers on the till; the slip prints with the courier's name. Delivered,
+   failed and the courier's cash are recorded on Dispatch once the cloud is back.
+
+### 17.2 Capability
+
+| Capability | Means |
+|---|---|
+| `pos.snappfood` | The till takes Snappfood orders offline (§17.4) and uploads them (§17.6). Requires `pos.offline`. |
+
+The cloud books an uploaded Snappfood order from any agent (§17.7); the capability tells Branch
+Agents which agents can take one.
+
+### 17.3 Snapshot additions
+
+```json
+{
+  "settings": {
+    "call_numbers": { "POS": { "start": 100, "end": 399 }, "ONLINE": { "start": 500, "end": 599 } },
+    "call_number_issued_today": { "business_date": "2026-09-26", "POS": 37, "ONLINE": 12 }
+  },
+  "snappfood": {
+    "prices": [ { "product_id": "…", "variant_id": null, "price": "2820000" } ],
+    "add_ons": [ { "option_item_id": "…", "price_delta": "400000" } ]
+  },
+  "couriers": [ { "id": "…", "name": "رضا کریمی", "phone": "0912…", "checked_in": true } ]
+}
+```
+
+- `snappfood.prices` is the channel price sheet (Catalog → Snappfood prices) for this branch:
+  per product, or per size of a product sold in sizes, the price that applies on Snappfood (a
+  fixed channel price, else the markup rule on the branch's in-store price). `add_ons` gives each
+  add-on's price on Snappfood (the markup rule on its in-store price). An item missing from the
+  sheet is not sold on Snappfood.
+- `couriers` are the branch's active couriers; `checked_in` says who is on shift now, for the till
+  to list them first. A courier who is not checked in can still be picked.
+- `call_numbers.ONLINE` and `call_number_issued_today.ONLINE` are the Snappfood range (§17.5).
+- The cloud sends `data.changed` when the price sheet, the markup rule or the branch's couriers
+  change. A courier checking in or out is not announced; it reaches the agent with the 15-minute
+  pull.
+
+### 17.4 The Snappfood order on the till
+
+Offered only while the till sells on the agent (`OFFLINE`, §16.5) and the snapshot has a
+`snappfood` block. While the cloud answers, Snappfood's orders come by webhook, and typing one
+would book it twice, so the order type is not shown.
+
+The cashier chooses **Snappfood** as the order type and fills in, from Snappfood's panel:
+
+| Field | Rule |
+|---|---|
+| `code` | Required. Snappfood's order code as the panel shows it, 3 to 40 letters, digits and `-`. The till refuses a code it already holds from the last two days (`SNAPPFOOD_CODE_USED`). |
+| `expedition` | `DELIVERY` (the store's own courier), `RIDER` (a Snapp Express rider collects it) or `PICKUP` (the customer collects it). |
+| `payment` | `ONLINE` (paid to Snappfood) or `CASH` (the customer pays at the door). Only printed on the slip; Snappfood's record decides the money. |
+| `customer` | For `DELIVERY`: `name`, `phone` and `address`, as the panel shows them. `address` is required. |
+| `courier_id` | For `DELIVERY`: one of the snapshot's `couriers`. Optional; the order can leave without one and be assigned on Dispatch later. |
+
+**Lines** are the menu's products, sizes and add-ons, priced from `snappfood.prices` and
+`snappfood.add_ons`; an item not in the sheet is refused `NOT_ON_SNAPPFOOD`. Snappfood has already
+sold the order, so the till does **not** refuse a line for a stop, a selling window, today's stock
+or an option group's limits; it shows a warning on the line and lets it through. The line still
+counts against today's stock. Money is §12.4's, with `delivery_fee` `"0"`: the till does not know
+Snappfood's delivery or packing charges, which come with Snappfood's record.
+
+**Place** (`POST /api/till/orders/place` with `order_type: "SNAPPFOOD"` and a `snappfood` block of
+the fields above) checks and prices the cart, gives the order its call number (§17.5), prints its
+kitchen chits (§13.8), and for `DELIVERY` a `COURIER_SLIP` to the courier-slip route (else
+`fallback.OTHER`) with the call number, the Snappfood code, the customer, the address, the
+courier's name, the lines, and either *Paid online* or *Collect `<grand_total>` in cash*. No
+payment is taken, and the order is never finished on the till: it is delivered and closed in the
+cloud (§17.7). While it waits on the till:
+
+- lines may be added, and a line voided or the order cancelled, under §13.6's edit rules
+  (Snappfood cancelling an order on its panel is the usual reason);
+- **Reprint** reprints the chits or the slip;
+- the courier can be changed (`POST /api/till/orders/{id}/info` with `snappfood.courier_id`), and
+  the slip prints again, marked as a copy.
+
+At hand-over (§13.5) a Snappfood order goes up `OPEN`, or `CANCELLED` if it was cancelled. It is
+never dropped as an unpaid cart: it was placed, so the kitchen has it.
+
+### 17.5 Call numbers
+
+A Snappfood order takes its number from the day's `ONLINE` range, as the cloud numbers Snappfood
+orders, counted as §13.9 counts `POS`: the highest of the snapshot's
+`call_number_issued_today.ONLINE`, the `ONLINE` count in the last `heartbeat.ack`, and the
+numbers the till gave itself. `heartbeat.ack` gains `ONLINE`:
+
+```json
+{ "call_numbers": { "business_date": "2026-09-26", "POS": 41, "ONLINE": 12 } }
+```
+
+On upload the cloud raises its `ONLINE` counter to at least the order's number (§12.6).
+
+### 17.6 Upload additions
+
+A Snappfood order in §12.4's shape, with:
+
+```json
+{
+  "channel": "AGGREGATOR",
+  "order_type": "AGGREGATOR",
+  "shift_id": null,
+  "state": "OPEN",
+  "call_number": 507,
+  "snappfood": {
+    "code": "SF-4821",
+    "expedition": "DELIVERY",
+    "payment": "ONLINE",
+    "customer": { "name": "حمید بیانک", "phone": "0912…", "address": "…" },
+    "courier_id": "…"
+  },
+  "payments": []
+}
+```
+
+- `shift_id` is `null`: a Snappfood order is not a register sale and lands in no drawer.
+  `terminal_id` is still the bound till, for the record.
+- `state` is `OPEN` or `CANCELLED`, never `COMPLETED`; `payments` is empty.
+- Prices are checked against the snapshot's `snappfood` block, not the in-store prices; the
+  §12.6 arithmetic and snapshot checks hold otherwise.
+- A Snappfood order without a valid `snappfood.code`, or with `payments`, is `HELD`
+  `INVALID_ORDER`.
+
+### 17.7 One order per code
+
+The cloud keeps one order per Snappfood code, numbered `SNP-<code>` as today. Whichever record
+arrives first creates it: the till's upload, the webhook, or the pull (§17.8). The other is
+matched to it. The order records how far it has got in `aggregator_match`:
+
+| `aggregator_match` | Means |
+|---|---|
+| `null` | An ordinary Snappfood order: the webhook brought it while the cloud answered. |
+| `TILL_ONLY` | The till's upload came; Snappfood's record has not yet. |
+| `PULLED` | The pull brought it while the cloud was away, and no till order carries its code yet. |
+| `MATCHED` | Both records are in: the till's and Snappfood's. |
+
+**The till's upload, no order with its code yet.** Booked from the till: `SNP-<code>`, channel and
+type `AGGREGATOR`, the expedition as `aggregator_expedition` (`DELIVERY` → `DELIVERY`, `RIDER` →
+`ZF_EXPRESS`, `PICKUP` → `PICKUP`), state `CONFIRMED` (accepted at `placed_at`) or `CANCELLED`, the
+till's lines, call number, prints and history, no payments, `TILL_ONLY`. For `DELIVERY` it goes on
+the delivery board with the typed address and, if the till picked one, the courier assigned. It
+is not sent to the kitchen screens or printed. It waits for Snappfood's record, and shows on
+*Missed while offline* after two hours without it (§17.9).
+
+**The till's upload, an order with its code already there** (`PULLED`, or `null` because the
+webhook came while only the branch was cut off): matched. Snappfood's lines, money and customer
+stay. From the till it takes what Snappfood cannot know: the call number (if the order has none),
+the accept (a `PENDING_ACCEPTANCE` order becomes `CONFIRMED` at the till's `placed_at`, with no
+kitchen screen or print), the courier (if none is assigned), the prints and history. Flags:
+`SNAPPFOOD_DIFFERS` if the till's lines are not Snappfood's (same product, size, add-ons and
+quantity); `SNAPPFOOD_ACCEPTED_TWICE` if the cloud had already accepted it, since the kitchen may
+have made it twice; `SNAPPFOOD_CANCELLED` if one side cancelled it and the other did not.
+`MATCHED`.
+
+**Snappfood's record for a `TILL_ONLY` order** (the webhook's new-order message or the pull):
+matched. Snappfood's lines replace the till's (the till's are voided, not deleted, and kept in the
+history), its money and customer are applied as for any Snappfood order, and its cancel (54)
+cancels. Nothing goes to the incoming-order queue, the kitchen screens or the printers, and the
+branch's acceptance policy is not applied: the branch already made it. `SNAPPFOOD_DIFFERS` if the
+lines were not the same. `MATCHED`.
+
+The upload's result (§12.5) is `ACCEPTED` with `order_number` `SNP-<code>` in every case, and the
+flags; head office sees them on the uploaded-orders screen (§12.7) like any other.
+
+### 17.8 The pull
+
+The cloud asks Snappfood for each branch's orders of the last **six hours**, every **five
+minutes**, and at once when someone presses **Pull now** (on *Missed while offline*). It goes
+through one adapter, `SnappfoodOrders.list(branch, since)`, which answers each order as the
+webhook would carry it, with its current status. In the prototype the Snappfood simulator answers
+it (below); the live product needs Snappfood's API to list a vendor's orders, which is not yet
+confirmed.
+
+For each order the cloud does not have:
+
+- still waiting for the store's answer (Snappfood's status is new, 56, and nobody accepted it on
+  the panel): handled as if the webhook had just brought it, into the incoming-order queue;
+- accepted on the panel, delivered or cancelled: booked **pulled**. It is matched to a
+  `TILL_ONLY` order of the same code if there is one (§17.7). Otherwise it is booked with
+  Snappfood's lines, money and customer, `CONFIRMED` (or `CANCELLED` for 54), `PULLED`, without
+  the incoming-order queue, the kitchen screens or the printers.
+
+An order the cloud already has is left to the webhook's own rules, except that Snappfood's cancel
+reaches a `TILL_ONLY` order as above.
+
+**The simulator** gains *Gnext unreachable* per branch. While it is on, the orders it makes are
+not sent to the webhook: Snappfood keeps them, as its panel would. The simulator's panel view lets
+someone accept or cancel them there, as the branch would on Snappfood's panel. The pull reads
+them from there.
+
+### 17.9 Missed while offline
+
+A list for branch managers and head office:
+
+- `PULLED` orders more than **20 minutes** after the pull brought them (time for the till's
+  hand-over upload to arrive);
+- `TILL_ONLY` orders more than **two hours** after their upload.
+
+Each row shows the code, the branch, when it was placed, the lines and the total. Actions:
+
+| Action | For | Does |
+|---|---|---|
+| **Made** | `PULLED` | The branch made it from the panel: it stays `CONFIRMED`, leaves the list, and for the store's own courier goes on the delivery board for a courier to be assigned. |
+| **Link** | a `PULLED` and a `TILL_ONLY` order of the same branch | The two are one order whose code was mistyped on the till: matched as §17.7, the till's order folded into Snappfood's (its number, courier and history move over; the till's order is voided). |
+| **Not Snappfood's** | `TILL_ONLY` | Snappfood has no such order (typed by mistake): the order is cancelled, with the reason. |
+
+Each action is audited.
+
+### 17.10 Not in this step
+
+Phone delivery orders offline (still takeaway); answering Snappfood from the till (reject, report
+to support, more time); a Snappfood order changed by Snappfood support while the cloud is away (it
+arrives changed with the pull, and `SNAPPFOOD_DIFFERS` says so); courier delivered, failed and
+cash on the till.
