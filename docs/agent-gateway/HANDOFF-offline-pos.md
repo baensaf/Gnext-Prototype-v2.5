@@ -10,7 +10,7 @@ Read [`HANDOFF.md`](HANDOFF.md) (v1 and v2 history), [`agent-protocol.md`](agent
 |---|---|
 | v1: printing, card terminals, enrolment, settings page, tray, self-update, installer | Live on gnextdev.ir |
 | v2 §12: branch snapshot, offline order upload, conflict rules, sync status | Merged and deployed (#105–#109). Agent 1.2.0 built by CI, **unpublished** until head office presses Publish |
-| Offline POS: a till that takes orders while the internet is down | Contract §13 agreed (#111). P1 done: cloud (#112), agent 1.3.0 (#113). P2 (till binding, PIN sign-in), agent 1.4.0 (#114). P3 (till screen, catalogue and pricing on the agent), agent 1.5.0 (#116). P4 (orders on the agent, call numbers, void and cancel, hand-over, upload), agent 1.6.0 (#117). P4b-1 (the web POS reads and writes through a data source, #120). P4b-2 (the till screen is the web POS's own register, embedded in the agent), agent 1.7.0 (#121). P5 (cash and card offline, open orders), agent 1.8.0 (#122). P6 (kitchen chits by station, receipts, bills, reprints), agent 1.9.0 (#123). P7 (the web POS banner, the till window from the tray, Start menu and settings page), agent 1.10.0 (#124). P8 (the cloud keeps the table, add-on group names, voided lines and who cancelled), cloud only (#128). The till online: contract L0 (#140), cloud PIN sign-in L1 (#141), the till selling through the cloud L2 (agent 1.11.0, #142), the automatic switch L3 (agent 1.11.1, #143), the till at Windows sign-in and "ready to sell offline" on Branch Agents L4 (agent 1.11.2, this PR). Next: the branch test (pull the cable at a real branch) |
+| Offline POS: a till that takes orders while the internet is down | Contract §13 agreed (#111). P1 done: cloud (#112), agent 1.3.0 (#113). P2 (till binding, PIN sign-in), agent 1.4.0 (#114). P3 (till screen, catalogue and pricing on the agent), agent 1.5.0 (#116). P4 (orders on the agent, call numbers, void and cancel, hand-over, upload), agent 1.6.0 (#117). P4b-1 (the web POS reads and writes through a data source, #120). P4b-2 (the till screen is the web POS's own register, embedded in the agent), agent 1.7.0 (#121). P5 (cash and card offline, open orders), agent 1.8.0 (#122). P6 (kitchen chits by station, receipts, bills, reprints), agent 1.9.0 (#123). P7 (the web POS banner, the till window from the tray, Start menu and settings page), agent 1.10.0 (#124). P8 (the cloud keeps the table, add-on group names, voided lines and who cancelled), cloud only (#128). The till online: contract L0 (#140), cloud PIN sign-in L1 (#141), the till selling through the cloud L2 (agent 1.11.0, #142), the automatic switch L3 (agent 1.11.1, #143), the till at Windows sign-in and "ready to sell offline" on Branch Agents L4 (agent 1.11.2, #144). Snappfood orders while the cloud is away: contract S0 (§17, this PR), then S1–S3. Next: the branch test (pull the cable at a real branch) |
 
 What the offline POS can already rely on:
 
@@ -122,6 +122,22 @@ once CI is green.
 | L2 | **Agent and till online** (agent 1.11.0): `pos.till`; a cloud session on sign-in and `cloud-login`; the `/api/v1/*` proxy with the cookie; reachability from the session and the proxy; `cloud` in the state. The till page sells through the cloud source when `ONLINE`, with every feature, the register fixed to the bound till | High | **High** | Critical |
 | L3 | **Automatic switch** (agent 1.11.x): the page switches on the mode, carries the cart both ways, marks lines refused on the other side, holds a place that got no answer, the PIN prompt on return, the bar and toasts | High | **High** | Critical |
 | L4 | **Register on the branch PC**: open the till at sign-in (`open_at_sign_in`), and *ready to sell offline* on Branch Agents | Med | Low | High |
+
+### Snappfood orders while the cloud is away (confirmed 2026-09-26)
+
+The cloud is hosted inside the country, so a branch loses it when the datacenter has a bad spell
+(up an hour, down an hour, for up to two days), not in a national outage. Snappfood's orders keep
+arriving on Snappfood's own panel meanwhile. Contract: §17 of `agent-protocol.md`. The user chose:
+Snappfood's version is booked and differences flagged; the code is required on the till; a pulled
+order with no till order goes to a manager, never to the printers; the till assigns a courier and
+prints the slip. Phone delivery offline is out: branches did not name it as a pain.
+
+| # | Task | Cost | Risk | Importance |
+|---|---|---|---|---|
+| S0 | **Contract §17** | Low | Low | Critical, blocks the rest |
+| S1 | **Cloud booking**: snapshot `snappfood`, `couriers`, `ONLINE` call numbers; the upload takes Snappfood orders; one order per code (`aggregator_match`), whichever record comes first; the webhook matches a `TILL_ONLY` order | High | **High** | Critical |
+| S2 | **Pull and review**: the `SnappfoodOrders` adapter and the simulator's *Gnext unreachable*; the five-minute pull and **Pull now**; *Missed while offline* with Made, Link, Not Snappfood's | High | Med | Critical |
+| S3 | **Till and agent** (agent 1.12.0): `pos.snappfood`; the Snappfood order type offline; Snappfood prices, warnings not refusals; `ONLINE` call numbers; the courier slip; hand-over as `OPEN` | High | **High** | Critical |
 
 Most of the cost sits in P4b-2, P5 and P6. P4b replaces P3's plain screen; P3's agent side
 (`till.Catalog`, `/api/till/menu`, `/api/till/price`) stays.
