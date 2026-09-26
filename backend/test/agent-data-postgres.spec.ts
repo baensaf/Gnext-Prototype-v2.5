@@ -17,10 +17,9 @@ import { DiningTable } from '../src/entities/DiningTable.entity';
 import { OptionGroup } from '../src/entities/OptionGroup.entity';
 import { OptionItem } from '../src/entities/OptionItem.entity';
 import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
-import { PrintRoute } from '../src/entities/PrintRoute.entity';
 import { Printer } from '../src/entities/Printer.entity';
-import { PrinterGroup } from '../src/entities/PrinterGroup.entity';
-import { PrinterGroupMember } from '../src/entities/PrinterGroupMember.entity';
+import { KitchenStation } from '../src/entities/KitchenStation.entity';
+import { KdsRoutingRule } from '../src/entities/KdsRoutingRule.entity';
 import { Product } from '../src/entities/Product.entity';
 import { ProductOptionGroup } from '../src/entities/ProductOptionGroup.entity';
 import { ProductVariant } from '../src/entities/ProductVariant.entity';
@@ -206,7 +205,9 @@ describe('agent branch snapshot (PostgreSQL)', () => {
     expect(body.payment_methods).toEqual([{ id: ids.cash, code: 'CASH', name: 'نقد', kind: 'CASH' }]);
     expect(body.dining_tables).toEqual([{ id: ids.table, area: 'سالن', number: '12', seats: 4 }]);
     expect(body.delivery_zones).toEqual([{ id: ids.zone, name: 'ونک', fee: '400000' }]);
-    expect(body.tills).toEqual([{ id: ids.till, code: 'T1', name: 'صندوق ۱', payment_device_id: null }]);
+    expect(body.tills).toEqual([
+      { id: ids.till, code: 'T1', name: 'صندوق ۱', payment_device_id: null, receipt_printer_id: null, receipt_copies: 1, receipt_template: null },
+    ]);
     expect(body.open_shifts).toEqual([
       expect.objectContaining({ id: ids.shift, terminal_id: ids.till, shift_number: 'S-0001', business_date: BusinessDateUtil.today() }),
     ]);
@@ -315,35 +316,34 @@ describe('agent branch snapshot (PostgreSQL)', () => {
       await user('root', { role: 'SUPER_ADMIN', pin_hash: '$argon2id$x' });
     });
 
-    afterAll(async () => {
-      await dataSource.query(`DELETE FROM "printer_group_member" WHERE "group_id" IN (SELECT "id" FROM "printer_group" WHERE "tenant_id" = $1)`, [tenantId]);
-    });
-
     it('works out the print routing the offline till applies itself', async () => {
       const grillPrinter = await save<Printer>(Printer, { tenant_id: tenantId, branch_id: branchId, code: 'KIT1', name: 'گریل', printer_type: 'KITCHEN_IMPACT', is_active: true });
       const counter = await save<Printer>(Printer, { tenant_id: tenantId, branch_id: branchId, code: 'REC1', name: 'صندوق', printer_type: 'THERMAL_RECEIPT', is_active: true });
-      const grill = await save<PrinterGroup>(PrinterGroup, { tenant_id: tenantId, branch_id: branchId, code: 'GRL', name: 'گریل', ticket_template: 'COMPACT' });
-      const front = await save<PrinterGroup>(PrinterGroup, { tenant_id: tenantId, branch_id: branchId, code: 'FRT', name: 'جلو' });
-      await save<PrinterGroupMember>(PrinterGroupMember, { group_id: grill.id, printer_id: grillPrinter.id, priority: 0, copies: 2 });
-      await save<PrinterGroupMember>(PrinterGroupMember, { group_id: front.id, printer_id: counter.id, priority: 0, copies: 1 });
-      // The burger has a route of its own; the fries only the category's.
-      await save<PrintRoute>(PrintRoute, { tenant_id: tenantId, branch_id: branchId, document_type: 'KITCHEN_TICKET', category_id: ids.category, printer_group_id: front.id, copies: 1 });
-      await save<PrintRoute>(PrintRoute, { tenant_id: tenantId, branch_id: branchId, document_type: 'KITCHEN_TICKET', product_id: ids.burger, printer_group_id: grill.id, copies: 3 });
-      await save<PrintRoute>(PrintRoute, { tenant_id: tenantId, branch_id: branchId, document_type: 'CUSTOMER_RECEIPT', printer_group_id: front.id, copies: 1 });
+      const grill = await save<KitchenStation>(KitchenStation, {
+        tenant_id: tenantId, branch_id: branchId, code: 'GRL', name: 'گریل', ticket_template: 'COMPACT', printer_ids: [grillPrinter.id], copies: 3,
+      });
+      const front = await save<KitchenStation>(KitchenStation, { tenant_id: tenantId, branch_id: branchId, code: 'FRT', name: 'جلو', printer_ids: [counter.id] });
+      // The burger has a station of its own; the fries only the category's.
+      await save<KdsRoutingRule>(KdsRoutingRule, { tenant_id: tenantId, branch_id: branchId, category_id: ids.category, station_id: front.id });
+      await save<KdsRoutingRule>(KdsRoutingRule, { tenant_id: tenantId, branch_id: branchId, product_id: ids.burger, station_id: grill.id });
+      await dataSource.getRepository(Terminal).update({ id: ids.till }, { receipt_printer_id: counter.id, receipt_copies: 2 });
 
-      const { printing } = (await snapshot().expect(200)).body;
+      const body = (await snapshot().expect(200)).body;
+      const { printing } = body;
       expect(printing.groups).toEqual([
         { id: front.id, name: 'جلو', ticket_template: null, printers: [{ printer_id: counter.id, copies: 1 }] },
-        { id: grill.id, name: 'گریل', ticket_template: 'COMPACT', printers: [{ printer_id: grillPrinter.id, copies: 2 }] },
+        { id: grill.id, name: 'گریل', ticket_template: 'COMPACT', printers: [{ printer_id: grillPrinter.id, copies: 1 }] },
       ]);
       expect(printing.kitchen_routes).toEqual({
         [ids.burger]: { group_id: grill.id, copies: 3 },
         [ids.fries]: { group_id: front.id, copies: 1 },
       });
-      expect(printing.documents).toEqual({ CUSTOMER_RECEIPT: { group_id: front.id, copies: 1 }, GUEST_BILL: null, COURIER_SLIP: null });
+      // Receipts, bills and courier slips print at the till's own printer.
+      expect(printing.documents).toEqual({ CUSTOMER_RECEIPT: null, GUEST_BILL: null, COURIER_SLIP: null });
+      expect(body.tills[0]).toMatchObject({ receipt_printer_id: counter.id, receipt_copies: 2 });
       expect(printing.fallback).toEqual({ KITCHEN_TICKET: grillPrinter.id, OTHER: counter.id });
 
-      // A printer switched off leaves its group, as it would online.
+      // A printer switched off leaves its station, as it would online.
       await dataSource.getRepository(Printer).update({ id: grillPrinter.id }, { is_active: false });
       const after = (await snapshot().expect(200)).body.printing;
       expect(after.groups.find((g: any) => g.id === grill.id).printers).toEqual([]);
@@ -351,13 +351,9 @@ describe('agent branch snapshot (PostgreSQL)', () => {
       await dataSource.getRepository(Printer).update({ id: grillPrinter.id }, { is_active: true });
     });
 
-    it('hears of a change to a group member or the brand name, rows that carry no branch of their own', async () => {
-      const [member] = await dataSource.query(
-        `SELECT "group_id", "printer_id" FROM "printer_group_member" WHERE "group_id" IN (SELECT "id" FROM "printer_group" WHERE "tenant_id" = $1) LIMIT 1`,
-        [tenantId],
-      );
+    it('hears of a change to a station or the brand name', async () => {
       await changes.flushNow(tenantId);
-      await dataSource.query(`UPDATE "printer_group_member" SET "copies" = "copies" WHERE "group_id" = $1 AND "printer_id" = $2`, [member.group_id, member.printer_id]);
+      await dataSource.query(`UPDATE "kitchen_station" SET "copies" = "copies" WHERE "tenant_id" = $1`, [tenantId]);
       await until(() => changes.isWaiting(tenantId));
 
       await changes.flushNow(tenantId);

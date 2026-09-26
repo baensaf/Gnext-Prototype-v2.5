@@ -1529,27 +1529,32 @@ The snapshot (§12.2) gains, for every agent (a v1.2 agent ignores them):
         "printers": [ { "printer_id": "4c1e…", "copies": 1 } ] }
     ],
     "kitchen_routes": { "<product id>": { "group_id": "…", "copies": 1 } },
-    "documents": {
-      "CUSTOMER_RECEIPT": { "group_id": "…", "copies": 1 },
-      "GUEST_BILL": null
-    },
+    "documents": { "CUSTOMER_RECEIPT": null, "GUEST_BILL": null, "COURIER_SLIP": null },
     "fallback": { "KITCHEN_TICKET": "4c1e…", "OTHER": "9a07…" }
-  }
+  },
+  "tills": [
+    { "id": "…", "code": "T1", "name": "صندوق ۱", "payment_device_id": null,
+      "receipt_printer_id": "9a07…", "receipt_copies": 1, "receipt_template": null }
+  ]
 }
 ```
 
 - `order_actions` is the tenant's `ORDER_ACTIONS` setting, resolved over its defaults.
   `auto_logout_minutes` is `SYSTEM.auto_logout_minutes`; `0` means the till's own default of
   15 minutes.
-- `kitchen_routes` is the cloud's route matching done in advance: for each product, the most
-  specific `KITCHEN_TICKET` route (product, then category, then the kitchen station from the KDS
-  rules, then the catch-all). A product no route claims is left out.
-- `documents` holds each whole-order document's catch-all route, or `null` for none.
-- `groups[].printers` lists the group's members in priority order, with each member's copies.
-  The agent skips a printer that is not active in its config.
+- A "group" is a **prep station** (the KDS station, since cloud 2026-09-26): the same station
+  the kitchen screen shows the line on. `kitchen_routes` is the cloud's station lookup done in
+  advance: for each product, its own KDS rule's station, else its category's. A product no
+  station makes, or whose station is out of service, is left out. `copies` is the station's.
+- `groups[].printers` lists the station's printers in order. The agent skips a printer that is
+  not active in its config; a station with none left prints on `fallback.KITCHEN_TICKET`.
+- A receipt, guest bill or courier slip prints at the bound till: `tills[].receipt_printer_id`,
+  with the till's `receipt_copies` and `receipt_template`; without a printer of its own, or with
+  it off, on `fallback.OTHER`, still with the till's copies. `documents` is always `null` for
+  each; it is kept so an agent before 1.11.3 prints them on `fallback.OTHER`.
 - `fallback` is the printer the cloud falls back to for that kind (§6.1 ids), or `null`.
-- The cloud sends `data.changed` when routes, printer groups, KDS rules, the branch's name,
-  address or phone, or these settings change.
+- The cloud sends `data.changed` when prep stations, KDS rules, tills, printers, the branch's
+  name, address or phone, or these settings change.
 
 ### 13.12 Upload additions
 
@@ -2059,8 +2064,8 @@ Snappfood's delivery or packing charges, which come with Snappfood's record.
 
 **Place** (`POST /api/till/orders/place` with `order_type: "SNAPPFOOD"` and a `snappfood` block of
 the fields above) checks and prices the cart, gives the order its call number (§17.5), prints its
-kitchen chits (§13.8), and for `DELIVERY` a `COURIER_SLIP` to the courier-slip route (else
-`fallback.OTHER`) with the call number, the Snappfood code, the customer, the address, the
+kitchen chits (§13.8), and for `DELIVERY` a `COURIER_SLIP` at the till's receipt printer (§13.11,
+else `fallback.OTHER`) with the call number, the Snappfood code, the customer, the address, the
 courier's name, the lines, and either *Paid online* or *Collect `<grand_total>` in cash*. No
 payment is taken, and the order is never finished on the till: it is delivered and closed in the
 cloud (§17.7). While it waits on the till:

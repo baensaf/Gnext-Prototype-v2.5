@@ -4,7 +4,7 @@ import { In, IsNull, Repository } from 'typeorm';
 import { PrintJob } from '../../entities/PrintJob.entity';
 import { PrintAttempt } from '../../entities/PrintAttempt.entity';
 import { Printer } from '../../entities/Printer.entity';
-import { PrintRoute } from '../../entities/PrintRoute.entity';
+import { KitchenStation } from '../../entities/KitchenStation.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { OperationalAlert } from '../../entities/OperationalAlert.entity';
@@ -29,11 +29,12 @@ const isActiveLine = (item: { state?: string }): boolean => (item.state || 'ACTI
 
 type LineChange = 'VOID' | 'ADD';
 
-/** The lines of one order that share a print route, and so share a chit. */
+/** The lines of one order that one prep station makes, and so share a chit. */
 interface StationBatch {
-  route: PrintRoute | null;
+  /** Null for lines no station makes; they print on the branch's kitchen printer. */
+  station: KitchenStation | null;
   label: string;
-  /** The station group's choice of paper; null takes the chit's default. */
+  /** The station's choice of paper; null takes the chit's default. */
   template: TicketTemplate | null;
   lines: Array<{ item: OrderItem; change?: LineChange }>;
 }
@@ -68,11 +69,11 @@ export class PrintQueueService {
   /**
    * Print a document for an order, returning every job it made.
    *
-   * A kitchen ticket is split by print route: each line goes to its most specific route
-   * (product, then category, then kitchen station, then the catch-all), and the lines that share
-   * a route's printer group share one chit. A burger, fries and a drink can so come out as three
-   * chits on three printers, each saying which part of the order it is. Receipts, bills and
-   * courier slips are about the whole order and print once, on the catch-all route.
+   * A kitchen ticket is split by prep station: each line goes to the station that makes it (its
+   * product's KDS rule, else its category's), and the lines of one station share one chit. A
+   * burger, fries and a drink can so come out as three chits on three printers, each saying
+   * which part of the order it is. Receipts, bills and courier slips are about the whole order
+   * and print once, at the till the order was taken on.
    */
   async enqueueOrderPrintJobs(
     tenantId: string,
@@ -83,7 +84,7 @@ export class PrintQueueService {
     userId?: string,
     targetPrinterId?: string,
     /** A kitchen reprint for one station only: the grill's chit fell in the fryer. */
-    onlyGroupId?: string,
+    onlyStationId?: string,
   ): Promise<PrintJob[]> {
     // Outside the catch below on purpose. That catch exists so a printing fault can never
     // roll back an order, and it swallows everything — including "you picked a printer that
@@ -106,23 +107,22 @@ export class PrintQueueService {
       const heading = await this.orderHeading(order);
 
       if (documentType !== 'KITCHEN_TICKET') {
-        const routes = await this.routingService.loadRoutes(tenantId, order.branch_id, documentType);
-        const route = this.routingService.matchRoute(routes, {});
+        const { printers, template } = await this.routingService.printersForDocument(tenantId, order.branch_id, order.terminal_id);
         const html = this.renderService.renderDocument({
           ...heading,
           ...(await this.orderMoney(order)),
           documentType,
           isReprint,
-          template: (await this.routingService.group(tenantId, route?.printer_group_id))?.ticket_template ?? null,
+          template,
           items: activeLines.map((i) => this.renderLine(i)),
         });
-        return await this.recordJobs(tenantId, order, documentType, html, route, opts);
+        return await this.recordJobs(tenantId, order, documentType, html, printers, opts);
       }
 
       if (activeLines.length === 0) return [];
-      const batches = (await this.splitByRoute(tenantId, order, activeLines.map((item) => ({ item })))).filter(
+      const batches = (await this.splitByStation(tenantId, order, activeLines.map((item) => ({ item })))).filter(
         // The station's lines as they stand now, so a line added since the first chit is on it.
-        (batch) => !onlyGroupId || batch.route?.printer_group_id === onlyGroupId,
+        (batch) => !onlyStationId || batch.station?.id === onlyStationId,
       );
       const jobs: PrintJob[] = [];
       for (const batch of batches) {
@@ -134,7 +134,7 @@ export class PrintQueueService {
           stationLabel: batch.label,
           items: batch.lines.map((l) => this.renderLine(l.item)),
         });
-        jobs.push(...(await this.recordJobs(tenantId, order, documentType, html, batch.route, opts, batch.label)));
+        jobs.push(...(await this.recordStationJobs(tenantId, order, html, batch, opts)));
       }
       return jobs;
     } catch (err: any) {
@@ -156,9 +156,9 @@ export class PrintQueueService {
    *
    * The original chit is never reprinted as though it were current. Each station gets only the
    * delta for its own lines - struck lines marked VOID, appended lines marked ADD - or, for a
-   * cancellation, every line of its still on the order under a STOP heading. The lines are
-   * routed exactly as the original chits were, so a voided burger reaches the grill and not
-   * the bar.
+   * cancellation, every line of its still on the order under a STOP heading. The lines go to
+   * their stations exactly as the original chits did, so a voided burger reaches the grill and
+   * not the bar.
    */
   async enqueueKitchenChangeTicket(tenantId: string, orderId: string, change: KitchenChange, userId?: string): Promise<PrintJob[]> {
     try {
@@ -179,7 +179,7 @@ export class PrintQueueService {
 
       const heading = await this.orderHeading(order);
       const jobs: PrintJob[] = [];
-      for (const batch of await this.splitByRoute(tenantId, order, lines)) {
+      for (const batch of await this.splitByStation(tenantId, order, lines)) {
         const html = this.renderService.renderDocument({
           ...heading,
           documentType: 'KITCHEN_TICKET',
@@ -190,7 +190,7 @@ export class PrintQueueService {
           placedAt: new Date(),
           items: batch.lines.map((l) => this.renderLine(l.item, l.change)),
         });
-        jobs.push(...(await this.recordJobs(tenantId, order, 'KITCHEN_TICKET', html, batch.route, opts, batch.label)));
+        jobs.push(...(await this.recordStationJobs(tenantId, order, html, batch, opts)));
       }
       return jobs;
     } catch (err: any) {
@@ -245,9 +245,9 @@ export class PrintQueueService {
         entity_type: job.entity_type,
         entity_id: job.entity_id,
         printer_id: destination,
-        // The group routed the original. A copy aimed by hand at one device is no longer
-        // that group's job, and leaving the link would let a retry re-route it back.
-        printer_group_id: override ? null : job.printer_group_id,
+        // The original was the station's. A copy aimed by hand at one device is no longer
+        // that station's job, and leaving the link would let a retry send it back.
+        station_id: override ? null : job.station_id,
         label: job.label,
         status: 'QUEUED',
         copies: job.copies,
@@ -322,35 +322,25 @@ export class PrintQueueService {
   }
 
   /**
-   * Group lines by the printer group their route sends them to, keeping the order the lines
-   * came in. Two routes naming the same group are one chit, printed with the larger copy count.
-   * Lines no route claims share one batch, which falls back to any printer in the branch.
+   * Group lines by the prep station that makes them, keeping the order the lines came in. Lines
+   * no station makes share one batch, which prints on the branch's kitchen printer.
    */
-  private async splitByRoute(tenantId: string, order: OrderHeader, lines: StationBatch['lines']): Promise<StationBatch[]> {
-    const [routes, contexts] = await Promise.all([
-      this.routingService.loadRoutes(tenantId, order.branch_id, 'KITCHEN_TICKET'),
-      this.routingService.lineContexts(tenantId, order.branch_id, lines.map((l) => l.item.product_id)),
-    ]);
+  private async splitByStation(tenantId: string, order: OrderHeader, lines: StationBatch['lines']): Promise<StationBatch[]> {
+    const stations = await this.routingService.stationsFor(tenantId, order.branch_id, lines.map((l) => l.item.product_id));
 
     const batches = new Map<string, StationBatch>();
     for (const line of lines) {
-      const route = this.routingService.matchRoute(routes, contexts.get(line.item.product_id) || {});
-      const key = route ? route.printer_group_id : '';
+      const station = stations.get(line.item.product_id) ?? null;
+      const key = station?.id ?? '';
       const batch = batches.get(key);
-      if (!batch) {
-        batches.set(key, { route, label: '', template: null, lines: [line] });
-        continue;
-      }
-      batch.lines.push(line);
-      if (route && (route.copies || 1) > (batch.route?.copies || 1)) batch.route = route;
+      if (batch) batch.lines.push(line);
+      else batches.set(key, { station, label: '', template: station?.ticket_template ?? null, lines: [line] });
     }
 
     const result = [...batches.values()];
     for (const [index, batch] of result.entries()) {
-      const group = await this.routingService.group(tenantId, batch.route?.printer_group_id);
-      const name = group?.name || 'آشپزخانه';
+      const name = batch.station?.name || 'آشپزخانه';
       batch.label = result.length > 1 ? `${name} (${index + 1}/${result.length})` : name;
-      batch.template = group?.ticket_template ?? null;
     }
     return result;
   }
@@ -436,21 +426,27 @@ export class PrintQueueService {
     };
   }
 
-  /** One job per printer the route reaches, or one failed job when it reaches none. */
+  /** A station's chit on each of the station's printers. */
+  private async recordStationJobs(tenantId: string, order: OrderHeader, html: string, batch: StationBatch, opts: JobOptions) {
+    const routed = await this.routingService.printersForStation(tenantId, order.branch_id, batch.station);
+    return this.recordJobs(tenantId, order, 'KITCHEN_TICKET', html, routed, opts, batch.label, batch.station?.id);
+  }
+
+  /** One job per printer the document goes to, or one failed job when there is none. */
   private async recordJobs(
     tenantId: string,
     order: OrderHeader,
     documentType: string,
     html: string,
-    route: PrintRoute | null,
+    routed: RoutedPrinter[],
     opts: JobOptions,
     label?: string,
+    stationId?: string,
   ): Promise<PrintJob[]> {
-    // A hand-picked printer replaces whatever routing chose, and keeps the route's copy
-    // count so a receipt that normally prints twice still does.
-    const routed = await this.routingService.printersForRoute(tenantId, order.branch_id, route, documentType);
+    // A hand-picked printer replaces whatever routing chose, and keeps the routed copy count
+    // so a receipt that normally prints twice still does.
     const targets = opts.targetPrinterId
-      ? await this.forcedTarget(tenantId, order.branch_id, opts.targetPrinterId, route?.copies || routed[0]?.copies || 1)
+      ? await this.forcedTarget(tenantId, order.branch_id, opts.targetPrinterId, routed[0]?.copies || 1)
       : routed;
     const newJob = (printerId: string | undefined, copies: number) =>
       this.jobRepo.create({
@@ -460,7 +456,7 @@ export class PrintQueueService {
         entity_type: 'Order',
         entity_id: order.id,
         printer_id: printerId,
-        printer_group_id: route?.printer_group_id,
+        station_id: stationId,
         label,
         status: 'QUEUED',
         copies,
@@ -475,7 +471,7 @@ export class PrintQueueService {
     // looked exactly like one that printed. Fail it where the print queue shows failures,
     // and tell the branch.
     if (targets.length === 0) {
-      const savedJob = await this.jobRepo.save(newJob(undefined, route?.copies || 1));
+      const savedJob = await this.jobRepo.save(newJob(undefined, 1));
       savedJob.status = 'FAILED';
       await this.jobRepo.save(savedJob);
       await this.raiseUnroutedAlert(tenantId, order, documentType);
@@ -582,7 +578,10 @@ export class PrintQueueService {
         // A kitchen ticket that never prints is food nobody cooks.
         severity: documentType === 'KITCHEN_TICKET' ? 'CRITICAL' : 'WARNING',
         title,
-        message: `Order ${order.order_number}: no active printer is routed for ${documentType} at this branch, so it did not print. Add a printer and a print route, then retry the job from the print queue.`,
+        message:
+          documentType === 'KITCHEN_TICKET'
+            ? `Order ${order.order_number}: no kitchen printer is in service at this branch, so the kitchen ticket did not print. Give the prep station a printer, or add a kitchen printer, then retry the job from the print queue.`
+            : `Order ${order.order_number}: no printer is in service for ${documentType} at this branch, so it did not print. Give the till a receipt printer, or add a receipt printer, then retry the job from the print queue.`,
         acknowledged: false,
       }),
     );
@@ -686,8 +685,8 @@ export class PrintQueueService {
       }
     }
 
-    // A job routed afresh takes the first printer; every other printer in the group gets a job
-    // of its own, as it would have had the group been working when the order was placed.
+    // A job routed afresh takes the first printer; every other printer of the station gets a
+    // job of its own, as it would have had the station's printers been working at the time.
     const [first, ...others] = targets;
     if (!job.printer_id) {
       job.printer_id = first.printer.id;
@@ -709,7 +708,7 @@ export class PrintQueueService {
           entity_type: job.entity_type,
           entity_id: job.entity_id,
           printer_id: target.printer.id,
-          printer_group_id: job.printer_group_id,
+          station_id: job.station_id,
           label: job.label,
           status: 'QUEUED',
           copies: target.copies,
@@ -729,9 +728,9 @@ export class PrintQueueService {
   /**
    * Where a retry prints. A job with a printer goes back to that printer, or to its fallback
    * when asked. A job with none — nothing was reachable when it was made — is routed again as
-   * it first was: through its station's printer group when it had one, so the grill's chit
-   * reaches the grill and every printer the group has gained since; otherwise on the route
-   * with no selector.
+   * it first was: a kitchen chit to its station's printers, so the grill's chit reaches the
+   * grill and every printer the station has gained since; any other document to the printer of
+   * the till its order was taken on.
    */
   private async retryTargets(tenantId: string, job: PrintJob, useFallback?: boolean): Promise<RoutedPrinter[]> {
     if (job.printer_id) {
@@ -751,14 +750,16 @@ export class PrintQueueService {
       return [{ printer, copies: job.copies || 1 }];
     }
 
-    const route = job.printer_group_id
-      ? ({ printer_group_id: job.printer_group_id, copies: job.copies || 1 } as PrintRoute)
-      : this.routingService.matchRoute(await this.routingService.loadRoutes(tenantId, job.branch_id, job.document_type), {});
-    const routed = await this.routingService.printersForRoute(tenantId, job.branch_id, route, job.document_type);
+    let routed: RoutedPrinter[];
+    if (job.document_type === 'KITCHEN_TICKET') {
+      routed = await this.routingService.printersForStation(tenantId, job.branch_id, await this.routingService.station(tenantId, job.station_id));
+    } else {
+      const order =
+        job.entity_type === 'Order' ? await this.orderRepo.findOne({ where: { id: job.entity_id, tenant_id: tenantId } }) : null;
+      routed = (await this.routingService.printersForDocument(tenantId, job.branch_id, order?.terminal_id)).printers;
+    }
     if (routed.length === 0) {
-      throw new BadRequestException(
-        `No printer is routed for ${job.document_type} at this branch. Add a printer and a print route, then retry.`,
-      );
+      throw new BadRequestException(`No printer is in service for ${job.document_type} at this branch. Add a printer, then retry.`);
     }
     return routed;
   }

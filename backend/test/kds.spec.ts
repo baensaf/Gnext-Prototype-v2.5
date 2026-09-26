@@ -42,7 +42,10 @@ describe('KdsService (Unit & Integration)', () => {
       // repository the assertions watch.
       manager: { transaction: jest.fn(async (cb: any) => cb({ save: (_entity: any, order: any) => orderRepo.save(order) })) },
     };
-    productRepo = { findOne: jest.fn().mockResolvedValue({ id: 'prod-1', category_id: 'cat-hot-dishes' }) };
+    productRepo = {
+      findOne: jest.fn().mockResolvedValue({ id: 'prod-1', category_id: 'cat-hot-dishes' }),
+      find: jest.fn().mockResolvedValue([{ id: 'prod-1', category_id: 'cat-hot-dishes' }]),
+    };
     auditWriter = { write: jest.fn() };
     transitionRecorder = { record: jest.fn() };
 
@@ -79,8 +82,8 @@ describe('KdsService (Unit & Integration)', () => {
     });
 
     ruleRepo.find.mockResolvedValue([
-      { id: 'rule-prod', station_id: 'st-grill', product_id: 'prod-burger', priority: 10 },
-      { id: 'rule-cat', station_id: 'st-main', category_id: 'cat-fastfood', priority: 5 },
+      { id: 'rule-prod', station_id: 'st-grill', product_id: 'prod-burger' },
+      { id: 'rule-cat', station_id: 'st-main', category_id: 'cat-fastfood' },
     ]);
 
     stationRepo.findOne.mockResolvedValue({ id: 'st-grill', name: 'Grill Station', target_minutes: 10 });

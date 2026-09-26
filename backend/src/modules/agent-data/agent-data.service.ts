@@ -328,7 +328,16 @@ export class AgentDataService {
       delivery_zones: zones.map((z) => ({ id: z.id, name: z.name, fee: rial(z.fee || 0) })),
       tills: tills
         .filter((t) => (t.terminal_type || 'CASHIER') === 'CASHIER')
-        .map((t) => ({ id: t.id, code: t.code, name: t.name, payment_device_id: t.payment_device_id ?? null })),
+        .map((t) => ({
+          id: t.id,
+          code: t.code,
+          name: t.name,
+          payment_device_id: t.payment_device_id ?? null,
+          // Where the till's receipts and bills print (§13.11), as PrintRoutingService prints them online.
+          receipt_printer_id: t.receipt_printer_id ?? null,
+          receipt_copies: t.receipt_copies || 1,
+          receipt_template: t.receipt_template ?? null,
+        })),
       open_shifts: openShifts.map((s) => ({
         id: s.id,
         terminal_id: s.terminal_id ?? null,

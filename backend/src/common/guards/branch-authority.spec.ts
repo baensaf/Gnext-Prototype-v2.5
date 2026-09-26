@@ -40,7 +40,7 @@ const SITE_CONFIG: [any, string[]][] = [
   [DeliveryController, ['createZone', 'updateZone', 'deleteZone', 'createCourier', 'updateCourierPay']],
   [DineInController, ['createSection', 'updateSection', 'archiveSection', 'createTable', 'updateTable', 'archiveTable']],
   [KdsController, ['createStation', 'updateStation', 'deleteStation', 'createScreen', 'updateScreen', 'deleteScreen', 'createRoutingRule', 'deleteRoutingRule']],
-  [PrintersController, ['createPrinter', 'updatePrinter', 'deletePrinter', 'createGroup', 'updateGroup', 'deleteGroup', 'createRoute', 'updateRoute', 'deleteRoute']],
+  [PrintersController, ['createPrinter', 'updatePrinter', 'deletePrinter']],
   [TenantController, ['createTerminal', 'updateTerminal', 'archiveTerminal']],
   [PaymentController, ['createDevice']],
 ];
@@ -130,7 +130,7 @@ const BY_ID: [any, string[]][] = [
   ],
   [DineInController, ['updateSection', 'archiveSection', 'updateTable', 'archiveTable', 'seatGuests', 'releaseTable']],
   [KdsController, ['updateStation', 'deleteStation', 'updateScreen', 'deleteScreen', 'deleteRoutingRule']],
-  [PrintersController, ['updatePrinter', 'deletePrinter', 'updateGroup', 'deleteGroup', 'updateRoute', 'deleteRoute']],
+  [PrintersController, ['updatePrinter', 'deletePrinter']],
   [TenantController, ['updateTerminal', 'archiveTerminal']],
 ];
 

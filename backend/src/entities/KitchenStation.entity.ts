@@ -23,6 +23,22 @@ export class KitchenStation {
   @Column({ type: 'int', default: 10 })
   target_minutes: number;
 
+  /**
+   * The printers this station's chits print on, every one of them, in this order. Empty: the
+   * branch's kitchen printer prints them, as it does for a station whose printers are all out
+   * of service.
+   */
+  @Column({ type: 'uuid', array: true, default: () => "'{}'" })
+  printer_ids: string[];
+
+  /** How many copies of each chit each of its printers prints. */
+  @Column({ type: 'int', default: 1 })
+  copies: number;
+
+  /** COMPACT or DETAILED chits; null takes the kitchen chit's default. */
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  ticket_template?: 'COMPACT' | 'DETAILED' | null;
+
   @Column({ type: 'boolean', default: true })
   is_active: boolean;
 

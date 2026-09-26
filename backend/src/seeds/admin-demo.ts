@@ -129,11 +129,16 @@ export async function seedAdminDemo(
   // sides, and one screen showing both. Its old stations were deleted in testing on 09-10.
   const stationRepo = ds.getRepository('KitchenStation');
   if (valiasr && !(await stationRepo.findOne({ where: { tenant_id: tenantId, branch_id: valiasr.id, deleted_at: IsNull() } }))) {
+    // Both print on the branch's kitchen printer, each chit headed with its station.
+    const kitchenPrinter: any = await ds
+      .getRepository('Printer')
+      .findOne({ where: { tenant_id: tenantId, branch_id: valiasr.id, printer_type: 'KITCHEN_IMPACT', is_active: true } });
+    const printer_ids = kitchenPrinter ? [kitchenPrinter.id] : [];
     const grill: any = await stationRepo.save(
-      stationRepo.create({ tenant_id: tenantId, branch_id: valiasr.id, code: 'VAL-GRILL', name: 'گریل', station_type: 'HOT_KITCHEN', target_minutes: 8, is_active: true }),
+      stationRepo.create({ tenant_id: tenantId, branch_id: valiasr.id, code: 'VAL-GRILL', name: 'گریل', station_type: 'HOT_KITCHEN', target_minutes: 8, is_active: true, printer_ids }),
     );
     const fryer: any = await stationRepo.save(
-      stationRepo.create({ tenant_id: tenantId, branch_id: valiasr.id, code: 'VAL-FRY', name: 'سرخ‌کن', station_type: 'FRYER', target_minutes: 5, is_active: true }),
+      stationRepo.create({ tenant_id: tenantId, branch_id: valiasr.id, code: 'VAL-FRY', name: 'سرخ‌کن', station_type: 'FRYER', target_minutes: 5, is_active: true, printer_ids }),
     );
     const ruleRepo = ds.getRepository('KdsRoutingRule');
     const routes: Array<[string, any]> = [
@@ -146,7 +151,7 @@ export async function seedAdminDemo(
       const category = categories.find((c) => c.code === code);
       if (!category) continue;
       await ruleRepo.save(
-        ruleRepo.create({ tenant_id: tenantId, branch_id: valiasr.id, station_id: station.id, category_id: category.id, priority: 10 }),
+        ruleRepo.create({ tenant_id: tenantId, branch_id: valiasr.id, station_id: station.id, category_id: category.id }),
       );
     }
     await ds.getRepository('KdsScreen').save(

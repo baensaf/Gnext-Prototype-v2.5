@@ -23,9 +23,9 @@ export class PrintJob {
   @Column({ type: 'uuid', nullable: true })
   printer_id?: string;
 
-  /** The printer group the route sent this job to; empty when no route matched. */
+  /** The prep station a kitchen chit is for; empty for other documents and unrouted lines. */
   @Column({ type: 'uuid', nullable: true })
-  printer_group_id?: string;
+  station_id?: string;
 
   /** The station a kitchen chit is for, e.g. "Grill (1/3)". Other documents leave it empty. */
   @Column({ type: 'varchar', length: 160, nullable: true })

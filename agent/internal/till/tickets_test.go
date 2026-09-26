@@ -35,7 +35,7 @@ func (l *printLog) reachable() []PrinterInfo {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.reach == nil {
-		return []PrinterInfo{{ID: "p-grill"}, {ID: "p-fry"}, {ID: "p-counter"}, {ID: "p-kitchen"}}
+		return []PrinterInfo{{ID: "p-grill"}, {ID: "p-fry"}, {ID: "p-counter"}, {ID: "p-kitchen"}, {ID: "p-till"}}
 	}
 	return l.reach
 }
@@ -117,7 +117,8 @@ func TestTheReceiptPrintsWhenPaidAndGoesUpWithTheChits(t *testing.T) {
 			receipt = &j
 		}
 	}
-	if receipt == nil || receipt.printer != "p-counter" || receipt.copies != 1 {
+	// At the till's own printer, the till's copies.
+	if receipt == nil || receipt.printer != "p-till" || receipt.copies != 2 {
 		t.Fatalf("receipt = %+v", receipt)
 	}
 	for _, want := range []string{"ایران برگر", "ولیعصر", "فاکتور فروش", "پرداخت شد", "نقد", "۲٬۶۹۵٬۰۰۰ ریال", "بیرون‌بر"} {
@@ -214,9 +215,8 @@ func TestATicketFallsBackAndFailsWhenNothingCanPrintIt(t *testing.T) {
 func TestABillAndACopyOfTheReceiptOnRequest(t *testing.T) {
 	s := newShop(t)
 	o := s.placed(TypeDineIn)
-	// No bill route: the fallback for other documents.
 	recs, err := s.till.PrintDocument(o.ID, PrintInput{Document: DocBill})
-	if err != nil || len(recs) != 1 || recs[0].PrinterID != "p-counter" || recs[0].Reprint {
+	if err != nil || len(recs) != 1 || recs[0].PrinterID != "p-till" || recs[0].Reprint {
 		t.Fatalf("bill = %+v, %v", recs, err)
 	}
 	s.printedOrder(o.ID)
@@ -237,6 +237,17 @@ func TestABillAndACopyOfTheReceiptOnRequest(t *testing.T) {
 	}
 	if _, err := s.till.PrintDocument(o.ID, PrintInput{Document: "MENU"}); code(err) != CodeInvalid {
 		t.Fatalf("unknown document: %v", err)
+	}
+}
+
+func TestAReceiptFallsBackToTheBranchPrinterWhenTheTillsIsOff(t *testing.T) {
+	s := newShop(t)
+	s.printer.set(func(l *printLog) { l.reach = []PrinterInfo{{ID: "p-grill"}, {ID: "p-fry"}, {ID: "p-counter"}} })
+	o := s.placed(TypeDineIn)
+	recs, err := s.till.PrintDocument(o.ID, PrintInput{Document: DocBill})
+	// The branch's printer, still the till's copies, as the cloud prints it.
+	if err != nil || len(recs) != 1 || recs[0].PrinterID != "p-counter" || recs[0].Copies != 2 {
+		t.Fatalf("bill = %+v, %v", recs, err)
 	}
 }
 

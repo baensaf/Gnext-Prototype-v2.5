@@ -1,9 +1,10 @@
-import type { KdsScreen, KitchenStation, KdsRoutingRule } from 'src/api/kdsApi';
+import type { KdsScreen, PrinterDevice, KitchenStation, KdsRoutingRule } from 'src/api/kdsApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import {
@@ -33,6 +34,7 @@ import {
   FormControl,
   DialogContent,
   DialogActions,
+  FormHelperText,
   CircularProgress,
 } from '@mui/material';
 
@@ -42,6 +44,17 @@ import { useScopedBranchId } from 'src/contexts/branch-context';
 
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
+
+type StationForm = {
+  code: string;
+  name: string;
+  target_minutes: number;
+  printer_ids: string[];
+  copies: number;
+  ticket_template: '' | 'COMPACT' | 'DETAILED';
+};
+
+const EMPTY_STATION: StationForm = { code: '', name: '', target_minutes: 10, printer_ids: [], copies: 1, ticket_template: '' };
 
 export function KdsConfigurationPage() {
   const { t } = useTranslation();
@@ -58,6 +71,7 @@ export function KdsConfigurationPage() {
   const [stations, setStations] = useState<KitchenStation[]>([]);
   const [screens, setScreens] = useState<KdsScreen[]>([]);
   const [rules, setRules] = useState<KdsRoutingRule[]>([]);
+  const [printers, setPrinters] = useState<PrinterDevice[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,27 +92,30 @@ export function KdsConfigurationPage() {
 
   // Dialogs
   const [stationModalOpen, setStationModalOpen] = useState(false);
-  const [stationForm, setStationForm] = useState({ code: '', name: '', target_minutes: 10 });
+  const [editingStationId, setEditingStationId] = useState<string | null>(null);
+  const [stationForm, setStationForm] = useState<StationForm>(EMPTY_STATION);
 
   const [screenModalOpen, setScreenModalOpen] = useState(false);
   const [screenForm, setScreenForm] = useState({ code: '', name: '', station_ids: [] as string[] });
 
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
-  const [ruleForm, setRuleForm] = useState({ station_id: '', selector_type: 'PRODUCT', product_id: '', category_id: '', priority: 1 });
+  const [ruleForm, setRuleForm] = useState({ station_id: '', selector_type: 'CATEGORY', product_id: '', category_id: '' });
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [stList, scList, rlList, prodList, catList] = await Promise.all([
+      const [stList, scList, rlList, prnList, prodList, catList] = await Promise.all([
         kdsApi.getStations(selectedBranchId || undefined),
         kdsApi.getScreens(selectedBranchId || undefined),
         kdsApi.getRoutingRules(selectedBranchId || undefined),
+        kdsApi.getPrinters(selectedBranchId || undefined).catch(() => []),
         catalogApi.getProducts().catch(() => []),
         catalogApi.getCategories().catch(() => []),
       ]);
       setStations(stList || []);
       setScreens(scList || []);
       setRules(rlList || []);
+      setPrinters(prnList || []);
       setProducts(Array.isArray(prodList) ? prodList : (prodList as any).items || []);
       setCategories(Array.isArray(catList) ? catList : (catList as any).items || []);
       setError(null);
@@ -113,15 +130,41 @@ export function KdsConfigurationPage() {
     loadData();
   }, [loadData]);
 
-  const handleCreateStation = async () => {
+  const printerName = (id: string) => printers.find((p) => p.id === id)?.name || id;
+
+  const openCreateStation = () => {
+    setEditingStationId(null);
+    setStationForm(EMPTY_STATION);
+    setStationModalOpen(true);
+  };
+
+  const openEditStation = (st: KitchenStation) => {
+    setEditingStationId(st.id);
+    setStationForm({
+      code: st.code,
+      name: st.name,
+      target_minutes: st.target_minutes || 10,
+      printer_ids: st.printer_ids || [],
+      copies: st.copies || 1,
+      ticket_template: st.ticket_template || '',
+    });
+    setStationModalOpen(true);
+  };
+
+  const handleSaveStation = async () => {
     try {
       if (!selectedBranchId) {
         setError(t('operations.kds.noBranchError', 'Choose a branch before adding kitchen configuration'));
         return;
       }
-      await kdsApi.createStation({ branch_id: selectedBranchId, ...stationForm });
+      const payload = { ...stationForm, ticket_template: stationForm.ticket_template || null };
+      if (editingStationId) {
+        await kdsApi.updateStation(editingStationId, payload);
+      } else {
+        await kdsApi.createStation({ branch_id: selectedBranchId, ...payload });
+      }
       setStationModalOpen(false);
-      setStationForm({ code: '', name: '', target_minutes: 10 });
+      setStationForm(EMPTY_STATION);
       loadData();
     } catch (err: any) {
       setError(err.detail || t('operations.kds.createStationError', 'Failed to create station'));
@@ -173,10 +216,9 @@ export function KdsConfigurationPage() {
         station_id: ruleForm.station_id,
         product_id: ruleForm.selector_type === 'PRODUCT' ? ruleForm.product_id : undefined,
         category_id: ruleForm.selector_type === 'CATEGORY' ? ruleForm.category_id : undefined,
-        priority: ruleForm.priority,
       });
       setRuleModalOpen(false);
-      setRuleForm({ station_id: '', selector_type: 'PRODUCT', product_id: '', category_id: '', priority: 1 });
+      setRuleForm({ station_id: '', selector_type: 'CATEGORY', product_id: '', category_id: '' });
       loadData();
     } catch (err: any) {
       setError(err.detail || t('operations.kds.createRuleError', 'Failed to create routing rule'));
@@ -222,7 +264,7 @@ export function KdsConfigurationPage() {
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                   {t('operations.kds.tabs.stations', 'Kitchen Preparation Stations')} ({stations.length})
                 </Typography>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setStationModalOpen(true)}>
+                <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateStation}>
                   {t('operations.kds.addStation', 'Add Prep Station')}
                 </Button>
               </Stack>
@@ -232,6 +274,7 @@ export function KdsConfigurationPage() {
                   <TableRow>
                     <TableCell>{t('operations.kds.colCode', 'Code')}</TableCell>
                     <TableCell>{t('operations.kds.colName', 'Name')}</TableCell>
+                    <TableCell>{t('operations.kds.colPrinters', 'Printers')}</TableCell>
                     <TableCell>{t('operations.kds.colTargetMinutes', 'Target Prep Time')}</TableCell>
                     <TableCell>{t('operations.kds.colStatus', 'Status')}</TableCell>
                     <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
@@ -244,6 +287,18 @@ export function KdsConfigurationPage() {
                     <TableRow key={st.id}>
                       <TableCell><strong>{st.code}</strong></TableCell>
                       <TableCell>{st.name}</TableCell>
+                      <TableCell>
+                        {(st.printer_ids || []).length ? (
+                          (st.printer_ids || []).map((id) => <Chip key={id} label={printerName(id)} size="small" sx={{ mr: 0.5 }} />)
+                        ) : (
+                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            {t('operations.kds.branchKitchenPrinter')}
+                          </Typography>
+                        )}
+                        {(st.copies || 1) > 1 && (
+                          <Chip label={t('operations.kds.copiesVal', { copies: st.copies })} size="small" variant="outlined" />
+                        )}
+                      </TableCell>
                       <TableCell>{t('operations.kds.colMinutesVal', '{{minutes}} min', { minutes: st.target_minutes || 10 })}</TableCell>
                       <TableCell>
                         <Chip
@@ -253,6 +308,9 @@ export function KdsConfigurationPage() {
                         />
                       </TableCell>
                       <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
+                        <IconButton onClick={() => openEditStation(st)} aria-label={t('operations.kds.editStation')}>
+                          <EditIcon />
+                        </IconButton>
                         <IconButton
                           color="error"
                           onClick={() =>
@@ -349,13 +407,15 @@ export function KdsConfigurationPage() {
                   {t('operations.kds.addRule', 'Add Routing Rule')}
                 </Button>
               </Stack>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {t('operations.kds.rulesHint')}
+              </Alert>
 
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>{t('operations.printers.colPriority', 'Priority')}</TableCell>
-                    <TableCell>{t('operations.kds.colTargetStation', 'Target Station')}</TableCell>
                     <TableCell>{t('operations.kds.colCategory', 'Menu Category / Product')}</TableCell>
+                    <TableCell>{t('operations.kds.colTargetStation', 'Target Station')}</TableCell>
                     <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
                       {t('operations.kds.colActions', 'Actions')}
                     </TableCell>
@@ -369,12 +429,15 @@ export function KdsConfigurationPage() {
 
                     return (
                       <TableRow key={rl.id}>
-                        <TableCell><Chip label={`P${rl.priority}`} color="primary" size="small" /></TableCell>
-                        <TableCell><strong>{st ? st.name : rl.station_id}</strong></TableCell>
                         <TableCell>
-                          {rl.product_id && <Chip label={`Product: ${prod ? prod.name : rl.product_id}`} color="success" size="small" />}
-                          {rl.category_id && <Chip label={`Category: ${cat ? cat.name : rl.category_id}`} color="info" size="small" />}
+                          {rl.product_id && (
+                            <Chip label={t('operations.kds.ruleProduct', { name: prod ? prod.name : rl.product_id })} color="success" size="small" />
+                          )}
+                          {rl.category_id && (
+                            <Chip label={t('operations.kds.ruleCategory', { name: cat ? cat.name : rl.category_id })} color="info" size="small" />
+                          )}
                         </TableCell>
+                        <TableCell><strong>{st ? st.name : rl.station_id}</strong></TableCell>
                         <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
                           <IconButton
                             color="error"
@@ -400,9 +463,13 @@ export function KdsConfigurationPage() {
         </>
       )}
 
-      {/* Add Station Modal */}
+      {/* Add / Edit Station Modal */}
       <Dialog open={stationModalOpen} onClose={() => setStationModalOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>{t('operations.kds.createStationModal', 'Create Kitchen Preparation Station')}</DialogTitle>
+        <DialogTitle>
+          {editingStationId
+            ? t('operations.kds.editStation')
+            : t('operations.kds.createStationModal', 'Create Kitchen Preparation Station')}
+        </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <TextField
@@ -424,12 +491,62 @@ export function KdsConfigurationPage() {
               onChange={(e) => setStationForm({ ...stationForm, target_minutes: Number(e.target.value) })}
               fullWidth
             />
+            <FormControl fullWidth>
+              <InputLabel>{t('operations.kds.formPrinters')}</InputLabel>
+              <Select
+                multiple
+                value={stationForm.printer_ids}
+                label={t('operations.kds.formPrinters')}
+                onChange={(e) =>
+                  setStationForm({
+                    ...stationForm,
+                    printer_ids: typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value,
+                  })
+                }
+                renderValue={(selected) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {selected.map((id) => (
+                      <Chip key={id} label={printerName(id)} size="small" />
+                    ))}
+                  </Box>
+                )}
+              >
+                {printers.map((p) => (
+                  <MenuItem key={p.id} value={p.id}>
+                    {p.name}
+                  </MenuItem>
+                ))}
+              </Select>
+              <FormHelperText>{t('operations.kds.formPrintersHint')}</FormHelperText>
+            </FormControl>
+            <TextField
+              label={t('operations.kds.formCopies')}
+              type="number"
+              value={stationForm.copies}
+              onChange={(e) => setStationForm({ ...stationForm, copies: Math.max(1, Number(e.target.value) || 1) })}
+              slotProps={{ htmlInput: { min: 1 } }}
+              fullWidth
+            />
+            <FormControl fullWidth>
+              <InputLabel shrink>{t('operations.printers.ticketTemplate')}</InputLabel>
+              <Select
+                displayEmpty
+                notched
+                value={stationForm.ticket_template}
+                label={t('operations.printers.ticketTemplate')}
+                onChange={(e) => setStationForm({ ...stationForm, ticket_template: e.target.value as StationForm['ticket_template'] })}
+              >
+                <MenuItem value="">{t('operations.printers.templates.DEFAULT')}</MenuItem>
+                <MenuItem value="COMPACT">{t('operations.printers.templates.COMPACT')}</MenuItem>
+                <MenuItem value="DETAILED">{t('operations.printers.templates.DETAILED')}</MenuItem>
+              </Select>
+            </FormControl>
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setStationModalOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
-          <Button variant="contained" onClick={handleCreateStation}>
-            {t('operations.kds.createStationBtn', 'Save Station')}
+          <Button variant="contained" onClick={handleSaveStation}>
+            {editingStationId ? t('common.save') : t('operations.kds.createStationBtn', 'Save Station')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -501,25 +618,44 @@ export function KdsConfigurationPage() {
             </FormControl>
 
             <FormControl fullWidth>
-              <InputLabel>{t('operations.kds.formCategory', 'Menu Category')}</InputLabel>
+              <InputLabel>{t('operations.kds.formAppliesTo')}</InputLabel>
               <Select
-                value={ruleForm.category_id}
-                label={t('operations.kds.formCategory', 'Menu Category')}
-                onChange={(e) => setRuleForm({ ...ruleForm, selector_type: 'CATEGORY', category_id: e.target.value })}
+                value={ruleForm.selector_type}
+                label={t('operations.kds.formAppliesTo')}
+                onChange={(e) => setRuleForm({ ...ruleForm, selector_type: e.target.value })}
               >
-                {categories.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                ))}
+                <MenuItem value="CATEGORY">{t('operations.kds.appliesCategory')}</MenuItem>
+                <MenuItem value="PRODUCT">{t('operations.kds.appliesProduct')}</MenuItem>
               </Select>
             </FormControl>
 
-            <TextField
-              label={t('operations.printers.formPriority', 'Priority')}
-              type="number"
-              value={ruleForm.priority}
-              onChange={(e) => setRuleForm({ ...ruleForm, priority: Number(e.target.value) })}
-              fullWidth
-            />
+            {ruleForm.selector_type === 'CATEGORY' ? (
+              <FormControl fullWidth>
+                <InputLabel>{t('operations.kds.formCategory', 'Menu Category')}</InputLabel>
+                <Select
+                  value={ruleForm.category_id}
+                  label={t('operations.kds.formCategory', 'Menu Category')}
+                  onChange={(e) => setRuleForm({ ...ruleForm, category_id: e.target.value })}
+                >
+                  {categories.map((c) => (
+                    <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : (
+              <FormControl fullWidth>
+                <InputLabel>{t('operations.kds.formProduct')}</InputLabel>
+                <Select
+                  value={ruleForm.product_id}
+                  label={t('operations.kds.formProduct')}
+                  onChange={(e) => setRuleForm({ ...ruleForm, product_id: e.target.value })}
+                >
+                  {products.map((p) => (
+                    <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>

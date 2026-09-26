@@ -24,6 +24,20 @@ export class Terminal {
   @Column({ type: 'uuid', nullable: true })
   payment_device_id: string | null;
 
+  /**
+   * Where the till's receipts, guest bills and courier slips print. Empty: the branch's
+   * receipt printer.
+   */
+  @Column({ type: 'uuid', nullable: true })
+  receipt_printer_id: string | null;
+
+  @Column({ type: 'int', default: 1 })
+  receipt_copies: number;
+
+  /** COMPACT or DETAILED receipts; null takes each document's default. */
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  receipt_template: 'COMPACT' | 'DETAILED' | null;
+
   @Column({ type: 'boolean', default: true })
   is_active: boolean;
 

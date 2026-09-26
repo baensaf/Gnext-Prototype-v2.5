@@ -7,6 +7,7 @@ import { BranchOperatingHour } from '../../entities/BranchOperatingHour.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { CashierShift } from '../../entities/CashierShift.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
+import { Printer } from '../../entities/Printer.entity';
 import { AdminUser } from '../../entities/AdminUser.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
@@ -326,6 +327,16 @@ export class TenantService {
       if (!device) throw new NotFoundException('Payment terminal not found');
       if (device.branch_id && device.branch_id !== (data.branch_id || terminal.branch_id)) {
         throw new BadRequestException('The card terminal belongs to another branch');
+      }
+    }
+    if (data.receipt_printer_id) {
+      // A till's receipts come out at its own counter, not another branch's.
+      const printer = await this.terminalRepo.manager.findOne(Printer, {
+        where: { id: data.receipt_printer_id, tenant_id: tenantId },
+      });
+      if (!printer) throw new NotFoundException('Printer not found');
+      if (printer.branch_id !== (data.branch_id || terminal.branch_id)) {
+        throw new BadRequestException('The receipt printer belongs to another branch');
       }
     }
     Object.assign(terminal, data);

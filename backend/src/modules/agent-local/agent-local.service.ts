@@ -24,6 +24,7 @@ import { AgentConfigService } from '../agent-gateway/agent-config.service';
 import { AgentSessionsService } from '../agent-gateway/agent-sessions.service';
 import { OFFLINE_TILL_ROLES } from '../agent-data/agent-data.service';
 import { AGENT_TERMINAL_DRIVERS } from '../payment/agent-payments.service';
+import { detachPrinter } from '../printing/print-routing.service';
 
 /** The PIN log's action for a till sign-in (agent-protocol.md §16.3). */
 export const TILL_SIGN_IN = 'TILL_SIGN_IN';
@@ -235,6 +236,7 @@ export class AgentLocalService {
   async deletePrinter(a: LocalActor, id: string) {
     const printer = await this.ownPrinter(a, id);
     await this.printerRepo.softDelete({ id: printer.id });
+    await detachPrinter(this.printerRepo.manager, printer.tenant_id, printer.id);
     await this.changed(a, 'PRINTER_DELETED', 'Printer', printer.id, printer, null);
     return { ok: true };
   }

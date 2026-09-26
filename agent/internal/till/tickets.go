@@ -72,8 +72,8 @@ func (t *Till) printerActive(id string) bool {
 	return slices.ContainsFunc(t.Printers(), func(p PrinterInfo) bool { return p.ID == id })
 }
 
-// targets are the printers of a route's group that the agent can reach, each route copies ×
-// member copies; else the fallback, route copies times (the cloud's printersForRoute).
+// targets are the printers of a station that the agent can reach, each route copies × printer
+// copies; else the fallback, route copies times (the cloud's printersForStation).
 func (t *Till) targets(c *Catalog, route *PrintRoute, fallback *string) []target {
 	routeCopies := 1
 	if route != nil && route.Copies > 0 {
@@ -225,15 +225,33 @@ func (b *chitBatch) routeCopies() int {
 	return max(b.route.Copies, 1)
 }
 
-// documentTickets prints a whole-order document on its route (§13.8).
-func (t *Till) documentTickets(c *Catalog, o *Order, documentType string, reprint bool) []PrintRecord {
-	route := c.Printing.Documents[documentType]
-	var g *PrinterGroup
-	if route != nil {
-		g = c.group(route.GroupID)
+// documentTargets is where a whole-order document prints, and on which paper (the cloud's
+// printersForDocument): the bound till's receipt printer with the till's copies, else the
+// branch's printer for documents that are not the kitchen's.
+func (t *Till) documentTargets(c *Catalog) ([]target, string) {
+	copies, template, own := 1, "", (*string)(nil)
+	if b := t.Binding(); b != nil {
+		if i := slices.IndexFunc(c.Tills, func(r Register) bool { return r.ID == b.TerminalID }); i >= 0 {
+			r := c.Tills[i]
+			copies, own = max(r.ReceiptCopies, 1), r.ReceiptPrinterID
+			if r.ReceiptTemplate != nil {
+				template = *r.ReceiptTemplate
+			}
+		}
 	}
+	for _, id := range []*string{own, c.Printing.Fallback.Other} {
+		if id != nil && *id != "" && t.printerActive(*id) {
+			return []target{{printerID: *id, copies: copies}}, template
+		}
+	}
+	return nil, template
+}
+
+// documentTickets prints a whole-order document at the till (§13.8).
+func (t *Till) documentTickets(c *Catalog, o *Order, documentType string, reprint bool) []PrintRecord {
+	targets, template := t.documentTargets(c)
 	doc := heading(c, o, o.PlacedAt)
-	doc.DocumentType, doc.Template, doc.IsReprint = documentType, g.template(), reprint
+	doc.DocumentType, doc.Template, doc.IsReprint = documentType, template, reprint
 	for _, l := range o.Lines {
 		doc.Items = append(doc.Items, renderItem(l, ""))
 	}
@@ -246,7 +264,7 @@ func (t *Till) documentTickets(c *Catalog, o *Order, documentType string, reprin
 			doc.Payments = append(doc.Payments, RenderPayment{Method: p.MethodKind, Amount: p.Amount})
 		}
 	}
-	return t.records(documentType, "", RenderDocument(doc), t.targets(c, route, c.Printing.Fallback.Other), reprint)
+	return t.records(documentType, "", RenderDocument(doc), targets, reprint)
 }
 
 // records are the tickets to print, one per printer, or one FAILED when no printer is reachable.

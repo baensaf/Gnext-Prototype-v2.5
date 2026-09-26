@@ -10,9 +10,7 @@ import { Branch } from '../src/entities/Branch.entity';
 import { Category } from '../src/entities/Category.entity';
 import { Product } from '../src/entities/Product.entity';
 import { Printer } from '../src/entities/Printer.entity';
-import { PrinterGroup } from '../src/entities/PrinterGroup.entity';
-import { PrinterGroupMember } from '../src/entities/PrinterGroupMember.entity';
-import { PrintRoute } from '../src/entities/PrintRoute.entity';
+import { Terminal } from '../src/entities/Terminal.entity';
 import { PrintJob } from '../src/entities/PrintJob.entity';
 import { OrderItem } from '../src/entities/OrderItem.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
@@ -20,8 +18,8 @@ import { ReasonCode } from '../src/entities/ReasonCode.entity';
 import { deleteTenantData } from './utils/tenant-teardown';
 
 // Station printing end to end: the real order flow, the real routing queries, the real
-// print_job rows. A burger shop with a grill, a fryer and a bar, and the counter catching
-// anything no route claims.
+// print_job rows. A burger shop with a grill, a fryer and a bar, a kitchen printer catching
+// anything no station makes, and a till with its own receipt printer.
 describe('kitchen tickets split by station (PostgreSQL)', () => {
   let moduleRef: TestingModule;
   let app: INestApplication;
@@ -32,6 +30,7 @@ describe('kitchen tickets split by station (PostgreSQL)', () => {
   let tenantId: string;
   let branchId: string;
   let reasonCodeId: string;
+  let tillId: string;
   const productIds: Record<string, string> = {};
   const printerIds: Record<string, string> = {};
 
@@ -69,40 +68,34 @@ describe('kitchen tickets split by station (PostgreSQL)', () => {
     await product('COLA', drinks);
     await product('CAKE', desserts);
 
-    const station = async (code: string, printers: string[]) => {
-      const group = await save(PrinterGroup, { tenant_id: tenantId, branch_id: branchId, code, name: code });
-      for (const [i, name] of printers.entries()) {
-        printerIds[name] ??= (
-          await save(Printer, { tenant_id: tenantId, branch_id: branchId, code: name, name, printer_type: 'KITCHEN_IMPACT', is_active: true })
-        ).id;
-        await save(PrinterGroupMember, { group_id: group.id, printer_id: printerIds[name], priority: i + 1, copies: 1 });
-      }
-      return group.id;
+    // The kitchen printer sorts first by code, so it is the branch's fallback for kitchen chits.
+    const printer = async (name: string, code: string, printer_type = 'KITCHEN_IMPACT') => {
+      printerIds[name] = (await save(Printer, { tenant_id: tenantId, branch_id: branchId, code, name, printer_type, is_active: true })).id;
     };
-    const counter = await station('Counter', ['PRN-COUNTER']);
-    const grill = await station('Grill', ['PRN-GRILL']);
+    await printer('PRN-KITCHEN', 'K-00');
+    await printer('PRN-GRILL', 'K-10');
+    await printer('PRN-FRYER', 'K-20');
+    await printer('PRN-BAR', 'K-30');
+    await printer('PRN-PASS', 'K-40');
+    await printer('PRN-TILL', 'R-10', 'THERMAL_RECEIPT');
+
+    const station = async (code: string, printers: string[], copies = 1) =>
+      (await kds.createStation(tenantId, { branch_id: branchId, code, name: code, printer_ids: printers.map((n) => printerIds[n]), copies })).id;
+    const grill = await station('Grill', ['PRN-GRILL'], 2);
     const fryer = await station('Fryer', ['PRN-FRYER']);
     // The bar has a printer at the bar and one at the pass.
     const bar = await station('Bar', ['PRN-BAR', 'PRN-PASS']);
 
-    const route = (r: Partial<PrintRoute>) => save(PrintRoute, { tenant_id: tenantId, branch_id: branchId, priority: 0, copies: 1, ...r });
-    await route({ document_type: 'CUSTOMER_RECEIPT', printer_group_id: counter });
-    await route({ document_type: 'KITCHEN_TICKET', printer_group_id: counter });
-    await route({ document_type: 'KITCHEN_TICKET', category_id: burgers, printer_group_id: grill, copies: 2 });
-    await route({ document_type: 'KITCHEN_TICKET', category_id: drinks, printer_group_id: bar });
+    await kds.createRoutingRule(tenantId, { branch_id: branchId, station_id: grill, category_id: burgers });
+    await kds.createRoutingRule(tenantId, { branch_id: branchId, station_id: fryer, category_id: sides });
+    await kds.createRoutingRule(tenantId, { branch_id: branchId, station_id: bar, category_id: drinks });
 
-    // Fries reach the fryer through their kitchen station, not a category route.
-    const fryStation = await kds.createStation(tenantId, { branch_id: branchId, code: 'PRS-FRY', name: 'Fry station' });
-    await kds.createRoutingRule(tenantId, { branch_id: branchId, station_id: fryStation.id, category_id: sides });
-    await route({ document_type: 'KITCHEN_TICKET', station_id: fryStation.id, printer_group_id: fryer });
+    tillId = (
+      await save(Terminal, { tenant_id: tenantId, branch_id: branchId, code: 'PRS-T1', name: 'Till 1', terminal_type: 'CASHIER', receipt_printer_id: printerIds['PRN-TILL'] })
+    ).id;
   }, 60000);
 
   afterAll(async () => {
-    // Group members carry no tenant_id, so the tenant sweep cannot find them.
-    await dataSource.query(
-      `DELETE FROM printer_group_member WHERE group_id IN (SELECT id FROM printer_group WHERE tenant_id = $1)`,
-      [tenantId],
-    );
     await deleteTenantData(dataSource, tenantId);
     await app.close();
   });
@@ -133,7 +126,7 @@ describe('kitchen tickets split by station (PostgreSQL)', () => {
 
     expect(receipts).toHaveLength(0);
 
-    // Grill, Fryer, Bar (two printers) and the counter for the cake.
+    // Grill, Fryer, Bar (two printers) and the kitchen printer for the cake.
     expect(kitchen).toHaveLength(5);
     expect(kitchen.every((j) => j.status === 'SUCCESS')).toBe(true);
 
@@ -151,9 +144,9 @@ describe('kitchen tickets split by station (PostgreSQL)', () => {
     expect(barChits).toHaveLength(2);
     expect(barChits.every((j) => j.rendered_html.includes('COLA') && !j.rendered_html.includes('FRIES'))).toBe(true);
 
-    const [counter] = onPrinter(kitchen, 'PRN-COUNTER');
-    expect(counter.rendered_html).toContain('CAKE');
-    expect(counter.rendered_html).not.toContain('BURGER');
+    const [rest] = onPrinter(kitchen, 'PRN-KITCHEN');
+    expect(rest.rendered_html).toContain('CAKE');
+    expect(rest.rendered_html).not.toContain('BURGER');
   }, 60000);
 
   it('sends an edit only to the stations whose lines changed', async () => {
@@ -205,14 +198,17 @@ describe('kitchen tickets split by station (PostgreSQL)', () => {
         grand_total: '100000.0000',
         paid_total: '100000.0000',
         outstanding_total: '0.0000',
+        terminal_id: tillId,
         ...overrides,
       } as any),
     )) as unknown as OrderHeader;
 
     await orders.afterPaymentSucceeded(tenantId, order.id);
 
-    const printed = (await jobsFor(order.id)).map((j) => j.document_type).sort();
-    expect(printed).toEqual(['COURIER_SLIP', 'CUSTOMER_RECEIPT']);
+    const printed = await jobsFor(order.id);
+    expect(printed.map((j) => j.document_type).sort()).toEqual(['COURIER_SLIP', 'CUSTOMER_RECEIPT']);
+    // Both at the till that took the order.
+    expect(printed.every((j) => j.printer_id === printerIds['PRN-TILL'])).toBe(true);
   }, 60000);
 
   it('tells every station still holding food to stop on cancel', async () => {
@@ -221,9 +217,9 @@ describe('kitchen tickets split by station (PostgreSQL)', () => {
     await orders.cancelOrder(tenantId, orderId, { reasonCodeId, reason: 'Guest left' } as any);
 
     const stops = (await jobsFor(orderId)).slice(before);
-    // Burger (grill), colas (bar + pass) and cake (counter); the fries were already voided.
+    // Burger (grill), colas (bar + pass) and cake (kitchen); the fries were already voided.
     expect(stops.map((j) => j.printer_id).sort()).toEqual(
-      [printerIds['PRN-GRILL'], printerIds['PRN-BAR'], printerIds['PRN-PASS'], printerIds['PRN-COUNTER']].sort(),
+      [printerIds['PRN-GRILL'], printerIds['PRN-BAR'], printerIds['PRN-PASS'], printerIds['PRN-KITCHEN']].sort(),
     );
     expect(stops.every((j) => j.rendered_html.includes('لغو سفارش — آماده نکنید'))).toBe(true);
     // The cook reads why, even when the till sent only a reason code.

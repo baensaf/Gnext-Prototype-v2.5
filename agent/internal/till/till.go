@@ -167,6 +167,11 @@ type Register struct {
 	Code            string  `json:"code"`
 	Name            string  `json:"name"`
 	PaymentDeviceID *string `json:"payment_device_id"`
+	// Where the till's receipts and bills print, how many copies, and on which paper (§13.11).
+	// No printer: the branch's (the snapshot's fallback for OTHER).
+	ReceiptPrinterID *string `json:"receipt_printer_id"`
+	ReceiptCopies    int     `json:"receipt_copies"`
+	ReceiptTemplate  *string `json:"receipt_template"`
 }
 
 // Shift is an open shift in the snapshot.

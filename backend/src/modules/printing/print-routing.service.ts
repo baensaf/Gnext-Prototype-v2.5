@@ -1,41 +1,29 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
-import { PrintRoute } from '../../entities/PrintRoute.entity';
-import { PrinterGroup } from '../../entities/PrinterGroup.entity';
-import { PrinterGroupMember } from '../../entities/PrinterGroupMember.entity';
+import { EntityManager, In, Repository } from 'typeorm';
 import { Printer } from '../../entities/Printer.entity';
 import { Product } from '../../entities/Product.entity';
 import { KdsRoutingRule } from '../../entities/KdsRoutingRule.entity';
+import { KitchenStation } from '../../entities/KitchenStation.entity';
+import { Terminal } from '../../entities/Terminal.entity';
+import { stationIdFor } from '../kds/prep-station';
+import { TicketTemplate } from './print-render.service';
 
-export interface RouteMatchOptions {
-  tenantId: string;
-  branchId: string;
-  documentType: string;
-  productId?: string;
-  categoryId?: string;
-  stationId?: string;
-}
-
-/** What a single order line is known by when it is matched against the print routes. */
-export interface LineRouteContext {
-  productId?: string;
-  categoryId?: string;
-  stationId?: string;
-}
-
-/** A route as the offline till applies it: the printer group, and the route's copies. */
+/** A route as the offline till applies it: the station, and its copies. */
 export interface OfflineRoute {
   group_id: string;
   copies: number;
 }
 
-/** The snapshot's `printing` block without its heading (protocol §13.11). */
+/**
+ * The snapshot's `printing` block without its heading (protocol §13.11). The field names are
+ * the ones agents already in branches read: a "group" is a prep station.
+ */
 export interface OfflineRouting {
   groups: Array<{
     id: string;
     name: string;
-    ticket_template: 'COMPACT' | 'DETAILED' | null;
+    ticket_template: TicketTemplate | null;
     printers: Array<{ printer_id: string; copies: number }>;
   }>;
   kitchen_routes: Record<string, OfflineRoute>;
@@ -49,199 +37,169 @@ export interface RoutedPrinter {
   copies: number;
 }
 
+const isKitchenPrinter = (p: Printer) => String(p.printer_type || '').toUpperCase().startsWith('KITCHEN');
+
+/**
+ * The branch printer a document prints on when nothing more specific is set up, always the same
+ * one (the branch's printers come ordered by code): a kitchen chit on a kitchen printer, anything
+ * else on a receipt printer, else on any printer that is not the kitchen's, else on any at all.
+ * A kitchen chit with no kitchen printer gets none, so it fails and raises an alert rather than
+ * come out at the counter, where nobody cooking would see it.
+ */
+export function branchFallback(branchPrinters: Printer[], kitchen: boolean): Printer | undefined {
+  if (kitchen) return branchPrinters.find(isKitchenPrinter);
+  return (
+    branchPrinters.find((p) => String(p.printer_type || '').toUpperCase().includes('RECEIPT')) ??
+    branchPrinters.find((p) => !isKitchenPrinter(p)) ??
+    branchPrinters[0]
+  );
+}
+
+/** A retired printer leaves its stations and tills, so they no longer name a device that is gone. */
+export async function detachPrinter(em: EntityManager, tenantId: string, printerId: string): Promise<void> {
+  await em
+    .createQueryBuilder()
+    .update(KitchenStation)
+    .set({ printer_ids: () => `array_remove("printer_ids", :printerId)` })
+    .where(`"tenant_id" = :tenantId AND :printerId = ANY("printer_ids")`, { tenantId, printerId })
+    .execute();
+  await em.update(Terminal, { tenant_id: tenantId, receipt_printer_id: printerId }, { receipt_printer_id: null });
+}
+
+/**
+ * Where paper prints.
+ *
+ * A kitchen chit goes to the prep station that makes its lines (a product's KDS rule, else its
+ * category's) and prints on every printer of that station. A receipt, guest bill or courier
+ * slip prints at the till the order was taken on. Anything without its own printer falls back
+ * to the branch's printer of that kind.
+ */
 @Injectable()
 export class PrintRoutingService {
   constructor(
-    @InjectRepository(PrintRoute) private readonly routeRepo: Repository<PrintRoute>,
-    @InjectRepository(PrinterGroup) private readonly groupRepo: Repository<PrinterGroup>,
-    @InjectRepository(PrinterGroupMember) private readonly memberRepo: Repository<PrinterGroupMember>,
     @InjectRepository(Printer) private readonly printerRepo: Repository<Printer>,
     @InjectRepository(Product) private readonly productRepo: Repository<Product>,
-    @InjectRepository(KdsRoutingRule) private readonly kdsRuleRepo: Repository<KdsRoutingRule>,
+    @InjectRepository(KdsRoutingRule) private readonly ruleRepo: Repository<KdsRoutingRule>,
+    @InjectRepository(KitchenStation) private readonly stationRepo: Repository<KitchenStation>,
+    @InjectRepository(Terminal) private readonly terminalRepo: Repository<Terminal>,
   ) {}
 
-  async loadRoutes(tenantId: string, branchId: string, documentType: string): Promise<PrintRoute[]> {
-    return this.routeRepo.find({
-      where: { tenant_id: tenantId, branch_id: branchId, document_type: documentType },
-      order: { priority: 'DESC' },
+  /** The branch's printers in service, in the order the fallback picks from. */
+  private async branchPrinters(tenantId: string, branchId: string): Promise<Printer[]> {
+    return this.printerRepo.find({
+      where: { tenant_id: tenantId, branch_id: branchId, is_active: true },
+      order: { code: 'ASC', id: 'ASC' },
     });
   }
 
   /**
-   * The most specific route for a line: product beats category, category beats station, and
-   * any of them beats a route with no selector. Between equally specific routes the higher
-   * priority wins, because the routes arrive sorted by priority.
-   *
-   * A whole-order document such as a receipt passes no line context, so only a route with no
-   * selector can match it.
+   * The prep station of each product at the branch, keyed by product id. A product no rule
+   * claims, or whose station is out of service, is left out.
    */
-  matchRoute(routes: PrintRoute[], line: LineRouteContext): PrintRoute | null {
-    let bestMatch: PrintRoute | null = null;
-    let highestScore = -1;
-
-    for (const route of routes) {
-      let score: number;
-      if (route.product_id) {
-        if (route.product_id !== line.productId) continue;
-        score = 100;
-      } else if (route.category_id) {
-        if (route.category_id !== line.categoryId) continue;
-        score = 50;
-      } else if (route.station_id) {
-        if (route.station_id !== line.stationId) continue;
-        score = 25;
-      } else {
-        score = 10;
-      }
-
-      if (score > highestScore) {
-        highestScore = score;
-        bestMatch = route;
-      }
-    }
-    return bestMatch;
-  }
-
-  /**
-   * Category and kitchen station for each product, keyed by product id. The station comes from
-   * the same KDS routing rules that put the line on a kitchen screen, so a "Grill" print route
-   * and the Grill screen agree about where a burger goes.
-   */
-  async lineContexts(tenantId: string, branchId: string, productIds: string[]): Promise<Map<string, LineRouteContext>> {
+  async stationsFor(tenantId: string, branchId: string, productIds: string[]): Promise<Map<string, KitchenStation>> {
     const ids = [...new Set(productIds.filter(Boolean))];
-    const contexts = new Map<string, LineRouteContext>();
-    if (ids.length === 0) return contexts;
+    const result = new Map<string, KitchenStation>();
+    if (ids.length === 0) return result;
 
-    const [products, rules] = await Promise.all([
+    const [products, rules, stations] = await Promise.all([
       this.productRepo.find({ where: { id: In(ids), tenant_id: tenantId } }),
-      this.kdsRuleRepo.find({ where: { tenant_id: tenantId, branch_id: branchId }, order: { priority: 'DESC' } }),
+      this.ruleRepo.find({ where: { tenant_id: tenantId, branch_id: branchId } }),
+      this.stationRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, is_active: true } }),
     ]);
     const categoryOf = new Map(products.map((p) => [p.id, p.category_id]));
+    const stationById = new Map(stations.map((s) => [s.id, s]));
 
     for (const productId of ids) {
-      const categoryId = categoryOf.get(productId) || undefined;
-      const rule =
-        rules.find((r) => r.product_id && r.product_id === productId) ||
-        rules.find((r) => r.category_id && categoryId && r.category_id === categoryId);
-      contexts.set(productId, { productId, categoryId, stationId: rule?.station_id });
+      const station = stationById.get(stationIdFor(rules, productId, categoryOf.get(productId)) ?? '');
+      if (station) result.set(productId, station);
     }
-    return contexts;
+    return result;
+  }
+
+  async station(tenantId: string, stationId?: string | null): Promise<KitchenStation | null> {
+    if (!stationId) return null;
+    return this.stationRepo.findOne({ where: { id: stationId, tenant_id: tenantId } });
   }
 
   /**
-   * Every active printer in the route's group prints the job, in member priority order, each
-   * printing the route's copies times its own.
-   *
-   * A route whose group has no working printer, or no route at all, falls back to one printer
-   * of the kind the document belongs on, always the same one (by code): a kitchen chit to a
-   * kitchen printer, anything else to a receipt printer, else any printer. A kitchen chit with
-   * no kitchen printer comes back with none, so it fails and raises an alert rather than come
-   * out at the counter, where nobody cooking would see it.
+   * Every printer of the station that is in service prints the chit, in the station's order,
+   * each the station's copies. A station with none, or no station, prints on the branch's
+   * kitchen printer.
    */
-  async printersForRoute(
+  async printersForStation(tenantId: string, branchId: string, station: KitchenStation | null): Promise<RoutedPrinter[]> {
+    const copies = station?.copies || 1;
+    const ids = station?.printer_ids || [];
+    if (ids.length) {
+      const printers = await this.printerRepo.find({ where: { id: In(ids), tenant_id: tenantId, is_active: true } });
+      const byId = new Map(printers.map((p) => [p.id, p]));
+      const routed = ids.filter((id) => byId.has(id)).map((id) => ({ printer: byId.get(id)!, copies }));
+      if (routed.length) return routed;
+    }
+    const fallback = branchFallback(await this.branchPrinters(tenantId, branchId), true);
+    return fallback ? [{ printer: fallback, copies }] : [];
+  }
+
+  /**
+   * Where a whole-order document prints: the till's receipt printer, with the till's copies and
+   * paper. An order from no till (online, an aggregator, a kiosk), or from a till with no printer
+   * of its own in service, prints on the branch's receipt printer.
+   */
+  async printersForDocument(
     tenantId: string,
     branchId: string,
-    route: PrintRoute | null,
-    documentType?: string,
-  ): Promise<RoutedPrinter[]> {
-    const routeCopies = route?.copies || 1;
+    terminalId?: string | null,
+  ): Promise<{ printers: RoutedPrinter[]; template: TicketTemplate | null }> {
+    const till = terminalId ? await this.terminalRepo.findOne({ where: { id: terminalId, tenant_id: tenantId } }) : null;
+    const copies = till?.receipt_copies || 1;
+    const template = till?.receipt_template ?? null;
 
-    if (route) {
-      const members = await this.memberRepo.find({ where: { group_id: route.printer_group_id }, order: { priority: 'ASC' } });
-      const printers = members.length
-        ? await this.printerRepo.find({ where: { id: In(members.map((m) => m.printer_id)), tenant_id: tenantId, is_active: true } })
-        : [];
-      const byId = new Map(printers.map((p) => [p.id, p]));
-      const routed = members
-        .filter((m) => byId.has(m.printer_id))
-        .map((m) => ({ printer: byId.get(m.printer_id)!, copies: routeCopies * (m.copies || 1) }));
-      if (routed.length > 0) return routed;
+    if (till?.receipt_printer_id) {
+      const own = await this.printerRepo.findOne({ where: { id: till.receipt_printer_id, tenant_id: tenantId, is_active: true } });
+      if (own) return { printers: [{ printer: own, copies }], template };
     }
-
-    const inBranch = await this.printerRepo.find({
-      where: { tenant_id: tenantId, branch_id: branchId, is_active: true },
-      order: { code: 'ASC' },
-    });
-    const isKitchen = (p: Printer) => String(p.printer_type || '').toUpperCase().startsWith('KITCHEN');
-    const fallback =
-      documentType === 'KITCHEN_TICKET'
-        ? inBranch.find(isKitchen)
-        : inBranch.find((p) => String(p.printer_type || '').toUpperCase().includes('RECEIPT')) ?? inBranch.find((p) => !isKitchen(p)) ?? inBranch[0];
-    return fallback ? [{ printer: fallback, copies: routeCopies }] : [];
+    const fallback = branchFallback(await this.branchPrinters(tenantId, branchId), false);
+    return { printers: fallback ? [{ printer: fallback, copies }] : [], template };
   }
 
   /**
    * The branch's routing worked out in advance, for the agent's offline till to apply itself
-   * (protocol §13.11): the kitchen route each product would take, the route of each whole-order
-   * document, the printer groups with their members, and the printer each kind of document falls
-   * back to. The till then splits and routes exactly as `PrintQueueService` does online.
+   * (protocol §13.11): each product's station, the stations with their printers, and the printer
+   * each kind of document falls back to. Receipts, bills and courier slips print at the till's
+   * own printer, which the snapshot's `tills` carry, so `documents` is empty.
    */
   async offlineRouting(tenantId: string, branchId: string, productIds: string[]): Promise<OfflineRouting> {
-    const [kitchenRoutes, receiptRoutes, billRoutes, slipRoutes, contexts, groups, inBranch] = await Promise.all([
-      this.loadRoutes(tenantId, branchId, 'KITCHEN_TICKET'),
-      this.loadRoutes(tenantId, branchId, 'CUSTOMER_RECEIPT'),
-      this.loadRoutes(tenantId, branchId, 'GUEST_BILL'),
-      this.loadRoutes(tenantId, branchId, 'COURIER_SLIP'),
-      this.lineContexts(tenantId, branchId, productIds),
-      this.groupRepo.find({ where: { tenant_id: tenantId, branch_id: branchId }, order: { code: 'ASC', id: 'ASC' } }),
-      this.printerRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, is_active: true }, order: { code: 'ASC', id: 'ASC' } }),
+    const [byProduct, stations, inBranch] = await Promise.all([
+      this.stationsFor(tenantId, branchId, productIds),
+      this.stationRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, is_active: true }, order: { code: 'ASC', id: 'ASC' } }),
+      this.branchPrinters(tenantId, branchId),
     ]);
-    const members = groups.length
-      ? await this.memberRepo.find({ where: { group_id: In(groups.map((g) => g.id)) }, order: { priority: 'ASC', printer_id: 'ASC' } })
-      : [];
-    // Online, a group's members are read across the tenant, not only the branch; so here.
-    const memberPrinters = members.length
-      ? await this.printerRepo.find({ where: { id: In([...new Set(members.map((m) => m.printer_id))]), tenant_id: tenantId, is_active: true } })
-      : [];
-    const active = new Set(memberPrinters.map((p) => p.id));
+    const stationPrinterIds = [...new Set(stations.flatMap((s) => s.printer_ids || []))];
+    const active = new Set(
+      stationPrinterIds.length
+        ? (await this.printerRepo.find({ where: { id: In(stationPrinterIds), tenant_id: tenantId, is_active: true } })).map((p) => p.id)
+        : [],
+    );
 
     const kitchen_routes: OfflineRouting['kitchen_routes'] = {};
-    for (const productId of [...new Set(productIds)].sort()) {
-      const route = this.matchRoute(kitchenRoutes, contexts.get(productId) || {});
-      if (route) kitchen_routes[productId] = { group_id: route.printer_group_id, copies: route.copies || 1 };
+    for (const productId of [...byProduct.keys()].sort()) {
+      const station = byProduct.get(productId)!;
+      kitchen_routes[productId] = { group_id: station.id, copies: station.copies || 1 };
     }
-    const documentRoute = (routes: PrintRoute[]): OfflineRoute | null => {
-      const route = this.matchRoute(routes, {});
-      return route ? { group_id: route.printer_group_id, copies: route.copies || 1 } : null;
-    };
-    const isKitchen = (p: Printer) => String(p.printer_type || '').toUpperCase().startsWith('KITCHEN');
-    const other =
-      inBranch.find((p) => String(p.printer_type || '').toUpperCase().includes('RECEIPT')) ?? inBranch.find((p) => !isKitchen(p)) ?? inBranch[0];
 
     return {
-      groups: groups.map((g) => ({
-        id: g.id,
-        name: g.name,
-        ticket_template: g.ticket_template ?? null,
-        printers: members
-          .filter((m) => m.group_id === g.id && active.has(m.printer_id))
-          .map((m) => ({ printer_id: m.printer_id, copies: m.copies || 1 })),
+      groups: stations.map((s) => ({
+        id: s.id,
+        name: s.name,
+        ticket_template: s.ticket_template ?? null,
+        printers: (s.printer_ids || []).filter((id) => active.has(id)).map((id) => ({ printer_id: id, copies: 1 })),
       })),
       kitchen_routes,
-      documents: {
-        CUSTOMER_RECEIPT: documentRoute(receiptRoutes),
-        GUEST_BILL: documentRoute(billRoutes),
-        // A Snappfood order the store delivers itself, taken while the cloud was away (§17.4).
-        COURIER_SLIP: documentRoute(slipRoutes),
+      // Kept for agents before 1.11.3, which print these on fallback.OTHER when null.
+      documents: { CUSTOMER_RECEIPT: null, GUEST_BILL: null, COURIER_SLIP: null },
+      fallback: {
+        KITCHEN_TICKET: branchFallback(inBranch, true)?.id ?? null,
+        OTHER: branchFallback(inBranch, false)?.id ?? null,
       },
-      fallback: { KITCHEN_TICKET: inBranch.find(isKitchen)?.id ?? null, OTHER: other?.id ?? null },
     };
-  }
-
-  async groupName(tenantId: string, groupId: string): Promise<string | undefined> {
-    return (await this.group(tenantId, groupId))?.name;
-  }
-
-  async group(tenantId: string, groupId?: string | null): Promise<PrinterGroup | null> {
-    if (!groupId) return null;
-    return await this.groupRepo.findOne({ where: { id: groupId, tenant_id: tenantId } });
-  }
-
-  /** The printers for a document with no lines to route by, or for a single line. */
-  async resolvePrintersForRoute(opts: RouteMatchOptions): Promise<{ printers: Printer[]; copies: number }> {
-    const routes = await this.loadRoutes(opts.tenantId, opts.branchId, opts.documentType);
-    const route = this.matchRoute(routes, { productId: opts.productId, categoryId: opts.categoryId, stationId: opts.stationId });
-    const routed = await this.printersForRoute(opts.tenantId, opts.branchId, route, opts.documentType);
-    return { printers: routed.map((r) => r.printer), copies: routed[0]?.copies || route?.copies || 1 };
   }
 }
