@@ -1503,7 +1503,6 @@
     "columnStatus": "Status",
     "columnDate": "Date & Time",
     "columnReference": "Reference / RRN",
-    "filterBranch": "Filter by Branch",
     "filterMethod": "Payment Method",
     "statusSucceeded": "Successful",
     "statusFailed": "Failed",
@@ -3422,8 +3421,6 @@
       "subtitle": "Manage operational POS, Kiosk, and Kitchen KDS terminal hardware registers",
       "addTerminal": "Add Terminal",
       "newTerminal": "New Terminal Device",
-      "filterBranch": "Filter by Branch",
-      "allBranches": "All Branches",
       "colCode": "Terminal Code",
       "colName": "Name / Station",
       "colType": "Terminal Type",
@@ -3462,8 +3459,6 @@
       "title": "Printers & Print Routing",
       "subtitle": "Manage network receipt printers, kitchen ticket routing groups, and print document rules",
       "v5PreviewBanner": "Printers with a network connection print for real through this branch's agent. Printers without one are simulated: their jobs are marked printed and nothing comes out.",
-      "branchFilter": "Branch Context",
-      "allBranches": "All Branches",
       "quickLinks": {
         "queue": "Print Queue & Jobs",
         "simulator": "Hardware Sensor Simulator"
@@ -3653,7 +3648,6 @@
       "replaceWarning": "This branch already has an agent. When the new code is used, the current agent is revoked.",
       "done": "Done",
       "filterBranch": "Branch",
-      "allBranches": "All branches",
       "showRevoked": "Show revoked agents",
       "agentsTitle": "Agents",
       "colBranch": "Branch",

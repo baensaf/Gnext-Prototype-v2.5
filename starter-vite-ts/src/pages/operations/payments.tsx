@@ -38,7 +38,7 @@ import { tenantApi } from 'src/api/tenantApi';
 import { paymentApi } from 'src/api/paymentApi';
 import { httpClient } from 'src/api/httpClient';
 import { useAuthStore } from 'src/store/useAuthStore';
-import { useScopedBranchId } from 'src/contexts/branch-context';
+import { useScopedBranchId, useBranchContextOptional } from 'src/contexts/branch-context';
 
 import { TerminalAgentDialog } from 'src/components/payment-terminal/terminal-agent-dialog';
 
@@ -63,6 +63,8 @@ export function PaymentsPage() {
   const [devSerial, setDevSerial] = useState('');
   const [devType, setDevType] = useState('POS_TERMINAL');
   const [devBranchId, setDevBranchId] = useScopedBranchId();
+  // The header's branch is the only branch offered; the other choice is the whole chain.
+  const scopedBranch = useBranchContextOptional()?.selectedBranch ?? null;
   const [devAccountId, setDevAccountId] = useState('');
   const [agentDevice, setAgentDevice] = useState<PaymentDevice | null>(null);
 
@@ -385,7 +387,7 @@ export function PaymentsPage() {
               <TextField label="Serial Number" value={devSerial} onChange={(e) => setDevSerial(e.target.value)} fullWidth placeholder="e.g. SN-8839210" />
               <TextField select label="Branch Scope" value={devBranchId} onChange={(e) => setDevBranchId(e.target.value)} fullWidth>
                 <MenuItem value="">All Branches</MenuItem>
-                {branches.map((b) => (
+                {(scopedBranch ? [scopedBranch] : branches).map((b) => (
                   <MenuItem key={b.id} value={b.id}>
                     {b.name}
                   </MenuItem>

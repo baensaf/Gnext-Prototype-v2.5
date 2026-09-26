@@ -90,6 +90,11 @@ export function TerminalsPage() {
     loadData();
   }, [loadData]);
 
+  const branchLabel = (id: string) => {
+    const b = branches.find((x) => x.id === id);
+    return b ? `${b.name} (${b.code})` : '';
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!branchId) {
@@ -285,20 +290,30 @@ export function TerminalsPage() {
           </Typography>
           <form onSubmit={handleCreate}>
             <Stack spacing={2.5}>
-              <FormControl fullWidth required>
-                <InputLabel>{t('operations.terminals.formBranch', 'Branch')}</InputLabel>
-                <Select
-                  value={branchId}
+              {/* A branch chosen in the header is the terminal's branch; only head office picks one. */}
+              {selectedBranchId ? (
+                <TextField
+                  fullWidth
                   label={t('operations.terminals.formBranch', 'Branch')}
-                  onChange={(e) => setBranchId(e.target.value)}
-                >
-                  {branches.map((b) => (
-                    <MenuItem key={b.id} value={b.id}>
-                      {b.name} ({b.code})
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                  value={branchLabel(selectedBranchId)}
+                  slotProps={{ input: { readOnly: true } }}
+                />
+              ) : (
+                <FormControl fullWidth required>
+                  <InputLabel>{t('operations.terminals.formBranch', 'Branch')}</InputLabel>
+                  <Select
+                    value={branchId}
+                    label={t('operations.terminals.formBranch', 'Branch')}
+                    onChange={(e) => setBranchId(e.target.value)}
+                  >
+                    {branches.map((b) => (
+                      <MenuItem key={b.id} value={b.id}>
+                        {b.name} ({b.code})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
 
               <TextField
                 label={t('operations.terminals.formCode', 'Terminal Code')}
