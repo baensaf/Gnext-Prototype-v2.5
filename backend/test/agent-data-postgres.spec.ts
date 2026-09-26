@@ -211,8 +211,9 @@ describe('agent branch snapshot (PostgreSQL)', () => {
       expect.objectContaining({ id: ids.shift, terminal_id: ids.till, shift_number: 'S-0001', business_date: BusinessDateUtil.today() }),
     ]);
     expect(body.settings).toEqual({
-      call_numbers: { POS: { start: 100, end: 399 } },
-      call_number_issued_today: { business_date: businessToday(), POS: 0 },
+      // ONLINE is the range the till numbers Snappfood orders in (§17.5).
+      call_numbers: { POS: { start: 100, end: 399 }, ONLINE: { start: 500, end: 599 } },
+      call_number_issued_today: { business_date: businessToday(), POS: 0, ONLINE: 0 },
       order_actions: { edit_window_minutes: 10, cancel_window_minutes: 10 },
       auto_logout_minutes: 0,
       // How the till dates what it sells offline: the same cutoff as every other channel.
@@ -230,7 +231,7 @@ describe('agent branch snapshot (PostgreSQL)', () => {
       heading: { brand_name: 'Agent data fixture', branch_name: 'مرکز خرید', branch_address: null, branch_phone: null, calendar: 'JALALI' },
       groups: [],
       kitchen_routes: {},
-      documents: { CUSTOMER_RECEIPT: null, GUEST_BILL: null },
+      documents: { CUSTOMER_RECEIPT: null, GUEST_BILL: null, COURIER_SLIP: null },
       fallback: { KITCHEN_TICKET: null, OTHER: null },
     });
 
@@ -339,7 +340,7 @@ describe('agent branch snapshot (PostgreSQL)', () => {
         [ids.burger]: { group_id: grill.id, copies: 3 },
         [ids.fries]: { group_id: front.id, copies: 1 },
       });
-      expect(printing.documents).toEqual({ CUSTOMER_RECEIPT: { group_id: front.id, copies: 1 }, GUEST_BILL: null });
+      expect(printing.documents).toEqual({ CUSTOMER_RECEIPT: { group_id: front.id, copies: 1 }, GUEST_BILL: null, COURIER_SLIP: null });
       expect(printing.fallback).toEqual({ KITCHEN_TICKET: grillPrinter.id, OTHER: counter.id });
 
       // A printer switched off leaves its group, as it would online.
@@ -415,7 +416,7 @@ describe('agent branch snapshot (PostgreSQL)', () => {
       const till = await connect(OFFLINE_TILL);
       const beat = till.send('heartbeat', { in_flight: 0, unacked_results: 0, till: { terminal_id: ids.till, mode: 'ONLINE', open_orders: 0 } });
       const ack = await till.next((m) => m.type === 'heartbeat.ack' && m.ref === beat);
-      expect(ack.payload.call_numbers).toEqual({ business_date: businessToday(), POS: 41 });
+      expect(ack.payload.call_numbers).toEqual({ business_date: businessToday(), POS: 41, ONLINE: 0 });
       till.ws.terminate();
       await till.closed;
 
