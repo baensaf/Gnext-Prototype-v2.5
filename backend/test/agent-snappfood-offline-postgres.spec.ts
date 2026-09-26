@@ -32,6 +32,9 @@ import { deleteTenantData } from './utils/tenant-teardown';
 
 // Snappfood orders taken on the till while the cloud was away (protocol §17): one order per
 // code, whichever record arrives first, with Snappfood's lines and money booked.
+// Real database round trips, several per step; the default 5 s is tight on a busy runner.
+jest.setTimeout(30000);
+
 describe('Snappfood orders taken offline (PostgreSQL)', () => {
   let moduleRef: TestingModule;
   let app: INestApplication;
