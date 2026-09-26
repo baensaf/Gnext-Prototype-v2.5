@@ -78,7 +78,8 @@ export function PrintersPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [stations, setStations] = useState<KitchenStation[]>([]);
 
-  const [selectedBranchId, setSelectedBranchId] = useScopedBranchId();
+  // The header's switcher is the only branch filter; head office lists every branch.
+  const [selectedBranchId] = useScopedBranchId();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [testSuccessMsg, setTestSuccessMsg] = useState<string | null>(null);
@@ -525,7 +526,7 @@ export function PrintersPage() {
         </Alert>
       )}
 
-      {/* Control Bar: Branch Filter + Tabs */}
+      {/* Control Bar: Tabs */}
       <Paper sx={{ mb: 3, borderRadius: 2, p: 1 }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
           <Tabs value={tab} onChange={(_, val) => setTab(val)}>
@@ -533,20 +534,6 @@ export function PrintersPage() {
             <Tab label={`${t('operations.printers.tabs.groups', 'Printer Groups')} (${groups.length})`} value="GROUPS" />
             <Tab label={`${t('operations.printers.tabs.routes', 'Print Document Routes')} (${routes.length})`} value="ROUTES" />
           </Tabs>
-
-          <FormControl size="small" sx={{ minWidth: 200, m: 1 }}>
-            <InputLabel>{t('operations.printers.branchFilter', 'Branch Context')}</InputLabel>
-            <Select
-              value={selectedBranchId}
-              label={t('operations.printers.branchFilter', 'Branch Context')}
-              onChange={(e) => setSelectedBranchId(e.target.value)}
-            >
-              <MenuItem value="">{t('operations.printers.allBranches', 'All Branches')}</MenuItem>
-              {branches.map((b) => (
-                <MenuItem key={b.id} value={b.id}>{b.name} ({b.code})</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
         </Stack>
       </Paper>
 

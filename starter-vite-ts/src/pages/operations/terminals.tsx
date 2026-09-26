@@ -47,7 +47,8 @@ export function TerminalsPage() {
   // Card terminals the branch agent drives: what a kiosk can charge its guests on.
   const [cardTerminals, setCardTerminals] = useState<PaymentDevice[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useScopedBranchId();
+  // The header's switcher is the only branch filter; head office lists every branch.
+  const [selectedBranchId] = useScopedBranchId();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -176,25 +177,6 @@ export function TerminalsPage() {
           {success}
         </Alert>
       )}
-
-      {/* Branch Filter */}
-      <Box sx={{ mb: 3, maxWidth: 300 }}>
-        <FormControl fullWidth size="small">
-          <InputLabel>{t('operations.terminals.filterBranch', 'Filter by Branch')}</InputLabel>
-          <Select
-            value={selectedBranchId}
-            label={t('operations.terminals.filterBranch', 'Filter by Branch')}
-            onChange={(e) => setSelectedBranchId(e.target.value)}
-          >
-            <MenuItem value="">{t('operations.terminals.allBranches', 'All Branches')}</MenuItem>
-            {branches.map((b) => (
-              <MenuItem key={b.id} value={b.id}>
-                {b.name} ({b.code})
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Box>
 
       <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
         <CardContent sx={{ p: 0 }}>

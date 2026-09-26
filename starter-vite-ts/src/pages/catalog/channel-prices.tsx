@@ -1,4 +1,3 @@
-import type { Branch } from 'src/api/tenantApi';
 import type { ChannelPriceSheet } from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
@@ -14,17 +13,13 @@ import {
   Alert,
   Table,
   Button,
-  Select,
   TableRow,
-  MenuItem,
   TableBody,
   TableCell,
   TableHead,
   TextField,
   Typography,
-  InputLabel,
   CardContent,
-  FormControl,
   TableContainer,
   InputAdornment,
 } from '@mui/material';
@@ -32,9 +27,9 @@ import {
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
 
-import { tenantApi } from 'src/api/tenantApi';
 import { catalogApi } from 'src/api/catalogApi';
 import { settingsApi } from 'src/api/settingsApi';
+import { useBranchContextOptional } from 'src/contexts/branch-context';
 
 const CHANNEL = 'SNAPPFOOD';
 
@@ -50,9 +45,11 @@ export function ChannelPricesPage() {
   const [roundTo, setRoundTo] = useState('0');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [search, setSearch] = useState('');
-  const [branches, setBranches] = useState<Branch[]>([]);
-  // Whose in-store prices the markup starts from; none means base prices.
-  const [branchId, setBranchId] = useState('');
+  // Whose in-store prices the markup starts from: the branch chosen in the header, or base
+  // prices at head office.
+  const branchScope = useBranchContextOptional();
+  const branchId = branchScope?.selectedBranchId ?? '';
+  const branchName = branchScope?.selectedBranch?.name ?? '';
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -71,13 +68,6 @@ export function ChannelPricesPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    tenantApi
-      .getBranches()
-      .then((bs) => setBranches(bs.filter((b) => b.is_active && (!b.branch_type || b.branch_type === 'RESTAURANT'))))
-      .catch(() => setBranches([]));
-  }, []);
 
   const saveRule = async () => {
     try {
@@ -164,17 +154,9 @@ export function ChannelPricesPage() {
       </Card>
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2, alignItems: { sm: 'center' } }}>
-        <FormControl size="small" sx={{ minWidth: 240 }}>
-          <InputLabel shrink>{t('pricing.channelPrices.branch')}</InputLabel>
-          <Select value={branchId} displayEmpty label={t('pricing.channelPrices.branch')} onChange={(e) => setBranchId(e.target.value)}>
-            <MenuItem value="">{t('pricing.channelPrices.basePrices')}</MenuItem>
-            {branches.map((b) => (
-              <MenuItem key={b.id} value={b.id}>
-                {b.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap' }}>
+          {branchId ? `${t('pricing.channelPrices.branch')} ${branchName}` : t('pricing.channelPrices.basePrices')}
+        </Typography>
         <TextField
           size="small"
           placeholder={t('pricing.channelPrices.search')}

@@ -71,7 +71,8 @@ export function AgentsPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [agents, setAgents] = useState<BranchAgent[]>([]);
   const [codes, setCodes] = useState<EnrolmentCode[]>([]);
-  const [branchId, setBranchId] = useScopedBranchId();
+  // The header's switcher is the only branch filter; head office lists every branch.
+  const [branchId] = useScopedBranchId();
   const [includeRevoked, setIncludeRevoked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -253,21 +254,6 @@ export function AgentsPage() {
       )}
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3, alignItems: { sm: 'center' } }}>
-        <FormControl size="small" sx={{ minWidth: 260 }}>
-          <InputLabel>{t('operations.agents.filterBranch', 'Branch')}</InputLabel>
-          <Select
-            value={branchId}
-            label={t('operations.agents.filterBranch', 'Branch')}
-            onChange={(e) => setBranchId(e.target.value)}
-          >
-            <MenuItem value="">{t('operations.agents.allBranches', 'All branches')}</MenuItem>
-            {branches.map((b) => (
-              <MenuItem key={b.id} value={b.id}>
-                {b.name} ({b.code})
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
         <FormControlLabel
           control={<Switch checked={includeRevoked} onChange={(e) => setIncludeRevoked(e.target.checked)} />}
           label={t('operations.agents.showRevoked', 'Show revoked agents')}
