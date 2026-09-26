@@ -113,16 +113,18 @@ export class AgentReleasesCiController {
       [
         { name: 'file', maxCount: 1 },
         { name: 'installer', maxCount: 1 },
+        { name: 'bridge', maxCount: 1 },
       ],
-      { limits: { fileSize: MAX_RELEASE_BYTES, files: 2 } },
+      { limits: { fileSize: MAX_RELEASE_BYTES, files: 3 } },
     ),
   )
-  async upload(@UploadedFiles() files: { file?: any[]; installer?: any[] }, @Body() body: CiAgentReleaseDto) {
+  async upload(@UploadedFiles() files: { file?: any[]; installer?: any[]; bridge?: any[] }, @Body() body: CiAgentReleaseDto) {
     return await this.releases.uploadFromCi({
       version: body.version,
       commit: body.commit,
       file: files?.file?.[0],
       installer: files?.installer?.[0],
+      bridge: files?.bridge?.[0],
     });
   }
 }

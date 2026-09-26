@@ -35,8 +35,10 @@ section numbers (§) in the code refer to it.
     without a response code is `UNKNOWN`. Response `00` is approved; other codes are declined, or
     cancelled when the description says so. `payment.query` is not supported: Saman's inquiry
     needs the RRN, which an unknown charge does not have. Status is checked every 5 minutes, never
-    during a charge. An agent update replaces only `gnext-agent.exe`: a new bridge reaches a PC
-    when the installer runs there again (an enrolled agent keeps its enrolment).
+    during a charge. Since 1.11.5 agent updates keep the bridge current too: each release carries
+    the bridge built with it (`gnext-saman-bridge.zip`), and an agent whose `saman\release.sha256`
+    does not match it downloads it, checks its SHA-256 and swaps `saman\` between charges
+    (protocol §9.3). A PC on 1.11.4 or older takes the bridge right after it updates itself.
   - `fake`: amounts ending in `0` are approved, `1` declined, `2` time out (`UNKNOWN`; a later
     *Check terminal* finds them approved), `3` cancelled on the terminal.
 - **Branch snapshot** (§12.2): keeps a copy of what the branch sells, at its prices, in
@@ -137,7 +139,8 @@ section numbers (§) in the code refer to it.
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
   publishes a build, then swaps the binary after checking its SHA-256. Since 1.10.2 an old
   binary still held by an open window no longer blocks the next update (§9), and the settings
-  window reopens itself on the new binary.
+  window reopens itself on the new binary. Since 1.11.5 it also brings `saman\` up to the
+  Saman bridge published with its version (§9.3).
 - **Settings window** (Start-menu and desktop shortcut *Gnext Agent*, the tray, or running the
   exe): the page on `http://127.0.0.1:47800` in a window of its own, drawn by WebView2, the Edge
   engine in Windows 10 and 11 (in the browser if it is missing). One window per user; opening it
@@ -217,7 +220,8 @@ Logs: `%ProgramData%\Gnext\Agent\logs\agent.log`.
 
 ## Release
 
-Bump `VERSION` and merge. After the deploy, CI uploads that `gnext-agent.exe` to the cloud as
+Bump `VERSION` and merge; a change to `saman-bridge` alone needs the bump too. After the deploy,
+CI uploads that `gnext-agent.exe`, its setup wizard and `gnext-saman-bridge.zip` to the cloud as
 an unpublished release; press **Publish** on the Agents screen to tell online agents to update
 (setup: `docs/agent-gateway/HANDOFF.md`, "Agent releases from CI"). Hand
 `gnext-agent-setup-<version>.exe`, from the run's `gnext-agent-windows` artifact, to new

@@ -18,6 +18,7 @@ import (
 	"gnext/agent/internal/journal"
 	"gnext/agent/internal/localui"
 	"gnext/agent/internal/offline"
+	"gnext/agent/internal/payment"
 	"gnext/agent/internal/printing"
 	"gnext/agent/internal/protocol"
 	"gnext/agent/internal/store"
@@ -247,6 +248,8 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 			exitCode.Store(exitRestart)
 			cancel()
 		},
+		BridgeDir:  payment.BridgeDir(),
+		LockBridge: payment.LockBridge,
 	}
 	h.mu.Lock()
 	h.id, h.agent, h.client, h.till = &id, a, client, tl

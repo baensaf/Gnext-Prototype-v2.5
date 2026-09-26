@@ -125,7 +125,8 @@ jobs:
           path: agent/dist/gnext-agent.exe
 
   # Wraps the agent in a setup wizard (Inno Setup). The artifact holds the installer for branch
-  # PCs and the bare .exe (agent-release offers that one to the cloud after deploy).
+  # PCs, and the bare .exe and the zipped Saman bridge (agent-release offers those to the cloud
+  # after deploy, for agents to update to).
   agent-installer:
     needs: agent
     runs-on: windows-latest
@@ -147,6 +148,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Remove-Item dist\saman\*.pdb -ErrorAction SilentlyContinue
           '{"op":"version"}' | & dist\saman\gnext-saman-bridge.exe
+          # What agents on this version install into saman\ (agent-protocol §9.3).
+          Compress-Archive -Path dist\saman\* -DestinationPath dist\gnext-saman-bridge.zip
+          Get-Item dist\gnext-saman-bridge.zip | Format-Table Name, Length
       - name: Build the installer
         shell: pwsh
         run: |
@@ -219,7 +223,8 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
           sparse-checkout: agent/VERSION
           sparse-checkout-cone-mode: false
-      # Holds the bare exe (what agents update to) and the setup wizard (what head office downloads).
+      # Holds the bare exe and the bridge zip (what agents update to) and the setup wizard (what
+      # head office downloads).
       - uses: actions/download-artifact@v4
         with:
           name: gnext-agent-windows
@@ -234,8 +239,11 @@ jobs:
           fi
           version=$(tr -d '[:space:]' < agent/VERSION)
           setup="dist/gnext-agent-setup-$version.exe"
-          [ -f "$setup" ] || { echo "::error::$setup is missing from the gnext-agent-windows artifact"; exit 1; }
-          sha256sum dist/gnext-agent.exe "$setup"
+          bridge="dist/gnext-saman-bridge.zip"
+          for f in "$setup" "$bridge"; do
+            [ -f "$f" ] || { echo "::error::$f is missing from the gnext-agent-windows artifact"; exit 1; }
+          done
+          sha256sum dist/gnext-agent.exe "$setup" "$bridge"
           sha=$(sha256sum dist/gnext-agent.exe | cut -d' ' -f1)
           # The link from GitHub to the VPS carries about 20 KB/s, so ask before sending megabytes.
           held=$(curl -sS --max-time 60 --retry 3 --retry-all-errors -H "Authorization: Bearer $TOKEN" \
@@ -246,8 +254,8 @@ jobs:
               echo "::warning::Agent $version is already uploaded with a different build. Bump agent/VERSION to ship agent changes."
               exit 0
             fi
-            if [ "$(jq -r .has_installer <<<"$held")" = "true" ]; then
-              echo "Agent $version and its installer are already uploaded; nothing to do."
+            if [ "$(jq -r .has_installer <<<"$held")" = "true" ] && [ "$(jq -r .has_bridge <<<"$held")" = "true" ]; then
+              echo "Agent $version, its installer and its bridge are already uploaded; nothing to do."
               exit 0
             fi
           fi
@@ -256,13 +264,14 @@ jobs:
             -F "version=$version" -F "commit=$(git rev-parse HEAD)" \
             -F "file=@dist/gnext-agent.exe;type=application/octet-stream" \
             -F "installer=@$setup;type=application/octet-stream" \
+            -F "bridge=@$bridge;type=application/zip" \
             "$AGENT_RELEASE_URL/api/v1/agent-releases/ci") || code=000
           cat response.json 2>/dev/null; echo
           [ "$code" = "200" ] || { echo "::error::Upload of agent $version failed: HTTP $code"; exit 1; }
           if [ "$(jq -r .created response.json)" = "true" ]; then
             echo "::notice::Agent $version uploaded. Publish it on the Branch Agents screen to roll it out."
           elif [ "$(jq -r .sha256_matches response.json)" = "true" ]; then
-            echo "Agent $version was already uploaded; installer attached: $(jq -r .installer_attached response.json)."
+            echo "Agent $version was already uploaded; installer attached: $(jq -r .installer_attached response.json), bridge attached: $(jq -r .bridge_attached response.json)."
           else
             echo "::warning::Agent $version is already uploaded with a different build. Bump agent/VERSION to ship agent changes."
           fi

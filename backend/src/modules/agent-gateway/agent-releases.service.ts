@@ -11,6 +11,7 @@ import { compareVersions } from './agent-protocol';
 import { AgentSessionsService } from './agent-sessions.service';
 
 export const AGENT_BINARY_NAME = 'gnext-agent.exe';
+export const BRIDGE_ZIP_NAME = 'gnext-saman-bridge.zip';
 export const installerName = (version: string) => `gnext-agent-setup-${version}.exe`;
 /** A Windows build of the agent is a few megabytes; anything near this is a mistake. */
 export const MAX_RELEASE_BYTES = 64 * 1024 * 1024;
@@ -30,9 +31,14 @@ export interface LatestRelease {
   size: number;
   released_at: string;
   min_agent_version: string | null;
+  /** The Saman bridge built with this release (§9.3); older agents ignore it. */
+  bridge: { url: string; sha256: string; size: number } | null;
 }
 
 type UploadedFile = ReleaseUpload['file'];
+
+/** A file CI adds to a release after its exe: the setup wizard, or the zipped Saman bridge. */
+type Attachment = 'installer' | 'bridge';
 
 interface CheckedBuild {
   version: string;
@@ -43,6 +49,10 @@ interface CheckedBuild {
 
 export function releaseUrl(version: string) {
   return `/api/v1/agent/releases/${version}/${AGENT_BINARY_NAME}`;
+}
+
+export function bridgeUrl(version: string) {
+  return `/api/v1/agent/releases/${version}/${BRIDGE_ZIP_NAME}`;
 }
 
 /**
@@ -99,29 +109,52 @@ export class AgentReleasesService {
   async ciStatus(version: string) {
     if (!VERSION.test(version)) throw new BadRequestException('Version must look like 1.0.3.');
     const release = await this.repo.findOne({ where: { version } });
-    return { exists: !!release, sha256: release?.sha256 ?? null, has_installer: !!release?.installer_path };
+    return {
+      exists: !!release,
+      sha256: release?.sha256 ?? null,
+      has_installer: !!release?.installer_path,
+      has_bridge: !!release?.bridge_path,
+    };
   }
 
-  async uploadFromCi(input: { version: string; commit?: string; file: UploadedFile; installer?: UploadedFile }) {
+  async uploadFromCi(input: {
+    version: string;
+    commit?: string;
+    file: UploadedFile;
+    installer?: UploadedFile;
+    bridge?: UploadedFile;
+  }) {
     const build = this.check({ version: input.version, file: input.file });
     if (input.installer) this.checkExe(input.installer, 'installer');
+    if (input.bridge) this.checkZip(input.bridge);
     const commit = /^[0-9a-f]{7,40}$/i.test(input.commit || '') ? input.commit!.toLowerCase() : null;
     const notes = commit ? `Built by CI from commit ${commit.slice(0, 12)}.` : 'Built by CI.';
     const saved = (await this.repo.findOne({ where: { version: build.version } })) ? null : await this.store(build, notes, null);
     const release = saved ?? (await this.repo.findOneOrFail({ where: { version: build.version } }));
     const matches = release.sha256 === build.sha256;
     if (saved) this.logger.log(`CI uploaded agent ${saved.version} (${saved.sha256})${commit ? ` from ${commit}` : ''}`);
-    // An installer wraps the exe it was built with, so it joins a release only when that exe is
-    // the stored one. A release from before installers were uploaded gets one on the next deploy.
-    const installerAttached = !!input.installer && matches && (await this.attachInstaller(release, input.installer));
-    const current = installerAttached ? await this.repo.findOneOrFail({ where: { id: release.id } }) : release;
-    return { created: !!saved, sha256_matches: matches, installer_attached: installerAttached, release: this.view(current) };
+    // The installer and the bridge were built with the exe, so they join a release only when
+    // that exe is the stored one. A release from before either was uploaded gets it on the next
+    // deploy.
+    const installerAttached = !!input.installer && matches && (await this.attach(release, 'installer', input.installer));
+    const bridgeAttached = !!input.bridge && matches && (await this.attach(release, 'bridge', input.bridge));
+    const current =
+      installerAttached || bridgeAttached ? await this.repo.findOneOrFail({ where: { id: release.id } }) : release;
+    return {
+      created: !!saved,
+      sha256_matches: matches,
+      installer_attached: installerAttached,
+      bridge_attached: bridgeAttached,
+      release: this.view(current),
+    };
   }
 
-  /** Stores the setup wizard of a release that has none yet. False when one is already there. */
-  private async attachInstaller(release: AgentRelease, file: UploadedFile): Promise<boolean> {
-    if (release.installer_path) return false;
-    const relative = path.posix.join('agent-releases', release.version, installerName(release.version));
+  /** Stores the installer or bridge of a release that has none yet. False when one is already there. */
+  private async attach(release: AgentRelease, kind: Attachment, file: UploadedFile): Promise<boolean> {
+    const installer = kind === 'installer';
+    if (installer ? release.installer_path : release.bridge_path) return false;
+    const name = installer ? installerName(release.version) : BRIDGE_ZIP_NAME;
+    const relative = path.posix.join('agent-releases', release.version, name);
     const absolute = path.join(AgentReleasesService.dataDir(), relative);
     const pending = `${absolute}.${randomUUID()}.part`;
     await fs.mkdir(path.dirname(absolute), { recursive: true });
@@ -129,13 +162,19 @@ export class AgentReleasesService {
     try {
       const sha256 = createHash('sha256').update(file.buffer).digest('hex');
       // Only the upload that fills the empty column moves its file into place.
-      const result = await this.repo.update(
-        { id: release.id, installer_path: IsNull() },
-        { installer_path: relative, installer_sha256: sha256, installer_size_bytes: String(file.size) },
-      );
+      const size = String(file.size);
+      const result = installer
+        ? await this.repo.update(
+            { id: release.id, installer_path: IsNull() },
+            { installer_path: relative, installer_sha256: sha256, installer_size_bytes: size },
+          )
+        : await this.repo.update(
+            { id: release.id, bridge_path: IsNull() },
+            { bridge_path: relative, bridge_sha256: sha256, bridge_size_bytes: size },
+          );
       if (!result.affected) return false;
       await fs.rename(pending, absolute);
-      this.logger.log(`CI attached the installer of agent ${release.version} (${sha256})`);
+      this.logger.log(`CI attached the ${kind} of agent ${release.version} (${sha256})`);
       return true;
     } finally {
       await fs.rm(pending, { force: true });
@@ -158,6 +197,13 @@ export class AgentReleasesService {
     if (file.size > MAX_RELEASE_BYTES) throw new BadRequestException(`The file is too large for an ${what} build.`);
     // Every Windows executable starts with "MZ".
     if (file.buffer[0] !== 0x4d || file.buffer[1] !== 0x5a) throw new BadRequestException('That is not a Windows executable.');
+  }
+
+  private checkZip(file: UploadedFile) {
+    if (!file?.buffer?.length) throw new BadRequestException('The bridge is empty.');
+    if (file.size > MAX_RELEASE_BYTES) throw new BadRequestException('The file is too large for a bridge build.');
+    // A zip starts with a local file header, "PK\x03\x04".
+    if (file.buffer.readUInt32LE(0) !== 0x04034b50) throw new BadRequestException('The bridge is not a zip file.');
   }
 
   /**
@@ -243,21 +289,29 @@ export class AgentReleasesService {
       size: Number(top.size_bytes),
       released_at: new Date(top.published_at!).toISOString(),
       min_agent_version: top.min_agent_version ?? null,
+      bridge: top.bridge_path
+        ? { url: bridgeUrl(top.version), sha256: top.bridge_sha256!, size: Number(top.bridge_size_bytes) }
+        : null,
     };
   }
 
-  /** The file of a published release, for download. */
-  async openPublished(version: string): Promise<{ stream: ReadStream; size: number; sha256: string }> {
+  /** The exe of a published release, or its Saman bridge zip, for download. */
+  async openPublished(version: string, what: 'agent' | 'bridge' = 'agent'): Promise<{ stream: ReadStream; size: number; sha256: string }> {
     const release = VERSION.test(version) ? await this.repo.findOne({ where: { version, published_at: Not(IsNull()) } }) : null;
     if (!release) throw new NotFoundException({ code: 'NOT_FOUND', title: 'Not Found', detail: `No published release ${version}.` });
-    const absolute = path.join(AgentReleasesService.dataDir(), release.file_path);
+    const file =
+      what === 'agent'
+        ? { path: release.file_path, size: release.size_bytes, sha256: release.sha256 }
+        : { path: release.bridge_path, size: release.bridge_size_bytes, sha256: release.bridge_sha256 };
+    if (!file.path) throw new NotFoundException({ code: 'NOT_FOUND', title: 'Not Found', detail: `Release ${version} has no Saman bridge.` });
+    const absolute = path.join(AgentReleasesService.dataDir(), file.path);
     try {
       await fs.access(absolute);
     } catch {
-      this.logger.error(`release ${version} is published but its file is missing: ${absolute}`);
+      this.logger.error(`release ${version} is published but its ${what} file is missing: ${absolute}`);
       throw new NotFoundException({ code: 'NOT_FOUND', title: 'Not Found', detail: `The file for ${version} is missing.` });
     }
-    return { stream: createReadStream(absolute), size: Number(release.size_bytes), sha256: release.sha256 };
+    return { stream: createReadStream(absolute), size: Number(file.size), sha256: file.sha256! };
   }
 
   /**
@@ -290,11 +344,13 @@ export class AgentReleasesService {
   }
 
   private view(r: AgentRelease) {
-    const { file_path, installer_path, installer_sha256, installer_size_bytes, ...rest } = r;
+    const { file_path, installer_path, installer_sha256, installer_size_bytes, bridge_path, bridge_sha256, bridge_size_bytes, ...rest } =
+      r;
     return {
       ...rest,
       size_bytes: Number(r.size_bytes),
       has_installer: !!installer_path,
+      has_bridge: !!bridge_path,
       url: releaseUrl(r.version),
       published: !!r.published_at,
     };

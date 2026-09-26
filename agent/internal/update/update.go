@@ -1,4 +1,5 @@
-// Package update checks for, downloads, verifies and installs new agent builds (§9).
+// Package update checks for, downloads, verifies and installs new agent builds and the Saman
+// bridge published with them (§9).
 package update
 
 import (
@@ -31,36 +32,62 @@ type Updater struct {
 	End   func()
 	// Restart closes the socket and exits with code 3 so the service restarts on the new binary.
 	Restart func()
+
+	// BridgeDir is the Saman bridge folder this updater keeps at the release's bridge (§9.3);
+	// empty leaves it alone. LockBridge, when set, holds off bridge runs while the folder is
+	// swapped and returns the unlock.
+	BridgeDir  string
+	LockBridge func() (unlock func())
 }
 
-// Check installs a newer release if one is published. It returns only on failure or when there
-// is nothing to do; on success Restart does not return.
+// Check installs a newer release if one is published, or else brings the Saman bridge up to the
+// one published with the running version. It returns only on failure or when there is nothing
+// to do; after a new binary is installed Restart does not return.
 func (u *Updater) Check(ctx context.Context) error {
 	rel, err := u.Client.LatestRelease(ctx)
 	if err != nil {
 		return fmt.Errorf("release check: %w", err)
 	}
-	if rel == nil || !Newer(rel.Version, u.Version) {
+	switch {
+	case rel == nil:
 		return nil
+	case Newer(rel.Version, u.Version):
+		// The new binary brings its bridge in on its own first check.
+		return u.install(ctx, rel)
+	case Compare(rel.Version, u.Version) == 0 && rel.Bridge != nil && u.BridgeDir != "":
+		return u.syncBridge(ctx, rel)
 	}
-	u.Log.Info("update available", "from", u.Version, "to", rel.Version)
+	return nil
+}
 
+// quiesce stops new charges and waits until no command runs. The caller must call u.End unless
+// the agent is about to restart.
+func (u *Updater) quiesce(ctx context.Context) error {
 	u.Begin()
+	for !u.Idle() {
+		select {
+		case <-ctx.Done():
+			u.End()
+			return ctx.Err()
+		case <-time.After(time.Second):
+		}
+	}
+	return nil
+}
+
+func (u *Updater) install(ctx context.Context, rel *cloud.Release) error {
+	u.Log.Info("update available", "from", u.Version, "to", rel.Version)
+	if err := u.quiesce(ctx); err != nil {
+		return err
+	}
 	installed := false
 	defer func() {
 		if !installed {
 			u.End()
 		}
 	}()
-	for !u.Idle() {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Second):
-		}
-	}
 
-	path, err := u.download(ctx, rel)
+	path, err := u.download(ctx, rel.URL, "gnext-agent-"+rel.Version+".exe", rel.Size, rel.SHA256)
 	if err != nil {
 		return err
 	}
@@ -90,28 +117,30 @@ func (u *Updater) Check(ctx context.Context) error {
 	return nil
 }
 
-func (u *Updater) download(ctx context.Context, rel *cloud.Release) (string, error) {
+// download fetches url into the updates folder as name and checks its size and SHA-256. A file
+// that fails the check is deleted.
+func (u *Updater) download(ctx context.Context, url, name string, wantSize int64, wantSHA string) (string, error) {
 	if err := os.MkdirAll(u.Dir, 0o700); err != nil {
 		return "", err
 	}
-	path := filepath.Join(u.Dir, "gnext-agent-"+rel.Version+".exe")
+	path := filepath.Join(u.Dir, name)
 	f, err := os.Create(path)
 	if err != nil {
 		return "", err
 	}
 	h := sha256.New()
-	err = u.Client.Download(ctx, rel.URL, io.MultiWriter(f, h))
+	err = u.Client.Download(ctx, url, io.MultiWriter(f, h))
 	size, _ := f.Seek(0, io.SeekCurrent)
 	f.Close()
-	if err == nil && rel.Size > 0 && size != rel.Size {
-		err = fmt.Errorf("size %d, expected %d", size, rel.Size)
+	if err == nil && wantSize > 0 && size != wantSize {
+		err = fmt.Errorf("size %d, expected %d", size, wantSize)
 	}
-	if err == nil && !strings.EqualFold(hex.EncodeToString(h.Sum(nil)), rel.SHA256) {
+	if err == nil && !strings.EqualFold(hex.EncodeToString(h.Sum(nil)), wantSHA) {
 		err = fmt.Errorf("sha256 mismatch")
 	}
 	if err != nil {
 		os.Remove(path)
-		return "", fmt.Errorf("download %s: %w", rel.Version, err)
+		return "", fmt.Errorf("download %s: %w", name, err)
 	}
 	return path, nil
 }

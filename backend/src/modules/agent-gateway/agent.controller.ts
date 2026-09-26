@@ -4,7 +4,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import { Agent } from '../../entities/Agent.entity';
 import { AgentAuthenticated } from './agent-auth.guard';
 import { AgentEnrolmentService } from './agent-enrolment.service';
-import { AGENT_BINARY_NAME, AgentReleasesService } from './agent-releases.service';
+import { AGENT_BINARY_NAME, AgentReleasesService, BRIDGE_ZIP_NAME } from './agent-releases.service';
 
 /** Where agents connect. The gateway path sits under /api/ because only that prefix is proxied. */
 export const AGENT_WS_PATH = '/api/v1/agent/ws';
@@ -38,6 +38,15 @@ export function agentWsUrl(req: Request, publicUrl = process.env.AGENT_PUBLIC_UR
   return `${isLocalHost(host) ? 'ws' : 'wss'}://${host}${AGENT_WS_PATH}`;
 }
 
+function sendRelease(res: Response, file: { stream: NodeJS.ReadableStream; size: number; sha256: string }, filename: string) {
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Length', String(file.size));
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('X-Content-SHA256', file.sha256);
+  file.stream.on('error', () => res.destroy());
+  file.stream.pipe(res);
+}
+
 /** The agent's own HTTPS surface (docs/agent-gateway/agent-protocol.md). */
 @Controller('api/v1/agent')
 export class AgentController {
@@ -69,13 +78,14 @@ export class AgentController {
   @AgentAuthenticated()
   @Get(`releases/:version/${AGENT_BINARY_NAME}`)
   async downloadRelease(@Param('version') version: string, @Res() res: Response) {
-    const file = await this.releases.openPublished(version);
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Length', String(file.size));
-    res.setHeader('Content-Disposition', `attachment; filename="${AGENT_BINARY_NAME}"`);
-    res.setHeader('X-Content-SHA256', file.sha256);
-    file.stream.on('error', () => res.destroy());
-    file.stream.pipe(res);
+    sendRelease(res, await this.releases.openPublished(version), AGENT_BINARY_NAME);
+  }
+
+  /** The Saman bridge of a release, zipped, checked the same way (§9.3). */
+  @AgentAuthenticated()
+  @Get(`releases/:version/${BRIDGE_ZIP_NAME}`)
+  async downloadBridge(@Param('version') version: string, @Res() res: Response) {
+    sendRelease(res, await this.releases.openPublished(version, 'bridge'), BRIDGE_ZIP_NAME);
   }
 
   /** Who the key belongs to. Lets an installer check a key works before starting the service. */
