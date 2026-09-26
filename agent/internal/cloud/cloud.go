@@ -96,6 +96,15 @@ type Release struct {
 	SHA256          string `json:"sha256"`
 	Size            int64  `json:"size"`
 	MinAgentVersion string `json:"min_agent_version"`
+	// Bridge is the Saman bridge built with this release (§9.3), or nil when it has none.
+	Bridge *Artifact `json:"bridge"`
+}
+
+// Artifact is one more file of a release, checked like the agent itself.
+type Artifact struct {
+	URL    string `json:"url"`
+	SHA256 string `json:"sha256"`
+	Size   int64  `json:"size"`
 }
 
 // LatestRelease returns nil when nothing is published.

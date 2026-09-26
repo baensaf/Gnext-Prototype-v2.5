@@ -35,6 +35,19 @@ export class AgentRelease {
   @Column({ type: 'bigint', nullable: true })
   installer_size_bytes?: string | null;
 
+  /**
+   * The Saman bridge built with this release, zipped, e.g.
+   * `agent-releases/1.0.9/gnext-saman-bridge.zip`. Agents on this version install it (§9.3). Only CI supplies one.
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  bridge_path?: string | null;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  bridge_sha256?: string | null;
+
+  @Column({ type: 'bigint', nullable: true })
+  bridge_size_bytes?: string | null;
+
   @Column({ type: 'text', nullable: true })
   notes?: string | null;
 

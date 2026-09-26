@@ -46,7 +46,18 @@ Source: "{#SourceExe}"; DestDir: "{app}"; Flags: ignoreversion
 #ifdef SamanDir
 ; The Saman PC-POS bridge and Saman's SDK, used by terminals with the sep driver.
 Source: "{#SamanDir}\*"; DestDir: "{app}\saman"; Flags: ignoreversion recursesubdirs
+
+[InstallDelete]
+; The bridge an agent update installed (with its release.sha256 marker) gives way to this one;
+; the agent then brings in the bridge published with its version (agent-protocol §9.3).
+Type: filesandordirs; Name: "{app}\saman"
 #endif
+
+[UninstallDelete]
+; Agent updates write the bridge folder themselves, so the uninstaller does not know its files.
+Type: filesandordirs; Name: "{app}\saman"
+Type: filesandordirs; Name: "{app}\saman.new"
+Type: filesandordirs; Name: "{app}\saman.old*"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut to Gnext Agent"

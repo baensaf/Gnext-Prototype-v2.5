@@ -804,20 +804,28 @@ Auth required. The agent calls it on start, every hour (with ±5 min jitter), on
   "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
   "size": 9876543,
   "released_at": "2026-09-20T10:00:00.000Z",
-  "min_agent_version": "1.0.0"
+  "min_agent_version": "1.0.0",
+  "bridge": {
+    "url": "/api/v1/agent/releases/1.0.3/gnext-saman-bridge.zip",
+    "sha256": "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+    "size": 84337
+  }
 }
 ```
 
-`204 No Content` when no release has been published.
+`204 No Content` when no release has been published. `bridge` is the Saman bridge built with
+the release (§9.3), or `null` for a release that has none; agents before 1.11.5 ignore it.
 
-`url` is relative to the server. The download needs the same auth header and returns
-`application/octet-stream` with `Content-Length` and an `X-Content-SHA256` header. An unknown or
-unpublished version is `404`.
+`url` and `bridge.url` are relative to the server. A download needs the same auth header and
+returns `application/octet-stream` with `Content-Length` and an `X-Content-SHA256` header. An
+unknown or unpublished version, or a bridge a release does not have, is `404`.
 
 Every green push to `main` offers the agent CI built to the cloud (`POST
-/api/v1/agent-releases/ci`, bearer `AGENT_RELEASE_CI_TOKEN`) once the deploy is done. It is
-stored unpublished, and only a new `agent/VERSION` makes a new release; the same version again
-is a no-op. Head office can still upload a build by hand on the Branch Agents screen, and
+/api/v1/agent-releases/ci`, bearer `AGENT_RELEASE_CI_TOKEN`) once the deploy is done, with its
+setup wizard and its bridge zip. It is stored unpublished, and only a new `agent/VERSION` makes
+a new release; the same version again only adds a setup wizard or bridge the release still
+lacks, and only when its exe is the stored one. A change to the bridge alone therefore needs a
+bump of `agent/VERSION` too. Head office can still upload a build by hand on the Branch Agents screen, and
 publishes either kind there. Publishing sends `agent.check_update` to every online agent older than the build. A release may set
 `min_agent_version`; agents below it are closed with `4011` (§4.2).
 
@@ -845,6 +853,27 @@ If `version` is greater than the agent's own (semver comparison):
 
 If the new binary fails to start three times, an administrator restores the newest
 `gnext-agent.old-<version>.exe` by hand. Automatic rollback is not in v1.
+
+### 9.3 Saman bridge
+
+The `sep` driver runs `saman\gnext-saman-bridge.exe` beside the agent (§7.6). The binary update
+of §9.2 does not touch that folder. Instead, when `version` equals the agent's own and `bridge`
+is set, and `saman\release.sha256` does not hold `bridge.sha256`:
+
+1. Download to `%ProgramData%\Gnext\Agent\updates\gnext-saman-bridge-<version>.zip` and check
+   `size` and `sha256` as in §9.2. Charges still run meanwhile.
+2. Unpack into `saman.new` beside `saman`. Every entry must stay inside it, and it must hold
+   `gnext-saman-bridge.exe`; otherwise nothing changes. Write `bridge.sha256` to
+   `saman.new\release.sha256`.
+3. Wait as in §9.2 step 1, and for any bridge still running (a status check). Rename `saman`
+   to `saman.old` (`saman.old-2` and on when an earlier one cannot be removed) and `saman.new`
+   to `saman`; if the second rename fails, `saman.old` goes back. Delete `saman.old`.
+
+So an agent updated by §9.2 takes its bridge at the first check of the new binary, about ten
+seconds after it starts, and a PC with the right bridge downloads nothing. The installer
+deletes `saman` before it lays down its own bridge, without the marker, so an installed PC takes
+the published bridge once. An agent run with `GNEXT_SAMAN_BRIDGE` set (development) leaves its
+bridge alone.
 
 No code signing in v1; the SHA-256 comes over the authenticated TLS channel.
 

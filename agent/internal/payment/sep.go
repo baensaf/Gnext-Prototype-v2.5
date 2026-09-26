@@ -219,7 +219,28 @@ func BridgePath() string {
 	return filepath.Join(filepath.Dir(exe), "saman", "gnext-saman-bridge.exe")
 }
 
+// BridgeDir is the bridge folder agent updates keep current (§9.3), or "" when
+// GNEXT_SAMAN_BRIDGE points at a bridge of the developer's own.
+func BridgeDir() string {
+	if os.Getenv("GNEXT_SAMAN_BRIDGE") != "" {
+		return ""
+	}
+	return filepath.Dir(BridgePath())
+}
+
+// bridgeMu keeps an update from swapping the bridge folder while a bridge runs from it.
+var bridgeMu sync.RWMutex
+
+// LockBridge waits for running bridges to finish and holds new ones off until the returned
+// unlock is called.
+func LockBridge() (unlock func()) {
+	bridgeMu.Lock()
+	return bridgeMu.Unlock
+}
+
 func runBridge(ctx context.Context, req bridgeRequest) (bridgeResponse, error) {
+	bridgeMu.RLock()
+	defer bridgeMu.RUnlock()
 	var out bridgeResponse
 	path := BridgePath()
 	if _, err := os.Stat(path); err != nil {

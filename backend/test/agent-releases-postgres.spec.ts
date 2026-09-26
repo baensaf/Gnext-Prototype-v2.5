@@ -136,6 +136,7 @@ describe('agent releases (PostgreSQL)', () => {
       size: bytes.length,
       released_at: expect.any(String),
       min_agent_version: null,
+      bridge: null,
     });
 
     const download = await agentGet(latest.body.url).buffer(true).parse((res, cb) => {
@@ -303,16 +304,91 @@ describe('agent releases (PostgreSQL)', () => {
         const status = (bearer = token) =>
           request(app.getHttpServer()).get(`/api/v1/agent-releases/ci/${v}`).set('Authorization', `Bearer ${bearer}`);
         await status(token + 'x').expect(401);
-        expect((await status().expect(200)).body).toEqual({ exists: false, sha256: null, has_installer: false });
+        expect((await status().expect(200)).body).toEqual({ exists: false, sha256: null, has_installer: false, has_bridge: false });
 
         const bytes = exe('build of 24');
         await ciPost(v, bytes).expect(200);
         const sha256 = createHash('sha256').update(bytes).digest('hex');
-        expect((await status().expect(200)).body).toEqual({ exists: true, sha256, has_installer: false });
+        expect((await status().expect(200)).body).toEqual({ exists: true, sha256, has_installer: false, has_bridge: false });
 
         await ciPostWithInstaller(v, bytes, exe('setup of 24')).expect(200);
-        expect((await status().expect(200)).body).toEqual({ exists: true, sha256, has_installer: true });
+        expect((await status().expect(200)).body).toEqual({ exists: true, sha256, has_installer: true, has_bridge: false });
         await request(app.getHttpServer()).get('/api/v1/agent-releases/ci/latest').set('Authorization', `Bearer ${token}`).expect(400);
+      });
+    });
+
+    describe('with the Saman bridge', () => {
+      const zip = (text: string) => Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.from(text)]);
+      const ciPostWithBridge = (v: string, bytes: Buffer, bridge: Buffer) =>
+        request(app.getHttpServer())
+          .post('/api/v1/agent-releases/ci')
+          .set('Authorization', `Bearer ${token}`)
+          .field('version', v)
+          .attach('file', bytes, 'gnext-agent.exe')
+          .attach('installer', exe(`setup of ${v}`), `gnext-agent-setup-${v}.exe`)
+          .attach('bridge', bridge, 'gnext-saman-bridge.zip');
+      const download = (url: string) =>
+        agentGet(url)
+          .buffer(true)
+          .parse((res, cb) => {
+            const chunks: Buffer[] = [];
+            res.on('data', (c: Buffer) => chunks.push(c));
+            res.on('end', () => cb(null, Buffer.concat(chunks)));
+          });
+
+      it('stores it with the release, and names it in latest once published', async () => {
+        const v = version(30);
+        const bridge = zip('bridge of 30');
+        const res = await ciPostWithBridge(v, exe('build of 30'), bridge).expect(200);
+        expect(res.body).toMatchObject({ created: true, installer_attached: true, bridge_attached: true, release: { has_bridge: true } });
+        expect(res.body.release).not.toHaveProperty('bridge_path');
+        await agentGet(`/api/v1/agent/releases/${v}/gnext-saman-bridge.zip`).expect(404);
+
+        await releases.publish(res.body.release.id, actor());
+        try {
+          const latest = await agentGet('/api/v1/agent/releases/latest').expect(200);
+          const sha256 = createHash('sha256').update(bridge).digest('hex');
+          expect(latest.body).toMatchObject({
+            version: v,
+            bridge: { url: `/api/v1/agent/releases/${v}/gnext-saman-bridge.zip`, sha256, size: bridge.length },
+          });
+          const file = await download(latest.body.bridge.url).expect(200);
+          expect(file.headers['x-content-sha256']).toBe(sha256);
+          expect(file.body).toEqual(bridge);
+        } finally {
+          await releases.unpublish(res.body.release.id, actor());
+        }
+      });
+
+      it('adds it to a release that has none, keeps the first one, and reports it to CI', async () => {
+        const v = version(31);
+        const bytes = exe('build of 31');
+        await ciPost(v, bytes).expect(200);
+
+        const added = await ciPostWithBridge(v, bytes, zip('first bridge')).expect(200);
+        expect(added.body).toMatchObject({ sha256_matches: true, bridge_attached: true });
+        const again = await ciPostWithBridge(v, bytes, zip('second bridge')).expect(200);
+        expect(again.body).toMatchObject({ bridge_attached: false, release: { has_bridge: true } });
+        expect(await fs.readFile(path.join(dataDir, 'agent-releases', v, 'gnext-saman-bridge.zip'))).toEqual(zip('first bridge'));
+        const status = await request(app.getHttpServer()).get(`/api/v1/agent-releases/ci/${v}`).set('Authorization', `Bearer ${token}`).expect(200);
+        expect(status.body).toMatchObject({ has_installer: true, has_bridge: true });
+      });
+
+      it('leaves it out when the exe it came with is not the stored one', async () => {
+        const v = version(32);
+        await ciPost(v, exe('build of 32')).expect(200);
+        const res = await ciPostWithBridge(v, exe('build of 32, changed'), zip('bridge')).expect(200);
+        expect(res.body).toMatchObject({ sha256_matches: false, bridge_attached: false, release: { has_bridge: false } });
+      });
+
+      it('refuses a bridge that is not a zip', async () => {
+        const v = version(33);
+        await ciPostWithBridge(v, exe('build of 33'), exe('not a zip')).expect(400);
+        expect(await dataSource.getRepository(AgentRelease).findOne({ where: { version: v } })).toBeNull();
+      });
+
+      it('has no bridge download for a published release without one', async () => {
+        await agentGet(`/api/v1/agent/releases/${publishedVersion}/gnext-saman-bridge.zip`).expect(404);
       });
     });
   });
