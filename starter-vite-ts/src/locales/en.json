@@ -3105,7 +3105,7 @@
       "title": "Branch Overrides",
       "branch": "Branch",
       "loadError": "Failed to load this branch’s settings",
-      "pickBranch": "Choose a branch to see what it does differently from head office.",
+      "pickBranch": "Pick a branch in the header to see what it does differently from head office.",
       "pickBranchFirst": "Choose a branch first",
       "intro": "Every value here comes from head office unless {{branch}} has its own. Saving a group creates an override for this branch alone; the rest of the chain keeps following head office.",
       "canDiverge": "What this branch may decide for itself",

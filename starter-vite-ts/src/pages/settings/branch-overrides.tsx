@@ -16,18 +16,14 @@ import {
   Switch,
   Button,
   Dialog,
-  Select,
   Tooltip,
-  MenuItem,
   TableRow,
   TableBody,
   TableCell,
   TableHead,
   TextField,
-  InputLabel,
   Typography,
   DialogTitle,
-  FormControl,
   DialogActions,
   DialogContent,
   TableContainer,
@@ -36,7 +32,6 @@ import {
 
 import { tenantApi } from 'src/api/tenantApi';
 import { settingsApi } from 'src/api/settingsApi';
-import { useIsHeadOffice } from 'src/store/useAuthStore';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
@@ -83,10 +78,8 @@ type Row = {
 export function BranchOverridesPage() {
   const { t } = useTranslation();
 
-  const [branchId, setBranchId] = useScopedBranchId();
-  // A confined account has exactly one branch and the server answers it about that one
-  // whatever it asks for, so offering a chooser would only promise a view it cannot have.
-  const isHeadOffice = useIsHeadOffice();
+  // The branch comes from the header's switcher; at head office there is none to show.
+  const [branchId] = useScopedBranchId();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [scoped, setScoped] = useState<ScopedSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -247,22 +240,6 @@ export function BranchOverridesPage() {
         ]}
         action={
           <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-            {isHeadOffice && (
-            <FormControl size="small" sx={{ minWidth: 220 }}>
-              <InputLabel>{t('settings.branchOverrides.branch', 'Branch')}</InputLabel>
-              <Select
-                value={branchId}
-                label={t('settings.branchOverrides.branch', 'Branch')}
-                onChange={(e) => setBranchId(e.target.value)}
-              >
-                {branches.map((b) => (
-                  <MenuItem key={b.id} value={b.id}>
-                    {b.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            )}
             <Button variant="outlined" startIcon={<RefreshIcon />} onClick={load} disabled={busy}>
               {t('common.refresh', 'Refresh')}
             </Button>
@@ -274,7 +251,7 @@ export function BranchOverridesPage() {
         <Alert severity="info" sx={{ mb: 3 }}>
           {t(
             'settings.branchOverrides.pickBranch',
-            'Choose a branch to see what it does differently from head office.'
+            'Pick a branch in the header to see what it does differently from head office.'
           )}
         </Alert>
       ) : (
