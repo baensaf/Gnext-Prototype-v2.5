@@ -36,6 +36,10 @@ export interface Terminal {
   last_seen_at?: string;
   /** A kiosk's card terminal, charged through the branch agent. */
   payment_device_id?: string | null;
+  /** Where its receipts, bills and courier slips print; null: the branch's receipt printer. */
+  receipt_printer_id?: string | null;
+  receipt_copies?: number;
+  receipt_template?: 'COMPACT' | 'DETAILED' | null;
 }
 
 export const tenantApi = {

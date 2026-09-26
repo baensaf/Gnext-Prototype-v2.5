@@ -1,3 +1,4 @@
+import type { PrinterDevice } from 'src/api/kdsApi';
 import type { PaymentDevice } from 'src/api/paymentApi';
 import type { Branch, Terminal } from 'src/api/tenantApi';
 
@@ -33,6 +34,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { kdsApi } from 'src/api/kdsApi';
 import { tenantApi } from 'src/api/tenantApi';
 import { paymentApi } from 'src/api/paymentApi';
 import { useScopedBranchId } from 'src/contexts/branch-context';
@@ -46,6 +48,8 @@ export function TerminalsPage() {
   const [terminals, setTerminals] = useState<Terminal[]>([]);
   // Card terminals the branch agent drives: what a kiosk can charge its guests on.
   const [cardTerminals, setCardTerminals] = useState<PaymentDevice[]>([]);
+  // Printers a till's receipts can print on.
+  const [printers, setPrinters] = useState<PrinterDevice[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   // The header's switcher is the only branch filter; head office lists every branch.
   const [selectedBranchId] = useScopedBranchId();
@@ -78,6 +82,8 @@ export function TerminalsPage() {
       setTerminals(tList || []);
       const devices = await paymentApi.getDevices(selectedBranchId || undefined).catch(() => []);
       setCardTerminals((devices || []).filter((d) => d.is_active && d.agent_connection && d.agent_driver));
+      const printerList = await kdsApi.getPrinters(selectedBranchId || undefined).catch(() => []);
+      setPrinters((printerList || []).filter((p) => p.is_active));
       setError(null);
     } catch (err: any) {
       setError(err.detail || err.message || t('operations.terminals.loadError', 'Failed to load terminals'));
@@ -122,6 +128,19 @@ export function TerminalsPage() {
       loadData();
     } catch (err: any) {
       setError(err.detail || err.message || t('operations.terminals.cardLinkError', 'Could not link the card terminal'));
+    }
+  };
+
+  const handleReceiptSetting = async (
+    terminal: Terminal,
+    patch: Pick<Terminal, 'receipt_printer_id' | 'receipt_copies' | 'receipt_template'>
+  ) => {
+    try {
+      await tenantApi.updateTerminal(terminal.id, patch);
+      setSuccess(t('operations.terminals.receiptSaved', { name: terminal.name }));
+      loadData();
+    } catch (err: any) {
+      setError(err.detail || err.message || t('operations.terminals.receiptError'));
     }
   };
 
@@ -194,6 +213,7 @@ export function TerminalsPage() {
                   <TableCell>{t('operations.terminals.colType', 'Terminal Type')}</TableCell>
                   <TableCell>{t('operations.terminals.colBranch', 'Branch')}</TableCell>
                   <TableCell>{t('operations.terminals.colCardTerminal', 'Card terminal')}</TableCell>
+                  <TableCell>{t('operations.terminals.colReceipts')}</TableCell>
                   <TableCell>{t('operations.terminals.colStatus', 'Status')}</TableCell>
                   <TableCell align="center">{t('operations.terminals.colActions', 'Actions')}</TableCell>
                 </TableRow>
@@ -201,13 +221,13 @@ export function TerminalsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                    <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
                       <CircularProgress size={32} />
                     </TableCell>
                   </TableRow>
                 ) : terminals.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                       <Typography color="text.secondary">
                         {t('operations.terminals.noTerminals', 'No terminals found for this selection.')}
                       </Typography>
@@ -250,6 +270,59 @@ export function TerminalsPage() {
                             </Select>
                           ) : (
                             '—'
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {item.terminal_type === 'KDS' ? (
+                            '—'
+                          ) : (
+                            // Where this till's receipts, bills and courier slips come out.
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                              <Select
+                                size="small"
+                                displayEmpty
+                                value={item.receipt_printer_id || ''}
+                                onChange={(e) => handleReceiptSetting(item, { receipt_printer_id: e.target.value || null })}
+                                sx={{ minWidth: 180 }}
+                                inputProps={{ 'aria-label': t('operations.terminals.colReceipts') }}
+                              >
+                                <MenuItem value="">{t('operations.terminals.receiptBranchPrinter')}</MenuItem>
+                                {printers
+                                  .filter((p) => p.branch_id === item.branch_id)
+                                  .map((p) => (
+                                    <MenuItem key={p.id} value={p.id}>
+                                      {p.name}
+                                    </MenuItem>
+                                  ))}
+                              </Select>
+                              <TextField
+                                size="small"
+                                type="number"
+                                label={t('operations.terminals.receiptCopies')}
+                                defaultValue={item.receipt_copies || 1}
+                                onBlur={(e) => {
+                                  const copies = Math.max(1, Number(e.target.value) || 1);
+                                  if (copies !== (item.receipt_copies || 1)) handleReceiptSetting(item, { receipt_copies: copies });
+                                }}
+                                slotProps={{ htmlInput: { min: 1 } }}
+                                sx={{ width: 90 }}
+                              />
+                              <Select
+                                size="small"
+                                displayEmpty
+                                value={item.receipt_template || ''}
+                                onChange={(e) =>
+                                  handleReceiptSetting(item, {
+                                    receipt_template: (e.target.value || null) as Terminal['receipt_template'],
+                                  })
+                                }
+                                inputProps={{ 'aria-label': t('operations.printers.ticketTemplate') }}
+                              >
+                                <MenuItem value="">{t('operations.printers.templates.DEFAULT')}</MenuItem>
+                                <MenuItem value="COMPACT">{t('operations.printers.templates.COMPACT')}</MenuItem>
+                                <MenuItem value="DETAILED">{t('operations.printers.templates.DETAILED')}</MenuItem>
+                              </Select>
+                            </Stack>
                           )}
                         </TableCell>
                         <TableCell>

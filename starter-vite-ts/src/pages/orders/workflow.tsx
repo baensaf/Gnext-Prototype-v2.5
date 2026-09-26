@@ -765,18 +765,18 @@ export function OrdersWorkflowPage() {
 
   /**
    * The stations this order printed to, so one lost chit can be printed again on its own.
-   * Taken from the chits themselves, since routes may have changed since.
+   * Taken from the chits themselves, since the stations may have changed since.
    */
   const loadReprintStations = useCallback(async (orderId: string) => {
     try {
       const res = await kdsApi.getPrintJobs({ entityId: orderId, documentType: 'KITCHEN_TICKET', limit: 50 });
-      const byGroup = new Map<string, string>();
+      const byStation = new Map<string, string>();
       for (const job of res.items) {
-        if (!job.printer_group_id) continue;
+        if (!job.station_id) continue;
         // "Grill (1/3)" is the same station as "Grill (2/4)" on another print.
-        byGroup.set(job.printer_group_id, (job.label || '').replace(/\s*\([^)]*\)\s*$/, '') || job.printer_group_id);
+        byStation.set(job.station_id, (job.label || '').replace(/\s*\([^)]*\)\s*$/, '') || job.station_id);
       }
-      setReprintStations([...byGroup].map(([id, name]) => ({ id, name })));
+      setReprintStations([...byStation].map(([id, name]) => ({ id, name })));
     } catch {
       // Without the list the dialog just offers every station, which is the old behaviour.
       setReprintStations([]);

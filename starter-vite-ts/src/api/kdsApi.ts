@@ -1,5 +1,6 @@
 import { httpClient } from './httpClient';
 
+/** A prep station: the kitchen screen shows its lines, and its printers print its chits. */
 export interface KitchenStation {
   id: string;
   branch_id?: string;
@@ -8,6 +9,11 @@ export interface KitchenStation {
   station_type: string;
   target_minutes: number;
   is_active: boolean;
+  /** Every one prints each chit, in this order. Empty: the branch's kitchen printer. */
+  printer_ids: string[];
+  copies: number;
+  /** The chit's paper; null takes the default. */
+  ticket_template?: 'COMPACT' | 'DETAILED' | null;
 }
 
 export interface KdsScreen {
@@ -26,7 +32,6 @@ export interface KdsRoutingRule {
   station_id: string;
   product_id?: string;
   category_id?: string;
-  priority: number;
 }
 
 /** How the branch agent reaches a printer. None means the printer is simulated. */
@@ -36,6 +41,7 @@ export type PrinterConnection =
   | { kind: 'serial'; port: string; baud: number };
 
 export interface PrinterDevice {
+  branch_id?: string;
   id: string;
   code: string;
   name: string;
@@ -47,34 +53,6 @@ export interface PrinterDevice {
   agent_connection?: PrinterConnection | null;
 }
 
-export interface PrinterGroupMember {
-  group_id: string;
-  printer_id: string;
-  priority: number;
-  copies: number;
-}
-
-export interface PrinterGroup {
-  id: string;
-  code: string;
-  name: string;
-  /** The paper this group prints; null takes the document's default. */
-  ticket_template?: 'COMPACT' | 'DETAILED' | null;
-  members?: PrinterGroupMember[];
-}
-
-export interface PrintRoute {
-  id: string;
-  branch_id?: string;
-  document_type: string;
-  product_id?: string | null;
-  category_id?: string | null;
-  station_id?: string | null;
-  printer_group_id: string;
-  priority: number;
-  copies: number;
-}
-
 export interface PrintJob {
   id: string;
   branch_id: string;
@@ -82,7 +60,8 @@ export interface PrintJob {
   entity_type: string;
   entity_id: string;
   printer_id?: string;
-  printer_group_id?: string;
+  /** The prep station a kitchen chit is for. */
+  station_id?: string;
   /** The station a kitchen chit is for, e.g. "Grill (1/3)" when the order was split. */
   label?: string;
   status: 'QUEUED' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'CANCELLED';
@@ -171,7 +150,7 @@ export const kdsApi = {
     return res.data;
   },
 
-  // 3. Routing Rules
+  // 3. Routing Rules: a product's or a category's station. A second rule for one moves it.
   getRoutingRules: async (branchId?: string): Promise<KdsRoutingRule[]> => {
     const res = await httpClient.get('/api/v1/kds/routing-rules', { params: { branchId } });
     return res.data;
@@ -238,38 +217,6 @@ export const kdsApi = {
     const res = await httpClient.delete(`/api/v1/printers/${id}`);
     return res.data;
   },
-  getPrinterGroups: async (branchId?: string): Promise<PrinterGroup[]> => {
-    const res = await httpClient.get('/api/v1/printer-groups', { params: { branchId } });
-    return res.data;
-  },
-  createPrinterGroup: async (data: Partial<PrinterGroup> & { branch_id?: string; members?: PrinterGroupMember[] }): Promise<PrinterGroup> => {
-    const res = await httpClient.post('/api/v1/printer-groups', data);
-    return res.data;
-  },
-  updatePrinterGroup: async (id: string, data: Partial<PrinterGroup> & { branch_id?: string; members?: PrinterGroupMember[] }): Promise<PrinterGroup> => {
-    const res = await httpClient.patch(`/api/v1/printer-groups/${id}`, data);
-    return res.data;
-  },
-  deletePrinterGroup: async (id: string): Promise<any> => {
-    const res = await httpClient.delete(`/api/v1/printer-groups/${id}`);
-    return res.data;
-  },
-  getPrintRoutes: async (branchId?: string): Promise<PrintRoute[]> => {
-    const res = await httpClient.get('/api/v1/print-routes', { params: { branchId } });
-    return res.data;
-  },
-  createPrintRoute: async (data: Partial<PrintRoute>): Promise<PrintRoute> => {
-    const res = await httpClient.post('/api/v1/print-routes', data);
-    return res.data;
-  },
-  updatePrintRoute: async (id: string, data: Partial<PrintRoute>): Promise<PrintRoute> => {
-    const res = await httpClient.patch(`/api/v1/print-routes/${id}`, data);
-    return res.data;
-  },
-  deletePrintRoute: async (id: string): Promise<any> => {
-    const res = await httpClient.delete(`/api/v1/print-routes/${id}`);
-    return res.data;
-  },
 
   // 6. Print Jobs & Simulator Outcome
   getPrintJobs: async (params?: { branchId?: string; status?: string; documentType?: string; entityId?: string; limit?: number; offset?: number }): Promise<{ items: PrintJob[]; total: number }> => {
@@ -303,14 +250,14 @@ export const kdsApi = {
     documentType = 'CUSTOMER_RECEIPT',
     reason?: string,
     printerId?: string,
-    /** One station's chit only, by its printer group. */
-    printerGroupId?: string
+    /** One station's chit only. */
+    stationId?: string
   ): Promise<any> => {
     const res = await httpClient.post(`/api/v1/orders/${orderId}/reprint`, {
       documentType,
       reason,
       printerId,
-      printerGroupId,
+      stationId,
     });
     return res.data;
   },

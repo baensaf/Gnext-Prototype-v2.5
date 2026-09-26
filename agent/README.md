@@ -128,6 +128,11 @@ section numbers (§) in the code refer to it.
   Since 1.11.2 (§16.8): the till opens when a Windows user signs in, when a till is bound and
   the settings page's *باز شدن صندوق هنگام ورود به ویندوز* is on (the default; `open_at_sign_in`
   in `till.json`, changed by the manager signed in there).
+
+  Since 1.11.3 (§13.11): offline receipts and bills print at the bound till's own receipt
+  printer, with its copies and paper, as they do online; a till without one, or with its printer
+  off, prints on the branch's. Kitchen chits go to each product's prep station, which the cloud
+  still sends as `groups` and `kitchen_routes`, so older agents keep printing them.
 - Reports device status every 60 s; checks for updates on start, hourly, and when head office
   publishes a build, then swaps the binary after checking its SHA-256. Since 1.10.2 an old
   binary still held by an open window no longer blocks the next update (§9), and the settings

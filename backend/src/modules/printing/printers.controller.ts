@@ -3,34 +3,21 @@ import { Request } from 'express';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityTarget, Repository } from 'typeorm';
 import { Printer } from '../../entities/Printer.entity';
-import { PrinterGroup } from '../../entities/PrinterGroup.entity';
-import { PrinterGroupMember } from '../../entities/PrinterGroupMember.entity';
-import { PrintRoute } from '../../entities/PrintRoute.entity';
 import { PrintJob } from '../../entities/PrintJob.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
-import { KitchenStation } from '../../entities/KitchenStation.entity';
 import { PrintQueueService } from './print-queue.service';
+import { detachPrinter } from './print-routing.service';
 import { AgentConfigService } from '../agent-gateway/agent-config.service';
 import { parseDeviceConnection } from '../../common/utils/device-connection.util';
 import { AuditWriter } from '../audit/audit-writer.service';
-import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
+import { MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
-import {
-  CreatePrinterDto,
-  CreatePrinterGroupDto,
-  CreatePrintRouteDto,
-  UpdatePrinterDto,
-  UpdatePrinterGroupDto,
-  UpdatePrintRouteDto,
-} from './dtos/printing-config.dto';
+import { CreatePrinterDto, UpdatePrinterDto } from './dtos/printing-config.dto';
 
 @Controller('api/v1')
 export class PrintersController {
   constructor(
     @InjectRepository(Printer) private readonly printerRepo: Repository<Printer>,
-    @InjectRepository(PrinterGroup) private readonly groupRepo: Repository<PrinterGroup>,
-    @InjectRepository(PrinterGroupMember) private readonly memberRepo: Repository<PrinterGroupMember>,
-    @InjectRepository(PrintRoute) private readonly routeRepo: Repository<PrintRoute>,
     private readonly queueService: PrintQueueService,
     private readonly auditWriter: AuditWriter,
     private readonly agentConfig: AgentConfigService,
@@ -49,9 +36,9 @@ export class PrintersController {
   }
 
   /**
-   * A printer, group or station named inside a record has to be in that record's branch.
-   * The branch guard checks the id in the path; these ride in the body, and a Valiasr
-   * manager could make Nosrat's printer their fallback or send their tickets to its group.
+   * A printer named inside a record has to be in that record's branch. The branch guard checks
+   * the id in the path; this one rides in the body, and a Valiasr manager could make Nosrat's
+   * printer their fallback.
    */
   private async assertInBranch(
     tenantId: string,
@@ -141,8 +128,7 @@ export class PrintersController {
     if (!printer) throw new NotFoundException('Printer not found');
 
     await this.printerRepo.softDelete({ id });
-    // A retired printer leaves its groups, so they no longer list a device that is gone.
-    await this.memberRepo.delete({ printer_id: id });
+    await detachPrinter(this.printerRepo.manager, tenantId, id);
     await this.pushConfig(tenantId, printer.branch_id);
     return { success: true };
   }
@@ -155,161 +141,7 @@ export class PrintersController {
     return await this.queueService.testPrint((req as any).tenantId, id, (req as any).userId);
   }
 
-  // 2. Printer Groups CRUD
-  @Get('printer-groups')
-  async getGroups(@Query('branchId') branchId: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const where: any = { tenant_id: tenantId };
-    if (branchId) where.branch_id = branchId;
-    const groups = await this.groupRepo.find({ where, order: { name: 'ASC' } });
-
-    const result = [];
-    for (const g of groups) {
-      const members = await this.memberRepo.find({ where: { group_id: g.id }, order: { priority: 'ASC' } });
-      result.push({ ...g, members });
-    }
-    return result;
-  }
-
-  @Roles(...MANAGER_AND_ABOVE)
-  @Post('printer-groups')
-  async createGroup(@Body() body: CreatePrinterGroupDto, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const group = this.groupRepo.create({
-      tenant_id: tenantId,
-      branch_id: body.branch_id,
-      code: body.code.toUpperCase(),
-      name: body.name,
-      ticket_template: body.ticket_template ?? null,
-    });
-    for (const m of Array.isArray(body.members) ? body.members : []) {
-      await this.assertInBranch(tenantId, Printer, m.printer_id, body.branch_id, 'Printer');
-    }
-    const savedGroup = await this.groupRepo.save(group);
-
-    if (body.members && Array.isArray(body.members)) {
-      for (const m of body.members) {
-        const member = this.memberRepo.create({
-          group_id: savedGroup.id,
-          printer_id: m.printer_id,
-          priority: m.priority || 0,
-          copies: m.copies || 1,
-        });
-        await this.memberRepo.save(member);
-      }
-    }
-    return savedGroup;
-  }
-
-  @BranchOwned(PrinterGroup)
-  @Roles(...MANAGER_AND_ABOVE)
-  @Patch('printer-groups/:id')
-  async updateGroup(@Param('id') id: string, @Body() body: UpdatePrinterGroupDto, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const group = await this.groupRepo.findOne({ where: { id, tenant_id: tenantId } });
-    if (!group) throw new NotFoundException('Printer group not found');
-
-    if (body.name !== undefined) group.name = body.name;
-    if (body.code !== undefined) group.code = body.code.toUpperCase();
-    if (body.ticket_template !== undefined) group.ticket_template = body.ticket_template ?? null;
-    if (body.branch_id) group.branch_id = body.branch_id;
-    for (const m of Array.isArray(body.members) ? body.members : []) {
-      await this.assertInBranch(tenantId, Printer, m.printer_id, group.branch_id, 'Printer');
-    }
-
-    const savedGroup = await this.groupRepo.save(group);
-
-    if (body.members && Array.isArray(body.members)) {
-      await this.memberRepo.delete({ group_id: id });
-      const savedMembers = [];
-      for (const m of body.members) {
-        const member = this.memberRepo.create({
-          group_id: savedGroup.id,
-          printer_id: m.printer_id,
-          priority: m.priority || 0,
-          copies: m.copies || 1,
-        });
-        savedMembers.push(await this.memberRepo.save(member));
-      }
-      return { ...savedGroup, members: savedMembers };
-    }
-
-    const members = await this.memberRepo.find({ where: { group_id: id }, order: { priority: 'ASC' } });
-    return { ...savedGroup, members };
-  }
-
-  @BranchOwned(PrinterGroup)
-  @Roles(...MANAGER_AND_ABOVE)
-  @Delete('printer-groups/:id')
-  async deleteGroup(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    await this.groupRepo.softDelete({ id, tenant_id: tenantId });
-    return { success: true };
-  }
-
-  // 3. Print Routes CRUD
-  @Get('print-routes')
-  async getRoutes(@Query('branchId') branchId: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const where: any = { tenant_id: tenantId };
-    if (branchId) where.branch_id = branchId;
-    return await this.routeRepo.find({ where, order: { priority: 'DESC' } });
-  }
-
-  @Roles(...MANAGER_AND_ABOVE)
-  @Post('print-routes')
-  async createRoute(@Body() body: CreatePrintRouteDto, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    await this.assertInBranch(tenantId, PrinterGroup, body.printer_group_id, body.branch_id, 'Printer group');
-    await this.assertInBranch(tenantId, KitchenStation, body.station_id, body.branch_id, 'Kitchen station');
-    const route = this.routeRepo.create({
-      tenant_id: tenantId,
-      branch_id: body.branch_id,
-      document_type: body.document_type || 'CUSTOMER_RECEIPT',
-      product_id: body.product_id || null,
-      category_id: body.category_id || null,
-      station_id: body.station_id || null,
-      printer_group_id: body.printer_group_id,
-      priority: body.priority || 0,
-      copies: body.copies || 1,
-    });
-    return await this.routeRepo.save(route);
-  }
-
-  @BranchOwned(PrintRoute)
-  @Roles(...MANAGER_AND_ABOVE)
-  @Patch('print-routes/:id')
-  async updateRoute(@Param('id') id: string, @Body() body: UpdatePrintRouteDto, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const route = await this.routeRepo.findOne({ where: { id, tenant_id: tenantId } });
-    if (!route) throw new NotFoundException('Print route not found');
-
-    if (body.document_type !== undefined) route.document_type = body.document_type;
-    if (body.printer_group_id !== undefined) route.printer_group_id = body.printer_group_id;
-    if (body.priority !== undefined) route.priority = Number(body.priority);
-    if (body.copies !== undefined) route.copies = Number(body.copies);
-    if ('product_id' in body) route.product_id = body.product_id || null;
-    if ('category_id' in body) route.category_id = body.category_id || null;
-    if ('station_id' in body) route.station_id = body.station_id || null;
-    if (body.branch_id) route.branch_id = body.branch_id;
-    if (body.printer_group_id !== undefined) {
-      await this.assertInBranch(tenantId, PrinterGroup, route.printer_group_id, route.branch_id, 'Printer group');
-    }
-    if (body.station_id) await this.assertInBranch(tenantId, KitchenStation, route.station_id, route.branch_id, 'Kitchen station');
-
-    return await this.routeRepo.save(route);
-  }
-
-  @BranchOwned(PrintRoute)
-  @Roles(...MANAGER_AND_ABOVE)
-  @Delete('print-routes/:id')
-  async deleteRoute(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    await this.routeRepo.softDelete({ id, tenant_id: tenantId });
-    return { success: true };
-  }
-
-  // 4. Print Jobs Queue & Simulation Actions
+  // 2. Print Jobs Queue & Simulation Actions
   @Get('print-jobs')
   async getJobs(
     @Query('branchId') branchId: string,
@@ -367,7 +199,8 @@ export class PrintersController {
       body.reason || 'Order Reprint Request',
       userId,
       body.printerId || body.printer_id,
-      body.printerGroupId || body.printer_group_id,
+      // One station's chit only.
+      body.stationId || body.station_id,
     );
   }
 

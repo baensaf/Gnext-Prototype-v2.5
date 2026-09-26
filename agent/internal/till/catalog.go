@@ -64,11 +64,15 @@ type Catalog struct {
 		Kind string `json:"kind"`
 	} `json:"payment_methods"`
 	DiningTables []Table `json:"dining_tables"`
+	// Tills carry where each till's receipts print (§13.11).
+	Tills []Register `json:"tills"`
 	// Printing is where offline tickets go and what they are headed with (§13.11).
 	Printing Printing `json:"printing"`
 }
 
-// Printing is the snapshot's routing of tickets (§13.11), matched in advance by the cloud.
+// Printing is the snapshot's routing of tickets (§13.11), matched in advance by the cloud: each
+// product's prep station ("group"), the stations' printers, and the branch's fallback printers.
+// Its `documents` are always null now; receipts print at the till's own printer.
 type Printing struct {
 	Heading struct {
 		BrandName     string `json:"brand_name"`
@@ -77,16 +81,15 @@ type Printing struct {
 		BranchPhone   string `json:"branch_phone"`
 		Calendar      string `json:"calendar"`
 	} `json:"heading"`
-	Groups        []PrinterGroup         `json:"groups"`
-	KitchenRoutes map[string]PrintRoute  `json:"kitchen_routes"`
-	Documents     map[string]*PrintRoute `json:"documents"`
+	Groups        []PrinterGroup        `json:"groups"`
+	KitchenRoutes map[string]PrintRoute `json:"kitchen_routes"`
 	Fallback      struct {
 		KitchenTicket *string `json:"KITCHEN_TICKET"`
 		Other         *string `json:"OTHER"`
 	} `json:"fallback"`
 }
 
-// PrinterGroup is a station's printers, in priority order, each with its copies.
+// PrinterGroup is a prep station's printers, in order, each with its copies.
 type PrinterGroup struct {
 	ID             string  `json:"id"`
 	Name           string  `json:"name"`
@@ -97,7 +100,7 @@ type PrinterGroup struct {
 	} `json:"printers"`
 }
 
-// PrintRoute sends a document to a printer group, so many times.
+// PrintRoute sends a product's chit to its station, so many times.
 type PrintRoute struct {
 	GroupID string `json:"group_id"`
 	Copies  int    `json:"copies"`

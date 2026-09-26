@@ -10,9 +10,8 @@ import { AdminUser } from '../src/entities/AdminUser.entity';
 import { Category } from '../src/entities/Category.entity';
 import { Product } from '../src/entities/Product.entity';
 import { Printer } from '../src/entities/Printer.entity';
-import { PrinterGroup } from '../src/entities/PrinterGroup.entity';
-import { PrinterGroupMember } from '../src/entities/PrinterGroupMember.entity';
-import { PrintRoute } from '../src/entities/PrintRoute.entity';
+import { KitchenStation } from '../src/entities/KitchenStation.entity';
+import { KdsRoutingRule } from '../src/entities/KdsRoutingRule.entity';
 import { PrintJob } from '../src/entities/PrintJob.entity';
 import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
 import { PaymentDevice } from '../src/entities/PaymentDevice.entity';
@@ -88,7 +87,7 @@ describe('branch agent journey (PostgreSQL)', () => {
       await save(Product, { tenant_id: tenantId, category_id: category.id, code: 'JRN-BURGER', name: 'Burger', base_price: '250000.0000', tax_rate: '0.0900' })
     ).id;
 
-    // One network printer, routed for receipts and kitchen tickets, driven by the agent.
+    // One network printer for receipts and kitchen tickets, driven by the agent.
     printerId = (
       await save(Printer, {
         tenant_id: tenantId,
@@ -100,11 +99,9 @@ describe('branch agent journey (PostgreSQL)', () => {
         agent_connection: { kind: 'tcp', host: '192.168.1.50', port: 9100 },
       })
     ).id;
-    const group = await save(PrinterGroup, { tenant_id: tenantId, branch_id: branchId, code: 'JRN-GRP', name: 'Counter' });
-    await save(PrinterGroupMember, { group_id: group.id, printer_id: printerId, priority: 1, copies: 1 });
-    for (const document_type of ['CUSTOMER_RECEIPT', 'KITCHEN_TICKET']) {
-      await save(PrintRoute, { tenant_id: tenantId, branch_id: branchId, document_type, printer_group_id: group.id, priority: 0, copies: 1 });
-    }
+    // Receipts find it as the branch's receipt printer; the food's station prints its chits on it too.
+    const station = await save(KitchenStation, { tenant_id: tenantId, branch_id: branchId, code: 'JRN-ST', name: 'Counter', printer_ids: [printerId] });
+    await save(KdsRoutingRule, { tenant_id: tenantId, branch_id: branchId, category_id: category.id, station_id: station.id });
 
     // One Saman terminal, driven by the agent.
     cardMethodId = (await save(PaymentMethod, { tenant_id: tenantId, code: 'CARD_POS', name: 'Bank card', kind: 'CARD_POS', is_active: true })).id;
@@ -116,10 +113,6 @@ describe('branch agent journey (PostgreSQL)', () => {
 
   afterAll(async () => {
     await agent?.disconnect();
-    await dataSource.query(
-      `DELETE FROM printer_group_member WHERE group_id IN (SELECT id FROM printer_group WHERE tenant_id = $1)`,
-      [tenantId],
-    );
     await deleteTenantData(dataSource, tenantId);
     await app.close();
   });

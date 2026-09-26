@@ -1,9 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Printer } from '../../entities/Printer.entity';
-import { PrinterGroup } from '../../entities/PrinterGroup.entity';
-import { PrinterGroupMember } from '../../entities/PrinterGroupMember.entity';
-import { PrintRoute } from '../../entities/PrintRoute.entity';
 import { PrintJob } from '../../entities/PrintJob.entity';
 import { PrintAttempt } from '../../entities/PrintAttempt.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
@@ -11,6 +8,8 @@ import { Branch } from '../../entities/Branch.entity';
 import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { Product } from '../../entities/Product.entity';
 import { KdsRoutingRule } from '../../entities/KdsRoutingRule.entity';
+import { KitchenStation } from '../../entities/KitchenStation.entity';
+import { Terminal } from '../../entities/Terminal.entity';
 import { PrintRenderService } from './print-render.service';
 import { PrintRoutingService } from './print-routing.service';
 import { PrintQueueService } from './print-queue.service';
@@ -23,9 +22,6 @@ import { AgentPrintingService } from './agent-printing.service';
   imports: [
     TypeOrmModule.forFeature([
       Printer,
-      PrinterGroup,
-      PrinterGroupMember,
-      PrintRoute,
       PrintJob,
       PrintAttempt,
       OrderHeader,
@@ -33,6 +29,8 @@ import { AgentPrintingService } from './agent-printing.service';
       OperationalAlert,
       Product,
       KdsRoutingRule,
+      KitchenStation,
+      Terminal,
     ]),
     AuditModule,
     AgentGatewayModule,

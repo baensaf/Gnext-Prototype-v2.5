@@ -14,9 +14,8 @@ import { AdminUser } from '../src/entities/AdminUser.entity';
 import { Category } from '../src/entities/Category.entity';
 import { Product } from '../src/entities/Product.entity';
 import { Printer } from '../src/entities/Printer.entity';
-import { PrinterGroup } from '../src/entities/PrinterGroup.entity';
-import { PrinterGroupMember } from '../src/entities/PrinterGroupMember.entity';
-import { PrintRoute } from '../src/entities/PrintRoute.entity';
+import { KitchenStation } from '../src/entities/KitchenStation.entity';
+import { KdsRoutingRule } from '../src/entities/KdsRoutingRule.entity';
 import { PrintJob } from '../src/entities/PrintJob.entity';
 import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
 import { PaymentDevice } from '../src/entities/PaymentDevice.entity';
@@ -119,11 +118,9 @@ const bin = process.env.GNEXT_AGENT_BIN;
         agent_connection: { kind: 'tcp', host: '127.0.0.1', port: printerPort },
       })
     ).id;
-    const group = await save(PrinterGroup, { tenant_id: tenantId, branch_id: branchId, code: 'GOA-GRP', name: 'Counter' });
-    await save(PrinterGroupMember, { group_id: group.id, printer_id: printerId, priority: 1, copies: 1 });
-    for (const document_type of ['CUSTOMER_RECEIPT', 'KITCHEN_TICKET']) {
-      await save(PrintRoute, { tenant_id: tenantId, branch_id: branchId, document_type, printer_group_id: group.id, priority: 0, copies: 1 });
-    }
+    // Receipts find it as the branch's receipt printer; the food's station prints its chits on it too.
+    const station = await save(KitchenStation, { tenant_id: tenantId, branch_id: branchId, code: 'GOA-ST', name: 'Counter', printer_ids: [printerId] });
+    await save(KdsRoutingRule, { tenant_id: tenantId, branch_id: branchId, category_id: category.id, station_id: station.id });
     cardMethodId = (await save(PaymentMethod, { tenant_id: tenantId, code: 'CARD_POS', name: 'Bank card', kind: 'CARD_POS', is_active: true })).id;
     const terminalId = (await save(PaymentDevice, { tenant_id: tenantId, branch_id: branchId, code: 'GOA-POS', name: 'Counter terminal', kind: 'POS' })).id;
     await payments.setDeviceAgent(tenantId, terminalId, { agentConnection: { kind: 'tcp', host: '127.0.0.1', port: 8888 }, agentDriver: 'fake' });
@@ -136,7 +133,6 @@ const bin = process.env.GNEXT_AGENT_BIN;
       await exited;
     }
     printer?.close();
-    await dataSource.query(`DELETE FROM printer_group_member WHERE group_id IN (SELECT id FROM printer_group WHERE tenant_id = $1)`, [tenantId]);
     await deleteTenantData(dataSource, tenantId);
     await app.close();
     // The agent's headless browser can hold its profile for a moment after the agent exits.

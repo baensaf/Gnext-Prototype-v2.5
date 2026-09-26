@@ -323,13 +323,12 @@ export async function runSeed() {
     }
   }
 
-  // 6a. Idempotent printers, one receipt and one kitchen printer per selling site, each
-  // with a group and routes. With none, every receipt and kitchen ticket in the demo had
-  // nowhere to go — and a kitchen ticket with no printer is an order nobody cooks.
+  // 6a. Idempotent printers, one receipt and one kitchen printer per selling site, the
+  // receipt printer at the site's tills. With none, every receipt and kitchen ticket in the
+  // demo had nowhere to go — and a kitchen ticket with no printer is an order nobody cooks.
+  // A kitchen chit finds the kitchen printer by itself; a station with printers of its own
+  // (admin-demo) sends its chits there instead.
   const printerRepo = AppDataSource.getRepository('Printer');
-  const printerGroupRepo = AppDataSource.getRepository('PrinterGroup');
-  const printerMemberRepo = AppDataSource.getRepository('PrinterGroupMember');
-  const printRouteRepo = AppDataSource.getRepository('PrintRoute');
   for (const site of sellingBranches) {
     const findOrCreate = async (repo: any, where: Record<string, unknown>, data: Record<string, unknown>) =>
       (await repo.findOne({ where })) || (await repo.save(repo.create({ ...where, ...data })));
@@ -339,32 +338,17 @@ export async function runSeed() {
       { tenant_id: tenant.id, branch_id: site.id, code: `PRN-${site.code}-RCPT` },
       { name: `چاپگر صندوق ${site.name}`, printer_type: 'THERMAL_RECEIPT', paper_width_mm: 80, is_active: true, simulated_address: 'sim://receipt' },
     );
-    const kitchenPrinter = await findOrCreate(
+    await findOrCreate(
       printerRepo,
       { tenant_id: tenant.id, branch_id: site.id, code: `PRN-${site.code}-KIT` },
       // If the kitchen printer jams, the ticket comes out at the counter rather than nowhere.
       { name: `چاپگر آشپزخانه ${site.name}`, printer_type: 'KITCHEN_IMPACT', paper_width_mm: 80, is_active: true, simulated_address: 'sim://kitchen', fallback_printer_id: receiptPrinter.id },
     );
 
-    const routes: Array<{ group: string; name: string; printer: any; documents: string[] }> = [
-      { group: 'RCPT', name: 'صندوق', printer: receiptPrinter, documents: ['CUSTOMER_RECEIPT', 'GUEST_BILL', 'COURIER_SLIP'] },
-      { group: 'KIT', name: 'آشپزخانه', printer: kitchenPrinter, documents: ['KITCHEN_TICKET'] },
-    ];
-    for (const route of routes) {
-      const group = await findOrCreate(
-        printerGroupRepo,
-        { tenant_id: tenant.id, branch_id: site.id, code: `GRP-${site.code}-${route.group}` },
-        { name: `${route.name} ${site.name}` },
-      );
-      await findOrCreate(printerMemberRepo, { group_id: group.id, printer_id: route.printer.id }, { priority: 1, copies: 1 });
-      for (const documentType of route.documents) {
-        await findOrCreate(
-          printRouteRepo,
-          { tenant_id: tenant.id, branch_id: site.id, document_type: documentType, printer_group_id: group.id },
-          { priority: 10, copies: 1 },
-        );
-      }
-    }
+    await terminalRepo.update(
+      { tenant_id: tenant.id, branch_id: site.id, terminal_type: 'CASHIER', receipt_printer_id: IsNull() },
+      { receipt_printer_id: receiptPrinter.id },
+    );
   }
 
   // 7. Idempotent Reason Codes
@@ -863,8 +847,6 @@ async function rebrandLegacyDemo(
       renames.push(
         ['printer', `PRN-${site.code}-RCPT`, `${legacy} Receipt Printer`, `چاپگر صندوق ${site.name}`],
         ['printer', `PRN-${site.code}-KIT`, `${legacy} Kitchen Printer`, `چاپگر آشپزخانه ${site.name}`],
-        ['printer_group', `GRP-${site.code}-RCPT`, `${legacy} Counter`, `صندوق ${site.name}`],
-        ['printer_group', `GRP-${site.code}-KIT`, `${legacy} Kitchen`, `آشپزخانه ${site.name}`],
       );
     }
     renames.push(

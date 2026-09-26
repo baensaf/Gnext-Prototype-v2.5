@@ -15,6 +15,19 @@ import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { Product } from '../../entities/Product.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { OrderTransitionRecorder } from '../order-lifecycle/order-transition-recorder.service';
+import { stationIdFor } from './prep-station';
+
+type StationInput = {
+  branch_id?: string;
+  code?: string;
+  name?: string;
+  station_type?: string;
+  target_minutes?: number;
+  is_active?: boolean;
+  printer_ids?: string[];
+  copies?: number;
+  ticket_template?: 'COMPACT' | 'DETAILED' | null;
+};
 
 /**
  * Open orders that starting a ticket moves to PREPARING. KITCHEN_PREPARING is the legacy
@@ -67,7 +80,21 @@ export class KdsService {
     return await this.stationRepo.find({ where, order: { name: 'ASC' } });
   }
 
-  async createStation(tenantId: string, data: { branch_id?: string; code: string; name: string; station_type?: string; target_minutes?: number }, correlationId?: string) {
+  /**
+   * A station prints on its own branch's printers. The ids ride in the body, where the branch
+   * guard does not look, and a Valiasr grill could otherwise print in Nosrat's kitchen.
+   */
+  private async assertPrintersInBranch(tenantId: string, printerIds: string[] | undefined, branchId: string | null) {
+    const ids = [...new Set((printerIds || []).filter(Boolean))];
+    if (!ids.length) return;
+    const found = await this.printerRepo.find({ where: { tenant_id: tenantId, id: In(ids), branch_id: branchId ?? undefined } });
+    if (!branchId || found.length !== ids.length) {
+      throw new BadRequestException("Every printer of a station must be in the station's branch");
+    }
+  }
+
+  async createStation(tenantId: string, data: StationInput & { code: string; name: string }, correlationId?: string) {
+    await this.assertPrintersInBranch(tenantId, data.printer_ids, data.branch_id || null);
     const station = this.stationRepo.create({
       tenant_id: tenantId,
       branch_id: data.branch_id || null,
@@ -75,6 +102,9 @@ export class KdsService {
       name: data.name,
       station_type: data.station_type || 'HOT_KITCHEN',
       target_minutes: data.target_minutes || 10,
+      printer_ids: [...new Set(data.printer_ids || [])],
+      copies: data.copies || 1,
+      ticket_template: data.ticket_template ?? null,
       is_active: true,
     });
     const saved = await this.stationRepo.save(station);
@@ -88,10 +118,12 @@ export class KdsService {
     return saved;
   }
 
-  async updateStation(tenantId: string, id: string, data: any) {
+  async updateStation(tenantId: string, id: string, data: StationInput) {
     const station = await this.stationRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!station) throw new NotFoundException('Station not found');
     Object.assign(station, data);
+    if (data.printer_ids) station.printer_ids = [...new Set(data.printer_ids)];
+    if (data.printer_ids || data.branch_id) await this.assertPrintersInBranch(tenantId, station.printer_ids, station.branch_id);
     return await this.stationRepo.save(station);
   }
 
@@ -151,22 +183,29 @@ export class KdsService {
   async getRoutingRules(tenantId: string, branchId?: string) {
     const where: any = { tenant_id: tenantId };
     if (branchId) where.branch_id = branchId;
-    return await this.ruleRepo.find({ where, order: { priority: 'DESC' } });
+    return await this.ruleRepo.find({ where, order: { created_at: 'ASC' } });
   }
 
-  async createRoutingRule(tenantId: string, data: { branch_id: string; station_id: string; product_id?: string; category_id?: string; priority?: number }) {
+  /**
+   * Send a product, or a category, to a station at the branch. It has one station, so a rule
+   * for one already routed moves it rather than adding a second answer.
+   */
+  async createRoutingRule(tenantId: string, data: { branch_id: string; station_id: string; product_id?: string; category_id?: string }) {
     if ((!data.product_id && !data.category_id) || (data.product_id && data.category_id)) {
       throw new BadRequestException('Routing rule must specify exactly one of product_id or category_id');
     }
 
-    const rule = this.ruleRepo.create({
-      tenant_id: tenantId,
-      branch_id: data.branch_id,
-      station_id: data.station_id,
-      product_id: data.product_id || null,
-      category_id: data.category_id || null,
-      priority: data.priority || 0,
-    });
+    const selector = data.product_id ? { product_id: data.product_id } : { category_id: data.category_id };
+    const existing = await this.ruleRepo.findOne({ where: { tenant_id: tenantId, branch_id: data.branch_id, ...selector } });
+    const rule =
+      existing ??
+      this.ruleRepo.create({
+        tenant_id: tenantId,
+        branch_id: data.branch_id,
+        product_id: data.product_id || null,
+        category_id: data.category_id || null,
+      });
+    rule.station_id = data.station_id;
     return await this.ruleRepo.save(rule);
   }
 
@@ -175,7 +214,7 @@ export class KdsService {
     return { success: true };
   }
 
-  // 4. Ticket Generation with Product > Category > Station routing engine
+  // 4. Ticket Generation: each line to its prep station, else the branch's first station
   async generateTicketsForOrder(tenantId: string, orderId: string, correlationId?: string) {
     const order = await this.orderRepo.findOne({
       where: { id: orderId, tenant_id: tenantId },
@@ -183,10 +222,7 @@ export class KdsService {
     });
     if (!order) throw new NotFoundException('Order not found');
 
-    const rules = await this.ruleRepo.find({
-      where: { tenant_id: tenantId, branch_id: order.branch_id },
-      order: { priority: 'DESC' },
-    });
+    const rules = await this.ruleRepo.find({ where: { tenant_id: tenantId, branch_id: order.branch_id } });
 
     let defaultStation = await this.stationRepo.findOne({ where: { tenant_id: tenantId, branch_id: order.branch_id, is_active: true } });
     if (!defaultStation) {
@@ -203,29 +239,12 @@ export class KdsService {
     // re-run after an edit to fire newly appended lines, so without the filter
     // a line struck off before it was ever fired would be sent to the kitchen.
     const routableItems = (order.items || []).filter((i) => (i.state || 'ACTIVE') === 'ACTIVE');
+    const productIds = [...new Set(routableItems.map((i) => i.product_id).filter(Boolean))];
+    const products = productIds.length ? await this.productRepo.find({ where: { id: In(productIds), tenant_id: tenantId } }) : [];
+    const categoryOf = new Map(products.map((p) => [p.id, p.category_id]));
 
     for (const item of routableItems) {
-      let targetStationId = defaultStation.id;
-
-      // Check product rule match first
-      const prodRule = rules.find((r) => r.product_id && r.product_id === item.product_id);
-      if (prodRule) {
-        targetStationId = prodRule.station_id;
-      } else {
-        // Check category rule match by looking up product category
-        const categoryRules = rules.filter((r) => !!r.category_id);
-        if (categoryRules.length > 0 && item.product_id) {
-          const product = await this.productRepo.findOne({
-            where: { id: item.product_id, tenant_id: tenantId },
-          });
-          if (product && product.category_id) {
-            const catRule = categoryRules.find((r) => r.category_id === product.category_id);
-            if (catRule) {
-              targetStationId = catRule.station_id;
-            }
-          }
-        }
-      }
+      const targetStationId = stationIdFor(rules, item.product_id, categoryOf.get(item.product_id)) ?? defaultStation.id;
 
       if (!itemsByStation.has(targetStationId)) {
         itemsByStation.set(targetStationId, []);

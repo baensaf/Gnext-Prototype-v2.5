@@ -1,14 +1,33 @@
-import { IsArray, IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+
+/** What a prep station prints on, and how: shared by creating and editing one. */
+class StationPrintingDto {
+  /** Its printers, every one printing each chit, in this order. Each must be in its branch. */
+  @IsOptional()
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  printer_ids?: string[];
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  copies?: number;
+
+  /** COMPACT or DETAILED chits; null takes the kitchen chit's default. */
+  @IsOptional()
+  @IsIn(['COMPACT', 'DETAILED', null])
+  ticket_template?: 'COMPACT' | 'DETAILED' | null;
+}
 
 /**
- * What a kitchen station, a screen and a routing rule are made of.
+ * What a kitchen (prep) station, a screen and a routing rule are made of.
  *
  * All three took `any`. A station created without a branch failed on a not-null constraint
  * deep in the driver, which is how the configuration screen's own "add station" button
  * behaved: it never sent one. Naming the branch here is what makes that visible.
  */
 
-export class CreateStationDto {
+export class CreateStationDto extends StationPrintingDto {
   @IsUUID()
   branch_id: string;
 
@@ -30,7 +49,7 @@ export class CreateStationDto {
   target_minutes?: number;
 }
 
-export class UpdateStationDto {
+export class UpdateStationDto extends StationPrintingDto {
   @IsOptional()
   @IsUUID()
   branch_id?: string;
@@ -125,8 +144,4 @@ export class CreateRoutingRuleDto {
   @IsOptional()
   @IsUUID()
   category_id?: string;
-
-  @IsOptional()
-  @IsInt()
-  priority?: number;
 }

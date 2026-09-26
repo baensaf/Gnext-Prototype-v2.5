@@ -38,11 +38,11 @@ const ordersJSON = `{
       { "id": "g-counter", "name": "صندوق", "ticket_template": null, "printers": [ { "printer_id": "p-counter", "copies": 1 } ] }
     ],
     "kitchen_routes": { "burger": { "group_id": "g-grill", "copies": 1 }, "fries": { "group_id": "g-fry", "copies": 1 } },
-    "documents": { "CUSTOMER_RECEIPT": { "group_id": "g-counter", "copies": 1 }, "GUEST_BILL": null },
+    "documents": { "CUSTOMER_RECEIPT": null, "GUEST_BILL": null },
     "fallback": { "KITCHEN_TICKET": "p-kitchen", "OTHER": "p-counter" }
   },
   "payment_methods": [ { "id": "m-cash", "code": "CASH", "name": "نقد", "kind": "CASH" }, { "id": "m-card", "code": "POS", "name": "کارتخوان", "kind": "CARD_POS" } ],
-  "tills": [ { "id": "till-1", "code": "T1", "name": "صندوق ۱", "payment_device_id": "pos-1" } ],
+  "tills": [ { "id": "till-1", "code": "T1", "name": "صندوق ۱", "payment_device_id": "pos-1", "receipt_printer_id": "p-till", "receipt_copies": 2, "receipt_template": null } ],
   "open_shifts": [ { "id": "shift-1", "terminal_id": "till-1", "shift_number": "S-1", "business_date": "2026-09-24" } ]
 }`
 

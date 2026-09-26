@@ -68,9 +68,6 @@ import { KitchenTicket } from './entities/KitchenTicket.entity';
 import { KitchenTicketItem } from './entities/KitchenTicketItem.entity';
 import { KdsEvent } from './entities/KdsEvent.entity';
 import { Printer } from './entities/Printer.entity';
-import { PrinterGroup } from './entities/PrinterGroup.entity';
-import { PrinterGroupMember } from './entities/PrinterGroupMember.entity';
-import { PrintRoute } from './entities/PrintRoute.entity';
 import { PrintJob } from './entities/PrintJob.entity';
 import { PrintAttempt } from './entities/PrintAttempt.entity';
 
@@ -189,7 +186,7 @@ import { ReportExportJob } from './entities/ReportExportJob.entity';
           RefundRequest, RefundItem, RefundAllocation, Refund,
           DiningArea, DiningTable, TableSession, TableOccupancyEvent,
           KitchenStation, KdsScreen, KdsRoutingRule, KitchenTicket, KitchenTicketItem, KdsEvent,
-          Printer, PrinterGroup, PrinterGroupMember, PrintRoute, PrintJob, PrintAttempt,
+          Printer, PrintJob, PrintAttempt,
           Courier, DeliveryAssignment, CourierSettlement, CourierSettlementLine,
           DeliveryZone, CourierAttendance, CourierTerminalAssignment, Delivery, DeliveryEvent,
           CashierShift, CashMovement, BusinessDayClose,
