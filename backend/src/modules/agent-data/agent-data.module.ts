@@ -6,6 +6,8 @@ import { AgentSyncOrder } from '../../entities/AgentSyncOrder.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { CashierShift } from '../../entities/CashierShift.entity';
 import { Category } from '../../entities/Category.entity';
+import { Courier } from '../../entities/Courier.entity';
+import { CourierAttendance } from '../../entities/CourierAttendance.entity';
 import { DeliveryZone } from '../../entities/DeliveryZone.entity';
 import { DiningArea } from '../../entities/DiningArea.entity';
 import { DiningTable } from '../../entities/DiningTable.entity';
@@ -54,6 +56,8 @@ import { AgentDataService } from './agent-data.service';
       CashierShift,
       TenantSetting,
       AdminUser,
+      Courier,
+      CourierAttendance,
     ]),
     AgentGatewayModule,
     CatalogModule,

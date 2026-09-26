@@ -5,6 +5,8 @@ import { PaymentMethod } from '../../src/entities/PaymentMethod.entity';
 import { CustomerPhone } from '../../src/entities/CustomerPhone.entity';
 import { CustomerAddress } from '../../src/entities/CustomerAddress.entity';
 import { CustomerService } from '../../src/modules/customer/customer.service';
+import { AgentSyncOrder } from '../../src/entities/AgentSyncOrder.entity';
+import { OrderStateEvent } from '../../src/entities/OrderStateEvent.entity';
 
 /**
  * The payment and customer stores a Snappfood order lands in, for tests that build
@@ -58,6 +60,9 @@ export function snappfoodIntakeMocks() {
       { provide: getRepositoryToken(CustomerPhone), useValue: customerPhoneRepo },
       { provide: getRepositoryToken(CustomerAddress), useValue: customerAddressRepo },
       { provide: CustomerService, useValue: customerService },
+      // Only a till-typed order (§17.7) reaches these; the intake tests never make one.
+      { provide: getRepositoryToken(AgentSyncOrder), useValue: { findOne: jest.fn().mockResolvedValue(null), save: jest.fn() } },
+      { provide: getRepositoryToken(OrderStateEvent), useValue: { create: jest.fn((dto: any) => dto), save: jest.fn() } },
     ],
   };
 }

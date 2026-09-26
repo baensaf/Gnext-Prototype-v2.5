@@ -3802,7 +3802,11 @@
           "DAY_CLOSED": "روز قبلاً بسته شده",
           "STOCK_NEGATIVE": "موجودی زیر صفر",
           "BUSINESS_DATE_DIFFERS": "تاریخ مغایر با ساعت پایان روز",
-          "TABLE_UNKNOWN": "میز در این شعبه نیست"
+          "TABLE_UNKNOWN": "میز در این شعبه نیست",
+          "SNAPPFOOD_DIFFERS": "اقلام اسنپ‌فود با صندوق فرق دارد",
+          "SNAPPFOOD_ACCEPTED_TWICE": "سفارش اسنپ‌فود آنلاین هم پذیرفته شده",
+          "SNAPPFOOD_CANCELLED": "فقط در یک طرف لغو شده",
+          "COURIER_UNKNOWN": "پیک در این شعبه نیست"
         }
       }
     }

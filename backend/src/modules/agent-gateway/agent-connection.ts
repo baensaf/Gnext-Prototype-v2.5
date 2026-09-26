@@ -45,8 +45,8 @@ export interface AgentConnectionDeps {
   minAgentVersion?: string | null;
   /** The newest published build, for `welcome.update` and the minimum version it demands. */
   latestRelease?: () => Promise<{ version: string; min_agent_version: string | null } | null>;
-  /** Today's POS call-number count at the agent's branch, for an offline till's `heartbeat.ack` (§13.9). */
-  callNumbers?: (agent: Agent) => Promise<{ business_date: string; POS: number }>;
+  /** Today's POS and ONLINE call-number counts at the agent's branch, for an offline till's `heartbeat.ack` (§13.9, §17.5). */
+  callNumbers?: (agent: Agent) => Promise<{ business_date: string; POS: number; ONLINE: number }>;
   heartbeatIntervalS?: number;
   handshakeTimeoutMs?: number;
   log?: (message: string) => void;

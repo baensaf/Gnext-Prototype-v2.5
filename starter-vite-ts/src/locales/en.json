@@ -3802,7 +3802,11 @@
           "DAY_CLOSED": "Day already closed",
           "STOCK_NEGATIVE": "Stock below zero",
           "BUSINESS_DATE_DIFFERS": "Dated differently from the cutoff",
-          "TABLE_UNKNOWN": "Table not in this branch"
+          "TABLE_UNKNOWN": "Table not in this branch",
+          "SNAPPFOOD_DIFFERS": "Snappfood's lines differ from the till's",
+          "SNAPPFOOD_ACCEPTED_TWICE": "Snappfood order also accepted online",
+          "SNAPPFOOD_CANCELLED": "Cancelled on one side only",
+          "COURIER_UNKNOWN": "Courier not in this branch"
         }
       }
     }

@@ -2,7 +2,10 @@ import { Inject, Injectable, NotFoundException, BadRequestException, Optional, f
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
+import { AgentSyncOrder } from '../../entities/AgentSyncOrder.entity';
 import { IntegrationLog } from '../../entities/IntegrationLog.entity';
+import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
+import { sameSnappfoodLines } from '../../common/utils/snappfood-order.util';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { Product } from '../../entities/Product.entity';
@@ -64,6 +67,8 @@ export class SimulationService {
     @InjectRepository(PaymentMethod) private readonly paymentMethodRepo: Repository<PaymentMethod>,
     @InjectRepository(CustomerPhone) private readonly customerPhoneRepo: Repository<CustomerPhone>,
     @InjectRepository(CustomerAddress) private readonly customerAddressRepo: Repository<CustomerAddress>,
+    @InjectRepository(AgentSyncOrder) private readonly syncRepo: Repository<AgentSyncOrder>,
+    @InjectRepository(OrderStateEvent) private readonly stateEventRepo: Repository<OrderStateEvent>,
     private readonly customerService: CustomerService,
     private readonly auditWriter: AuditWriter,
     // The acceptance policy lives with orders, and orders tell Snappfood about their
@@ -159,6 +164,10 @@ export class SimulationService {
     const known = orderCode
       ? await this.orderRepo.findOne({ where: { tenant_id: tenantId, order_number: `SNP-${orderCode}` } })
       : null;
+    // The till took this order while the cloud was away (§17.7): Snappfood's record joins it.
+    if (known?.aggregator_match === 'TILL_ONLY' && (statusCode === 56 || statusCode === 54)) {
+      return this.matchTillOrder(tenantId, known, statusCode, payload, 'WEBHOOK', signature, idempotencyKey, corrId);
+    }
     if (known) {
       return this.applySnappfoodStatus(tenantId, known, statusCode, payload, signature, idempotencyKey, corrId);
     }
@@ -1248,6 +1257,99 @@ export class SimulationService {
         },
       ],
     };
+  }
+
+  /**
+   * Snappfood's record of an order the till took while the cloud was away (protocol §17.7),
+   * brought by the webhook or the pull. Snappfood owns the lines and the money, so its lines
+   * replace the till's when they differ (the till's are voided, not deleted), and its money and
+   * customer are applied as for any Snappfood order; its cancel (54) cancels. The branch has
+   * already made the order, so nothing goes to the incoming-order queue, the kitchen or the
+   * printers. A difference is flagged on the till's upload for head office to look at.
+   */
+  async matchTillOrder(
+    tenantId: string,
+    order: OrderHeader,
+    statusCode: number,
+    payload: any,
+    via: 'WEBHOOK' | 'PULL',
+    signature?: string,
+    idempotencyKey?: string,
+    corrId = `corr-snapp-match-${Date.now()}`,
+  ): Promise<SnappfoodWebhookResult> {
+    const lines = this.snappfoodLines(payload);
+    const current = await this.orderItemRepo.find({ where: { tenant_id: tenantId, order_id: order.id, state: 'ACTIVE' } });
+    const same = sameSnappfoodLines(
+      current.map((i) => ({ product_id: i.product_id, product_name: i.product_name, quantity: i.quantity })),
+      lines.map((l) => ({ product_id: l.product_id ?? null, product_name: l.product_name, quantity: l.quantity })),
+    );
+    if (!same) {
+      const earlier = await this.orderItemRepo.count({ where: { tenant_id: tenantId, order_id: order.id } });
+      await this.orderItemRepo.update({ tenant_id: tenantId, order_id: order.id, state: 'ACTIVE' }, { state: 'VOID' });
+      await this.writeSnappfoodLines(tenantId, order.id, lines, earlier + 1);
+    }
+    const fromState = order.state;
+    await this.applySnappfoodMoney(tenantId, order, payload, lines);
+    await this.linkSnappfoodCustomer(tenantId, order, payload, corrId);
+    order.notes = this.describeSnappfoodOrder(payload);
+    const { aggregator_prep_minutes, aggregator_max_extra_minutes } = this.snappfoodTiming(payload);
+    Object.assign(order, { aggregator_prep_minutes, aggregator_max_extra_minutes });
+    const flags = same ? [] : ['SNAPPFOOD_DIFFERS'];
+    if (statusCode === 54 && !['CANCELLED', 'COMPLETED'].includes(order.state)) {
+      this.markCancelled(order);
+      await this.reverseSnappfoodPayments(tenantId, order);
+    }
+    order.aggregator_match = 'MATCHED';
+    order.aggregator_match_at = new Date();
+    await this.orderRepo.save(order);
+
+    await this.stateEventRepo.save(
+      this.stateEventRepo.create({
+        tenant_id: tenantId,
+        order_id: order.id,
+        from_state: fromState,
+        to_state: order.state,
+        action: 'SNAPPFOOD_MATCHED',
+        reason_text: same ? null : "Snappfood's lines replaced the ones typed on the till",
+        occurred_at: new Date(),
+        snapshot: { via, status_code: statusCode, flags },
+      } as Partial<OrderStateEvent>),
+    );
+    // The till's upload is the order's id (§12.4); its flags are what head office reviews.
+    if (flags.length) {
+      const row = await this.syncRepo.findOne({ where: { id: order.id, tenant_id: tenantId } });
+      if (row) {
+        row.flags = [...new Set([...(row.flags || []), ...flags])];
+        row.reviewed_at = null;
+        row.reviewed_by = null;
+        await this.syncRepo.save(row);
+      }
+    }
+
+    const log = await this.logRepo.save(
+      this.logRepo.create({
+        tenant_id: tenantId,
+        provider: 'SNAPPFOOD',
+        event_type: via === 'PULL' ? 'ORDER_PULLED_MATCHED' : 'ORDER_MATCHED',
+        hmac_signature: signature || 'simulated-valid-hmac',
+        idempotency_key: idempotencyKey || `${payload.code || payload.order_code}:${statusCode}`,
+        is_duplicate: false,
+        status: 'SUCCESS',
+        request_payload: payload,
+        response_payload: { order_id: order.id, state: order.state, flags },
+      }),
+    );
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'SYSTEM',
+      action: 'SNAPPFOOD_TILL_ORDER_MATCHED',
+      entityType: 'Order',
+      entityId: order.id,
+      branchId: order.branch_id,
+      correlationId: corrId,
+      afterData: { order_id: order.id, via, status_code: statusCode, flags },
+    });
+    return { simulated: true, correlationId: corrId, success: true, duplicate: false, order, log_id: log.id };
   }
 
   // The order state each Snappfood lifecycle step leaves behind. `status` is the legacy

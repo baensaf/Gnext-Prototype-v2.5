@@ -20,6 +20,9 @@ export type OrderState =
   // because aggregators track a store's rejection rate.
   | 'REJECTED';
 
+/** How far a Snappfood order taken while the cloud was away has got (protocol §17.7). */
+export type AggregatorMatch = 'TILL_ONLY' | 'PULLED' | 'MATCHED';
+
 @Entity('order_header')
 export class OrderHeader {
   @PrimaryGeneratedColumn('uuid')
@@ -190,6 +193,15 @@ export class OrderHeader {
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   aggregator_issue: string;
+
+  // A Snappfood order taken while the cloud was away (protocol §17.7): TILL_ONLY when only the
+  // till's record is in, PULLED when only Snappfood's is, MATCHED once both are; null for one
+  // the webhook brought as usual. The time is when it got there.
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  aggregator_match?: AggregatorMatch | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  aggregator_match_at?: Date | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   placed_at: Date;
