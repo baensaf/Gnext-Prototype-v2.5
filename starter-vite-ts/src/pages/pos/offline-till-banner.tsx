@@ -6,6 +6,8 @@ import { Alert, Button, AlertTitle } from '@mui/material';
 
 import { useCloudUnreachable } from 'src/utils/cloud-reachability';
 
+import { VersionTag } from 'src/components/version-tag';
+
 // ----------------------------------------------------------------------
 
 /** Where the branch agent serves the offline till, on the branch PC (agent-protocol.md §13.13). */
@@ -41,7 +43,9 @@ export function OfflineTillBanner() {
         </Button>
       }
     >
-      <AlertTitle sx={{ fontWeight: 700 }}>{t('pos.offlineTill.title')}</AlertTitle>
+      <AlertTitle sx={{ fontWeight: 700 }}>
+        {t('pos.offlineTill.title')} <VersionTag feature="pos.offlineTill" />
+      </AlertTitle>
       {t('pos.offlineTill.body')}
     </Alert>
   );

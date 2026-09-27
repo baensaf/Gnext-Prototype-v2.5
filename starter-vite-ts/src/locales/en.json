@@ -4136,5 +4136,18 @@
       "noShifts": "No shifts",
       "closedOnly": "Closed by this account"
     }
+  },
+  "versionLabels": {
+    "show": "Show version labels",
+    "hide": "Hide version labels",
+    "off": "Versions",
+    "unlabelled": "Not labelled",
+    "meaning": {
+      "V1": "Ships in Phase 1, version 1",
+      "V2": "Ships in Phase 1, version 2",
+      "V3": "Ships in Phase 1, version 3",
+      "V4": "Ships in Phase 1, version 4",
+      "F": "Future: after Phase 1"
+    }
   }
 }
