@@ -13,6 +13,8 @@ import { useCurrencyCode } from 'src/utils/currency';
 
 import { moadianApi } from 'src/api/moadianApi';
 
+import { VersionTag } from 'src/components/version-tag';
+
 export const TAX_STATUS_COLOR: Record<TaxInvoiceStatus, 'warning' | 'info' | 'success' | 'error'> = {
   QUEUED: 'warning',
   PENDING: 'info',
@@ -126,6 +128,7 @@ export function MoadianOrderPanel({ orderId, orderState }: { orderId: string; or
         <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1 }}>
           <ReceiptLongIcon color="primary" />
           <Typography variant="h6">{t('moadian.orderPanel.title', 'Moadian e-invoice')}</Typography>
+          <VersionTag feature="moadian" />
         </Stack>
         <Stack sx={{ flexDirection: 'row', gap: 1 }}>
           {!loading && !hasOriginal && orderState === 'COMPLETED' && (

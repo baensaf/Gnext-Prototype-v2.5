@@ -1,8 +1,11 @@
-import type { NavSectionProps } from 'src/components/nav-section';
+import type { NavSectionProps, NavItemDataProps } from 'src/components/nav-section';
 
 import { useTranslation } from 'react-i18next';
 
+import Box from '@mui/material/Box';
+
 import { CONFIG } from 'src/global-config';
+import { pageLabel } from 'src/config/version-labels';
 import { useWorkspaceScope } from 'src/contexts/branch-context';
 import { canReachPath, fitsWorkspace } from 'src/config/role-access';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
@@ -10,6 +13,7 @@ import { useIncomingOrders } from 'src/contexts/incoming-orders-context';
 
 import { Label } from 'src/components/label';
 import { SvgColor } from 'src/components/svg-color';
+import { VersionTag, useVersionLabels } from 'src/components/version-tag';
 
 const icon = (name: string) => (
   <SvgColor src={`${CONFIG.assetsDir}/assets/icons/navbar/${name}.svg`} />
@@ -48,6 +52,24 @@ export function useNavData(): NavSectionProps['data'] {
   const visible = (path: string) =>
     canReachPath(role, path, isHeadOffice) && fitsWorkspace(path, workspace);
   const incomingCount = useIncomingOrders()?.orders.length ?? 0;
+  const showVersions = useVersionLabels((s) => s.show);
+
+  // A labelled page carries its Phase 1 version beside its menu entry, after any badge it
+  // already has. Groups are left alone: their entries carry their own.
+  const withVersion = (item: NavItemDataProps): NavItemDataProps => {
+    const value = showVersions && !item.children ? pageLabel(item.path) : undefined;
+    if (!value || Array.isArray(item.info)) return item;
+    const tag = <VersionTag label={value} />;
+    const info = item.info ? (
+      <Box component="span" sx={{ display: 'inline-flex', gap: 0.5 }}>
+        {item.info}
+        {tag}
+      </Box>
+    ) : (
+      tag
+    );
+    return { ...item, info };
+  };
 
   const sections: NavSectionProps['data'] = [
     {
@@ -339,24 +361,24 @@ export function useNavData(): NavSectionProps['data'] {
         .map((item) => {
           // An open parent can still have a child the role may not open — chain reports
           // sit under the same menu as the branch's own.
-          if (!item.children) return visible(item.path) ? item : null;
+          if (!item.children) return visible(item.path) ? withVersion(item) : null;
 
           const children = item.children.filter((child) => visible(child.path));
           if (!children.length) {
-            return visible(item.path) ? { ...item, children: undefined } : null;
+            return visible(item.path) ? withVersion({ ...item, children: undefined }) : null;
           }
           // One survivor is not a menu. A cashier's shifts group is left holding a single
           // entry once Business Days goes, and a disclosure triangle that reveals one link
           // costs a click and buys nothing — so it becomes that link, under its own name.
           if (children.length === 1) {
-            return { ...item, children: undefined, title: children[0].title, path: children[0].path };
+            return withVersion({ ...item, children: undefined, title: children[0].title, path: children[0].path });
           }
           // A group survives on its children. When its heading is head office's, a branch
           // manager still needs the entries they can open underneath it (Availability under
           // Catalog) — judging the group by its heading alone would take the whole menu away.
           return {
             ...item,
-            children,
+            children: children.map(withVersion),
             path: visible(item.path) ? item.path : children[0].path,
           };
         })

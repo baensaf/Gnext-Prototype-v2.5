@@ -46,6 +46,7 @@ import { useCurrencyCode } from 'src/utils/currency';
 
 import { usePosSource, PosFeatureGate } from 'src/contexts/pos-source';
 
+import { VersionTag } from 'src/components/version-tag';
 import { toast, showErrorToast } from 'src/components/snackbar';
 import { UnconfirmedChargeActions } from 'src/components/payment-terminal/unconfirmed-charge-actions';
 
@@ -430,6 +431,9 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                           {paymentMethods.map((m) => (
                             <MenuItem key={m.id} value={m.id}>
                               {m.name} ({m.kind || m.code})
+                              {m.kind === 'CUSTOMER_CREDIT' && (
+                                <VersionTag feature="pos.customerCredit" sx={{ ml: 1 }} />
+                              )}
                             </MenuItem>
                           ))}
                         </Select>

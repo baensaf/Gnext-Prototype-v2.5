@@ -86,6 +86,7 @@ import { useCurrencyCode, useCurrencyLabel } from 'src/utils/currency';
 import { useBranchContext } from 'src/contexts/branch-context';
 import { usePosSource, PosFeatureGate } from 'src/contexts/pos-source';
 
+import { VersionTag } from 'src/components/version-tag';
 import { CheckoutModal } from 'src/components/CheckoutModal';
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { toast, showErrorToast } from 'src/components/snackbar';
@@ -2110,6 +2111,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
                   {orderType === 'DINE_IN' && (
                     <>
+                      <VersionTag feature="pos.tableAssignment" />
                       <Tooltip title={tableNumber ? `Dining Table: ${tableNumber}` : 'Select Dining Table'}>
                         <IconButton
                           color="warning"
@@ -2437,6 +2439,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
               {/* Compact Coupon Code & Manual Discount Bar */}
               <Stack direction="row" spacing={1} sx={{ mb: 1.25, alignItems: 'center' }}>
+                <VersionTag feature="pos.coupon" />
                 <PosFeatureGate off={!features.discounts} grow>
                 <TextField
                   size="small"

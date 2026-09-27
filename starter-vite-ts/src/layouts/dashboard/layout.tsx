@@ -11,6 +11,7 @@ import { iconButtonClasses } from '@mui/material/IconButton';
 
 import { Logo } from 'src/components/logo';
 import { useSettingsContext } from 'src/components/settings';
+import { VersionLabelsButton } from 'src/components/version-tag';
 
 import { NavMobile } from './nav-mobile';
 import { VerticalDivider } from './content';
@@ -132,6 +133,9 @@ export function DashboardLayout({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0, sm: 0.75 } }}>
           {/** @slot Searchbar */}
           <Searchbar data={navData} extraItems={settingsSearchItems} />
+
+          {/** @slot Which Phase 1 version the page on screen ships in */}
+          <VersionLabelsButton />
 
           {/** @slot Language popover */}
           <LanguagePopover

@@ -29,6 +29,8 @@ import { useAuthStore } from 'src/store/useAuthStore';
 import { usePosSource } from 'src/contexts/pos-source';
 import { isApproverRole } from 'src/config/role-access';
 
+import { VersionTag } from 'src/components/version-tag';
+
 /** The reasons a register picks from; OTHER asks for a few words. */
 export const STOP_REASONS = ['SOLD_OUT', 'INGREDIENT_MISSING', 'EQUIPMENT_DOWN', 'QUALITY', 'OTHER'] as const;
 
@@ -129,7 +131,11 @@ export function PosStopDialog({ product, branchId, availabilities, onClose, onDo
       size="small"
       type="password"
       label={t('pos.stop.approverPin')}
-      helperText={t('pos.stop.approverPinHelp')}
+      helperText={
+        <>
+          {t('pos.stop.approverPinHelp')} <VersionTag feature="pos.stop.approverPin" />
+        </>
+      }
       value={pin}
       onChange={(e) => setPin(e.target.value)}
       slotProps={{ htmlInput: { inputMode: 'numeric', autoComplete: 'off' } }}
@@ -176,7 +182,7 @@ export function PosStopDialog({ product, branchId, availabilities, onClose, onDo
             <>
               <div>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  {t('pos.stop.why')}
+                  {t('pos.stop.why')} <VersionTag feature="pos.stop.reason" />
                 </Typography>
                 <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
                   {STOP_REASONS.map((r) => (
@@ -201,7 +207,8 @@ export function PosStopDialog({ product, branchId, availabilities, onClose, onDo
                   />
                 )}
               </div>
-              <RadioGroup value={until} onChange={(e) => setUntil(e.target.value as 'NEXT_SHIFT' | 'FURTHER_NOTICE')}>
+              <VersionTag feature="pos.stop.duration" sx={{ alignSelf: 'flex-start', mb: -1.5 }} />
+              <RadioGroup value={until}onChange={(e) => setUntil(e.target.value as 'NEXT_SHIFT' | 'FURTHER_NOTICE')}>
                 <FormControlLabel value="NEXT_SHIFT" control={<Radio />} label={t('pos.stop.untilNextShift')} />
                 <FormControlLabel
                   value="FURTHER_NOTICE"
