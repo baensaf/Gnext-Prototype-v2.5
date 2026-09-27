@@ -3,6 +3,7 @@ import type {} from '@mui/x-tree-view/themeAugmentation';
 import type {} from '@mui/x-data-grid/themeAugmentation';
 import type {} from '@mui/x-date-pickers/themeAugmentation';
 import type {} from '@mui/material/themeCssVarsAugmentation';
+import type {} from '@mui/x-data-grid-premium/themeAugmentation';
 import type { DeepPartial } from './types';
 import type { MixinsExtend } from './core/mixins';
 import type { OpacityExtend } from './core/opacity';

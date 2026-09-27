@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import { BadRequestException, INestApplication } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
 import { Tenant } from '../src/entities/Tenant.entity';
@@ -10,7 +10,7 @@ import { Product } from '../src/entities/Product.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { OrderItem } from '../src/entities/OrderItem.entity';
 import { OrderService } from '../src/modules/order/order.service';
-import { csvField, lifecycleGroupOf, normaliseDigits } from '../src/modules/order/order-list';
+import { csvField, lifecycleGroupOf, normaliseDigits, parseGridFilters } from '../src/modules/order/order-list';
 import { deleteTenantData } from './utils/tenant-teardown';
 
 // The Orders page asks the server for one page at a time. It used to fetch the default 50
@@ -156,6 +156,74 @@ describe('order list (PostgreSQL)', () => {
     const ids = some.data.map((o: any) => o.id);
     const found = await orders.getOrders(tenantId, { ids: [...ids, 'not-a-uuid'].join(',') });
     expect(found.data.map((o: any) => o.id).sort()).toEqual([...ids].sort());
+  });
+
+  describe("the grid's column filters", () => {
+    const filters = (items: any[], logic?: 'and' | 'or') => JSON.stringify({ items, ...(logic ? { logic } : {}) });
+    const list = (items: any[], extra: any = {}, logic?: 'and' | 'or') =>
+      orders.getOrders(tenantId, { branchId: branchA, ...extra, filters: filters(items, logic) });
+
+    it('filters by channel, type, order number, customer, item and amount', async () => {
+      expect((await list([{ field: 'channel', operator: 'is', value: 'KIOSK' }])).total).toBe(1);
+      expect((await list([{ field: 'channel', operator: 'not', value: 'POS' }])).total).toBe(2);
+      expect((await list([{ field: 'order_type', operator: 'isAnyOf', value: ['AGGREGATOR', 'DELIVERY'] }])).total).toBe(1);
+      expect((await list([{ field: 'customer_name', operator: 'contains', value: 'ahmadi' }])).data[0].notes).toBe('first ever');
+      // Staff type the 09 form; the filter also finds the same mobile, and reads Persian digits.
+      expect((await list([{ field: 'customer_name', operator: 'contains', value: '۰۹۱۲۱۲۳' }])).total).toBe(1);
+      expect((await list([{ field: 'customer_name', operator: 'isNotEmpty' }])).total).toBe(1);
+      expect((await list([{ field: 'customer_name', operator: 'isEmpty' }])).total).toBe(65);
+      expect((await list([{ field: 'items', operator: 'contains', value: 'PIZ' }])).total).toBe(1);
+      expect((await list([{ field: 'grand_total', operator: '>=', value: '99000' }])).total).toBe(1);
+      const numbered = (await orders.getOrders(tenantId, { branchId: branchA, limit: '1' })).data[0].order_number;
+      expect((await list([{ field: 'order_number', operator: 'equals', value: numbered }])).total).toBe(1);
+    });
+
+    it('takes % and _ as the characters they are', async () => {
+      expect((await list([{ field: 'order_number', operator: 'contains', value: '%' }])).total).toBe(0);
+      expect((await list([{ field: 'items', operator: 'contains', value: '_' }])).total).toBe(0);
+    });
+
+    it('combines with and by default, or when asked, and never outside the branch or tab', async () => {
+      const kiosk = { field: 'channel', operator: 'is', value: 'KIOSK' };
+      const aggregator = { field: 'order_type', operator: 'is', value: 'AGGREGATOR' };
+      expect((await list([kiosk, aggregator])).total).toBe(0);
+      expect((await list([kiosk, aggregator], {}, 'or')).total).toBe(2);
+      // "Or" does not reach past the tab, the branch or the tenant.
+      expect((await list([kiosk, aggregator], { group: 'WAITING' }, 'or')).total).toBe(1);
+      const branchBOnly = await orders.getOrders(tenantId, {
+        branchId: branchB,
+        filters: filters([{ field: 'branch_id', operator: 'is', value: branchA }, kiosk], 'or'),
+      });
+      expect(branchBOnly.total).toBe(0);
+    });
+
+    it('lets open orders through a date filter on the list, but not in the export', async () => {
+      const onThe20th = [{ field: 'placed_at', operator: 'between', value: [day(20, 0).toISOString(), day(21, 0).toISOString()] }];
+      const listed = await orders.getOrders(tenantId, { branchId: branchB, filters: filters(onThe20th), counts: '1' });
+      expect(listed.counts).toMatchObject({ ALL: 2, OPEN: 2 });
+      const csv = await orders.exportOrdersCsv(tenantId, { branchId: branchB, filters: filters(onThe20th) });
+      expect(csv.slice(1).trim().split('\r\n')).toHaveLength(2);
+      // Only a start: everything from the 20th on.
+      const since = [{ field: 'placed_at', operator: 'between', value: [day(20, 0).toISOString(), null] }];
+      expect((await list(since)).total).toBe(5);
+    });
+
+    it('ignores a filter still waiting for its value', async () => {
+      expect((await list([{ field: 'order_number', operator: 'contains', value: '' }, { field: 'channel', operator: 'isAnyOf', value: [] }])).total).toBe(66);
+    });
+
+    it('refuses fields, operators and values it does not know', () => {
+      expect(() => parseGridFilters('{not json')).toThrow(BadRequestException);
+      expect(() => parseGridFilters(filters([{ field: 'notes', operator: 'contains', value: 'x' }]))).toThrow(/cannot be filtered by notes/);
+      expect(() => parseGridFilters(filters([{ field: 'channel', operator: 'contains', value: 'x' }]))).toThrow(/Unknown filter/);
+      expect(() => parseGridFilters(filters([{ field: 'channel', operator: '__proto__' }]))).toThrow(/Unknown filter/);
+      expect(() => parseGridFilters(filters(Array.from({ length: 13 }, () => ({ field: 'channel', operator: 'is' }))))).toThrow(/At most 12/);
+      return Promise.all([
+        expect(list([{ field: 'grand_total', operator: '>', value: '1; DROP TABLE order_header' }])).rejects.toThrow(/Not a number/),
+        expect(list([{ field: 'branch_id', operator: 'is', value: 'not-a-uuid' }])).rejects.toThrow(/Not a value/),
+        expect(list([{ field: 'placed_at', operator: 'between', value: ['yesterday', null] }])).rejects.toThrow(/Not a date/),
+      ]);
+    });
   });
 
   it('groups, reads digits and quotes CSV the same way everywhere', () => {

@@ -110,8 +110,24 @@ export interface OrderListRow extends OrderHeader {
   delivery_address: string | null;
 }
 
+/**
+ * One of the grid's column filters, as the server reads it (`order-list.ts`). `placed_at` only
+ * takes `between`, with `[from, to]` instants the browser works out on the business clock.
+ */
+export interface OrderGridFilterItem {
+  field: string;
+  operator: string;
+  value?: unknown;
+}
+
+export interface OrderGridFilters {
+  items: OrderGridFilterItem[];
+  logic?: 'and' | 'or';
+}
+
 /** The filters the order book understands; everything runs on the server. */
 export interface OrderListQuery {
+  filters?: OrderGridFilters;
   branchId?: string;
   group?: OrderLifecycle | 'ALL';
   from?: string;
@@ -151,6 +167,7 @@ const listParams = (query: OrderListQuery) => ({
   page: query.page,
   limit: query.limit,
   counts: query.counts ? '1' : undefined,
+  filters: query.filters?.items.length ? JSON.stringify(query.filters) : undefined,
 });
 
 /** One of Snappfood's reasons a store may give for turning an order down. */

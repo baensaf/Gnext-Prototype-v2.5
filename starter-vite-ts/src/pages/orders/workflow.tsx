@@ -1,4 +1,4 @@
-import type { GridColDef, GridSortModel } from '@mui/x-data-grid';
+import type { GridColDef, GridSortModel, GridFilterModel } from '@mui/x-data-grid-premium';
 import type { RefundRecord } from 'src/api/refundApi';
 import type { ReasonCode } from 'src/api/settingsApi';
 import type { ReceiptData, PaymentRecord } from 'src/api/paymentApi';
@@ -14,7 +14,6 @@ import CloseIcon from '@mui/icons-material/Close';
 import PrintIcon from '@mui/icons-material/Print';
 import CancelIcon from '@mui/icons-material/Cancel';
 import PersonIcon from '@mui/icons-material/Person';
-import SearchIcon from '@mui/icons-material/Search';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -62,7 +61,6 @@ import {
   DialogContent,
   DialogActions,
   TableContainer,
-  InputAdornment,
   CircularProgress,
 } from '@mui/material';
 
@@ -98,7 +96,18 @@ import { CheckoutModal } from 'src/components/CheckoutModal';
 import { ServerDataGrid } from 'src/components/server-data-grid';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 import { OrderEditDialog } from 'src/components/orders/OrderEditDialog';
-import { CalendarDateField } from 'src/components/calendar-date-field/calendar-date-field';
+
+import {
+  textFilters,
+  numberFilters,
+  selectFilters,
+  toServerFilters,
+  placedAtFilters,
+  decodeFilterModel,
+  encodeFilterModel,
+  legacyFilterModel,
+  DEFAULT_FILTER_MODEL,
+} from './order-grid-filters';
 
 // An order is waiting, open, held, completed, refunded or cancelled. How far the kitchen or
 // the courier has got is shown beside that rather than as a stage of its own: most branches
@@ -109,7 +118,6 @@ const OPEN_STATUSES = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'KITCHEN_PREPARING
 
 type Lifecycle = OrderLifecycle;
 type TabKey = Lifecycle | 'ALL';
-type RangeKey = 'today' | 'yesterday' | '7d' | '30d' | 'all' | 'custom';
 
 type ReprintDocumentType = 'CUSTOMER_RECEIPT' | 'KITCHEN_TICKET' | 'GUEST_BILL' | 'COURIER_SLIP';
 
@@ -123,14 +131,22 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'ALL', label: 'all' },
 ];
 
-const RANGES: RangeKey[] = ['today', 'yesterday', '7d', '30d', 'all', 'custom'];
 const ORDER_TYPES = ['DINE_IN', 'TAKEAWAY', 'PICKUP', 'DELIVERY', 'AGGREGATOR'];
 const CHANNELS = ['POS', 'KIOSK', 'ONLINE', 'AGGREGATOR'];
 const PAGE_SIZES = [25, 50, 100];
 const SORTABLE = ['placed_at', 'grand_total', 'outstanding_total', 'order_number'] as const;
 
 // Defaults are left out of the address bar, so a plain /app/orders is today's open orders.
-const DEFAULTS = { tab: 'OPEN', range: 'today', page: '0', size: '25', sort: 'placed_at', dir: 'desc' };
+const DEFAULTS = {
+  tab: 'OPEN',
+  f: encodeFilterModel(DEFAULT_FILTER_MODEL),
+  page: '0',
+  size: '25',
+  sort: 'placed_at',
+  dir: 'desc',
+};
+// What the address bar held before the grid's own filters; dropped once the filters change.
+const LEGACY_FILTER_PARAMS = { range: null, from: null, to: null, type: null, channel: null };
 
 const lifecycleOf = (order: { status: string; refunded_total?: string | null }): Lifecycle => {
   const { status } = order;
@@ -186,35 +202,6 @@ const deliveryStateKeyOf = (state: string | null | undefined): string | null => 
   }
 };
 
-/** A business day (YYYY-MM-DD) moved by `days`, on the restaurants' clock. */
-const shiftDay = (day: string, days: number) =>
-  businessDate(new Date(new Date(`${day}T12:00:00+03:30`).getTime() + days * 86_400_000));
-
-/** Midnight at the start of a business day in Tehran, which keeps no daylight saving. */
-const startOfDay = (day: string) => `${day}T00:00:00+03:30`;
-
-/** The placed-at window a date choice stands for; `to` is exclusive. */
-const rangeBounds = (range: RangeKey, from: string, to: string): { from?: string; to?: string } => {
-  const today = businessToday();
-  switch (range) {
-    case 'today':
-      return { from: startOfDay(today), to: startOfDay(shiftDay(today, 1)) };
-    case 'yesterday':
-      return { from: startOfDay(shiftDay(today, -1)), to: startOfDay(today) };
-    case '7d':
-      return { from: startOfDay(shiftDay(today, -6)), to: startOfDay(shiftDay(today, 1)) };
-    case '30d':
-      return { from: startOfDay(shiftDay(today, -29)), to: startOfDay(shiftDay(today, 1)) };
-    case 'custom':
-      return {
-        from: from ? startOfDay(from) : undefined,
-        to: to ? startOfDay(shiftDay(to, 1)) : undefined,
-      };
-    default:
-      return {};
-  }
-};
-
 export function OrdersWorkflowPage() {
   const { t } = useTranslation();
   const currency = useCurrencyCode();
@@ -236,11 +223,15 @@ export function OrdersWorkflowPage() {
   const param = (key: keyof typeof DEFAULTS | string, fallback = '') =>
     searchParams.get(key) || (DEFAULTS as Record<string, string>)[key] || fallback;
   const tab = param('tab') as TabKey;
-  const range = (RANGES.includes(param('range') as RangeKey) ? param('range') : 'today') as RangeKey;
-  const customFrom = param('from');
-  const customTo = param('to');
-  const typeFilter = param('type');
-  const channelFilter = param('channel');
+  // The grid's column filters, under `f`. A link from before them still opens its filters.
+  const filterParam = searchParams.get('f');
+  const legacyParams = Object.keys(LEGACY_FILTER_PARAMS)
+    .map((key) => `${key}=${encodeURIComponent(searchParams.get(key) || '')}`)
+    .join('&');
+  const filterModel = useMemo<GridFilterModel>(
+    () => decodeFilterModel(filterParam) ?? legacyFilterModel(new URLSearchParams(legacyParams)) ?? DEFAULT_FILTER_MODEL,
+    [filterParam, legacyParams]
+  );
   const query = param('q');
   const page = Math.max(0, Number(param('page', '0')) || 0);
   const pageSize = PAGE_SIZES.includes(Number(param('size'))) ? Number(param('size')) : 25;
@@ -273,7 +264,6 @@ export function OrdersWorkflowPage() {
   const [counts, setCounts] = useState<Partial<Record<TabKey, number>>>({});
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const [searchText, setSearchText] = useState(query);
   const [reasonCodes, setReasonCodes] = useState<ReasonCode[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -511,18 +501,19 @@ export function OrdersWorkflowPage() {
     }
   };
 
+  // A filter still waiting for its value changes the model but not what the server is asked.
+  const serverFilters = JSON.stringify(toServerFilters(filterModel) ?? null);
+
   const listQuery = useMemo<OrderListQuery>(
     () => ({
       branchId: branchId || undefined,
       group: tab,
-      ...rangeBounds(range, customFrom, customTo),
-      type: typeFilter || undefined,
-      channel: channelFilter || undefined,
+      filters: JSON.parse(serverFilters) ?? undefined,
       q: query || undefined,
       sort: sortField,
       dir: sortDir,
     }),
-    [branchId, tab, range, customFrom, customTo, typeFilter, channelFilter, query, sortField, sortDir]
+    [branchId, tab, serverFilters, query, sortField, sortDir]
   );
 
   // Answers can come back out of order when filters change quickly; only the latest counts.
@@ -559,17 +550,6 @@ export function OrdersWorkflowPage() {
   // An order placed at the till, paid, sent or finished anywhere in the branch shows up here
   // without a refresh. The list re-reads in place, keeping the page and filters.
   useLiveRefresh(['orders'], () => loadData(true), branchId);
-
-  // The search box writes to the address bar once typing pauses.
-  useEffect(() => {
-    setSearchText(query);
-  }, [query]);
-
-  useEffect(() => {
-    if (searchText === query) return undefined;
-    const timer = setTimeout(() => setParams({ q: searchText || null }), 350);
-    return () => clearTimeout(timer);
-  }, [searchText, query, setParams]);
 
   const loadDrawerDetails = useCallback(
     async (orderId: string) => {
@@ -945,7 +925,7 @@ export function OrdersWorkflowPage() {
       field: 'order_number',
       headerName: t('orders.table.orderNumber'),
       width: 210,
-      filterable: false,
+      filterOperators: textFilters('order_number'),
       renderCell: ({ row }) => (
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
           {row.call_number ? <Chip label={row.call_number} size="small" color="primary" sx={{ fontWeight: 800 }} /> : null}
@@ -967,7 +947,9 @@ export function OrdersWorkflowPage() {
             headerName: t('orders.table.branch', 'Branch'),
             width: 140,
             sortable: false,
-            filterable: false,
+            type: 'singleSelect',
+            valueOptions: branches.map((b) => ({ value: b.id, label: b.name })),
+            filterOperators: selectFilters('branch_id'),
             renderCell: ({ row }) => branchNameById.get(row.branch_id) || row.branch_id,
           } as GridColDef<OrderListRow>,
         ]
@@ -975,8 +957,8 @@ export function OrdersWorkflowPage() {
     {
       field: 'placed_at',
       headerName: t('orders.table.placedAt'),
-      width: 130,
-      filterable: false,
+      width: 190,
+      filterOperators: placedAtFilters(t),
       renderCell: ({ row }) => (
         <Typography variant="caption" dir="ltr">
           {formatPlaced(row.placed_at)}
@@ -986,17 +968,21 @@ export function OrdersWorkflowPage() {
     {
       field: 'channel',
       headerName: t('orders.table.channel'),
-      width: 110,
+      width: 130,
       sortable: false,
-      filterable: false,
+      type: 'singleSelect',
+      valueOptions: CHANNELS.map((channel) => ({ value: channel, label: getChannelLabel(channel) })),
+      filterOperators: selectFilters('channel'),
       renderCell: ({ row }) => <Chip label={getChannelLabel(row.channel)} size="small" variant="outlined" />,
     },
     {
       field: 'order_type',
       headerName: t('orders.table.type'),
-      width: 110,
+      width: 130,
       sortable: false,
-      filterable: false,
+      type: 'singleSelect',
+      valueOptions: ORDER_TYPES.map((type) => ({ value: type, label: getOrderTypeLabel(type) })),
+      filterOperators: selectFilters('order_type'),
       renderCell: ({ row }) => (
         <Chip color={getOrderTypeColor(row.order_type) as any} label={getOrderTypeLabel(row.order_type)} size="small" />
       ),
@@ -1016,7 +1002,8 @@ export function OrdersWorkflowPage() {
       minWidth: 150,
       flex: 1,
       sortable: false,
-      filterable: false,
+      // Name or mobile; "is empty" is a walk-in.
+      filterOperators: textFilters('customer_name'),
       renderCell: ({ row }) => (
         <Box>
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -1036,7 +1023,7 @@ export function OrdersWorkflowPage() {
       minWidth: 150,
       flex: 1,
       sortable: false,
-      filterable: false,
+      filterOperators: textFilters('items'),
       renderCell: ({ row }) => {
         const items = activeItems(row);
         const count = items.reduce((sum, it) => sum + Number(it.quantity || 0), 0);
@@ -1065,7 +1052,8 @@ export function OrdersWorkflowPage() {
       width: 140,
       align: 'right',
       headerAlign: 'right',
-      filterable: false,
+      type: 'number',
+      filterOperators: numberFilters('grand_total'),
       renderCell: ({ row }) => (
         <Typography variant="body2" sx={{ color: 'primary.main', fontWeight: 700 }}>
           <span dir="ltr">{MoneyUtil.formatCurrency(row.total_amount || row.grand_total)} {currency}</span>
@@ -1078,7 +1066,9 @@ export function OrdersWorkflowPage() {
       width: 150,
       align: 'right',
       headerAlign: 'right',
-      filterable: false,
+      // Filters on what is still due.
+      type: 'number',
+      filterOperators: numberFilters('outstanding_total'),
       renderCell: ({ row }) => renderPayment(row),
     },
     {
@@ -1134,6 +1124,11 @@ export function OrdersWorkflowPage() {
     },
   ];
 
+  // The toolbar's search box is the `q` search, over order and call numbers, customers, notes and items.
+  const gridFilterModel = useMemo<GridFilterModel>(
+    () => ({ ...filterModel, quickFilterValues: query ? [query] : [] }),
+    [filterModel, query]
+  );
   const sortModel = useMemo<GridSortModel>(() => [{ field: sortField || 'placed_at', sort: sortDir }], [sortField, sortDir]);
   const menuPrimary = menuOrder && !readOnly ? primaryActionOf(menuOrder) : null;
 
@@ -1183,106 +1178,14 @@ export function OrdersWorkflowPage() {
         </Alert>
       )}
 
-      {/* Filters: which orders (tab), when, what kind, from where, and a search over all of them */}
+      {/* Which orders. The grid's toolbar searches, and its header row filters each column. */}
       <Card sx={{ borderRadius: 3, boxShadow: 2, mb: 3 }}>
         <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-          <Tabs
-            onChange={(_, val) => setParams({ tab: val })}
-            sx={{ minHeight: 40, mb: 2 }}
-            value={tab}
-            variant="scrollable"
-          >
+          <Tabs onChange={(_, val) => setParams({ tab: val })} sx={{ minHeight: 40 }} value={tab} variant="scrollable">
             {TABS.map(({ key, label }) => (
               <Tab key={key} label={t(`orders.tabs.${label}`, { count: counts[key] ?? 0 })} value={key} />
             ))}
           </Tabs>
-
-          <Stack direction={{ md: 'row', xs: 'column' }} spacing={1.5} sx={{ alignItems: { md: 'center', xs: 'stretch' }, flexWrap: 'wrap' }}>
-            <TextField
-              label={t('orders.filters.date')}
-              onChange={(e) => setParams({ range: e.target.value, from: null, to: null })}
-              select
-              size="small"
-              sx={{ minWidth: 150 }}
-              value={range}
-            >
-              {RANGES.map((key) => (
-                <MenuItem key={key} value={key}>
-                  {t(`orders.filters.ranges.${key}`)}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            {range === 'custom' && (
-              <>
-                <CalendarDateField
-                  label={t('orders.filters.from')}
-                  onChange={(e) => setParams({ from: e.target.value || null })}
-                  size="small"
-                  sx={{ width: { md: 170, xs: '100%' } }}
-                  value={customFrom}
-                />
-                <CalendarDateField
-                  label={t('orders.filters.to')}
-                  onChange={(e) => setParams({ to: e.target.value || null })}
-                  size="small"
-                  sx={{ width: { md: 170, xs: '100%' } }}
-                  value={customTo}
-                />
-              </>
-            )}
-
-            <TextField
-              label={t('orders.table.type')}
-              onChange={(e) => setParams({ type: e.target.value || null })}
-              select
-              size="small"
-              sx={{ minWidth: 140 }}
-              value={typeFilter}
-            >
-              <MenuItem value="">{t('orders.filters.any')}</MenuItem>
-              {ORDER_TYPES.map((type) => (
-                <MenuItem key={type} value={type}>
-                  {getOrderTypeLabel(type)}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <TextField
-              label={t('orders.table.channel')}
-              onChange={(e) => setParams({ channel: e.target.value || null })}
-              select
-              size="small"
-              sx={{ minWidth: 140 }}
-              value={channelFilter}
-            >
-              <MenuItem value="">{t('orders.filters.any')}</MenuItem>
-              {CHANNELS.map((channel) => (
-                <MenuItem key={channel} value={channel}>
-                  {getChannelLabel(channel)}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <Box sx={{ flexGrow: 1 }} />
-
-            <TextField
-              onChange={(e) => setSearchText(e.target.value)}
-              placeholder={t('orders.searchPlaceholder')}
-              size="small"
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon color="action" fontSize="small" />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-              sx={{ width: { md: 320, xs: '100%' } }}
-              value={searchText}
-            />
-          </Stack>
         </CardContent>
       </Card>
 
@@ -1290,7 +1193,18 @@ export function OrdersWorkflowPage() {
         columns={columns}
         density="compact"
         emptyTitle={t('orders.table.empty')}
-        emptyDescription={range !== 'all' ? t('orders.table.emptyHint') : undefined}
+        emptyDescription={filterModel.items.length ? t('orders.table.emptyHint') : undefined}
+        filterModel={gridFilterModel}
+        headerFilters
+        onFilterModelChange={(model) => {
+          // The grid also reports the model it was given; only a real change resets the page.
+          const next = encodeFilterModel(model);
+          const nextQuery = (model.quickFilterValues ?? []).join(' ').trim();
+          const changes: Record<string, string | null> = {};
+          if (next !== encodeFilterModel(filterModel)) Object.assign(changes, { f: next }, LEGACY_FILTER_PARAMS);
+          if (nextQuery !== query) changes.q = nextQuery || null;
+          if (Object.keys(changes).length) setParams(changes);
+        }}
         getRowHeight={() => 'auto'}
         height={680}
         loading={loading}
@@ -1309,7 +1223,7 @@ export function OrdersWorkflowPage() {
         paginationModel={{ page, pageSize }}
         rowCount={total}
         rows={rows}
-        showToolbar={false}
+        quickFilterPlaceholder={t('orders.searchPlaceholder')}
         sortModel={sortModel}
         sx={{
           borderRadius: 3,

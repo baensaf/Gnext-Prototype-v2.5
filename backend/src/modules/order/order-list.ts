@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { SelectQueryBuilder } from 'typeorm';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 
@@ -132,6 +133,8 @@ export function applyOrderFilters(
   // Only orders that took money, for choosing one to refund.
   if (query.paid === '1' || query.paid === 'true') qb.andWhere('o.paid_total > 0');
 
+  applyGridFilters(qb, parseGridFilters(query.filters), currentAnyDate);
+
   if (query.ids) {
     const ids = String(query.ids).split(',').map((id) => id.trim()).filter((id) => UUID_PATTERN.test(id));
     qb.andWhere(ids.length ? 'o.id IN (:...ids)' : '1 = 0', { ids });
@@ -141,15 +144,12 @@ export function applyOrderFilters(
   if (q) {
     const like = `%${q}%`;
     const otherPhone = alternatePhonePrefix(q);
-    const phoneMatch = otherPhone ? ' OR c.mobile ILIKE :phoneLike OR c.phone ILIKE :phoneLike' : '';
     const clauses = [
       'o.order_number ILIKE :like',
       'o.notes ILIKE :like',
       'o.table_number ILIKE :like',
-      `EXISTS (SELECT 1 FROM customer c WHERE c.id = o.customer_id AND c.tenant_id = o.tenant_id
-        AND (concat_ws(' ', c.first_name, c.last_name) ILIKE :like OR c.full_name ILIKE :like
-             OR c.mobile ILIKE :like OR c.phone ILIKE :like${phoneMatch}))`,
-      `EXISTS (SELECT 1 FROM order_item i WHERE i.order_id = o.id AND i.product_name ILIKE :like)`,
+      customerMatchSql('like', otherPhone ? 'phoneLike' : null),
+      itemMatchSql('like'),
     ];
     // A Snappfood order keeps its customer's number in the notes, in the +98 form.
     if (otherPhone) clauses.push('o.notes ILIKE :phoneLike');
@@ -161,6 +161,200 @@ export function applyOrderFilters(
     }
     qb.andWhere(`(${clauses.join(' OR ')})`, params);
   }
+}
+
+/** An order whose customer's name, mobile or phone matches `:like` (or the other mobile spelling). */
+function customerMatchSql(likeParam: string, phoneParam: string | null): string {
+  const phoneMatch = phoneParam ? ` OR c.mobile ILIKE :${phoneParam} OR c.phone ILIKE :${phoneParam}` : '';
+  return `EXISTS (SELECT 1 FROM customer c WHERE c.id = o.customer_id AND c.tenant_id = o.tenant_id
+        AND (concat_ws(' ', c.first_name, c.last_name) ILIKE :${likeParam} OR c.full_name ILIKE :${likeParam}
+             OR c.mobile ILIKE :${likeParam} OR c.phone ILIKE :${likeParam}${phoneMatch}))`;
+}
+
+/** An order with an item whose name matches `:like`. */
+function itemMatchSql(likeParam: string): string {
+  return `EXISTS (SELECT 1 FROM order_item i WHERE i.order_id = o.id AND i.product_name ILIKE :${likeParam})`;
+}
+
+/**
+ * The grid's own column filters (the header filters and filter panel of MUI X DataGrid Pro),
+ * sent as `filters={"items":[{"field","operator","value"}],"logic":"and"|"or"}`.
+ *
+ * Only the fields and operators below are understood. An unknown one is refused rather than
+ * skipped: a list that quietly ignores a filter reads as if it had applied it. An item with no
+ * value yet (the user picked "contains" and has not typed) filters nothing, as in the grid.
+ */
+export interface GridFilterItem {
+  field: string;
+  operator: string;
+  value?: unknown;
+}
+
+export interface GridFilters {
+  items: GridFilterItem[];
+  logic: 'and' | 'or';
+}
+
+/** More conditions than anyone builds by hand; a cap on what one request can make the database do. */
+export const MAX_GRID_FILTERS = 12;
+const MAX_ANY_OF = 50;
+
+type Condition = { sql: string; params: Record<string, unknown> };
+/** SQL for one condition, with its parameters named from `p`; null when it has no value yet. */
+type OperatorSql = (value: unknown, p: string) => Condition | null;
+
+const refuse = (message: string): never => {
+  throw new BadRequestException(message);
+};
+
+/** `%` and `_` typed into a filter are the characters, not wildcards. */
+const escapeLike = (text: string) => text.replace(/[\\%_]/g, (c) => `\\${c}`);
+
+const textOf = (value: unknown): string =>
+  typeof value === 'string' || typeof value === 'number' ? normaliseDigits(String(value).trim()) : '';
+
+const textOperators = (column: string): Record<string, OperatorSql> => {
+  const like = (pattern: (text: string) => string): OperatorSql => (value, p) => {
+    const text = textOf(value);
+    return text ? { sql: `${column} ILIKE :${p}`, params: { [p]: pattern(escapeLike(text)) } } : null;
+  };
+  return {
+    contains: like((text) => `%${text}%`),
+    equals: like((text) => text),
+    startsWith: like((text) => `${text}%`),
+    endsWith: like((text) => `%${text}`),
+  };
+};
+
+const selectOperators = (column: string, valid: (value: string) => boolean = () => true): Record<string, OperatorSql> => {
+  const one = (value: unknown): string | null => {
+    if (value === undefined || value === null || value === '') return null;
+    return typeof value === 'string' && value.length <= 64 && valid(value) ? value : refuse(`Not a value for ${column}: ${String(value)}`);
+  };
+  return {
+    is: (value, p) => {
+      const v = one(value);
+      return v ? { sql: `${column} = :${p}`, params: { [p]: v } } : null;
+    },
+    not: (value, p) => {
+      const v = one(value);
+      return v ? { sql: `${column} IS DISTINCT FROM :${p}`, params: { [p]: v } } : null;
+    },
+    isAnyOf: (value, p) => {
+      const list = (Array.isArray(value) ? value : []).map(one).filter((v): v is string => !!v);
+      if (list.length > MAX_ANY_OF) refuse(`At most ${MAX_ANY_OF} values in one filter`);
+      return list.length ? { sql: `${column} IN (:...${p})`, params: { [p]: list } } : null;
+    },
+  };
+};
+
+const numberOperators = (column: string): Record<string, OperatorSql> => {
+  const compare = (sqlOperator: string): OperatorSql => (value, p) => {
+    const text = textOf(value);
+    if (!text) return null;
+    if (!/^-?\d+(\.\d+)?$/.test(text)) refuse(`Not a number: ${text}`);
+    return { sql: `${column} ${sqlOperator} :${p}`, params: { [p]: text } };
+  };
+  return {
+    '=': compare('='),
+    '!=': compare('<>'),
+    '>': compare('>'),
+    '>=': compare('>='),
+    '<': compare('<'),
+    '<=': compare('<='),
+  };
+};
+
+/**
+ * `between` takes `[from, to]`, instants with `to` exclusive, either end open. The browser
+ * works out the business day's bounds (today, a Jalali day, a range) on the restaurants'
+ * clock, as the date filter always has; the server only compares instants.
+ */
+const placedAtOperators: Record<string, OperatorSql> = {
+  between: (value, p) => {
+    const [rawFrom, rawTo] = Array.isArray(value) ? value : [];
+    const from = rawFrom ? validDate(rawFrom) || refuse(`Not a date: ${String(rawFrom)}`) : null;
+    const to = rawTo ? validDate(rawTo) || refuse(`Not a date: ${String(rawTo)}`) : null;
+    const bounds = [from && `o.placed_at >= :${p}_from`, to && `o.placed_at < :${p}_to`].filter(Boolean);
+    if (!bounds.length) return null;
+    return { sql: bounds.join(' AND '), params: { ...(from ? { [`${p}_from`]: from } : {}), ...(to ? { [`${p}_to`]: to } : {}) } };
+  },
+};
+
+const GRID_FIELDS: Record<string, Record<string, OperatorSql>> = {
+  order_number: textOperators('o.order_number'),
+  placed_at: placedAtOperators,
+  channel: selectOperators('o.channel'),
+  order_type: selectOperators('o.order_type'),
+  branch_id: selectOperators('o.branch_id', (v) => UUID_PATTERN.test(v)),
+  customer_name: {
+    contains: (value, p) => {
+      const text = textOf(value);
+      if (!text) return null;
+      const otherPhone = alternatePhonePrefix(text);
+      return {
+        sql: customerMatchSql(p, otherPhone ? `${p}_phone` : null),
+        params: { [p]: `%${escapeLike(text)}%`, ...(otherPhone ? { [`${p}_phone`]: `%${escapeLike(otherPhone)}%` } : {}) },
+      };
+    },
+    // A walk-in: no customer on the order.
+    isEmpty: () => ({ sql: 'o.customer_id IS NULL', params: {} }),
+    isNotEmpty: () => ({ sql: 'o.customer_id IS NOT NULL', params: {} }),
+  },
+  items: {
+    contains: (value, p) => {
+      const text = textOf(value);
+      return text ? { sql: itemMatchSql(p), params: { [p]: `%${escapeLike(text)}%` } } : null;
+    },
+  },
+  grand_total: numberOperators('o.grand_total'),
+  outstanding_total: numberOperators('o.outstanding_total'),
+};
+
+/** Reads the `filters` parameter; null when there is none. */
+export function parseGridFilters(raw: unknown): GridFilters | null {
+  if (raw === undefined || raw === null || raw === '') return null;
+  let parsed: any = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      refuse('filters is not valid JSON');
+    }
+  }
+  if (!parsed || !Array.isArray(parsed.items)) refuse('filters needs a list of items');
+  if (parsed.items.length > MAX_GRID_FILTERS) refuse(`At most ${MAX_GRID_FILTERS} filters`);
+
+  const items: GridFilterItem[] = parsed.items.map((item: any) => {
+    const field = String(item?.field ?? '');
+    const operator = String(item?.operator ?? '');
+    if (!Object.prototype.hasOwnProperty.call(GRID_FIELDS, field)) refuse(`Orders cannot be filtered by ${field}`);
+    if (!Object.prototype.hasOwnProperty.call(GRID_FIELDS[field], operator)) refuse(`Unknown filter on ${field}: ${operator}`);
+    return { field, operator, value: item.value };
+  });
+  return { items, logic: parsed.logic === 'or' ? 'or' : 'and' };
+}
+
+/**
+ * Adds the grid's filters as one bracketed condition, so "or" between them never loosens the
+ * tenant, branch or tab around it. With `currentAnyDate`, a date filter lets waiting, open and
+ * held orders through, as the list's date range does.
+ */
+export function applyGridFilters(qb: SelectQueryBuilder<OrderHeader>, filters: GridFilters | null, currentAnyDate = false) {
+  if (!filters) return;
+  const conditions: string[] = [];
+  const params: Record<string, unknown> = {};
+  filters.items.forEach((item, index) => {
+    const condition = GRID_FIELDS[item.field][item.operator](item.value, `gf${index}`);
+    if (!condition) return;
+    const sql =
+      item.field === 'placed_at' && currentAnyDate
+        ? `((${LIFECYCLE_SQL}) IN (${inList(CURRENT_GROUPS)}) OR (${condition.sql}))`
+        : `(${condition.sql})`;
+    conditions.push(sql);
+    Object.assign(params, condition.params);
+  });
+  if (conditions.length) qb.andWhere(`(${conditions.join(filters.logic === 'or' ? ' OR ' : ' AND ')})`, params);
 }
 
 export function applyOrderSort(qb: SelectQueryBuilder<OrderHeader>, query: any) {
