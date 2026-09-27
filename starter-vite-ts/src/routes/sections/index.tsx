@@ -1,8 +1,9 @@
 import type { RouteObject } from 'react-router';
 
 import { useEffect } from 'react';
-import { Navigate } from 'react-router';
+import { Navigate, useParams } from 'react-router';
 
+import { paths } from 'src/routes/paths';
 import { RequiresBranch } from 'src/routes/components/requires-branch';
 
 import Page404 from 'src/pages/error/404';
@@ -49,7 +50,6 @@ import { AvailabilityPage } from 'src/pages/catalog/availability';
 import { CashDrawerPage } from 'src/pages/operations/cash-drawer';
 import { PrintQueuePage } from 'src/pages/operations/print-queue';
 /* Detail & Simulation Sub-Pages */
-import { OrdersDetailPage } from 'src/pages/orders/orders-detail';
 import { PaymentSettingsPage } from 'src/pages/settings/payments';
 import { UserProfilePage } from 'src/pages/settings/user-profile';
 import { PriceChangesPage } from 'src/pages/catalog/price-changes';
@@ -107,6 +107,12 @@ function RoleHomeRedirect() {
   return <Navigate to={homePathForRole(role)} replace />;
 }
 
+/** An order used to have a page of its own; old links open it in the Orders drawer. */
+function OrderRedirect() {
+  const { id = '' } = useParams();
+  return <Navigate to={paths.app.orders.detail(id)} replace />;
+}
+
 export const routesSection: RouteObject[] = [
   {
     path: '/',
@@ -133,7 +139,7 @@ export const routesSection: RouteObject[] = [
       { path: 'kiosk', element: <RequiresBranch><KioskPage /></RequiresBranch> },
       { path: 'orders', element: <OrdersWorkflowPage /> },
       { path: 'orders/incoming', element: <RequiresBranch><IncomingOrdersPage /></RequiresBranch> },
-      { path: 'orders/:id', element: <OrdersDetailPage /> },
+      { path: 'orders/:id', element: <OrderRedirect /> },
       { path: 'dine-in/floor', element: <RequiresBranch><DineInPage /></RequiresBranch> },
       { path: 'kds', element: <RequiresBranch><KdsPage /></RequiresBranch> },
       { path: 'delivery', element: <Navigate to="/app/delivery/orders" replace /> },

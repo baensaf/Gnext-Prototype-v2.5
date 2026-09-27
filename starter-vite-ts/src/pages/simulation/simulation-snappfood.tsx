@@ -36,6 +36,7 @@ import {
   AccordionDetails,
 } from '@mui/material';
 
+import { paths } from 'src/routes/paths';
 import { RouterLink } from 'src/routes/components';
 
 import { fTime } from 'src/utils/format-time';
@@ -580,7 +581,7 @@ export function SimulationSnappfoodPage() {
                           <Stack direction="row" spacing={1}>
                             <Button
                               component={RouterLink}
-                              href={`/app/orders/${generatedResult.order.id}`}
+                              href={paths.app.orders.detail(generatedResult.order.id)}
                               variant="outlined"
                               size="small"
                               startIcon={<ReceiptLongIcon />}

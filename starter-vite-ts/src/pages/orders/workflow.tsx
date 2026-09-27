@@ -26,7 +26,6 @@ import ScheduleIcon from '@mui/icons-material/Schedule';
 import SecurityIcon from '@mui/icons-material/Security';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import {
   Box,
@@ -66,9 +65,6 @@ import {
   InputAdornment,
   CircularProgress,
 } from '@mui/material';
-
-import { paths } from 'src/routes/paths';
-import { RouterLink } from 'src/routes/components';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { useCurrencyCode } from 'src/utils/currency';
@@ -1331,14 +1327,6 @@ export function OrdersWorkflowPage() {
           </ListItemIcon>
           <ListItemText>{t('orders.actions.details')}</ListItemText>
         </MenuItem>
-        {menuOrder && (
-          <MenuItem component={RouterLink} href={paths.app.orders.detail(menuOrder.id)} onClick={closeMenu}>
-            <ListItemIcon>
-              <OpenInNewIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>{t('orders.actions.openPage')}</ListItemText>
-          </MenuItem>
-        )}
         {menuOrder && hasReceipt(menuOrder) && (
           <MenuItem onClick={fromMenu((o) => handleViewReceipt(o.id))}>
             <ListItemIcon>
@@ -1677,16 +1665,9 @@ export function OrdersWorkflowPage() {
                   />
                   <Chip label={getChannelLabel(selectedDrawerOrder.channel)} size="small" variant="outlined" />
                 </Stack>
-                <Stack direction="row" spacing={0.5}>
-                  <Tooltip title={t('orders.actions.openPage')}>
-                    <IconButton component={RouterLink} href={paths.app.orders.detail(selectedDrawerOrder.id)} size="small">
-                      <OpenInNewIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <IconButton onClick={closeDrawer} size="small">
-                    <CloseIcon />
-                  </IconButton>
-                </Stack>
+                <IconButton onClick={closeDrawer} size="small">
+                  <CloseIcon />
+                </IconButton>
               </Stack>
 
               <Typography variant="caption" color="text.secondary">
