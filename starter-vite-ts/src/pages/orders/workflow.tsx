@@ -957,7 +957,7 @@ export function OrdersWorkflowPage() {
     {
       field: 'placed_at',
       headerName: t('orders.table.placedAt'),
-      width: 190,
+      width: 130,
       filterOperators: placedAtFilters(t),
       renderCell: ({ row }) => (
         <Typography variant="caption" dir="ltr">
@@ -968,7 +968,7 @@ export function OrdersWorkflowPage() {
     {
       field: 'channel',
       headerName: t('orders.table.channel'),
-      width: 130,
+      width: 110,
       sortable: false,
       type: 'singleSelect',
       valueOptions: CHANNELS.map((channel) => ({ value: channel, label: getChannelLabel(channel) })),
@@ -978,7 +978,7 @@ export function OrdersWorkflowPage() {
     {
       field: 'order_type',
       headerName: t('orders.table.type'),
-      width: 130,
+      width: 110,
       sortable: false,
       type: 'singleSelect',
       valueOptions: ORDER_TYPES.map((type) => ({ value: type, label: getOrderTypeLabel(type) })),
@@ -1178,7 +1178,7 @@ export function OrdersWorkflowPage() {
         </Alert>
       )}
 
-      {/* Which orders. The grid's toolbar searches, and its header row filters each column. */}
+      {/* Which orders. The grid's toolbar searches and filters the columns. */}
       <Card sx={{ borderRadius: 3, boxShadow: 2, mb: 3 }}>
         <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
           <Tabs onChange={(_, val) => setParams({ tab: val })} sx={{ minHeight: 40 }} value={tab} variant="scrollable">
@@ -1195,7 +1195,6 @@ export function OrdersWorkflowPage() {
         emptyTitle={t('orders.table.empty')}
         emptyDescription={filterModel.items.length ? t('orders.table.emptyHint') : undefined}
         filterModel={gridFilterModel}
-        headerFilters
         onFilterModelChange={(model) => {
           // The grid also reports the model it was given; only a real change resets the page.
           const next = encodeFilterModel(model);
