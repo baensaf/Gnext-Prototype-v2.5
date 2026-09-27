@@ -35,6 +35,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { paths } from 'src/routes/paths';
 import { RouterLink } from 'src/routes/components';
 
 import { MoneyUtil } from 'src/utils/money.util';
@@ -346,7 +347,7 @@ export function MoadianInvoicesPage() {
                         {inv.tax_id}
                       </TableCell>
                       <TableCell>
-                        <Link component={RouterLink} href={`/app/orders/${inv.order_id}`}>
+                        <Link component={RouterLink} href={paths.app.orders.detail(inv.order_id)}>
                           {inv.order_number || '—'}
                         </Link>
                       </TableCell>
