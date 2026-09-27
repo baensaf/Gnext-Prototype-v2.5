@@ -67,6 +67,9 @@ services:
     build:
       context: ./starter-vite-ts
       dockerfile: Dockerfile
+      args:
+        # Unset, the grids show MUI's "missing license" watermark.
+        VITE_MUI_X_LICENSE_KEY: ${MUI_X_LICENSE_KEY:-}
     container_name: gnext_frontend
     restart: unless-stopped
     ports:

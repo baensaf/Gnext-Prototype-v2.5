@@ -5,6 +5,9 @@ COPY package*.json ./
 RUN npm ci --legacy-peer-deps || npm install
 COPY . .
 ENV VITE_SERVER_URL=""
+# MUI X Pro's key, from MUI_X_LICENSE_KEY in the VPS .env (see docker-compose.prod.yml).
+ARG VITE_MUI_X_LICENSE_KEY=""
+ENV VITE_MUI_X_LICENSE_KEY=$VITE_MUI_X_LICENSE_KEY
 RUN npm run build
 
 # Stage 2: Serve using Nginx

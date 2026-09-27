@@ -533,7 +533,7 @@
       "snappfoodCourier": "Snappfood courier",
       "counter": "Counter",
       "itemCount": "{{count}} items in all",
-      "emptyHint": "Try another date or the All tab.",
+      "emptyHint": "Try other filters or the All tab.",
       "takenOffline": "Taken while the branch was offline"
     },
     "actions": {
@@ -751,18 +751,18 @@
       "aggregator": "Snappfood"
     },
     "filters": {
-      "date": "Date",
       "from": "From",
       "to": "To",
-      "any": "Any",
       "ranges": {
         "today": "Today",
         "yesterday": "Yesterday",
         "7d": "Last 7 days",
-        "30d": "Last 30 days",
-        "all": "Any date",
-        "custom": "Custom range"
-      }
+        "30d": "Last 30 days"
+      },
+      "on": "On",
+      "onOrAfter": "From",
+      "onOrBefore": "Until",
+      "between": "Between"
     }
   },
   "dineIn": {

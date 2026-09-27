@@ -8,16 +8,13 @@ import type {
   GridRowSelectionModel,
   GridRowHeightReturnValue,
   GridColumnVisibilityModel,
-} from '@mui/x-data-grid';
+} from '@mui/x-data-grid-premium';
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { faIR } from '@mui/x-data-grid/locales';
-import {
-  DataGrid,
-  GridToolbar,
-} from '@mui/x-data-grid';
+import { faIR } from '@mui/x-data-grid-premium/locales';
+import { DataGridPremium } from '@mui/x-data-grid-premium';
 import {
   Box,
   Card,
@@ -39,6 +36,10 @@ export interface ServerDataGridProps<T = any> {
   onSortModelChange?: (model: GridSortModel) => void;
   filterModel?: GridFilterModel;
   onFilterModelChange?: (model: GridFilterModel) => void;
+  /** A row of filters under the column headers, one per filterable column. */
+  headerFilters?: boolean;
+  /** Hint in the toolbar's search box. */
+  quickFilterPlaceholder?: string;
   rowSelectionModel?: GridRowSelectionModel;
   onRowSelectionModelChange?: (model: GridRowSelectionModel) => void;
   checkboxSelection?: boolean;
@@ -78,6 +79,8 @@ export function ServerDataGrid<T extends { id?: string | number }>({
   onSortModelChange,
   filterModel,
   onFilterModelChange,
+  headerFilters = false,
+  quickFilterPlaceholder,
   rowSelectionModel,
   onRowSelectionModelChange,
   checkboxSelection = false,
@@ -100,10 +103,11 @@ export function ServerDataGrid<T extends { id?: string | number }>({
   const localeText = i18n.language?.startsWith('fa') ? faLocaleText : undefined;
 
   const isServerPagination = rowCount !== undefined;
+  const isServerFiltering = !!(filterModel && onFilterModelChange);
 
   return (
     <Card sx={{ height, width: '100%', display: 'flex', flexDirection: 'column', ...sx }}>
-      <DataGrid
+      <DataGridPremium
         rows={rows}
         columns={columns}
         loading={loading}
@@ -111,7 +115,7 @@ export function ServerDataGrid<T extends { id?: string | number }>({
         density={density}
         paginationMode={isServerPagination ? 'server' : 'client'}
         sortingMode={sortModel && onSortModelChange ? 'server' : 'client'}
-        filterMode={filterModel && onFilterModelChange ? 'server' : 'client'}
+        filterMode={isServerFiltering ? 'server' : 'client'}
         rowCount={isServerPagination ? rowCount : undefined}
         paginationModel={paginationModel}
         onPaginationModelChange={onPaginationModelChange}
@@ -120,6 +124,12 @@ export function ServerDataGrid<T extends { id?: string | number }>({
         onSortModelChange={onSortModelChange}
         filterModel={filterModel}
         onFilterModelChange={onFilterModelChange}
+        headerFilters={headerFilters}
+        // Grouping, aggregation and pivoting work on the rows in the browser. With the server
+        // paging, that is one page, and the totals would read as the whole list's.
+        disableRowGrouping={isServerPagination}
+        disableAggregation={isServerPagination}
+        disablePivoting={isServerPagination}
         rowSelectionModel={rowSelectionModel}
         onRowSelectionModelChange={onRowSelectionModelChange}
         checkboxSelection={checkboxSelection}
@@ -134,7 +144,6 @@ export function ServerDataGrid<T extends { id?: string | number }>({
         columnVisibilityModel={columnVisibilityModel}
         onColumnVisibilityModelChange={onColumnVisibilityModelChange}
         slots={{
-          toolbar: showToolbar ? GridToolbar : undefined,
           loadingOverlay: () => (
             <Box
               sx={{
@@ -174,7 +183,25 @@ export function ServerDataGrid<T extends { id?: string | number }>({
         slotProps={{
           toolbar: {
             showQuickFilter: true,
-            quickFilterProps: { debounceMs: 400 },
+            quickFilterProps: {
+              debounceMs: 400,
+              ...(quickFilterPlaceholder ? { slotProps: { root: { placeholder: quickFilterPlaceholder } } } : {}),
+              // The server searches the whole phrase, not each word on its own.
+              ...(isServerFiltering
+                ? {
+                    quickFilterParser: (input: string) => (input.trim() ? [input.trim()] : []),
+                    quickFilterFormatter: (values: string[]) => values.join(' '),
+                  }
+                : {}),
+            },
+            // The grid's own export writes the rows it holds: one page when the server pages.
+            ...(isServerPagination
+              ? {
+                  csvOptions: { disableToolbarButton: true },
+                  printOptions: { disableToolbarButton: true },
+                  excelOptions: { disableToolbarButton: true },
+                }
+              : {}),
           },
         }}
         sx={{
