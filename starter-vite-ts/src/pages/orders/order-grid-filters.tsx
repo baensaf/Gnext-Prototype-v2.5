@@ -7,13 +7,12 @@ import type {
 } from '@mui/x-data-grid-premium';
 import type { OrderGridFilters, OrderGridFilterItem } from 'src/api/orderApi';
 
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Box, Stack, Button, Popover } from '@mui/material';
+import { Box } from '@mui/material';
 import { getGridStringOperators, getGridNumericOperators, getGridSingleSelectOperators } from '@mui/x-data-grid-premium';
 
-import { businessDate, businessToday, formatCalendarDate } from 'src/utils/calendar';
+import { businessDate, businessToday } from 'src/utils/calendar';
 
 import { CalendarDateField } from 'src/components/calendar-date-field/calendar-date-field';
 
@@ -91,77 +90,35 @@ const placedBounds = (operator: string, value: unknown): [string | null, string 
   }
 };
 
-/** One business day on the chain's calendar, in the header filter row or the filter panel. */
-function CalendarDayInput({ item, applyValue, headerFilterMenu, clearButton, className, slotProps }: GridFilterInputValueProps) {
+/** One business day on the chain's calendar, in the filter panel. */
+function CalendarDayInput({ item, applyValue, className, slotProps }: GridFilterInputValueProps) {
   return (
-    <>
-      <Box className={className} sx={{ minWidth: 0 }}>
-        <CalendarDateField
-          fullWidth
-          label={slotProps?.root.label}
-          onChange={(e) => applyValue({ ...item, value: e.target.value || undefined })}
-          size="small"
-          value={isDay(item.value) ? item.value : ''}
-        />
-      </Box>
-      {headerFilterMenu}
-      {clearButton}
-    </>
+    <Box className={className}>
+      <CalendarDateField
+        fullWidth
+        label={slotProps?.root.label}
+        onChange={(e) => applyValue({ ...item, value: e.target.value || undefined })}
+        size="small"
+        value={isDay(item.value) ? item.value : ''}
+      />
+    </Box>
   );
 }
 
-/**
- * A first and last business day, either left open. Two pickers do not fit a header filter
- * cell, so there it is a button naming the range, and the pickers open under it.
- */
-function CalendarRangeInput({ item, applyValue, headerFilterMenu, clearButton, className }: GridFilterInputValueProps) {
+/** A first and last business day, either left open. */
+function CalendarRangeInput({ item, applyValue, className }: GridFilterInputValueProps) {
   const { t } = useTranslation();
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [from, to] = Array.isArray(item.value) ? item.value : [];
   const set = (index: 0 | 1, day: string) => {
     const next = [from ?? '', to ?? ''];
     next[index] = day;
     applyValue({ ...item, value: next[0] || next[1] ? next : undefined });
   };
-  const fields = (
-    <>
-      <CalendarDateField label={t('orders.filters.from')} onChange={(e) => set(0, e.target.value)} size="small" sx={{ width: 180 }} value={isDay(from) ? from : ''} />
-      <CalendarDateField label={t('orders.filters.to')} onChange={(e) => set(1, e.target.value)} size="small" sx={{ width: 180 }} value={isDay(to) ? to : ''} />
-    </>
-  );
-
-  if (!headerFilterMenu) {
-    return (
-      <Box className={className} sx={{ display: 'flex', gap: 1 }}>
-        {fields}
-      </Box>
-    );
-  }
-
-  const summary = isDay(from) || isDay(to) ? `${isDay(from) ? formatCalendarDate(from) : '…'} – ${isDay(to) ? formatCalendarDate(to) : '…'}` : t('orders.filters.between');
   return (
-    <>
-      <Box className={className} sx={{ minWidth: 0 }}>
-        <Button
-          color="inherit"
-          fullWidth
-          onClick={(e) => setAnchor(e.currentTarget)}
-          size="small"
-          sx={{ justifyContent: 'flex-start', fontWeight: 400, whiteSpace: 'nowrap', overflow: 'hidden' }}
-          variant="outlined"
-        >
-          <span dir="ltr">{summary}</span>
-        </Button>
-      </Box>
-      <Popover anchorEl={anchor} onClose={() => setAnchor(null)} open={!!anchor}>
-        {/* Keys typed into the pickers are theirs, not the grid's header navigation. */}
-        <Stack onKeyDown={(e) => e.stopPropagation()} spacing={1.5} sx={{ p: 2 }}>
-          {fields}
-        </Stack>
-      </Popover>
-      {headerFilterMenu}
-      {clearButton}
-    </>
+    <Box className={className} sx={{ display: 'flex', gap: 1 }}>
+      <CalendarDateField label={t('orders.filters.from')} onChange={(e) => set(0, e.target.value)} size="small" sx={{ width: 170 }} value={isDay(from) ? from : ''} />
+      <CalendarDateField label={t('orders.filters.to')} onChange={(e) => set(1, e.target.value)} size="small" sx={{ width: 170 }} value={isDay(to) ? to : ''} />
+    </Box>
   );
 }
 
