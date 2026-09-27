@@ -561,7 +561,6 @@ export async function runSeed() {
       tenant_id: tenant.id,
       category_id: categoryByCode.get(p.category).id,
       code: p.code,
-      sku: p.code,
       name: p.name,
       base_price: MoneyUtil.format(p.price),
       tax_rate: '0.0900',

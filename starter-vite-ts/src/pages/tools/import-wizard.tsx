@@ -47,7 +47,8 @@ const TARGET_FIELDS: Record<ImportEntityType, { field: string; labelKey: string;
     { field: 'is_active', labelKey: 'tools.importWizard.fields.is_active' },
   ],
   PRODUCTS: [
-    { field: 'code', labelKey: 'tools.importWizard.fields.code', required: true },
+    // Optional: a row without a code updates the product of the same name, or adds one.
+    { field: 'code', labelKey: 'tools.importWizard.fields.code' },
     { field: 'name_fa', labelKey: 'tools.importWizard.fields.name_fa', required: true },
     { field: 'name_en', labelKey: 'tools.importWizard.fields.name_en' },
     { field: 'category_code', labelKey: 'tools.importWizard.fields.category_code' },

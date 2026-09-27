@@ -1652,7 +1652,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                 inputRef={searchInputRef}
                 fullWidth
                 size="small"
-                placeholder="Search products by English/Persian name, SKU or code (e.g. Cheese, همبرگر, PROD-01)..."
+                placeholder="Search products by English/Persian name or code (e.g. Cheese, همبرگر, PROD-01)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 slotProps={{
@@ -1865,18 +1865,20 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                                 sx={{ fontSize: '0.625rem', height: 18, mb: 0.75, fontWeight: 700 }}
                               />
                             )}
-                            <Chip
-                              label={p.code}
-                              size="small"
-                              variant="outlined"
-                              sx={{
-                                fontSize: '0.625rem',
-                                height: 18,
-                                mb: 0.75,
-                                fontWeight: 700,
-                                letterSpacing: 0.5,
-                              }}
-                            />
+                            {p.code && (
+                              <Chip
+                                label={p.code}
+                                size="small"
+                                variant="outlined"
+                                sx={{
+                                  fontSize: '0.625rem',
+                                  height: 18,
+                                  mb: 0.75,
+                                  fontWeight: 700,
+                                  letterSpacing: 0.5,
+                                }}
+                              />
+                            )}
                             </Box>
                             <Typography
                               variant="subtitle2"
@@ -2948,16 +2950,9 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                           value={v.id}
                           control={<Radio size="small" />}
                           label={
-                            <Box>
-                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                {v.name}
-                              </Typography>
-                              {v.sku && (
-                                <Typography variant="caption" color="text.secondary">
-                                  SKU: {v.sku}
-                                </Typography>
-                              )}
-                            </Box>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                              {v.name}
+                            </Typography>
                           }
                           sx={{ m: 0 }}
                         />

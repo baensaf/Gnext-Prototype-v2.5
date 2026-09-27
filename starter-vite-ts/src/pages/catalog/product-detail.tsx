@@ -94,7 +94,6 @@ export function ProductDetailPage() {
   const [categoryId, setCategoryId] = useState('');
   const [basePrice, setBasePrice] = useState('');
   const [taxRate, setTaxRate] = useState('');
-  const [sku, setSku] = useState('');
   const [barcode, setBarcode] = useState('');
   const [description, setDescription] = useState('');
   const [photoIds, setPhotoIds] = useState<string[]>([]);
@@ -112,7 +111,6 @@ export function ProductDetailPage() {
   const [editingVariant, setEditingVariant] = useState<ProductVariant | null>(null);
   const [varCode, setVarCode] = useState('');
   const [varName, setVarName] = useState('');
-  const [varSku, setVarSku] = useState('');
   const [varBarcode, setVarBarcode] = useState('');
   const [varPrice, setVarPrice] = useState('');
   const [varIsDefault, setVarIsDefault] = useState(false);
@@ -140,12 +138,11 @@ export function ProductDetailPage() {
       setVariants(vList);
       setAllOptionGroups(ogList);
 
-      setCode(prod.code);
+      setCode(prod.code || '');
       setName(prod.name);
       setCategoryId(prod.category_id);
       setBasePrice(wholeRials(prod.base_price));
       setTaxRate(taxRateToPercent(prod.tax_rate ?? '0.0900'));
-      setSku(prod.sku || '');
       setBarcode(prod.barcode || '');
       setDescription(prod.description || '');
       setPhotoIds([prod.image_asset_id, ...(prod.gallery_asset_ids || [])].filter(Boolean) as string[]);
@@ -223,13 +220,13 @@ export function ProductDetailPage() {
     setError(null);
     try {
       const updated = await catalogApi.updateProduct(id, {
-        code,
+        // Blank clears them: a product may have no code or barcode.
+        code: code.trim() || null,
         name,
         category_id: categoryId,
         base_price: basePrice,
         tax_rate: percentToTaxRate(taxRate),
-        sku: sku || undefined,
-        barcode: barcode || undefined,
+        barcode: barcode.trim() || null,
         description: description || undefined,
         image_asset_id: photoIds[0] || null,
         gallery_asset_ids: photoIds.slice(1),
@@ -249,7 +246,6 @@ export function ProductDetailPage() {
     setEditingVariant(null);
     setVarCode('');
     setVarName('');
-    setVarSku('');
     setVarBarcode('');
     setVarPrice(basePrice || '0');
     setVarIsDefault(variants.length === 0);
@@ -261,7 +257,6 @@ export function ProductDetailPage() {
     setEditingVariant(v);
     setVarCode(v.code);
     setVarName(v.name);
-    setVarSku(v.sku || '');
     setVarBarcode(v.barcode || '');
     setVarPrice(wholeRials(v.base_price));
     setVarIsDefault(v.is_default);
@@ -279,7 +274,6 @@ export function ProductDetailPage() {
         await catalogApi.updateProductVariant(id, editingVariant.id, {
           code: varCode,
           name: varName,
-          sku: varSku || undefined,
           barcode: varBarcode || undefined,
           base_price: varPrice,
           is_default: varIsDefault,
@@ -289,7 +283,6 @@ export function ProductDetailPage() {
         await catalogApi.createProductVariant(id, {
           code: varCode,
           name: varName,
-          sku: varSku || undefined,
           barcode: varBarcode || undefined,
           base_price: varPrice,
           is_default: varIsDefault,
@@ -362,7 +355,7 @@ export function ProductDetailPage() {
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
             {product?.name || t('catalog.productDetailPage.defaultTitle')}
           </Typography>
-          <Chip label={product?.code} variant="outlined" sx={{ fontWeight: 'bold' }} />
+          {product?.code && <Chip label={product.code} variant="outlined" sx={{ fontWeight: 'bold' }} />}
           {currentCategory && <Chip label={currentCategory.name} color="primary" size="small" />}
         </Stack>
       </Stack>
@@ -421,16 +414,7 @@ export function ProductDetailPage() {
                   {t('catalog.productDetailPage.general.title')}
                 </Typography>
                 <Grid container spacing={2}>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <TextField
-                      label={t('catalog.productDetailPage.general.code')}
-                      value={code}
-                      onChange={(e) => setCode(e.target.value.toUpperCase())}
-                      fullWidth
-                      required
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
+                  <Grid size={{ xs: 12 }}>
                     <TextField
                       label={t('catalog.productDetailPage.general.name')}
                       value={name}
@@ -512,11 +496,28 @@ export function ProductDetailPage() {
                       fullWidth
                     />
                   </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField
+                      label={t('catalog.productDetailPage.general.description')}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      fullWidth
+                      multiline
+                      rows={3}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <Typography variant="overline" color="text.secondary">
+                      {t('catalog.productsPage.identifiersTitle')}
+                    </Typography>
+                  </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
-                      label={t('catalog.productDetailPage.general.sku')}
-                      value={sku}
-                      onChange={(e) => setSku(e.target.value)}
+                      label={t('catalog.productDetailPage.general.code')}
+                      value={code}
+                      onChange={(e) => setCode(e.target.value.toUpperCase())}
+                      helperText={t('catalog.productsPage.codeHelp')}
+                      slotProps={{ htmlInput: { maxLength: 32 } }}
                       fullWidth
                     />
                   </Grid>
@@ -526,16 +527,6 @@ export function ProductDetailPage() {
                       value={barcode}
                       onChange={(e) => setBarcode(e.target.value)}
                       fullWidth
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12 }}>
-                    <TextField
-                      label={t('catalog.productDetailPage.general.description')}
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      fullWidth
-                      multiline
-                      rows={3}
                     />
                   </Grid>
                 </Grid>
@@ -657,7 +648,6 @@ export function ProductDetailPage() {
                     <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.default')}</TableCell>
                     <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.variantName')}</TableCell>
                     <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.code')}</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.sku')}</TableCell>
                     <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.barcode')}</TableCell>
                     <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.basePrice')}</TableCell>
                     <TableCell sx={{ fontWeight: 'bold' }} align="right">{t('catalog.productDetailPage.variants.actions')}</TableCell>
@@ -681,7 +671,6 @@ export function ProductDetailPage() {
                       </TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>{v.name}</TableCell>
                       <TableCell>{v.code}</TableCell>
-                      <TableCell>{v.sku || '—'}</TableCell>
                       <TableCell>{v.barcode || '—'}</TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>
                         <span dir="ltr">{MoneyUtil.formatCurrency(v.base_price)} {currency}</span>
@@ -853,15 +842,6 @@ export function ProductDetailPage() {
                   onChange={(e) => setVarName(e.target.value)}
                   fullWidth
                   required
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  label={t('catalog.productDetailPage.variants.sku')}
-                  placeholder="e.g. CHB-DBL"
-                  value={varSku}
-                  onChange={(e) => setVarSku(e.target.value)}
-                  fullWidth
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>

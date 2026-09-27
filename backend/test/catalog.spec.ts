@@ -125,6 +125,36 @@ describe('CatalogService (Unit)', () => {
     expect(result.reason).toBe('Out of stock');
   });
 
+  describe('Product code', () => {
+    const base = { name: 'Espresso', category_id: 'cat-1', base_price: '80000' };
+    beforeEach(() => {
+      prodRepo.create.mockImplementation((dto: any) => ({ ...dto }));
+      prodRepo.save.mockImplementation((p: any) => Promise.resolve({ id: 'p-new', ...p }));
+    });
+
+    it('creates a product with no code, and a blank code counts as none', async () => {
+      const without = await service.createProduct('t-1', base, 'c');
+      const blank = await service.createProduct('t-1', { ...base, code: '   ' }, 'c');
+      expect(without.code).toBeNull();
+      expect(blank.code).toBeNull();
+      expect(prodRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it('upper-cases a given code and refuses one another product has', async () => {
+      prodRepo.findOne.mockResolvedValueOnce(null);
+      expect((await service.createProduct('t-1', { ...base, code: ' esp-1 ' }, 'c')).code).toBe('ESP-1');
+      prodRepo.findOne.mockResolvedValueOnce({ id: 'p-other', code: 'ESP-1' });
+      await expect(service.createProduct('t-1', { ...base, code: 'esp-1' }, 'c')).rejects.toThrow('Product code ESP-1 already exists');
+    });
+
+    it('clears a code on update, and keeps a product its own code', async () => {
+      prodRepo.findOne.mockResolvedValueOnce({ id: 'p-1', code: 'ESP-1' });
+      expect((await service.updateProduct('t-1', 'p-1', { code: '' } as any, 'c')).code).toBeNull();
+      prodRepo.findOne.mockResolvedValueOnce({ id: 'p-1', code: 'ESP-1' }).mockResolvedValueOnce({ id: 'p-1', code: 'ESP-1' });
+      expect((await service.updateProduct('t-1', 'p-1', { code: 'esp-1' } as any, 'c')).code).toBe('ESP-1');
+    });
+  });
+
   describe('Product Variants', () => {
     it('should create a variant and write audit event', async () => {
       prodRepo.findOne.mockResolvedValue({ id: 'prod-burger', base_price: '150000.0000' });
@@ -138,7 +168,6 @@ describe('CatalogService (Unit)', () => {
           code: 'VAR-CHB-DBL',
           name: 'Double Patty',
           base_price: '220000.0000',
-          sku: 'CHB-DBL',
           is_default: false,
         },
         'corr-v1',
