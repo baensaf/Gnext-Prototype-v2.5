@@ -32,7 +32,6 @@ export interface ProductVariant {
   product_id: string;
   code: string;
   name: string;
-  sku?: string;
   barcode?: string;
   base_price: string;
   is_default: boolean;
@@ -42,9 +41,9 @@ export interface ProductVariant {
 
 export interface Product {
   id: string;
-  code: string;
-  sku?: string;
-  barcode?: string;
+  /** Optional: chains fill it to search or re-import by; blank for most shops. */
+  code?: string | null;
+  barcode?: string | null;
   name: string;
   description?: string;
   category_id: string;

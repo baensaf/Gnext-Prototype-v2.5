@@ -152,7 +152,7 @@ export function MediaLocalizationDemoPage() {
                 >
                   {products.map((p) => (
                     <MenuItem key={p.id} value={p.id}>
-                      {p.name} ({p.code})
+                      {p.name}{p.code ? ` (${p.code})` : ''}
                     </MenuItem>
                   ))}
                 </TextField>

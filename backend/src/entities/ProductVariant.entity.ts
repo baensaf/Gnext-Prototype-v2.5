@@ -26,9 +26,6 @@ export class ProductVariant {
   code: string;
 
   @Column({ type: 'varchar', length: 64, nullable: true })
-  sku: string;
-
-  @Column({ type: 'varchar', length: 64, nullable: true })
   barcode: string;
 
   @Column({ type: 'varchar', length: 160 })

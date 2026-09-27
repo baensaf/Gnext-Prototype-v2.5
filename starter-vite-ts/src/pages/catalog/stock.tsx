@@ -81,7 +81,7 @@ export function DailyStockPage() {
     return products.filter(
       (p) =>
         (categoryTab === 'ALL' || p.category_id === categoryTab) &&
-        (!q || p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q))
+        (!q || p.name.toLowerCase().includes(q) || (p.code || '').toLowerCase().includes(q))
     );
   }, [products, search, categoryTab]);
 

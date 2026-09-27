@@ -8,11 +8,9 @@ export class Product {
   @Column({ type: 'uuid' })
   tenant_id: string;
 
-  @Column({ type: 'varchar', length: 32 })
-  code: string;
-
-  @Column({ type: 'varchar', length: 64, nullable: true })
-  sku: string;
+  /** Optional, for chains that search or re-import by it; the id is what other records point at. */
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  code: string | null;
 
   @Column({ type: 'varchar', length: 64, nullable: true })
   barcode: string;

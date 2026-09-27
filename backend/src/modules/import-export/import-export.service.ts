@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, Raw } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { ImportJob, ImportEntityType } from '../../entities/ImportJob.entity';
 import { ImportRow } from '../../entities/ImportRow.entity';
@@ -385,7 +385,7 @@ export class ImportExportService {
         if (!parsedData.mobile) errors.push('Mobile phone is required');
         else if (!/^(\+?\d{10,15}|09\d{9})$/.test(parsedData.mobile)) errors.push('Invalid phone number format');
       } else if (job.entity_type === 'PRODUCTS') {
-        if (!parsedData.code) errors.push('Product Code is required');
+        if (parsedData.code && String(parsedData.code).trim().length > 32) errors.push('Product Code is at most 32 characters');
         if (!parsedData.name_fa && !parsedData.name) errors.push('Product Name is required');
         if (parsedData.base_price === undefined || parsedData.base_price === '') {
           errors.push('Base price must be a valid number');
@@ -491,15 +491,32 @@ export class ImportExportService {
             }
             await manager.save(customer);
           } else if (job.entity_type === 'PRODUCTS') {
-            let product = await manager.findOne(Product, { where: { tenant_id: tenantId, code: data.code } });
+            const code = String(data.code ?? '').trim().toUpperCase() || null;
             const isActive = data.is_active === 'false' || data.is_active === '0' ? false : true;
             const priceStr = MoneyUtil.format(data.base_price || '0', 4);
-            const productName = data.name_fa || data.name_en || data.name || 'Imported Product';
+            const productName = String(data.name_fa || data.name_en || data.name || 'Imported Product').trim();
 
             let catId: string | null = null;
             if (data.category_code) {
               const cat = await manager.findOne(Category, { where: { tenant_id: tenantId, code: data.category_code } });
               if (cat) catId = cat.id;
+            }
+
+            // The code finds the product when the row has one. Without it the name does: the chain
+            // has one menu, so a name is one product, or one per category at most.
+            let product: Product | null;
+            if (code) {
+              product = await manager.findOne(Product, { where: { tenant_id: tenantId, code: Raw((c) => `UPPER(${c}) = :code`, { code }) } });
+            } else {
+              const named = await manager.find(Product, {
+                where: { tenant_id: tenantId, name: Raw((n) => `LOWER(TRIM(${n})) = :name`, { name: productName.toLowerCase() }) },
+              });
+              const inCategory = catId ? named.filter((p) => p.category_id === catId) : [];
+              const matches = inCategory.length ? inCategory : named;
+              if (matches.length > 1) {
+                throw new Error(`${matches.length} products are named "${productName}"; give this row a product code or a category`);
+              }
+              product = matches[0] ?? null;
             }
 
             if (!catId) {
@@ -510,7 +527,7 @@ export class ImportExportService {
             if (!product) {
               product = manager.create(Product, {
                 tenant_id: tenantId,
-                code: data.code,
+                code,
                 name: productName,
                 category_id: catId || undefined,
                 base_price: priceStr,

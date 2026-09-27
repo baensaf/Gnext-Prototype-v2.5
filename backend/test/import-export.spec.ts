@@ -191,6 +191,51 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
     });
   });
 
+  describe('Product import without codes', () => {
+    const runRows = async (rows: any[], existing: any[]) => {
+      const manager = {
+        findOne: jest.fn((entity: any) => Promise.resolve(entity === Category ? { id: 'cat-default' } : null)),
+        find: jest.fn().mockResolvedValue(existing),
+        create: jest.fn((_e: any, dto: any) => ({ ...dto })),
+        save: jest.fn((a: any, b?: any) => Promise.resolve(b ?? a)),
+      };
+      dataSource.transaction.mockImplementation((cb: any) => cb(manager));
+      jobRepo.findOne.mockResolvedValue({ id: 'job-p', tenant_id: 't-1', entity_type: 'PRODUCTS' });
+      rowRepo.find.mockResolvedValue(rows.map((parsed_data, i) => ({ row_number: i + 1, status: 'VALID', parsed_data })));
+      const result = await service.executeJob('job-p', 'u-1');
+      return { result, manager };
+    };
+
+    it('passes validation with no code column', async () => {
+      jobRepo.findOne.mockResolvedValue({ id: 'job-p', entity_type: 'PRODUCTS', status: 'STAGED' });
+      rowRepo.find.mockResolvedValue([{ row_number: 1, raw_data: { Name: 'Latte', Price: '90000' } }]);
+      const job = await service.validateJob('job-p', { Name: 'name_fa', Price: 'base_price' });
+      expect(job.valid_rows).toBe(1);
+    });
+
+    it('updates the product of the same name instead of adding a second one', async () => {
+      const latte = { id: 'p-latte', name: 'Latte', category_id: 'cat-default', base_price: '80000.0000', code: null };
+      const { result, manager } = await runRows([{ name_fa: ' latte ', base_price: '90000' }], [latte]);
+      expect(result.importedCount).toBe(1);
+      expect(manager.create).not.toHaveBeenCalledWith(Product, expect.anything());
+      expect(latte.base_price).toBe('90000.0000');
+    });
+
+    it('creates a new product, with no code, when no name matches', async () => {
+      const { manager } = await runRows([{ name_fa: 'Mocha', base_price: '95000' }], []);
+      expect(manager.create).toHaveBeenCalledWith(Product, expect.objectContaining({ name: 'Mocha', code: null }));
+    });
+
+    it('refuses a row whose name is two products, rather than guessing', async () => {
+      const twins = [
+        { id: 'p-1', name: 'Tea', category_id: 'cat-a' },
+        { id: 'p-2', name: 'Tea', category_id: 'cat-b' },
+      ];
+      const { result } = await runRows([{ name_fa: 'Tea', base_price: '40000' }], twins);
+      expect(result).toEqual({ importedCount: 0, failedCount: 1 });
+    });
+  });
+
   describe('Seed Profiles & System Reset', () => {
     it('should return available seed profiles', () => {
       const profiles = service.getSeedProfiles();

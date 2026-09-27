@@ -97,7 +97,6 @@ export function ProductsPage() {
   const [basePrice, setBasePrice] = useState('1500000');
   const [productType, setProductType] = useState<'STANDARD' | 'COMBO'>('STANDARD');
   const [taxPercent, setTaxPercent] = useState(DEFAULT_TAX_PERCENT);
-  const [sku, setSku] = useState('');
   const [barcode, setBarcode] = useState('');
   const [description, setDescription] = useState('');
   const [imageAssetId, setImageAssetId] = useState<string | undefined>(undefined);
@@ -136,14 +135,13 @@ export function ProductsPage() {
     }
     try {
       await catalogApi.createProduct({
-        code,
+        code: code.trim() || null,
         name,
         category_id: categoryId,
         base_price: basePrice,
         product_type: productType,
         tax_rate: percentToTaxRate(taxPercent),
-        sku,
-        barcode,
+        barcode: barcode.trim() || undefined,
         description,
         image_asset_id: imageAssetId,
       });
@@ -162,19 +160,18 @@ export function ProductsPage() {
     setBasePrice('1500000');
     setProductType('STANDARD');
     setTaxPercent(DEFAULT_TAX_PERCENT);
-    setSku('');
     setBarcode('');
     setDescription('');
     setImageAssetId(undefined);
   };
 
-  // Search by name, code, SKU or barcode, within the picked category and status.
+  // Search by name, code or barcode, within the picked category and status.
   const visibleProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
     return products.filter(
       (p) =>
         (statusFilter === 'ALL' || (statusFilter === 'ON') === p.is_active) &&
-        (!q || [p.name, p.code, p.sku, p.barcode].some((field) => (field || '').toLowerCase().includes(q)))
+        (!q || [p.name, p.code, p.barcode].some((field) => (field || '').toLowerCase().includes(q)))
     );
   }, [products, search, statusFilter]);
 
@@ -333,9 +330,11 @@ export function ProductsPage() {
                                 <Chip label={t('catalog.productsPage.comboBadge')} size="small" color="secondary" sx={{ ml: 1 }} />
                               )}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary" component="code">
-                              {p.code}
-                            </Typography>
+                            {p.code && (
+                              <Typography variant="caption" color="text.secondary" component="code">
+                                {p.code}
+                              </Typography>
+                            )}
                           </Box>
                         </Stack>
                       </TableCell>
@@ -425,15 +424,6 @@ export function ProductsPage() {
               </FormControl>
 
               <TextField
-                label={t('catalog.productsPage.code')}
-                placeholder={t('catalog.productsPage.codeHint')}
-                required
-                fullWidth
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-              />
-
-              <TextField
                 label={t('catalog.productsPage.name')}
                 placeholder={t('catalog.productsPage.nameHint')}
                 required
@@ -485,6 +475,25 @@ export function ProductsPage() {
               <ImageUploader
                 label={t('catalog.productsPage.productImage')}
                 onUploadSuccess={(asset) => setImageAssetId(asset.id)}
+              />
+
+              <Typography variant="overline" color="text.secondary">
+                {t('catalog.productsPage.identifiersTitle')}
+              </Typography>
+              <TextField
+                label={t('catalog.productsPage.code')}
+                placeholder={t('catalog.productsPage.codeHint')}
+                helperText={t('catalog.productsPage.codeHelp')}
+                fullWidth
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                slotProps={{ htmlInput: { maxLength: 32 } }}
+              />
+              <TextField
+                label={t('catalog.productsPage.barcode')}
+                fullWidth
+                value={barcode}
+                onChange={(e) => setBarcode(e.target.value)}
               />
 
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>

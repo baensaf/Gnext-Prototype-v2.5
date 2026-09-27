@@ -275,7 +275,7 @@ export class CatalogService {
     if (!query || (!query.page && !query.limit && !query.search)) {
       const where: any = { tenant_id: tenantId };
       if (categoryId) where.category_id = categoryId;
-      const products = await this.prodRepo.find({ where, order: { code: 'ASC' } });
+      const products = await this.prodRepo.find({ where, order: { name: 'ASC' } });
       // Variants ride along so a list can show the hot and the cold sandwich as rows of their own.
       const variants = await this.variantRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { sort_order: 'ASC', code: 'ASC' } });
       // The main photo's address, so a list can show a thumbnail without a request per product.
@@ -299,10 +299,10 @@ export class CatalogService {
     }
 
     if (query.search) {
-      qb.andWhere('(LOWER(p.name) LIKE :search OR LOWER(p.code) LIKE :search OR LOWER(p.sku) LIKE :search)', { search: `%${query.search.toLowerCase()}%` });
+      qb.andWhere('(LOWER(p.name) LIKE :search OR LOWER(p.code) LIKE :search OR LOWER(p.barcode) LIKE :search)', { search: `%${query.search.toLowerCase()}%` });
     }
 
-    qb.orderBy('p.code', 'ASC')
+    qb.orderBy('p.name', 'ASC')
       .skip((page - 1) * limit)
       .take(limit);
 
@@ -336,15 +336,28 @@ export class CatalogService {
     return { ...prod, optionGroups, variants };
   }
 
-  async createProduct(tenantId: string, data: { code: string; name: string; category_id: string; base_price: string; sku?: string; barcode?: string; description?: string; tax_rate?: string; image_asset_id?: string; product_type?: 'STANDARD' | 'COMBO' }, correlationId: string) {
+  /**
+   * A product code is optional: blank means none. When given it is upper-cased and must not be
+   * another live product's, since search and re-imports find a product by it.
+   */
+  private async productCode(tenantId: string, raw: unknown, exceptId?: string): Promise<string | null> {
+    if (raw === undefined || raw === null) return null;
+    if (typeof raw !== 'string') throw new BadRequestException('A product code is text');
+    const code = raw.trim().toUpperCase();
+    if (!code) return null;
+    if (code.length > 32) throw new BadRequestException('A product code is at most 32 characters');
+    const existing = await this.prodRepo.findOne({ where: { tenant_id: tenantId, code } });
+    if (existing && existing.id !== exceptId) throw new ConflictException(`Product code ${code} already exists`);
+    return code;
+  }
+
+  async createProduct(tenantId: string, data: { code?: string | null; name: string; category_id: string; base_price: string; barcode?: string; description?: string; tax_rate?: string; image_asset_id?: string; product_type?: 'STANDARD' | 'COMBO' }, correlationId: string) {
     // The body is untyped, so what the database refused came back as a 500 and a negative
     // price went straight onto the menu.
-    if (!data.code?.trim() || !data.name?.trim()) throw new BadRequestException('A product needs a code and a name');
+    if (!data.name?.trim()) throw new BadRequestException('A product needs a name');
     if (!data.category_id) throw new BadRequestException('A product needs a category');
     this.assertPrice(data.base_price ?? '0', 'base_price');
-    const code = data.code.trim().toUpperCase();
-    const existing = await this.prodRepo.findOne({ where: { tenant_id: tenantId, code } });
-    if (existing) throw new ConflictException(`Product code ${code} already exists`);
+    const code = await this.productCode(tenantId, data.code);
     this.assertProductType(data.product_type);
 
     const prod = this.prodRepo.create({
@@ -354,7 +367,6 @@ export class CatalogService {
       product_type: data.product_type || 'STANDARD',
       category_id: data.category_id,
       base_price: MoneyUtil.format(data.base_price || '0'),
-      sku: data.sku || null,
       barcode: data.barcode || null,
       description: data.description || null,
       tax_rate: data.tax_rate || '0.1000',
@@ -382,6 +394,7 @@ export class CatalogService {
     if (!prod) throw new NotFoundException('Product not found');
     const before = { ...prod };
     this.assertProductType(data.product_type);
+    if (data.code !== undefined) data.code = await this.productCode(tenantId, data.code, id);
 
     if (data.base_price) {
       this.assertPrice(data.base_price, 'base_price');
@@ -473,7 +486,6 @@ export class CatalogService {
       code: string;
       name: string;
       base_price?: string;
-      sku?: string;
       barcode?: string;
       is_default?: boolean;
       sort_order?: number;
@@ -508,7 +520,6 @@ export class CatalogService {
       code,
       name: data.name,
       base_price: MoneyUtil.format(data.base_price || prod.base_price || '0'),
-      sku: data.sku || null,
       barcode: data.barcode || null,
       is_default: isDefault,
       sort_order: data.sort_order ?? count,
