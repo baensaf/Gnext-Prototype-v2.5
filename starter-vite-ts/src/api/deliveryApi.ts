@@ -9,7 +9,8 @@ export interface DeliveryZone {
   branch_id: string;
   code: string;
   name: string;
-  polygon?: any;
+  /** The outline drawn on the map (GeoJSON Polygon). The till still picks a zone by postal code. */
+  polygon?: { type: 'Polygon'; coordinates: number[][][] } | null;
   postal_prefixes?: string[];
   fee: string;
   /** Per-trip pay for couriers on ZONE_RATE; null means each courier's own rate. */
@@ -122,7 +123,7 @@ export const deliveryApi = {
   },
   updateZone: async (
     id: string,
-    data: { name?: string; fee?: string; estimated_minutes?: number; courier_pay?: string | null }
+    data: { name?: string; fee?: string; estimated_minutes?: number; courier_pay?: string | null; polygon?: DeliveryZone['polygon'] }
   ): Promise<DeliveryZone> => {
     const res = await httpClient.patch(`/api/v1/delivery/zones/${id}`, data);
     return res.data;

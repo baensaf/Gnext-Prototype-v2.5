@@ -118,6 +118,10 @@ export class UpdateZoneDto {
   @ValidateIf((_, value) => value !== null)
   @Matches(NON_NEGATIVE_AMOUNT, { message: 'courier_pay must be a non-negative amount' })
   courier_pay?: string | null;
+
+  /** The zone's outline drawn on the map (GeoJSON Polygon); null clears it. */
+  @IsOptional()
+  polygon?: unknown;
 }
 
 export class UpdateCourierPayDto {
