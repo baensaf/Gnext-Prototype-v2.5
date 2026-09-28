@@ -766,7 +766,8 @@
   },
   "dineIn": {
     "title": "Dine-In Floor Plan & Operations",
-    "subtitle": "Slice R17 — Table management, occupancy, move, merge, split orders, item transfers, and guest bill",
+    "subtitle": "Table management, occupancy, move, merge, split orders and the guest bill",
+    "occupancy": "Occupancy",
     "addTable": "Add Table",
     "addSection": "Add Section",
     "refresh": "Refresh",
