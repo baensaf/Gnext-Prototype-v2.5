@@ -64,6 +64,46 @@ export class PaymentService {
     return `${prefix}${seq}`;
   }
 
+  /**
+   * One page of the payments taken, newest first, with the order each was taken against. A
+   * payment reaches its branch through its order, so `branchId` filters on the order's.
+   */
+  async listPayments(tenantId: string, query: { branchId?: string; page?: number | string; limit?: number | string }) {
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 25));
+    const page = Math.max(1, Number(query.page) || 1);
+
+    const qb = this.dataSource
+      .createQueryBuilder(Payment, 'p')
+      .innerJoin(OrderHeader, 'o', 'o.id = p.order_id AND o.tenant_id = p.tenant_id')
+      .where('p.tenant_id = :tenantId', { tenantId });
+    if (query.branchId) qb.andWhere('o.branch_id = :branchId', { branchId: query.branchId });
+
+    const total = await qb.getCount();
+    const rows = await qb
+      .select([
+        'p.id AS id',
+        'p.payment_number AS payment_number',
+        'p.order_id AS order_id',
+        'o.order_number AS order_number',
+        'o.branch_id AS branch_id',
+        'p.method_kind AS method_kind',
+        'p.status AS status',
+        'p.amount AS amount',
+        'p.currency_code AS currency_code',
+        'p.reference AS reference',
+        'p.business_date AS business_date',
+        'p.initiated_at AS initiated_at',
+        'p.posted_at AS posted_at',
+      ])
+      .orderBy('COALESCE(p.posted_at, p.initiated_at)', 'DESC')
+      .addOrderBy('p.payment_number', 'DESC')
+      .offset((page - 1) * limit)
+      .limit(limit)
+      .getRawMany();
+
+    return { data: rows, total, page, limit };
+  }
+
   async getOrderPayments(tenantId: string, orderId: string) {
     return await this.paymentRepo.find({
       where: { tenant_id: tenantId, order_id: orderId },

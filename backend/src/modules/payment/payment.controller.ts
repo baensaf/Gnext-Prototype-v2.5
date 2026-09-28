@@ -13,6 +13,7 @@ import {
 } from './dtos/payment.dto';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
+import { effectiveBranchId } from '../../common/utils/user-scope.util';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { Payment } from '../../entities/Payment.entity';
 
@@ -43,6 +44,15 @@ export class PaymentController {
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
     return await this.paymentService.createPaymentIntent(tenantId, body, userId, correlationId);
+  }
+
+  /** The Payments page: one page of the money taken, newest first. A branch account only ever sees its own. */
+  @Roles(...MANAGER_AND_ABOVE)
+  @Get('payments')
+  async listPayments(@Query() query: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const branchId = effectiveBranchId((req as any).userBranchId, query.branchId || query.branch);
+    return await this.paymentService.listPayments(tenantId, { branchId, page: query.page, limit: query.limit });
   }
 
   @BranchOwned(Payment, PAYMENT_OF_BRANCH)
