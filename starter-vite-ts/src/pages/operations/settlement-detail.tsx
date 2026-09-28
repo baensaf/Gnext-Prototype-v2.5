@@ -32,6 +32,8 @@ import {
 import { fDateTime } from 'src/utils/format-time';
 import { useCurrencyCode } from 'src/utils/currency';
 
+import { VersionTag } from 'src/components/version-tag';
+
 import { deliveryApi } from '../../api/deliveryApi';
 
 export function SettlementDetailPage() {
@@ -287,6 +289,7 @@ export function SettlementDetailPage() {
                     onClick={handleReview}
                   >
                     {t('settlements.review', 'Mark as Reviewed')}
+                    <VersionTag feature="delivery.settlementReview" sx={{ ml: 1 }} />
                   </Button>
                 )}
                 {(settlement.status === 'DRAFT' || settlement.status === 'REVIEWED') && (
