@@ -41,8 +41,8 @@ import { fDate , fTime } from 'src/utils/format-time';
 import { shiftApi } from 'src/api/shiftApi';
 import { tenantApi } from 'src/api/tenantApi';
 import { useAuthStore } from 'src/store/useAuthStore';
-import { isApproverRole } from 'src/config/role-access';
 import { useBranchContext } from 'src/contexts/branch-context';
+import { isApproverRole, homePathForRole } from 'src/config/role-access';
 
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 import { MovementDialog } from 'src/components/shift/movement-dialog';
@@ -248,7 +248,8 @@ export function CashDrawerPage() {
       <CustomBreadcrumbs
         heading={t('shift.page.title', 'Shifts & drawers')}
         links={[
-          { name: t('nav.home', 'Home'), href: '/app/dashboard' },
+          // A cashier opens this page too, and their home is the register.
+          { name: t('nav.home', 'Home'), href: homePathForRole(role) },
           { name: t('shift.page.title', 'Shifts & drawers') },
         ]}
         action={

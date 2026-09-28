@@ -24,9 +24,9 @@ export interface RoleAccess {
 /**
  * A register operator: take orders, work the floor, close their own shift. Everything
  * that shapes the business — prices, discounts, catalogue, settings — is somebody else's.
+ * So is the dashboard: the branch's takings for the day are the manager's to read.
  */
 const CASHIER_PATHS = [
-  '/app/dashboard',
   '/app/pos',
   '/app/kiosk',
   '/app/kds',
@@ -45,6 +45,7 @@ const CASHIER_PATHS = [
 
 /** A branch manager runs one site: its people, its money, its menu, its reports. */
 const MANAGER_PATHS = [
+  '/app/dashboard',
   ...CASHIER_PATHS,
   '/app/cashier',
   '/app/delivery',

@@ -75,7 +75,8 @@ export function useNavData(): NavSectionProps['data'] {
     {
       subheader: t('nav.liveOperations', 'Live Operations'),
       items: [
-        // Two roles land here and there was no way back to it once you left.
+        // Managers and admins land here and there was no way back to it once you left.
+        // A cashier cannot open it, so the role filter below drops it for them.
         {
           title: t('nav.dashboard', 'Dashboard'),
           path: '/app/dashboard',
