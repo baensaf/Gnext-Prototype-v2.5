@@ -42,6 +42,7 @@ import { kdsApi } from 'src/api/kdsApi';
 import { catalogApi } from 'src/api/catalogApi';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 
+import { VersionTag } from 'src/components/version-tag';
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
@@ -246,7 +247,15 @@ export function KdsConfigurationPage() {
       <Paper sx={{ mb: 3, borderRadius: 2 }}>
         <Tabs value={tab} onChange={(_, val) => setTab(val)}>
           <Tab label={t('operations.kds.tabs.stations', 'Kitchen Preparation Stations')} value="STATIONS" />
-          <Tab label={t('operations.kds.tabs.screens', 'KDS Bump Screens')} value="SCREENS" />
+          <Tab
+            label={
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                <span>{t('operations.kds.tabs.screens', 'KDS Bump Screens')}</span>
+                <VersionTag feature="kds.screens" />
+              </Stack>
+            }
+            value="SCREENS"
+          />
           <Tab label={t('operations.kds.tabs.rules', 'Station Routing Rules')} value="RULES" />
         </Tabs>
       </Paper>
@@ -489,6 +498,7 @@ export function KdsConfigurationPage() {
               type="number"
               value={stationForm.target_minutes}
               onChange={(e) => setStationForm({ ...stationForm, target_minutes: Number(e.target.value) })}
+              slotProps={{ input: { endAdornment: <VersionTag feature="kds.targetMinutes" /> } }}
               fullWidth
             />
             <FormControl fullWidth>
