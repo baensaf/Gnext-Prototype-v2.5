@@ -54,11 +54,11 @@ export function useNavData(): NavSectionProps['data'] {
   const incomingCount = useIncomingOrders()?.orders.length ?? 0;
   const showVersions = useVersionLabels((s) => s.show);
 
-  // A labelled page carries its Phase 1 version beside its menu entry, after any badge it
-  // already has. Groups are left alone: their entries carry their own.
+  // A page that ships after V1 carries its Phase 1 version beside its menu entry, after any
+  // badge it already has. Groups are left alone: their entries carry their own.
   const withVersion = (item: NavItemDataProps): NavItemDataProps => {
     const value = showVersions && !item.children ? pageLabel(item.path) : undefined;
-    if (!value || Array.isArray(item.info)) return item;
+    if (!value || value === 'V1' || Array.isArray(item.info)) return item;
     const tag = <VersionTag label={value} />;
     const info = item.info ? (
       <Box component="span" sx={{ display: 'inline-flex', gap: 0.5 }}>

@@ -6,8 +6,10 @@ import { create } from 'zustand';
 import { useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 
+import Box from '@mui/material/Box';
 import Tooltip from '@mui/material/Tooltip';
 import IconButton from '@mui/material/IconButton';
+import SellOutlinedIcon from '@mui/icons-material/SellOutlined';
 
 import { pageLabel, FEATURE_LABELS } from 'src/config/version-labels';
 
@@ -59,7 +61,8 @@ export function VersionTag({ feature, label, sx }: VersionTagProps) {
   const { t } = useTranslation();
   const show = useVersionLabels((s) => s.show);
   const value = label ?? (feature ? FEATURE_LABELS[feature] : undefined);
-  if (!show || !value) return null;
+  // V1 is the default, so it goes unmarked: only what ships later carries a chip.
+  if (!show || !value || value === 'V1') return null;
 
   return (
     <Tooltip title={t(`versionLabels.meaning.${value}`)}>
@@ -75,8 +78,8 @@ export function VersionTag({ feature, label, sx }: VersionTagProps) {
 }
 
 /**
- * The header's switch for the labels. While they are on it shows the version of the page on
- * screen; a page nobody has labelled yet shows a neutral chip.
+ * The header's switch for the labels: a tag icon, followed by the page's version when the page
+ * ships after V1. A V1 page, or one nobody has labelled yet, shows the icon alone.
  */
 export function VersionLabelsButton() {
   const { t } = useTranslation();
@@ -85,12 +88,13 @@ export function VersionLabelsButton() {
   const value = pageLabel(pathname);
 
   return (
-    <Tooltip title={show ? t('versionLabels.hide') : t('versionLabels.show')}>
-      <IconButton onClick={toggle} aria-pressed={show} sx={{ px: 0.75, borderRadius: 1 }}>
-        <Label color={show && value ? COLORS[value] : 'default'} variant={show ? 'soft' : 'outlined'}>
-          {show ? (value ?? t('versionLabels.unlabelled')) : t('versionLabels.off')}
-        </Label>
-      </IconButton>
-    </Tooltip>
+    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+      <Tooltip title={show ? t('versionLabels.hide') : t('versionLabels.show')}>
+        <IconButton onClick={toggle} aria-pressed={show} color={show ? 'primary' : 'default'}>
+          <SellOutlinedIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      {value && <VersionTag label={value} />}
+    </Box>
   );
 }
