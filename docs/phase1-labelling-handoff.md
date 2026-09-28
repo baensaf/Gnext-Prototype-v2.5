@@ -106,13 +106,12 @@ type is V4.
 **Page group 7, delivery (`/app/delivery/…`): V1.** Decided 2026-09-29:
 
 - **Couriers belong to one branch in V1**, and a courier is a user with a Courier role,
-  added by the branch manager like a cashier. A courier cannot sign in in V1: the account is
-  there for the Android tracking app that comes later. The manager marks on the board which
-  couriers work today. *Not built yet:* today couriers are their own records, shared across
-  the chain (D-01).
-- **Zones are V1, drawn on a map.** The till still picks the zone by postal code. *Not built
-  yet:* zones have an unused `polygon` column; the map (Neshan, Map.ir or OpenStreetMap) is
-  undecided.
+  added by the branch manager on Delivery → Couriers, which opens the account too (username:
+  the mobile in its +98 form). A courier cannot sign in in V1: the account is there for the
+  Android tracking app that comes later. The manager marks who is "working today", which
+  resets at the day's cutoff. *Built in PR #168.*
+- **Zones are V1, drawn on a map** (OpenStreetMap; Neshan or Map.ir later need only a tile
+  URL and a key). The till still picks the zone by postal code. *Built in PR #169.*
 - **V1 pays a courier the zone's delivery fee, nothing else.** The flat and zone-rate pay
   rules are V4.
 
