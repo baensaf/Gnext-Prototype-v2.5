@@ -89,6 +89,6 @@ yet shared with the account used on 2026-09-28.
    entry and a `<VersionTag>` for each feature that ships later than its page.
 5. Ship a small PR as `CLAUDE.md` describes: a worktree from `origin/main`,
    `npm run lint` and `npm run build`, a PR, then `gh pr merge --rebase` once CI passes.
-   The merge deploys to gnextdev.ir.
+   The merge deploys to gnext.top.
 
 Any locale strings you add go into both `en.json` and `fa.json` with the same keys.

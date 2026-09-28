@@ -11,7 +11,7 @@
 #ifndef SourceExe
   #define SourceExe "..\dist\gnext-agent.exe"
 #endif
-#define DefaultServer "https://gnextdev.ir"
+#define DefaultServer "https://gnext.top"
 
 [Setup]
 AppId={{8E3C5B2A-6F1D-4C8B-9A7E-2D4F6B1C0E93}

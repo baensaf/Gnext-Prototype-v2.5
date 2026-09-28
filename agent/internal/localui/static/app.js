@@ -114,7 +114,7 @@ function render() {
   $('#signout').hidden = !user;
 
   if (!$('#enrol-form').dataset.touched) {
-    $('#enrol-form').server.value = s.server || 'https://gnextdev.ir';
+    $('#enrol-form').server.value = s.server || 'https://gnext.top';
   }
   $('#enrol-replace').hidden = !s.enrolled;
   $('#enrol-branch').textContent = branch;
