@@ -63,6 +63,8 @@ import { useBranchContext } from 'src/contexts/branch-context';
 import { deliveryApi, COURIER_PAY_MODES } from 'src/api/deliveryApi';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
+import { VersionTag } from 'src/components/version-tag';
+
 import { CourierSettlementsPage } from './settlements';
 
 type DeliveryTab = 'BOARD' | 'COURIERS' | 'SETTLEMENTS' | 'ZONES' | 'AUDIT';
@@ -348,6 +350,8 @@ export function DeliveryPage() {
       {COURIER_PAY_MODES.map((mode) => (
         <MenuItem key={mode} value={mode}>
           {t(`delivery.payRules.${mode}`)}
+          {/* V1 pays the courier the zone's delivery fee; the other rules come later. */}
+          {mode !== 'DELIVERY_FEE' && <VersionTag feature="delivery.payModes" sx={{ ml: 1 }} />}
         </MenuItem>
       ))}
     </TextField>
@@ -675,7 +679,18 @@ export function DeliveryPage() {
             <Tab key="COURIERS" label={`${t('delivery.tabs.couriers')} (${couriers.length})`} value="COURIERS" icon={<PersonIcon />} iconPosition="start" />,
             <Tab key="SETTLEMENTS" label={t('delivery.tabs.settlements')} value="SETTLEMENTS" icon={<ReceiptLongIcon />} iconPosition="start" />,
             <Tab key="ZONES" label={`${t('delivery.tabs.zones')} (${zones.length})`} value="ZONES" icon={<MapIcon />} iconPosition="start" />,
-            <Tab key="AUDIT" label={t('delivery.tabs.audit')} value="AUDIT" icon={<HistoryIcon />} iconPosition="start" />,
+            <Tab
+              key="AUDIT"
+              label={
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                  <span>{t('delivery.tabs.audit')}</span>
+                  <VersionTag feature="delivery.audit" />
+                </Stack>
+              }
+              value="AUDIT"
+              icon={<HistoryIcon />}
+              iconPosition="start"
+            />,
           ].filter((item) => canOpenTab(item.key as DeliveryTab))}
         </Tabs>
       </Paper>
@@ -911,7 +926,9 @@ export function DeliveryPage() {
                 <TableCell>{t('delivery.couriers.vehicle')}</TableCell>
                 <TableCell>{t('delivery.couriers.compensationPerDelivery')}</TableCell>
                 <TableCell>{t('delivery.couriers.attendance')}</TableCell>
-                <TableCell>{t('delivery.couriers.availability')}</TableCell>
+                <TableCell>
+                  {t('delivery.couriers.availability')} <VersionTag feature="delivery.availability" />
+                </TableCell>
                 <TableCell>{t('delivery.couriers.mobilePosAssignment')}</TableCell>
                 <TableCell>{t('delivery.couriers.activeLoad')}</TableCell>
                 <TableCell align="right">{t('delivery.couriers.actions')}</TableCell>
@@ -938,7 +955,10 @@ export function DeliveryPage() {
                     <TableCell>
                       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                         <Box>
-                          <Typography variant="body2">{t(`delivery.payRules.${c.pay_mode || 'FLAT'}`)}</Typography>
+                          <Typography variant="body2">
+                            {t(`delivery.payRules.${c.pay_mode || 'FLAT'}`)}{' '}
+                            {c.pay_mode !== 'DELIVERY_FEE' && <VersionTag feature="delivery.payModes" />}
+                          </Typography>
                           {c.pay_mode !== 'DELIVERY_FEE' && (
                             <Typography variant="caption" color="text.secondary">
                               {t(c.pay_mode === 'ZONE_RATE' ? 'delivery.payRules.zoneFallback' : 'delivery.payRules.flatAmount', {
@@ -1250,7 +1270,9 @@ export function DeliveryPage() {
 
       {/* Courier Already On File */}
       <Dialog open={Boolean(courierOnFile)} onClose={() => setCourierOnFile(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>{t('delivery.modals.moveCourier.title')}</DialogTitle>
+        <DialogTitle>
+          {t('delivery.modals.moveCourier.title')} <VersionTag feature="delivery.moveCourier" />
+        </DialogTitle>
         <DialogContent>
           {courierOnFile && (
             <Stack spacing={2} sx={{ pt: 1 }}>

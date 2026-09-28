@@ -33,6 +33,9 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/refunds': 'V2',
   '/app/payments': 'V1',
   '/app/operations/card-terminals': 'V1',
+  // Full delivery is V1; head office's fleet roll-up is not.
+  '/app/delivery': 'V1',
+  '/app/delivery/rollup': 'V4',
   '/app/moadian': 'F',
 };
 
@@ -68,6 +71,14 @@ export const FEATURE_LABELS = {
   'payments.onlineGateway': 'F',
   'payments.bankTransfer': 'V4',
   'payments.settlementAccounts': 'V4',
+  // Delivery. V1 couriers belong to one branch and are paid the zone's delivery fee.
+  'delivery.payModes': 'V4',
+  'delivery.availability': 'V4',
+  'delivery.moveCourier': 'V4',
+  'delivery.courierDetail': 'V4',
+  'delivery.settlementReview': 'V4',
+  'delivery.settlementReverse': 'V2',
+  'delivery.audit': 'F',
   // Kitchen screen settings; the stations and routing rules also drive the printers.
   'kds.screens': 'F',
   'kds.targetMinutes': 'F',

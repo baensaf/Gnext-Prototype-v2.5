@@ -103,9 +103,34 @@ registers and printers. The bank settlement accounts moved to Settings → Payme
 and are V4. The "online payment gateway" device type is F; the "bank transfer account"
 type is V4.
 
+**Page group 7, delivery (`/app/delivery/…`): V1.** Decided 2026-09-29:
+
+- **Couriers belong to one branch in V1**, and a courier is a user with a Courier role,
+  added by the branch manager like a cashier. A courier cannot sign in in V1: the account is
+  there for the Android tracking app that comes later. The manager marks on the board which
+  couriers work today. *Not built yet:* today couriers are their own records, shared across
+  the chain (D-01).
+- **Zones are V1, drawn on a map.** The till still picks the zone by postal code. *Not built
+  yet:* zones have an unused `polygon` column; the map (Neshan, Map.ir or OpenStreetMap) is
+  undecided.
+- **V1 pays a courier the zone's delivery fee, nothing else.** The flat and zone-rate pay
+  rules are V4.
+
+| Feature | Label |
+|---|---|
+| Other courier pay rules (flat, zone rate) | V4 |
+| Courier availability (available, busy, offline) | V4 |
+| Moving a courier to another branch | V4 |
+| The courier detail page | V4 |
+| The settlement "review" step | V4 |
+| Reversing a closed settlement | V2 |
+| Snappfood orders the store delivers, on the board | V3 |
+| The delivery audit tab | F |
+| Head office's fleet roll-up (`/app/delivery/rollup`) | V4 |
+
 ## Next
 
-Page group 7, delivery, then groups 8–15 in the order listed on the Feature labels tab.
+Page group 8, catalog, then groups 9–15 in the order listed on the Feature labels tab.
 
 ## Routine for each page
 

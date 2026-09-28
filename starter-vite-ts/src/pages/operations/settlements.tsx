@@ -36,6 +36,7 @@ import { httpClient as axios } from 'src/api/httpClient';
 import { useBranchContext } from 'src/contexts/branch-context';
 
 import { Iconify } from 'src/components/iconify';
+import { VersionTag } from 'src/components/version-tag';
 
 interface CourierUnsettledSummary {
   courier_id: string;
@@ -699,6 +700,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
               {activeSettlementDetail.status === 'DRAFT' && (
                 <Button variant="contained" color="warning" onClick={handleReviewSettlement}>
                   {t('settlements.detailModal.submitReview')}
+                  <VersionTag feature="delivery.settlementReview" sx={{ ml: 1 }} />
                 </Button>
               )}
 
@@ -711,6 +713,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
               {activeSettlementDetail.status === 'CLOSED' && (
                 <Button variant="outlined" color="error" onClick={handleReverseSettlement}>
                   {t('settlements.detailModal.reverseSettlement')}
+                  <VersionTag feature="delivery.settlementReverse" sx={{ ml: 1 }} />
                 </Button>
               )}
             </DialogActions>

@@ -33,6 +33,7 @@ import { useCurrencyCode } from 'src/utils/currency';
 import { deliveryApi } from 'src/api/deliveryApi';
 import { profilesApi } from 'src/api/profilesApi';
 
+import { VersionTag } from 'src/components/version-tag';
 import {
   InfoCard,
   formatMoney,
@@ -148,7 +149,11 @@ export function CourierDetailPage() {
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
       <ProfileHeader
-        title={courier.name}
+        title={
+          <>
+            {courier.name} <VersionTag feature="delivery.courierDetail" />
+          </>
+        }
         subtitle={
           <span dir="ltr">
             {courier.code}
