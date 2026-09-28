@@ -81,6 +81,7 @@ export const paths = {
       branches: `${ROOTS.APP}/operations/branches`,
       branchDetail: (id: string) => `${ROOTS.APP}/operations/branches/${id}`,
       terminals: `${ROOTS.APP}/operations/terminals`,
+      cardTerminals: `${ROOTS.APP}/operations/card-terminals`,
       kdsConfiguration: `${ROOTS.APP}/operations/kds-configuration`,
       printers: `${ROOTS.APP}/operations/printers`,
       printQueue: `${ROOTS.APP}/operations/print-queue`,

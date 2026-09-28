@@ -29,6 +29,10 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/cashier': 'V1',
   // Head office's view of every branch's drawers
   '/app/cashier/rollup': 'V4',
+  // In V1 money goes back only by cancelling a paid order from the Orders page.
+  '/app/refunds': 'V2',
+  '/app/payments': 'V1',
+  '/app/operations/card-terminals': 'V1',
   '/app/moadian': 'F',
 };
 
@@ -60,6 +64,10 @@ export const FEATURE_LABELS = {
   // Business days
   'businessDay.reopen': 'V2',
   'businessDay.dateReview': 'F',
+  // Card terminals and the bank accounts they settle into
+  'payments.onlineGateway': 'F',
+  'payments.bankTransfer': 'V4',
+  'payments.settlementAccounts': 'V4',
   // Kitchen screen settings; the stations and routing rules also drive the printers.
   'kds.screens': 'F',
   'kds.targetMinutes': 'F',

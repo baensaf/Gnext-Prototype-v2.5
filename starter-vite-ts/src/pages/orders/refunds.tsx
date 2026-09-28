@@ -161,7 +161,7 @@ export function RefundsPage() {
             Refunds & Paid Order Cancellations
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Slice 13 — Item-level, partial, full refunds, same-tender rules, and post-preparation cancellation approvals
+            {t('refunds.subtitle', 'Full and partial refunds of paid orders, released by a manager PIN.')}
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>

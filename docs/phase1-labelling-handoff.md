@@ -95,10 +95,17 @@ cashier closes it. These ship later:
 The business day closes by itself once it has ended and every shift is counted (Q-03,
 answered 2026-09-29).
 
+**Page group 6, payments and refunds.** Payments (`/app/payments`) is V1 and is now only
+the list of payments taken. Refunds (`/app/refunds`) is V2: in V1, money goes back only by
+cancelling a paid order from the Orders page. The card terminal set-up moved out of Payments
+into Settings → Hardware → Card terminals (`/app/operations/card-terminals`, V1), next to
+registers and printers. The bank settlement accounts moved to Settings → Payments & refunds
+and are V4. The "online payment gateway" device type is F; the "bank transfer account"
+type is V4.
+
 ## Next
 
-Page group 6, payments and refunds, then groups 7–15 in the order listed on the Feature
-labels tab.
+Page group 7, delivery, then groups 8–15 in the order listed on the Feature labels tab.
 
 ## Routine for each page
 
