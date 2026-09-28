@@ -13,7 +13,7 @@ page, the product manager decides which version ships each feature: V1, V2, V3, 
 | Version | What it is for |
 |---|---|
 | V1 Counter | One branch sells, delivers and closes its day: POS, catalog, cash and card, shifts, business day, printing, and full delivery (addresses, zones, couriers, dispatch board, courier settlement) |
-| V2 Floor | Table assignment and the dine-in floor, the full approval engine, the full refund and correction set |
+| V2 Floor | Creating tables and assigning one when an order is submitted (nothing more of the dine-in floor), the full approval engine, the full refund and correction set |
 | V3 Delivery and Snappfood | The real Snappfood integration, customer import at scale, coupons, customer credit |
 | V4 Club, credit and head office | Discount campaigns, Tara Pay, kiosk, chain-scale pricing, consolidated reports |
 | F | After Phase 1. Offline operation is F. So is Moadian: Iran Burger issues tax invoices from its own accounting software. So is the KDS and everything that depends on it |
@@ -24,8 +24,10 @@ tickets are printed. Kitchen stations and routing rules stay V1, because the pri
 
 ## Where the decisions live
 
-- **Claude Doc "Phase 1 Decision Register"**: https://claude.ai/code/artifact/ba67a43a-c842-4738-81e1-28af6e84ddbe.
-  The product manager shares it with the new account. It has two tabs:
+- **Claude Doc "Phase 1 Decision Register"**: https://claude.ai/code/artifact/1775b8f0-b936-4b43-aac1-ded088ace0e4.
+  Rebuilt on 2026-09-28 under the account Claude works in, because the docs tools refuse a
+  doc owned by another organization even when it is shared. The first copy
+  (`ba67a43a-…`) is no longer updated. It has two tabs:
   - **Decision register**: every decision found in the docs and code (rows S, A, R, C, O, P,
     Y, K, D, U, I, G, L), each marked Confirmed, Accepted recommendation or Implicit in
     code, and waiting for a Keep, Change or Open verdict. Open questions are Q-01 to Q-16.
@@ -73,11 +75,15 @@ the order type, and the manager PIN for a late or paid cancellation.
 **KDS (`/app/kds`): F.** On the kitchen settings page, the bump-screens tab and the target
 preparation time are F. That page's other features wait for its own turn.
 
+**Page group 3, dine-in floor (`/app/dine-in/floor`): V2, but a very basic V2.** V2 is only
+creating sections and tables; the POS assigns a table when the order is submitted. Running
+service from the floor is F: occupancy, table states, seating, move, merge, split, the guest
+bill, paying from the table and releasing it.
+
 ## Next
 
-Page group 3, then groups 4–15 in the order listed on the Feature labels tab. The page
-group 2 rows and the KDS change still have to go into the Decision Register, which was not
-yet shared with the account used on 2026-09-28.
+Page group 4 (KDS) is already F, so page group 5, shifts and business days, is next. Then
+groups 6–15 in the order listed on the Feature labels tab.
 
 ## Routine for each page
 

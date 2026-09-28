@@ -19,6 +19,8 @@ export const PHASE_LABELS: PhaseLabel[] = ['V1', 'V2', 'V3', 'V4', 'F'];
 const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/pos': 'V1',
   '/app/orders': 'V1',
+  // V2 only sets up sections and tables; the POS assigns a table to an order.
+  '/app/dine-in': 'V2',
   // Only Snappfood (and later the website) sends orders that wait to be accepted.
   '/app/orders/incoming': 'V3',
   // No restaurant in Iran runs a kitchen screen; tickets are printed.
@@ -43,6 +45,9 @@ export const FEATURE_LABELS = {
   'orders.takenOffline': 'F',
   'orders.headOfficeView': 'V4',
   'orders.auditSnapshot': 'F',
+  // Dine-in floor: running service from the floor (occupancy, seating, move, merge, split,
+  // guest bill, pay, release) comes after Phase 1.
+  'dineIn.liveFloor': 'F',
   // Kitchen screen settings; the stations and routing rules also drive the printers.
   'kds.screens': 'F',
   'kds.targetMinutes': 'F',

@@ -46,7 +46,7 @@ import { orderApi } from 'src/api/orderApi';
 import { dineInApi } from 'src/api/dineInApi';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 
-import { Label } from 'src/components/label';
+import { VersionTag } from 'src/components/version-tag';
 import { CheckoutModal } from 'src/components/CheckoutModal';
 
 export function DineInPage() {
@@ -302,7 +302,7 @@ export function DineInPage() {
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            {t('dineIn.title', 'Dine-In Floor Plan & Operations')} <Label color="info">V4</Label>
+            {t('dineIn.title', 'Dine-In Floor Plan & Operations')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {t('dineIn.subtitle', 'Slice R17 — Table management, occupancy, move, merge, split orders, item transfers, and guest bill')}
@@ -328,6 +328,12 @@ export function DineInPage() {
       )}
 
       {/* Floor Overview KPI Summary */}
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+        <Typography variant="overline" color="text.secondary">
+          {t('dineIn.occupancy', 'Occupancy')}
+        </Typography>
+        <VersionTag feature="dineIn.liveFloor" />
+      </Stack>
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 6, sm: 3 }}>
           <Paper variant="outlined" sx={{ p: 2, borderRadius: 1.5, textAlign: 'center' }}>
@@ -416,7 +422,11 @@ export function DineInPage() {
                     <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                       {t('dineIn.table', 'Table')} {tbl.table_number}
                     </Typography>
-                    <Chip label={getStatusLabel(tbl.status)} color={getStatusColor(tbl.status) as any} size="small" sx={{ fontWeight: 'bold' }} />
+                    {/* The table's state and everything done from the card is running service: F. */}
+                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                      <Chip label={getStatusLabel(tbl.status)} color={getStatusColor(tbl.status) as any} size="small" sx={{ fontWeight: 'bold' }} />
+                      <VersionTag feature="dineIn.liveFloor" />
+                    </Stack>
                   </Stack>
 
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
@@ -527,7 +537,7 @@ export function DineInPage() {
       {/* Seat Guests Dialog */}
       <Dialog open={seatDialogOpen} onClose={() => setSeatDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ fontWeight: 'bold' }}>
-          {t('dineIn.seatDialogTitle', 'Seat Guests — Table')} {selectedTable?.table_number}
+          {t('dineIn.seatDialogTitle', 'Seat Guests — Table')} {selectedTable?.table_number} <VersionTag feature="dineIn.liveFloor" />
         </DialogTitle>
         <Box component="form" onSubmit={handleSeatGuests}>
           <DialogContent>
@@ -554,7 +564,7 @@ export function DineInPage() {
       {/* Move Table Dialog */}
       <Dialog open={moveDialogOpen} onClose={() => setMoveDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ fontWeight: 'bold' }}>
-          {t('dineIn.moveDialogTitle', 'Move Order from Table')} {selectedTable?.table_number}
+          {t('dineIn.moveDialogTitle', 'Move Order from Table')} {selectedTable?.table_number} <VersionTag feature="dineIn.liveFloor" />
         </DialogTitle>
         <DialogContent>
           <TextField
@@ -585,7 +595,7 @@ export function DineInPage() {
       {/* Merge Orders Dialog */}
       <Dialog open={mergeDialogOpen} onClose={() => setMergeDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontWeight: 'bold' }}>
-          {t('dineIn.mergeDialogTitle', 'Merge Orders into Table')} {selectedTable?.table_number}
+          {t('dineIn.mergeDialogTitle', 'Merge Orders into Table')} {selectedTable?.table_number} <VersionTag feature="dineIn.liveFloor" />
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -626,7 +636,7 @@ export function DineInPage() {
       {/* Split Order Dialog */}
       <Dialog open={splitDialogOpen} onClose={() => setSplitDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ fontWeight: 'bold' }}>
-          {t('dineIn.splitDialogTitle', 'Split Order')} #{currentOrder?.order_number}
+          {t('dineIn.splitDialogTitle', 'Split Order')} #{currentOrder?.order_number} <VersionTag feature="dineIn.liveFloor" />
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -686,7 +696,9 @@ export function DineInPage() {
 
       {/* Guest Bill Dialog */}
       <Dialog open={billDialogOpen} onClose={() => setBillDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>{t('dineIn.guestBillTitle', 'Guest Bill Preview')}</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>
+          {t('dineIn.guestBillTitle', 'Guest Bill Preview')} <VersionTag feature="dineIn.liveFloor" />
+        </DialogTitle>
         <DialogContent>
           {/*
             The bill is a whole document with its own body and table styles; in a frame
