@@ -62,6 +62,7 @@ import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
 import { ProductDetailPage } from 'src/pages/catalog/product-detail';
 import { NoteTemplatesPage } from 'src/pages/settings/note-templates';
 import { BranchDetailPage } from 'src/pages/operations/branch-detail';
+import { CardTerminalsPage } from 'src/pages/operations/card-terminals';
 import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
 import { CourierDetailPage } from 'src/pages/operations/courier-detail';
 import { CourierPaySettingsPage } from 'src/pages/settings/courier-pay';
@@ -187,6 +188,7 @@ export const routesSection: RouteObject[] = [
       { path: 'operations/branches', element: <BranchesPage /> },
       { path: 'operations/branches/:id', element: <BranchDetailPage /> },
       { path: 'operations/terminals', element: <RequiresBranch><TerminalsPage /></RequiresBranch> },
+      { path: 'operations/card-terminals', element: <RequiresBranch><CardTerminalsPage /></RequiresBranch> },
       { path: 'operations/kds-configuration', element: <RequiresBranch><KdsConfigurationPage /></RequiresBranch> },
       { path: 'operations/printers', element: <RequiresBranch><PrintersPage /></RequiresBranch> },
       { path: 'operations/print-queue', element: <RequiresBranch><PrintQueuePage /></RequiresBranch> },

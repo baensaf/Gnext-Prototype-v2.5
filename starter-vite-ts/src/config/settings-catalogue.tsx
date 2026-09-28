@@ -8,6 +8,7 @@ import ShieldIcon from '@mui/icons-material/Shield';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import TranslateIcon from '@mui/icons-material/Translate';
+import CreditCardIcon from '@mui/icons-material/CreditCard';
 import TwoWheelerIcon from '@mui/icons-material/TwoWheeler';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
@@ -147,6 +148,18 @@ export function useSettingsCatalogue(): SettingCategory[] {
           tags: ['terminals', 'pos', 'registers', 'devices', 'hardware', 'pairing', 'serials', 'پایانه‌ها', 'صندوق', 'دستگاه‌ها', 'سخت‌افزار'],
         },
         {
+          id: 'card-terminals',
+          scope: 'BRANCH',
+          title: t('settings.hub.items.cardTerminals.title', 'Card terminals'),
+          description: t(
+            'settings.hub.items.cardTerminals.description',
+            "The counter's card terminals and the couriers' mobile card readers, and how the branch agent reaches each one."
+          ),
+          path: '/app/operations/card-terminals',
+          icon: <CreditCardIcon sx={{ color: 'primary.main' }} />,
+          tags: ['card', 'eft', 'pos', 'terminal', 'saman', 'card reader', 'mobile pos', 'کارتخوان', 'پوز', 'پایانه پرداخت', 'سامان'],
+        },
+        {
           id: 'printers',
           scope: 'BRANCH',
           title: t('settings.hub.items.printers.title', 'Printers & Print Routing'),
@@ -278,7 +291,7 @@ export function useSettingsCatalogue(): SettingCategory[] {
           title: t('settings.hub.items.payments.title', 'Payments & Refund Methods'),
           description: t(
             'settings.hub.items.payments.description',
-            'EFT POS terminals, card gateways, cash drawers, refund limits, and payment methods.'
+            'Payment and refund methods, and the bank accounts the card terminals settle into.'
           ),
           path: '/app/settings/payments-refunds',
           icon: <PaymentsIcon sx={{ color: 'success.main' }} />,

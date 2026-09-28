@@ -1488,7 +1488,12 @@
     }
   },
   "payments": {
-    "title": "Payment Transactions & Devices",
+    "title": "Payments",
+    "subtitle": "Every payment taken at this branch.",
+    "cardTerminals": {
+      "title": "Card terminals",
+      "loadError": "Failed to load the card terminals"
+    },
     "void": "Cancel",
     "tabTransactions": "Payment Records",
     "tabDevices": "POS Terminals & Devices",
@@ -1548,6 +1553,7 @@
   },
   "refunds": {
     "title": "Refunds & Returns",
+    "subtitle": "Full and partial refunds of paid orders, released by a manager PIN.",
     "originalTender": "Original Payment Method Refund",
     "cashAlternative": "Alternative Cash Refund",
     "reason": "Reason",
@@ -2983,9 +2989,13 @@
           "title": "Courier Pay",
           "description": "The pay rule new couriers start on, and whether failed deliveries are paid."
         },
+        "cardTerminals": {
+          "title": "Card terminals",
+          "description": "The counter's card terminals and the couriers' mobile card readers, and how the branch agent reaches each one."
+        },
         "payments": {
           "title": "Payments & Refund Methods",
-          "description": "EFT POS terminals, card gateways, cash drawers, refund limits, and payment methods.",
+          "description": "Payment and refund methods, and the bank accounts the card terminals settle into.",
           "badge": "Gateways Ready"
         },
         "kds": {

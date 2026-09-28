@@ -1,4 +1,5 @@
 import type { PaymentMethod } from 'src/api/settingsApi';
+import type { SettlementAccount } from 'src/api/paymentApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -37,10 +38,12 @@ import {
 
 import { useCurrencyCode } from 'src/utils/currency';
 
+import { paymentApi } from 'src/api/paymentApi';
 import { settingsApi } from 'src/api/settingsApi';
 import { useIsHeadOffice } from 'src/store/useAuthStore';
 import { useBranchContext } from 'src/contexts/branch-context';
 
+import { VersionTag } from 'src/components/version-tag';
 import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
@@ -70,12 +73,25 @@ export function PaymentSettingsPage() {
   const [formActive, setFormActive] = useState(true);
   const [savingMethod, setSavingMethod] = useState(false);
 
+  // The bank accounts the card terminals settle into: the chain's, like the tender types.
+  const [accounts, setAccounts] = useState<SettlementAccount[]>([]);
+  const [accDrawerOpen, setAccDrawerOpen] = useState(false);
+  const [accCode, setAccCode] = useState('');
+  const [accName, setAccName] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [iban, setIban] = useState('');
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const list = await settingsApi.getPaymentMethods();
+      const [list, accountList] = await Promise.all([
+        settingsApi.getPaymentMethods(),
+        paymentApi.getAccounts().catch(() => [] as SettlementAccount[]),
+      ]);
       setMethods(list || []);
+      setAccounts(accountList);
     } catch (err: any) {
       setError(err?.response?.data?.message || err.detail || err.message || t('settings.paymentsPage.loadError', 'Failed to load payment methods'));
     } finally {
@@ -155,6 +171,28 @@ export function PaymentSettingsPage() {
       setError(err?.response?.data?.message || err.detail || err.message || t('settings.paymentsPage.saveError', 'Failed to save payment method'));
     } finally {
       setSavingMethod(false);
+    }
+  };
+
+  const handleCreateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await paymentApi.createAccount({
+        code: accCode,
+        name: accName,
+        bank_name: bankName || undefined,
+        account_number: accountNumber || undefined,
+        iban: iban || undefined,
+      });
+      setAccDrawerOpen(false);
+      setAccCode('');
+      setAccName('');
+      setBankName('');
+      setAccountNumber('');
+      setIban('');
+      loadData();
+    } catch (err: any) {
+      setError(err.detail || 'Failed to create settlement account');
     }
   };
 
@@ -297,6 +335,82 @@ export function PaymentSettingsPage() {
           </Table>
         </TableContainer>
       </Card>
+
+      {/* Bank settlement accounts */}
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 4, mb: 1.5 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Typography variant="h6">{t('payments.tabAccounts', 'Bank Settlement Accounts')}</Typography>
+          <VersionTag feature="payments.settlementAccounts" />
+        </Stack>
+        <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setAccDrawerOpen(true)} disabled={!isHeadOffice}>
+          {t('payments.addAccount', 'Create Account')}
+        </Button>
+      </Stack>
+      <Card sx={{ borderRadius: 2 }}>
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Account Code</TableCell>
+                <TableCell>Account Name</TableCell>
+                <TableCell>Bank</TableCell>
+                <TableCell>Account Number</TableCell>
+                <TableCell>IBAN</TableCell>
+                <TableCell>Status</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {accounts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} align="center">
+                    <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
+                      No settlement accounts created yet.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                accounts.map((acc) => (
+                  <TableRow key={acc.id}>
+                    <TableCell>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                        {acc.code}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{acc.name}</TableCell>
+                    <TableCell>{acc.bank_name || '-'}</TableCell>
+                    <TableCell>{acc.account_number || '-'}</TableCell>
+                    <TableCell>{acc.iban || '-'}</TableCell>
+                    <TableCell>
+                      <Chip label={acc.is_active ? 'Active' : 'Inactive'} color={acc.is_active ? 'success' : 'default'} size="small" />
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Card>
+
+      <Drawer anchor="right" open={accDrawerOpen} onClose={() => setAccDrawerOpen(false)}>
+        <Box sx={{ width: 400, p: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+            Create Settlement Account
+          </Typography>
+          <Box component="form" onSubmit={handleCreateAccount}>
+            <Stack spacing={2.5}>
+              <TextField label="Account Code" value={accCode} onChange={(e) => setAccCode(e.target.value)} required fullWidth placeholder="e.g. ACC-MELLAT-MAIN" />
+              <TextField label="Account Name" value={accName} onChange={(e) => setAccName(e.target.value)} required fullWidth placeholder="e.g. Mellat Corporate Account" />
+              <TextField label="Bank Name" value={bankName} onChange={(e) => setBankName(e.target.value)} fullWidth placeholder="e.g. Bank Mellat" />
+              <TextField label="Account Number" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} fullWidth />
+              <TextField label="IBAN (Sheba)" value={iban} onChange={(e) => setIban(e.target.value)} fullWidth placeholder="IR..." />
+
+              <Button type="submit" variant="contained" size="large" fullWidth sx={{ mt: 2 }}>
+                Save Account
+              </Button>
+            </Stack>
+          </Box>
+        </Box>
+      </Drawer>
 
       {/* Create / Edit Drawer */}
       <Drawer
