@@ -1,4 +1,4 @@
-import type { PaymentRecord } from 'src/api/paymentApi';
+import type { PaymentListRow } from 'src/api/paymentApi';
 
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
@@ -10,6 +10,7 @@ import {
   Stack,
   Table,
   Paper,
+  Alert,
   Button,
   TableRow,
   TableBody,
@@ -17,63 +18,58 @@ import {
   TableHead,
   Typography,
   TableContainer,
+  TablePagination,
 } from '@mui/material';
 
-import { fDate } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
-import { useCurrencyCode } from 'src/utils/currency';
+import { fDateTime } from 'src/utils/format-time';
 
-import { httpClient } from 'src/api/httpClient';
+import { paymentApi } from 'src/api/paymentApi';
+import { useScopedBranchId } from 'src/contexts/branch-context';
+
+const PAGE_SIZES = [25, 50, 100];
 
 /**
- * The money taken at this branch. Only a list to read: the card terminals are set up under
- * Settings → Card terminals, and the bank accounts they settle into under Settings →
- * Payments & refunds.
+ * The money taken at this branch, newest first. Only a list to read: the card terminals are
+ * set up under Settings → Card terminals, and the bank accounts they settle into under
+ * Settings → Payments & refunds.
  */
 export function PaymentsPage() {
-  const currency = useCurrencyCode();
   const { t } = useTranslation();
+  const [branchId] = useScopedBranchId();
 
-  const [transactions, setTransactions] = useState<PaymentRecord[]>([]);
+  const [rows, setRows] = useState<PaymentListRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
+  const [error, setError] = useState<string | null>(null);
 
-  // There is no payments list in the API yet, and the audit route this reads is not served,
-  // so the list stays empty rather than showing an error.
   const loadData = useCallback(async () => {
     try {
-      const txRes = await httpClient.get('/api/v1/audit/logs', { params: { entityType: 'Payment', limit: 25 } });
-      if (Array.isArray(txRes.data)) {
-        setTransactions(
-          txRes.data.map((l: any) => ({
-            id: l.entity_id || l.id,
-            order_id: l.payload_json?.order_id || l.payload_json?.orderId || '-',
-            payment_number: l.payload_json?.payment_number || `PAY-${(l.id || '').substring(0, 8)}`,
-            method_id: l.payload_json?.method_id || '-',
-            method_kind: l.payload_json?.method_kind || l.payload_json?.method || 'CARD_PRESENT',
-            status: (l.payload_json?.status || 'SUCCEEDED') as any,
-            amount: l.payload_json?.amount || '0',
-            currency_code: l.payload_json?.currency_code || currency,
-            business_date: l.created_at || new Date().toISOString(),
-            recorded_at: l.created_at || new Date().toISOString(),
-            initiated_at: l.created_at || new Date().toISOString(),
-            reference: l.payload_json?.reference || l.payload_json?.rrn,
-          }))
-        );
-      }
-    } catch {
-      setTransactions([]);
+      const res = await paymentApi.listPayments({ branchId: branchId || undefined, page: page + 1, limit: pageSize });
+      setRows(res.data);
+      setTotal(res.total);
+      setError(null);
+    } catch (err: any) {
+      setError(err.detail || err.message || t('payments.loadError', 'Could not load the payments'));
     }
-  }, [currency]);
+  }, [branchId, page, pageSize, t]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Another branch is another list, from its first page.
+  useEffect(() => {
+    setPage(0);
+  }, [branchId]);
 
   return (
     <Box>
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            {t('payments.title', 'Payments & Settlement Infrastructure')}
+            {t('payments.title', 'Payments')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {t('payments.subtitle', 'Every payment taken at this branch.')}
@@ -84,12 +80,18 @@ export function PaymentsPage() {
         </Button>
       </Stack>
 
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
       <TableContainer component={Paper} variant="outlined">
         <Table>
           <TableHead>
             <TableRow>
               <TableCell>{t('payments.columnPaymentNumber', 'Payment Number')}</TableCell>
-              <TableCell>{t('payments.columnOrder', 'Order ID')}</TableCell>
+              <TableCell>{t('payments.columnOrder', 'Order No')}</TableCell>
               <TableCell>{t('payments.columnMethod', 'Method')}</TableCell>
               <TableCell>{t('payments.columnAmount', 'Amount')}</TableCell>
               <TableCell>{t('payments.columnReference', 'Reference / RRN')}</TableCell>
@@ -98,7 +100,7 @@ export function PaymentsPage() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {transactions.length === 0 ? (
+            {rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} align="center">
                   <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
@@ -107,12 +109,14 @@ export function PaymentsPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              transactions.map((tx) => (
+              rows.map((tx) => (
                 <TableRow key={tx.id}>
                   <TableCell><code>{tx.payment_number}</code></TableCell>
-                  <TableCell>{tx.order_id}</TableCell>
+                  <TableCell><code>{tx.order_number}</code></TableCell>
                   <TableCell><Chip label={tx.method_kind} size="small" variant="outlined" /></TableCell>
-                  <TableCell><strong>{MoneyUtil.format(tx.amount)} {tx.currency_code}</strong></TableCell>
+                  <TableCell>
+                    <strong dir="ltr">{MoneyUtil.formatCurrency(tx.amount)} {tx.currency_code}</strong>
+                  </TableCell>
                   <TableCell><code>{tx.reference || '-'}</code></TableCell>
                   <TableCell>
                     <Chip
@@ -121,12 +125,24 @@ export function PaymentsPage() {
                       size="small"
                     />
                   </TableCell>
-                  <TableCell>{fDate(tx.business_date)}</TableCell>
+                  <TableCell dir="ltr">{fDateTime(tx.posted_at || tx.initiated_at)}</TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
+        <TablePagination
+          component="div"
+          count={total}
+          page={page}
+          onPageChange={(_, next) => setPage(next)}
+          rowsPerPage={pageSize}
+          rowsPerPageOptions={PAGE_SIZES}
+          onRowsPerPageChange={(e) => {
+            setPageSize(Number(e.target.value));
+            setPage(0);
+          }}
+        />
       </TableContainer>
     </Box>
   );

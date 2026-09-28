@@ -66,6 +66,23 @@ export interface PaymentRecord {
 
 export type Payment = PaymentRecord;
 
+/** A row of the Payments page: a payment with the number of the order it was taken against. */
+export interface PaymentListRow {
+  id: string;
+  payment_number: string;
+  order_id: string;
+  order_number: string;
+  branch_id: string;
+  method_kind: string;
+  status: PaymentRecord['status'];
+  amount: string;
+  currency_code: string;
+  reference?: string | null;
+  business_date: string;
+  initiated_at: string;
+  posted_at?: string | null;
+}
+
 /** How long the till waits for the customer and the bank at the card terminal. */
 const TERMINAL_WAIT_MS = 150_000;
 const TERMINAL_POLL_MS = 1500;
@@ -187,6 +204,12 @@ export const paymentApi = {
     };
     const res = await httpClient.post('/api/v1/payment-devices', payload);
     return res.data;
+  },
+
+  /** One page of the payments taken, newest first. A branch account only ever gets its own. */
+  listPayments: async (params: { branchId?: string; page?: number; limit?: number }): Promise<{ data: PaymentListRow[]; total: number }> => {
+    const res = await httpClient.get('/api/v1/payments', { params });
+    return { data: res.data?.data || [], total: Number(res.data?.total) || 0 };
   },
 
   getOrderPayments: async (orderId: string): Promise<PaymentRecord[]> => {

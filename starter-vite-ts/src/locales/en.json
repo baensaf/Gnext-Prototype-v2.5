@@ -1490,6 +1490,7 @@
   "payments": {
     "title": "Payments",
     "subtitle": "Every payment taken at this branch.",
+    "loadError": "Could not load the payments",
     "cardTerminals": {
       "title": "Card terminals",
       "loadError": "Failed to load the card terminals"
