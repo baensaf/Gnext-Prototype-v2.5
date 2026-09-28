@@ -92,6 +92,7 @@ import { httpClient as axios } from 'src/api/httpClient';
 import { isManagerOrAbove } from 'src/config/role-access';
 import { useBranchContext, useScopedBranchId } from 'src/contexts/branch-context';
 
+import { VersionTag } from 'src/components/version-tag';
 import { CheckoutModal } from 'src/components/CheckoutModal';
 import { ServerDataGrid } from 'src/components/server-data-grid';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
@@ -409,24 +410,38 @@ export function OrdersWorkflowPage() {
 
   const renderProgressChip = (status: string) => {
     const key = progressKeyOf(status);
-    return key ? <Chip label={t(`orders.progress.${key}`)} size="small" variant="outlined" /> : null;
+    return key ? (
+      <>
+        <Chip label={t(`orders.progress.${key}`)} size="small" variant="outlined" />
+        {/* Only a kitchen screen moves an order to preparing or ready. */}
+        {(key === 'preparing' || key === 'ready') && <VersionTag feature="orders.kitchenProgress" />}
+      </>
+    ) : null;
   };
 
   // An open Snappfood order shows the time the store promised, or that Snappfood support has it.
   const renderSnappfoodChips = (order: OrderHeader) => {
     if (!isSnappfoodOrder(order) || lifecycleOf(order) !== 'OPEN') return null;
     if (order.aggregator_issue_at) {
-      return <Chip color="warning" label={t('orders.snappfood.withSupport')} size="small" />;
+      return (
+        <>
+          <Chip color="warning" label={t('orders.snappfood.withSupport')} size="small" />
+          <VersionTag feature="orders.snappfood" />
+        </>
+      );
     }
     const by = promisedBy(order);
     return by ? (
-      <Chip
-        label={t('orders.snappfood.promisedBy', {
-          time: fTime(by),
-        })}
-        size="small"
-        variant="outlined"
-      />
+      <>
+        <Chip
+          label={t('orders.snappfood.promisedBy', {
+            time: fTime(by),
+          })}
+          size="small"
+          variant="outlined"
+        />
+        <VersionTag feature="orders.snappfood" />
+      </>
     ) : null;
   };
 
@@ -857,9 +872,12 @@ export function OrdersWorkflowPage() {
   const renderWhere = (order: OrderListRow) => {
     if (order.table_number) {
       return (
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          {t('orders.table.tableNumber', { number: order.table_number })}
-        </Typography>
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            {t('orders.table.tableNumber', { number: order.table_number })}
+          </Typography>
+          <VersionTag feature="orders.table" />
+        </Stack>
       );
     }
     const isDelivery = order.order_type === 'DELIVERY' || !!order.delivery_state || !!order.delivery_zone_name;
@@ -937,6 +955,7 @@ export function OrdersWorkflowPage() {
               <CloudOffIcon fontSize="small" color="action" />
             </Tooltip>
           ) : null}
+          {row.source === 'AGENT_OFFLINE' ? <VersionTag feature="orders.takenOffline" /> : null}
         </Stack>
       ),
     },
@@ -945,7 +964,13 @@ export function OrdersWorkflowPage() {
           {
             field: 'branch_id',
             headerName: t('orders.table.branch', 'Branch'),
-            width: 140,
+            renderHeader: () => (
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                <span>{t('orders.table.branch', 'Branch')}</span>
+                <VersionTag feature="orders.headOfficeView" />
+              </Stack>
+            ),
+            width: 160,
             sortable: false,
             type: 'singleSelect',
             valueOptions: branches.map((b) => ({ value: b.id, label: b.name })),
@@ -1270,6 +1295,7 @@ export function OrdersWorkflowPage() {
               <ScheduleIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText>{t('orders.actions.reportToSnappfood')}</ListItemText>
+            <VersionTag feature="orders.snappfood" sx={{ ml: 1 }} />
           </MenuItem>
         )}
         {menuOrder && canChangeType(menuOrder) && (
@@ -1331,6 +1357,7 @@ export function OrdersWorkflowPage() {
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 'bold' }}>
           <ScheduleIcon color="warning" />
           {t('orders.snappfood.reportTitle', { orderNumber: reportOrder?.order_number })}
+          <VersionTag feature="orders.snappfood" />
         </DialogTitle>
         <DialogContent>
           <Typography color="text.secondary" sx={{ mb: 2 }} variant="body2">
@@ -1587,6 +1614,7 @@ export function OrdersWorkflowPage() {
                 {t('orders.drawer.placedOn', { date: selectedDrawerOrder.placed_at ? formatCalendarDateTime(selectedDrawerOrder.placed_at) : t('orders.drawer.justNow') })}
                 {selectedDrawerOrder.table_number && ` • ${t('orders.drawer.table', { number: selectedDrawerOrder.table_number })}`}
               </Typography>
+              {selectedDrawerOrder.table_number && <VersionTag feature="orders.table" sx={{ ml: 0.5 }} />}
               {selectedDrawerOrder.aggregator_issue && (
                 <Typography variant="caption" color="warning.main" sx={{ display: 'block', fontWeight: 600 }}>
                   {t('orders.snappfood.issue', { issue: selectedDrawerOrder.aggregator_issue })}
@@ -1991,14 +2019,17 @@ export function OrdersWorkflowPage() {
                                 <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
                                   {t('orders.drawer.corr')} {evt.correlation_id ? evt.correlation_id.substring(0, 8) + '...' : '-'}
                                 </Typography>
-                                <Button
-                                  size="small"
-                                  startIcon={<CodeIcon />}
-                                  onClick={() => setInspectingJson(evt)}
-                                  sx={{ textTransform: 'none', py: 0.25, fontSize: '0.75rem' }}
-                                >
-                                  {t('orders.drawer.inspectSnapshot')}
-                                </Button>
+                                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                                  <Button
+                                    size="small"
+                                    startIcon={<CodeIcon />}
+                                    onClick={() => setInspectingJson(evt)}
+                                    sx={{ textTransform: 'none', py: 0.25, fontSize: '0.75rem' }}
+                                  >
+                                    {t('orders.drawer.inspectSnapshot')}
+                                  </Button>
+                                  <VersionTag feature="orders.auditSnapshot" />
+                                </Stack>
                               </Stack>
                             </Paper>
                           );
@@ -2211,6 +2242,7 @@ export function OrdersWorkflowPage() {
               sx={{ mb: 2 }}
               label={t('orders.typeDialog.tableId', 'Table')}
               placeholder={t('orders.typeDialog.tablePlaceholder', 'Optional — can be seated later')}
+              slotProps={{ input: { endAdornment: <VersionTag feature="orders.table" /> } }}
               value={typeTableId}
               onChange={(e) => setTypeTableId(e.target.value)}
             />

@@ -13,12 +13,14 @@ page, the product manager decides which version ships each feature: V1, V2, V3, 
 | Version | What it is for |
 |---|---|
 | V1 Counter | One branch sells, delivers and closes its day: POS, catalog, cash and card, shifts, business day, printing, and full delivery (addresses, zones, couriers, dispatch board, courier settlement) |
-| V2 Floor and kitchen | Table assignment and the dine-in floor, KDS, the full approval engine, the full refund and correction set |
+| V2 Floor | Table assignment and the dine-in floor, the full approval engine, the full refund and correction set |
 | V3 Delivery and Snappfood | The real Snappfood integration, customer import at scale, coupons, customer credit |
 | V4 Club, credit and head office | Discount campaigns, Tara Pay, kiosk, chain-scale pricing, consolidated reports |
-| F | After Phase 1. Offline operation is F. So is Moadian: Iran Burger issues tax invoices from its own accounting software |
+| F | After Phase 1. Offline operation is F. So is Moadian: Iran Burger issues tax invoices from its own accounting software. So is the KDS and everything that depends on it |
 
 Full delivery moved from V3 to V1 on 2026-09-28. V3 is now mostly Snappfood and customers.
+KDS moved from V2 to F on 2026-09-28: no restaurant in Iran runs a kitchen screen, so
+tickets are printed. Kitchen stations and routing rules stay V1, because the printers use them.
 
 ## Where the decisions live
 
@@ -53,11 +55,29 @@ Everything else on the POS page is V1: delivery orders, quick customer registrat
 combos (HAMI has no combos, but Iran Burger needs them), manual discount with the
 cashier's limit, hold and resume, and the cash, card and split payments.
 
+**Page group 2, orders list and order drawer (`/app/orders`): V1. Incoming orders
+(`/app/orders/incoming`): V3.** These features of the orders page ship later:
+
+| Feature | Label |
+|---|---|
+| Snappfood "promised by" and "with support" chips, and Report to Snappfood | V3 |
+| Table number in the list, the drawer and the change-type dialog | V2 |
+| Kitchen progress chips (preparing, ready) | F |
+| The icon marking an order taken offline | F |
+| Head office's read-only view across branches (the branch column) | V4 |
+| "Inspect snapshot" JSON in the audit tab | F |
+
+Everything else on the orders page is V1, including editing lines on a sent order, changing
+the order type, and the manager PIN for a late or paid cancellation.
+
+**KDS (`/app/kds`): F.** On the kitchen settings page, the bump-screens tab and the target
+preparation time are F. That page's other features wait for its own turn.
+
 ## Next
 
-Page group 2: orders list (`/app/orders`), order detail (`/app/orders/:id`) and incoming
-orders (`/app/orders/incoming`). After that, groups 3–15 in the order listed on the
-Feature labels tab.
+Page group 3, then groups 4–15 in the order listed on the Feature labels tab. The page
+group 2 rows and the KDS change still have to go into the Decision Register, which was not
+yet shared with the account used on 2026-09-28.
 
 ## Routine for each page
 
