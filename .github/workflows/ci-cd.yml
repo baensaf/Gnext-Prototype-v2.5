@@ -20,7 +20,7 @@ env:
   DEPLOY_PORT: '20481'
   DEPLOY_USER: baensaf
   DEPLOY_KNOWN_HOST: '[195.234.80.33]:20481 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK+Zrt2kVT+8saVUy3+QcJE5pcza3Vo5YV1Un3fCSZaK'
-  AGENT_RELEASE_URL: https://gnextdev.ir
+  AGENT_RELEASE_URL: https://gnext.top
 
 jobs:
   backend:
