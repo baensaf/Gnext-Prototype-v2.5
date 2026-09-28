@@ -32,8 +32,10 @@ Full delivery moved from V3 to V1 on 2026-09-28. V3 is now mostly Snappfood and 
 - **In the prototype**: `starter-vite-ts/src/config/version-labels.ts` mirrors the Feature
   labels tab. `PAGE_LABELS` maps a path prefix to a version. `FEATURE_LABELS` lists only
   the features that ship later than their page. `<VersionTag feature="…" />` from
-  `src/components/version-tag` draws the chip. The header chip shows the page's version
-  and toggles every label on and off. Shipped in PR #156 and live on gnextdev.ir.
+  `src/components/version-tag` draws the chip. A tag icon in the header toggles every label
+  on and off. Shipped in PR #156 and live on gnextdev.ir.
+  V1 is the default and draws no chip anywhere (header, menu or feature), and an unlabelled
+  page shows nothing either: only pages and features that ship later are marked.
 
 ## Done so far
 
