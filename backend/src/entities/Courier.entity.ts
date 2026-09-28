@@ -11,6 +11,10 @@ export class Courier {
   @Column({ type: 'uuid', nullable: true })
   branch_id: string;
 
+  /** The courier's account (role COURIER), which the tracking app will sign in with. */
+  @Column({ type: 'uuid', nullable: true })
+  user_id: string | null;
+
   @Column({ type: 'varchar', length: 32 })
   code: string;
 

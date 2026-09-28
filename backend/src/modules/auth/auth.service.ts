@@ -6,7 +6,7 @@ import { AdminUser } from '../../entities/AdminUser.entity';
 import { Tenant } from '../../entities/Tenant.entity';
 import { SessionService } from './session.service';
 import { AuditWriter } from '../audit/audit-writer.service';
-import { isHeadOfficeUser } from '../../common/utils/user-scope.util';
+import { COURIER_ROLE, isHeadOfficeUser } from '../../common/utils/user-scope.util';
 
 @Injectable()
 export class AuthService {
@@ -38,6 +38,25 @@ export class AuthService {
         code: 'INVALID_CREDENTIALS',
         title: 'Authentication Failed',
         detail: 'Invalid username or password.',
+      });
+    }
+
+    // A courier's account is there for the tracking app, which does not exist yet; it has no
+    // password to check and nothing to open in the back office.
+    if (user.role === COURIER_ROLE) {
+      await this.auditWriter.write({
+        tenantId: user.tenant_id,
+        actorType: 'ADMIN',
+        actorId: user.id,
+        action: 'AUTH_LOGIN_FAILED',
+        correlationId: correlationId || '00000000-0000-0000-0000-000000000000',
+        ip,
+        details: { username, reason: 'COURIER_NO_SIGN_IN' },
+      });
+      throw new UnauthorizedException({
+        code: 'COURIER_NO_SIGN_IN',
+        title: 'Authentication Failed',
+        detail: 'Courier accounts cannot sign in yet.',
       });
     }
 

@@ -54,6 +54,21 @@ describe('AuthService (Unit)', () => {
     );
   });
 
+  it('refuses a courier account, which cannot sign in until the tracking app', async () => {
+    userRepo.findOne.mockResolvedValue({
+      id: 'courier-user',
+      tenant_id: 'tenant-id',
+      username: '+989120000002',
+      password_hash: '!courier-no-sign-in',
+      role: 'COURIER',
+      is_active: true,
+    });
+
+    const attempt = authService.login('+989120000002', 'anything');
+    await expect(attempt).rejects.toThrow(UnauthorizedException);
+    await attempt.catch((err: any) => expect(err.getResponse().code).toBe('COURIER_NO_SIGN_IN'));
+  });
+
   it('should throw UnauthorizedException when password does not match', async () => {
     const hash = await argon2.hash('correct-password');
     userRepo.findOne.mockResolvedValue({

@@ -2,6 +2,8 @@ import { Injectable, NotFoundException, BadRequestException, ConflictException, 
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Not, MoreThanOrEqual } from 'typeorm';
 import { Courier } from '../../entities/Courier.entity';
+import { AdminUser } from '../../entities/AdminUser.entity';
+import { COURIER_ROLE, courierUsername } from '../../common/utils/user-scope.util';
 import { DeliveryAssignment } from '../../entities/DeliveryAssignment.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { CourierSettlement } from '../../entities/CourierSettlement.entity';
@@ -68,6 +70,7 @@ export class DeliveryService {
     @InjectRepository(Customer) private readonly customerRepo: Repository<Customer>,
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
     @InjectRepository(TenantSetting) private readonly settingRepo: Repository<TenantSetting>,
+    @InjectRepository(AdminUser) private readonly userRepo: Repository<AdminUser>,
     private readonly transitionRecorder: OrderTransitionRecorder,
     private readonly auditWriter: AuditWriter,
     private readonly shiftService: ShiftService,
@@ -253,12 +256,47 @@ export class DeliveryService {
       });
     }
 
+    // A courier is a user with the Courier role, signed in by their mobile number once the
+    // tracking app exists. So the number is required, and no other account may hold it.
+    if (!data.phone?.trim()) {
+      throw new BadRequestException({
+        code: 'COURIER_PHONE_REQUIRED',
+        title: 'Mobile Number Required',
+        detail: "A courier's mobile number is their username, so it is required.",
+      });
+    }
+    const username = courierUsername(data.phone, code);
+    const taken = await this.userRepo.findOne({ where: { tenant_id: tenantId, username } });
+    if (taken) {
+      throw new ConflictException({
+        code: 'COURIER_PHONE_IN_USE',
+        title: 'Mobile Number In Use',
+        detail: `Another account (${taken.display_name}) already uses ${data.phone}.`,
+      });
+    }
+
     const payMode = isCourierPayMode(data.pay_mode)
       ? data.pay_mode
       : (await this.payPolicyFor(tenantId, data.branch_id)).defaultPayMode;
 
+    const account = await this.userRepo.save(
+      this.userRepo.create({
+        tenant_id: tenantId,
+        username,
+        display_name: data.name,
+        // Nothing to verify against: a courier cannot sign in until the tracking app exists.
+        password_hash: '!courier-no-sign-in',
+        role: COURIER_ROLE,
+        branch_id: data.branch_id || null,
+        is_active: true,
+        preferred_locale: 'fa',
+        created_by: actorId,
+      }),
+    );
+
     const courier = this.courierRepo.create({
       tenant_id: tenantId,
+      user_id: account.id,
       branch_id: data.branch_id || null,
       code,
       name: data.name,
@@ -348,6 +386,10 @@ export class DeliveryService {
       courier.branch_id = targetBranchId;
       courier.is_active = true;
       await this.courierRepo.save(courier);
+      // Their account works where they do.
+      if (courier.user_id) {
+        await this.userRepo.update({ id: courier.user_id, tenant_id: tenantId }, { branch_id: targetBranchId, is_active: true });
+      }
 
       await this.auditWriter.write({
         tenantId,

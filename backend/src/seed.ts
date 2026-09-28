@@ -3,6 +3,7 @@ import { AppDataSource } from './data-source';
 import { IsNull } from 'typeorm';
 import { ORDER_ACTION_DEFAULTS } from './modules/order/order-edit-policy';
 import { MoneyUtil } from './common/utils/money.util';
+import { COURIER_ROLE, courierUsername } from './common/utils/user-scope.util';
 import { seedAdminDemo } from './seeds/admin-demo';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
@@ -269,8 +270,23 @@ export async function runSeed() {
   for (const courier of couriers) {
     const existing = await courierRepo.findOne({ where: { tenant_id: tenant.id, code: courier.code } });
     if (existing) continue;
+    // A courier is a user with the Courier role, who cannot sign in until the tracking app.
+    const username = courierUsername(courier.phone, courier.code);
+    const account =
+      (await adminRepo.findOne({ where: { tenant_id: tenant.id, username } })) ||
+      (await adminRepo.save(adminRepo.create({
+        tenant_id: tenant.id,
+        username,
+        display_name: courier.name,
+        password_hash: '!courier-no-sign-in',
+        role: COURIER_ROLE,
+        branch_id: courier.branch.id,
+        is_active: true,
+        preferred_locale: 'fa',
+      })));
     await courierRepo.save(courierRepo.create({
       tenant_id: tenant.id,
+      user_id: account.id,
       branch_id: courier.branch.id,
       code: courier.code,
       name: courier.name,

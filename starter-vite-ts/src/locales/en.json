@@ -24,7 +24,8 @@
       "ADMIN": "Administrator",
       "OWNER": "Owner",
       "MANAGER": "Branch Manager",
-      "CASHIER": "Cashier"
+      "CASHIER": "Cashier",
+      "COURIER": "Courier"
     },
     "idleTitle": "Are you still there?",
     "idleBody": "This terminal has been idle. You will be signed out in {{count}} seconds.",
@@ -976,13 +977,13 @@
       "nameAndPhone": "Name & Phone",
       "vehicle": "Vehicle",
       "compensationPerDelivery": "Compensation / Delivery",
-      "attendance": "Attendance",
+      "attendance": "Today",
       "availability": "Availability",
       "mobilePosAssignment": "Mobile POS Assignment",
       "activeLoad": "Active Load",
       "actions": "Actions",
-      "checkIn": "Check-In",
-      "checkOut": "Check-Out",
+      "checkIn": "Working today",
+      "checkOut": "Not working today",
       "assignPos": "Assign POS",
       "editPay": "Change pay rule",
       "vehicleTypes": {
@@ -992,8 +993,8 @@
         "onFoot": "On Foot"
       },
       "attendanceStatus": {
-        "checkedIn": "Checked In",
-        "checkedOut": "Checked Out",
+        "checkedIn": "Working",
+        "checkedOut": "Not working",
         "paused": "Paused"
       },
       "availabilityStatus": {
@@ -1055,7 +1056,7 @@
         "code": "Courier Code",
         "name": "Courier Name",
         "phone": "Phone Number",
-        "phoneHelp": "A courier already riding for another branch is found by this number and moved, not added twice.",
+        "phoneHelp": "Also their username for the courier app, which they sign in to later. A courier already riding for another branch is found by this number and moved, not added twice.",
         "vehicleType": "Vehicle Type",
         "compensation": "Compensation per Delivery ({{currency}})",
         "payMode": "Pay rule",
@@ -3852,6 +3853,7 @@
     "pickBranchRollup": "See all branches instead"
   },
   "users": {
+    "courierManagedOnDelivery": "Managed with the courier, on the delivery screen",
     "title": "Users & Roles",
     "add": "Add account",
     "edit": "Edit account",

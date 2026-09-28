@@ -25,6 +25,7 @@ import { CustomerAddress } from '../src/entities/CustomerAddress.entity';
 import { Customer } from '../src/entities/Customer.entity';
 import { Branch } from '../src/entities/Branch.entity';
 import { TenantSetting } from '../src/entities/TenantSetting.entity';
+import { AdminUser } from '../src/entities/AdminUser.entity';
 
 describe('DeliveryService (Courier Settlement)', () => {
   let service: DeliveryService;
@@ -105,6 +106,8 @@ describe('DeliveryService (Courier Settlement)', () => {
         // Only the chain roll-up reads branches; nothing under test here does.
         { provide: getRepositoryToken(Branch), useValue: { find: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(TenantSetting), useValue: { find: jest.fn().mockResolvedValue([]) } },
+        // Only adding or moving a courier touches their account; nothing under test here does.
+        { provide: getRepositoryToken(AdminUser), useValue: { findOne: jest.fn(), update: jest.fn() } },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: OrderTransitionRecorder, useValue: { record: jest.fn() } },
         { provide: ShiftService, useValue: shiftService },
