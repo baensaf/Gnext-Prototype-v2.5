@@ -41,6 +41,8 @@ import { shiftApi } from 'src/api/shiftApi';
 import { tenantApi } from 'src/api/tenantApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 
+import { VersionTag } from 'src/components/version-tag';
+
 // ----------------------------------------------------------------------
 
 function Line({ label, value, color, strong }: { label: string; value: string; color?: string; strong?: boolean }) {
@@ -176,7 +178,8 @@ export function ShiftDetailPage() {
 
       {blind && (
         <Alert severity="info" sx={{ mb: 3 }}>
-          {t('shift.detail.blind', 'Sales, refunds and what the drawer should hold are shown once the shift has been counted down.')}
+          {t('shift.detail.blind', 'Sales, refunds and what the drawer should hold are shown once the shift has been counted down.')}{' '}
+          <VersionTag feature="shift.blindCount" />
         </Alert>
       )}
 

@@ -21,6 +21,8 @@ import { useCurrencyLabel } from 'src/utils/currency';
 import { shiftApi } from 'src/api/shiftApi';
 import { settingsApi } from 'src/api/settingsApi';
 
+import { VersionTag } from 'src/components/version-tag';
+
 // ----------------------------------------------------------------------
 
 export type MovementType = 'PAID_IN' | 'PAID_OUT' | 'SAFE_DROP';
@@ -100,7 +102,9 @@ export function MovementDialog({ open, onClose, shiftId, type, onPosted }: Props
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ fontWeight: 'bold' }}>{title}</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 'bold' }}>
+        {title} {type === 'SAFE_DROP' && <VersionTag feature="shift.safeDrop" />}
+      </DialogTitle>
       <Box component="form" onSubmit={submit}>
         <DialogContent>
           <Stack spacing={2}>
