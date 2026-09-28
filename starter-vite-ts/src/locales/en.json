@@ -1004,6 +1004,9 @@
       }
     },
     "zones": {
+      "mapColumn": "Map",
+      "drawn": "Drawn",
+      "notDrawn": "Not drawn",
       "title": "Delivery Zones",
       "addZone": "Add Delivery Zone",
       "code": "Code",
@@ -1092,6 +1095,7 @@
         "removeNo": "Keep"
       },
       "addZone": {
+        "mapHelp": "Draw the zone with the polygon tool, top left. Only a picture of the area for now: the till still picks the zone by postal code.",
         "title": "Add Delivery Zone",
         "code": "Zone Code",
         "name": "Zone Name",

@@ -2,7 +2,7 @@ import type { Courier, Delivery, DeliveryZone, CourierOnFile, DeliveryEvent, Cou
 
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { lazy, useRef, useState, Suspense, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import MapIcon from '@mui/icons-material/Map';
@@ -68,6 +68,9 @@ import { VersionTag } from 'src/components/version-tag';
 import { CourierSettlementsPage } from './settlements';
 
 type DeliveryTab = 'BOARD' | 'COURIERS' | 'SETTLEMENTS' | 'ZONES' | 'AUDIT';
+
+// The map and its drawing tools only load when zones are on screen.
+const ZoneMap = lazy(() => import('src/components/zone-map').then((m) => ({ default: m.ZoneMap })));
 
 /**
  * Each tab is a place you can be sent to, bookmark, or come back to with the browser's back
@@ -217,13 +220,15 @@ export function DeliveryPage() {
   const [payEdit, setPayEdit] = useState<{ courier: Courier; pay_mode: CourierPayMode; amount: string } | null>(null);
 
   const [zoneModalOpen, setZoneModalOpen] = useState(false);
-  const [zoneForm, setZoneForm] = useState({ code: '', name: '', fee: '500000', estimated_minutes: 30, courier_pay: '' });
+  const emptyZoneForm = () => ({ code: '', name: '', fee: '500000', estimated_minutes: 30, courier_pay: '', polygon: null as DeliveryZone['polygon'] });
+  const [zoneForm, setZoneForm] = useState(emptyZoneForm);
   const [zoneEdit, setZoneEdit] = useState<{
     zone: DeliveryZone;
     name: string;
     fee: string;
     estimated_minutes: number;
     courier_pay: string;
+    polygon: DeliveryZone['polygon'];
   } | null>(null);
   const [zoneRemoveAsked, setZoneRemoveAsked] = useState(false);
 
@@ -312,6 +317,7 @@ export function DeliveryPage() {
         fee: zoneEdit.fee || '0',
         estimated_minutes: zoneEdit.estimated_minutes,
         courier_pay: zoneEdit.courier_pay.trim() === '' ? null : zoneEdit.courier_pay,
+        polygon: zoneEdit.polygon ?? null,
       });
       setZoneEdit(null);
       await loadData();
@@ -543,7 +549,7 @@ export function DeliveryPage() {
         courier_pay: zoneForm.courier_pay.trim() === '' ? null : zoneForm.courier_pay,
       });
       setZoneModalOpen(false);
-      setZoneForm({ code: '', name: '', fee: '500000', estimated_minutes: 30, courier_pay: '' });
+      setZoneForm(emptyZoneForm());
       loadData();
     } catch (err: any) {
       setError(err.detail || t('delivery.errors.createZoneFailed'));
@@ -1060,6 +1066,10 @@ export function DeliveryPage() {
             </Button>
           </Stack>
 
+          <Suspense fallback={<Box sx={{ height: 320 }} />}>
+            <ZoneMap zones={zones.map((z) => ({ id: z.id, name: z.name, polygon: z.polygon }))} sx={{ mb: 3 }} />
+          </Suspense>
+
           <Table>
             <TableHead>
               <TableRow>
@@ -1068,6 +1078,7 @@ export function DeliveryPage() {
                 <TableCell>{t('delivery.zones.standardFee')}</TableCell>
                 <TableCell>{t('delivery.zones.courierPay')}</TableCell>
                 <TableCell>{t('delivery.zones.estimatedMinutes')}</TableCell>
+                <TableCell>{t('delivery.zones.mapColumn')}</TableCell>
                 <TableCell>{t('delivery.zones.status')}</TableCell>
                 <TableCell align="right">{t('delivery.zones.actions')}</TableCell>
               </TableRow>
@@ -1086,6 +1097,14 @@ export function DeliveryPage() {
                     )}
                   </TableCell>
                   <TableCell>{z.estimated_minutes} {t('delivery.zones.mins')}</TableCell>
+                  <TableCell>
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      color={z.polygon ? 'primary' : 'default'}
+                      label={z.polygon ? t('delivery.zones.drawn') : t('delivery.zones.notDrawn')}
+                    />
+                  </TableCell>
                   <TableCell><Chip label={z.is_active ? t('delivery.zones.active') : t('delivery.zones.inactive')} color="success" size="small" /></TableCell>
                   <TableCell align="right">
                     <IconButton
@@ -1099,6 +1118,7 @@ export function DeliveryPage() {
                           fee: String(Number(z.fee || 0)),
                           estimated_minutes: z.estimated_minutes,
                           courier_pay: z.courier_pay !== null && z.courier_pay !== undefined ? String(Number(z.courier_pay)) : '',
+                          polygon: z.polygon ?? null,
                         });
                       }}
                     >
@@ -1328,7 +1348,7 @@ export function DeliveryPage() {
       </Dialog>
 
       {/* Edit Zone */}
-      <Dialog open={Boolean(zoneEdit)} onClose={() => setZoneEdit(null)} maxWidth="xs" fullWidth>
+      <Dialog open={Boolean(zoneEdit)} onClose={() => setZoneEdit(null)} maxWidth="sm" fullWidth>
         <DialogTitle>{t('delivery.modals.editZone.title', { code: zoneEdit?.zone.code })}</DialogTitle>
         <DialogContent>
           {zoneEdit && (
@@ -1356,6 +1376,22 @@ export function DeliveryPage() {
                 onChange={(e) => setZoneEdit({ ...zoneEdit, estimated_minutes: Number(e.target.value) })}
                 fullWidth
               />
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                  {t('delivery.modals.addZone.mapHelp')}
+                </Typography>
+                <Suspense fallback={<Box sx={{ height: 280 }} />}>
+                  <ZoneMap
+                    height={280}
+                    zones={zones.map((z) => ({ id: z.id, name: z.name, polygon: z.polygon }))}
+                    editing={{
+                      id: zoneEdit.zone.id,
+                      polygon: zoneEdit.zone.polygon ?? null,
+                      onChange: (polygon) => setZoneEdit((prev) => (prev ? { ...prev, polygon } : prev)),
+                    }}
+                  />
+                </Suspense>
+              </Box>
               {zoneRemoveAsked && (
                 <Alert
                   severity="warning"
@@ -1386,7 +1422,7 @@ export function DeliveryPage() {
       </Dialog>
 
       {/* Add Zone Modal */}
-      <Dialog open={zoneModalOpen} onClose={() => setZoneModalOpen(false)} maxWidth="xs" fullWidth>
+      <Dialog open={zoneModalOpen} onClose={() => setZoneModalOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{t('delivery.modals.addZone.title')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
@@ -1402,6 +1438,20 @@ export function DeliveryPage() {
               fullWidth
             />
             <TextField label={t('delivery.modals.addZone.estimatedMinutes')} type="number" value={zoneForm.estimated_minutes} onChange={(e) => setZoneForm({ ...zoneForm, estimated_minutes: Number(e.target.value) })} fullWidth />
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                {t('delivery.modals.addZone.mapHelp')}
+              </Typography>
+              {zoneModalOpen && (
+                <Suspense fallback={<Box sx={{ height: 280 }} />}>
+                  <ZoneMap
+                    height={280}
+                    zones={zones.map((z) => ({ id: z.id, name: z.name, polygon: z.polygon }))}
+                    editing={{ polygon: null, onChange: (polygon) => setZoneForm((prev) => ({ ...prev, polygon })) }}
+                  />
+                </Suspense>
+              )}
+            </Box>
           </Stack>
         </DialogContent>
         <DialogActions>

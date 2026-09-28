@@ -31,6 +31,7 @@ import { normalizePhone } from '../customer/customer.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { CourierPayMode, computeCourierPay, isCourierPayMode, resolveCourierPayPolicy } from './courier-pay';
+import { normalizeZonePolygon } from './zone-shape';
 
 const ACTIVE_DELIVERY_STATES: DeliveryState[] = ['ASSIGNED', 'PICKED_UP', 'EN_ROUTE'];
 
@@ -95,7 +96,7 @@ export class DeliveryService {
       fee: MoneyUtil.format(data.fee || '0', 4),
       estimated_minutes: data.estimated_minutes || 30,
       courier_pay: DeliveryService.optionalAmount(data.courier_pay),
-      polygon: data.polygon || null,
+      polygon: normalizeZonePolygon(data.polygon),
       postal_prefixes: data.postal_prefixes || null,
       is_active: true,
     });
@@ -121,17 +122,19 @@ export class DeliveryService {
   async updateZone(
     tenantId: string,
     id: string,
-    data: { name?: string; fee?: string; estimated_minutes?: number; courier_pay?: string | null },
+    data: { name?: string; fee?: string; estimated_minutes?: number; courier_pay?: string | null; polygon?: unknown },
     actorId?: string,
   ) {
     const zone = await this.zoneRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!zone) throw new NotFoundException('Delivery zone not found');
 
-    const before = { name: zone.name, fee: zone.fee, estimated_minutes: zone.estimated_minutes, courier_pay: zone.courier_pay };
+    const before = { name: zone.name, fee: zone.fee, estimated_minutes: zone.estimated_minutes, courier_pay: zone.courier_pay, polygon: zone.polygon };
     if (data.name !== undefined) zone.name = data.name;
     if (data.fee !== undefined) zone.fee = MoneyUtil.format(data.fee || '0', 4);
     if (data.estimated_minutes !== undefined) zone.estimated_minutes = data.estimated_minutes;
     if (data.courier_pay !== undefined) zone.courier_pay = DeliveryService.optionalAmount(data.courier_pay);
+    // Drawn on the map; null rubs it out.
+    if (data.polygon !== undefined) zone.polygon = normalizeZonePolygon(data.polygon);
 
     const saved = await this.zoneRepo.save(zone);
     await this.auditWriter.write({
@@ -144,7 +147,7 @@ export class DeliveryService {
       branchId: saved.branch_id,
       correlationId: 'corr-zone-update',
       beforeData: before,
-      afterData: { name: saved.name, fee: saved.fee, estimated_minutes: saved.estimated_minutes, courier_pay: saved.courier_pay },
+      afterData: { name: saved.name, fee: saved.fee, estimated_minutes: saved.estimated_minutes, courier_pay: saved.courier_pay, polygon: saved.polygon },
     });
     return saved;
   }
