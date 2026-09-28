@@ -25,6 +25,10 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/orders/incoming': 'V3',
   // No restaurant in Iran runs a kitchen screen; tickets are printed.
   '/app/kds': 'F',
+  // Shifts, their statements and business days
+  '/app/cashier': 'V1',
+  // Head office's view of every branch's drawers
+  '/app/cashier/rollup': 'V4',
   '/app/moadian': 'F',
 };
 
@@ -48,6 +52,14 @@ export const FEATURE_LABELS = {
   // Dine-in floor: running service from the floor (occupancy, seating, move, merge, split,
   // guest bill, pay, release) comes after Phase 1.
   'dineIn.liveFloor': 'F',
+  // Shifts: in V1 the cashier enters the counted cash and closes the shift, nothing more.
+  'shift.safeDrop': 'V4',
+  'shift.blindCount': 'V4',
+  'shift.differenceSignoff': 'V4',
+  'shift.openOrdersPin': 'V4',
+  // Business days
+  'businessDay.reopen': 'V2',
+  'businessDay.dateReview': 'F',
   // Kitchen screen settings; the stations and routing rules also drive the printers.
   'kds.screens': 'F',
   'kds.targetMinutes': 'F',

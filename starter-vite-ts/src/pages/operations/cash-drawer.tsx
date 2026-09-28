@@ -44,6 +44,7 @@ import { useAuthStore } from 'src/store/useAuthStore';
 import { useBranchContext } from 'src/contexts/branch-context';
 import { isApproverRole, homePathForRole } from 'src/config/role-access';
 
+import { VersionTag } from 'src/components/version-tag';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 import { MovementDialog } from 'src/components/shift/movement-dialog';
 import { OpenShiftDialog } from 'src/components/shift/open-shift-dialog';
@@ -209,6 +210,7 @@ export function CashDrawerPage() {
                       <Button size="small" color="info" startIcon={<AccountBalanceWalletIcon />} onClick={() => setMovement({ shiftId: shift.id, type: 'SAFE_DROP' })}>
                         {t('shift.movement.safeDrop', 'Safe drop')}
                       </Button>
+                      <VersionTag feature="shift.safeDrop" sx={{ alignSelf: 'center' }} />
                     </>
                   )}
                   <Button size="small" startIcon={<ReceiptLongIcon />} onClick={() => navigate(`/app/cashier/shifts/${shift.id}`)}>

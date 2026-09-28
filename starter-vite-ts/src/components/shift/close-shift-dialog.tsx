@@ -30,6 +30,8 @@ import { paymentApi } from 'src/api/paymentApi';
 import { useAuthStore } from 'src/store/useAuthStore';
 import { isApproverRole } from 'src/config/role-access';
 
+import { VersionTag } from 'src/components/version-tag';
+
 import { OpenOrderLine, DayCloseOrders } from './day-close-orders';
 
 // ----------------------------------------------------------------------
@@ -430,7 +432,8 @@ export function CloseShiftDialog({ open, onClose, shiftId, shiftNumber, onClosed
                       <Typography variant="subtitle2">
                         {t('shift.close.openOrders', '{{count}} order(s) from this till are still open', {
                           count: openOrders.length,
-                        })}
+                        })}{' '}
+                        <VersionTag feature="shift.openOrdersPin" />
                       </Typography>
                       <Typography variant="body2">
                         {approver
@@ -469,7 +472,8 @@ export function CloseShiftDialog({ open, onClose, shiftId, shiftNumber, onClosed
                       {t(
                         'shift.close.blindHelp',
                         'Count the cash in the drawer and enter the total. What it should hold is shown after you have counted.'
-                      )}
+                      )}{' '}
+                      <VersionTag feature="shift.blindCount" />
                     </Alert>
                   ) : (
                     statement && (
@@ -486,7 +490,8 @@ export function CloseShiftDialog({ open, onClose, shiftId, shiftNumber, onClosed
                         ? t('shift.close.needsApproval', 'The drawer is out by more than {{tolerance}}. A reason and a manager PIN are needed to close.', {
                             tolerance: MoneyUtil.formatCurrency(signoff.varianceTolerance),
                           })
-                        : t('shift.close.needsReason', 'The drawer does not balance. Give a reason to close.')}
+                        : t('shift.close.needsReason', 'The drawer does not balance. Give a reason to close.')}{' '}
+                      <VersionTag feature="shift.differenceSignoff" />
                     </Alert>
                     <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                       <Stack spacing={1}>
@@ -526,6 +531,7 @@ export function CloseShiftDialog({ open, onClose, shiftId, shiftNumber, onClosed
                     required={step === 'signoff'}
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
+                    slotProps={{ input: { endAdornment: <VersionTag feature="shift.differenceSignoff" /> } }}
                   />
                 )}
 

@@ -80,10 +80,25 @@ creating sections and tables; the POS assigns a table when the order is submitte
 service from the floor is F: occupancy, table states, seating, move, merge, split, the guest
 bill, paying from the table and releasing it.
 
+**Page group 5, shifts and business days (`/app/cashier/…`): V1. The chain shift roll-up
+(`/app/cashier/rollup`): V4.** A V1 shift close only asks for the counted cash, and the
+cashier closes it. These ship later:
+
+| Feature | Label |
+|---|---|
+| Safe drop | V4 |
+| Blind count, a reason for a difference, a manager PIN beyond the tolerance | V4 |
+| A manager PIN to leave the till's open orders open | V4 |
+| Reopening a closed business day | V2 |
+| "Check past dates against the cutoff" | F |
+
+The business day closes by itself once it has ended and every shift is counted (Q-03,
+answered 2026-09-29).
+
 ## Next
 
-Page group 4 (KDS) is already F, so page group 5, shifts and business days, is next. Then
-groups 6–15 in the order listed on the Feature labels tab.
+Page group 6, payments and refunds, then groups 7–15 in the order listed on the Feature
+labels tab.
 
 ## Routine for each page
 

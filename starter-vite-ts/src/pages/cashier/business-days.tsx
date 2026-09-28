@@ -35,6 +35,7 @@ import { businessDate as businessDayOf } from 'src/utils/calendar';
 
 import { useBranchContext } from 'src/contexts/branch-context';
 
+import { VersionTag } from 'src/components/version-tag';
 import { CalendarDateField } from 'src/components/calendar-date-field';
 import { DayCloseOrders } from 'src/components/shift/day-close-orders';
 
@@ -311,15 +312,18 @@ export function BusinessDaysPage() {
         const row = params.row as BusinessDayClose;
         if (row.status === 'CLOSED') {
           return (
-            <Button
-              size="small"
-              variant="outlined"
-              color="warning"
-              startIcon={<LockOpenIcon />}
-              onClick={() => setSelectedDay(row)}
-            >
-              {t('cashier.reopen', 'Reopen')}
-            </Button>
+            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', height: '100%' }}>
+              <Button
+                size="small"
+                variant="outlined"
+                color="warning"
+                startIcon={<LockOpenIcon />}
+                onClick={() => setSelectedDay(row)}
+              >
+                {t('cashier.reopen', 'Reopen')}
+              </Button>
+              <VersionTag feature="businessDay.reopen" />
+            </Stack>
           );
         }
         return (
@@ -436,7 +440,12 @@ export function BusinessDaysPage() {
       {branchId && (
         <Card sx={{ mb: 3 }}>
           <CardHeader
-            title={t('cashier.dateReview.title', 'Check past dates against the cutoff')}
+            title={
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <span>{t('cashier.dateReview.title', 'Check past dates against the cutoff')}</span>
+                <VersionTag feature="businessDay.dateReview" />
+              </Stack>
+            }
             subheader={t(
               'cashier.dateReview.subtitle',
               'Lists orders, payments, refunds and shifts from the last 90 days whose stored date the current cutoff would have given differently — usually sales after midnight dated to the next day. Nothing is changed.'
@@ -559,7 +568,9 @@ export function BusinessDaysPage() {
 
       {/* Reopen Business Day Dialog */}
       <Dialog open={Boolean(selectedDay)} onClose={() => setSelectedDay(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>{t('cashier.reopenBusinessDayTitle', 'Reopen Business Day')}</DialogTitle>
+        <DialogTitle>
+          {t('cashier.reopenBusinessDayTitle', 'Reopen Business Day')} <VersionTag feature="businessDay.reopen" />
+        </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {t('cashier.reopenWarningManager', 'Only a manager can reopen a closed day, and the reason is kept in the audit log.')}
