@@ -18,6 +18,7 @@ import { Customer } from '../../entities/Customer.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
+import { AdminUser } from '../../entities/AdminUser.entity';
 import { DeliveryService } from './delivery.service';
 import { DeliveryController } from './delivery.controller';
 import { CourierSettlementsController } from './courier-settlements.controller';
@@ -46,6 +47,8 @@ import { CashierModule } from '../cashier/cashier.module';
       Terminal,
       Branch,
       TenantSetting,
+      // A courier's account, made and moved with the courier.
+      AdminUser,
     ]),
     AuditModule,
     OrderLifecycleModule,

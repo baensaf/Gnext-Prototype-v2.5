@@ -15,6 +15,24 @@ export const APPROVER_ROLES = [...HEAD_OFFICE_ROLES, 'MANAGER', 'SUPERVISOR'];
 export const ASSIGNABLE_ROLES = [...APPROVER_ROLES, 'CASHIER'];
 
 /**
+ * A courier's account. It is made with the courier, on the delivery screen, never on the
+ * users screen, and it cannot sign in until the tracking app exists.
+ */
+export const COURIER_ROLE = 'COURIER';
+
+/** A courier's username: the mobile number in its +98 form, or the courier code without one. */
+export function courierUsername(phone: string | null | undefined, code: string): string {
+  const digits = (phone || '')
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[^\d+]/g, '');
+  if (digits.startsWith('09') && digits.length === 11) return `+98${digits.slice(1)}`;
+  if (digits.startsWith('989') && digits.length === 12) return `+${digits}`;
+  if (digits) return digits.startsWith('+') ? digits : `+${digits}`;
+  return code.toLowerCase();
+}
+
+/**
  * An approver pin is four to eight digits. A one-digit pin falls to the fifth guess of the
  * fifteen-minute window, and every refund and paid cancellation at that branch with it.
  */

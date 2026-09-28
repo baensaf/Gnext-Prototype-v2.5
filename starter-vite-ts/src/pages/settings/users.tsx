@@ -245,9 +245,16 @@ export function UsersPage() {
                       >
                         <VisibilityIcon fontSize="small" />
                       </IconButton>
-                      <IconButton size="small" onClick={() => openEdit(user)}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
+                      {/* A courier's account is made and moved with the courier, on the delivery screen. */}
+                      {user.role === 'COURIER' ? (
+                        <IconButton size="small" disabled title={t('users.courierManagedOnDelivery', 'Managed with the courier, on the delivery screen')}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      ) : (
+                        <IconButton size="small" onClick={() => openEdit(user)}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

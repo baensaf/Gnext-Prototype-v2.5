@@ -275,4 +275,5 @@ export const ROLE_LABELS: Record<string, string> = {
   OWNER: 'Owner',
   MANAGER: 'Branch Manager',
   CASHIER: 'Cashier',
+  COURIER: 'Courier',
 };

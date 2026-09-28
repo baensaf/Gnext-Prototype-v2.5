@@ -10,7 +10,7 @@ import { Repository } from 'typeorm';
 import * as argon2 from 'argon2';
 import { AdminUser } from '../../entities/AdminUser.entity';
 import { Branch } from '../../entities/Branch.entity';
-import { ASSIGNABLE_ROLES, APPROVER_ROLES, HEAD_OFFICE_ROLES, isValidPin } from '../../common/utils/user-scope.util';
+import { ASSIGNABLE_ROLES, APPROVER_ROLES, COURIER_ROLE, HEAD_OFFICE_ROLES, isValidPin } from '../../common/utils/user-scope.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 
 /**
@@ -154,6 +154,16 @@ export class UsersService {
   async update(tenantId: string, id: string, data: UserWriteDto, actorId: string, correlationId: string) {
     const user = await this.userRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!user) throw new NotFoundException('User not found');
+
+    // A courier's account comes and goes with the courier, on the delivery screen, which also
+    // keeps their branch and phone in step with it.
+    if (user.role === COURIER_ROLE) {
+      throw new BadRequestException({
+        code: 'COURIER_ACCOUNT',
+        title: 'Courier Account',
+        detail: "A courier's account is managed with the courier, on the delivery screen.",
+      });
+    }
 
     // The demo disaster this prevents: an administrator demoting or disabling the account
     // they are signed in as, and losing the only way back into the application.

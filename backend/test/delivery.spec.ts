@@ -20,6 +20,7 @@ import { CustomerAddress } from '../src/entities/CustomerAddress.entity';
 import { Customer } from '../src/entities/Customer.entity';
 import { Branch } from '../src/entities/Branch.entity';
 import { TenantSetting } from '../src/entities/TenantSetting.entity';
+import { AdminUser } from '../src/entities/AdminUser.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { OrderTransitionRecorder } from '../src/modules/order-lifecycle/order-transition-recorder.service';
 import { ShiftService } from '../src/modules/cashier/shift.service';
@@ -47,8 +48,15 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
   let transitionRecorder: any;
   let branchRepo: any;
   let settingRepo: any;
+  let userRepo: any;
 
   beforeEach(async () => {
+    userRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockImplementation((u) => u),
+      save: jest.fn().mockImplementation((u) => Promise.resolve({ id: 'user-courier', ...u })),
+      update: jest.fn(),
+    };
     branchRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() };
     settingRepo = { find: jest.fn().mockResolvedValue([]) };
     courierRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn().mockImplementation((c) => c), save: jest.fn().mockImplementation((c) => Promise.resolve(c)) };
@@ -98,6 +106,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
         { provide: getRepositoryToken(Customer), useValue: customerRepo },
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
         { provide: getRepositoryToken(TenantSetting), useValue: settingRepo },
+        { provide: getRepositoryToken(AdminUser), useValue: userRepo },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: OrderTransitionRecorder, useValue: transitionRecorder },
         { provide: ShiftService, useValue: { requireDrawer: jest.fn(), recordCashPaymentMovement: jest.fn() } },
@@ -396,6 +405,46 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
 
       const chosen = await service.createCourier('t-1', { branch_id: 'downtown', code: 'CR-10', name: 'Mina', phone: '09128888888', pay_mode: 'FLAT' });
       expect(chosen.pay_mode).toBe('FLAT');
+    });
+  });
+
+  describe('a courier is a user', () => {
+    it('opens a Courier account with the mobile number as its username, at the courier\'s branch', async () => {
+      courierRepo.find.mockResolvedValue([]);
+
+      const courier = await service.createCourier('t-1', { branch_id: 'downtown', code: 'CR-11', name: 'Reza', phone: '0912 555 1234' });
+
+      expect(userRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ username: '+989125551234', display_name: 'Reza', role: 'COURIER', branch_id: 'downtown', is_active: true }),
+      );
+      expect(courier.user_id).toBe('user-courier');
+    });
+
+    it('refuses a courier without a mobile number, since it is their username', async () => {
+      courierRepo.find.mockResolvedValue([]);
+
+      await expect(service.createCourier('t-1', { branch_id: 'downtown', code: 'CR-12', name: 'Nima' })).rejects.toThrow(BadRequestException);
+      expect(userRepo.save).not.toHaveBeenCalled();
+      expect(courierRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('refuses a mobile number another account already uses', async () => {
+      courierRepo.find.mockResolvedValue([]);
+      userRepo.findOne.mockResolvedValue({ id: 'u-9', display_name: 'Someone', username: '+989125551234' });
+
+      await expect(service.createCourier('t-1', { branch_id: 'downtown', code: 'CR-13', name: 'Reza', phone: '09125551234' })).rejects.toThrow(ConflictException);
+      expect(courierRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("moves the courier's account with them", async () => {
+      courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', branch_id: 'central', user_id: 'user-1', name: 'Ali', is_active: true });
+      branchRepo.findOne.mockResolvedValue({ id: 'downtown', tenant_id: 't-1', name: 'Downtown Express' });
+      attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_OUT' });
+      terminalAssignRepo.findOne.mockResolvedValue(null);
+
+      await service.moveCourier('t-1', 'cour-1', 'downtown', 'user-1');
+
+      expect(userRepo.update).toHaveBeenCalledWith({ id: 'user-1', tenant_id: 't-1' }, { branch_id: 'downtown', is_active: true });
     });
   });
 
