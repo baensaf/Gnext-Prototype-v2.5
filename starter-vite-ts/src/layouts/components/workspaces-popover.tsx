@@ -17,8 +17,8 @@ import Button, { buttonClasses } from '@mui/material/Button';
 import { paths } from 'src/routes/paths';
 import { useRouter, usePathname } from 'src/routes/hooks';
 
-import { canReachPath, fitsWorkspace } from 'src/config/role-access';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
+import { canReachPath, fitsWorkspace, homePathForRole } from 'src/config/role-access';
 import { HEAD_OFFICE_SCOPE, useBranchContextOptional } from 'src/contexts/branch-context';
 
 import { Label } from 'src/components/label';
@@ -57,12 +57,12 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
   /**
    * Each scope has its own menu, so switching can leave you on a page the new one does not
    * offer — the POS at head office, the menu composer inside a shop. Staying there would
-   * show a screen the sidebar has just taken away; the dashboard exists in both.
+   * show a screen the sidebar has just taken away, so go to the account's own start page.
    */
   const switchScope = (id: string, scope: WorkspaceScope) => {
     setSelectedBranchId?.(id);
     onClose();
-    if (!fitsWorkspace(pathname, scope)) router.push(paths.app.dashboard);
+    if (!fitsWorkspace(pathname, scope)) router.push(homePathForRole(role));
   };
 
   // Branches are the chain's to manage, so the way there goes through head office.
