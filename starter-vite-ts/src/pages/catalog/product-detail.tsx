@@ -20,6 +20,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import {
   Box,
   Tab,
@@ -56,6 +58,7 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
+import { addonMin, addonRuleLabel } from 'src/utils/addon-rule';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 import { wholeRials, percentToTaxRate, taxRateToPercent } from 'src/utils/tax-rate';
 
@@ -208,6 +211,21 @@ export function ProductDetailPage() {
     try {
       await catalogApi.detachOptionGroup(id, groupId);
       setProduct(await catalogApi.getProductById(id));
+    } catch (err: any) {
+      setError(err.detail || err.message || t('catalog.productDetailPage.errors.saveFailed'));
+    }
+  };
+
+  /** The order the POS shows this product's groups in. */
+  const handleMoveGroup = async (index: number, by: number) => {
+    if (!id || !product?.optionGroups) return;
+    const list = [...product.optionGroups];
+    const to = index + by;
+    if (to < 0 || to >= list.length) return;
+    [list[index], list[to]] = [list[to], list[index]];
+    setProduct({ ...product, optionGroups: list });
+    try {
+      await catalogApi.reorderProductOptionGroups(id, list.map((g) => g.id));
     } catch (err: any) {
       setError(err.detail || err.message || t('catalog.productDetailPage.errors.saveFailed'));
     }
@@ -754,32 +772,64 @@ export function ProductDetailPage() {
             </Paper>
           ) : (
             <Grid container spacing={2}>
-              {product.optionGroups.map((group) => (
+              {product.optionGroups.map((group, groupIndex) => (
                 <Grid key={group.id} size={{ xs: 12, md: 6 }}>
                   <Card variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                     <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                         {group.name}
                       </Typography>
-                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                        {group.is_required && (
-                          <Chip label={t('catalog.productDetailPage.modifiers.requiredBadge')} color="error" size="small" />
-                        )}
+                      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                         {canAuthor && (
-                          <IconButton
-                            size="small"
-                            color="error"
-                            title={t('catalog.productDetailPage.modifiers.detach', 'Remove from this product')}
-                            onClick={() => handleDetachGroup(group.id)}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
+                          <>
+                            <IconButton
+                              size="small"
+                              disabled={groupIndex === 0}
+                              title={t('catalog.addonSheet.moveUp')}
+                              onClick={() => handleMoveGroup(groupIndex, -1)}
+                            >
+                              <ArrowUpwardIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              disabled={groupIndex === (product.optionGroups?.length || 0) - 1}
+                              title={t('catalog.addonSheet.moveDown')}
+                              onClick={() => handleMoveGroup(groupIndex, 1)}
+                            >
+                              <ArrowDownwardIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              title={t('catalog.productDetailPage.modifiers.detach')}
+                              onClick={() => handleDetachGroup(group.id)}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </>
                         )}
                       </Stack>
                     </Stack>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                      {t('catalog.productDetailPage.modifiers.code')}: {group.code} • {t('catalog.productDetailPage.modifiers.min')}: {group.min_selection} • {t('catalog.productDetailPage.modifiers.max')}: {group.max_selection}
-                    </Typography>
+                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5, mb: 1.5 }}>
+                      <Chip size="small" color={addonMin(group) > 0 ? 'warning' : 'default'} label={addonRuleLabel(t, group)} />
+                      {addonMin(group) === 0 && (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={group.prompt_at_pos !== false ? t('catalog.productDetailPage.modifiers.asksAtPos') : t('catalog.productDetailPage.modifiers.ringsThrough')}
+                        />
+                      )}
+                      {group.from_category_id && (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          color="info"
+                          label={t('catalog.productDetailPage.modifiers.fromCategory', {
+                            name: categories.find((c) => c.id === group.from_category_id)?.name || '',
+                          })}
+                        />
+                      )}
+                    </Stack>
 
                     <Stack spacing={0.5}>
                       {group.items?.map((item) => (
@@ -928,9 +978,11 @@ export function ProductDetailPage() {
               label={t('catalog.productDetailPage.modifiers.selectGroup')}
               onChange={(e) => setSelectedOptionGroupId(e.target.value)}
             >
-              {allOptionGroups.map((og) => (
+              {allOptionGroups
+                .filter((og) => !(product?.optionGroups || []).some((g) => g.id === og.id))
+                .map((og) => (
                 <MenuItem key={og.id} value={og.id}>
-                  {og.name} ({og.code})
+                  {og.name} · {addonRuleLabel(t, og)}
                 </MenuItem>
               ))}
             </Select>

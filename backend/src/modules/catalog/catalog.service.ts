@@ -7,6 +7,7 @@ import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { OptionGroup } from '../../entities/OptionGroup.entity';
 import { OptionItem } from '../../entities/OptionItem.entity';
 import { ProductOptionGroup } from '../../entities/ProductOptionGroup.entity';
+import { CategoryOptionGroup } from '../../entities/CategoryOptionGroup.entity';
 import { ProductAvailability } from '../../entities/ProductAvailability.entity';
 import { AvailabilitySchedule } from '../../entities/AvailabilitySchedule.entity';
 import { Branch } from '../../entities/Branch.entity';
@@ -62,6 +63,23 @@ export interface StopActor {
   /** Where it was done, e.g. POS for the register's tile. */
   source?: string;
 }
+
+/**
+ * An add-on group's selection rule, checked: at least `min`, at most `max`, where a max of 0
+ * means no limit. "Required" is a minimum above zero and nothing else; a caller that still
+ * sends `is_required` with a minimum of 0 gets a minimum of 1, which is what it always meant.
+ */
+function selectionRule(min: number, max: number, isRequired?: boolean): { min: number; max: number; required: boolean } {
+  const least = Math.max(Number(min) || 0, isRequired ? 1 : 0);
+  const most = Number(max) || 0;
+  if (least < 0 || most < 0 || (most !== 0 && most < least)) {
+    throw new BadRequestException(`Invalid modifier selections. min_selection (${least}) must be >= 0 and <= max_selection (${most}).`);
+  }
+  return { min: least, max: most, required: least > 0 };
+}
+
+/** A code no one types: add-on groups and items are found by name on every screen. */
+const generatedCode = (prefix: string, n = 0) => `${prefix}-${Date.now().toString(36).toUpperCase()}${n}`.slice(0, 32);
 
 @Injectable()
 export class CatalogService {
@@ -290,7 +308,7 @@ export class CatalogService {
       const group = await this.groupRepo.findOne({ where: { id: link.option_group_id, tenant_id: tenantId } });
       if (group) {
         const items = await this.itemRepo.find({ where: { option_group_id: group.id, tenant_id: tenantId }, order: { sort_order: 'ASC' } });
-        optionGroups.push({ ...group, items, excluded_item_ids: link.excluded_item_ids || [] });
+        optionGroups.push({ ...group, items, excluded_item_ids: link.excluded_item_ids || [], from_category_id: link.from_category_id ?? null });
       }
     }
 
@@ -341,6 +359,7 @@ export class CatalogService {
     });
 
     const saved = await this.prodRepo.save(prod);
+    await this.linkCategoryGroups(tenantId, saved.id, saved.category_id);
 
     await this.auditWriter.write({
       tenantId,
@@ -383,6 +402,11 @@ export class CatalogService {
     Object.assign(prod, data);
     const saved = await this.prodRepo.save(prod);
     if (data.base_price && !MoneyUtil.equals(before.base_price, saved.base_price)) await this.endDatedBasePrice(tenantId, id, null);
+    // A product moved to another category leaves the old one's add-on groups and takes the new one's.
+    if (data.category_id && data.category_id !== before.category_id) {
+      await this.prodGroupRepo.delete({ tenant_id: tenantId, product_id: id, from_category_id: before.category_id });
+      await this.linkCategoryGroups(tenantId, id, saved.category_id);
+    }
 
     await this.auditWriter.write({
       tenantId,
@@ -627,13 +651,22 @@ export class CatalogService {
   // Option Groups & Items
   async getOptionGroups(tenantId: string, query?: PaginationQueryDto & { search?: string }): Promise<PagedResponse<any> | any[]> {
     if (!query || (!query.page && !query.limit && !query.search)) {
-      const groups = await this.groupRepo.find({ where: { tenant_id: tenantId }, order: { code: 'ASC' } });
-      const result = [];
-      for (const g of groups) {
-        const items = await this.itemRepo.find({ where: { option_group_id: g.id, tenant_id: tenantId }, order: { sort_order: 'ASC' } });
-        result.push({ ...g, items });
-      }
-      return result;
+      // Each group says where it is used: the products that carry it (and the category a link
+      // came from) and the categories it is on, so the add-ons page can show and edit that.
+      const [groups, items, links, categoryLinks] = await Promise.all([
+        this.groupRepo.find({ where: { tenant_id: tenantId }, order: { name: 'ASC' } }),
+        this.itemRepo.find({ where: { tenant_id: tenantId }, order: { sort_order: 'ASC' } }),
+        this.prodGroupRepo.find({ where: { tenant_id: tenantId } }),
+        this.prodGroupRepo.manager.getRepository(CategoryOptionGroup).find({ where: { tenant_id: tenantId } }),
+      ]);
+      return groups.map((g) => ({
+        ...g,
+        items: items.filter((i) => i.option_group_id === g.id),
+        product_links: links
+          .filter((l) => l.option_group_id === g.id)
+          .map((l) => ({ product_id: l.product_id, from_category_id: l.from_category_id ?? null })),
+        category_ids: categoryLinks.filter((c) => c.option_group_id === g.id).map((c) => c.category_id),
+      }));
     }
 
     const page = query.page || 1;
@@ -658,25 +691,27 @@ export class CatalogService {
     return createPagedResponse(itemsList, total, page, limit);
   }
 
-  async createOptionGroup(tenantId: string, data: { code: string; name: string; min_selection?: number; max_selection?: number; is_required?: boolean }, correlationId: string) {
-    const code = data.code.toUpperCase();
+  async createOptionGroup(
+    tenantId: string,
+    data: { code?: string; name: string; min_selection?: number; max_selection?: number; is_required?: boolean; prompt_at_pos?: boolean },
+    correlationId: string,
+  ) {
+    // No one types a code any more; one is made when none is given.
+    const code = data.code?.trim() ? data.code.trim().toUpperCase() : generatedCode('AG');
     const existing = await this.groupRepo.findOne({ where: { tenant_id: tenantId, code } });
     if (existing) throw new ConflictException(`Option group ${code} already exists`);
+    if (!data.name?.trim()) throw new BadRequestException('An add-on group needs a name');
 
-    const min = data.min_selection ?? 0;
-    const max = data.max_selection ?? 1;
-
-    if (min < 0 || max < min) {
-      throw new BadRequestException(`Invalid modifier selections. min_selection (${min}) must be >= 0 and <= max_selection (${max}).`);
-    }
+    const rule = selectionRule(data.min_selection ?? 0, data.max_selection ?? 1, data.is_required);
 
     const group = this.groupRepo.create({
       tenant_id: tenantId,
       code,
-      name: data.name,
-      min_selection: min,
-      max_selection: max,
-      is_required: data.is_required ?? false,
+      name: data.name.trim(),
+      min_selection: rule.min,
+      max_selection: rule.max,
+      is_required: rule.required,
+      prompt_at_pos: data.prompt_at_pos ?? true,
     });
 
     const saved = await this.groupRepo.save(group);
@@ -707,7 +742,7 @@ export class CatalogService {
     }
   }
 
-  async createOptionItem(tenantId: string, groupId: string, data: { code: string; name?: string; price_delta?: string; is_default?: boolean; sort_order?: number; product_id?: string }, correlationId: string) {
+  async createOptionItem(tenantId: string, groupId: string, data: { code?: string; name?: string; price_delta?: string; is_default?: boolean; sort_order?: number; product_id?: string }, correlationId: string) {
     const group = await this.groupRepo.findOne({ where: { id: groupId, tenant_id: tenantId } });
     if (!group) throw new NotFoundException('Option group not found');
     // A combo slot's choice can be a dish of its own; it takes the dish's name unless given one.
@@ -718,7 +753,7 @@ export class CatalogService {
       tenant_id: tenantId,
       option_group_id: groupId,
       product_id: component?.id || null,
-      code: data.code.toUpperCase(),
+      code: data.code?.trim() ? data.code.trim().toUpperCase() : generatedCode(group.code),
       name: data.name || component!.name,
       price_delta: MoneyUtil.format(data.price_delta || '0'),
       is_default: data.is_default ?? false,
@@ -775,14 +810,136 @@ export class CatalogService {
     }
   }
 
-  async attachOptionGroupToProduct(tenantId: string, productId: string, optionGroupId: string, sortOrder: number = 0, correlationId: string) {
+  async attachOptionGroupToProduct(tenantId: string, productId: string, optionGroupId: string, sortOrder: number | undefined, correlationId: string) {
     let link = await this.prodGroupRepo.findOne({ where: { tenant_id: tenantId, product_id: productId, option_group_id: optionGroupId } });
     if (!link) {
       await this.assertGroupFillable(tenantId, optionGroupId, { link: { product_id: productId } });
-      link = this.prodGroupRepo.create({ tenant_id: tenantId, product_id: productId, option_group_id: optionGroupId, sort_order: sortOrder });
+      link = this.prodGroupRepo.create({
+        tenant_id: tenantId,
+        product_id: productId,
+        option_group_id: optionGroupId,
+        // A group added later comes after the ones already there.
+        sort_order: sortOrder ?? (await this.nextGroupPosition(this.prodGroupRepo.manager, tenantId, productId)),
+      });
+      await this.prodGroupRepo.save(link);
+    } else if (link.from_category_id) {
+      // Put on the product itself too: it stays when the group comes off the category.
+      link.from_category_id = null;
       await this.prodGroupRepo.save(link);
     }
     return link;
+  }
+
+  private async nextGroupPosition(em: EntityManager, tenantId: string, productId: string): Promise<number> {
+    const links = await em.find(ProductOptionGroup, { where: { tenant_id: tenantId, product_id: productId } });
+    return links.reduce((top, l) => Math.max(top, (l.sort_order ?? 0) + 1), 0);
+  }
+
+  /** The order a product shows its add-on groups in, at the POS and on its page. */
+  async reorderProductOptionGroups(tenantId: string, productId: string, groupIds: string[], correlationId: string) {
+    const links = await this.prodGroupRepo.find({ where: { tenant_id: tenantId, product_id: productId } });
+    const position = new Map((groupIds || []).map((id, i) => [id, i]));
+    for (const link of links) {
+      const at = position.get(link.option_group_id);
+      if (at === undefined || at === link.sort_order) continue;
+      link.sort_order = at;
+      await this.prodGroupRepo.save(link);
+    }
+    await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'PRODUCT_OPTION_GROUPS_ORDERED', entityType: 'Product', entityId: productId, correlationId, details: { groupIds } });
+    return { success: true };
+  }
+
+  /** A product joining a category takes every add-on group on that category, as Toast's menu groups pass theirs on. */
+  private async linkCategoryGroups(tenantId: string, productId: string, categoryId: string | null, em: EntityManager = this.prodGroupRepo.manager) {
+    if (!categoryId) return;
+    const onCategory = await em.find(CategoryOptionGroup, { where: { tenant_id: tenantId, category_id: categoryId } });
+    for (const c of onCategory) {
+      const has = await em.findOne(ProductOptionGroup, { where: { tenant_id: tenantId, product_id: productId, option_group_id: c.option_group_id } });
+      if (has) continue;
+      await em.save(ProductOptionGroup, em.create(ProductOptionGroup, {
+        tenant_id: tenantId,
+        product_id: productId,
+        option_group_id: c.option_group_id,
+        from_category_id: categoryId,
+        sort_order: await this.nextGroupPosition(em, tenantId, productId),
+      }));
+    }
+  }
+
+  /**
+   * Where an add-on group is used, set from the group's sheet: the products it is put on
+   * directly and the categories it is on. A category passes the group to every product in it
+   * now and to each one added later. Taking a category away takes the links it made, and leaves
+   * the ones put on a product directly. A product taken off by hand on its own page stays off.
+   */
+  async setOptionGroupLinks(tenantId: string, groupId: string, data: { product_ids?: string[]; category_ids?: string[] }, correlationId: string) {
+    const result = await this.groupRepo.manager.transaction(async (em) => {
+      const group = await em.findOne(OptionGroup, { where: { id: groupId, tenant_id: tenantId } });
+      if (!group) throw new NotFoundException('Option group not found');
+      const wantProducts = new Set(data.product_ids || []);
+      const wantCategories = new Set(data.category_ids || []);
+
+      const known = async (entity: typeof Product | typeof Category, ids: Set<string>, what: string) => {
+        if (!ids.size) return;
+        const found = await em.count(entity, { where: { tenant_id: tenantId, id: In([...ids]) } });
+        if (found !== ids.size) throw new BadRequestException(`Unknown ${what}`);
+      };
+      await known(Product, wantProducts, 'product');
+      await known(Category, wantCategories, 'category');
+
+      const categoryRows = await em.find(CategoryOptionGroup, { where: { tenant_id: tenantId, option_group_id: groupId } });
+      for (const row of categoryRows.filter((r) => !wantCategories.has(r.category_id))) {
+        await em.delete(ProductOptionGroup, { tenant_id: tenantId, option_group_id: groupId, from_category_id: row.category_id });
+        await em.delete(CategoryOptionGroup, { id: row.id });
+      }
+      const addedCategories = [...wantCategories].filter((id) => !categoryRows.some((r) => r.category_id === id));
+      for (const categoryId of addedCategories) {
+        await em.save(CategoryOptionGroup, em.create(CategoryOptionGroup, { tenant_id: tenantId, category_id: categoryId, option_group_id: groupId }));
+      }
+
+      let links = await em.find(ProductOptionGroup, { where: { tenant_id: tenantId, option_group_id: groupId } });
+      // Direct links: drop the ones unticked, add the new ones, and make an inherited link direct when ticked.
+      for (const link of links.filter((l) => !l.from_category_id && !wantProducts.has(l.product_id))) {
+        await em.delete(ProductOptionGroup, { id: link.id });
+      }
+      for (const productId of wantProducts) {
+        const link = links.find((l) => l.product_id === productId);
+        if (link?.from_category_id) {
+          link.from_category_id = null;
+          await em.save(ProductOptionGroup, link);
+        } else if (!link) {
+          await em.save(ProductOptionGroup, em.create(ProductOptionGroup, {
+            tenant_id: tenantId,
+            product_id: productId,
+            option_group_id: groupId,
+            sort_order: await this.nextGroupPosition(em, tenantId, productId),
+          }));
+        }
+      }
+      // Only a newly added category reaches its products; one already on keeps the choices made since.
+      links = await em.find(ProductOptionGroup, { where: { tenant_id: tenantId, option_group_id: groupId } });
+      for (const categoryId of addedCategories) {
+        const products = await em.find(Product, { where: { tenant_id: tenantId, category_id: categoryId } });
+        for (const p of products.filter((p) => !links.some((l) => l.product_id === p.id))) {
+          await em.save(ProductOptionGroup, em.create(ProductOptionGroup, {
+            tenant_id: tenantId,
+            product_id: p.id,
+            option_group_id: groupId,
+            from_category_id: categoryId,
+            sort_order: await this.nextGroupPosition(em, tenantId, p.id),
+          }));
+        }
+      }
+
+      await this.assertGroupFillable(tenantId, groupId, {}, em);
+      const finalLinks = await em.find(ProductOptionGroup, { where: { tenant_id: tenantId, option_group_id: groupId } });
+      return {
+        product_links: finalLinks.map((l) => ({ product_id: l.product_id, from_category_id: l.from_category_id ?? null })),
+        category_ids: [...wantCategories],
+      };
+    });
+    await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'OPTION_GROUP_LINKS_SET', entityType: 'OptionGroup', entityId: groupId, correlationId, details: { ...data } });
+    return result;
   }
 
   // Product Availability & Temporary Suspension
@@ -1175,21 +1332,23 @@ export class CatalogService {
 
   // Add-on groups: editing what the group and its items are
 
-  async updateOptionGroup(tenantId: string, id: string, data: { name?: string; min_selection?: number; max_selection?: number; is_required?: boolean }, correlationId: string) {
+  async updateOptionGroup(
+    tenantId: string,
+    id: string,
+    data: { name?: string; min_selection?: number; max_selection?: number; is_required?: boolean; prompt_at_pos?: boolean },
+    correlationId: string,
+  ) {
     const group = await this.groupRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!group) throw new NotFoundException('Option group not found');
-    const min = data.min_selection ?? group.min_selection;
-    const max = data.max_selection ?? group.max_selection;
-    if (min < 0 || max < min) {
-      throw new BadRequestException(`Invalid modifier selections. min_selection (${min}) must be >= 0 and <= max_selection (${max}).`);
-    }
-    await this.assertGroupFillable(tenantId, id, { min, isRequired: data.is_required ?? min > 0 });
+    // Snappfood has only min/max; a minimum above zero is what "required" means.
+    const rule = selectionRule(data.min_selection ?? group.min_selection, data.max_selection ?? group.max_selection, data.is_required);
+    await this.assertGroupFillable(tenantId, id, { min: rule.min, isRequired: rule.required });
     const before = { ...group };
     if (data.name !== undefined) group.name = data.name;
-    group.min_selection = min;
-    group.max_selection = max;
-    // Snappfood has only min/max; a minimum above zero is what "required" means.
-    group.is_required = data.is_required ?? min > 0;
+    group.min_selection = rule.min;
+    group.max_selection = rule.max;
+    group.is_required = rule.required;
+    if (data.prompt_at_pos !== undefined) group.prompt_at_pos = !!data.prompt_at_pos;
     const saved = await this.groupRepo.save(group);
     await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'OPTION_GROUP_UPDATED', entityType: 'OptionGroup', entityId: id, correlationId, beforeData: before, afterData: saved });
     return saved;
@@ -1199,52 +1358,66 @@ export class CatalogService {
    * The group editor's Save: its rules, its items (new, changed, reordered) and the items it
    * drops, all or nothing. Saved call by call, a failure halfway left a new minimum live
    * without the choices meant to go with it. The finished group is checked against every
-   * product that carries it before anything commits.
+   * product that carries it before anything commits. With no id it creates the group, so the
+   * add-ons page has one sheet for both.
    */
   async saveOptionGroup(
     tenantId: string,
-    id: string,
+    id: string | null,
     data: {
       name?: string;
       min_selection?: number;
       max_selection?: number;
-      items?: Array<{ id?: string; name: string; price_delta?: string; sort_order?: number }>;
+      prompt_at_pos?: boolean;
+      items?: Array<{ id?: string; name: string; price_delta?: string; sort_order?: number; is_default?: boolean; product_id?: string | null }>;
       removed_item_ids?: string[];
     },
     correlationId: string,
   ) {
     const now = new Date();
     const result = await this.groupRepo.manager.transaction(async (em) => {
-      const group = await em.findOne(OptionGroup, { where: { id, tenant_id: tenantId } });
-      if (!group) throw new NotFoundException('Option group not found');
-      const before = { ...group };
-      const min = data.min_selection ?? group.min_selection;
-      const max = data.max_selection ?? group.max_selection;
-      if (min < 0 || max < min) {
-        throw new BadRequestException(`Invalid modifier selections. min_selection (${min}) must be >= 0 and <= max_selection (${max}).`);
+      let group: OptionGroup | null;
+      if (id) {
+        group = await em.findOne(OptionGroup, { where: { id, tenant_id: tenantId } });
+        if (!group) throw new NotFoundException('Option group not found');
+      } else {
+        if (!data.name?.trim()) throw new BadRequestException('An add-on group needs a name');
+        group = em.create(OptionGroup, { tenant_id: tenantId, code: generatedCode('AG'), name: data.name.trim(), min_selection: 0, max_selection: 1 });
       }
-      if (data.name !== undefined) group.name = data.name;
-      group.min_selection = min;
-      group.max_selection = max;
+      const before = { ...group };
       // Snappfood has only min/max; a minimum above zero is what "required" means.
-      group.is_required = min > 0;
+      const rule = selectionRule(data.min_selection ?? group.min_selection, data.max_selection ?? group.max_selection);
+      if (data.name !== undefined) group.name = data.name.trim();
+      group.min_selection = rule.min;
+      group.max_selection = rule.max;
+      group.is_required = rule.required;
+      if (data.prompt_at_pos !== undefined) group.prompt_at_pos = !!data.prompt_at_pos;
+      // save() fills in a new group's id on the entity itself.
       await em.save(OptionGroup, group);
+      const groupId = group.id;
 
-      const existing = await em.find(OptionItem, { where: { tenant_id: tenantId, option_group_id: id } });
+      // A combo slot's choice gives a dish of its own; it must be one of this menu's.
+      const dishIds = [...new Set((data.items || []).map((i) => i.product_id).filter((p): p is string => !!p))];
+      const dishes = dishIds.length ? await em.find(Product, { where: { tenant_id: tenantId, id: In(dishIds) } }) : [];
+      if (dishes.length !== dishIds.length) throw new BadRequestException('An add-on gives a product that is not on this menu');
+
+      const existing = await em.find(OptionItem, { where: { tenant_id: tenantId, option_group_id: groupId } });
       const byId = new Map(existing.map((i) => [i.id, i]));
       for (const [index, input] of (data.items || []).entries()) {
-        const name = (input.name || '').trim();
+        const name = (input.name || '').trim() || dishes.find((d) => d.id === input.product_id)?.name || '';
         if (!name) continue;
         const price = MoneyUtil.format(input.price_delta || '0');
         const sortOrder = input.sort_order ?? index;
+        const productId = input.product_id === undefined ? undefined : input.product_id || null;
         if (!input.id) {
           await em.save(OptionItem, em.create(OptionItem, {
             tenant_id: tenantId,
-            option_group_id: id,
-            code: `${group.code}-${now.getTime().toString(36).toUpperCase()}${index}`,
+            option_group_id: groupId,
+            code: `${group.code}-${now.getTime().toString(36).toUpperCase()}${index}`.slice(0, 32),
             name,
             price_delta: price,
-            is_default: false,
+            product_id: productId ?? null,
+            is_default: !!input.is_default,
             sort_order: sortOrder,
           }));
           continue;
@@ -1252,10 +1425,14 @@ export class CatalogService {
         const item = byId.get(input.id);
         if (!item) throw new NotFoundException(`Option item ${input.id} is not in this group`);
         const priceChanged = !MoneyUtil.equals(item.price_delta || '0', price);
-        if (item.name === name && !priceChanged && item.sort_order === sortOrder) continue;
+        const isDefault = input.is_default === undefined ? item.is_default : !!input.is_default;
+        const dish = productId === undefined ? item.product_id : productId;
+        if (item.name === name && !priceChanged && item.sort_order === sortOrder && item.is_default === isDefault && item.product_id === dish) continue;
         item.name = name;
         item.price_delta = price;
         item.sort_order = sortOrder;
+        item.is_default = isDefault;
+        item.product_id = dish;
         await em.save(OptionItem, item);
         // As in updateOptionItem: a typed price ends a dated one in force, or the sweep puts it back.
         if (priceChanged) {
@@ -1274,16 +1451,16 @@ export class CatalogService {
         if (item) await em.softRemove(OptionItem, item);
       }
 
-      await this.assertGroupFillable(tenantId, id, {}, em);
-      const items = await em.find(OptionItem, { where: { tenant_id: tenantId, option_group_id: id }, order: { sort_order: 'ASC' } });
+      await this.assertGroupFillable(tenantId, groupId, {}, em);
+      const items = await em.find(OptionItem, { where: { tenant_id: tenantId, option_group_id: groupId }, order: { sort_order: 'ASC' } });
       return { before, saved: { ...group, items } };
     });
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
-      action: 'OPTION_GROUP_SAVED',
+      action: id ? 'OPTION_GROUP_SAVED' : 'OPTION_GROUP_CREATED',
       entityType: 'OptionGroup',
-      entityId: id,
+      entityId: result.saved.id,
       correlationId,
       beforeData: result.before,
       afterData: result.saved,
@@ -1295,6 +1472,7 @@ export class CatalogService {
     const group = await this.groupRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!group) throw new NotFoundException('Option group not found');
     await this.prodGroupRepo.delete({ tenant_id: tenantId, option_group_id: id });
+    await this.prodGroupRepo.manager.getRepository(CategoryOptionGroup).delete({ tenant_id: tenantId, option_group_id: id });
     await this.groupRepo.softRemove(group);
     await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'OPTION_GROUP_ARCHIVED', entityType: 'OptionGroup', entityId: id, correlationId });
     return { success: true };

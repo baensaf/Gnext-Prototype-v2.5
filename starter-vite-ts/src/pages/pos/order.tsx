@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
+import TuneIcon from '@mui/icons-material/Tune';
 import CheckIcon from '@mui/icons-material/Check';
 import ClearIcon from '@mui/icons-material/Clear';
 import PauseIcon from '@mui/icons-material/Pause';
@@ -52,7 +53,6 @@ import {
   Stack,
   Alert,
   Paper,
-  Radio,
   Drawer,
   Button,
   Select,
@@ -65,7 +65,7 @@ import {
   Typography,
   IconButton,
   InputLabel,
-  RadioGroup,
+  ButtonBase,
   CardContent,
   FormControl,
   DialogTitle,
@@ -82,6 +82,7 @@ import {
 import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
+import { addonMin, isPickOne, addonRuleLabel } from 'src/utils/addon-rule';
 
 import { useBranchContext } from 'src/contexts/branch-context';
 import { usePosSource, PosFeatureGate } from 'src/contexts/pos-source';
@@ -104,6 +105,8 @@ export interface CartItem {
   lineSubtotal: string;
   /** Why this line cannot be sold where the register sells now, after the till switched (§16.6). */
   refused?: string;
+  /** The product has sizes or add-on groups, so the line offers to change them. */
+  hasChoices?: boolean;
 }
 
 /**
@@ -266,6 +269,8 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
   const [selectedVariantId, setSelectedVariantId] = useState<string>('');
   const [optionGroups, setOptionGroups] = useState<OptionGroup[]>([]);
   const [checkedOptionIds, setCheckedOptionIds] = useState<string[]>([]);
+  // The cart line the dialog is changing, or null when it adds a new line.
+  const [editingLine, setEditingLine] = useState<number | null>(null);
 
   // Cart state
   const [cart, setCart] = useState<CartItem[]>(carried?.cart ?? []);
@@ -547,11 +552,18 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     if (bestMatches.length === 1) setSelectedDeliveryZoneId(bestMatches[0].id);
   }, [orderType, selectedDeliveryAddressId, customerAddresses, deliveryZones, selectedDeliveryZoneId]);
 
-  const handleOpenProductOptions = async (p: Product) => {
+  /**
+   * A tap on a tile, or on a cart line's Add-ons button (`lineIndex`). The tile rings the item
+   * straight through, as HAMI's register does, unless it has sizes to pick, a required group,
+   * or an optional group set to ask at the POS (Toast's "force show"). The line always opens
+   * the dialog, with the line's choices ticked.
+   */
+  const handleOpenProductOptions = async (p: Product, lineIndex: number | null = null) => {
     // A new tap is a new attempt: the last one's "could not load" does not stay up.
     setError(null);
     setSelectedProduct(p);
     setCheckedOptionIds([]);
+    setEditingLine(lineIndex);
     // A failed read is not "no sizes, no add-ons": ringing the dish up bare would only be
     // refused at submit, after the cart is built. Say so here; tapping the tile tries again.
     let vList: ProductVariant[];
@@ -599,30 +611,38 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       return;
     }
 
+    // Required groups first, so what must be picked is at the top of the dialog.
+    const ordered = [...offered].sort((a, b) => Number(addonMin(b) > 0) - Number(addonMin(a) > 0));
     setProductVariants(onSale);
-    setOptionGroups(offered);
+    setOptionGroups(ordered);
     // The catalogue's default choices start ticked (a combo's usual drink), up to what each
     // group allows, so the common order is one tap.
+    const defaults = ordered.flatMap((g) =>
+      (g.items || [])
+        .filter((i) => i.is_default)
+        .slice(0, g.max_selection && g.max_selection > 0 ? g.max_selection : undefined)
+    );
+    const line = lineIndex !== null ? cart[lineIndex] : null;
+    const offeredIds = new Set(ordered.flatMap((g) => (g.items || []).map((i) => i.id)));
     setCheckedOptionIds(
-      offered.flatMap((g) =>
-        (g.items || [])
-          .filter((i) => i.is_default)
-          .slice(0, g.max_selection && g.max_selection > 0 ? g.max_selection : undefined)
-          .map((i) => i.id)
-      )
+      line ? line.selectedOptions.map((o) => o.id).filter((id) => offeredIds.has(id)) : defaults.map((i) => i.id)
     );
 
     const defaultVariant = onSale.find((v) => v.is_default) || onSale[0];
-    setSelectedVariantId(defaultVariant?.id || '');
+    const lineVariant = line?.selectedVariant && onSale.find((v) => v.id === line.selectedVariant!.id);
+    setSelectedVariantId((lineVariant || defaultVariant)?.id || '');
 
-    if (onSale.length > 1 || offered.length > 0) {
+    const asks = onSale.length > 1 || ordered.some((g) => addonMin(g) > 0 || g.prompt_at_pos !== false);
+    if (line || asks) {
       setOptionDialogOpen(true);
     } else {
-      addToCart(p, defaultVariant, []);
+      // Rung straight through with the default add-ons; the line's Add-ons button changes them.
+      addToCart(p, defaultVariant, defaults, onSale.length > 1 || ordered.length > 0);
+      setSelectedProduct(null);
     }
   };
 
-  const addToCart = (product: Product, variant: ProductVariant | undefined, options: OptionItem[]) => {
+  const addToCart = (product: Product, variant: ProductVariant | undefined, options: OptionItem[], hasChoices = false) => {
     if (placedOrder) setPlacedOrder(null);
     if (holdSuccessMessage) setHoldSuccessMessage(null);
 
@@ -657,6 +677,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
           quantity: 1,
           selectedOptions: options,
           lineSubtotal: itemUnitPrice,
+          hasChoices,
         },
       ];
     });
@@ -666,29 +687,65 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
   // bread) or a group overfilled; the register refuses the same.
   const unfilledSlot = optionGroups.find((g) => {
     const count = (g.items || []).filter((i) => checkedOptionIds.includes(i.id)).length;
-    const min = Math.max(g.min_selection || 0, g.is_required ? 1 : 0);
-    return count < min || (!!g.max_selection && count > g.max_selection);
+    return count < addonMin(g) || (!!g.max_selection && count > g.max_selection);
   });
+
+  const chosenOptionsNow = (): OptionItem[] =>
+    optionGroups.flatMap((g) => (g.items || []).filter((i) => checkedOptionIds.includes(i.id)));
+
+  // What one of the item costs as picked, shown on the dialog's button.
+  const dialogUnitPrice = selectedProduct
+    ? chosenOptionsNow().reduce(
+        (sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2),
+        priceOf(selectedProduct, productVariants.find((v) => v.id === selectedVariantId))
+      )
+    : '0';
+
+  const closeOptionDialog = () => {
+    setOptionDialogOpen(false);
+    setSelectedProduct(null);
+    setProductVariants([]);
+    setSelectedVariantId('');
+    setEditingLine(null);
+  };
 
   const handleConfirmAddWithOptions = () => {
     if (!selectedProduct) return;
 
     const chosenVariant = productVariants.find((v) => v.id === selectedVariantId);
+    const chosenOptions = chosenOptionsNow();
+    const hasChoices = productVariants.length > 1 || optionGroups.length > 0;
 
-    const chosenOptions: OptionItem[] = [];
-    optionGroups.forEach((g) => {
-      g.items?.forEach((i) => {
-        if (checkedOptionIds.includes(i.id)) {
-          chosenOptions.push(i);
-        }
-      });
+    if (editingLine !== null) {
+      // The line keeps its place and quantity; only its size and add-ons change.
+      const unit = chosenOptions.reduce((sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2), priceOf(selectedProduct, chosenVariant));
+      setCart((prev) =>
+        prev.map((ci, i) =>
+          i === editingLine
+            ? {
+                ...ci,
+                selectedVariant: chosenVariant,
+                selectedOptions: chosenOptions,
+                lineSubtotal: MoneyUtil.multiply(unit, ci.quantity.toString(), 2),
+                hasChoices,
+              }
+            : ci
+        )
+      );
+    } else {
+      addToCart(selectedProduct, chosenVariant, chosenOptions, hasChoices);
+    }
+    closeOptionDialog();
+  };
+
+  /** Tick or untick an add-on: a pick-one group swaps its choice rather than adding a second. */
+  const toggleOption = (g: OptionGroup, itemId: string) => {
+    const inGroup = new Set((g.items || []).map((i) => i.id));
+    setCheckedOptionIds((prev) => {
+      // A required pick-one choice (the bread) is changed, not cleared.
+      if (prev.includes(itemId)) return isPickOne(g) && addonMin(g) > 0 ? prev : prev.filter((id) => id !== itemId);
+      return isPickOne(g) ? [...prev.filter((id) => !inGroup.has(id)), itemId] : [...prev, itemId];
     });
-
-    addToCart(selectedProduct, chosenVariant, chosenOptions);
-    setOptionDialogOpen(false);
-    setSelectedProduct(null);
-    setProductVariants([]);
-    setSelectedVariantId('');
   };
 
   const updateQuantity = (index: number, delta: number) => {
@@ -2402,14 +2459,27 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                               <Typography
                                 variant="caption"
                                 sx={{ display: 'block', color: 'text.secondary', fontWeight: 500, fontSize: '0.725rem' }}
-                                noWrap
                               >
-                                + {item.selectedOptions.map((o) => o.name).join(', ')}
+                                + {item.selectedOptions.map((o) => o.name).join('، ')}
                               </Typography>
                             )}
-                            <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main', mt: 0.25, display: 'block' }}>
-                              {MoneyUtil.formatCurrency(item.lineSubtotal)} {currency}
-                            </Typography>
+                            <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mt: 0.25 }}>
+                              <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                {MoneyUtil.formatCurrency(item.lineSubtotal)} {currency}
+                              </Typography>
+                              {/* Change a line's size and add-ons without ringing it up again. */}
+                              {(item.hasChoices || item.selectedOptions.length > 0 || !!item.selectedVariant) && (
+                                <Button
+                                  size="small"
+                                  variant="text"
+                                  startIcon={<TuneIcon sx={{ fontSize: 14 }} />}
+                                  onClick={() => handleOpenProductOptions(item.product, idx)}
+                                  sx={{ minWidth: 0, py: 0, px: 0.5, fontSize: '0.7rem' }}
+                                >
+                                  {t('pos.options.editLine')}
+                                </Button>
+                              )}
+                            </Stack>
                             {item.refused && (
                               <Typography variant="caption" color="error" sx={{ display: 'block', fontWeight: 600 }}>
                                 {item.refused}
@@ -2914,128 +2984,129 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         </DialogActions>
       </Dialog>
 
-      {/* Option & Variant Customization Dialog */}
-      <Dialog open={optionDialogOpen} onClose={() => setOptionDialogOpen(false)} maxWidth="sm" fullWidth aria-keyshortcuts="Escape">
-        <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span>{t('pos.options.title', { name: selectedProduct?.name })}</span>
-        </DialogTitle>
+      {/* Size & add-on dialog: choice buttons, required groups first, the price on the button. */}
+      <Dialog open={optionDialogOpen} onClose={closeOptionDialog} maxWidth="sm" fullWidth aria-keyshortcuts="Escape">
+        <DialogTitle sx={{ fontWeight: 'bold' }}>{t('pos.options.title', { name: selectedProduct?.name })}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
-          {/* Variant Selection Section */}
           {productVariants.length > 0 && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2.5 }}>
               <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
                   {t('pos.options.variant')}
                 </Typography>
                 <VersionTag feature="catalog.sizes" />
               </Stack>
-              <RadioGroup
-                value={selectedVariantId}
-                onChange={(e) => setSelectedVariantId(e.target.value)}
-              >
-                <Grid container spacing={1}>
-                  {productVariants.map((v) => (
-                    <Grid key={v.id} size={{ xs: 12, sm: 6 }}>
-                      <Paper
-                        variant="outlined"
+              <Grid container spacing={1}>
+                {productVariants.map((v) => {
+                  const on = selectedVariantId === v.id;
+                  return (
+                    <Grid key={v.id} size={{ xs: 6, sm: 4 }}>
+                      <ButtonBase
                         onClick={() => setSelectedVariantId(v.id)}
+                        aria-pressed={on}
                         sx={{
-                          p: 1.5,
-                          borderRadius: 2,
-                          cursor: 'pointer',
-                          borderColor: selectedVariantId === v.id ? 'primary.main' : 'divider',
-                          bgcolor: selectedVariantId === v.id ? 'action.hover' : 'background.paper',
-                          borderWidth: selectedVariantId === v.id ? 2 : 1,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
+                          width: '100%',
+                          minHeight: 56,
+                          p: 1.25,
+                          borderRadius: 1.5,
+                          border: 2,
+                          borderColor: on ? 'primary.main' : 'divider',
+                          bgcolor: on ? 'action.selected' : 'background.paper',
+                          flexDirection: 'column',
+                          alignItems: 'stretch',
+                          textAlign: 'start',
                         }}
                       >
-                        <FormControlLabel
-                          value={v.id}
-                          control={<Radio size="small" />}
-                          label={
-                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                              {v.name}
-                            </Typography>
-                          }
-                          sx={{ m: 0 }}
-                        />
-                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                          {v.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
                           {MoneyUtil.formatCurrency(selectedProduct ? priceOf(selectedProduct, v) : v.base_price)} {currency}
                         </Typography>
-                      </Paper>
+                      </ButtonBase>
                     </Grid>
-                  ))}
-                </Grid>
-              </RadioGroup>
+                  );
+                })}
+              </Grid>
             </Box>
           )}
 
-          {/* Modifier Groups Section */}
           {optionGroups.length > 0 && (
-            <Box>
-              {productVariants.length > 0 && <Divider sx={{ my: 2 }} />}
-              <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
-                  {t('pos.options.addOns')}
-                </Typography>
-                <VersionTag feature="catalog.addonGroups" />
-              </Stack>
-              {optionGroups.map((g) => (
-                <Box key={g.id} sx={{ mb: 2 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5, color: 'text.secondary' }}>
-                    {g.name} {g.is_required ? `(${t('pos.options.required')})` : ''}
-                  </Typography>
-                  {g.items?.map((item) => (
-                    <FormControlLabel
-                      key={item.id}
-                      control={
-                        <Checkbox
-                          checked={checkedOptionIds.includes(item.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              // A one-choice group swaps its choice rather than adding a second.
-                              const inGroup = new Set(g.items?.map((i) => i.id));
-                              setCheckedOptionIds((prev) =>
-                                g.max_selection === 1
-                                  ? [...prev.filter((id) => !inGroup.has(id)), item.id]
-                                  : [...prev, item.id]
-                              );
-                            } else {
-                              setCheckedOptionIds((prev) => prev.filter((id) => id !== item.id));
-                            }
-                          }}
-                        />
-                      }
-                      // A free choice ("no onions") shows no price; "+0 IRR" read as a charge.
-                      label={
-                        MoneyUtil.greaterThan(item.price_delta || '0', '0')
-                          ? `${item.name} (+${MoneyUtil.formatCurrency(item.price_delta)} ${currency})`
-                          : item.name
-                      }
-                      sx={{ display: 'block', mb: 0.5 }}
-                    />
-                  ))}
-                </Box>
-              ))}
-            </Box>
+            <Stack spacing={2.5}>
+              {optionGroups.map((g) => {
+                const picked = (g.items || []).filter((i) => checkedOptionIds.includes(i.id)).length;
+                const missing = picked < addonMin(g);
+                return (
+                  <Box key={g.id}>
+                    <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1, mb: 1 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                        {g.name}
+                      </Typography>
+                      <Chip
+                        size="small"
+                        color={addonMin(g) > 0 ? (missing ? 'warning' : 'success') : 'default'}
+                        variant={addonMin(g) > 0 ? 'filled' : 'outlined'}
+                        label={addonRuleLabel(t, g)}
+                      />
+                      <VersionTag feature="catalog.addonGroups" />
+                    </Stack>
+                    <Grid container spacing={1}>
+                      {(g.items || []).map((item) => {
+                        const on = checkedOptionIds.includes(item.id);
+                        const priced = MoneyUtil.greaterThan(item.price_delta || '0', '0');
+                        return (
+                          <Grid key={item.id} size={{ xs: 6, sm: 4 }}>
+                            <ButtonBase
+                              onClick={() => toggleOption(g, item.id)}
+                              role={isPickOne(g) ? 'radio' : 'checkbox'}
+                              aria-checked={on}
+                              sx={{
+                                width: '100%',
+                                minHeight: 52,
+                                p: 1.25,
+                                borderRadius: 1.5,
+                                border: 2,
+                                borderColor: on ? 'primary.main' : missing ? 'warning.light' : 'divider',
+                                bgcolor: on ? 'action.selected' : 'background.paper',
+                                justifyContent: 'space-between',
+                                gap: 1,
+                                textAlign: 'start',
+                              }}
+                            >
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography variant="body2" sx={{ fontWeight: on ? 'bold' : 500 }}>
+                                  {item.name}
+                                </Typography>
+                                {/* A free choice ("no onions") shows no price; "+0" read as a charge. */}
+                                {priced && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    +{MoneyUtil.formatCurrency(item.price_delta)} {currency}
+                                  </Typography>
+                                )}
+                              </Box>
+                              {on && <CheckIcon fontSize="small" color="primary" />}
+                            </ButtonBase>
+                          </Grid>
+                        );
+                      })}
+                    </Grid>
+                  </Box>
+                );
+              })}
+            </Stack>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOptionDialogOpen(false)}>{t('pos.options.cancel')}</Button>
+        <DialogActions sx={{ px: 3, py: 2 }}>
           {unfilledSlot && (
-            <Typography variant="caption" color="warning.main" sx={{ mr: 'auto', ml: 2 }}>
+            <Typography variant="caption" color="warning.main" sx={{ mr: 'auto' }}>
               {t('pos.comboChooseSlot', { slot: unfilledSlot.name })}
             </Typography>
           )}
-          <Button
-            variant="contained"
-            onClick={handleConfirmAddWithOptions}
-            disabled={!!unfilledSlot}
-            sx={{ fontWeight: 'bold', px: 3 }}
-          >
-            {t('pos.options.addToCart')}
+          <Button onClick={closeOptionDialog}>{t('pos.options.cancel')}</Button>
+          <Button variant="contained" onClick={handleConfirmAddWithOptions} disabled={!!unfilledSlot} sx={{ fontWeight: 'bold', px: 3 }}>
+            {t(editingLine !== null ? 'pos.options.updateLine' : 'pos.options.addWithPrice', {
+              price: `${MoneyUtil.formatCurrency(dialogUnitPrice)} ${currency}`,
+            })}
           </Button>
         </DialogActions>
       </Dialog>

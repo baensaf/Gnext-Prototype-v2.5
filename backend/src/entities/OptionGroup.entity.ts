@@ -20,8 +20,13 @@ export class OptionGroup {
   @Column({ type: 'integer', default: 1 })
   max_selection: number;
 
+  /** Always `min_selection > 0`; kept for the readers that ask for it by name. */
   @Column({ type: 'boolean', default: false })
   is_required: boolean;
+
+  /** An optional group opens the POS choices dialog when the item is rung up. Required ones always do. */
+  @Column({ type: 'boolean', default: true })
+  prompt_at_pos: boolean;
 
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
