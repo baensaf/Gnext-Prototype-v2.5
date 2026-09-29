@@ -185,7 +185,7 @@ kitchen stations and routing, printers, the print queue and branch agents. Monit
 | "Ready to sell offline" on a branch agent | F |
 
 **Page group 12, reports, audit and Moadian.** Decided 2026-09-29. The reports page
-(`/app/reports`) is V2. V1 has one very basic report instead, still to be defined. The audit
+(`/app/reports`) is V2. V1 has one very basic report instead: the dashboard (page group 15). The audit
 explorer (`/app/audit`) and Moadian are F. Reports that ship later than the page:
 
 | Report | Label |
@@ -215,9 +215,15 @@ Courier pay and branch overrides are V4. The localization demo and data reset pa
 terminal, the order number, the customer's phone and name, and setting up the kiosk device.
 Sizes and add-ons on the kiosk are V4, as in the catalog. The simulated card terminal is F.
 
+**Page group 15, dashboard, simulators and tools.** Decided 2026-09-29. The dashboard
+(`/app/dashboard`) is V1 and is V1's one basic report: today's sales, open orders and open
+shifts. Branch health and the list of branches with their agents are V4 (head office). The
+simulators (`/app/simulation/…`) and the offline till (`/till`) are F.
+
 ## Next
 
-Page group 15, dashboard, simulators and tools in the order listed on the Feature labels tab.
+Every page group is labelled (2026-09-29). Next: turn the labels into the product scope
+documents for V1–V4. in the order listed on the Feature labels tab.
 
 ## Routine for each page
 

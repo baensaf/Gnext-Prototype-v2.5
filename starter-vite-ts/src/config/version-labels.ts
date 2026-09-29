@@ -17,6 +17,10 @@ export const PHASE_LABELS: PhaseLabel[] = ['V1', 'V2', 'V3', 'V4', 'F'];
 
 /** The version a page first ships in, by path prefix. The longest matching prefix wins. */
 const PAGE_LABELS: Record<string, PhaseLabel> = {
+  // Today's sales, open orders and open shifts: V1's one basic report
+  '/app/dashboard': 'V1',
+  // Prototype tools: the Snappfood simulator, payment and printer mocks, integration logs
+  '/app/simulation': 'F',
   '/app/pos': 'V1',
   '/app/orders': 'V1',
   // V2 only sets up sections and tables; the POS assigns a table to an order.
@@ -38,7 +42,7 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   // Chain-wide health and alerts for head office
   '/app/operations/monitoring': 'V4',
   '/app/kiosk': 'V3',
-  // V1 has one very basic report, still to be defined; the reports page comes in V2.
+  // V1's one very basic report is the dashboard; the reports page comes in V2.
   '/app/reports': 'V2',
   '/app/audit': 'F',
   // Settings: users, roles, general, calendar, business day, shift policy, order workflow,
@@ -160,6 +164,8 @@ export const FEATURE_LABELS = {
   'settings.refundMethods': 'V2',
   // Kiosk (V3): sizes and add-ons follow the catalog (V4).
   'kiosk.simulatedTerminal': 'F',
+  // Dashboard: head office's view across branches
+  'dashboard.branchHealth': 'V4',
   // Moadian e-invoices on an order
   moadian: 'F',
 } satisfies Record<string, PhaseLabel>;

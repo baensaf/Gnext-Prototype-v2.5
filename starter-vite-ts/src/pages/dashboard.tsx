@@ -32,6 +32,8 @@ import { useAuthStore } from 'src/store/useAuthStore';
 import { httpClient as axios } from 'src/api/httpClient';
 import { useBranchContextOptional } from 'src/contexts/branch-context';
 
+import { VersionTag } from 'src/components/version-tag';
+
 export function DashboardPage() {
   const currency = useCurrencyLabel();
   const { t } = useTranslation();
@@ -154,7 +156,7 @@ export function DashboardPage() {
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
-                    {t('dashboard.branchHealth')}
+                    {t('dashboard.branchHealth')} <VersionTag feature="dashboard.branchHealth" />
                   </Typography>
                   <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'success.main', mt: 0.5 }}>
                     {kpis.branch_health_percentage}%
@@ -174,7 +176,7 @@ export function DashboardPage() {
         <CardContent>
           <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-              {t('dashboard.branchHealth')}
+              {t('dashboard.branchHealth')} <VersionTag feature="dashboard.branchHealth" />
             </Typography>
             <Chip label={t('app.simulatedBadge')} color="warning" size="small" />
           </Stack>
