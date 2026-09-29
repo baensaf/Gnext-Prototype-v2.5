@@ -25,6 +25,7 @@ import { useCurrencyLabel } from 'src/utils/currency';
 import { settingsApi } from 'src/api/settingsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 
+import { VersionTag } from 'src/components/version-tag';
 import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
@@ -189,7 +190,12 @@ export function ShiftPolicySettingsPage() {
             <TextField
               fullWidth
               type="number"
-              label={t('settings.shiftPolicy.toleranceLabel', 'Variance tolerance ({{currency}})', { currency: currencyLabel })}
+              label={
+                <>
+                  {t('settings.shiftPolicy.toleranceLabel', 'Variance tolerance ({{currency}})', { currency: currencyLabel })}{' '}
+                  <VersionTag feature="shift.differenceSignoff" />
+                </>
+              }
               helperText={t(
                 'settings.shiftPolicy.toleranceHelp',
                 'The largest over or short a drawer may close on without a manager PIN. Any difference at all still needs a reason. Zero sends every difference to a manager.'
@@ -210,7 +216,9 @@ export function ShiftPolicySettingsPage() {
               }
               label={
                 <Box>
-                  <Typography variant="subtitle2">{t('settings.shiftPolicy.blindLabel', 'Blind count at close')}</Typography>
+                  <Typography variant="subtitle2">
+                    {t('settings.shiftPolicy.blindLabel', 'Blind count at close')} <VersionTag feature="shift.blindCount" />
+                  </Typography>
                   <Typography variant="caption" color="text.secondary">
                     {t(
                       'settings.shiftPolicy.blindHelp',

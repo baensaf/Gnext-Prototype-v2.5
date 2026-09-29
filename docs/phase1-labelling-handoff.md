@@ -196,9 +196,24 @@ explorer (`/app/audit`) and Moadian are F. Reports that ship later than the page
 | Saved report views | V4 |
 | Print job log, integration and webhook log, "V5 preview: inventory" | F |
 
+**Page group 13, settings (`/app/settings/…`): V1.** Decided 2026-09-29. **Money is shown
+in Toman** everywhere (screens, receipts, exports) and stored in Rial, as banks and card
+terminals expect. More than one currency is F: the Omani rial and the US dollar come in V7.
+Approval policies (`/app/settings/approvals`) are V2; V1 keeps the fixed manager-PIN checks.
+Courier pay and branch overrides are V4. The localization demo and data reset pages are F.
+
+| Feature | Label |
+|---|---|
+| More than one currency | F (V7) |
+| Reopening closed orders | V2 |
+| Requiring a table for dine-in | V2 |
+| Incoming orders (accepting automatically) | V3 |
+| Refund methods | V2 |
+| Difference tolerance, blind count | V4 |
+
 ## Next
 
-Page group 13, settings, then groups 14–15 in the order listed on the Feature labels tab.
+Page group 14, kiosk, then group 15 in the order listed on the Feature labels tab.
 
 ## Routine for each page
 

@@ -29,6 +29,7 @@ import {
 import { settingsApi } from 'src/api/settingsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 
+import { VersionTag } from 'src/components/version-tag';
 import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 import { CallNumberRangesCard } from 'src/components/settings/call-number-ranges-card';
@@ -300,7 +301,8 @@ export function OrderWorkflowSettingsPage() {
                   label={
                     <Box>
                       <Typography variant="subtitle2">
-                        {t('settings.orderWorkflow.allowReopenLabel', 'Allow Reopening Closed Orders')}
+                        {t('settings.orderWorkflow.allowReopenLabel', 'Allow Reopening Closed Orders')}{' '}
+                        <VersionTag feature="settings.reopenOrders" />
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {t(
@@ -334,7 +336,8 @@ export function OrderWorkflowSettingsPage() {
               <Stack spacing={2.5}>
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                   <Typography variant="subtitle2">
-                    {t('settings.orderWorkflow.incoming.title', 'Incoming Orders')}
+                    {t('settings.orderWorkflow.incoming.title', 'Incoming Orders')}{' '}
+                    <VersionTag feature="settings.incomingOrders" />
                   </Typography>
                   <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 2 }}>
                     {t(
@@ -410,7 +413,8 @@ export function OrderWorkflowSettingsPage() {
                     label={
                       <Box>
                         <Typography variant="subtitle2">
-                          {t('settings.orderWorkflow.requireTableLabel', 'Enforce Table Selection for Dine-In')}
+                          {t('settings.orderWorkflow.requireTableLabel', 'Enforce Table Selection for Dine-In')}{' '}
+                          <VersionTag feature="settings.requireTable" />
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
                           {t(

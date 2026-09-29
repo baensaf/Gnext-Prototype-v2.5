@@ -31,6 +31,7 @@ import { settingsApi } from 'src/api/settingsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
+import { VersionTag } from 'src/components/version-tag';
 import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
@@ -197,7 +198,8 @@ export function GeneralSettingsPage() {
             <CardContent>
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  {t('settings.generalPage.supportedCurrencies', 'Supported Currencies')}
+                  {t('settings.generalPage.supportedCurrencies', 'Supported Currencies')}{' '}
+                  <VersionTag feature="settings.currencies" />
                 </Typography>
                 <Chip label={t('settings.generalPage.oneCurrencyNotice', 'One Currency per Order (AD-10)')} color="info" size="small" />
               </Stack>
