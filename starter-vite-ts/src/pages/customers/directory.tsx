@@ -55,6 +55,7 @@ import {
   customerApi
 } from 'src/api/customerApi';
 
+import { VersionTag } from 'src/components/version-tag';
 import { ServerDataGrid } from 'src/components/server-data-grid';
 import { CalendarDateField } from 'src/components/calendar-date-field';
 
@@ -308,7 +309,12 @@ export function CustomersPage() {
           {
             field: 'wallet_balance',
             headerName: 'Wallet / Credit Balance',
-            width: 220,
+            width: 240,
+            renderHeader: () => (
+              <>
+                Wallet / Credit Balance <VersionTag feature="customers.credit" sx={{ ml: 1 }} />
+              </>
+            ),
             renderCell: (params) => {
               const c = params.row as Customer;
               const walletBal = c.wallet_balance || c.credit_account?.current_balance || '0.0000';
@@ -336,6 +342,12 @@ export function CustomersPage() {
             field: 'is_active',
             headerName: 'Status',
             width: 130,
+            // The "Blocked" badge; blocking a customer is F.
+            renderHeader: () => (
+              <>
+                Status <VersionTag feature="customers.block" sx={{ ml: 1 }} />
+              </>
+            ),
             renderCell: (params) => {
               const c = params.row as Customer;
               // Blocked outranks disabled on the badge: it is the one that stops an order
@@ -482,7 +494,12 @@ export function CustomersPage() {
                 type="number"
                 fullWidth
                 value={creditLimit}
-                helperText="A wallet account will be automatically provisioned with this initial credit limit."
+                helperText={
+                  <>
+                    A wallet account will be automatically provisioned with this initial credit limit.{' '}
+                    <VersionTag feature="customers.credit" />
+                  </>
+                }
                 onChange={(e) => setCreditLimit(e.target.value)}
               />
 

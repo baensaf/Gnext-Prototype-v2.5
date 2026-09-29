@@ -50,6 +50,7 @@ import { useCurrencyCode, useCurrencyLabel } from 'src/utils/currency';
 import { creditApi } from 'src/api/creditApi';
 import { customerApi } from 'src/api/customerApi';
 
+import { VersionTag } from 'src/components/version-tag';
 import { CalendarDateField } from 'src/components/calendar-date-field';
 
 export function CustomerCreditPage() {
@@ -565,7 +566,9 @@ export function CustomerCreditPage() {
                   <TableCell align="right">{t('credit.table.currentBalance', 'Current Balance')}</TableCell>
                   <TableCell align="right">{t('credit.table.availableCredit', 'Available Credit')}</TableCell>
                   <TableCell>{t('credit.table.status', 'Status')}</TableCell>
-                  <TableCell align="right">{t('credit.table.aging', 'Aging (0-30d)')}</TableCell>
+                  <TableCell align="right">
+                    {t('credit.table.aging', 'Aging (0-30d)')} <VersionTag feature="credit.aging" />
+                  </TableCell>
                   <TableCell align="center">{t('credit.table.actions', 'Actions')}</TableCell>
                 </TableRow>
               </TableHead>
@@ -1041,7 +1044,7 @@ export function CustomerCreditPage() {
               {/* Aging Breakdown Cards */}
               <Box>
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1.5 }}>
-                  {t('credit.aging', 'Aging Summary')}
+                  {t('credit.aging', 'Aging Summary')} <VersionTag feature="credit.aging" />
                 </Typography>
                 <Grid container spacing={2}>
                   {(() => {

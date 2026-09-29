@@ -47,6 +47,14 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   // Raising or lowering base prices now, by percent or amount
   '/app/pricing/changes': 'V1',
   '/app/pricing/snappfood': 'V3',
+  // Registering and finding customers, with their addresses
+  '/app/customers': 'V1',
+  // A customer's profile page (`*` is one path segment: the customer's id)
+  '/app/customers/*': 'V4',
+  '/app/credit': 'V3',
+  // Customer-specific rates and the wallet belong to the customer club.
+  '/app/discounts': 'V4',
+  '/app/discounts/coupons': 'V3',
 };
 
 /** Features that ship later than the page they sit on. */
@@ -110,16 +118,29 @@ export const FEATURE_LABELS = {
   // Price changes: V1 changes base prices now.
   'pricing.scheduled': 'V4',
   'pricing.listPrices': 'V4',
+  // Customers and credit
+  'customers.block': 'F',
+  'customers.credit': 'V3',
+  'customers.audit': 'F',
+  'credit.aging': 'V4',
+  'coupons.testBench': 'F',
   // Moadian e-invoices on an order
   moadian: 'F',
 } satisfies Record<string, PhaseLabel>;
 
 export type LabelledFeature = keyof typeof FEATURE_LABELS;
 
+/** Whether `pathname` is `prefix` or under it; a `*` in the prefix stands for one path segment. */
+function underPrefix(pathname: string, prefix: string) {
+  const want = prefix.split('/');
+  const have = pathname.split('/');
+  return want.length <= have.length && want.every((part, i) => part === '*' || part === have[i]);
+}
+
 export function pageLabel(pathname: string): PhaseLabel | undefined {
   let best: string | undefined;
   for (const prefix of Object.keys(PAGE_LABELS)) {
-    const matches = pathname === prefix || pathname.startsWith(`${prefix}/`);
+    const matches = underPrefix(pathname, prefix);
     if (matches && (!best || prefix.length > best.length)) best = prefix;
   }
   return best ? PAGE_LABELS[best] : undefined;
