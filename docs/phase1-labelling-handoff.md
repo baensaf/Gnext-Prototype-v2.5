@@ -184,9 +184,21 @@ kitchen stations and routing, printers, the print queue and branch agents. Monit
 | Simulated printers, the hardware simulator and "simulate outcome" | F |
 | "Ready to sell offline" on a branch agent | F |
 
+**Page group 12, reports, audit and Moadian.** Decided 2026-09-29. The reports page
+(`/app/reports`) is V2. V1 has one very basic report instead, still to be defined. The audit
+explorer (`/app/audit`) and Moadian are F. Reports that ship later than the page:
+
+| Report | Label |
+|---|---|
+| Snappfood orders, Snappfood webhook reconciliation | V3 |
+| Customer credit ledger, end-of-day credit use | V3 |
+| Customer activity, credit aging, branch comparison | V4 |
+| Saved report views | V4 |
+| Print job log, integration and webhook log, "V5 preview: inventory" | F |
+
 ## Next
 
-Page group 12, reports, audit and Moadian, then groups 13–15 in the order listed on the Feature labels tab.
+Page group 13, settings, then groups 14–15 in the order listed on the Feature labels tab.
 
 ## Routine for each page
 
