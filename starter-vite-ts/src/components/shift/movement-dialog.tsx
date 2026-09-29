@@ -16,7 +16,7 @@ import {
   DialogActions,
 } from '@mui/material';
 
-import { useCurrencyLabel } from 'src/utils/currency';
+import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { shiftApi } from 'src/api/shiftApi';
 import { settingsApi } from 'src/api/settingsApi';
@@ -116,8 +116,8 @@ export function MovementDialog({ open, onClose, shiftId, type, onPosted }: Props
               required
               fullWidth
               autoFocus
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              value={toToman(amount)}
+              onChange={(e) => setAmount(fromToman(e.target.value))}
               slotProps={{ htmlInput: { min: 1, dir: 'ltr' } }}
             />
             {type !== 'PAID_IN' && reasonCodes.length > 0 && (

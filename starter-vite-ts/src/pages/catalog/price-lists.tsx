@@ -37,6 +37,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { toToman, fromToman } from 'src/utils/currency';
 
 import { tenantApi } from 'src/api/tenantApi';
 import { catalogApi } from 'src/api/catalogApi';
@@ -133,12 +134,13 @@ export function PriceListsPage() {
   };
 
   const key = (productId: string, variantId: string | null) => `${productId}:${variantId || ''}`;
-  const shown = (price: string | null) => (price ? String(Number(price)) : '');
+  /** A saved price as the toman figure its box shows; drafts are typed in tomans too. */
+  const shown = (price: string | null) => (price ? toToman(price) : '');
 
   const savePrice = async (productId: string, variantId: string | null) => {
     const value = (drafts[key(productId, variantId)] ?? '').trim();
     try {
-      setSheet(await catalogApi.setListPrice(selectedListId, productId, variantId, value === '' ? null : value));
+      setSheet(await catalogApi.setListPrice(selectedListId, productId, variantId, value === '' ? null : fromToman(value)));
       setDrafts((prev) => {
         const next = { ...prev };
         delete next[key(productId, variantId)];

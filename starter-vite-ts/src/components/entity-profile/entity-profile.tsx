@@ -37,8 +37,11 @@ import {
 
 import { paths } from 'src/routes/paths';
 
+import { moneyUnit } from 'src/utils/currency';
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
+
+import i18n from 'src/locales/i18n';
 
 // ----------------------------------------------------------------------
 
@@ -46,8 +49,9 @@ export function formatDateTime(value?: string | null): string {
   return value ? fDateTime(value) : '—';
 }
 
+/** An amount stored in `currency`, for reading: rials show as tomans. */
 export function formatMoney(value?: string | null, currency: string = 'IRR'): string {
-  return `${MoneyUtil.formatCurrency(value || '0')} ${currency}`;
+  return `${MoneyUtil.formatCurrency(value || '0')} ${moneyUnit(currency, i18n.language)}`;
 }
 
 const ORDER_STATE_COLOR: Record<string, 'success' | 'error' | 'warning' | 'info' | 'default'> = {

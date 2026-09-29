@@ -45,7 +45,7 @@ import { useParams } from 'src/routes/hooks';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
-import { useCurrencyCode, useCurrencyLabel } from 'src/utils/currency';
+import { toToman, fromToman, useCurrencyCode, useCurrencyLabel } from 'src/utils/currency';
 
 import { creditApi } from 'src/api/creditApi';
 import { customerApi } from 'src/api/customerApi';
@@ -719,13 +719,13 @@ export function CustomerCreditPage() {
                   <Grid size={{ xs: 6 }}>
                     <Typography variant="caption" color="text.secondary">Current Balance:</Typography>
                     <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                      {MoneyUtil.formatCurrency(selectedAccount?.current_balance || '0')} {selectedAccount?.currency_code || currency}
+                      {MoneyUtil.formatCurrency(selectedAccount?.current_balance || '0')} {currencyLabel}
                     </Typography>
                   </Grid>
                   <Grid size={{ xs: 6 }}>
                     <Typography variant="caption" color="text.secondary">Credit Limit:</Typography>
                     <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                      {MoneyUtil.formatCurrency(selectedAccount?.credit_limit || '0')} {selectedAccount?.currency_code || currency}
+                      {MoneyUtil.formatCurrency(selectedAccount?.credit_limit || '0')} {currencyLabel}
                     </Typography>
                   </Grid>
                 </Grid>
@@ -737,9 +737,9 @@ export function CustomerCreditPage() {
                 type="number"
                 required
                 fullWidth
-                value={repayAmount}
-                onChange={(e) => setRepayAmount(e.target.value)}
-                helperText={`Preview: ${MoneyUtil.formatCurrency(repayAmount || '0')} ${currency}`}
+                value={toToman(repayAmount)}
+                onChange={(e) => setRepayAmount(fromToman(e.target.value))}
+                helperText={`Preview: ${MoneyUtil.formatCurrency(repayAmount || '0')} ${currencyLabel}`}
               />
 
               <TextField
@@ -798,9 +798,9 @@ export function CustomerCreditPage() {
                 type="text"
                 required
                 fullWidth
-                value={adjustAmount}
-                onChange={(e) => setAdjustAmount(e.target.value)}
-                helperText="Use negative sign for debit charge (e.g. -500000) or positive for credit addition"
+                value={toToman(adjustAmount)}
+                onChange={(e) => setAdjustAmount(fromToman(e.target.value))}
+                helperText="Use negative sign for debit charge (e.g. -50000) or positive for credit addition"
               />
 
               <TextField
@@ -941,9 +941,9 @@ export function CustomerCreditPage() {
                   type="number"
                   required
                   fullWidth
-                  value={newAccountLimit}
-                  onChange={(e) => setNewAccountLimit(e.target.value)}
-                  helperText={`Preview: ${MoneyUtil.formatCurrency(newAccountLimit || '0')} ${newAccountCurrency}`}
+                  value={toToman(newAccountLimit)}
+                  onChange={(e) => setNewAccountLimit(fromToman(e.target.value))}
+                  helperText={`Preview: ${MoneyUtil.formatCurrency(newAccountLimit || '0')} ${currencyLabel}`}
                 />
               )}
 
@@ -1007,7 +1007,7 @@ export function CustomerCreditPage() {
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                       {MoneyUtil.formatCurrency(statementData.credit_account?.credit_limit || statementData.account?.credit_limit || '0')}{' '}
-                      {statementData.currencyCode || currency}
+                      {currencyLabel}
                     </Typography>
                   </Grid>
                   <Grid size={{ xs: 6, md: 3 }}>
@@ -1024,7 +1024,7 @@ export function CustomerCreditPage() {
                       }}
                     >
                       {MoneyUtil.formatCurrency(statementData.credit_account?.current_balance || statementData.account?.current_balance || '0')}{' '}
-                      {statementData.currencyCode || currency}
+                      {currencyLabel}
                     </Typography>
                   </Grid>
                   <Grid size={{ xs: 6, md: 3 }}>
@@ -1035,7 +1035,7 @@ export function CustomerCreditPage() {
                       {MoneyUtil.formatCurrency(
                         statementData.credit_account?.availableCredit || statementData.credit_account?.available_credit || '0'
                       )}{' '}
-                      {statementData.currencyCode || currency}
+                      {currencyLabel}
                     </Typography>
                   </Grid>
                 </Grid>
@@ -1189,7 +1189,7 @@ export function CustomerCreditPage() {
                                 }}
                               >
                                 {isNegative ? `-${MoneyUtil.formatCurrency(MoneyUtil.abs(tx.amount))}` : `+${MoneyUtil.formatCurrency(tx.amount)}`}{' '}
-                                {tx.currency_code || currency}
+                                {currencyLabel}
                               </TableCell>
                               <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                                 {MoneyUtil.formatCurrency(tx.balance_after || '0')}

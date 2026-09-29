@@ -40,7 +40,7 @@ import { RouterLink } from 'src/routes/components';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
-import { useCurrencyCode } from 'src/utils/currency';
+import { useCurrencyLabel } from 'src/utils/currency';
 
 import { settingsApi } from 'src/api/settingsApi';
 import { useIsHeadOffice } from 'src/store/useAuthStore';
@@ -74,7 +74,7 @@ function DeadlineCell({ invoice, now }: { invoice: TaxInvoice; now: number }) {
  * chain has issued with where it stands at the (simulated) tax office.
  */
 export function MoadianInvoicesPage() {
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const { t } = useTranslation();
   const labels = useMoadianLabels();
   const { selectedBranchId, isHeadOffice: atHeadOffice } = useBranchContext();

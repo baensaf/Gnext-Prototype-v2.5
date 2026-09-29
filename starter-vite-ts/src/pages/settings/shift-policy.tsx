@@ -20,7 +20,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 
-import { useCurrencyLabel } from 'src/utils/currency';
+import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { settingsApi } from 'src/api/settingsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
@@ -182,8 +182,8 @@ export function ShiftPolicySettingsPage() {
                 'settings.shiftPolicy.floatHelp',
                 'Offered when a shift is opened. The cashier still enters what they actually counted into the drawer.'
               )}
-              value={policy.defaultOpeningFloat}
-              onChange={(e) => setPolicy((p) => ({ ...p, defaultOpeningFloat: e.target.value }))}
+              value={toToman(policy.defaultOpeningFloat)}
+              onChange={(e) => setPolicy((p) => ({ ...p, defaultOpeningFloat: fromToman(e.target.value) }))}
               slotProps={{ htmlInput: { min: 0, dir: 'ltr' } }}
             />
 
@@ -200,8 +200,8 @@ export function ShiftPolicySettingsPage() {
                 'settings.shiftPolicy.toleranceHelp',
                 'The largest over or short a drawer may close on without a manager PIN. Any difference at all still needs a reason. Zero sends every difference to a manager.'
               )}
-              value={policy.varianceTolerance}
-              onChange={(e) => setPolicy((p) => ({ ...p, varianceTolerance: e.target.value }))}
+              value={toToman(policy.varianceTolerance)}
+              onChange={(e) => setPolicy((p) => ({ ...p, varianceTolerance: fromToman(e.target.value) }))}
               slotProps={{ htmlInput: { min: 0, dir: 'ltr' } }}
             />
 

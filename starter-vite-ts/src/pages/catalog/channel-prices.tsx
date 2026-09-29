@@ -26,6 +26,7 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
+import { toToman, fromToman } from 'src/utils/currency';
 
 import { catalogApi } from 'src/api/catalogApi';
 import { settingsApi } from 'src/api/settingsApi';
@@ -58,7 +59,7 @@ export function ChannelPricesPage() {
       const data = await catalogApi.getChannelPriceSheet(CHANNEL, branchId || null);
       setSheet(data);
       setMarkup(String(data.rule.markup_percent));
-      setRoundTo(String(data.rule.round_to));
+      setRoundTo(toToman(data.rule.round_to));
       setDrafts({});
     } catch (err: any) {
       setError(err.detail || err.message || t('pricing.channelPrices.loadFailed'));
@@ -74,7 +75,7 @@ export function ChannelPricesPage() {
       const all = (await settingsApi.getSettings())?.CHANNEL_PRICING || {};
       await settingsApi.updateSetting('CHANNEL_PRICING', {
         ...all,
-        [CHANNEL]: { markup_percent: Number(markup) || 0, round_to: Number(roundTo) || 0 },
+        [CHANNEL]: { markup_percent: Number(markup) || 0, round_to: Number(fromToman(roundTo)) || 0 },
       });
       setNotice(t('pricing.channelPrices.ruleSaved'));
       await load();
@@ -88,7 +89,7 @@ export function ChannelPricesPage() {
   const saveFixed = async (productId: string, variantId: string | null) => {
     const value = (drafts[key(productId, variantId)] ?? '').trim();
     try {
-      setSheet(await catalogApi.setChannelFixedPrice(CHANNEL, productId, variantId, value === '' ? null : value, branchId || null));
+      setSheet(await catalogApi.setChannelFixedPrice(CHANNEL, productId, variantId, value === '' ? null : fromToman(value), branchId || null));
       setDrafts((prev) => {
         const next = { ...prev };
         delete next[key(productId, variantId)];
@@ -190,7 +191,8 @@ export function ChannelPricesPage() {
             {rows.map((r) => {
               const k = key(r.product_id, r.variant_id);
               const draft = drafts[k];
-              const changed = draft !== undefined && draft !== (r.fixed_price ? String(Number(r.fixed_price)) : '');
+              // Drafts are what was typed, in tomans; the sheet holds rials.
+              const changed = draft !== undefined && draft !== (r.fixed_price ? toToman(r.fixed_price) : '');
               return (
                 <TableRow key={k}>
                   <TableCell>{r.name}</TableCell>
@@ -202,7 +204,7 @@ export function ChannelPricesPage() {
                         size="small"
                         type="number"
                         placeholder={t('pricing.channelPrices.followsRule')}
-                        value={draft ?? (r.fixed_price ? String(Number(r.fixed_price)) : '')}
+                        value={draft ?? (r.fixed_price ? toToman(r.fixed_price) : '')}
                         onChange={(e) => setDrafts((prev) => ({ ...prev, [k]: e.target.value }))}
                         sx={{ width: 150 }}
                       />

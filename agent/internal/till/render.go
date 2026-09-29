@@ -265,7 +265,7 @@ func row(label, value, class string) string {
 
 func positive(v string) string {
 	if money(v) > 0 {
-		return rial(v)
+		return toman(v)
 	}
 	return ""
 }
@@ -292,9 +292,9 @@ func customerDocument(o RenderDoc) string {
 	for _, item := range o.Items {
 		unit := ""
 		if item.UnitPrice != "" {
-			unit = rial(item.UnitPrice)
+			unit = toman(item.UnitPrice)
 		}
-		lineTotal := rial(firstOf(item.TotalPrice, item.UnitPrice))
+		lineTotal := toman(firstOf(item.TotalPrice, item.UnitPrice))
 		if isSlip {
 			// The courier checks the bag, not the prices.
 			lines.WriteString(`<tr><td>` + fa(qty(item.Quantity)) + ` × ` + esc(item.ProductName) + `</td></tr>`)
@@ -322,7 +322,7 @@ func customerDocument(o RenderDoc) string {
 	if !isSlip {
 		subtotal := ""
 		if o.Subtotal != nil {
-			subtotal = rial(*o.Subtotal)
+			subtotal = toman(*o.Subtotal)
 		}
 		discount := ""
 		if d := positive(o.DiscountTotal); d != "" {
@@ -330,7 +330,7 @@ func customerDocument(o RenderDoc) string {
 		}
 		grand := ""
 		if o.GrandTotal != nil {
-			grand = rial(*o.GrandTotal) + " ریال"
+			grand = toman(*o.GrandTotal) + " تومان"
 		}
 		totals = `<hr/>
 ` + row("جمع اقلام", subtotal, "") + `
@@ -350,7 +350,7 @@ func customerDocument(o RenderDoc) string {
 			if name == "" {
 				name = p.Method
 			}
-			b.WriteString(row(name, rial(p.Amount), ""))
+			b.WriteString(row(name, toman(p.Amount), ""))
 		}
 		payments = b.String()
 	}
@@ -361,13 +361,13 @@ func customerDocument(o RenderDoc) string {
 		case isSlip && paidInFull:
 			status = `<div class="box">پرداخت شده — وجهی دریافت نشود</div>`
 		case isSlip:
-			status = `<div class="inv">دریافت از مشتری: ` + rial(*o.OutstandingTotal) + ` ریال</div>`
+			status = `<div class="inv">دریافت از مشتری: ` + toman(*o.OutstandingTotal) + ` تومان</div>`
 		case o.DocumentType == "CUSTOMER_RECEIPT" && paidInFull:
 			status = `<div class="box">پرداخت شد</div>`
 		case o.DocumentType == "CUSTOMER_RECEIPT":
-			status = `<div class="box">پرداخت نشده — مانده ` + rial(*o.OutstandingTotal) + ` ریال</div>`
+			status = `<div class="box">پرداخت نشده — مانده ` + toman(*o.OutstandingTotal) + ` تومان</div>`
 		case !paidInFull:
-			status = `<div class="box">مانده قابل پرداخت: ` + rial(*o.OutstandingTotal) + ` ریال</div>`
+			status = `<div class="box">مانده قابل پرداخت: ` + toman(*o.OutstandingTotal) + ` تومان</div>`
 		}
 	}
 
@@ -445,7 +445,7 @@ func compactReceipt(o RenderDoc) string {
 	for _, item := range o.Items {
 		lines.WriteString(`<tr>
   <td>` + fa(qty(item.Quantity)) + ` × ` + esc(item.ProductName) + `</td>
-  <td class="num">` + rial(firstOf(item.TotalPrice, item.UnitPrice)) + `</td>
+  <td class="num">` + toman(firstOf(item.TotalPrice, item.UnitPrice)) + `</td>
 </tr>`)
 	}
 	status := ""
@@ -453,12 +453,12 @@ func compactReceipt(o RenderDoc) string {
 		if money(*o.OutstandingTotal) <= 0 {
 			status = `<div class="box">پرداخت شد</div>`
 		} else {
-			status = `<div class="box">مانده: ` + rial(*o.OutstandingTotal) + ` ریال</div>`
+			status = `<div class="box">مانده: ` + toman(*o.OutstandingTotal) + ` تومان</div>`
 		}
 	}
 	grand := ""
 	if o.GrandTotal != nil {
-		grand = `<div class="row total"><span>مبلغ کل</span><span>` + rial(*o.GrandTotal) + ` ریال</span></div>`
+		grand = `<div class="row total"><span>مبلغ کل</span><span>` + toman(*o.GrandTotal) + ` تومان</span></div>`
 	}
 	return `<div class="c brand">` + esc(firstOf(o.BrandName, o.BranchName)) + `</div>
 ` + reprintTop(o) + `
@@ -599,12 +599,14 @@ func money(v string) int64 {
 	return n
 }
 
-func rial(v string) string {
+// toman prints stored rials as tomans (one toman is ten rials), rounded half up.
+func toman(v string) string {
 	n := money(v)
 	neg := n < 0
 	if neg {
 		n = -n
 	}
+	n = (n + 5) / 10
 	s := strconv.FormatInt(n, 10)
 	var b strings.Builder
 	for i, r := range s {

@@ -26,7 +26,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
-import { useCurrencyCode } from 'src/utils/currency';
+import { useCurrencyLabel } from 'src/utils/currency';
 
 import { useAuthStore } from 'src/store/useAuthStore';
 import { httpClient as axios } from 'src/api/httpClient';
@@ -111,7 +111,7 @@ interface CartItem {
 
 export function KioskPage() {
   const { t, i18n } = useTranslation();
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const branchScope = useBranchContextOptional();
   const [kioskTerminal, setKioskTerminal] = useState<KioskTerminal | null>(() => readKioskTerminal());
   const [deviceDialogOpen, setDeviceDialogOpen] = useState(false);

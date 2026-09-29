@@ -35,10 +35,11 @@ export class MoneyUtil {
   }
 
   /**
-   * Formats a monetary value with thousand separators without passing through native floating-point numbers.
+   * An amount for people to read: stored rials shown as tomans (÷ 10, see `utils/currency`),
+   * with thousand separators, without passing through native floating-point numbers.
    */
   static formatCurrency(val: MoneyInput, decimals: number = 0): string {
-    const d = new Decimal(val || 0);
+    const d = new Decimal(val || 0).div(10);
     const fixedStr = d.toFixed(decimals);
     const [intPart, fracPart] = fixedStr.split('.');
     const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');

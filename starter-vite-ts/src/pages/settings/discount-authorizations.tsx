@@ -13,7 +13,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 
-import { useCurrencyLabel } from 'src/utils/currency';
+import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { httpClient as axios } from 'src/api/httpClient';
 import { DashboardContent } from 'src/layouts/dashboard';
@@ -169,8 +169,8 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                 <TextField
                   type="number"
                   label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction ({{currency}})', { currency: currencyLabel })}
-                  value={policy.cashierMaxFixed}
-                  onChange={(e) => setPolicy({ ...policy, cashierMaxFixed: Number(e.target.value) })}
+                  value={toToman(policy.cashierMaxFixed)}
+                  onChange={(e) => setPolicy({ ...policy, cashierMaxFixed: Number(fromToman(e.target.value)) })}
                   disabled={!isHeadOffice}
                   helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} {{currency}}', { currency: currencyLabel, amount: '50,000' })}
                 />
@@ -200,8 +200,8 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                 <TextField
                   type="number"
                   label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction ({{currency}})', { currency: currencyLabel })}
-                  value={policy.supervisorMaxFixed}
-                  onChange={(e) => setPolicy({ ...policy, supervisorMaxFixed: Number(e.target.value) })}
+                  value={toToman(policy.supervisorMaxFixed)}
+                  onChange={(e) => setPolicy({ ...policy, supervisorMaxFixed: Number(fromToman(e.target.value)) })}
                   disabled={!isHeadOffice}
                   helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} {{currency}}', { currency: currencyLabel, amount: '150,000' })}
                 />
@@ -231,8 +231,8 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                 <TextField
                   type="number"
                   label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction ({{currency}})', { currency: currencyLabel })}
-                  value={policy.managerMaxFixed}
-                  onChange={(e) => setPolicy({ ...policy, managerMaxFixed: Number(e.target.value) })}
+                  value={toToman(policy.managerMaxFixed)}
+                  onChange={(e) => setPolicy({ ...policy, managerMaxFixed: Number(fromToman(e.target.value)) })}
                   disabled={!isHeadOffice}
                   helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} {{currency}}', { currency: currencyLabel, amount: '300,000' })}
                 />

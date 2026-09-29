@@ -241,8 +241,8 @@ ${o.orderNotes ? `<hr/><div class="note">توضیحات سفارش: ${this.esc(o
 
     const lines = o.items
       .map((item) => {
-        const unit = item.unit_price !== undefined && item.unit_price !== null && item.unit_price !== '' ? this.rial(item.unit_price) : '';
-        const lineTotal = this.rial(item.total_price ?? item.unit_price ?? '');
+        const unit = item.unit_price !== undefined && item.unit_price !== null && item.unit_price !== '' ? this.toman(item.unit_price) : '';
+        const lineTotal = this.toman(item.total_price ?? item.unit_price ?? '');
         if (isSlip) {
           // The courier checks the bag, not the prices.
           return `<tr><td>${this.fa(this.qty(item.quantity))} × ${this.esc(item.product_name)}</td></tr>`;
@@ -260,20 +260,20 @@ ${o.orderNotes ? `<hr/><div class="note">توضیحات سفارش: ${this.esc(o
 
     const row = (label: string, value?: string, cls = '') =>
       value !== undefined && value !== '' ? `<div class="row ${cls}"><span>${label}</span><span>${value}</span></div>` : '';
-    const positive = (v?: string) => (this.money(v) > 0n ? this.rial(v!) : undefined);
+    const positive = (v?: string) => (this.money(v) > 0n ? this.toman(v!) : undefined);
 
     const totals = isSlip
       ? ''
       : `<hr/>
-${row('جمع اقلام', o.subtotal !== undefined ? this.rial(o.subtotal) : undefined)}
+${row('جمع اقلام', o.subtotal !== undefined ? this.toman(o.subtotal) : undefined)}
 ${positive(o.discountTotal) ? row('تخفیف', `${positive(o.discountTotal)}-`) : ''}
 ${row('بسته‌بندی', positive(o.packagingTotal))}
 ${row('هزینه ارسال', positive(o.deliveryFee))}
 ${row('مالیات بر ارزش افزوده', positive(o.taxTotal))}
-${row('مبلغ قابل پرداخت', o.grandTotal !== undefined ? `${this.rial(o.grandTotal)} ریال` : undefined, 'total')}`;
+${row('مبلغ قابل پرداخت', o.grandTotal !== undefined ? `${this.toman(o.grandTotal)} تومان` : undefined, 'total')}`;
 
     const payments = (o.payments || []).length
-      ? `<hr/>${(o.payments || []).map((p) => row(PAYMENT_METHODS[p.method] || p.method, this.rial(p.amount))).join('')}`
+      ? `<hr/>${(o.payments || []).map((p) => row(PAYMENT_METHODS[p.method] || p.method, this.toman(p.amount))).join('')}`
       : '';
 
     let status = '';
@@ -281,11 +281,11 @@ ${row('مبلغ قابل پرداخت', o.grandTotal !== undefined ? `${this.ria
       if (isSlip) {
         status = paidInFull
           ? '<div class="box">پرداخت شده — وجهی دریافت نشود</div>'
-          : `<div class="inv">دریافت از مشتری: ${this.rial(o.outstandingTotal)} ریال</div>`;
+          : `<div class="inv">دریافت از مشتری: ${this.toman(o.outstandingTotal)} تومان</div>`;
       } else if (o.documentType === 'CUSTOMER_RECEIPT') {
-        status = paidInFull ? '<div class="box">پرداخت شد</div>' : `<div class="box">پرداخت نشده — مانده ${this.rial(o.outstandingTotal)} ریال</div>`;
+        status = paidInFull ? '<div class="box">پرداخت شد</div>' : `<div class="box">پرداخت نشده — مانده ${this.toman(o.outstandingTotal)} تومان</div>`;
       } else if (!paidInFull) {
-        status = `<div class="box">مانده قابل پرداخت: ${this.rial(o.outstandingTotal)} ریال</div>`;
+        status = `<div class="box">مانده قابل پرداخت: ${this.toman(o.outstandingTotal)} تومان</div>`;
       }
     }
 
@@ -347,7 +347,7 @@ ${o.orderNotes ? `<div class="sub">توضیحات: ${this.esc(o.orderNotes)}</di
       .map(
         (item) => `<tr>
   <td>${this.fa(this.qty(item.quantity))} × ${this.esc(item.product_name)}</td>
-  <td class="num">${this.rial(item.total_price ?? item.unit_price ?? '')}</td>
+  <td class="num">${this.toman(item.total_price ?? item.unit_price ?? '')}</td>
 </tr>`,
       )
       .join('');
@@ -357,7 +357,7 @@ ${o.orderNotes ? `<div class="sub">توضیحات: ${this.esc(o.orderNotes)}</di
         ? ''
         : owed <= 0n
           ? '<div class="box">پرداخت شد</div>'
-          : `<div class="box">مانده: ${this.rial(o.outstandingTotal)} ریال</div>`;
+          : `<div class="box">مانده: ${this.toman(o.outstandingTotal)} تومان</div>`;
 
     return `<div class="c brand">${this.esc(o.brandName || o.branchName || '')}</div>
 ${o.isReprint ? REPRINT_MARK : REPRINT_SLOT}
@@ -366,7 +366,7 @@ ${o.isReprint ? REPRINT_MARK : REPRINT_SLOT}
 <hr/>
 <table>${lines}</table>
 <hr/>
-${o.grandTotal !== undefined ? `<div class="row total"><span>مبلغ کل</span><span>${this.rial(o.grandTotal)} ریال</span></div>` : ''}
+${o.grandTotal !== undefined ? `<div class="row total"><span>مبلغ کل</span><span>${this.toman(o.grandTotal)} تومان</span></div>` : ''}
 ${status}`;
   }
 
@@ -396,10 +396,11 @@ ${status}`;
     return m[1] ? -n : n;
   }
 
-  private rial(value: string | number): string {
+  /** Stored rials printed as tomans (one toman is ten rials), rounded half up. */
+  private toman(value: string | number): string {
     const n = this.money(value as any);
     const neg = n < 0n;
-    const grouped = (neg ? -n : n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '٬');
+    const grouped = (((neg ? -n : n) + 5n) / 10n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '٬');
     return this.fa(`${neg ? '-' : ''}${grouped}`);
   }
 

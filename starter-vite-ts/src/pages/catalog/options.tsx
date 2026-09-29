@@ -35,14 +35,14 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
-import { useCurrencyCode, useCurrencyLabel } from 'src/utils/currency';
+import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { catalogApi } from 'src/api/catalogApi';
 
 import { OptionGroupEditDialog } from './option-group-edit-dialog';
 
 export function OptionsPage() {
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
 
@@ -374,8 +374,8 @@ export function OptionsPage() {
               type="number"
               required
               fullWidth
-              value={priceDelta}
-              onChange={(e) => setPriceDelta(e.target.value)}
+              value={toToman(priceDelta)}
+              onChange={(e) => setPriceDelta(fromToman(e.target.value))}
             />
           </Stack>
         </DialogContent>

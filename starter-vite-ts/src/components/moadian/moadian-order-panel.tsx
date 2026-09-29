@@ -9,7 +9,7 @@ import { Box, Card, Chip, Stack, Alert, Button, Typography, CircularProgress } f
 import { RouterLink } from 'src/routes/components';
 
 import { MoneyUtil } from 'src/utils/money.util';
-import { useCurrencyCode } from 'src/utils/currency';
+import { useCurrencyLabel } from 'src/utils/currency';
 
 import { moadianApi } from 'src/api/moadianApi';
 
@@ -36,7 +36,7 @@ export function useMoadianLabels() {
 
 /** The e-invoices behind one order: the original, and any cancellation or return after it. */
 export function MoadianOrderPanel({ orderId, orderState }: { orderId: string; orderState: string }) {
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const { t } = useTranslation();
   const labels = useMoadianLabels();
   const [invoices, setInvoices] = useState<TaxInvoice[]>([]);

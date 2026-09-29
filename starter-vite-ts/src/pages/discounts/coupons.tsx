@@ -28,7 +28,7 @@ import {
 
 import { fDate } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
-import { useCurrencyLabel } from 'src/utils/currency';
+import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { httpClient as axios } from 'src/api/httpClient';
 import { catalogApi, type Product } from 'src/api/catalogApi';
@@ -249,8 +249,8 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
                   type="number"
                   fullWidth
                   size="small"
-                  value={testOrderTotal}
-                  onChange={(e) => setTestOrderTotal(e.target.value)}
+                  value={toToman(testOrderTotal)}
+                  onChange={(e) => setTestOrderTotal(fromToman(e.target.value))}
                 />
               </Box>
               <Box sx={{ width: { xs: '100%', sm: 'auto' } }}>
@@ -468,8 +468,8 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
                 fullWidth
                 type="number"
                 label={t('coupons.minSubtotalLabel', 'Minimum Purchase Subtotal ({{currency}})', { currency: currencyLabel })}
-                value={minSubtotal}
-                onChange={(e) => setMinSubtotal(e.target.value)}
+                value={toToman(minSubtotal)}
+                onChange={(e) => setMinSubtotal(fromToman(e.target.value))}
                 placeholder="100000"
               />
 
@@ -477,8 +477,8 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
                 fullWidth
                 type="number"
                 label={t('coupons.maxCapLabel', 'Maximum Discount Cap ({{currency}})', { currency: currencyLabel })}
-                value={maxCap}
-                onChange={(e) => setMaxCap(e.target.value)}
+                value={toToman(maxCap)}
+                onChange={(e) => setMaxCap(fromToman(e.target.value))}
                 placeholder="50000"
               />
 

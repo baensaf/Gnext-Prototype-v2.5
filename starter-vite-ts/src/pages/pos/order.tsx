@@ -81,7 +81,7 @@ import {
 
 import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
-import { useCurrencyCode, useCurrencyLabel } from 'src/utils/currency';
+import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { useBranchContext } from 'src/contexts/branch-context';
 import { usePosSource, PosFeatureGate } from 'src/contexts/pos-source';
@@ -159,7 +159,7 @@ function formatRejectionReason(reason?: string, fallback: string = 'Discount was
 export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) {
   const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
 
   const { selectedBranchId, setSelectedBranchId } = useBranchContext();
   // The cloud for the web POS; the branch agent for the offline till.
@@ -1123,7 +1123,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     if (overOwnLimit) {
       // Prompt Manager PIN authorization immediately
       setApprovalReason(
-        `Manual discount ${manualValue}${manualCalcType === 'PERCENTAGE' ? '%' : ` ${currency}`} exceeds your limit (${discountLimits.own.pct}% / ${MoneyUtil.formatCurrency(discountLimits.own.maxFixed)} ${currency}). Manager PIN authorization required.`
+        `Manual discount ${manualCalcType === 'PERCENTAGE' ? `${manualValue}%` : `${MoneyUtil.formatCurrency(manualValue)} ${currency}`} exceeds your limit (${discountLimits.own.pct}% / ${MoneyUtil.formatCurrency(discountLimits.own.maxFixed)} ${currency}). Manager PIN authorization required.`
       );
       setManualDiscountModalOpen(false);
       setApprovalModalOpen(true);
@@ -2668,9 +2668,10 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                 size="small"
                 type="number"
                 placeholder={manualCalcType === 'PERCENTAGE' ? 'e.g. 10 (%)' : `e.g. 50000 (${currency})`}
-                value={manualValue}
+                // An amount is typed in tomans and kept in rials; a percentage as it is.
+                value={manualCalcType === 'FIXED_AMOUNT' ? toToman(manualValue) : manualValue}
                 onChange={(e) => {
-                  setManualValue(e.target.value);
+                  setManualValue(manualCalcType === 'FIXED_AMOUNT' ? fromToman(e.target.value) : e.target.value);
                   setError(null);
                 }}
                 fullWidth
@@ -2698,7 +2699,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                         sx={{ fontWeight: 600, cursor: 'pointer' }}
                       />
                     ))
-                  : ['20000', '50000', '100000', '200000', '300000'].map((amt) => (
+                  : ['200000', '500000', '1000000', '2000000', '3000000'].map((amt) => (
                       <Chip
                         key={amt}
                         label={`${MoneyUtil.formatCurrency(amt)}`}

@@ -50,7 +50,7 @@ import { paths } from 'src/routes/paths';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
-import { useCurrencyCode } from 'src/utils/currency';
+import { useCurrencyLabel } from 'src/utils/currency';
 
 import { catalogApi } from 'src/api/catalogApi';
 import { useBranchContext } from 'src/contexts/branch-context';
@@ -81,7 +81,7 @@ const isLive = (a: ProductAvailability) =>
  * of hours is kept as a third way for the odd case. The scope is the header switcher's.
  */
 export function AvailabilityPage() {
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const { t } = useTranslation();
   const { selectedBranchId, selectedBranch, isHeadOffice } = useBranchContext();
 

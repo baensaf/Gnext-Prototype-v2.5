@@ -6,6 +6,10 @@ import { useRef, useMemo, useState, useEffect, useContext, useCallback, createCo
 import { paths } from 'src/routes/paths';
 import { useRouter } from 'src/routes/hooks';
 
+import { moneyUnit } from 'src/utils/currency';
+import { MoneyUtil } from 'src/utils/money.util';
+
+import i18n from 'src/locales/i18n';
 import { orderApi } from 'src/api/orderApi';
 import { canReachPath } from 'src/config/role-access';
 import { useBranchContextOptional } from 'src/contexts/branch-context';
@@ -43,8 +47,8 @@ export function useIncomingOrders(): IncomingOrdersValue | undefined {
 }
 
 export function formatOrderTotal(order: OrderHeader): string {
-  const amount = Number(order.grand_total || order.total_amount || 0).toLocaleString();
-  return order.currency_code ? `${amount} ${order.currency_code}` : amount;
+  const amount = MoneyUtil.formatCurrency(order.grand_total || order.total_amount || 0);
+  return `${amount} ${moneyUnit(order.currency_code, i18n.language)}`;
 }
 
 /** Two short tones, built in the browser so there is no sound file to ship. */

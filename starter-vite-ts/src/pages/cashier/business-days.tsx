@@ -29,9 +29,10 @@ import {
   DialogActions,
 } from '@mui/material';
 
-import { useCurrencyCode } from 'src/utils/currency';
+import { MoneyUtil } from 'src/utils/money.util';
 import { fDate , fDateTime } from 'src/utils/format-time';
 import { businessDate as businessDayOf } from 'src/utils/calendar';
+import { useCurrencyCode, useCurrencyLabel } from 'src/utils/currency';
 
 import { useBranchContext } from 'src/contexts/branch-context';
 
@@ -57,6 +58,7 @@ const nextBusinessDate = (date: string) => {
 
 export function BusinessDaysPage() {
   const currency = useCurrencyCode();
+  const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
 
   const [businessDays, setBusinessDays] = useState<BusinessDayClose[]>([]);
@@ -259,7 +261,7 @@ export function BusinessDaysPage() {
         return (
           <Typography variant="caption">
             {t('cashier.ordersCount', 'Orders')}: {totals.orderCount ?? 0} · {t('cashier.sales', 'Sales')}:{' '}
-            <span dir="ltr">{Number(totals.grossSales || totals.totalSales || 0).toLocaleString()} {currency}</span>
+            <span dir="ltr">{MoneyUtil.formatCurrency(totals.grossSales || totals.totalSales || 0)} {currencyLabel}</span>
           </Typography>
         );
       },

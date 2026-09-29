@@ -32,7 +32,7 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
-import { useCurrencyCode } from 'src/utils/currency';
+import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { orderApi } from 'src/api/orderApi';
 import { refundApi } from 'src/api/refundApi';
@@ -46,7 +46,7 @@ const APPROVER_ROLES = ['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER', 'SUPERVISOR'
 
 export function RefundsPage() {
   const { t } = useTranslation();
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const [branchId] = useScopedBranchId();
   const role = useAuthStore((state) => state.user?.role);
   const canApprove = APPROVER_ROLES.includes((role || '').toUpperCase());
@@ -312,8 +312,8 @@ export function RefundsPage() {
 
             <TextField
               label={t('refunds.amount', 'Amount')}
-              value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+              value={toToman(form.amount)}
+              onChange={(e) => setForm({ ...form, amount: fromToman(e.target.value) })}
               helperText={t('refunds.amountHelp', 'Leave empty to refund the whole order.')}
               fullWidth
             />

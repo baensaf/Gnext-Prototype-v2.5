@@ -23,7 +23,7 @@ import {
 
 import { fDate } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
-import { useCurrencyLabel } from 'src/utils/currency';
+import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { shiftApi } from 'src/api/shiftApi';
 import { paymentApi } from 'src/api/paymentApi';
@@ -515,8 +515,8 @@ export function CloseShiftDialog({ open, onClose, shiftId, shiftNumber, onClosed
                   required
                   fullWidth
                   autoFocus={step === 'count'}
-                  value={actualCash}
-                  onChange={(e) => setActualCash(e.target.value)}
+                  value={toToman(actualCash)}
+                  onChange={(e) => setActualCash(fromToman(e.target.value))}
                   // Locked once the difference is known: a recount starts the close again.
                   disabled={step === 'signoff'}
                   slotProps={{ htmlInput: { min: 0, dir: 'ltr' } }}

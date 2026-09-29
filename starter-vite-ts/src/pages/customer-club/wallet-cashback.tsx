@@ -20,7 +20,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
-import { useCurrencyCode } from 'src/utils/currency';
+import { useCurrencyLabel } from 'src/utils/currency';
 
 import { httpClient as axios } from 'src/api/httpClient';
 import { DashboardContent } from 'src/layouts/dashboard';
@@ -47,7 +47,7 @@ interface WalletCashbackPageProps {
 }
 
 export default function WalletCashbackPage({ isEmbedded = false }: WalletCashbackPageProps) {
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const { t } = useTranslation();
 
   const [accounts, setAccounts] = useState<CreditAccount[]>([]);
@@ -218,7 +218,7 @@ export default function WalletCashbackPage({ isEmbedded = false }: WalletCashbac
                     <TableCell>{acc.currency_code}</TableCell>
                     <TableCell>
                       <Typography variant="subtitle2" color="success.main">
-                        {MoneyUtil.formatCurrency(acc.current_balance)} {acc.currency_code}
+                        {MoneyUtil.formatCurrency(acc.current_balance)} {currency}
                       </Typography>
                     </TableCell>
                     <TableCell>
