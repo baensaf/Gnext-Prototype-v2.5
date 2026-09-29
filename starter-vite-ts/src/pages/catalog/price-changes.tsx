@@ -33,6 +33,7 @@ import { fDate, fDateTime } from 'src/utils/format-time';
 
 import { catalogApi } from 'src/api/catalogApi';
 
+import { VersionTag } from 'src/components/version-tag';
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CalendarDateField } from 'src/components/calendar-date-field';
 
@@ -192,7 +193,9 @@ export function PriceChangesPage() {
             sx={{ mb: 2 }}
           >
             <ToggleButton value="ITEMS">{t('pricing.changes.targetItems')}</ToggleButton>
-            <ToggleButton value="ADDONS">{t('pricing.changes.targetAddons')}</ToggleButton>
+            <ToggleButton value="ADDONS">
+              {t('pricing.changes.targetAddons')} <VersionTag feature="catalog.addonGroups" sx={{ ml: 1 }} />
+            </ToggleButton>
           </ToggleButtonGroup>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
             {addons ? (
@@ -215,7 +218,7 @@ export function PriceChangesPage() {
                 <MenuItem value={BASE}>{t('pricing.changes.basePrices')}</MenuItem>
                 {lists.map((l) => (
                   <MenuItem key={l.id} value={l.id}>
-                    {t('pricing.changes.listPrices', { name: l.name })}
+                    {t('pricing.changes.listPrices', { name: l.name })} <VersionTag feature="pricing.listPrices" sx={{ ml: 1 }} />
                   </MenuItem>
                 ))}
               </Select>
@@ -238,7 +241,11 @@ export function PriceChangesPage() {
               label={t('pricing.changes.from')}
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              helperText={t('pricing.changes.fromHelp')}
+              helperText={
+                <>
+                  {t('pricing.changes.fromHelp')} <VersionTag feature="pricing.scheduled" />
+                </>
+              }
             />
           </Stack>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { md: 'flex-start' } }}>

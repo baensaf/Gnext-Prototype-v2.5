@@ -146,9 +146,20 @@ Today's stock and importing products and categories are V1.
 | Selling windows (for example, breakfast only) | V2 |
 | Importing customers | F |
 
+**Page group 9, pricing.** Decided 2026-09-29. Branch prices (`/app/pricing/price-lists`)
+are V4: a V1 branch sells at base prices. Price changes (`/app/pricing/changes`) are V1:
+raise or lower base prices now, by percent or amount, by category, with rounding. Snappfood
+prices (`/app/pricing/snappfood`) are V3.
+
+| Feature | Label |
+|---|---|
+| Scheduling a price change for a later day | V4 |
+| Changing a price list's prices | V4 |
+| Changing add-on prices | V4 |
+
 ## Next
 
-Page group 9, pricing, then groups 10–15 in the order listed on the Feature labels tab.
+Page group 10, customers, credit and discounts, then groups 11–15 in the order listed on the Feature labels tab.
 
 ## Routine for each page
 
