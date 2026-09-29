@@ -21,7 +21,9 @@ import { RouterLink } from 'src/routes/components';
 
 import { httpClient } from 'src/api/httpClient';
 import { DashboardContent } from 'src/layouts/dashboard';
+import { REPORT_LABELS } from 'src/config/version-labels';
 
+import { VersionTag } from 'src/components/version-tag';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 interface CatalogEntry {
@@ -210,6 +212,7 @@ export function ReportsIndexPage() {
                             <Box sx={{ minWidth: 0 }}>
                               <Typography variant="subtitle2" sx={{ mb: 0.25 }}>
                                 {entry.name}
+                                {REPORT_LABELS[entry.code] && <VersionTag label={REPORT_LABELS[entry.code]} sx={{ ml: 1 }} />}
                               </Typography>
                               <Typography
                                 variant="caption"

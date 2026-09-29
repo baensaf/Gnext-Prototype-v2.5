@@ -25,7 +25,9 @@ import {
 import { useParams, useRouter } from 'src/routes/hooks';
 
 import { httpClient as axios } from 'src/api/httpClient';
+import { REPORT_LABELS } from 'src/config/version-labels';
 
+import { VersionTag } from 'src/components/version-tag';
 import { CalendarDateField } from 'src/components/calendar-date-field';
 
 export function ReportViewerPage() {
@@ -184,6 +186,7 @@ export function ReportViewerPage() {
                 {catalog.map((rep) => (
                   <MenuItem key={rep.code} value={rep.code}>
                     {rep.name} ({rep.category})
+                    {REPORT_LABELS[rep.code] && <VersionTag label={REPORT_LABELS[rep.code]} sx={{ ml: 1 }} />}
                   </MenuItem>
                 ))}
               </Select>
@@ -230,6 +233,7 @@ export function ReportViewerPage() {
           <Button variant="outlined" size="small" onClick={handleSaveView} disabled={!savedViewName}>
             Save View
           </Button>
+          <VersionTag feature="reports.savedViews" />
           {savedViews.length > 0 && (
             <Chip label={`${savedViews.length} Saved Filter Views Available`} color="secondary" size="small" />
           )}
