@@ -14,8 +14,8 @@ page, the product manager decides which version ships each feature: V1, V2, V3, 
 |---|---|
 | V1 Counter | One branch sells, delivers and closes its day: POS, catalog, cash and card, shifts, business day, printing, and full delivery (addresses, zones, couriers, dispatch board, courier settlement) |
 | V2 Floor | Creating tables and assigning one when an order is submitted (nothing more of the dine-in floor), the full approval engine, the full refund and correction set |
-| V3 Delivery and Snappfood | The real Snappfood integration, customer import at scale, coupons, customer credit |
-| V4 Club, credit and head office | Discount campaigns, Tara Pay, kiosk, chain-scale pricing, consolidated reports |
+| V3 Delivery and Snappfood | The real Snappfood integration, coupons, customer credit, the kiosk |
+| V4 Club, credit and head office | Discount campaigns, Tara Pay, chain-scale pricing, consolidated reports |
 | F | After Phase 1. Offline operation is F. So is Moadian: Iran Burger issues tax invoices from its own accounting software. So is the KDS and everything that depends on it |
 
 Full delivery moved from V3 to V1 on 2026-09-28. V3 is now mostly Snappfood and customers.
@@ -171,9 +171,22 @@ cashback (`/app/discounts/…`) are V4, with the customer club.
 | Credit aging | V4 |
 | The coupon test bench | F |
 
+**Page group 11, operations (`/app/operations/…`): V1.** Decided 2026-09-29: branches, tills,
+kitchen stations and routing, printers, the print queue and branch agents. Monitoring
+(`/app/operations/monitoring`) is V4. The kiosk moved from V4 to V3 (`/app/kiosk` is V3).
+
+| Feature | Label |
+|---|---|
+| Branch types "production kitchen" and "office" | F |
+| The kiosk as a device type | V3 |
+| The KDS as a device type | F |
+| Serial-port printers, label printers, a fallback printer | F |
+| Simulated printers, the hardware simulator and "simulate outcome" | F |
+| "Ready to sell offline" on a branch agent | F |
+
 ## Next
 
-Page group 11, operations, then groups 12–15 in the order listed on the Feature labels tab.
+Page group 12, reports, audit and Moadian, then groups 13–15 in the order listed on the Feature labels tab.
 
 ## Routine for each page
 

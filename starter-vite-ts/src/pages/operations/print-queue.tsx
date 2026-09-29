@@ -42,6 +42,8 @@ import { useLiveRefresh } from 'src/utils/use-live-refresh';
 import { kdsApi } from 'src/api/kdsApi';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 
+import { VersionTag } from 'src/components/version-tag';
+
 const DOC_TYPES = ['CUSTOMER_RECEIPT', 'KITCHEN_TICKET', 'COURIER_SLIP', 'GUEST_BILL', 'TEST_PRINT'];
 const STATUSES = ['QUEUED', 'PROCESSING', 'SUCCESS', 'FAILED'];
 
@@ -368,7 +370,9 @@ export function PrintQueuePage() {
 
       {/* Simulate Outcome Modal */}
       <Dialog open={Boolean(outcomeJob)} onClose={() => setOutcomeJob(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>{t('printQueue.simulateOutcome', 'Simulate Printer Hardware Outcome')}</DialogTitle>
+        <DialogTitle>
+          {t('printQueue.simulateOutcome', 'Simulate Printer Hardware Outcome')} <VersionTag feature="printQueue.simulate" />
+        </DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>
             {t('printQueue.simulateHelp', 'Mark this simulated printer’s job as printed or failed.')}

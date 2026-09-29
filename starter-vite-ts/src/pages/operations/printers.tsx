@@ -49,6 +49,7 @@ import { canReachPath } from 'src/config/role-access';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
+import { VersionTag } from 'src/components/version-tag';
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
@@ -274,6 +275,7 @@ export function PrintersPage() {
                 startIcon={<SensorsIcon />}
               >
                 {t('operations.printers.quickLinks.simulator', 'Hardware Sensor Simulator')}
+                <VersionTag feature="printers.simulated" sx={{ ml: 1 }} />
               </Button>
             )}
             <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
@@ -341,7 +343,9 @@ export function PrintersPage() {
                     <TableCell>{t('operations.printers.colType', 'Type')}</TableCell>
                     <TableCell>{t('operations.printers.colAddress', 'Network Address')}</TableCell>
                     <TableCell>{t('operations.printers.colPaper', 'Paper Width')}</TableCell>
-                    <TableCell>{t('operations.printers.colFallback', 'Fallback Printer')}</TableCell>
+                    <TableCell>
+                      {t('operations.printers.colFallback', 'Fallback Printer')} <VersionTag feature="printers.fallback" />
+                    </TableCell>
                     <TableCell>{t('operations.printers.colStatus', 'Status')}</TableCell>
                     <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
                       {t('operations.printers.colActions', 'Actions')}
@@ -470,7 +474,7 @@ export function PrintersPage() {
               >
                 <MenuItem value="THERMAL_RECEIPT">{t('operations.printers.types.THERMAL_RECEIPT', 'Thermal Customer Receipt (80mm)')}</MenuItem>
                 <MenuItem value="KITCHEN_IMPACT">{t('operations.printers.types.KITCHEN_IMPACT', 'Kitchen Impact / Dot Matrix (80mm)')}</MenuItem>
-                <MenuItem value="LABEL_STICKER">{t('operations.printers.types.LABEL_STICKER', 'Cup / Item Label Sticker')}</MenuItem>
+                <MenuItem value="LABEL_STICKER">{t('operations.printers.types.LABEL_STICKER', 'Cup / Item Label Sticker')} <VersionTag feature="printers.label" sx={{ ml: 1 }} /></MenuItem>
               </Select>
             </FormControl>
             <FormControl fullWidth>
@@ -480,14 +484,14 @@ export function PrintersPage() {
                 label={t('operations.printers.connection.kind', 'Connection')}
                 onChange={(e) => setConnForm({ ...connForm, kind: e.target.value as ConnectionForm['kind'] })}
               >
-                <MenuItem value="none">{t('operations.printers.connection.none', 'Simulated (no branch agent)')}</MenuItem>
+                <MenuItem value="none">{t('operations.printers.connection.none', 'Simulated (no branch agent)')} <VersionTag feature="printers.simulated" sx={{ ml: 1 }} /></MenuItem>
                 <MenuItem value="tcp">{t('operations.printers.connection.tcp', 'Network printer (TCP)')}</MenuItem>
                 {/* The branch agent prints over TCP only; see Supported() in agent/internal/printing. */}
                 {savedConnKind === 'windows' && (
                   <MenuItem value="windows">{t('operations.printers.connection.windows', 'Printer installed in Windows')}</MenuItem>
                 )}
                 {savedConnKind === 'serial' && (
-                  <MenuItem value="serial">{t('operations.printers.connection.serial', 'Serial port')}</MenuItem>
+                  <MenuItem value="serial">{t('operations.printers.connection.serial', 'Serial port')} <VersionTag feature="printers.serial" sx={{ ml: 1 }} /></MenuItem>
                 )}
               </Select>
             </FormControl>
@@ -582,7 +586,9 @@ export function PrintersPage() {
               fullWidth
             />
             <FormControl fullWidth>
-              <InputLabel>{t('operations.printers.formFallback', 'Fallback Backup Printer')}</InputLabel>
+              <InputLabel>
+                {t('operations.printers.formFallback', 'Fallback Backup Printer')} <VersionTag feature="printers.fallback" />
+              </InputLabel>
               <Select
                 value={printerForm.fallback_printer_id}
                 label={t('operations.printers.formFallback', 'Fallback Backup Printer')}
