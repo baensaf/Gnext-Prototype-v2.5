@@ -211,9 +211,13 @@ Courier pay and branch overrides are V4. The localization demo and data reset pa
 | Refund methods | V2 |
 | Difference tolerance, blind count | V4 |
 
+**Page group 14, kiosk (`/app/kiosk`): V3.** Decided 2026-09-29: ordering, card payment on the
+terminal, the order number, the customer's phone and name, and setting up the kiosk device.
+Sizes and add-ons on the kiosk are V4, as in the catalog. The simulated card terminal is F.
+
 ## Next
 
-Page group 14, kiosk, then group 15 in the order listed on the Feature labels tab.
+Page group 15, dashboard, simulators and tools in the order listed on the Feature labels tab.
 
 ## Routine for each page
 

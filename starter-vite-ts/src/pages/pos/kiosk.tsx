@@ -32,6 +32,7 @@ import { useAuthStore } from 'src/store/useAuthStore';
 import { httpClient as axios } from 'src/api/httpClient';
 import { useBranchContextOptional } from 'src/contexts/branch-context';
 
+import { VersionTag } from 'src/components/version-tag';
 import { DeviceTerminalDialog } from 'src/components/shift/device-terminal-dialog';
 
 /**
@@ -703,7 +704,7 @@ export function KioskPage() {
                 {(customizingProduct.variants || []).length > 0 && (
                   <Box>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                      Size
+                      Size <VersionTag feature="catalog.sizes" />
                     </Typography>
                     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
                       {(customizingProduct.variants || []).map((v) => (
@@ -723,7 +724,7 @@ export function KioskPage() {
                 {customizingProduct.option_groups?.map((group) => (
                   <Box key={group.id}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                      {group.name} {isRequiredGroup(group) ? '(Required)' : ''}
+                      {group.name} {isRequiredGroup(group) ? '(Required)' : ''} <VersionTag feature="catalog.addonGroups" />
                       {pickHint(group) && (
                         <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
                           {pickHint(group)}
@@ -870,7 +871,12 @@ export function KioskPage() {
             </Typography>
             <Typography color="text.secondary">
               {bootstrapData?.simulatedCapabilities?.simulated_card_terminal
-                ? t('kiosk.pay.simulated', 'Simulated card terminal (no terminal is connected at this branch)')
+                ? (
+                    <>
+                      {t('kiosk.pay.simulated', 'Simulated card terminal (no terminal is connected at this branch)')}{' '}
+                      <VersionTag feature="kiosk.simulatedTerminal" />
+                    </>
+                  )
                 : t('kiosk.pay.onTerminal', 'Follow the instructions on the card terminal')}
             </Typography>
           </DialogContent>
