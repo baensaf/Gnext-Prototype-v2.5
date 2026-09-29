@@ -56,7 +56,7 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
-import { useCurrencyCode, useCurrencyLabel } from 'src/utils/currency';
+import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 import { wholeRials, percentToTaxRate, taxRateToPercent } from 'src/utils/tax-rate';
 
 import { catalogApi } from 'src/api/catalogApi';
@@ -71,7 +71,7 @@ import { ProductPriceHistory } from './product-price-history';
 
 export function ProductDetailPage() {
   const currencyLabel = useCurrencyLabel();
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -444,8 +444,8 @@ export function ProductDetailPage() {
                     <TextField
                       label={t('catalog.productDetailPage.general.basePrice', { currency: currencyLabel })}
                       type="number"
-                      value={basePrice}
-                      onChange={(e) => setBasePrice(e.target.value)}
+                      value={toToman(basePrice)}
+                      onChange={(e) => setBasePrice(fromToman(e.target.value))}
                       slotProps={{
                         htmlInput: { min: 0, step: 1 },
                         input: { endAdornment: <InputAdornment position="end">{currency}</InputAdornment> },
@@ -459,8 +459,8 @@ export function ProductDetailPage() {
                     <TextField
                       label={t('catalog.productDetailPage.general.containerPrice', 'Packaging price')}
                       type="number"
-                      value={containerPrice}
-                      onChange={(e) => setContainerPrice(e.target.value)}
+                      value={toToman(containerPrice)}
+                      onChange={(e) => setContainerPrice(fromToman(e.target.value))}
                       slotProps={{
                         htmlInput: { min: 0, step: 1 },
                         input: { endAdornment: <InputAdornment position="end">{currency}</InputAdornment> },
@@ -868,8 +868,8 @@ export function ProductDetailPage() {
                 <TextField
                   label={t('catalog.productDetailPage.variants.basePrice')}
                   type="number"
-                  value={varPrice}
-                  onChange={(e) => setVarPrice(e.target.value)}
+                  value={toToman(varPrice)}
+                  onChange={(e) => setVarPrice(fromToman(e.target.value))}
                   slotProps={{
                     htmlInput: { min: 0, step: 1 },
                     input: { endAdornment: <InputAdornment position="end">{currency}</InputAdornment> },

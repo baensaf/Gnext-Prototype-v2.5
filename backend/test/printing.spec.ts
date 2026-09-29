@@ -200,7 +200,7 @@ describe('PrintingModule (Unit & Integration)', () => {
     expect(html).toContain('ORD-20260922-0012');
     // Called out as order 12, amounts grouped in Persian digits, and paid.
     expect(html).toContain('<div class="big">۱۲</div>');
-    expect(html).toContain('۳۰٬۰۰۰٬۰۰۰');
+    expect(html).toContain('۳٬۰۰۰٬۰۰۰');
     expect(html).toContain('نقد');
     expect(html).toContain('پرداخت شد');
     expect(html).toContain('Burger &amp; Fries');
@@ -221,7 +221,7 @@ describe('PrintingModule (Unit & Integration)', () => {
 
     expect(html).toContain('برگه پیک');
     expect(html).toContain('Vanak Sq.');
-    expect(html).toContain('دریافت از مشتری: ۱٬۰۰۰٬۰۰۰ ریال');
+    expect(html).toContain('دریافت از مشتری: ۱۰۰٬۰۰۰ تومان');
   });
 
   // --- where a line and a document go ---------------------------------------------------

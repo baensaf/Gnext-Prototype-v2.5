@@ -44,8 +44,8 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
-import { useCurrencyCode } from 'src/utils/currency';
 import { percentToTaxRate, taxRateToPercent } from 'src/utils/tax-rate';
+import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { catalogApi } from 'src/api/catalogApi';
 import { useAuthStore } from 'src/store/useAuthStore';
@@ -70,7 +70,7 @@ const priceLabel = (p: Product, currency: string) => {
 };
 
 export function ProductsPage() {
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const navigate = useNavigate();
   const { t } = useTranslation();
 
@@ -457,8 +457,8 @@ export function ProductsPage() {
                 type="number"
                 required
                 fullWidth
-                value={basePrice}
-                onChange={(e) => setBasePrice(e.target.value)}
+                value={toToman(basePrice)}
+                onChange={(e) => setBasePrice(fromToman(e.target.value))}
                 slotProps={{
                   htmlInput: { min: 0, step: 1 },
                   input: { endAdornment: <InputAdornment position="end">{currency}</InputAdornment> },

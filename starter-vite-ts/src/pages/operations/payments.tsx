@@ -21,6 +21,7 @@ import {
   TablePagination,
 } from '@mui/material';
 
+import { moneyUnit } from 'src/utils/currency';
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
 
@@ -35,7 +36,7 @@ const PAGE_SIZES = [25, 50, 100];
  * Settings → Payments & refunds.
  */
 export function PaymentsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [branchId] = useScopedBranchId();
 
   const [rows, setRows] = useState<PaymentListRow[]>([]);
@@ -115,7 +116,7 @@ export function PaymentsPage() {
                   <TableCell><code>{tx.order_number}</code></TableCell>
                   <TableCell><Chip label={tx.method_kind} size="small" variant="outlined" /></TableCell>
                   <TableCell>
-                    <strong dir="ltr">{MoneyUtil.formatCurrency(tx.amount)} {tx.currency_code}</strong>
+                    <strong dir="ltr">{MoneyUtil.formatCurrency(tx.amount)} {moneyUnit(tx.currency_code, i18n.language)}</strong>
                   </TableCell>
                   <TableCell><code>{tx.reference || '-'}</code></TableCell>
                   <TableCell>

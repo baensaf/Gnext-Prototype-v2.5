@@ -40,7 +40,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
-import { useCurrencyCode } from 'src/utils/currency';
+import { useCurrencyLabel } from 'src/utils/currency';
 
 import { orderApi } from 'src/api/orderApi';
 import { dineInApi } from 'src/api/dineInApi';
@@ -50,7 +50,7 @@ import { VersionTag } from 'src/components/version-tag';
 import { CheckoutModal } from 'src/components/CheckoutModal';
 
 export function DineInPage() {
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const { t } = useTranslation();
   const [branchId] = useScopedBranchId();
 

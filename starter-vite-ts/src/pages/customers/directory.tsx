@@ -49,7 +49,7 @@ import { paths } from 'src/routes/paths';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
-import { useCurrencyCode } from 'src/utils/currency';
+import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import {
   customerApi
@@ -60,7 +60,7 @@ import { ServerDataGrid } from 'src/components/server-data-grid';
 import { CalendarDateField } from 'src/components/calendar-date-field';
 
 export function CustomersPage() {
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const navigate = useNavigate();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -493,14 +493,14 @@ export function CustomersPage() {
                 label={`Assigned Credit Line / Overdraft Limit (${currency})`}
                 type="number"
                 fullWidth
-                value={creditLimit}
+                value={toToman(creditLimit)}
                 helperText={
                   <>
                     A wallet account will be automatically provisioned with this initial credit limit.{' '}
                     <VersionTag feature="customers.credit" />
                   </>
                 }
-                onChange={(e) => setCreditLimit(e.target.value)}
+                onChange={(e) => setCreditLimit(fromToman(e.target.value))}
               />
 
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>
@@ -584,8 +584,8 @@ export function CustomersPage() {
                 size="small"
                 label={`Amount (${currency})`}
                 type="number"
-                value={txAmount}
-                onChange={(e) => setTxAmount(e.target.value)}
+                value={toToman(txAmount)}
+                onChange={(e) => setTxAmount(fromToman(e.target.value))}
                 sx={{ width: { xs: '100%', md: 180 } }}
               />
 

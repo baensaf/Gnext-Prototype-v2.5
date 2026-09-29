@@ -28,6 +28,7 @@ import {
   ToggleButtonGroup,
 } from '@mui/material';
 
+import { fromToman } from 'src/utils/currency';
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDate, fDateTime } from 'src/utils/format-time';
 
@@ -100,8 +101,9 @@ export function PriceChangesPage() {
     price_list_id: addons ? null : listId || null,
     category_id: addons ? null : categoryId || null,
     adjustment,
-    value: value.trim(),
-    round_to: Number(roundTo) || 0,
+    // Amounts are typed in tomans and sent in rials; a percentage goes as it is.
+    value: adjustment === 'AMOUNT' ? fromToman(value.trim()) : value.trim(),
+    round_to: Number(fromToman(roundTo)) || 0,
     effective_date: date || null,
   });
 

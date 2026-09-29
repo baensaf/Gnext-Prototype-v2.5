@@ -26,6 +26,8 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { toToman, fromToman } from 'src/utils/currency';
+
 import { approvalApi } from 'src/api/approvalApi';
 import { useIsHeadOffice } from 'src/store/useAuthStore';
 import { useBranchContext } from 'src/contexts/branch-context';
@@ -376,8 +378,8 @@ export function ApprovalsSettingsPage() {
 
               <TextField
                 label={t('settings.approvalsPage.formThresholdValue', 'Threshold Limit Value')}
-                value={thresholdValue}
-                onChange={(e) => setThresholdValue(e.target.value)}
+                value={thresholdType === 'AMOUNT' ? toToman(thresholdValue) : thresholdValue}
+                onChange={(e) => setThresholdValue(thresholdType === 'AMOUNT' ? fromToman(e.target.value) : e.target.value)}
                 required
                 fullWidth
                 placeholder={t('settings.approvalsPage.formThresholdPlaceholder', 'e.g. 10 for >10%')}

@@ -42,7 +42,7 @@ import {
 
 import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
-import { useCurrencyCode } from 'src/utils/currency';
+import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { usePosSource, PosFeatureGate } from 'src/contexts/pos-source';
 
@@ -65,7 +65,7 @@ interface CheckoutModalProps {
 
 export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: CheckoutModalProps) {
   const { t } = useTranslation();
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const navigate = useNavigate();
   const pos = usePosSource();
 
@@ -447,8 +447,8 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                         type="number"
                         required
                         fullWidth
-                        value={payAmount}
-                        onChange={(e) => setPayAmount(e.target.value)}
+                        value={toToman(payAmount)}
+                        onChange={(e) => setPayAmount(fromToman(e.target.value))}
                       />
                     </Grid>
                   </Grid>

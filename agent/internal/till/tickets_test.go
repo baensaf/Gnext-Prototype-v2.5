@@ -121,7 +121,7 @@ func TestTheReceiptPrintsWhenPaidAndGoesUpWithTheChits(t *testing.T) {
 	if receipt == nil || receipt.printer != "p-till" || receipt.copies != 2 {
 		t.Fatalf("receipt = %+v", receipt)
 	}
-	for _, want := range []string{"ایران برگر", "ولیعصر", "فاکتور فروش", "پرداخت شد", "نقد", "۲٬۶۹۵٬۰۰۰ ریال", "بیرون‌بر"} {
+	for _, want := range []string{"ایران برگر", "ولیعصر", "فاکتور فروش", "پرداخت شد", "نقد", "۲۶۹٬۵۰۰ تومان", "بیرون‌بر"} {
 		if !strings.Contains(receipt.html, want) {
 			t.Fatalf("receipt lacks %q", want)
 		}

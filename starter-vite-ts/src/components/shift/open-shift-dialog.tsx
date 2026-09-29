@@ -18,7 +18,7 @@ import {
   DialogActions,
 } from '@mui/material';
 
-import { useCurrencyLabel } from 'src/utils/currency';
+import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { shiftApi } from 'src/api/shiftApi';
 
@@ -91,8 +91,8 @@ export function OpenShiftDialog({ open, onClose, terminal, branchName, defaultFl
               required
               fullWidth
               autoFocus
-              value={openingFloat}
-              onChange={(e) => setOpeningFloat(e.target.value)}
+              value={toToman(openingFloat)}
+              onChange={(e) => setOpeningFloat(fromToman(e.target.value))}
               slotProps={{ htmlInput: { min: 0, dir: 'ltr' } }}
             />
           </Stack>

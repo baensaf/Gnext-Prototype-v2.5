@@ -30,7 +30,7 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
-import { useCurrencyCode } from 'src/utils/currency';
+import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { httpClient as axios } from 'src/api/httpClient';
 import { useBranchContext } from 'src/contexts/branch-context';
@@ -87,7 +87,7 @@ interface CourierSettlementsPageProps {
 }
 
 export function CourierSettlementsPage({ hideHeader = false }: CourierSettlementsPageProps = {}) {
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const { t } = useTranslation();
   const [tabValue, setTabValue] = useState(0);
 
@@ -604,14 +604,14 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                     <TextField
                       label={t('settlements.detailModal.totalComp')}
                       size="small"
-                      value={compAmount}
-                      onChange={(e) => setCompAmount(e.target.value)}
+                      value={toToman(compAmount)}
+                      onChange={(e) => setCompAmount(fromToman(e.target.value))}
                     />
                     <TextField
                       label={t('settlements.detailModal.totalAdj')}
                       size="small"
-                      value={adjAmount}
-                      onChange={(e) => setAdjAmount(e.target.value)}
+                      value={toToman(adjAmount)}
+                      onChange={(e) => setAdjAmount(fromToman(e.target.value))}
                     />
                     <Button variant="outlined" size="small" onClick={handleSaveSettlementDraft}>
                       {t('settlements.detailModal.recalculateSave')}
@@ -664,8 +664,8 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                               <TextField
                                 size="small"
                                 variant="outlined"
-                                value={line.actual_pos}
-                                onChange={(e) => handleLineActualChange(line.id, 'actual_pos', e.target.value)}
+                                value={toToman(line.actual_pos)}
+                                onChange={(e) => handleLineActualChange(line.id, 'actual_pos', fromToman(e.target.value))}
                                 slotProps={{ htmlInput: { style: { textAlign: 'right', padding: '4px 8px' } } }}
                               />
                             ) : (
@@ -677,8 +677,8 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                               <TextField
                                 size="small"
                                 variant="outlined"
-                                value={line.actual_cash}
-                                onChange={(e) => handleLineActualChange(line.id, 'actual_cash', e.target.value)}
+                                value={toToman(line.actual_cash)}
+                                onChange={(e) => handleLineActualChange(line.id, 'actual_cash', fromToman(e.target.value))}
                                 slotProps={{ htmlInput: { style: { textAlign: 'right', padding: '4px 8px' } } }}
                               />
                             ) : (

@@ -54,7 +54,7 @@ import { paths } from 'src/routes/paths';
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
 import { useLiveRefresh } from 'src/utils/use-live-refresh';
-import { useCurrencyCode, useCurrencyLabel } from 'src/utils/currency';
+import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { tenantApi } from 'src/api/tenantApi';
 import { settingsApi } from 'src/api/settingsApi';
@@ -145,7 +145,7 @@ function DispatchDetails({ delivery, now }: { delivery: Delivery; now: number })
 
 export function DeliveryPage() {
   const currencyLabel = useCurrencyLabel();
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const { t } = useTranslation();
   // A cashier checks couriers in and out at the counter; taking one onto the roster is the
   // manager's (the API refuses a register account).
@@ -369,8 +369,8 @@ export function DeliveryPage() {
       <TextField
         fullWidth
         label={t(mode === 'FLAT' ? 'delivery.modals.addCourier.compensationFlat' : 'delivery.modals.addCourier.compensationFallback', { currency: currencyLabel })}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+        value={toToman(value)}
+        onChange={(e) => onChange(fromToman(e.target.value))}
         slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
       />
     );
@@ -724,10 +724,10 @@ export function DeliveryPage() {
                       </Typography>
                       <DispatchDetails delivery={del} now={now} />
                       <Typography variant="body2" color="text.secondary">
-                        {t('delivery.card.zone')}: {del.zone_name} | {t('delivery.card.fee')}: {MoneyUtil.formatCurrency(del.fee)} {del.currency_code}
+                        {t('delivery.card.zone')}: {del.zone_name} | {t('delivery.card.fee')}: {MoneyUtil.formatCurrency(del.fee)} {currency}
                       </Typography>
                       <Typography variant="body2" sx={{ fontWeight: 'bold', mt: 1 }}>
-                        {t('delivery.card.total')}: {MoneyUtil.formatCurrency(del.grand_total)} {del.currency_code}
+                        {t('delivery.card.total')}: {MoneyUtil.formatCurrency(del.grand_total)} {currency}
                       </Typography>
 
                       <Stack direction="row" sx={{ pt: 2, justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1088,10 +1088,10 @@ export function DeliveryPage() {
                 <TableRow key={z.id}>
                   <TableCell><strong>{z.code}</strong></TableCell>
                   <TableCell>{z.name}</TableCell>
-                  <TableCell>{MoneyUtil.formatCurrency(z.fee)} {z.currency_code}</TableCell>
+                  <TableCell>{MoneyUtil.formatCurrency(z.fee)} {currency}</TableCell>
                   <TableCell>
                     {z.courier_pay !== null && z.courier_pay !== undefined ? (
-                      `${MoneyUtil.formatCurrency(z.courier_pay)} ${z.currency_code}`
+                      `${MoneyUtil.formatCurrency(z.courier_pay)} ${currency}`
                     ) : (
                       <Typography variant="caption" color="text.secondary">{t('delivery.zones.courierPayUnset')}</Typography>
                     )}
@@ -1356,16 +1356,16 @@ export function DeliveryPage() {
               <TextField label={t('delivery.modals.addZone.name')} value={zoneEdit.name} onChange={(e) => setZoneEdit({ ...zoneEdit, name: e.target.value })} fullWidth />
               <TextField
                 label={t('delivery.modals.addZone.fee', { currency: currencyLabel })}
-                value={zoneEdit.fee}
-                onChange={(e) => setZoneEdit({ ...zoneEdit, fee: e.target.value })}
+                value={toToman(zoneEdit.fee)}
+                onChange={(e) => setZoneEdit({ ...zoneEdit, fee: fromToman(e.target.value) })}
                 slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
                 fullWidth
               />
               <TextField
                 label={t('delivery.modals.addZone.courierPay', { currency: currencyLabel })}
                 helperText={t('delivery.modals.addZone.courierPayHelp')}
-                value={zoneEdit.courier_pay}
-                onChange={(e) => setZoneEdit({ ...zoneEdit, courier_pay: e.target.value })}
+                value={toToman(zoneEdit.courier_pay)}
+                onChange={(e) => setZoneEdit({ ...zoneEdit, courier_pay: fromToman(e.target.value) })}
                 slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
                 fullWidth
               />
@@ -1428,12 +1428,12 @@ export function DeliveryPage() {
           <Stack spacing={2} sx={{ pt: 1 }}>
             <TextField label={t('delivery.modals.addZone.code')} value={zoneForm.code} onChange={(e) => setZoneForm({ ...zoneForm, code: e.target.value })} fullWidth />
             <TextField label={t('delivery.modals.addZone.name')} value={zoneForm.name} onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })} fullWidth />
-            <TextField label={t('delivery.modals.addZone.fee', { currency: currencyLabel })} value={zoneForm.fee} onChange={(e) => setZoneForm({ ...zoneForm, fee: e.target.value })} fullWidth />
+            <TextField label={t('delivery.modals.addZone.fee', { currency: currencyLabel })} value={toToman(zoneForm.fee)} onChange={(e) => setZoneForm({ ...zoneForm, fee: fromToman(e.target.value) })} fullWidth />
             <TextField
               label={t('delivery.modals.addZone.courierPay', { currency: currencyLabel })}
               helperText={t('delivery.modals.addZone.courierPayHelp')}
-              value={zoneForm.courier_pay}
-              onChange={(e) => setZoneForm({ ...zoneForm, courier_pay: e.target.value })}
+              value={toToman(zoneForm.courier_pay)}
+              onChange={(e) => setZoneForm({ ...zoneForm, courier_pay: fromToman(e.target.value) })}
               slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
               fullWidth
             />

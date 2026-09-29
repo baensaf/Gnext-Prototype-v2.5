@@ -65,7 +65,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
-import { useCurrencyCode } from 'src/utils/currency';
+import { useCurrencyLabel } from 'src/utils/currency';
 import { fTime, fDateTime } from 'src/utils/format-time';
 import { useLiveRefresh } from 'src/utils/use-live-refresh';
 import {
@@ -205,7 +205,7 @@ const deliveryStateKeyOf = (state: string | null | undefined): string | null => 
 
 export function OrdersWorkflowPage() {
   const { t } = useTranslation();
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const [branchId] = useScopedBranchId();
   const { branches, isHeadOffice } = useBranchContext();
   // Head office looks orders up — a complaint, a courier dispute, a Snappfood query — but the

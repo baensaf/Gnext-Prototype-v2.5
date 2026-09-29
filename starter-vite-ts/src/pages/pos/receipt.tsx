@@ -17,12 +17,12 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
-import { useCurrencyCode } from 'src/utils/currency';
+import { useCurrencyLabel } from 'src/utils/currency';
 
 import { paymentApi } from 'src/api/paymentApi';
 
 export function ReceiptPage() {
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 

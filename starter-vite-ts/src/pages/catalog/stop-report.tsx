@@ -22,7 +22,7 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
-import { useCurrencyCode } from 'src/utils/currency';
+import { useCurrencyLabel } from 'src/utils/currency';
 
 import { catalogApi } from 'src/api/catalogApi';
 import { useBranchContext } from 'src/contexts/branch-context';
@@ -34,7 +34,7 @@ import { CalendarDateField } from 'src/components/calendar-date-field';
  * put them back, and the sales the register and kiosk refused meanwhile (valued at base price).
  */
 export function StopReportPage() {
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const { t } = useTranslation();
   const { selectedBranchId } = useBranchContext();
 

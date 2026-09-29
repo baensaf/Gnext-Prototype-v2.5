@@ -29,15 +29,16 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
-import { useCurrencyCode } from 'src/utils/currency';
+import { useCurrencyLabel } from 'src/utils/currency';
 
 import { VersionTag } from 'src/components/version-tag';
 
 import { deliveryApi } from '../../api/deliveryApi';
 
 export function SettlementDetailPage() {
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const params = useParams<{ id?: string; settlementId?: string }>();
   const id = params.id || params.settlementId;
   const navigate = useNavigate();
@@ -199,13 +200,13 @@ export function SettlementDetailPage() {
                 <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">{t('settlements.expectedCash', 'Expected Cash')}:</Typography>
                   <Typography sx={{ fontWeight: 600 }} dir="ltr">
-                    {Number(settlement.expected_cash || 0).toLocaleString()} {settlement.currency_code || currency}
+                    {MoneyUtil.formatCurrency(settlement.expected_cash || 0)} {currency}
                   </Typography>
                 </Stack>
                 <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">{t('settlements.actualCash', 'Actual Cash Submitted')}:</Typography>
                   <Typography sx={{ fontWeight: 600 }} dir="ltr">
-                    {Number(settlement.actual_cash || 0).toLocaleString()} {settlement.currency_code || currency}
+                    {MoneyUtil.formatCurrency(settlement.actual_cash || 0)} {currency}
                   </Typography>
                 </Stack>
                 <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -217,26 +218,26 @@ export function SettlementDetailPage() {
                     }}
                     dir="ltr"
                   >
-                    {variance > 0 ? `+${variance.toLocaleString()}` : variance.toLocaleString()} {settlement.currency_code || currency}
+                    {variance > 0 ? `+${MoneyUtil.formatCurrency(variance)}` : MoneyUtil.formatCurrency(variance)} {currency}
                   </Typography>
                 </Stack>
                 <Divider />
                 <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">{t('settlements.posAmount', 'Mobile POS Total')}:</Typography>
                   <Typography dir="ltr">
-                    {Number(settlement.pos_collected || settlement.mobile_pos_amount || 0).toLocaleString()} {settlement.currency_code || currency}
+                    {MoneyUtil.formatCurrency(settlement.pos_collected || settlement.mobile_pos_amount || 0)} {currency}
                   </Typography>
                 </Stack>
                 <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">{t('settlements.compensation', 'Courier Compensation/Fee')}:</Typography>
                   <Typography sx={{ fontWeight: 600, color: 'success.main' }} dir="ltr">
-                    {Number(settlement.total_compensation || settlement.commission_amount || 0).toLocaleString()} {settlement.currency_code || currency}
+                    {MoneyUtil.formatCurrency(settlement.total_compensation || settlement.commission_amount || 0)} {currency}
                   </Typography>
                 </Stack>
                 <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">{t('settlements.netRemittance', 'Net Cash Due to Merchant')}:</Typography>
                   <Typography sx={{ fontWeight: 700, color: 'primary.main' }} dir="ltr">
-                    {Number(settlement.net_amount || (Number(settlement.actual_cash || 0) - Number(settlement.total_compensation || 0))).toLocaleString()} {settlement.currency_code || currency}
+                    {MoneyUtil.formatCurrency(settlement.net_amount || Number(settlement.actual_cash || 0) - Number(settlement.total_compensation || 0))} {currency}
                   </Typography>
                 </Stack>
               </Stack>
@@ -335,11 +336,11 @@ export function SettlementDetailPage() {
                         <strong>{line.order_number || line.order_id?.slice(0, 8)}</strong>
                       </TableCell>
                       <TableCell>{line.customer_name || '-'}</TableCell>
-                      <TableCell dir="ltr">{Number(line.order_total || line.grand_total || 0).toLocaleString()} {currency}</TableCell>
-                      <TableCell dir="ltr">{Number(line.cash_collected || 0).toLocaleString()} {currency}</TableCell>
-                      <TableCell dir="ltr">{Number(line.pos_collected || line.pos_amount || 0).toLocaleString()} {currency}</TableCell>
+                      <TableCell dir="ltr">{MoneyUtil.formatCurrency(line.order_total || line.grand_total || 0)} {currency}</TableCell>
+                      <TableCell dir="ltr">{MoneyUtil.formatCurrency(line.cash_collected || 0)} {currency}</TableCell>
+                      <TableCell dir="ltr">{MoneyUtil.formatCurrency(line.pos_collected || line.pos_amount || 0)} {currency}</TableCell>
                       <TableCell dir="ltr" sx={{ color: 'success.main', fontWeight: 600 }}>
-                        {Number(line.compensation_amount || line.fee || 0).toLocaleString()} {currency}
+                        {MoneyUtil.formatCurrency(line.compensation_amount || line.fee || 0)} {currency}
                       </TableCell>
                       <TableCell>
                         <Chip size="small" label={line.status || line.state || 'COMPLETED'} color="success" />

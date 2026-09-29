@@ -24,7 +24,8 @@ import {
   TableContainer,
 } from '@mui/material';
 
-import { useCurrencyCode } from 'src/utils/currency';
+import { MoneyUtil } from 'src/utils/money.util';
+import { useCurrencyLabel } from 'src/utils/currency';
 
 import { tenantApi } from 'src/api/tenantApi';
 import { useAuthStore } from 'src/store/useAuthStore';
@@ -32,7 +33,7 @@ import { httpClient as axios } from 'src/api/httpClient';
 import { useBranchContextOptional } from 'src/contexts/branch-context';
 
 export function DashboardPage() {
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const { t } = useTranslation();
   const { tenant, user } = useAuthStore();
   const branchScope = useBranchContextOptional();
@@ -96,7 +97,7 @@ export function DashboardPage() {
                     {t('dashboard.salesToday')}
                   </Typography>
                   <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 0.5 }}>
-                    {kpis.sales_today} {currency}
+                    {MoneyUtil.formatCurrency(kpis.sales_today)} {currency}
                   </Typography>
                 </Box>
                 <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'primary.light', color: 'primary.main' }}>

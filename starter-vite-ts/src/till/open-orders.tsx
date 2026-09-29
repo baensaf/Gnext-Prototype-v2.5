@@ -36,7 +36,7 @@ import {
 
 import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
-import { useCurrencyCode, useCurrencyLabel } from 'src/utils/currency';
+import { useCurrencyLabel } from 'src/utils/currency';
 
 import { toast } from 'src/components/snackbar';
 import { CheckoutModal } from 'src/components/CheckoutModal';
@@ -209,7 +209,7 @@ type Props = {
  * orders beside the register, in the drawer the web POS uses for held carts.
  */
 export function OpenOrdersDrawer({ open, onClose, orders, troubled, loading, refresh }: Props) {
-  const currency = useCurrencyCode();
+  const currency = useCurrencyLabel();
   const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
   const [payingId, setPayingId] = useState<string | null>(null);

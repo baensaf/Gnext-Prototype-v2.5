@@ -20,7 +20,7 @@ import {
   DialogActions,
 } from '@mui/material';
 
-import { useCurrencyLabel } from 'src/utils/currency';
+import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { catalogApi } from 'src/api/catalogApi';
 
@@ -144,8 +144,8 @@ export function OptionGroupEditDialog({
                   <TextField
                     label={t('catalog.optionsPage.priceDelta', { currency: currencyLabel })}
                     type="number"
-                    value={item.price}
-                    onChange={(e) => patchItem(index, { price: e.target.value })}
+                    value={toToman(item.price)}
+                    onChange={(e) => patchItem(index, { price: fromToman(e.target.value) })}
                     size="small"
                     fullWidth
                   />

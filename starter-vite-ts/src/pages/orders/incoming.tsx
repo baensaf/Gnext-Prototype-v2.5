@@ -26,6 +26,7 @@ import {
   TableContainer,
 } from '@mui/material';
 
+import { MoneyUtil } from 'src/utils/money.util';
 import { isSnappfoodOrder, maxPromiseMinutes, promisesDeliveryTime } from 'src/utils/snappfood-order';
 
 import { orderApi } from 'src/api/orderApi';
@@ -305,7 +306,7 @@ function IncomingOrderDrawer({ order, reasons, policy, now, onClose, onAnswered 
                     {item.special_instructions ? ` (${item.special_instructions})` : ''}
                   </Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    {Number(item.line_total || item.subtotal || 0).toLocaleString()}
+                    {MoneyUtil.formatCurrency(item.line_total || item.subtotal || 0)}
                   </Typography>
                 </Stack>
               ))}
@@ -324,7 +325,7 @@ function IncomingOrderDrawer({ order, reasons, policy, now, onClose, onAnswered 
                 <Chip
                   size="small"
                   color="warning"
-                  label={t('orders.incoming.toCollect', { amount: outstanding.toLocaleString() })}
+                  label={t('orders.incoming.toCollect', { amount: MoneyUtil.formatCurrency(outstanding) })}
                 />
               )}
             </Stack>
