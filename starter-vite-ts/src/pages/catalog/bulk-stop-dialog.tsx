@@ -23,6 +23,8 @@ import {
 import { catalogApi } from 'src/api/catalogApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 
+import { VersionTag } from 'src/components/version-tag';
+
 import { STOP_REASONS } from '../pos/pos-stop-dialog';
 
 type Props = {
@@ -123,11 +125,10 @@ export function BulkStopDialog({ open, products, categories, onClose, onDone }: 
               label={t('catalog.bulkStop.category')}
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
-              helperText={t('catalog.bulkStop.categoryHelp')}
             >
               {categories.map((c) => (
                 <MenuItem key={c.id} value={c.id}>
-                  {c.parent_id ? `└ ${c.name}` : c.name}
+                  {c.name}
                 </MenuItem>
               ))}
             </TextField>
@@ -156,7 +157,11 @@ export function BulkStopDialog({ open, products, categories, onClose, onDone }: 
                 <TextField
                   {...params}
                   label={t('catalog.bulkStop.branches')}
-                  helperText={branchIds.length ? undefined : t('catalog.bulkStop.allBranches')}
+                  helperText={
+                    <>
+                      {branchIds.length ? null : t('catalog.bulkStop.allBranches')} <VersionTag feature="catalog.stopBranches" />
+                    </>
+                  }
                 />
               )}
             />
@@ -183,7 +188,8 @@ export function BulkStopDialog({ open, products, categories, onClose, onDone }: 
             />
           )}
 
-          <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+          <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+            <VersionTag feature="catalog.stopReason" />
             {STOP_REASONS.map((r) => (
               <Chip
                 key={r}

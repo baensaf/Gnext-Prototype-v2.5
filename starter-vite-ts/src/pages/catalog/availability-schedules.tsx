@@ -34,6 +34,8 @@ import {
 import { catalogApi } from 'src/api/catalogApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 
+import { VersionTag } from 'src/components/version-tag';
+
 // Iran's week starts on Saturday. Values are JavaScript's day numbers, 0 = Sunday.
 const WEEK = [6, 0, 1, 2, 3, 4, 5];
 
@@ -125,7 +127,7 @@ export function AvailabilitySchedulesSection({ products, categories, scopeName }
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-            {t('catalog.schedules.title')}
+            {t('catalog.schedules.title')} <VersionTag feature="catalog.sellingWindows" />
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {t('catalog.schedules.subtitle')}

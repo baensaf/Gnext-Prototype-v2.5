@@ -32,6 +32,7 @@ import {
 import { importExportApi } from 'src/api/importExportApi';
 
 import { Iconify } from 'src/components/iconify';
+import { VersionTag } from 'src/components/version-tag';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 type ImportEntityType = 'CUSTOMERS' | 'PRODUCTS' | 'CATEGORIES';
@@ -234,7 +235,7 @@ export function ImportWizardPage() {
                 onChange={(e) => handleEntityChange(e.target.value as ImportEntityType)}
               >
                 <MenuItem value="PRODUCTS">{t('tools.importWizard.entities.PRODUCTS', 'Products Catalog (Products, Prices & Categories)')}</MenuItem>
-                <MenuItem value="CUSTOMERS">{t('tools.importWizard.entities.CUSTOMERS', 'Customer Directory (Profiles, Phone Numbers & Identifiers)')}</MenuItem>
+                <MenuItem value="CUSTOMERS">{t('tools.importWizard.entities.CUSTOMERS', 'Customer Directory (Profiles, Phone Numbers & Identifiers)')} <VersionTag feature="import.customers" sx={{ ml: 1 }} /></MenuItem>
                 <MenuItem value="CATEGORIES">{t('tools.importWizard.entities.CATEGORIES', 'Menu Categories (Category Codes & Ordering)')}</MenuItem>
               </TextField>
             </Grid>

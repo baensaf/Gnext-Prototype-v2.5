@@ -50,6 +50,7 @@ import { percentToTaxRate, taxRateToPercent } from 'src/utils/tax-rate';
 import { catalogApi } from 'src/api/catalogApi';
 import { useAuthStore } from 'src/store/useAuthStore';
 
+import { VersionTag } from 'src/components/version-tag';
 import { ImageUploader } from 'src/components/ImageUploader';
 
 // The whole catalog is rated at the standard 9% VAT, so a product added through
@@ -279,7 +280,7 @@ export function ProductsPage() {
             <MenuItem value="">{t('catalog.productsPage.allCategories')}</MenuItem>
             {categories.map((c) => (
               <MenuItem key={c.id} value={c.id}>
-                {c.parent_id ? `└ ${c.name}` : c.name}
+                {c.name}
               </MenuItem>
             ))}
           </Select>
@@ -307,7 +308,9 @@ export function ProductsPage() {
                   <TableCell>{t('catalog.productsPage.name')}</TableCell>
                   <TableCell>{t('catalog.productsPage.category')}</TableCell>
                   <TableCell align="right">{t('catalog.productsPage.basePrice')}</TableCell>
-                  <TableCell align="center">{t('catalog.productsPage.sizes')}</TableCell>
+                  <TableCell align="center">
+                    {t('catalog.productsPage.sizes')} <VersionTag feature="catalog.sizes" />
+                  </TableCell>
                   <TableCell align="center">{t('catalog.productsPage.taxRate')}</TableCell>
                   <TableCell>{t('common.status', 'Status')}</TableCell>
                   <TableCell align="center">{t('catalog.productsPage.actions')}</TableCell>
@@ -440,7 +443,9 @@ export function ProductsPage() {
                   onChange={(e) => setProductType(e.target.value as 'STANDARD' | 'COMBO')}
                 >
                   <MenuItem value="STANDARD">{t('catalog.productsPage.typeStandard')}</MenuItem>
-                  <MenuItem value="COMBO">{t('catalog.productsPage.typeCombo')}</MenuItem>
+                  <MenuItem value="COMBO">
+                    {t('catalog.productsPage.typeCombo')} <VersionTag feature="catalog.combo" sx={{ ml: 1 }} />
+                  </MenuItem>
                 </Select>
               </FormControl>
               {productType === 'COMBO' && (
@@ -507,7 +512,7 @@ export function ProductsPage() {
       {/* Attach Option Group Dialog */}
       <Dialog open={attachDialogOpen} onClose={() => setAttachDialogOpen(false)}>
         <DialogTitle sx={{ fontWeight: 'bold' }}>
-          {t('catalog.productsPage.attachModalTitle', { name: selectedProduct?.name })}
+          {t('catalog.productsPage.attachModalTitle', { name: selectedProduct?.name })} <VersionTag feature="catalog.addonGroups" />
         </DialogTitle>
         <DialogContent sx={{ minWidth: 360, pt: 2 }}>
           <FormControl fullWidth sx={{ mt: 1 }}>

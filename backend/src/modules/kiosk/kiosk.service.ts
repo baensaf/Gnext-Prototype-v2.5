@@ -27,7 +27,6 @@ import { CatalogService, REFUSED_SALE_CODES } from '../catalog/catalog.service';
 import { PriceListService } from '../catalog/price-lists.service';
 import { inStorePrice } from '../../common/utils/price-list.util';
 import { checkOptionChoices } from '../catalog/option-choices.util';
-import { inTreeOrder } from '../../common/utils/category-tree.util';
 import { Terminal } from '../../entities/Terminal.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { IsNull, Not } from 'typeorm';
@@ -75,13 +74,10 @@ export class KioskService {
       branch = branches[0] || null;
     }
 
-    // Tree order, as on the register: each category followed by its sub-categories.
-    const categories = inTreeOrder(
-      await this.categoryRepo.find({
-        where: { tenant_id: tenantId, is_active: true },
-        order: { sort_order: 'ASC', name: 'ASC' },
-      }),
-    );
+    const categories = await this.categoryRepo.find({
+      where: { tenant_id: tenantId, is_active: true },
+      order: { sort_order: 'ASC', name: 'ASC' },
+    });
 
     const products = await this.productRepo.find({
       where: { tenant_id: tenantId, is_active: true },

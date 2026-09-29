@@ -36,8 +36,7 @@ import {
 import { catalogApi } from 'src/api/catalogApi';
 
 /**
- * Categories nest one level: a top-level category may hold sub-categories, which hold none.
- * The server returns them in tree order (each category followed by its sub-categories), which
+ * A menu has categories and nothing under them. The server returns them in menu order, which
  * is also the order the register and kiosk show them in.
  */
 export function CategoriesPage() {
@@ -51,7 +50,6 @@ export function CategoriesPage() {
   const [editing, setEditing] = useState<Category | null>(null);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
-  const [parentId, setParentId] = useState('');
 
   const [archiving, setArchiving] = useState<Category | null>(null);
   const [moveTo, setMoveTo] = useState('');
@@ -70,16 +68,10 @@ export function CategoriesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const siblingsOf = (c: Category) => categories.filter((o) => (o.parent_id || '') === (c.parent_id || ''));
-  const hasChildren = (c: Category) => categories.some((o) => o.parent_id === c.id);
-  // A parent must be top level, and not the category itself.
-  const parentChoices = categories.filter((c) => !c.parent_id && c.id !== editing?.id);
-
   const openCreate = () => {
     setEditing(null);
     setCode('');
     setName('');
-    setParentId('');
     setDrawerOpen(true);
   };
 
@@ -87,7 +79,6 @@ export function CategoriesPage() {
     setEditing(c);
     setCode(c.code);
     setName(c.name);
-    setParentId(c.parent_id || '');
     setDrawerOpen(true);
   };
 
@@ -95,9 +86,9 @@ export function CategoriesPage() {
     e.preventDefault();
     try {
       if (editing) {
-        await catalogApi.updateCategory(editing.id, { name, parent_id: parentId || null });
+        await catalogApi.updateCategory(editing.id, { name });
       } else {
-        await catalogApi.createCategory({ code, name, parent_id: parentId || null });
+        await catalogApi.createCategory({ code, name });
       }
       setDrawerOpen(false);
       loadData();
@@ -107,7 +98,7 @@ export function CategoriesPage() {
   };
 
   const move = async (c: Category, step: -1 | 1) => {
-    const ids = siblingsOf(c).map((o) => o.id);
+    const ids = categories.map((o) => o.id);
     const from = ids.indexOf(c.id);
     const to = from + step;
     if (to < 0 || to >= ids.length) return;
@@ -137,7 +128,6 @@ export function CategoriesPage() {
   };
 
   const archiveCount = archiving?.product_count || 0;
-  const archiveBlocked = !!archiving && hasChildren(archiving);
 
   return (
     <Box>
@@ -174,15 +164,10 @@ export function CategoriesPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {categories.map((c) => {
-                  const siblings = siblingsOf(c);
-                  const index = siblings.findIndex((o) => o.id === c.id);
-                  return (
+                {categories.map((c, index) => (
                     <TableRow key={c.id}>
-                      <TableCell sx={{ ps: c.parent_id ? 5 : 2 }}>
-                        <Typography variant={c.parent_id ? 'body2' : 'subtitle2'}>
-                          {c.parent_id ? `└ ${c.name}` : c.name}
-                        </Typography>
+                      <TableCell>
+                        <Typography variant="subtitle2">{c.name}</Typography>
                         <Typography variant="caption" color="text.secondary" component="code">
                           {c.code}
                         </Typography>
@@ -200,7 +185,7 @@ export function CategoriesPage() {
                         <IconButton
                           size="small"
                           title={t('catalog.categoriesPage.moveDown')}
-                          disabled={index >= siblings.length - 1}
+                          disabled={index >= categories.length - 1}
                           onClick={() => move(c, 1)}
                         >
                           <ArrowDownwardIcon fontSize="small" />
@@ -215,8 +200,7 @@ export function CategoriesPage() {
                         </IconButton>
                       </TableCell>
                     </TableRow>
-                  );
-                })}
+                ))}
               </TableBody>
             </Table>
           </TableContainer>
@@ -248,26 +232,6 @@ export function CategoriesPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
-              <TextField
-                select
-                label={t('catalog.categoriesPage.parent')}
-                fullWidth
-                value={parentId}
-                disabled={!!editing && hasChildren(editing)}
-                helperText={
-                  editing && hasChildren(editing)
-                    ? t('catalog.categoriesPage.parentLocked')
-                    : t('catalog.categoriesPage.nestHint')
-                }
-                onChange={(e) => setParentId(e.target.value)}
-              >
-                <MenuItem value="">{t('catalog.categoriesPage.noParent')}</MenuItem>
-                {parentChoices.map((p) => (
-                  <MenuItem key={p.id} value={p.id}>
-                    {p.name}
-                  </MenuItem>
-                ))}
-              </TextField>
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>
                 {editing ? t('catalog.categoriesPage.submitSave') : t('catalog.categoriesPage.submitCreate')}
               </Button>
@@ -279,9 +243,7 @@ export function CategoriesPage() {
       <Dialog open={!!archiving} onClose={() => setArchiving(null)} fullWidth maxWidth="xs">
         <DialogTitle>{t('catalog.categoriesPage.archiveTitle', { name: archiving?.name })}</DialogTitle>
         <DialogContent>
-          {archiveBlocked ? (
-            <Alert severity="warning">{t('catalog.categoriesPage.archiveHasChildren', { name: archiving?.name })}</Alert>
-          ) : archiveCount > 0 ? (
+          {archiveCount > 0 ? (
             <Stack spacing={2} sx={{ pt: 1 }}>
               <Typography variant="body2">
                 {t('catalog.categoriesPage.archiveMove', { name: archiving?.name, count: archiveCount })}
@@ -291,7 +253,7 @@ export function CategoriesPage() {
                   .filter((c) => c.id !== archiving?.id)
                   .map((c) => (
                     <MenuItem key={c.id} value={c.id}>
-                      {c.parent_id ? `└ ${c.name}` : c.name}
+                      {c.name}
                     </MenuItem>
                   ))}
               </TextField>
@@ -305,7 +267,7 @@ export function CategoriesPage() {
           <Button
             color="error"
             variant="contained"
-            disabled={archiveBlocked || (archiveCount > 0 && !moveTo)}
+            disabled={archiveCount > 0 && !moveTo}
             onClick={handleArchive}
           >
             {t('catalog.categoriesPage.archive')}

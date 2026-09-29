@@ -54,8 +54,8 @@ tickets are printed. Kitchen stations and routing rules stay V1, because the pri
 | "Internet is down" banner and offline till | F |
 
 Everything else on the POS page is V1: delivery orders, quick customer registration,
-combos (HAMI has no combos, but Iran Burger needs them), manual discount with the
-cashier's limit, hold and resume, and the cash, card and split payments.
+manual discount with the cashier's limit, hold and resume, and the cash, card and split
+payments. Combos moved to V4 with page group 8: a combo's choices are add-on groups.
 
 **Page group 2, orders list and order drawer (`/app/orders`): V1. Incoming orders
 (`/app/orders/incoming`): V3.** These features of the orders page ship later:
@@ -127,9 +127,27 @@ type is V4.
 | The delivery audit tab | F |
 | Head office's fleet roll-up (`/app/delivery/rollup`) | V4 |
 
+**Page group 8, catalog (`/app/catalog/…`): V1.** Decided 2026-09-29. A V1 product is one
+item at one price, in a category. Categories don't nest: sub-categories were removed from
+the prototype (migration 083 makes each one a category of its own). The add-ons page
+(`/app/catalog/modifiers`) and the 86 report (`/app/catalog/availability/report`) are V4.
+Today's stock and importing products and categories are V1.
+
+| Feature | Label |
+|---|---|
+| Sizes | V4 |
+| Add-on groups, and combos (built from them), on the POS too | V4 |
+| Packaging price, most per order | V4 |
+| A product's price history tab | V4 |
+| Stopping an item on Snappfood only | V3 |
+| A reason when stopping an item | F |
+| Stopping items at several branches at once (head office) | V4 |
+| Selling windows (for example, breakfast only) | V2 |
+| Importing customers | F |
+
 ## Next
 
-Page group 8, catalog, then groups 9–15 in the order listed on the Feature labels tab.
+Page group 9, pricing, then groups 10–15 in the order listed on the Feature labels tab.
 
 ## Routine for each page
 

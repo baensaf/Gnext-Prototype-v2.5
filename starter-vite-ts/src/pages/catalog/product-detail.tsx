@@ -63,6 +63,7 @@ import { catalogApi } from 'src/api/catalogApi';
 import { useAuthStore } from 'src/store/useAuthStore';
 import { useBranchContext } from 'src/contexts/branch-context';
 
+import { VersionTag } from 'src/components/version-tag';
 import { AmountInWords } from 'src/components/amount-in-words';
 
 import { ProductPhotos } from './product-photos';
@@ -398,9 +399,9 @@ export function ProductDetailPage() {
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={currentTab} onChange={(_, val) => setCurrentTab(val)}>
           <Tab label={t('catalog.productDetailPage.tabs.general')} />
-          <Tab label={t('catalog.productDetailPage.tabs.variants', { count: variants.length })} />
-          <Tab label={t('catalog.productDetailPage.tabs.modifiers', { count: product?.optionGroups?.length || 0 })} />
-          <Tab label={t('catalog.productDetailPage.tabs.priceHistory')} />
+          <Tab label={<Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><span>{t('catalog.productDetailPage.tabs.variants', { count: variants.length })}</span><VersionTag feature="catalog.sizes" /></Stack>} />
+          <Tab label={<Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><span>{t('catalog.productDetailPage.tabs.modifiers', { count: product?.optionGroups?.length || 0 })}</span><VersionTag feature="catalog.addonGroups" /></Stack>} />
+          <Tab label={<Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><span>{t('catalog.productDetailPage.tabs.priceHistory')}</span><VersionTag feature="catalog.priceHistory" /></Stack>} />
         </Tabs>
       </Box>
 
@@ -464,10 +465,15 @@ export function ProductDetailPage() {
                         htmlInput: { min: 0, step: 1 },
                         input: { endAdornment: <InputAdornment position="end">{currency}</InputAdornment> },
                       }}
-                      helperText={t(
-                        'catalog.productDetailPage.general.containerPriceHelp',
-                        'Per unit, for delivery apps. Recorded for the Snappfood menu; not charged on orders here yet.'
-                      )}
+                      helperText={
+                        <>
+                          {t(
+                            'catalog.productDetailPage.general.containerPriceHelp',
+                            'Per unit, for delivery apps. Recorded for the Snappfood menu; not charged on orders here yet.'
+                          )}{' '}
+                          <VersionTag feature="catalog.packagingPrice" />
+                        </>
+                      }
                       fullWidth
                     />
                     <AmountInWords amount={containerPrice} />
@@ -478,7 +484,12 @@ export function ProductDetailPage() {
                       type="number"
                       value={maxPerOrder}
                       onChange={(e) => setMaxPerOrder(e.target.value)}
-                      helperText={t('catalog.productDetailPage.general.maxPerOrderHelp', 'Empty for no limit')}
+                      helperText={
+                        <>
+                          {t('catalog.productDetailPage.general.maxPerOrderHelp', 'Empty for no limit')}{' '}
+                          <VersionTag feature="catalog.maxPerOrder" />
+                        </>
+                      }
                       slotProps={{ htmlInput: { min: 1, step: 1 } }}
                       fullWidth
                     />
@@ -586,7 +597,8 @@ export function ProductDetailPage() {
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      {t('catalog.productDetailPage.onSale.menuTime', 'Menu time')}
+                      {t('catalog.productDetailPage.onSale.menuTime', 'Menu time')}{' '}
+                      <VersionTag feature="catalog.sellingWindows" />
                     </Typography>
                     <Typography variant="body2">
                       {windows.length
