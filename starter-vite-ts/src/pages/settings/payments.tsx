@@ -249,7 +249,9 @@ export function PaymentSettingsPage() {
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colKind', 'Kind')}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colCurrency', 'Currency')}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colDevice', 'Device / Reference')}</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colRefund', 'Refund Policy')}</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>
+                  {t('settings.paymentsPage.colRefund', 'Refund Policy')} <VersionTag feature="settings.refundMethods" />
+                </TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colStatus', 'Status')}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }} align="right">
                   {t('settings.paymentsPage.colActions', 'Actions')}

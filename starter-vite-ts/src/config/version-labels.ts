@@ -41,6 +41,14 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   // V1 has one very basic report, still to be defined; the reports page comes in V2.
   '/app/reports': 'V2',
   '/app/audit': 'F',
+  // Settings: users, roles, general, calendar, business day, shift policy, order workflow,
+  // discount limits, payment methods, reason codes, note templates
+  '/app/settings': 'V1',
+  '/app/settings/approvals': 'V2',
+  '/app/settings/courier-pay': 'V4',
+  '/app/settings/branch-overrides': 'V4',
+  '/app/settings/localization': 'F',
+  '/app/settings/data-reset': 'F',
   // Full delivery is V1; head office's fleet roll-up is not.
   '/app/delivery': 'V1',
   '/app/delivery/rollup': 'V4',
@@ -144,6 +152,12 @@ export const FEATURE_LABELS = {
   'agents.offlineReady': 'F',
   // Reports
   'reports.savedViews': 'V4',
+  // Settings. Money is shown in Toman in V1; the Omani rial and the US dollar come in V7.
+  'settings.currencies': 'F',
+  'settings.reopenOrders': 'V2',
+  'settings.requireTable': 'V2',
+  'settings.incomingOrders': 'V3',
+  'settings.refundMethods': 'V2',
   // Moadian e-invoices on an order
   moadian: 'F',
 } satisfies Record<string, PhaseLabel>;
