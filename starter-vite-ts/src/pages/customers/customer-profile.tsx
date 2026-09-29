@@ -30,6 +30,7 @@ import { MoneyUtil } from 'src/utils/money.util';
 
 import { profilesApi } from 'src/api/profilesApi';
 
+import { VersionTag } from 'src/components/version-tag';
 import {
   InfoCard,
   formatMoney,
@@ -144,7 +145,14 @@ export function CustomerProfilePage() {
         <Tab value="overview" label={t('profile.tabs.overview')} />
         <Tab value="orders" label={`${t('profile.tabs.orders')} (${stats.order_count})`} />
         <Tab value="credit" label={t('profile.tabs.credit')} />
-        <Tab value="audit" label={t('profile.tabs.audit')} />
+        <Tab
+          value="audit"
+          label={
+            <span>
+              {t('profile.tabs.audit')} <VersionTag feature="customers.audit" />
+            </span>
+          }
+        />
       </Tabs>
 
       {tab === 'overview' && (

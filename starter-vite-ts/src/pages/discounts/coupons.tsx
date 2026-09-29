@@ -34,6 +34,7 @@ import { httpClient as axios } from 'src/api/httpClient';
 import { catalogApi, type Product } from 'src/api/catalogApi';
 
 import { Iconify } from 'src/components/iconify';
+import { VersionTag } from 'src/components/version-tag';
 import { CalendarDateField } from 'src/components/calendar-date-field';
 
 interface Coupon {
@@ -229,7 +230,7 @@ export function CouponsPage({ isEmbedded = false }: CouponsPageProps) {
         <CardContent>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
             <Iconify icon={'solar:ticket-bold' as any} color="primary" />
-            {t('coupons.testBenchTitle', 'POS Coupon Validation Test Bench')}
+            {t('coupons.testBenchTitle', 'POS Coupon Validation Test Bench')} <VersionTag feature="coupons.testBench" />
           </Typography>
           <form onSubmit={handleTestValidate}>
             <Stack spacing={2} sx={{ flexDirection: { xs: 'column', sm: 'row' }, alignItems: 'center' }}>
