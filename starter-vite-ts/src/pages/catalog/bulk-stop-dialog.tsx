@@ -49,7 +49,7 @@ export function BulkStopDialog({ open, products, categories, onClose, onDone }: 
   const [categoryId, setCategoryId] = useState('');
   const [picked, setPicked] = useState<Product[]>([]);
   const [branchIds, setBranchIds] = useState<string[]>([]);
-  const [until, setUntil] = useState<'NEXT_SHIFT' | 'HOURS' | 'MANUAL'>('NEXT_SHIFT');
+  const [until, setUntil] = useState<'NEXT_SHIFT' | 'HOURS' | 'MANUAL'>('MANUAL');
   const [hours, setHours] = useState('2');
   const [reason, setReason] = useState<(typeof STOP_REASONS)[number] | ''>('');
   const [otherText, setOtherText] = useState('');
@@ -62,7 +62,7 @@ export function BulkStopDialog({ open, products, categories, onClose, onDone }: 
     setCategoryId('');
     setPicked([]);
     setBranchIds([]);
-    setUntil('NEXT_SHIFT');
+    setUntil('MANUAL');
     setHours('2');
     setReason('');
     setOtherText('');
@@ -172,9 +172,13 @@ export function BulkStopDialog({ open, products, categories, onClose, onDone }: 
           )}
 
           <ToggleButtonGroup size="small" exclusive value={until} onChange={(_, next) => next && setUntil(next)}>
-            <ToggleButton value="NEXT_SHIFT">{t('catalog.bulkStop.untilNextShift')}</ToggleButton>
-            <ToggleButton value="HOURS">{t('catalog.bulkStop.forHours')}</ToggleButton>
             <ToggleButton value="MANUAL">{t('catalog.bulkStop.untilFurtherNotice')}</ToggleButton>
+            <ToggleButton value="NEXT_SHIFT">
+              {t('catalog.bulkStop.untilNextShift')} <VersionTag feature="catalog.stopDuration" sx={{ ml: 1 }} />
+            </ToggleButton>
+            <ToggleButton value="HOURS">
+              {t('catalog.bulkStop.forHours')} <VersionTag feature="catalog.stopDuration" sx={{ ml: 1 }} />
+            </ToggleButton>
           </ToggleButtonGroup>
           {until === 'HOURS' && (
             <TextField

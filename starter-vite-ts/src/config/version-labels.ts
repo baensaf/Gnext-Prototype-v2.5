@@ -94,9 +94,11 @@ export const FEATURE_LABELS = {
   'catalog.packagingPrice': 'V4',
   'catalog.maxPerOrder': 'V4',
   'catalog.priceHistory': 'V4',
-  // Availability: a V1 stop is available, until the next shift, until further notice, or for set hours.
+  // Availability: a V1 item is available, or off until someone puts it back.
   'catalog.snappfoodStop': 'V3',
   'catalog.stopReason': 'F',
+  // V1 stops are "until further notice" only: off until the next shift and off for set hours are F.
+  'catalog.stopDuration': 'F',
   'catalog.stopBranches': 'V4',
   'catalog.sellingWindows': 'V2',
   'import.customers': 'F',
