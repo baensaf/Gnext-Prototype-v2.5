@@ -117,6 +117,13 @@ export class CatalogController {
     return await this.catalogService.attachOptionGroupToProduct(tenantId, id, body.optionGroupId, body.sortOrder, correlationId);
   }
 
+  // The order a product shows its add-on groups in.
+  @HeadOfficeOnly()
+  @Put('products/:id/option-groups/order')
+  async reorderOptionGroups(@Param('id') id: string, @Body() body: { groupIds: string[] }, @Req() req: Request) {
+    return await this.catalogService.reorderProductOptionGroups((req as any).tenantId, id, body.groupIds, (req as any).correlationId);
+  }
+
   @HeadOfficeOnly()
   @Delete('products/:id/option-groups/:groupId')
   async detachOptionGroup(@Param('id') id: string, @Param('groupId') groupId: string, @Req() req: Request) {
@@ -187,7 +194,16 @@ export class CatalogController {
   async createOptionGroup(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
+    // The add-ons sheet sends the group with its items: created in one go, as a save.
+    if (Array.isArray(body?.items)) return await this.catalogService.saveOptionGroup(tenantId, null, body, correlationId);
     return await this.catalogService.createOptionGroup(tenantId, body, correlationId);
+  }
+
+  /** Where a group is used: products it is put on directly, and categories that pass it to theirs. */
+  @HeadOfficeOnly()
+  @Put('option-groups/:id/links')
+  async setOptionGroupLinks(@Param('id') id: string, @Body() body: { product_ids?: string[]; category_ids?: string[] }, @Req() req: Request) {
+    return await this.catalogService.setOptionGroupLinks((req as any).tenantId, id, body, (req as any).correlationId);
   }
 
   @HeadOfficeOnly()

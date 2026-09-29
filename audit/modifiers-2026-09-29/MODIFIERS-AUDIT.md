@@ -4,6 +4,8 @@ Scope: everything a sizes-free product needs to carry add-on groups: setting gro
 (Catalog → Modifiers), putting them on products, and choosing them at the POS. Read from
 `main` at 1be225b. Findings come from the code; none were reproduced in a browser.
 
+**Status (2026-09-30):** items 1–7 of the plan are built in PR #181, with two changes taken from Toast (see Benchmarks).
+
 Label context: add-on groups, the add-ons page and combos are **V4** (PR #170). The demo
 menu carries no add-on groups on purpose (PR #87), so nobody meets this flow in the demo
 until they build a group by hand, and that is where it feels complicated.
@@ -84,64 +86,103 @@ The last four are fine where they are: they sit with the other availability and 
 tools. The problem is the first two: building a group and deciding where it's used belong
 together, and right now they're split across pages with no link back.
 
-## Target model (simpler, same data)
+## Benchmarks: Snappfood partner panel and Toast
 
-No schema change is needed; everything below uses the existing tables.
+Snappfood from the earlier parity work (ba32010) and its vendor API (topping groups,
+add-to-product); the live panel was not opened for this audit. Toast from its own docs:
+[modifier behavior](https://support.toasttab.com/en/article/Required-Optional-Modifiers),
+[modifier groups](https://doc.toasttab.com/doc/platformguide/adminAddingModifierGroupsAndModifiers.html),
+[menu hierarchy](https://doc.toasttab.com/doc/platformguide/adminMenuHierarchy.html).
+
+| | Snappfood partner panel | Toast | Gnext now (this PR) |
+|---|---|---|---|
+| Group editor | One sheet: title, min/max, items with name and price | One sheet, items entered in the table, drag to order | One sheet for create and edit ✓ |
+| Codes | None on screen | None | None; the server makes them ✓ |
+| Required | Min above 0 is required; no separate flag | Required or Optional; a minimum only on required groups; a maximum on both | Optional/Required + One/Several; required = min > 0 ✓ |
+| Default choice | No | Yes, added automatically when the item is rung up | Yes, a Default tick per add-on ✓ |
+| Hiding one add-on on one product | Yes, a switch per add-on | No, use another group | Kept ✓ |
+| Attaching to many products | Link groups to products | On a menu group: every item in it inherits, per-item opt-out; group page lists where it is used | On a category: every product in it, new ones too; products take it off one by one; "Used on" list ✓ |
+| Does the POS ask? | Not a POS | Per group: Required (must choose), Optional + force show (pops up, skippable), Optional (staff open it) | Per group: required always asks; optional has "Ask at POS", off by default for a new group ✓ |
+| Pricing | A price per add-on | No charge, a price per option, or one price for the group; No/Extra/On-side prefixes | A price per add-on only (not taken over) |
+
+Two Toast ideas changed the plan: **ask at the POS is set per group** (instead of one rule
+for every product), and **a group can sit on a category** and reach every product in it,
+new ones included. Toast's group pricing, pre-modifiers and size-based prices were left out;
+the "بدون" (without) group already covers "no onions".
+
+## Target model
 
 **One name.** "Add-on group" and "add-on" (FA گروه افزودنی / افزودنی). Sizes stay "Sizes".
 
 **One group sheet** used for both create and edit:
 - Name.
-- **Rule**, picked from presets instead of three fields: *Optional* · *Pick exactly 1*
-  (required) · *Up to N* · *Between N and M*. They map onto min/max, and required is always
-  `min > 0`, so C1 and C4 go away.
-- Items as rows: name, price (default 0), a **Default** tick, drag or ↑↓ to order, and
-  "Gives product" under a *Combo slot* toggle so it stays out of the way.
-- **Used on**: multi-select products, or "every product in category X". This is also where
-  the delete warning gets its list.
-- No codes on screen; the server generates them, as the edit path already does.
+- **Rule**: *Optional* or *Required*, then *One* or *Several* (with *at least* when required
+  and *at most*, blank = no limit). It maps onto min/max; required is always `min > 0`, so
+  C1 and C4 go away.
+- **Ask the cashier when the item is rung up**, for optional groups. Required groups always ask.
+- Add-ons as rows: name, price (default 0), a **Default** tick (a radio in a pick-one group),
+  ↑↓ to order, and "Menu item" under a *Combo slot* switch so it stays out of the way.
+- **Used on**: categories and products. A category gives the group to every product in it
+  and to products added later; the sheet lists the products that have it through a category.
+  Delete warns how many products it comes off.
+- No codes on screen.
 
-**Groups page as a table:** Name · Rule ("Pick 1, required") · Items · Price range ·
-Used on N products. A row opens the sheet.
+**Groups page as a table:** Group · Rule ("Required · pick 1") · Add-ons · Price ·
+Used on (N products, category chips) · Asks at POS. A row opens the sheet.
 
-**Product → Add-ons tab** stays for per-product work: order the groups, switch items off.
-Remove the tune icon on the Products list.
+**Product → Add-ons tab** for per-product work: ↑↓ to order the groups, switch add-ons off,
+the rule and "from category" shown on each group. The attach list hides groups already on.
+The tune icon on the Products list is gone.
 
 **POS dialog:**
-- Pick-one groups become a row of large choice buttons (radio style); pick-many groups
-  become toggle tiles with their price.
-- Required groups come first, marked, with the unfilled one highlighted.
-- The button shows the total: "Add · 245,000".
-- **Only open the dialog when it's needed** (a required group or several sizes).
-  Optional-only products ring straight through, as HAMI does. The cart line gets an
-  *Add-ons* button that opens the same dialog to add or change extras (fixes P3 and P4).
-  That lets the demo menu carry add-ons again without a prompt on every burger.
+- Sizes and add-ons are large choice buttons; a pick-one group behaves as a radio (a required
+  one can be changed, not cleared), a pick-many group as toggles, each with its price.
+- Required groups come first, with the rule chip turning green once filled.
+- The button shows the price as picked: "Add · 245,000 Toman".
+- The dialog opens only for several sizes, a required group, or a group set to ask. Otherwise
+  the item rings straight through, as HAMI does, with its default add-ons.
+- Every line with sizes or add-ons has an **Add-ons** button that opens the same dialog with
+  the line's choices ticked and updates the line in place.
 
-## Plan
+## Plan and status
 
-Ordered by dependency. Cost = my token spend; risk = chance of breaking something that
-works today.
+| # | Task | Fixes | Cost | Risk | Impact | Status |
+|---|---|---|---|---|---|---|
+| 1 | Required is `min > 0` everywhere; migration sets min 1 on groups marked required with min 0 | C1, C4 | Low | Low | **Bug** | Built |
+| 2 | New add-on price defaults to 0 | C6 | Low | Low | Med | Built |
+| 3 | One vocabulary in EN and FA, drop "(V5 Feature)", Variants → Sizes | C11 | Low–Med | Low | Med | Built |
+| 4 | One group sheet (create = edit): rule, ask at POS, add-on rows with default tick, combo-slot menu item, ordering, no codes | C2, C4, C5, C7, C8, C9 | Med | Low–Med | **High** | Built |
+| 5 | "Used on" in the sheet by product or category (category inheritance, as Toast); groups page as a table; group order on the product; drop the list's tune icon | C3, C10 | Med | Low–Med | **High** | Built |
+| 6 | POS dialog: choice buttons, required first, price on the button | P1, P2, P5 | Med | Med | High | Built |
+| 7 | Per-group "ask at POS" (Toast) instead of a global rule; ring through with defaults; *Add-ons* button on the cart line | P3, P4 | Med–High | Med | High | Built |
+| 8 | One shared add-on picker for POS and kiosk | P6 | Med | Med | Low while the kiosk is V3 | Not built |
 
-| # | Task | Fixes | Cost | Risk | Impact |
-|---|---|---|---|---|---|
-| 1 | Required is `min > 0` everywhere: drop the Required box from the create drawer; the server ignores `is_required` | C1, C4 (half) | Low | Low | **Bug** |
-| 2 | New add-on price defaults to 0 | C6 | Low | Low | Med |
-| 3 | One vocabulary in EN and FA, drop "(V5 Feature)", Variants → Sizes (same keys in both files) | C11 | Low–Med | Low | Med |
-| 4 | One group sheet (create = edit): rule presets, item rows with default tick, combo-slot product link, ordering, no codes | C2, C4, C5, C7, C8, C9 | Med | Low–Med | **High** |
-| 5 | "Used on" in the sheet with bulk add by product or category (one backend endpoint that sets a group's links, with the existing fillable check); groups page as a table with a used-on count; drop the list's tune icon | C3, C10 | Med | Low–Med | **High** |
-| — | **Recommended cut line** — setup is then one sheet on one page | | | | |
-| 6 | POS dialog: choice buttons for pick-one, tiles for pick-many, required first, total on the button | P1, P2, P5 | Med | Med (`order.tsx` is 3,271 lines; keyboard and held-order paths) | High |
-| 7 | Ring optional-only products straight through; *Add-ons* button on the cart line to edit a line | P3, P4 | Med–High | Med (cart merge key, held-order reload, kiosk parity) | High — a product decision |
-| 8 | One shared add-on picker for POS and kiosk | P6 | Med | Med | Low while the kiosk is V3 |
+## What was built
 
-Items 1–3 are cheap. Items 4 and 5 carry most of the cost and most of the gain. Item 7
-changes the "the POS asks nothing" behaviour from PR #87, so it needs your call first.
+Backend (`catalog.service.ts`, migration 084 `AddonGroupSetup`):
+- `selectionRule()`: min/max checked in one place; max 0 = no limit; required = min > 0.
+  Migration 084 gives groups marked required with min 0 a min of 1 and recomputes the flag.
+- `option_group.prompt_at_pos` (existing groups keep asking; the sheet defaults a new
+  optional group to off).
+- `category_option_group` and `product_option_group.from_category_id`: a category's groups are
+  copied onto its products as links that remember the category. A new product, or one moved
+  into the category, gets them; one moved out loses them; taking the category off removes
+  those links and leaves direct ones. Readers of product links (orders, kiosk, agent snapshot)
+  are unchanged.
+- `POST /option-groups` with `items` creates a group in one save; `PUT /option-groups/:id`
+  also takes `prompt_at_pos`, `is_default` and `product_id` per item;
+  `PUT /option-groups/:id/links` sets products and categories;
+  `PUT /products/:id/option-groups/order` orders a product's groups; codes are optional.
+- Tests: `test/addon-group-setup-postgres.spec.ts`.
 
-## Questions for you
+Frontend: `pages/catalog/options.tsx` (table), `pages/catalog/addon-group-sheet.tsx` (sheet,
+replaces `option-group-edit-dialog.tsx`), `pages/catalog/product-detail.tsx`,
+`pages/catalog/products.tsx`, `pages/pos/order.tsx`, `utils/addon-rule.ts`, EN/FA strings.
 
-1. **Build or specify?** Add-ons are V4, and the prototype feeds the scope docs rather than
-   production. Should the fixes go into the prototype so the V4 behaviour can be shown, or
-   should this target model go into the V4 scope doc as the spec?
-2. **Ring-through with optional add-ons (item 7).** Is "tap adds the burger at once, tap the
-   line to add extras" acceptable next to HAMI's behaviour? If yes, the demo menu could carry
-   its add-ons again.
+Left as they were:
+- **Kiosk** (V3) keeps its own dialog and always shows add-on groups, as a guest-facing screen should.
+- **Tills running through the local agent** get the menu from the agent's snapshot, which
+  carries neither "ask at POS" nor default add-ons, so they keep asking for every group and
+  start with nothing ticked. Changing that needs an agent release.
+- The demo menu still has no add-on groups (PR #87). Whether to seed them back is the next decision.
+- The flow was not checked in a browser; typecheck, lint, build and the backend suite pass.

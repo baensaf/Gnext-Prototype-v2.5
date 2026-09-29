@@ -83,10 +83,28 @@ export interface OptionGroup {
   name: string;
   min_selection: number;
   max_selection: number;
+  /** Always `min_selection > 0`. */
   is_required: boolean;
+  /** An optional group opens the POS choices dialog when the item is rung up; required ones always do. */
+  prompt_at_pos?: boolean;
   items?: OptionItem[];
   /** On a product's own groups: the items this product leaves out. */
   excluded_item_ids?: string[];
+  /** On a product's own groups: the category the group came from, or null when put on the product. */
+  from_category_id?: string | null;
+  /** On the add-ons list: the products that carry the group, and the categories it is on. */
+  product_links?: { product_id: string; from_category_id: string | null }[];
+  category_ids?: string[];
+}
+
+/** What the add-on group sheet saves: the group, its items and the items it drops. */
+export interface OptionGroupDraft {
+  name: string;
+  min_selection: number;
+  max_selection: number;
+  prompt_at_pos: boolean;
+  items: { id?: string; name: string; price_delta: string; sort_order: number; is_default: boolean; product_id: string | null }[];
+  removed_item_ids: string[];
 }
 
 /** A branch price list. Branches on it sell at its prices, everything else at base. */
@@ -332,9 +350,13 @@ export const catalogApi = {
   archiveProduct: async (id: string): Promise<void> => {
     await httpClient.delete(`/api/v1/products/${id}`);
   },
-  attachOptionGroup: async (id: string, optionGroupId: string, sortOrder: number = 0): Promise<any> => {
+  /** Without a position the group goes after the product's others. */
+  attachOptionGroup: async (id: string, optionGroupId: string, sortOrder?: number): Promise<any> => {
     const res = await httpClient.post(`/api/v1/products/${id}/option-groups`, { optionGroupId, sortOrder });
     return res.data;
+  },
+  reorderProductOptionGroups: async (id: string, groupIds: string[]): Promise<void> => {
+    await httpClient.put(`/api/v1/products/${id}/option-groups/order`, { groupIds });
   },
 
   // Product Variants
@@ -370,19 +392,14 @@ export const catalogApi = {
     const res = await httpClient.patch(`/api/v1/option-groups/${id}`, data);
     return res.data;
   },
-  /** The group editor's Save: rules, items and removals in one transaction. */
-  saveOptionGroup: async (
-    id: string,
-    data: {
-      name: string;
-      min_selection: number;
-      max_selection: number;
-      items: { id?: string; name: string; price_delta: string; sort_order: number }[];
-      removed_item_ids: string[];
-    }
-  ): Promise<OptionGroup> => {
-    const res = await httpClient.put(`/api/v1/option-groups/${id}`, data);
+  /** The group sheet's Save: rules, items and removals in one transaction. No id creates the group. */
+  saveOptionGroup: async (id: string | null, data: OptionGroupDraft): Promise<OptionGroup> => {
+    const res = id ? await httpClient.put(`/api/v1/option-groups/${id}`, data) : await httpClient.post('/api/v1/option-groups', data);
     return res.data;
+  },
+  /** Where a group is used: products it is put on directly, and categories that pass it on. */
+  setOptionGroupLinks: async (id: string, data: { product_ids: string[]; category_ids: string[] }): Promise<void> => {
+    await httpClient.put(`/api/v1/option-groups/${id}/links`, data);
   },
   deleteOptionGroup: async (id: string): Promise<void> => {
     await httpClient.delete(`/api/v1/option-groups/${id}`);

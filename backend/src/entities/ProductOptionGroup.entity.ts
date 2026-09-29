@@ -21,6 +21,10 @@ export class ProductOptionGroup {
   @Column({ type: 'jsonb', default: () => "'[]'" })
   excluded_item_ids: string[];
 
+  /** The category this link came from (the group is on the category); null when put on the product itself. */
+  @Column({ type: 'uuid', nullable: true })
+  from_category_id: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 }

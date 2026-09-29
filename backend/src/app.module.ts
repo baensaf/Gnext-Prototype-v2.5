@@ -93,6 +93,7 @@ import { ProductVariant } from './entities/ProductVariant.entity';
 import { OptionGroup } from './entities/OptionGroup.entity';
 import { OptionItem } from './entities/OptionItem.entity';
 import { ProductOptionGroup } from './entities/ProductOptionGroup.entity';
+import { CategoryOptionGroup } from './entities/CategoryOptionGroup.entity';
 import { PriceGroup } from './entities/PriceGroup.entity';
 import { PriceEntry } from './entities/PriceEntry.entity';
 import { PriceGroupBranch } from './entities/PriceGroupBranch.entity';
@@ -173,7 +174,7 @@ import { ReportExportJob } from './entities/ReportExportJob.entity';
           Branch, BranchOperatingHour, Terminal, TenantSetting,
           Currency, PaymentMethod, ReasonCode,
           FileAsset, LocalizedString,
-          Category, Product, ProductVariant, OptionGroup, OptionItem, ProductOptionGroup, PriceGroup,
+          Category, Product, ProductVariant, OptionGroup, OptionItem, ProductOptionGroup, CategoryOptionGroup, PriceGroup,
           PriceEntry, PriceGroupBranch, PriceBulkJob,
           Menu, MenuCategory, MenuProduct, ProductAvailability, AvailabilitySchedule,
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,

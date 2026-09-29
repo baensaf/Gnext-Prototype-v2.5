@@ -48,7 +48,8 @@ describe('CatalogService (Unit)', () => {
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       softRemove: jest.fn().mockResolvedValue(true),
     };
-    prodGroupRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
+    // manager: the category add-on lookup a new product makes (none here).
+    prodGroupRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn(), create: jest.fn(), save: jest.fn(), manager: { find: jest.fn().mockResolvedValue([]) } };
     priceItemRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
     menuRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), softRemove: jest.fn() };
     menuCatRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };

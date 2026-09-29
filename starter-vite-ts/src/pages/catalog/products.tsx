@@ -1,4 +1,4 @@
-import type { Product, Category, OptionGroup } from 'src/api/catalogApi';
+import type { Product, Category } from 'src/api/catalogApi';
 
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -6,7 +6,6 @@ import React, { useMemo, useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
-import TuneIcon from '@mui/icons-material/Tune';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SearchIcon from '@mui/icons-material/Search';
 import FastfoodIcon from '@mui/icons-material/Fastfood';
@@ -24,7 +23,6 @@ import {
   Button,
   Drawer,
   Select,
-  Dialog,
   TableRow,
   MenuItem,
   TableBody,
@@ -36,9 +34,6 @@ import {
   InputLabel,
   CardContent,
   FormControl,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TableContainer,
   InputAdornment,
 } from '@mui/material';
@@ -83,7 +78,6 @@ export function ProductsPage() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [allOptionGroups, setAllOptionGroups] = useState<OptionGroup[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ON' | 'OFF'>('ALL');
@@ -102,11 +96,6 @@ export function ProductsPage() {
   const [description, setDescription] = useState('');
   const [imageAssetId, setImageAssetId] = useState<string | undefined>(undefined);
 
-  // Attach Option Group Dialog
-  const [attachDialogOpen, setAttachDialogOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [selectedOptionGroupId, setSelectedOptionGroupId] = useState('');
-
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -114,8 +103,6 @@ export function ProductsPage() {
       setCategories(cList);
       const pList = await catalogApi.getProducts(selectedCategoryId || undefined);
       setProducts(pList);
-      const ogList = await catalogApi.getOptionGroups();
-      setAllOptionGroups(ogList);
       setError(null);
     } catch (err: any) {
       setError(err.detail || t('catalog.productsPage.errors.loadFailed'));
@@ -184,24 +171,6 @@ export function ProductsPage() {
       } catch (err: any) {
         setError(err.detail || t('catalog.productsPage.errors.archiveFailed'));
       }
-    }
-  };
-
-  const handleOpenAttachDialog = (prod: Product) => {
-    setSelectedProduct(prod);
-    setAttachDialogOpen(true);
-  };
-
-  const handleAttachOptionGroup = async () => {
-    if (!selectedProduct || !selectedOptionGroupId) return;
-    try {
-      await catalogApi.attachOptionGroup(selectedProduct.id, selectedOptionGroupId);
-      setAttachDialogOpen(false);
-      setSelectedProduct(null);
-      setSelectedOptionGroupId('');
-      loadData();
-    } catch (err: any) {
-      setError(err.detail || t('catalog.productsPage.errors.attachFailed'));
     }
   };
 
@@ -369,22 +338,13 @@ export function ProductsPage() {
                           {canAuthor ? <EditIcon /> : <VisibilityIcon />}
                         </IconButton>
                         {canAuthor && (
-                          <>
-                            <IconButton
-                              title={t('catalog.productsPage.attachModifier')}
-                              color="info"
-                              onClick={() => handleOpenAttachDialog(p)}
-                            >
-                              <TuneIcon />
-                            </IconButton>
-                            <IconButton
+                          <IconButton
                               title={t('catalog.productsPage.archive')}
                               color="error"
                               onClick={() => handleArchive(p.id, p.name)}
                             >
                               <DeleteIcon />
                             </IconButton>
-                          </>
                         )}
                       </TableCell>
                     </TableRow>
@@ -508,35 +468,6 @@ export function ProductsPage() {
           </form>
         </Box>
       </Drawer>
-
-      {/* Attach Option Group Dialog */}
-      <Dialog open={attachDialogOpen} onClose={() => setAttachDialogOpen(false)}>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>
-          {t('catalog.productsPage.attachModalTitle', { name: selectedProduct?.name })} <VersionTag feature="catalog.addonGroups" />
-        </DialogTitle>
-        <DialogContent sx={{ minWidth: 360, pt: 2 }}>
-          <FormControl fullWidth sx={{ mt: 1 }}>
-            <InputLabel>{t('catalog.productsPage.selectOptionGroup')}</InputLabel>
-            <Select
-              value={selectedOptionGroupId}
-              label={t('catalog.productsPage.selectOptionGroup')}
-              onChange={(e) => setSelectedOptionGroupId(e.target.value)}
-            >
-              {allOptionGroups.map((og) => (
-                <MenuItem key={og.id} value={og.id}>
-                  {og.name} ({og.code})
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAttachDialogOpen(false)}>{t('catalog.productsPage.cancel')}</Button>
-          <Button variant="contained" onClick={handleAttachOptionGroup} sx={{ fontWeight: 'bold' }}>
-            {t('catalog.productsPage.submitAttach')}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }
