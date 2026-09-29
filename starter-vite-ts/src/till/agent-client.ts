@@ -119,7 +119,7 @@ export type MenuProduct = {
 };
 
 export type Menu = {
-  categories: { id: string; parent_id: string | null; name: string }[];
+  categories: { id: string; name: string }[];
   products: MenuProduct[];
   tables: { id: string; area: string | null; number: string; seats: number | null }[];
   payment_methods: { id: string; code: string; name: string; kind: string }[];

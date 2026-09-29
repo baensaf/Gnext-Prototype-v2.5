@@ -14,9 +14,6 @@ export class Category {
   @Column({ type: 'varchar', length: 160 })
   name: string;
 
-  @Column({ type: 'uuid', nullable: true })
-  parent_id: string;
-
   @Column({ type: 'integer', default: 0 })
   sort_order: number;
 

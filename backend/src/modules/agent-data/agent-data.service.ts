@@ -23,7 +23,6 @@ import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import { CALENDAR_SETTING_KEY, readCalendar } from '../../common/utils/calendar.util';
-import { inTreeOrder } from '../../common/utils/category-tree.util';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { parseDays } from '../../common/utils/availability-schedule.util';
 import { inStorePrice } from '../../common/utils/price-list.util';
@@ -308,7 +307,7 @@ export class AgentDataService {
           ends_at: new Date(clock.endOf(businessDate).getTime() + 1).toISOString(),
         },
       },
-      categories: inTreeOrder(categories).map((c) => ({ id: c.id, parent_id: c.parent_id ?? null, name: c.name, sort_order: c.sort_order ?? 0 })),
+      categories: categories.map((c) => ({ id: c.id, name: c.name, sort_order: c.sort_order ?? 0 })),
       products: catalogProducts,
       availability: {
         stopped: liveStops,

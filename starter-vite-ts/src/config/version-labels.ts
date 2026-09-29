@@ -37,6 +37,11 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/delivery': 'V1',
   '/app/delivery/rollup': 'V4',
   '/app/moadian': 'F',
+  // Categories, products, availability, today's stock and the product and category import
+  '/app/catalog': 'V1',
+  // Add-on groups, and the combos built from them
+  '/app/catalog/modifiers': 'V4',
+  '/app/catalog/availability/report': 'V4',
 };
 
 /** Features that ship later than the page they sit on. */
@@ -82,6 +87,19 @@ export const FEATURE_LABELS = {
   // Kitchen screen settings; the stations and routing rules also drive the printers.
   'kds.screens': 'F',
   'kds.targetMinutes': 'F',
+  // Catalog. A V1 product is one item at one price, in a category.
+  'catalog.sizes': 'V4',
+  'catalog.addonGroups': 'V4',
+  'catalog.combo': 'V4',
+  'catalog.packagingPrice': 'V4',
+  'catalog.maxPerOrder': 'V4',
+  'catalog.priceHistory': 'V4',
+  // Availability: a V1 stop is available, until the next shift, until further notice, or for set hours.
+  'catalog.snappfoodStop': 'V3',
+  'catalog.stopReason': 'F',
+  'catalog.stopBranches': 'V4',
+  'catalog.sellingWindows': 'V2',
+  'import.customers': 'F',
   // Moadian e-invoices on an order
   moadian: 'F',
 } satisfies Record<string, PhaseLabel>;

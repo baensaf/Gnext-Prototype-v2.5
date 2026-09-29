@@ -2926,6 +2926,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                   {t('pos.options.variant')}
                 </Typography>
+                <VersionTag feature="catalog.sizes" />
               </Stack>
               <RadioGroup
                 value={selectedVariantId}
@@ -2978,6 +2979,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
                   {t('pos.options.addOns')}
                 </Typography>
+                <VersionTag feature="catalog.addonGroups" />
               </Stack>
               {optionGroups.map((g) => (
                 <Box key={g.id} sx={{ mb: 2 }}>

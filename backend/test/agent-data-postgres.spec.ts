@@ -181,7 +181,7 @@ describe('agent branch snapshot (PostgreSQL)', () => {
     expect(res.headers['cache-control']).toBe('no-store');
     expect(body.data_version).toMatch(/^[0-9a-f]{32}$/);
     expect(body.branch).toMatchObject({ id: branchId, code: 'ADT', currency_code: 'IRR', time_zone: 'Asia/Tehran' });
-    expect(body.categories).toEqual([{ id: ids.category, parent_id: null, name: 'برگر', sort_order: 1 }]);
+    expect(body.categories).toEqual([{ id: ids.category, name: 'برگر', sort_order: 1 }]);
 
     expect(body.products.map((p: any) => p.code).sort()).toEqual(['B01', 'F01']);
     const burger = body.products.find((p: any) => p.id === ids.burger);

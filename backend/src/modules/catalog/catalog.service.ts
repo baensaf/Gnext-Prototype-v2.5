@@ -27,7 +27,6 @@ import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { CHANNEL_PRICING_KEY, applyChannelRule, readChannelRule } from '../../common/utils/channel-price.util';
 import { inStorePrice } from '../../common/utils/price-list.util';
-import { inTreeOrder } from '../../common/utils/category-tree.util';
 
 /** What besides a whole product a stop can be on, and how long it lasts. */
 export interface StopTarget {
@@ -48,7 +47,7 @@ export const STOP_CHANNELS = ['SNAPPFOOD'];
 /** Refusals that are a lost sale: the item was off (86'd, outside its hours or sold out). */
 export const REFUSED_SALE_CODES = ['PRODUCT_SUSPENDED', 'PRODUCT_OUT_OF_SCHEDULE', 'PRODUCT_OUT_OF_STOCK'];
 
-/** Which items a bulk stop is on: a category (with its sub-categories), or a list of products. */
+/** Which items a bulk stop is on: a category, or a list of products. */
 export interface BulkStopTargets {
   categoryId?: string | null;
   productIds?: string[] | null;
@@ -83,10 +82,7 @@ export class CatalogService {
   ) {}
 
   // Categories
-  /**
-   * The unpaged list is what menus read: tree order (each category followed by its
-   * sub-categories), each with how many products it holds.
-   */
+  /** The unpaged list is what menus read: in menu order, each with how many products it holds. */
   async getCategories(tenantId: string, query?: PaginationQueryDto & { search?: string }): Promise<PagedResponse<Category> | Category[]> {
     if (!query || (!query.page && !query.limit && !query.search)) {
       const rows = await this.catRepo.find({ where: { tenant_id: tenantId }, order: { sort_order: 'ASC', code: 'ASC' } });
@@ -98,7 +94,7 @@ export class CatalogService {
         .groupBy('p.category_id')
         .getRawMany();
       const countOf = new Map(counts.map((c) => [c.category_id, Number(c.n)]));
-      return inTreeOrder(rows).map((c) => Object.assign(c, { product_count: countOf.get(c.id) || 0 }));
+      return rows.map((c) => Object.assign(c, { product_count: countOf.get(c.id) || 0 }));
     }
 
     const page = query.page || 1;
@@ -117,43 +113,24 @@ export class CatalogService {
     return createPagedResponse(items, total, page, limit);
   }
 
-  /**
-   * Where a category may sit. Categories nest one level, so the parent must be a top-level
-   * category, and a category that holds sub-categories cannot itself go under another.
-   */
-  private async checkParent(tenantId: string, parentId: string | null, selfId?: string) {
-    if (!parentId) return;
-    const refuse = (code: string, message: string) => new BadRequestException({ statusCode: 400, code, message });
-    if (parentId === selfId) throw refuse('CATEGORY_PARENT_INVALID', 'A category cannot sit under itself');
-    const parent = await this.catRepo.findOne({ where: { id: parentId, tenant_id: tenantId } });
-    if (!parent) throw new NotFoundException('Parent category not found');
-    if (parent.parent_id) throw refuse('CATEGORY_TOO_DEEP', `${parent.name} is itself a sub-category; categories nest one level`);
-    if (selfId && (await this.catRepo.count({ where: { tenant_id: tenantId, parent_id: selfId } })) > 0) {
-      throw refuse('CATEGORY_HAS_SUBCATEGORIES', 'A category with sub-categories cannot go under another');
-    }
+  /** The next place at the end of the menu. Categories don't nest: a menu has categories and nothing under them. */
+  private async nextSortOrder(tenantId: string) {
+    const all = await this.catRepo.find({ where: { tenant_id: tenantId } });
+    return all.reduce((max, c) => Math.max(max, c.sort_order || 0), 0) + 1;
   }
 
-  /** The next place at the end of a category's siblings. */
-  private async nextSortOrder(tenantId: string, parentId: string | null) {
-    const siblings = await this.catRepo.find({ where: { tenant_id: tenantId, parent_id: parentId || IsNull() } });
-    return siblings.reduce((max, c) => Math.max(max, c.sort_order || 0), 0) + 1;
-  }
-
-  async createCategory(tenantId: string, data: { code: string; name: string; parent_id?: string; sort_order?: number; image_asset_id?: string }, correlationId: string) {
+  async createCategory(tenantId: string, data: { code: string; name: string; sort_order?: number; image_asset_id?: string }, correlationId: string) {
     const code = (data.code || '').trim().toUpperCase();
     const name = (data.name || '').trim();
     if (!code || !name) throw new BadRequestException('A category needs a code and a name');
     const existing = await this.catRepo.findOne({ where: { tenant_id: tenantId, code }, withDeleted: true });
     if (existing) throw new ConflictException(`Category code ${code} already exists`);
-    const parentId = data.parent_id || null;
-    await this.checkParent(tenantId, parentId);
 
     const cat = this.catRepo.create({
       tenant_id: tenantId,
       code,
       name,
-      parent_id: parentId,
-      sort_order: data.sort_order ?? (await this.nextSortOrder(tenantId, parentId)),
+      sort_order: data.sort_order ?? (await this.nextSortOrder(tenantId)),
       image_asset_id: data.image_asset_id || null,
       is_active: true,
     });
@@ -173,7 +150,7 @@ export class CatalogService {
     return saved;
   }
 
-  /** Rename a category or move it under another (or back to the top). Its code stays: other records refer to it. */
+  /** Rename a category. Its code stays: other records refer to it. */
   async updateCategory(tenantId: string, id: string, data: Partial<Category>, correlationId: string) {
     const cat = await this.catRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!cat) throw new NotFoundException('Category not found');
@@ -184,12 +161,7 @@ export class CatalogService {
       if (!name) throw new BadRequestException('A category needs a name');
       cat.name = name;
     }
-    if (data.parent_id !== undefined && (data.parent_id || null) !== (cat.parent_id || null)) {
-      const parentId = data.parent_id || null;
-      await this.checkParent(tenantId, parentId, id);
-      cat.parent_id = parentId as string;
-      cat.sort_order = await this.nextSortOrder(tenantId, parentId);
-    } else if (data.sort_order !== undefined) {
+    if (data.sort_order !== undefined) {
       cat.sort_order = Number(data.sort_order) || 0;
     }
     if (data.image_asset_id !== undefined) cat.image_asset_id = (data.image_asset_id || null) as string;
@@ -210,15 +182,12 @@ export class CatalogService {
     return saved;
   }
 
-  /** Put sibling categories (all top level, or all under one parent) in the order given. */
+  /** Put categories in the order given. */
   async reorderCategories(tenantId: string, ids: string[], correlationId: string) {
     const unique = [...new Set(ids || [])];
     if (!unique.length) throw new BadRequestException('No categories to order');
     const rows = await this.catRepo.find({ where: { tenant_id: tenantId, id: In(unique) } });
     if (rows.length !== unique.length) throw new NotFoundException('Category not found');
-    if (new Set(rows.map((r) => r.parent_id || '')).size > 1) {
-      throw new BadRequestException({ statusCode: 400, code: 'CATEGORY_NOT_SIBLINGS', message: 'Only categories under the same parent can be ordered together' });
-    }
     await this.catRepo.manager.transaction(async (em) => {
       for (const [index, id] of unique.entries()) {
         await em.update(Category, { id, tenant_id: tenantId }, { sort_order: index + 1 });
@@ -231,15 +200,12 @@ export class CatalogService {
   /**
    * Archive a category. One that still holds products is refused unless they move to another
    * category in the same step (audit C12: they used to lose their POS tab but stay orderable
-   * elsewhere). One with sub-categories is refused until those move or go.
+   * elsewhere).
    */
   async archiveCategory(tenantId: string, id: string, correlationId: string, moveTo?: string) {
     const cat = await this.catRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!cat) throw new NotFoundException('Category not found');
     const refuse = (code: string, message: string, count: number) => new BadRequestException({ statusCode: 400, code, message, count });
-
-    const children = await this.catRepo.count({ where: { tenant_id: tenantId, parent_id: id } });
-    if (children) throw refuse('CATEGORY_HAS_SUBCATEGORIES', `${cat.name} has ${children} sub-categories; move or archive them first`, children);
 
     const products = await this.prodRepo.count({ where: { tenant_id: tenantId, category_id: id } });
     let target: Category | null = null;
@@ -1055,14 +1021,13 @@ export class CatalogService {
     return { success: true };
   }
 
-  /** The products a bulk stop covers: a category's (and its sub-categories'), or the ones named. */
+  /** The products a bulk stop covers: a category's, or the ones named. */
   private async bulkProducts(tenantId: string, targets: BulkStopTargets) {
     let products: Product[];
     if (targets.categoryId) {
       const category = await this.catRepo.findOne({ where: { id: targets.categoryId, tenant_id: tenantId } });
       if (!category) throw new NotFoundException('Category not found');
-      const children = await this.catRepo.find({ where: { tenant_id: tenantId, parent_id: category.id } });
-      products = await this.prodRepo.find({ where: { tenant_id: tenantId, is_active: true, category_id: In([category.id, ...children.map((c) => c.id)]) } });
+      products = await this.prodRepo.find({ where: { tenant_id: tenantId, is_active: true, category_id: category.id } });
     } else {
       const ids = [...new Set(targets.productIds || [])];
       products = ids.length ? await this.prodRepo.find({ where: { tenant_id: tenantId, id: In(ids) } }) : [];

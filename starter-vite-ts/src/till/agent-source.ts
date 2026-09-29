@@ -287,7 +287,6 @@ export const agentPosSource: PosSource = {
         id: c.id,
         code: '',
         name: c.name,
-        parent_id: c.parent_id,
         sort_order: i,
         is_active: true,
       })),

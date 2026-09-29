@@ -48,12 +48,11 @@ describe('Bulk 86 and the stop report (PostgreSQL)', () => {
     branchA = (await save(Branch, { tenant_id: tenantId, code: 'B86A', name: 'Alpha', is_active: true, time_zone: 'Asia/Tehran' })).id;
     branchB = (await save(Branch, { tenant_id: tenantId, code: 'B86B', name: 'Beta', is_active: true, time_zone: 'Asia/Tehran' })).id;
     grill = (await save(Category, { tenant_id: tenantId, code: 'B86-GRILL', name: 'Grill', is_active: true })).id;
-    const skewers = (await save(Category, { tenant_id: tenantId, code: 'B86-SKEWERS', name: 'Skewers', parent_id: grill, is_active: true })).id;
     const drinks = (await save(Category, { tenant_id: tenantId, code: 'B86-DRINKS', name: 'Drinks', is_active: true })).id;
     const product = async (code: string, categoryId: string, price: string) =>
       (await save(Product, { tenant_id: tenantId, category_id: categoryId, code, name: code, base_price: price, tax_rate: '0.0000', is_active: true })).id;
     burger = await product('BURGER', grill, '200000.0000');
-    kebab = await product('KEBAB', skewers, '300000.0000');
+    kebab = await product('KEBAB', grill, '300000.0000');
     soda = await product('SODA', drinks, '30000.0000');
     const password = await argon2.hash('x');
     managerId = (await save(AdminUser, { tenant_id: tenantId, username: `b86-mgr-${Date.now()}`, display_name: 'Mina Manager', password_hash: password, role: 'MANAGER', branch_id: branchA, is_active: true })).id;

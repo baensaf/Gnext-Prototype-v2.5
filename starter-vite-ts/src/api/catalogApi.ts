@@ -17,8 +17,6 @@ export interface Category {
   id: string;
   code: string;
   name: string;
-  /** A sub-category's parent; categories nest one level. */
-  parent_id?: string | null;
   sort_order: number;
   is_active: boolean;
   image_asset_id?: string;
@@ -173,7 +171,7 @@ export interface PriceHistoryRow {
   status: 'UPCOMING' | 'CURRENT' | 'ENDED' | null;
 }
 
-/** A stop on many items or branches: a category (with sub-categories) or products; branches empty = chain-wide (head office). */
+/** A stop on many items or branches: a category or products; branches empty = chain-wide (head office). */
 export interface BulkStopRequest {
   categoryId?: string;
   productIds?: string[];

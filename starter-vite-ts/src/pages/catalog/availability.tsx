@@ -55,6 +55,8 @@ import { useCurrencyCode } from 'src/utils/currency';
 import { catalogApi } from 'src/api/catalogApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 
+import { VersionTag } from 'src/components/version-tag';
+
 import { BulkStopDialog } from './bulk-stop-dialog';
 import { AvailabilitySchedulesSection } from './availability-schedules';
 
@@ -446,7 +448,7 @@ export function AvailabilityPage() {
       {optionGroups.some((g) => (g.items || []).length > 0) && (
         <Box sx={{ mt: 4 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-            {t('catalog.availabilityPage.addonsTitle', 'Add-ons')}
+            {t('catalog.availabilityPage.addonsTitle', 'Add-ons')} <VersionTag feature="catalog.addonGroups" />
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {t(
@@ -510,7 +512,9 @@ export function AvailabilityPage() {
                 onChange={(_, next) => next !== null && showStop(target, next)}
               >
                 <ToggleButton value="">{t('catalog.availabilityPage.whereEverywhere')}</ToggleButton>
-                <ToggleButton value="SNAPPFOOD">{t('catalog.availabilityPage.whereSnappfood')}</ToggleButton>
+                <ToggleButton value="SNAPPFOOD">
+                  {t('catalog.availabilityPage.whereSnappfood')} <VersionTag feature="catalog.snappfoodStop" sx={{ ml: 1 }} />
+                </ToggleButton>
               </ToggleButtonGroup>
             )}
             {channel === 'SNAPPFOOD' && (
@@ -586,6 +590,7 @@ export function AvailabilityPage() {
                 label={t('catalog.availabilityPage.reasonLabel')}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
+                helperText={<VersionTag feature="catalog.stopReason" />}
                 fullWidth
               />
             )}
