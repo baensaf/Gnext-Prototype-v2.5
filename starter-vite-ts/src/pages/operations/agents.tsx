@@ -47,6 +47,7 @@ import { tenantApi } from 'src/api/tenantApi';
 import { agentsApi } from 'src/api/agentsApi';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 
+import { VersionTag } from 'src/components/version-tag';
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
@@ -341,6 +342,7 @@ export function AgentsPage() {
                                 />
                               </Tooltip>
                             )}
+                            {a.offline_ready && <VersionTag feature="agents.offlineReady" />}
                           </Stack>
                         ) : (
                           <Chip size="small" color="warning" label={t('operations.agents.statusOffline', 'Offline')} />

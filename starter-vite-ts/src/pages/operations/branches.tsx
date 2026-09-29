@@ -35,6 +35,7 @@ import {
 
 import { tenantApi } from 'src/api/tenantApi';
 
+import { VersionTag } from 'src/components/version-tag';
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
@@ -331,6 +332,7 @@ export function BranchesPage() {
                 {(['RESTAURANT', 'COMMISSARY', 'OFFICE'] as BranchType[]).map((value) => (
                   <MenuItem key={value} value={value}>
                     {branchTypeLabels[value]}
+                    {value !== 'RESTAURANT' && <VersionTag feature="branches.nonSellingTypes" sx={{ ml: 1 }} />}
                   </MenuItem>
                 ))}
               </TextField>

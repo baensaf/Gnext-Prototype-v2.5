@@ -33,6 +33,11 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/refunds': 'V2',
   '/app/payments': 'V1',
   '/app/operations/card-terminals': 'V1',
+  // Branches, tills, kitchen stations and routing, printers, the print queue, branch agents
+  '/app/operations': 'V1',
+  // Chain-wide health and alerts for head office
+  '/app/operations/monitoring': 'V4',
+  '/app/kiosk': 'V3',
   // Full delivery is V1; head office's fleet roll-up is not.
   '/app/delivery': 'V1',
   '/app/delivery/rollup': 'V4',
@@ -124,6 +129,16 @@ export const FEATURE_LABELS = {
   'customers.audit': 'F',
   'credit.aging': 'V4',
   'coupons.testBench': 'F',
+  // Operations
+  'branches.nonSellingTypes': 'F',
+  'terminals.kiosk': 'V3',
+  'terminals.kds': 'F',
+  'printers.serial': 'F',
+  'printers.simulated': 'F',
+  'printers.label': 'F',
+  'printers.fallback': 'F',
+  'printQueue.simulate': 'F',
+  'agents.offlineReady': 'F',
   // Moadian e-invoices on an order
   moadian: 'F',
 } satisfies Record<string, PhaseLabel>;

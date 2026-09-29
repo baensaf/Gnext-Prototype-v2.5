@@ -39,6 +39,7 @@ import { tenantApi } from 'src/api/tenantApi';
 import { paymentApi } from 'src/api/paymentApi';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 
+import { VersionTag } from 'src/components/version-tag';
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
@@ -414,8 +415,8 @@ export function TerminalsPage() {
                   onChange={(e) => setTerminalType(e.target.value as any)}
                 >
                   <MenuItem value="CASHIER">{t('operations.terminals.types.POS', 'CASHIER (POS Touch)')}</MenuItem>
-                  <MenuItem value="KIOSK">{t('operations.terminals.types.KIOSK', 'KIOSK (Self-Service)')}</MenuItem>
-                  <MenuItem value="KDS">{t('operations.terminals.types.KDS', 'KDS (Kitchen Display)')}</MenuItem>
+                  <MenuItem value="KIOSK">{t('operations.terminals.types.KIOSK', 'KIOSK (Self-Service)')} <VersionTag feature="terminals.kiosk" sx={{ ml: 1 }} /></MenuItem>
+                  <MenuItem value="KDS">{t('operations.terminals.types.KDS', 'KDS (Kitchen Display)')} <VersionTag feature="terminals.kds" sx={{ ml: 1 }} /></MenuItem>
                 </Select>
               </FormControl>
 
