@@ -158,6 +158,8 @@ export const FEATURE_LABELS = {
   'settings.requireTable': 'V2',
   'settings.incomingOrders': 'V3',
   'settings.refundMethods': 'V2',
+  // Kiosk (V3): sizes and add-ons follow the catalog (V4).
+  'kiosk.simulatedTerminal': 'F',
   // Moadian e-invoices on an order
   moadian: 'F',
 } satisfies Record<string, PhaseLabel>;
