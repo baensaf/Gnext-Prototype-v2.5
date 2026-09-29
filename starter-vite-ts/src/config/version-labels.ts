@@ -120,6 +120,10 @@ export const FEATURE_LABELS = {
   // Kitchen screen settings; the stations and routing rules also drive the printers.
   'kds.screens': 'F',
   'kds.targetMinutes': 'F',
+  // V1 print routing (2026-09-30): each station has one printer, each category goes to one
+  // station, one chit layout, one copy.
+  'routing.productRule': 'F',
+  'routing.printerOptions': 'F',
   // Catalog. A V1 product is one item at one price, in a category.
   'catalog.sizes': 'V4',
   'catalog.addonGroups': 'V4',

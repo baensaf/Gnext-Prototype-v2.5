@@ -440,7 +440,10 @@ export function KdsConfigurationPage() {
                       <TableRow key={rl.id}>
                         <TableCell>
                           {rl.product_id && (
-                            <Chip label={t('operations.kds.ruleProduct', { name: prod ? prod.name : rl.product_id })} color="success" size="small" />
+                            <>
+                              <Chip label={t('operations.kds.ruleProduct', { name: prod ? prod.name : rl.product_id })} color="success" size="small" />{' '}
+                              <VersionTag feature="routing.productRule" />
+                            </>
                           )}
                           {rl.category_id && (
                             <Chip label={t('operations.kds.ruleCategory', { name: cat ? cat.name : rl.category_id })} color="info" size="small" />
@@ -527,10 +530,16 @@ export function KdsConfigurationPage() {
                   </MenuItem>
                 ))}
               </Select>
-              <FormHelperText>{t('operations.kds.formPrintersHint')}</FormHelperText>
+              <FormHelperText>
+                {t('operations.kds.formPrintersHint')} <VersionTag feature="routing.printerOptions" />
+              </FormHelperText>
             </FormControl>
             <TextField
-              label={t('operations.kds.formCopies')}
+              label={
+                <>
+                  {t('operations.kds.formCopies')} <VersionTag feature="routing.printerOptions" />
+                </>
+              }
               type="number"
               value={stationForm.copies}
               onChange={(e) => setStationForm({ ...stationForm, copies: Math.max(1, Number(e.target.value) || 1) })}
@@ -538,7 +547,9 @@ export function KdsConfigurationPage() {
               fullWidth
             />
             <FormControl fullWidth>
-              <InputLabel shrink>{t('operations.printers.ticketTemplate')}</InputLabel>
+              <InputLabel shrink>
+                {t('operations.printers.ticketTemplate')} <VersionTag feature="routing.printerOptions" />
+              </InputLabel>
               <Select
                 displayEmpty
                 notched
@@ -635,7 +646,9 @@ export function KdsConfigurationPage() {
                 onChange={(e) => setRuleForm({ ...ruleForm, selector_type: e.target.value })}
               >
                 <MenuItem value="CATEGORY">{t('operations.kds.appliesCategory')}</MenuItem>
-                <MenuItem value="PRODUCT">{t('operations.kds.appliesProduct')}</MenuItem>
+                <MenuItem value="PRODUCT">
+                  {t('operations.kds.appliesProduct')} <VersionTag feature="routing.productRule" sx={{ ml: 1 }} />
+                </MenuItem>
               </Select>
             </FormControl>
 
