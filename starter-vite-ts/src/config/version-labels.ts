@@ -42,6 +42,11 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   // Add-on groups, and the combos built from them
   '/app/catalog/modifiers': 'V4',
   '/app/catalog/availability/report': 'V4',
+  // A V1 branch sells at base prices; price lists are chain-scale pricing.
+  '/app/pricing/price-lists': 'V4',
+  // Raising or lowering base prices now, by percent or amount
+  '/app/pricing/changes': 'V1',
+  '/app/pricing/snappfood': 'V3',
 };
 
 /** Features that ship later than the page they sit on. */
@@ -102,6 +107,9 @@ export const FEATURE_LABELS = {
   'catalog.stopBranches': 'V4',
   'catalog.sellingWindows': 'V2',
   'import.customers': 'F',
+  // Price changes: V1 changes base prices now.
+  'pricing.scheduled': 'V4',
+  'pricing.listPrices': 'V4',
   // Moadian e-invoices on an order
   moadian: 'F',
 } satisfies Record<string, PhaseLabel>;
