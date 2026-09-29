@@ -99,7 +99,7 @@ export function AvailabilityPage() {
   const [categoryTab, setCategoryTab] = useState('ALL');
 
   const [target, setTarget] = useState<StopTarget | null>(null);
-  const [mode, setMode] = useState<StopMode>('NEXT_SHIFT');
+  const [mode, setMode] = useState<StopMode>('MANUAL');
   const [hours, setHours] = useState('2');
   const [reason, setReason] = useState('');
   // Where the change applies: everywhere (''), or Snappfood only while the counter keeps selling.
@@ -187,7 +187,7 @@ export function AvailabilityPage() {
   const showStop = (tg: StopTarget, ch: '' | 'SNAPPFOOD') => {
     const current = stopFor(tg, ch);
     setChannel(ch);
-    setMode(current ? (current.suspended_until ? 'NEXT_SHIFT' : 'MANUAL') : 'NEXT_SHIFT');
+    setMode(current ? (current.suspended_until ? 'NEXT_SHIFT' : 'MANUAL') : 'MANUAL');
     setHours('2');
     setReason(current?.reason || '');
   };
@@ -535,7 +535,8 @@ export function AvailabilityPage() {
                 label={
                   <Box>
                     <Typography variant="body2">
-                      {t('catalog.availabilityPage.modeNextShift', 'Unavailable until the next shift')}
+                      {t('catalog.availabilityPage.modeNextShift', 'Unavailable until the next shift')}{' '}
+                      <VersionTag feature="catalog.stopDuration" />
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       {t(
@@ -563,7 +564,12 @@ export function AvailabilityPage() {
               <FormControlLabel
                 value="HOURS"
                 control={<Radio />}
-                label={t('catalog.availabilityPage.modeHours', 'Unavailable for a set time')}
+                label={
+                  <>
+                    {t('catalog.availabilityPage.modeHours', 'Unavailable for a set time')}{' '}
+                    <VersionTag feature="catalog.stopDuration" />
+                  </>
+                }
               />
             </RadioGroup>
 

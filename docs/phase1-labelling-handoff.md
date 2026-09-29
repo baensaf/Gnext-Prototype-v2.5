@@ -141,6 +141,7 @@ Today's stock and importing products and categories are V1.
 | A product's price history tab | V4 |
 | Stopping an item on Snappfood only | V3 |
 | A reason when stopping an item | F |
+| Stopping until the next shift, or for set hours (V1 is available or off until further notice) | F |
 | Stopping items at several branches at once (head office) | V4 |
 | Selling windows (for example, breakfast only) | V2 |
 | Importing customers | F |
