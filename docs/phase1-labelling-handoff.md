@@ -220,6 +220,14 @@ Sizes and add-ons on the kiosk are V4, as in the catalog. The simulated card ter
 shifts. Branch health and the list of branches with their agents are V4 (head office). The
 simulators (`/app/simulation/…`) and the offline till (`/till`) are F.
 
+**V1 print routing (decided 2026-09-30).** A branch has a few kitchen stations with one
+printer each; each category goes to one station, and an item whose category has no rule goes
+to the branch's default kitchen printer. One chit layout, one copy; a chit prints when the order
+is sent and a change chit when lines are added or voided. F: a product overriding its
+category, several printers per station, and copies or paper templates per printer.
+
+The V1 product scope: https://claude.ai/code/artifact/e999955c-f8c1-48f7-8278-88a7daf5e125
+
 ## Next
 
 Every page group is labelled (2026-09-29). Next: turn the labels into the product scope
