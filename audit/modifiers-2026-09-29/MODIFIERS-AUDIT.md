@@ -184,5 +184,5 @@ Left as they were:
 - **Tills running through the local agent** get the menu from the agent's snapshot, which
   carries neither "ask at POS" nor default add-ons, so they keep asking for every group and
   start with nothing ticked. Changing that needs an agent release.
-- The demo menu still has no add-on groups (PR #87). Whether to seed them back is the next decision.
+- The demo menu's add-on groups are back (follow-up PR, migration 085): extras on burgers and sandwiches, "without" on burgers, sandwiches and minis, and a combo drink (optional, cola ticked). All are on their categories and none asks at the POS, so every item still rings straight through.
 - The flow was not checked in a browser; typecheck, lint, build and the backend suite pass.
