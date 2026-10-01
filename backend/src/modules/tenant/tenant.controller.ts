@@ -26,17 +26,21 @@ export class TenantController {
   }
 
   @Get('branches')
-  async getBranches(@Req() req: Request) {
+  async getBranches(@Query('archived') archived: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
+    const userBranchId = (req as any).userBranchId ?? null;
     // The switcher already hid the other sites from a branch account. Hiding them here
     // too means it is a rule rather than a courtesy the next screen could forget.
-    return await this.tenantService.getBranches(tenantId, undefined, (req as any).userBranchId ?? null);
+    // Archived branches are head office's to see: `archived=1` adds them to its list.
+    const withArchived = !userBranchId && (archived === '1' || archived === 'true');
+    return await this.tenantService.getBranches(tenantId, undefined, userBranchId, withArchived);
   }
 
   @Get('branches/:id')
   async getBranchById(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.tenantService.getBranchById(tenantId, id);
+    // Head office still opens an archived branch's page, to read it or restore it.
+    return await this.tenantService.getBranchById(tenantId, id, !(req as any).userBranchId);
   }
 
   // Opening, renaming and closing sites is what head office is for. A branch account
@@ -62,7 +66,15 @@ export class TenantController {
   async archiveBranch(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
-    return await this.tenantService.archiveBranch(tenantId, id, correlationId);
+    return await this.tenantService.archiveBranch(tenantId, id, correlationId, (req as any).userId ?? null);
+  }
+
+  @Post('branches/:id/restore')
+  @HeadOfficeOnly()
+  async restoreBranch(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.tenantService.restoreBranch(tenantId, id, correlationId);
   }
 
   @Get('branches/:id/operating-hours')

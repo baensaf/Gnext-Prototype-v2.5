@@ -67,6 +67,7 @@ import { Terminal } from '../../entities/Terminal.entity';
 import { currentTillTerminalId } from '../../common/utils/till-context';
 import { Tenant } from '../../entities/Tenant.entity';
 import { Branch } from '../../entities/Branch.entity';
+import { isAfterHours } from '../../common/utils/opening-hours';
 import { Payment } from '../../entities/Payment.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { DiningTable } from '../../entities/DiningTable.entity';
@@ -290,7 +291,7 @@ export class OrderService {
     const header = [
       'order_number', 'call_number', 'branch', 'placed_at', 'business_date', 'channel', 'order_type',
       'status', 'lifecycle', 'customer', 'mobile', 'table', 'delivery_zone', 'courier', 'items',
-      'grand_total', 'paid_total', 'refunded_total', 'outstanding_total', 'currency',
+      'grand_total', 'paid_total', 'refunded_total', 'outstanding_total', 'currency', 'after_hours',
     ];
     const lines = rows.map((o) =>
       [
@@ -314,6 +315,7 @@ export class OrderService {
         o.refunded_total,
         o.outstanding_total,
         o.currency_code,
+        o.after_hours ? 'yes' : 'no',
       ]
         .map(csvField)
         .join(','),
@@ -487,9 +489,23 @@ export class OrderService {
     }
   }
 
+  /** An archived branch takes no new orders. Closed by its hours is not this: that only warns. */
+  private async assertBranchSells(em: EntityManager, tenantId: string, branchId?: string | null) {
+    if (!branchId) return;
+    const branch = await em.findOne(Branch, { where: { id: branchId, tenant_id: tenantId }, withDeleted: true });
+    if (branch && (branch.deleted_at || branch.is_active === false)) {
+      throw new BadRequestException({
+        code: 'BRANCH_ARCHIVED',
+        title: 'Branch Archived',
+        detail: `${branch.name} is archived and takes no new orders.`,
+      });
+    }
+  }
+
   async createDraft(tenantId: string, dto: OrderCreateDto, userId?: string, correlationId?: string) {
     return await this.dataSource.transaction(async (em) => {
       await this.assertCustomerServable(em, tenantId, dto.customer_id);
+      await this.assertBranchSells(em, tenantId, dto.branch_id);
       const orderNumber = await this.sequenceService.generateOrderNumber(tenantId, em);
       const currencyCode = dto.currency_code || 'IRR';
       const channel = dto.channel || 'POS';
@@ -837,6 +853,8 @@ export class OrderService {
       order.state = targetState;
       order.status = targetState;
       order.submitted_at = new Date();
+      // Outside its hours a branch still sells; the order is only marked, once, as it is sent.
+      order.after_hours = await isAfterHours(em, tenantId, order.branch_id, order.submitted_at);
 
       await em.save(OrderHeader, order);
       // The number the counter calls it by, given as it goes to the kitchen so an abandoned

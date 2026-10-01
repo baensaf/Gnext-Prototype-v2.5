@@ -4182,5 +4182,145 @@
       "V4": "Ships in Phase 1, version 4",
       "F": "Future: after Phase 1"
     }
+  },
+  "branchMgmt": {
+    "discard": "Discard changes",
+    "listSeparator": ", ",
+    "steps": {
+      "details": "Details",
+      "location": "Location",
+      "hours": "Opening hours",
+      "review": "Review"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "hours": "Opening hours",
+      "location": "Location"
+    },
+    "shortDays": {
+      "saturday": "Sat",
+      "sunday": "Sun",
+      "monday": "Mon",
+      "tuesday": "Tue",
+      "wednesday": "Wed",
+      "thursday": "Thu",
+      "friday": "Fri"
+    },
+    "status": {
+      "openUntil": "Open until {{time}}",
+      "openAllDay": "Open 24 hours",
+      "closedOpens": "Closed · opens {{day}} {{time}}",
+      "closedAlways": "Closed every day"
+    },
+    "list": {
+      "add": "Add branch",
+      "intro": "Head office adds and runs the chain's branches. Open a branch to change its details, hours or location.",
+      "showArchived": "Show archived",
+      "showArchivedCount": "Show archived ({{count}})",
+      "branch": "Branch",
+      "now": "Now",
+      "empty": "No branches yet."
+    },
+    "details": {
+      "title": "Title",
+      "titleHelp": "Shown in the header, reports and on receipts. Must differ from the chain's other branches.",
+      "titleRequired": "Give the branch a title.",
+      "titleTaken": "Another branch of the chain already has this title.",
+      "address": "Address",
+      "addressHelp": "Printed on receipts.",
+      "phone": "Phone",
+      "timeZone": "Time zone",
+      "timeZoneHelp": "Sets \"today\", the business day and when the branch is open.",
+      "noAddressPhone": "No address or phone"
+    },
+    "hours": {
+      "open": "Open",
+      "closed": "Closed",
+      "closedAllDay": "Closed all day",
+      "opensAt": "Opens at",
+      "closesAt": "Closes at",
+      "allDay": "24 hours",
+      "nextDay": "closes next day",
+      "nextDayShort": "next day",
+      "addShift": "Add shift",
+      "removeShift": "Remove shift",
+      "copyTo": "Copy to…",
+      "copyTitle": "Repeat these hours on",
+      "allDays": "All days",
+      "apply": "Apply",
+      "overlap": "Two shifts on this day overlap.",
+      "runsIntoNextDay": "The late shift runs into the next day's first shift.",
+      "help": "Outside these hours the till still sells: it shows a warning, and the order is marked after hours in the orders list and reports."
+    },
+    "location": {
+      "search": "Search",
+      "searchPlaceholder": "Search an address or place",
+      "noResults": "Nothing found. Try another name, or click the map.",
+      "clickToPlace": "Click the map to place the pin",
+      "none": "No pin yet",
+      "missing": "No pin on the map",
+      "help": "Delivery zones are drawn around this pin, and couriers will use it. The pin can be moved but not removed."
+    },
+    "new": {
+      "heading": "Add a branch",
+      "detailsTitle": "What is the branch called, and where?",
+      "detailsBody": "The title is the name staff and customers see. You can change any of this later.",
+      "locationTitle": "Place the branch on the map",
+      "locationBody": "Search the address, then click the map or drag the pin to the front door. Delivery zones are drawn around this pin.",
+      "pinRequired": "A branch cannot be added without its pin on the map.",
+      "hoursTitle": "When is the branch open?",
+      "hoursBody": "Add a second shift for a lunch and dinner split. A shift that closes after midnight, such as 18:00–02:00, belongs to the day it opens. Outside these hours the till still sells, with a warning.",
+      "reviewTitle": "Check and add the branch",
+      "reviewBody": "It starts active, with no tills, printers, staff or menu stops. Set those up next.",
+      "back": "Back",
+      "next": "Next",
+      "create": "Add branch",
+      "created": "Branch added. Next: enrol its branch agent, add its tills and printers, and give staff this branch."
+    },
+    "next": {
+      "agent": "Enrol branch agent",
+      "tills": "Add tills",
+      "printers": "Add printers",
+      "staff": "Assign staff"
+    },
+    "saved": {
+      "details": "Details saved.",
+      "hours": "Opening hours saved. They apply from the next minute.",
+      "location": "Location saved."
+    },
+    "archive": {
+      "action": "Archive branch",
+      "title": "Archive {{name}}?",
+      "intro": "For a branch that has closed for good. Once archived:",
+      "point1": "No till can sell there, and it leaves the branch picker.",
+      "point2": "Its branch agent is no longer accepted.",
+      "point3": "Staff whose only branch it is keep their accounts, with no branch until you give them another.",
+      "point4": "Its orders, payments, shifts and reports stay. You can restore it later.",
+      "refusedWhen": "Not possible while a shift is open there or an order is unpaid or unfinished.",
+      "confirm": "Archive",
+      "done": "Branch archived. Its history stays. {{staff}} staff now have no branch until you give them another.",
+      "refusedTitle": "The branch cannot be archived yet",
+      "openShifts": "Shifts still open: {{count}}"
+    },
+    "archived": {
+      "titleOn": "Archived on {{date}}",
+      "body": "No till can sell here and its branch agent is no longer accepted. Its orders, payments, shifts and reports stay. Restore it to use it again; the agent then has to be enrolled again."
+    },
+    "restore": {
+      "action": "Restore branch",
+      "done": "Branch restored. Enrol its branch agent again to print and take card payments."
+    },
+    "pos": {
+      "stillSells": "You can still take orders; they are marked after hours."
+    },
+    "orders": {
+      "afterHours": "After hours",
+      "afterHoursYes": "After hours",
+      "afterHoursNo": "In hours"
+    },
+    "noBranch": {
+      "title": "You have no branch to work in",
+      "body": "The branch you worked at has been archived. Ask head office to give you another branch; your account and PIN stay as they are."
+    }
   }
 }

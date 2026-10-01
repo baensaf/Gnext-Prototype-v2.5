@@ -96,6 +96,7 @@ import { PosShiftBar, PosShiftGate } from 'src/components/shift/pos-shift';
 
 import { PosStopDialog } from './pos-stop-dialog';
 import { OfflineTillBanner } from './offline-till-banner';
+import { ClosedBranchBanner } from './closed-branch-banner';
 
 export interface CartItem {
   product: Product;
@@ -1617,6 +1618,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     <Box aria-busy={loadingInitialData || holdingOrder || Boolean(resumingOrderId)}>
       {/* The internet is down: the way to the offline till on the branch PC (the till itself runs this page without it). */}
       {pos.kind === 'cloud' && <OfflineTillBanner />}
+      <ClosedBranchBanner />
       {loadingInitialData && <LinearProgress sx={{ mb: 2 }} />}
       {error && (
         <Alert severity="error" sx={{ mb: 2.5 }} onClose={() => setError(null)}>

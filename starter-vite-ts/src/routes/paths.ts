@@ -79,6 +79,7 @@ export const paths = {
     },
     operations: {
       branches: `${ROOTS.APP}/operations/branches`,
+      branchNew: `${ROOTS.APP}/operations/branches/new`,
       branchDetail: (id: string) => `${ROOTS.APP}/operations/branches/${id}`,
       terminals: `${ROOTS.APP}/operations/terminals`,
       cardTerminals: `${ROOTS.APP}/operations/card-terminals`,

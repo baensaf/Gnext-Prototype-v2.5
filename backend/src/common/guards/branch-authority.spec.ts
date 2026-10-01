@@ -47,7 +47,7 @@ const SITE_CONFIG: [any, string[]][] = [
 
 /** One decision for the whole chain, taken once, at head office. */
 const CHAIN_CONFIG: [any, string[]][] = [
-  [TenantController, ['updateTenantProfile', 'createBranch', 'updateBranch', 'archiveBranch', 'updateBranchHours']],
+  [TenantController, ['updateTenantProfile', 'createBranch', 'updateBranch', 'archiveBranch', 'restoreBranch', 'updateBranchHours']],
   [PaymentController, ['createSettlementAccount']],
   [SettingsController, ['createCurrency', 'updateCurrency', 'createPaymentMethod', 'updatePaymentMethod', 'createReasonCode', 'updateReasonCode']],
   [CatalogController, ['createProduct', 'updateProduct', 'createCategory', 'updateCategory']],

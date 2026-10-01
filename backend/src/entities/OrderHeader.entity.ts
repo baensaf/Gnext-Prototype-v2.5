@@ -158,6 +158,10 @@ export class OrderHeader {
   @Column({ type: 'timestamptz', nullable: true })
   submitted_at: Date;
 
+  /** Sent while its branch was outside its opening hours. Decided once, when it was sent. */
+  @Column({ type: 'boolean', default: false })
+  after_hours: boolean;
+
   @Column({ type: 'timestamptz', nullable: true })
   completed_at: Date;
 

@@ -12,8 +12,28 @@ export interface Branch {
   phone?: string;
   address?: string;
   time_zone?: string;
+  /** The branch's pin on the map; null on branches made before pins were required. */
+  latitude?: number | null;
+  longitude?: number | null;
   is_active: boolean;
   created_at: string;
+  /** Set while archived. */
+  deleted_at?: string | null;
+}
+
+/** One shift of a day as the server takes it; a closed day is one row with is_closed. */
+export type OpeningHoursInput = { day_of_week: number; open_time?: string; close_time?: string; is_closed?: boolean };
+
+/** What head office sends to add a branch: its details, pin and weekly hours in one go. */
+export interface NewBranch {
+  name: string;
+  branch_type?: BranchType;
+  phone?: string;
+  address?: string;
+  time_zone: string;
+  latitude: number;
+  longitude: number;
+  hours: OpeningHoursInput[];
 }
 
 export interface BranchOperatingHour {
@@ -51,15 +71,16 @@ export const tenantApi = {
     const res = await httpClient.patch('/api/v1/tenant', data);
     return res.data;
   },
-  getBranches: async (): Promise<Branch[]> => {
-    const res = await httpClient.get('/api/v1/branches');
+  /** `archived` adds archived branches, for head office's branch list. */
+  getBranches: async (options: { archived?: boolean } = {}): Promise<Branch[]> => {
+    const res = await httpClient.get('/api/v1/branches', { params: options.archived ? { archived: 1 } : undefined });
     return res.data;
   },
   getBranchById: async (id: string): Promise<Branch> => {
     const res = await httpClient.get(`/api/v1/branches/${id}`);
     return res.data;
   },
-  createBranch: async (data: Partial<Branch>): Promise<Branch> => {
+  createBranch: async (data: NewBranch): Promise<Branch> => {
     const res = await httpClient.post('/api/v1/branches', data);
     return res.data;
   },
@@ -67,14 +88,19 @@ export const tenantApi = {
     const res = await httpClient.patch(`/api/v1/branches/${id}`, data);
     return res.data;
   },
-  archiveBranch: async (id: string): Promise<void> => {
-    await httpClient.delete(`/api/v1/branches/${id}`);
+  archiveBranch: async (id: string): Promise<{ agentsRevoked: number; staffWithoutBranch: number }> => {
+    const res = await httpClient.delete(`/api/v1/branches/${id}`);
+    return res.data;
+  },
+  restoreBranch: async (id: string): Promise<Branch> => {
+    const res = await httpClient.post(`/api/v1/branches/${id}/restore`);
+    return res.data;
   },
   getBranchHours: async (id: string): Promise<BranchOperatingHour[]> => {
     const res = await httpClient.get(`/api/v1/branches/${id}/operating-hours`);
     return res.data;
   },
-  updateBranchHours: async (id: string, hours: BranchOperatingHour[]): Promise<BranchOperatingHour[]> => {
+  updateBranchHours: async (id: string, hours: OpeningHoursInput[]): Promise<BranchOperatingHour[]> => {
     const res = await httpClient.patch(`/api/v1/branches/${id}/operating-hours`, { hours });
     return res.data;
   },
