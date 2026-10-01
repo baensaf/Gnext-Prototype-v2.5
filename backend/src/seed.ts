@@ -168,7 +168,7 @@ export async function runSeed() {
         }),
       );
     }
-    console.log(`Seeded opening hours: ${code} (${hours.source})`);
+    console.log(`Seeded opening hours: ${code}`);
   }
 
   const sellingBranches = IRANBURGER_BRANCHES
