@@ -14,9 +14,9 @@ import { tenantApi } from 'src/api/tenantApi';
 /** "Open until 02:00", "Open 24 hours" or "Closed · opens Sat 11:00". */
 export function describeOpenStatus(status: OpenStatus, t: TFunction): string {
   if (status.open) {
-    return status.until
-      ? t('branchMgmt.status.openUntil', { defaultValue: 'Open until {{time}}', time: status.until })
-      : t('branchMgmt.status.openAllDay', 'Open 24 hours');
+    if (!status.until) return t('branchMgmt.status.openAllDay', 'Open 24 hours');
+    if (status.until === '00:00') return t('branchMgmt.status.openUntilMidnight', 'Open until midnight');
+    return t('branchMgmt.status.openUntil', { defaultValue: 'Open until {{time}}', time: status.until });
   }
   if (!status.opensDay) return t('branchMgmt.status.closedAlways', 'Closed every day');
   return t('branchMgmt.status.closedOpens', {
