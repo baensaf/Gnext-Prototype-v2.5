@@ -47,13 +47,16 @@ const span = (shift: Shift) => {
   return { start, end: close <= start ? close + 1440 : close };
 };
 
-/** The stored rows as a week; a day with no rows at all keeps the default. */
+/**
+ * The stored rows as a week, read as the server reads them: no hours at all is open around
+ * the clock every day; once there are hours, a day without any is closed.
+ */
 export function weekFromRows(rows: BranchOperatingHour[]): WeekHours {
-  const week = defaultWeek();
+  if (!rows.length) return Object.fromEntries(WEEK.map(({ day }) => [day, [{ open: '00:00', close: '00:00' }]])) as WeekHours;
+  const week: WeekHours = {};
   for (const { day } of WEEK) {
-    const ofDay = rows.filter((r) => r.day_of_week === day);
-    if (!ofDay.length) continue;
-    week[day] = ofDay
+    week[day] = rows
+      .filter((r) => r.day_of_week === day)
       .filter((r) => !r.is_closed)
       .map((r) => ({ open: hhmm(r.open_time), close: hhmm(r.close_time) }))
       .sort((a, b) => a.open.localeCompare(b.open));
