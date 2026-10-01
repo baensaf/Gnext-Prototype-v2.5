@@ -11,6 +11,7 @@ import * as path from 'path';
 import {
   IRANBURGER_BRANCHES,
   IRANBURGER_CATEGORIES,
+  IRANBURGER_HOURS,
   IRANBURGER_PRODUCTS,
   IRANBURGER_OPTION_GROUPS,
   IRANBURGER_TENANT_NAME,
@@ -133,6 +134,37 @@ export async function runSeed() {
     }
     branchByCode.set(b.code, branch);
   }
+
+  // 4b. Each branch's real opening hours (seeds/iranburger-data.ts), once. A branch with no
+  // hours, or still on the factory 08:00-23:00 every day, gets them; hours head office has
+  // set since are left alone.
+  const hoursRepo = AppDataSource.getRepository('BranchOperatingHour');
+  for (const [code, hours] of Object.entries(IRANBURGER_HOURS)) {
+    const branch = branchByCode.get(code);
+    if (!branch) continue;
+    const rows = await hoursRepo.find({ where: { tenant_id: tenant.id, branch_id: branch.id } });
+    const factory = rows.every(
+      (r: any) => !r.is_closed && String(r.open_time).startsWith('08:00') && String(r.close_time).startsWith('23:00'),
+    );
+    if (rows.length && !factory) continue;
+    await hoursRepo.delete({ tenant_id: tenant.id, branch_id: branch.id });
+    for (let day = 0; day < 7; day++) {
+      const [open, close] = hours.days?.[day] ?? hours.daily;
+      await hoursRepo.save(
+        hoursRepo.create({
+          tenant_id: tenant.id,
+          branch_id: branch.id,
+          day_of_week: day,
+          open_time: `${open}:00`,
+          close_time: `${close}:00`,
+          is_closed: false,
+          spans_midnight: close <= open,
+        }),
+      );
+    }
+    console.log(`Seeded opening hours: ${code} (${hours.source})`);
+  }
+
   const sellingBranches = IRANBURGER_BRANCHES
     .filter((b) => (b.branchType || 'RESTAURANT') === 'RESTAURANT')
     .map((b) => branchByCode.get(b.code));
