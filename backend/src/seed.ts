@@ -132,6 +132,12 @@ export async function runSeed() {
       branch = await branchRepo.save(branch);
       console.log(`Renamed Branch: ${b.legacyName} -> ${b.name}`);
     }
+    // Its pin from Balad, once: a branch head office has already placed keeps its own.
+    if (b.pin && (branch.latitude === null || branch.latitude === undefined)) {
+      [branch.latitude, branch.longitude] = b.pin;
+      branch = await branchRepo.save(branch);
+      console.log(`Placed Branch pin: ${b.code}`);
+    }
     branchByCode.set(b.code, branch);
   }
 

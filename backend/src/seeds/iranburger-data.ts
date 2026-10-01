@@ -23,34 +23,36 @@ export interface IranBurgerBranch {
   branchType?: 'RESTAURANT' | 'COMMISSARY';
   /** The name this row carried before the rebrand, so an existing database is renamed in place. */
   legacyName?: string;
+  /** [latitude, longitude] of the branch's Balad listing (2026-10-01). */
+  pin?: [number, number];
 }
 
 export const IRANBURGER_BRANCHES: IranBurgerBranch[] = [
   // The first three keep the codes of the old demo storefronts, so their terminals, printers,
   // floors, demo accounts and order history carry over unchanged.
-  { code: 'TEH-CENTRAL', name: 'ایران برگر مرکزی شعبه ۱ (نصرت)', address: 'تهران، نصرت، بلوار کشاورز، خ دکتر قریب، خ طوسی', phone: '02166126097', legacyName: 'Central Plaza' },
-  { code: 'TEH-DOWNTOWN', name: 'ایران برگر (ولیعصر)', address: 'تهران، ولیعصر، خ. زیرگذر چهارراه ولیعصر', phone: '09121157021', legacyName: 'Downtown Express' },
-  { code: 'TEH-NORTH', name: 'ایران برگر (هروی)', address: 'تهران، حسین آباد، خ موسوی بین مکران جنوبی و گلستان پنجم', phone: '02122968319', legacyName: 'Northside Grill' },
-  { code: 'TEH-KARGAR', name: 'ایران برگر (کارگر شمالی)', address: 'تهران، نصرت، خ. کارگر شمالی، خ. طباطبایی', phone: '02166127008' },
-  { code: 'TEH-VALIASR-CAFE', name: 'کافه ایران برگر (ولیعصر)', address: 'تهران، چهارراه ولیعصر به سمت میدان انقلاب، قبل از خیابان مظفر', phone: '02166492142' },
-  { code: 'TEH-YAKHCHIABAD', name: 'ایران برگر (یاخچی آباد)', address: 'تهران، یاخچی آباد، میدان بهشت', phone: '02155011176' },
-  { code: 'TEH-DADMAN', name: 'ایران برگر (دادمان)', address: 'تهران، سپهر، بلوار دادمان، خ فایز دشتی', phone: '02188374030' },
-  { code: 'TEH-KIANSHAHR', name: 'ایران برگر (کیانشهر)', address: 'تهران، کیانشهر شمالی، بلوار امام رضا، خ احدی، خ آل ابراهیم', phone: '02133617003' },
-  { code: 'TEH-AZADI', name: 'ایران برگر (شهرک آزادی)', address: 'تهران، شهرک آزادی، میدان پلیس، خ امام خمینی', phone: null },
-  { code: 'TEH-ZAFAR', name: 'ایران برگر (ظفر)', address: 'تهران، ظفر، بلوار نلسون ماندلا بین صانعی و شریفی', phone: '02188660667' },
-  { code: 'TEH-HEKMAT', name: 'ایران برگر (حکمت)', address: 'تهران، حکمت، بلوار اندرزگو بین آشتیانی منفرد و احمدی', phone: '02122399007' },
-  { code: 'SHZ-NIAYESH', name: 'ایران برگر (نیایش)', address: 'شیراز، ابیوردی، بلوار چمران، بلوار نیایش نبش کوچه ۱۰', phone: '09170917240' },
-  { code: 'SHZ-YAS', name: 'ایران برگر (کوی یاس)', address: 'شیراز، کوی یاس، بلوار قدوسی غربی', phone: null },
-  { code: 'SHZ-SANAYE', name: 'ایران برگر (صنایع)', address: 'شیراز، حسین آباد، بلوار میرزای شیرازی غربی', phone: '07136251515' },
-  { code: 'SHZ-MAHALLATI', name: 'ایران برگر (محلاتی جنوبی)', address: 'شیراز، بلوار محلاتی جنوبی، نبش کوچه ۶', phone: '07138474000' },
-  { code: 'SHZ-SERAJ', name: 'ایران برگر (شهرک سراج)', address: 'شیراز، شهرک سراج، بلوار پاسارگاد غربی', phone: '07138374000' },
-  { code: 'SHZ-FALAKEH-GAS', name: 'ایران برگر (فلکه گاز)', address: 'شیراز، باغ تخت، بلوار قدس', phone: '07132277776' },
-  { code: 'SHZ-VALFAJR', name: 'ایران برگر (والفجر)', address: 'شیراز، بلوار امیرکبیر', phone: '09170917154' },
-  { code: 'SHZ-FADAK', name: 'ایران برگر (فدک)', address: 'شیراز، کوی زهرا، بلوار فدک', phone: '07137352020' },
-  { code: 'SHZ-KASAEI', name: 'ایران برگر (کسایی)', address: 'شیراز، معالی آباد، تقاطع کسایی و دوستان', phone: '07136344030' },
-  { code: 'SHZ-AFIFABAD', name: 'ایران برگر (عفیف آباد)', address: 'شیراز، عفیف آباد، خ عفیف آباد بیستم', phone: '07136269000' },
-  { code: 'SHZ-KIANSHAHR', name: 'ایران برگر (کیان شهر)', address: 'شیراز، کیان شهر، خ پست', phone: null },
-  { code: 'SHZ-MODARES', name: 'ایران برگر (بلوار مدرس)', address: 'شیراز، بریجستون، کنارگذر مدرس', phone: '07137200029' },
+  { code: 'TEH-CENTRAL', name: 'ایران برگر مرکزی شعبه ۱ (نصرت)', address: 'تهران، نصرت، بلوار کشاورز، خ دکتر قریب، خ طوسی', phone: '02166126097', legacyName: 'Central Plaza', pin: [35.703796, 51.382266] },
+  { code: 'TEH-DOWNTOWN', name: 'ایران برگر (ولیعصر)', address: 'تهران، ولیعصر، خ. زیرگذر چهارراه ولیعصر', phone: '09121157021', legacyName: 'Downtown Express', pin: [35.701562, 51.405352] },
+  { code: 'TEH-NORTH', name: 'ایران برگر (هروی)', address: 'تهران، حسین آباد، خ موسوی بین مکران جنوبی و گلستان پنجم', phone: '02122968319', legacyName: 'Northside Grill', pin: [35.768628, 51.473036] },
+  { code: 'TEH-KARGAR', name: 'ایران برگر (کارگر شمالی)', address: 'تهران، نصرت، خ. کارگر شمالی، خ. طباطبایی', phone: '02166127008', pin: [35.70518, 51.390492] },
+  { code: 'TEH-VALIASR-CAFE', name: 'کافه ایران برگر (ولیعصر)', address: 'تهران، چهارراه ولیعصر به سمت میدان انقلاب، قبل از خیابان مظفر', phone: '02166492142', pin: [35.701383, 51.404395] },
+  { code: 'TEH-YAKHCHIABAD', name: 'ایران برگر (یاخچی آباد)', address: 'تهران، یاخچی آباد، میدان بهشت', phone: '02155011176', pin: [35.633532, 51.410051] },
+  { code: 'TEH-DADMAN', name: 'ایران برگر (دادمان)', address: 'تهران، سپهر، بلوار دادمان، خ فایز دشتی', phone: '02188374030', pin: [35.764796, 51.352819] },
+  { code: 'TEH-KIANSHAHR', name: 'ایران برگر (کیانشهر)', address: 'تهران، کیانشهر شمالی، بلوار امام رضا، خ احدی، خ آل ابراهیم', phone: '02133617003', pin: [35.638071, 51.447463] },
+  { code: 'TEH-AZADI', name: 'ایران برگر (شهرک آزادی)', address: 'تهران، شهرک آزادی، میدان پلیس، خ امام خمینی', phone: null, pin: [35.712465, 51.27666] },
+  { code: 'TEH-ZAFAR', name: 'ایران برگر (ظفر)', address: 'تهران، ظفر، بلوار نلسون ماندلا بین صانعی و شریفی', phone: '02188660667', pin: [35.759038, 51.413982] },
+  { code: 'TEH-HEKMAT', name: 'ایران برگر (حکمت)', address: 'تهران، حکمت، بلوار اندرزگو بین آشتیانی منفرد و احمدی', phone: '02122399007', pin: [35.795831, 51.443068] },
+  { code: 'SHZ-NIAYESH', name: 'ایران برگر (نیایش)', address: 'شیراز، ابیوردی، بلوار چمران، بلوار نیایش نبش کوچه ۱۰', phone: '09170917240', pin: [29.668174, 52.49396] },
+  { code: 'SHZ-YAS', name: 'ایران برگر (کوی یاس)', address: 'شیراز، کوی یاس، بلوار قدوسی غربی', phone: null, pin: [29.644427, 52.470079] },
+  { code: 'SHZ-SANAYE', name: 'ایران برگر (صنایع)', address: 'شیراز، حسین آباد، بلوار میرزای شیرازی غربی', phone: '07136251515', pin: [29.700412, 52.460513] },
+  { code: 'SHZ-MAHALLATI', name: 'ایران برگر (محلاتی جنوبی)', address: 'شیراز، بلوار محلاتی جنوبی، نبش کوچه ۶', phone: '07138474000', pin: [29.636084, 52.471265] },
+  { code: 'SHZ-SERAJ', name: 'ایران برگر (شهرک سراج)', address: 'شیراز، شهرک سراج، بلوار پاسارگاد غربی', phone: '07138374000', pin: [29.598166, 52.489472] },
+  { code: 'SHZ-FALAKEH-GAS', name: 'ایران برگر (فلکه گاز)', address: 'شیراز، باغ تخت، بلوار قدس', phone: '07132277776', pin: [29.632153, 52.539131] },
+  { code: 'SHZ-VALFAJR', name: 'ایران برگر (والفجر)', address: 'شیراز، بلوار امیرکبیر', phone: '09170917154', pin: [29.61787, 52.454098] },
+  { code: 'SHZ-FADAK', name: 'ایران برگر (فدک)', address: 'شیراز، کوی زهرا، بلوار فدک', phone: '07137352020', pin: [29.586024, 52.568009] },
+  { code: 'SHZ-KASAEI', name: 'ایران برگر (کسایی)', address: 'شیراز، معالی آباد، تقاطع کسایی و دوستان', phone: '07136344030', pin: [29.677487, 52.463669] },
+  { code: 'SHZ-AFIFABAD', name: 'ایران برگر (عفیف آباد)', address: 'شیراز، عفیف آباد، خ عفیف آباد بیستم', phone: '07136269000', pin: [29.625177, 52.501626] },
+  { code: 'SHZ-KIANSHAHR', name: 'ایران برگر (کیان شهر)', address: 'شیراز، کیان شهر، خ پست', phone: null, pin: [29.591312, 52.572944] },
+  { code: 'SHZ-MODARES', name: 'ایران برگر (بلوار مدرس)', address: 'شیراز، بریجستون، کنارگذر مدرس', phone: '07137200029', pin: [29.561367, 52.593144] },
   // Not a public listing: the demo's production kitchen, kept so the chain still shows a
   // location that prepares food without selling it.
   { code: 'TEH-COMMISSARY', name: 'آشپزخانه مرکزی', address: 'تهران، منطقه صنعتی', phone: null, branchType: 'COMMISSARY', legacyName: 'Central Production Kitchen' },
