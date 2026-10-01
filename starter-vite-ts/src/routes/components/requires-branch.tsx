@@ -33,7 +33,23 @@ export function RequiresBranch({ children, rollup }: RequiresBranchProps) {
 
   if (!branchScope) return <>{children}</>;
 
-  const { isHeadOffice, branches, selectedBranch, setSelectedBranchId } = branchScope;
+  const { isHeadOffice, branches, selectedBranch, setSelectedBranchId, loading } = branchScope;
+
+  if (!isHeadOffice && !loading && !selectedBranch && branches.length === 0) {
+    // The account's branch was archived. It stays active, with no branch to work in, until
+    // head office gives it another.
+    return (
+      <Box sx={{ p: 3, maxWidth: 640, mx: 'auto' }}>
+        <Alert severity="info">
+          <AlertTitle>{t('branchMgmt.noBranch.title', 'You have no branch to work in')}</AlertTitle>
+          {t(
+            'branchMgmt.noBranch.body',
+            'The branch you worked at has been archived. Ask head office to give you another branch; your account and PIN stay as they are.'
+          )}
+        </Alert>
+      </Box>
+    );
+  }
 
   if (!isHeadOffice) {
     // No branch yet means the list has not arrived (the provider reports "not loading" while

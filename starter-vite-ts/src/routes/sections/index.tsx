@@ -41,6 +41,7 @@ import { OrdersWorkflowPage } from 'src/pages/orders/workflow';
 import { IncomingOrdersPage } from 'src/pages/orders/incoming';
 import { CustomerCreditPage } from 'src/pages/customers/credit';
 import { ReportsIndexPage } from 'src/pages/reports/index-page';
+import { BranchNewPage } from 'src/pages/operations/branch-new';
 import { GeneralSettingsPage } from 'src/pages/settings/general';
 import { ImportWizardPage } from 'src/pages/tools/import-wizard';
 import { ShiftDetailPage } from 'src/pages/cashier/shift-detail';
@@ -186,6 +187,7 @@ export const routesSection: RouteObject[] = [
       { path: 'discounts/authorizations', element: <Navigate to="/app/settings/discount-authorizations" replace /> },
       { path: 'discounts/wallet', element: <DiscountsHubPage defaultTab={2} /> },
       { path: 'operations/branches', element: <BranchesPage /> },
+      { path: 'operations/branches/new', element: <BranchNewPage /> },
       { path: 'operations/branches/:id', element: <BranchDetailPage /> },
       { path: 'operations/terminals', element: <RequiresBranch><TerminalsPage /></RequiresBranch> },
       { path: 'operations/card-terminals', element: <RequiresBranch><CardTerminalsPage /></RequiresBranch> },

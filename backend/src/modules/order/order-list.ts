@@ -309,6 +309,14 @@ const GRID_FIELDS: Record<string, Record<string, OperatorSql>> = {
   },
   grand_total: numberOperators('o.grand_total'),
   outstanding_total: numberOperators('o.outstanding_total'),
+  // Sent while the branch was outside its opening hours: `yes` or `no`.
+  after_hours: {
+    is: (value) => {
+      if (value === undefined || value === null || value === '') return null;
+      if (value !== 'yes' && value !== 'no') refuse(`Not a value for after_hours: ${String(value)}`);
+      return { sql: value === 'yes' ? 'o.after_hours = true' : 'o.after_hours = false', params: {} };
+    },
+  },
 };
 
 /** Reads the `filters` parameter; null when there is none. */

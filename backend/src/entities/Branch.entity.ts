@@ -10,6 +10,12 @@ export type BranchType = 'COMMISSARY' | 'OFFICE' | 'RESTAURANT';
 /** Sites that take customer orders. Everything else is a supporting location. */
 export const SELLING_BRANCH_TYPES: BranchType[] = ['RESTAURANT'];
 
+/** Postgres hands numeric back as a string; a coordinate is read as the number it is. */
+const COORDINATE = {
+  to: (value: number | null) => value,
+  from: (value: string | null) => (value === null || value === undefined ? null : Number(value)),
+};
+
 @Entity('branch')
 export class Branch {
   @PrimaryGeneratedColumn('uuid')
@@ -38,6 +44,17 @@ export class Branch {
 
   @Column({ type: 'boolean', default: true })
   is_active: boolean;
+
+  /** The branch's pin on the map. Required for a new branch; older ones may have none yet. */
+  @Column({ type: 'numeric', precision: 9, scale: 6, nullable: true, transformer: COORDINATE })
+  latitude: number | null;
+
+  @Column({ type: 'numeric', precision: 9, scale: 6, nullable: true, transformer: COORDINATE })
+  longitude: number | null;
+
+  /** Who archived it; cleared on restore. When is `deleted_at`. */
+  @Column({ type: 'uuid', nullable: true })
+  archived_by: string | null;
 
   /**
    * The rules this branch's business day has run under (cutoff and time zone), kept so a

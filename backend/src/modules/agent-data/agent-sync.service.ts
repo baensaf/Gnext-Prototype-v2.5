@@ -40,6 +40,7 @@ import { CALL_NUMBER_SETTING_KEY, CallChannelGroup, readCallNumberRanges } from 
 import { OrderSequenceService } from '../order/order-sequence.service';
 import { bookSucceededPayment } from '../payment/payment-settlement';
 import { AgentDataService, BranchSnapshot } from './agent-data.service';
+import { isAfterHours } from '../../common/utils/opening-hours';
 
 /** At most this many orders in one upload (§12.5). */
 export const SYNC_BATCH_MAX = 50;
@@ -498,6 +499,7 @@ export class AgentSyncService {
         call_number: order.call_number,
         order_type: order.order_type,
         channel: sf ? 'AGGREGATOR' : 'POS',
+        after_hours: await isAfterHours(em, tenantId, branchId, placedAt),
         state,
         status: state,
         currency_code: 'IRR',

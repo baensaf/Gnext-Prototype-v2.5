@@ -991,6 +991,24 @@ export function OrdersWorkflowPage() {
       ),
     },
     {
+      // Sent while the branch was closed by its hours. It still sold; this only marks it.
+      field: 'after_hours',
+      headerName: t('branchMgmt.orders.afterHours', 'After hours'),
+      width: 120,
+      sortable: false,
+      type: 'singleSelect',
+      valueGetter: (_value, row) => (row.after_hours ? 'yes' : 'no'),
+      valueOptions: [
+        { value: 'yes', label: t('branchMgmt.orders.afterHoursYes', 'After hours') },
+        { value: 'no', label: t('branchMgmt.orders.afterHoursNo', 'In hours') },
+      ],
+      filterOperators: selectFilters('after_hours'),
+      renderCell: ({ row }) =>
+        row.after_hours ? (
+          <Chip size="small" color="warning" variant="outlined" label={t('branchMgmt.orders.afterHours', 'After hours')} />
+        ) : null,
+    } as GridColDef<OrderListRow>,
+    {
       field: 'channel',
       headerName: t('orders.table.channel'),
       width: 110,

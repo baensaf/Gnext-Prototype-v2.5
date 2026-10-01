@@ -83,6 +83,8 @@ export interface OrderHeader {
   notes?: string;
   placed_at: string;
   submitted_at?: string;
+  /** Sent while the branch was outside its opening hours. It still sold; this only marks it. */
+  after_hours?: boolean;
   completed_at?: string;
   cancelled_at?: string;
   /** Snappfood's preparation time, the minutes it lets the store add, and how the order travels. */

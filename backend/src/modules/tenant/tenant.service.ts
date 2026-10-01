@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { Tenant } from '../../entities/Tenant.entity';
 import { Branch, BranchType } from '../../entities/Branch.entity';
 import { BranchOperatingHour } from '../../entities/BranchOperatingHour.entity';
@@ -9,12 +9,44 @@ import { CashierShift } from '../../entities/CashierShift.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { Printer } from '../../entities/Printer.entity';
 import { AdminUser } from '../../entities/AdminUser.entity';
+import { Agent } from '../../entities/Agent.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
 import { trackBusinessDayChange } from '../../common/utils/business-clock';
-import { isTimeZone } from '../../common/utils/business-day';
+import { isHhMm, isTimeZone } from '../../common/utils/business-day';
+import { hoursProblem } from '../../common/utils/opening-hours';
+import { OPEN_STATUSES } from '../order/order-list';
 
 const BRANCH_TYPES: BranchType[] = ['RESTAURANT', 'COMMISSARY', 'OFFICE'];
+
+/** What head office may set on a branch. Status, history and the timeline are not on this list. */
+export interface BranchInput {
+  name?: string;
+  code?: string;
+  branch_type?: BranchType;
+  phone?: string | null;
+  address?: string | null;
+  time_zone?: string;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+}
+
+/** One shift of a day as the screens send it; a closed day is one row with is_closed. */
+export interface OpeningHoursInput {
+  day_of_week: number;
+  open_time?: string;
+  close_time?: string;
+  is_closed?: boolean;
+}
+
+/** A new branch given no hours opens 08:00 to 23:00 every day, as branches always have. */
+const DEFAULT_WEEK = Array.from({ length: 7 }, (_, day) => ({
+  day_of_week: day,
+  open_time: '08:00:00',
+  close_time: '23:00:00',
+  is_closed: false,
+  spans_midnight: false,
+}));
 
 @Injectable()
 export class TenantService {
@@ -55,18 +87,23 @@ export class TenantService {
     return updated;
   }
 
-  /** `onlyBranchId` confines the answer to one site, for an account that works at one. */
+  /**
+   * `onlyBranchId` confines the answer to one site, for an account that works at one.
+   * `includeArchived` adds archived branches, for head office's branch list.
+   */
   async getBranches(
     tenantId: string,
     query?: PaginationQueryDto & { search?: string },
     onlyBranchId?: string | null,
+    includeArchived = false,
   ): Promise<PagedResponse<Branch> | Branch[]> {
     if (!query || (!query.page && !query.limit && !query.search)) {
       return await this.branchRepo.find({
         where: onlyBranchId
           ? { tenant_id: tenantId, id: onlyBranchId }
           : { tenant_id: tenantId },
-        order: { code: 'ASC' },
+        withDeleted: includeArchived && !onlyBranchId,
+        order: { name: 'ASC' },
       });
     }
 
@@ -81,7 +118,7 @@ export class TenantService {
       qb.andWhere('(LOWER(b.name) LIKE :search OR LOWER(b.code) LIKE :search)', { search: `%${query.search.toLowerCase()}%` });
     }
 
-    qb.orderBy('b.code', 'ASC')
+    qb.orderBy('b.name', 'ASC')
       .skip((page - 1) * limit)
       .take(limit);
 
@@ -89,48 +126,54 @@ export class TenantService {
     return createPagedResponse(items, total, page, limit);
   }
 
-  async getBranchById(tenantId: string, branchId: string) {
-    const branch = await this.branchRepo.findOne({ where: { id: branchId, tenant_id: tenantId } });
+  /** An archived branch is found too when `withArchived`: head office still opens its page. */
+  async getBranchById(tenantId: string, branchId: string, withArchived = false) {
+    const branch = await this.branchRepo.findOne({ where: { id: branchId, tenant_id: tenantId }, withDeleted: withArchived });
     if (!branch) throw new NotFoundException('Branch not found');
     return branch;
   }
 
-  async createBranch(tenantId: string, data: { code: string; name: string; branch_type?: BranchType; phone?: string; address?: string; time_zone?: string }, correlationId: string) {
+  /**
+   * Head office adds a branch with everything it needs to run: details, time zone, the pin
+   * and the weekly hours, saved together or not at all. The pin is required. There is no
+   * branch code to type; one is made for the places that still key on it.
+   */
+  async createBranch(tenantId: string, data: BranchInput & { hours?: OpeningHoursInput[] }, correlationId: string) {
+    const name = String(data.name || '').trim();
+    if (!name) throw new BadRequestException({ code: 'BRANCH_TITLE_REQUIRED', message: 'A branch needs a title' });
     if (data.branch_type && !BRANCH_TYPES.includes(data.branch_type)) {
       throw new BadRequestException(`branch_type is one of ${BRANCH_TYPES.join(', ')}`);
     }
-    const existing = await this.branchRepo.findOne({ where: { tenant_id: tenantId, code: data.code } });
-    if (existing) throw new ConflictException(`Branch code ${data.code} already exists`);
     if (data.time_zone && !isTimeZone(data.time_zone)) throw new BadRequestException(`${data.time_zone} is not a time zone`);
+    const pin = this.readPin(data);
+    if (!pin) throw new BadRequestException({ code: 'BRANCH_PIN_REQUIRED', message: 'Place the branch on the map before saving it' });
+    await this.assertTitleFree(tenantId, name);
 
-    const branch = this.branchRepo.create({
-      tenant_id: tenantId,
-      code: data.code.toUpperCase(),
-      name: data.name,
-      // Defaults to a storefront, which is what a branch created without a stated
-      // type has always meant here.
-      branch_type: data.branch_type || 'RESTAURANT',
-      phone: data.phone || null,
-      address: data.address || null,
-      time_zone: data.time_zone || 'Asia/Tehran',
-      is_active: true,
-    });
+    const hours = data.hours?.length ? this.normaliseHours(data.hours) : DEFAULT_WEEK;
+    const problem = hoursProblem(hours);
+    if (problem) throw new BadRequestException({ code: 'BRANCH_HOURS_OVERLAP', message: problem });
 
-    const saved = await this.branchRepo.save(branch);
-
-    // Initialize 7-day operating hours default
-    for (let day = 0; day < 7; day++) {
-      const hour = this.hoursRepo.create({
+    const saved = await this.branchRepo.manager.transaction(async (em) => {
+      const branch = em.create(Branch, {
         tenant_id: tenantId,
-        branch_id: saved.id,
-        day_of_week: day,
-        open_time: '08:00:00',
-        close_time: '23:00:00',
-        is_closed: false,
-        spans_midnight: false,
+        code: await this.nextBranchCode(em, tenantId, data.code),
+        name,
+        // Defaults to a storefront, which is what a branch created without a stated
+        // type has always meant here.
+        branch_type: data.branch_type || 'RESTAURANT',
+        phone: data.phone?.trim() || null,
+        address: data.address?.trim() || null,
+        time_zone: data.time_zone || 'Asia/Tehran',
+        latitude: pin.latitude,
+        longitude: pin.longitude,
+        is_active: true,
       });
-      await this.hoursRepo.save(hour);
-    }
+      const created = await em.save(Branch, branch);
+      for (const h of hours) {
+        await em.save(BranchOperatingHour, em.create(BranchOperatingHour, { tenant_id: tenantId, branch_id: created.id, ...h }));
+      }
+      return created;
+    });
 
     await this.auditWriter.write({
       tenantId,
@@ -145,13 +188,30 @@ export class TenantService {
     return saved;
   }
 
-  async updateBranch(tenantId: string, branchId: string, data: Partial<Branch>, correlationId: string) {
+  /** Head office changes a branch's details, time zone or pin. The pin can move, not go. */
+  async updateBranch(tenantId: string, branchId: string, data: BranchInput, correlationId: string) {
     const branch = await this.getBranchById(tenantId, branchId);
     const before = { ...branch };
     if (data.time_zone && !isTimeZone(data.time_zone)) throw new BadRequestException(`${data.time_zone} is not a time zone`);
-    // The business-day timeline is history; only a change of rule writes to it.
-    const { business_day_timeline: _timeline, ...changes } = data;
-    Object.assign(branch, changes);
+    if (data.branch_type && !BRANCH_TYPES.includes(data.branch_type)) {
+      throw new BadRequestException(`branch_type is one of ${BRANCH_TYPES.join(', ')}`);
+    }
+    if (data.name !== undefined) {
+      const name = String(data.name).trim();
+      if (!name) throw new BadRequestException({ code: 'BRANCH_TITLE_REQUIRED', message: 'A branch needs a title' });
+      if (name.toLowerCase() !== branch.name.toLowerCase()) await this.assertTitleFree(tenantId, name, branchId);
+      branch.name = name;
+    }
+    if (data.latitude !== undefined || data.longitude !== undefined) {
+      const pin = this.readPin(data);
+      if (!pin) throw new BadRequestException({ code: 'BRANCH_PIN_REQUIRED', message: 'The pin can be moved but not removed' });
+      branch.latitude = pin.latitude;
+      branch.longitude = pin.longitude;
+    }
+    if (data.phone !== undefined) branch.phone = data.phone?.trim() || null;
+    if (data.address !== undefined) branch.address = data.address?.trim() || null;
+    if (data.time_zone) branch.time_zone = data.time_zone;
+    if (data.branch_type) branch.branch_type = data.branch_type;
     // A new time zone moves when the branch's day turns over, from now on.
     const updated = await trackBusinessDayChange(this.branchRepo.manager, tenantId, () => this.branchRepo.save(branch));
 
@@ -168,26 +228,52 @@ export class TenantService {
     return updated;
   }
 
-  async archiveBranch(tenantId: string, branchId: string, correlationId: string) {
+  /**
+   * Head office archives a branch that has closed for good. Refused while a shift is open or
+   * an order is unfinished. Its agent is revoked, so it must be enrolled again on restore.
+   * Its staff keep their accounts: they can sign in, with no branch to work in, until head
+   * office gives them another.
+   */
+  async archiveBranch(tenantId: string, branchId: string, correlationId: string, actorId?: string | null) {
     const branch = await this.getBranchById(tenantId, branchId);
     // Same reason as a register: a till left open in a closed shop can never be counted.
     const openShifts = await this.branchRepo.manager.count(CashierShift, {
       where: { tenant_id: tenantId, branch_id: branchId, state: In(['OPEN', 'CLOSING_REVIEW']) },
     });
-    if (openShifts > 0) {
+    const unfinished: Array<{ order_number: string; call_number: number | null; status: string }> =
+      await this.branchRepo.manager.query(
+        `SELECT order_number, call_number, status FROM order_header
+          WHERE tenant_id = $1 AND branch_id = $2
+            AND (status IN ('PENDING_ACCEPTANCE', ${OPEN_STATUSES.map((s) => `'${s}'`).join(', ')})
+                 OR (status NOT IN ('DRAFT', 'CANCELLED', 'REJECTED', 'REFUNDED') AND outstanding_total > 0))
+          ORDER BY placed_at DESC NULLS LAST LIMIT 20`,
+        [tenantId, branchId],
+      );
+    if (openShifts > 0 || unfinished.length > 0) {
+      const parts = [
+        openShifts > 0 ? `${openShifts} shift(s) open` : '',
+        unfinished.length > 0 ? `${unfinished.length} order(s) unpaid or not finished` : '',
+      ].filter(Boolean);
       throw new ConflictException({
-        code: 'BRANCH_HAS_OPEN_SHIFT',
-        message: `${branch.name} has ${openShifts} shift(s) open. Close them before closing the branch.`,
+        code: openShifts > 0 ? 'BRANCH_HAS_OPEN_SHIFT' : 'BRANCH_HAS_OPEN_ORDERS',
+        message: `${branch.name} has ${parts.join(' and ')}. Close them before archiving the branch.`,
+        context: { openShifts, orders: unfinished },
       });
     }
+
+    const agents = await this.branchRepo.manager.update(
+      Agent,
+      { tenant_id: tenantId, branch_id: branchId, status: 'ACTIVE' },
+      { status: 'REVOKED', revoked_at: new Date(), revoked_by: actorId ?? null },
+    );
     branch.is_active = false;
+    branch.archived_by = actorId ?? null;
+    await this.branchRepo.save(branch);
     await this.branchRepo.softRemove(branch);
 
-    // A closed shop's staff accounts go with it. Left active, they signed in pinned to a
-    // branch nobody could see, with every screen empty and no branch to switch to.
-    const users = await this.branchRepo.manager
+    const staff = await this.branchRepo.manager
       .getRepository(AdminUser)
-      .update({ tenant_id: tenantId, branch_id: branchId, is_active: true }, { is_active: false });
+      .count({ where: { tenant_id: tenantId, branch_id: branchId, is_active: true } });
 
     await this.auditWriter.write({
       tenantId,
@@ -196,9 +282,30 @@ export class TenantService {
       entityType: 'Branch',
       entityId: branchId,
       correlationId,
-      details: { accountsDisabled: users.affected ?? 0 },
+      details: { agentsRevoked: agents.affected ?? 0, staffWithoutBranch: staff },
     });
-    return { success: true, accountsDisabled: users.affected ?? 0 };
+    return { success: true, agentsRevoked: agents.affected ?? 0, staffWithoutBranch: staff };
+  }
+
+  /** Brings an archived branch back as it was: data, tills, printers, hours. Its agent enrols again. */
+  async restoreBranch(tenantId: string, branchId: string, correlationId: string) {
+    const branch = await this.getBranchById(tenantId, branchId, true);
+    if (!branch.deleted_at) throw new BadRequestException({ code: 'BRANCH_NOT_ARCHIVED', message: `${branch.name} is not archived` });
+    await this.assertTitleFree(tenantId, branch.name, branchId);
+    await this.branchRepo.recover(branch);
+    branch.is_active = true;
+    branch.archived_by = null;
+    const restored = await this.branchRepo.save(branch);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'BRANCH_RESTORED',
+      entityType: 'Branch',
+      entityId: branchId,
+      correlationId,
+    });
+    return restored;
   }
 
   async getBranchHours(tenantId: string, branchId: string) {
@@ -211,52 +318,30 @@ export class TenantService {
   /**
    * Replace the hours of every day the list mentions. A day can have several shifts
    * (lunch 12–16, dinner 19–23): each is its own row. A closed day is one row marked
-   * closed. Days the list leaves out keep what they had.
+   * closed. Days the list leaves out keep what they had. A shift that closes at or before
+   * it opens runs past midnight.
    */
-  async updateBranchHours(tenantId: string, branchId: string, hours: Array<{ day_of_week: number; open_time?: string; close_time?: string; is_closed?: boolean; spans_midnight?: boolean }>, correlationId: string) {
+  async updateBranchHours(tenantId: string, branchId: string, hours: OpeningHoursInput[], correlationId: string) {
     await this.getBranchById(tenantId, branchId);
-
-    const byDay = new Map<number, typeof hours>();
     for (const h of hours) {
-      if (h.day_of_week < 0 || h.day_of_week > 6) {
+      if (!Number.isInteger(h.day_of_week) || h.day_of_week < 0 || h.day_of_week > 6) {
         throw new BadRequestException(`Invalid day_of_week ${h.day_of_week}. Must be 0-6.`);
       }
-
-      if (!h.is_closed && h.open_time && h.close_time && !h.spans_midnight) {
-        if (h.open_time >= h.close_time) {
-          throw new BadRequestException(`Operating open_time (${h.open_time}) must be earlier than close_time (${h.close_time}) unless spans_midnight is true.`);
-        }
-      }
-      byDay.set(h.day_of_week, [...(byDay.get(h.day_of_week) || []), h]);
     }
+    const incoming = this.normaliseHours(hours);
+    const days = new Set(incoming.map((h) => h.day_of_week));
+    const kept = (await this.getBranchHours(tenantId, branchId)).filter((h) => !days.has(h.day_of_week));
+    const problem = hoursProblem([...kept, ...incoming]);
+    if (problem) throw new BadRequestException({ code: 'BRANCH_HOURS_OVERLAP', message: problem });
 
-    for (const [day, rows] of byDay) {
-      const open = rows.filter((r) => !r.is_closed);
-      const shifts = open
-        .map((r) => ({ open: (r.open_time || '08:00:00').slice(0, 5), close: (r.close_time || '23:00:00').slice(0, 5), spans: !!r.spans_midnight }))
-        .sort((a, b) => a.open.localeCompare(b.open));
-      for (let i = 1; i < shifts.length; i++) {
-        if (shifts[i - 1].spans || shifts[i].open < shifts[i - 1].close) {
-          throw new BadRequestException(`Shifts on day ${day} overlap (${shifts[i - 1].open}–${shifts[i - 1].close} and ${shifts[i].open}–${shifts[i].close}).`);
-        }
+    await this.hoursRepo.manager.transaction(async (em) => {
+      for (const day of days) {
+        await em.delete(BranchOperatingHour, { tenant_id: tenantId, branch_id: branchId, day_of_week: day });
       }
-
-      await this.hoursRepo.delete({ tenant_id: tenantId, branch_id: branchId, day_of_week: day });
-      const toSave = open.length ? open : [{ day_of_week: day, is_closed: true }];
-      for (const h of toSave) {
-        await this.hoursRepo.save(
-          this.hoursRepo.create({
-            tenant_id: tenantId,
-            branch_id: branchId,
-            day_of_week: day,
-            open_time: h.open_time || '08:00:00',
-            close_time: h.close_time || '23:00:00',
-            is_closed: h.is_closed ?? false,
-            spans_midnight: h.spans_midnight ?? false,
-          }),
-        );
+      for (const h of incoming) {
+        await em.save(BranchOperatingHour, em.create(BranchOperatingHour, { tenant_id: tenantId, branch_id: branchId, ...h }));
       }
-    }
+    });
 
     await this.auditWriter.write({
       tenantId,
@@ -269,6 +354,69 @@ export class TenantService {
     });
 
     return await this.getBranchHours(tenantId, branchId);
+  }
+
+  /** Rows as stored: one per shift, or one closed row for a day with none. */
+  private normaliseHours(hours: OpeningHoursInput[]) {
+    const time = (value: string | undefined, fallback: string) => {
+      const text = String(value || fallback).slice(0, 5);
+      if (!isHhMm(text)) throw new BadRequestException(`${value} is not a time (HH:MM)`);
+      return `${text}:00`;
+    };
+    const rows: Array<{ day_of_week: number; open_time: string; close_time: string; is_closed: boolean; spans_midnight: boolean }> = [];
+    for (let day = 0; day < 7; day++) {
+      const ofDay = hours.filter((h) => h.day_of_week === day);
+      if (!ofDay.length) continue;
+      const open = ofDay.filter((h) => !h.is_closed);
+      if (!open.length) {
+        rows.push({ day_of_week: day, open_time: '00:00:00', close_time: '00:00:00', is_closed: true, spans_midnight: false });
+        continue;
+      }
+      for (const h of open) {
+        const open_time = time(h.open_time, '08:00');
+        const close_time = time(h.close_time, '23:00');
+        rows.push({ day_of_week: day, open_time, close_time, is_closed: false, spans_midnight: close_time <= open_time });
+      }
+    }
+    return rows;
+  }
+
+  /** Both coordinates, in range; null when either is missing. */
+  private readPin(data: { latitude?: number | string | null; longitude?: number | string | null }) {
+    if (data.latitude === null || data.latitude === undefined || data.latitude === '') return null;
+    if (data.longitude === null || data.longitude === undefined || data.longitude === '') return null;
+    const latitude = Number(data.latitude);
+    const longitude = Number(data.longitude);
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      throw new BadRequestException({ code: 'BRANCH_PIN_INVALID', message: 'The pin is not a place on the map' });
+    }
+    return { latitude: Math.round(latitude * 1e6) / 1e6, longitude: Math.round(longitude * 1e6) / 1e6 };
+  }
+
+  /** Two live branches of one chain cannot share a title; an archived one keeps its own. */
+  private async assertTitleFree(tenantId: string, name: string, exceptId?: string) {
+    const clash = await this.branchRepo
+      .createQueryBuilder('b')
+      .where('b.tenant_id = :tenantId AND LOWER(b.name) = LOWER(:name)', { tenantId, name })
+      .andWhere(exceptId ? 'b.id <> :exceptId' : '1 = 1', { exceptId })
+      .getOne();
+    if (clash) throw new ConflictException({ code: 'BRANCH_TITLE_TAKEN', message: `Another branch is already called ${name}` });
+  }
+
+  /** The code other screens still key on: the one given, or B01, B02… whichever is free. */
+  private async nextBranchCode(em: EntityManager, tenantId: string, wanted?: string) {
+    const taken = new Set(
+      (await em.find(Branch, { where: { tenant_id: tenantId }, withDeleted: true, select: ['code'] })).map((b) => b.code.toUpperCase()),
+    );
+    const given = wanted?.trim().toUpperCase();
+    if (given) {
+      if (taken.has(given)) throw new ConflictException(`Branch code ${given} already exists`);
+      return given;
+    }
+    for (let n = taken.size + 1; ; n++) {
+      const code = `B${String(n).padStart(2, '0')}`;
+      if (!taken.has(code)) return code;
+    }
   }
 
   async getTerminals(tenantId: string, branchId?: string) {

@@ -1,189 +1,102 @@
-import type { Branch, BranchType } from 'src/api/tenantApi';
+import type { Branch } from 'src/api/tenantApi';
 
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import CorporateFareIcon from '@mui/icons-material/CorporateFare';
+import { useTheme } from '@mui/material/styles';
+import PlaceIcon from '@mui/icons-material/Place';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import {
   Box,
   Card,
   Chip,
-  Stack,
   Table,
-  Paper,
   Alert,
+  Stack,
   Button,
-  Drawer,
+  Switch,
+  Tooltip,
   TableRow,
-  MenuItem,
   TableBody,
   TableCell,
   TableHead,
-  TextField,
   Typography,
-  IconButton,
-  CardContent,
   TableContainer,
+  FormControlLabel,
   CircularProgress,
 } from '@mui/material';
 
+import { paths } from 'src/routes/paths';
+
 import { tenantApi } from 'src/api/tenantApi';
 
-import { VersionTag } from 'src/components/version-tag';
-import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
+import { BranchOpenChip, useBranchOpenStatus } from 'src/components/branch';
 
+/**
+ * Head office's list of the chain's branches: whether each is open now, and whether it has
+ * its pin. A row opens the branch; archived ones are shown on request.
+ */
 export function BranchesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [code, setCode] = useState('');
-  const [branchType, setBranchType] = useState<BranchType>('RESTAURANT');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
-
-  // Confirm dialog state for archive
-  const [archiveConfirm, setArchiveConfirm] = useState<{ id: string; name: string; open: boolean }>({
-    open: false,
-    id: '',
-    name: '',
-  });
-
-  const branchTypeLabels: Record<BranchType, string> = {
-    RESTAURANT: t('operations.branches.types.restaurant', 'Restaurant'),
-    COMMISSARY: t('operations.branches.types.commissary', 'Production Kitchen'),
-    OFFICE: t('operations.branches.types.office', 'Office'),
-  };
-
-  const loadBranches = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await tenantApi.getBranches();
-      setBranches(data || []);
+      setBranches(await tenantApi.getBranches({ archived: showArchived }));
       setError(null);
     } catch (err: any) {
       setError(err.detail || err.message || t('operations.branches.loadError', 'Failed to load branches'));
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [showArchived, t]);
 
   useEffect(() => {
-    loadBranches();
-  }, [loadBranches]);
+    load();
+  }, [load]);
 
-  const closeDrawer = () => {
-    setDrawerOpen(false);
-    setEditingId(null);
-    setCode('');
-    setName('');
-    setPhone('');
-    setAddress('');
-    setBranchType('RESTAURANT');
-  };
-
-  const openCreate = () => {
-    setEditingId(null);
-    setCode('');
-    setName('');
-    setPhone('');
-    setAddress('');
-    setBranchType('RESTAURANT');
-    setDrawerOpen(true);
-  };
-
-  const openEdit = (branch: Branch) => {
-    setEditingId(branch.id);
-    setCode(branch.code);
-    setName(branch.name);
-    setPhone(branch.phone || '');
-    setAddress(branch.address || '');
-    setBranchType(branch.branch_type || 'RESTAURANT');
-    setDrawerOpen(true);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (editingId) {
-        // Code is the stable key other records point at, so an edit changes the
-        // human-facing details only and leaves the identifier alone.
-        await tenantApi.updateBranch(editingId, { name, phone, address, branch_type: branchType });
-        setSuccess(t('operations.branches.updateSuccess', 'Branch updated successfully'));
-      } else {
-        await tenantApi.createBranch({ code, name, phone, address, branch_type: branchType });
-        setSuccess(t('operations.branches.saveSuccess', 'Branch created successfully'));
-      }
-      closeDrawer();
-      loadBranches();
-    } catch (err: any) {
-      setError(
-        err.detail ||
-          err.message ||
-          (editingId
-            ? t('operations.branches.updateError', 'Failed to update branch')
-            : t('operations.branches.createError', 'Failed to create branch'))
-      );
-    }
-  };
-
-  const handleConfirmArchive = async () => {
-    try {
-      await tenantApi.archiveBranch(archiveConfirm.id);
-      setArchiveConfirm({ open: false, id: '', name: '' });
-      setSuccess(t('operations.branches.archiveSuccess', 'Branch archived successfully'));
-      loadBranches();
-    } catch (err: any) {
-      setError(err.detail || err.message || t('operations.branches.archiveError', 'Failed to archive branch'));
-    }
-  };
+  const archivedCount = branches.filter((b) => b.deleted_at).length;
 
   return (
     <Box sx={{ pb: 6 }}>
       <CustomBreadcrumbs
-        heading={t('operations.branches.title', 'Branch Management')}
+        heading={t('operations.branches.title', 'Branches')}
         links={[
           { name: t('nav.home', 'Home'), href: '/app/dashboard' },
           { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
-          { name: t('operations.branches.title', 'Branch Management') },
+          { name: t('operations.branches.title', 'Branches') },
         ]}
         action={
-          <Stack direction="row" spacing={1.5}>
-            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadBranches}>
-              {t('common.refresh', 'Refresh')}
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={openCreate}
-              sx={{ fontWeight: 'bold' }}
-            >
-              {t('operations.branches.createBranch', 'Create Branch')}
-            </Button>
-          </Stack>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate(paths.app.operations.branchNew)}>
+            {t('branchMgmt.list.add', 'Add branch')}
+          </Button>
         }
       />
 
-      <Alert icon={<CorporateFareIcon fontSize="inherit" />} severity="info" sx={{ mb: 3 }}>
-        {t(
-          'operations.branches.orgScopeNotice',
-          'Organization-level setting. Locations are defined here at head office and are available to the whole chain; each branch then runs its own operations against them.'
-        )}
-      </Alert>
+      <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 1 }}>
+        <Typography variant="body2" color="text.secondary">
+          {t('branchMgmt.list.intro', 'Head office adds and runs the chain\'s branches. Open a branch to change its details, hours or location.')}
+        </Typography>
+        <FormControlLabel
+          control={<Switch size="small" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />}
+          label={
+            <Typography variant="body2">
+              {showArchived && archivedCount
+                ? t('branchMgmt.list.showArchivedCount', { defaultValue: 'Show archived ({{count}})', count: archivedCount })
+                : t('branchMgmt.list.showArchived', 'Show archived')}
+            </Typography>
+          }
+        />
+      </Stack>
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
@@ -191,190 +104,95 @@ export function BranchesPage() {
         </Alert>
       )}
 
-      {success && (
-        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess(null)}>
-          {success}
-        </Alert>
-      )}
-
-      <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
-        <CardContent sx={{ p: 0 }}>
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
-            <Table>
-              <TableHead>
+      <Card sx={{ borderRadius: 3 }}>
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>{t('branchMgmt.list.branch', 'Branch')}</TableCell>
+                <TableCell>{t('branchMgmt.details.phone', 'Phone')}</TableCell>
+                <TableCell>{t('branchMgmt.list.now', 'Now')}</TableCell>
+                <TableCell>{t('branchMgmt.tabs.location', 'Location')}</TableCell>
+                <TableCell>{t('branchMgmt.details.timeZone', 'Time zone')}</TableCell>
+                <TableCell>{t('operations.branches.status', 'Status')}</TableCell>
+                <TableCell padding="checkbox" />
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loading ? (
                 <TableRow>
-                  <TableCell>{t('operations.branches.code', 'Code')}</TableCell>
-                  <TableCell>{t('operations.branches.name', 'Name')}</TableCell>
-                  <TableCell>{t('operations.branches.type', 'Type')}</TableCell>
-                  <TableCell>{t('operations.branches.phone', 'Phone')}</TableCell>
-                  <TableCell>{t('operations.branches.address', 'Address')}</TableCell>
-                  <TableCell>{t('operations.branches.timeZone', 'Time Zone')}</TableCell>
-                  <TableCell>{t('operations.branches.status', 'Status')}</TableCell>
-                  <TableCell align="center">{t('operations.branches.actions', 'Actions')}</TableCell>
+                  <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                    <CircularProgress size={32} />
+                  </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
-                      <CircularProgress size={32} />
-                    </TableCell>
-                  </TableRow>
-                ) : branches.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                      <Typography color="text.secondary">
-                        {t('operations.branches.noBranches', 'No branches found. Click "Create Branch" to add one.')}
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  branches.map((b) => (
-                    <TableRow key={b.id} hover>
-                      <TableCell><code>{b.code}</code></TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>{b.name}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={branchTypeLabels[b.branch_type || 'RESTAURANT']}
-                          color={(b.branch_type || 'RESTAURANT') === 'RESTAURANT' ? 'primary' : 'default'}
-                          size="small"
-                          variant={(b.branch_type || 'RESTAURANT') === 'RESTAURANT' ? 'filled' : 'outlined'}
-                        />
-                      </TableCell>
-                      <TableCell>{b.phone || '—'}</TableCell>
-                      <TableCell>{b.address || '—'}</TableCell>
-                      <TableCell>{b.time_zone || 'Asia/Tehran'}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={b.is_active ? t('operations.branches.active', 'Active') : t('operations.branches.archived', 'Archived')}
-                          color={b.is_active ? 'success' : 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <IconButton
-                          title={t('operations.branches.edit', 'Edit Branch')}
-                          onClick={() => openEdit(b)}
-                        >
-                          <EditIcon />
-                        </IconButton>
-                        <IconButton
-                          title={t('operations.branches.schedule', 'Hours Schedule')}
-                          color="primary"
-                          onClick={() => navigate(`/app/operations/branches/${b.id}`)}
-                        >
-                          <AccessTimeIcon />
-                        </IconButton>
-                        <IconButton
-                          title={t('operations.branches.archive', 'Archive Branch')}
-                          color="error"
-                          onClick={() => setArchiveConfirm({ open: true, id: b.id, name: b.name })}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
+              ) : branches.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                    <Typography color="text.secondary" sx={{ mb: 2 }}>
+                      {t('branchMgmt.list.empty', 'No branches yet.')}
+                    </Typography>
+                    <Button variant="outlined" startIcon={<AddIcon />} onClick={() => navigate(paths.app.operations.branchNew)}>
+                      {t('branchMgmt.list.add', 'Add branch')}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                branches.map((branch) => (
+                  <BranchRow key={branch.id} branch={branch} onOpen={() => navigate(paths.app.operations.branchDetail(branch.id))} />
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Card>
-
-      {/* Create Branch Drawer */}
-      <Drawer
-        anchor="right"
-        open={drawerOpen}
-        onClose={closeDrawer}
-      >
-        <Box sx={{ width: { xs: 320, sm: 400 }, p: 3 }}>
-          <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            {editingId
-              ? t('operations.branches.editBranch', 'Edit Branch Location')
-              : t('operations.branches.newBranch', 'New Branch Location')}
-          </Typography>
-          <form onSubmit={handleSubmit}>
-            <Stack spacing={2.5}>
-              <TextField
-                label={t('operations.branches.branchCode', 'Branch Code')}
-                placeholder="e.g. TEH-WEST"
-                required
-                fullWidth
-                disabled={!!editingId}
-                helperText={
-                  editingId
-                    ? t('operations.branches.codeLocked', 'Branch code cannot be changed after creation.')
-                    : undefined
-                }
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-              />
-              <TextField
-                label={t('operations.branches.branchName', 'Branch Name')}
-                placeholder="e.g. Tehran West Branch"
-                required
-                fullWidth
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-              <TextField
-                select
-                label={t('operations.branches.type', 'Type')}
-                helperText={t(
-                  'operations.branches.typeHint',
-                  'Only a restaurant takes customer orders. Production kitchens and offices get no POS, kiosk or kitchen display, and are left out of sales comparisons.'
-                )}
-                fullWidth
-                value={branchType}
-                onChange={(e) => setBranchType(e.target.value as BranchType)}
-              >
-                {(['RESTAURANT', 'COMMISSARY', 'OFFICE'] as BranchType[]).map((value) => (
-                  <MenuItem key={value} value={value}>
-                    {branchTypeLabels[value]}
-                    {value !== 'RESTAURANT' && <VersionTag feature="branches.nonSellingTypes" sx={{ ml: 1 }} />}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <TextField
-                label={t('operations.branches.phoneNumber', 'Phone Number')}
-                placeholder="e.g. +982188000003"
-                fullWidth
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-              <TextField
-                label={t('operations.branches.address', 'Address')}
-                multiline
-                rows={3}
-                fullWidth
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-              />
-              <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>
-                {editingId
-                  ? t('operations.branches.updateBranch', 'Update Branch')
-                  : t('operations.branches.saveBranch', 'Save Branch')}
-              </Button>
-            </Stack>
-          </form>
-        </Box>
-      </Drawer>
-
-      {/* Archive Confirm Dialog */}
-      <ConfirmDialog
-        open={archiveConfirm.open}
-        onClose={() => setArchiveConfirm({ open: false, id: '', name: '' })}
-        onConfirm={handleConfirmArchive}
-        title={t('operations.branches.archiveConfirmTitle', 'Archive Branch Location')}
-        content={t(
-          'operations.branches.archiveConfirmContent',
-          'Are you sure you want to archive branch "{{name}}"? This will hide the location from active POS routing.',
-          { name: archiveConfirm.name }
-        )}
-        confirmLabel={t('operations.branches.archive', 'Archive')}
-        confirmColor="warning"
-      />
     </Box>
+  );
+}
+
+function BranchRow({ branch, onOpen }: { branch: Branch; onOpen: () => void }) {
+  const { t } = useTranslation();
+  const theme = useTheme();
+  const archived = !!branch.deleted_at || !branch.is_active;
+  const status = useBranchOpenStatus(archived ? null : branch.id, branch.time_zone);
+  const hasPin = branch.latitude !== null && branch.latitude !== undefined;
+
+  return (
+    <TableRow hover onClick={onOpen} sx={{ cursor: 'pointer', ...(archived && { opacity: 0.6 }) }}>
+      <TableCell>
+        <Typography sx={{ fontWeight: 600 }}>{branch.name}</Typography>
+        <Typography variant="caption" color="text.secondary">
+          {branch.address || t('operations.branchDetail.noAddress', 'No address specified')}
+        </Typography>
+      </TableCell>
+      <TableCell dir="ltr" sx={{ textAlign: theme.direction === 'rtl' ? 'right' : 'left' }}>
+        {branch.phone || '—'}
+      </TableCell>
+      <TableCell>{archived ? '—' : <BranchOpenChip status={status} />}</TableCell>
+      <TableCell>
+        {hasPin ? (
+          <Tooltip title={`${Number(branch.latitude).toFixed(5)}, ${Number(branch.longitude).toFixed(5)}`}>
+            <PlaceIcon fontSize="small" color="primary" />
+          </Tooltip>
+        ) : (
+          <Chip size="small" color="warning" variant="outlined" label={t('branchMgmt.location.missing', 'No pin on the map')} />
+        )}
+      </TableCell>
+      <TableCell>
+        <Typography variant="body2" dir="ltr" component="span">
+          {branch.time_zone || 'Asia/Tehran'}
+        </Typography>
+      </TableCell>
+      <TableCell>
+        <Chip
+          size="small"
+          color={archived ? 'default' : 'success'}
+          variant={archived ? 'outlined' : 'filled'}
+          label={archived ? t('operations.branches.archived', 'Archived') : t('operations.branches.active', 'Active')}
+        />
+      </TableCell>
+      <TableCell padding="checkbox">
+        <ChevronRightIcon color="action" sx={{ transform: theme.direction === 'rtl' ? 'rotate(180deg)' : 'none' }} />
+      </TableCell>
+    </TableRow>
   );
 }
