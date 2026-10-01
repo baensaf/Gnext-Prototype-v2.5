@@ -60,49 +60,24 @@ export const IRANBURGER_BRANCHES: IranBurgerBranch[] = [
 
 /**
  * A branch's weekly hours: one shift every day, HH:MM, with the odd day different. A close
- * at or before the open runs past midnight (00:00 is midnight). `day` is JavaScript's day
- * number, 0 = Sunday.
+ * at or before the open runs past midnight. `day` is JavaScript's day number, 0 = Sunday.
  */
 export interface IranBurgerHours {
   daily: [open: string, close: string];
   days?: Partial<Record<number, [open: string, close: string]>>;
-  /** `balad`: as the branch's Balad listing gave them on 2026-10-01. `assumed`: the listing has none. */
-  source: 'balad' | 'assumed';
 }
 
-/** The chain's usual day, from the listings that give hours; used where a listing has none. */
-const USUAL_DAY: IranBurgerHours = { daily: ['11:00', '00:00'], source: 'assumed' };
-
 /**
- * Opening hours by branch code. Balad shows "11:59 PM" for a shift that ends at midnight;
- * that is 00:00 here. Niayesh stays open past midnight every night, until 04:00 after
- * Wednesday. The commissary does not sell, so it has none.
+ * The chain's hours, as the product manager gave them on 2026-10-01: every branch opens at
+ * 11:00 and closes at 04:00 the next morning, every day. (Balad's listings, used before,
+ * mostly showed closing at midnight.)
  */
-export const IRANBURGER_HOURS: Record<string, IranBurgerHours> = {
-  'TEH-CENTRAL': { daily: ['10:30', '23:30'], source: 'balad' },
-  'TEH-DOWNTOWN': USUAL_DAY,
-  'TEH-NORTH': { daily: ['11:00', '00:00'], source: 'balad' },
-  'TEH-KARGAR': { daily: ['11:00', '00:00'], source: 'balad' },
-  'TEH-VALIASR-CAFE': { daily: ['10:30', '00:00'], source: 'balad' },
-  'TEH-YAKHCHIABAD': USUAL_DAY,
-  'TEH-DADMAN': { daily: ['11:00', '00:00'], source: 'balad' },
-  'TEH-KIANSHAHR': { daily: ['13:00', '00:00'], source: 'balad' },
-  'TEH-AZADI': USUAL_DAY,
-  'TEH-ZAFAR': USUAL_DAY,
-  'TEH-HEKMAT': USUAL_DAY,
-  'SHZ-NIAYESH': { daily: ['12:00', '01:00'], days: { 3: ['12:00', '04:00'] }, source: 'balad' },
-  'SHZ-YAS': USUAL_DAY,
-  'SHZ-SANAYE': USUAL_DAY,
-  'SHZ-MAHALLATI': USUAL_DAY,
-  'SHZ-SERAJ': USUAL_DAY,
-  'SHZ-FALAKEH-GAS': { daily: ['11:00', '00:00'], source: 'balad' },
-  'SHZ-VALFAJR': { daily: ['12:00', '00:00'], source: 'balad' },
-  'SHZ-FADAK': { daily: ['11:30', '00:00'], source: 'balad' },
-  'SHZ-KASAEI': { daily: ['11:00', '00:00'], source: 'balad' },
-  'SHZ-AFIFABAD': USUAL_DAY,
-  'SHZ-KIANSHAHR': USUAL_DAY,
-  'SHZ-MODARES': { daily: ['10:00', '00:00'], source: 'balad' },
-};
+export const IRANBURGER_CHAIN_HOURS: IranBurgerHours = { daily: ['11:00', '04:00'] };
+
+/** Opening hours by branch code. The commissary does not sell, so it has none. */
+export const IRANBURGER_HOURS: Record<string, IranBurgerHours> = Object.fromEntries(
+  IRANBURGER_BRANCHES.filter((b) => (b.branchType || 'RESTAURANT') === 'RESTAURANT').map((b) => [b.code, IRANBURGER_CHAIN_HOURS]),
+);
 
 export interface IranBurgerCategory {
   code: string;
