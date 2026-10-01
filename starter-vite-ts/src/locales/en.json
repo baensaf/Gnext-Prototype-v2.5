@@ -4208,6 +4208,7 @@
     },
     "status": {
       "openUntil": "Open until {{time}}",
+      "openUntilMidnight": "Open until midnight",
       "openAllDay": "Open 24 hours",
       "closedOpens": "Closed · opens {{day}} {{time}}",
       "closedAlways": "Closed every day"

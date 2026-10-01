@@ -4208,6 +4208,7 @@
     },
     "status": {
       "openUntil": "باز تا {{time}}",
+      "openUntilMidnight": "باز تا نیمه‌شب",
       "openAllDay": "باز ۲۴ ساعته",
       "closedOpens": "بسته · باز می‌شود {{day}} {{time}}",
       "closedAlways": "همه روزها بسته"

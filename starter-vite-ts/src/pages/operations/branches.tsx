@@ -153,7 +153,9 @@ function BranchRow({ branch, onOpen }: { branch: Branch; onOpen: () => void }) {
   const { t } = useTranslation();
   const theme = useTheme();
   const archived = !!branch.deleted_at || !branch.is_active;
-  const status = useBranchOpenStatus(archived ? null : branch.id, branch.time_zone);
+  // A production kitchen or office does not sell, so open or closed says nothing about it.
+  const sells = (branch.branch_type ?? 'RESTAURANT') === 'RESTAURANT';
+  const status = useBranchOpenStatus(archived || !sells ? null : branch.id, branch.time_zone);
   const hasPin = branch.latitude !== null && branch.latitude !== undefined;
 
   return (
@@ -167,7 +169,7 @@ function BranchRow({ branch, onOpen }: { branch: Branch; onOpen: () => void }) {
       <TableCell dir="ltr" sx={{ textAlign: theme.direction === 'rtl' ? 'right' : 'left' }}>
         {branch.phone || '—'}
       </TableCell>
-      <TableCell>{archived ? '—' : <BranchOpenChip status={status} />}</TableCell>
+      <TableCell>{archived || !sells ? '—' : <BranchOpenChip status={status} />}</TableCell>
       <TableCell>
         {hasPin ? (
           <Tooltip title={`${Number(branch.latitude).toFixed(5)}, ${Number(branch.longitude).toFixed(5)}`}>
