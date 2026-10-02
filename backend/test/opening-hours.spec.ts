@@ -31,9 +31,9 @@ describe('opening hours', () => {
     expect(isOpenAt(week, at, 'Asia/Dubai')).toBe(false);
   });
 
-  it('treats equal times as the whole day and no hours as always open', () => {
+  it('treats equal times as the whole day, and no hours as closed', () => {
     expect(isOpenAt([shift(1, '00:00', '00:00')], tehran('2026-10-05T03:00:00'), 'Asia/Tehran')).toBe(true);
-    expect(isOpenAt([], tehran('2026-10-05T03:00:00'), 'Asia/Tehran')).toBe(true);
+    expect(isOpenAt([], tehran('2026-10-05T03:00:00'), 'Asia/Tehran')).toBe(false);
   });
 
   it('refuses overlapping shifts, and a late shift running into the next day', () => {

@@ -27,6 +27,14 @@ export class AdminUser {
   @Column({ type: 'uuid', nullable: true })
   branch_id: string | null;
 
+  /**
+   * Set when the account's branch was archived: the assignment was taken away, though
+   * `branch_id` still says where it worked. The account then has no branch at all (never head
+   * office) until head office assigns one, which clears this. Restoring the branch does not.
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  branch_removed_at: Date | null;
+
   @Column({ type: 'text', nullable: true })
   pin_hash: string;
 

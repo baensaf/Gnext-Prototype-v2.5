@@ -9,6 +9,8 @@ import Box from '@mui/material/Box';
 import { useTheme } from '@mui/material/styles';
 import { iconButtonClasses } from '@mui/material/IconButton';
 
+import { NoBranchGate } from 'src/routes/components/requires-branch';
+
 import { Logo } from 'src/components/logo';
 import { useSettingsContext } from 'src/components/settings';
 import { VersionLabelsButton } from 'src/components/version-tag';
@@ -213,7 +215,7 @@ export function DashboardLayout({
           : (slotProps?.main?.sx ? [slotProps.main.sx] : [])),
       ]}
     >
-      {children}
+      <NoBranchGate>{children}</NoBranchGate>
     </MainSection>
   );
 

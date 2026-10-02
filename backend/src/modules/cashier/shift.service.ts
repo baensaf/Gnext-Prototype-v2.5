@@ -390,6 +390,20 @@ export class ShiftService {
       if (terminal.is_active === false || (terminal.terminal_type && terminal.terminal_type !== 'CASHIER')) {
         throw new BadRequestException(`Terminal ${terminal.code || terminal.id} is not an active cash register`);
       }
+      // No drawer opens at an archived branch. The lock is shared with archiving, so a shift
+      // opened while the branch is being archived waits for it, then finds it archived.
+      const branch = await em.findOne(Branch, {
+        where: { id: terminal.branch_id, tenant_id: tenantId },
+        withDeleted: true,
+        lock: { mode: 'pessimistic_read' },
+      });
+      if (branch && (branch.deleted_at || branch.is_active === false)) {
+        throw new BadRequestException({
+          code: 'BRANCH_ARCHIVED',
+          title: 'Branch Archived',
+          detail: 'This branch is archived; no shift can be opened there.',
+        });
+      }
 
       const currencyCode = dto.currencyCode || 'IRR';
 

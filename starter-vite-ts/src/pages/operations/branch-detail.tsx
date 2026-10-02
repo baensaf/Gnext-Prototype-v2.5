@@ -64,11 +64,13 @@ const pinOf = (branch: Branch): Pin | null =>
     ? { latitude: Number(branch.latitude), longitude: Number(branch.longitude) }
     : null;
 
-type ArchiveRefusal = {
-  detail: string;
-  openShifts: number;
-  orders: Array<{ order_number: string; call_number: number | null; status: string }>;
+/** What the server says stops the archive: one entry per shift, order, delivery or settlement. */
+type ArchiveBlocker = {
+  kind: 'SHIFT' | 'ORDER' | 'REFUND_DUE' | 'DELIVERY' | 'SETTLEMENT' | 'HELD_ORDER';
+  label: string;
 };
+
+type ArchiveRefusal = { detail: string; items: ArchiveBlocker[] };
 
 /**
  * One branch: its details, weekly hours and pin, each on a tab and saved on its own. Head
@@ -97,6 +99,16 @@ export function BranchDetailPage() {
   const [refusal, setRefusal] = useState<ArchiveRefusal | null>(null);
 
   const status = useBranchOpenStatus(branch?.id, branch?.time_zone, rows);
+
+  const blockerKindLabel = (kind: ArchiveBlocker['kind']) =>
+    ({
+      SHIFT: t('branchMgmt.archive.kinds.shift', 'Cash shift not closed'),
+      ORDER: t('branchMgmt.archive.kinds.order', 'Order unpaid or in progress'),
+      REFUND_DUE: t('branchMgmt.archive.kinds.refundDue', 'Cancelled order, money not given back'),
+      DELIVERY: t('branchMgmt.archive.kinds.delivery', 'Delivery not finished'),
+      SETTLEMENT: t('branchMgmt.archive.kinds.settlement', 'Courier settlement open'),
+      HELD_ORDER: t('branchMgmt.archive.kinds.heldOrder', 'Held order (discard it first)'),
+    })[kind] || kind;
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -203,11 +215,7 @@ export function BranchDetailPage() {
       );
     } catch (err: any) {
       setArchiveOpen(false);
-      setRefusal({
-        detail: err.detail || err.message,
-        openShifts: Number(err.context?.openShifts || 0),
-        orders: err.context?.orders || [],
-      });
+      setRefusal({ detail: err.detail || err.message, items: err.context?.items || [] });
     } finally {
       setSaving(false);
     }
@@ -420,19 +428,11 @@ export function BranchDetailPage() {
           <Typography variant="body2" sx={{ mb: 1 }}>
             {refusal?.detail}
           </Typography>
-          {!!refusal?.openShifts && (
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              {t('branchMgmt.archive.openShifts', { defaultValue: 'Shifts still open: {{count}}', count: refusal.openShifts })}
-            </Typography>
-          )}
-          {!!refusal?.orders.length && (
+          {!!refusal?.items.length && (
             <List dense disablePadding>
-              {refusal.orders.map((order) => (
-                <ListItem key={order.order_number} disableGutters>
-                  <ListItemText
-                    primary={order.call_number ? `#${order.call_number} · ${order.order_number}` : order.order_number}
-                    secondary={order.status}
-                  />
+              {refusal.items.map((item) => (
+                <ListItem key={`${item.kind}-${item.label}`} disableGutters>
+                  <ListItemText primary={item.label} secondary={blockerKindLabel(item.kind)} />
                 </ListItem>
               ))}
             </List>

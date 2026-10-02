@@ -19,6 +19,11 @@ export type BranchContextValue = {
   /** The kind of site currently in scope; head office is not a site, so null there. */
   selectedBranchType: BranchType | null;
   loading: boolean;
+  /**
+   * The account's branch was archived and taken away from it: it signs in with no branch to
+   * work in until head office assigns one. Only true once the branch list has been read.
+   */
+  hasNoBranch: boolean;
   setSelectedBranchId: (id: string) => void;
   refreshBranches: () => Promise<void>;
 };
@@ -104,12 +109,15 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
     }
   });
   const [loading, setLoading] = useState(true);
+  // Whose branch list has been read: "no branch" is only known once it has, for this account.
+  const [loadedFor, setLoadedFor] = useState<string | null | undefined>(undefined);
 
   const fetchBranches = useCallback(async () => {
     try {
       setLoading(true);
       const list = await tenantApi.getBranches();
       setBranches(list);
+      setLoadedFor(userBranchId);
 
       if (userBranchId) {
         // Not a preference: a branch account cannot be at head office, and a stale
@@ -185,6 +193,8 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
     // Rows written before branch_type existed are storefronts, which is what they were.
     selectedBranchType: isHeadOffice ? null : selectedBranch?.branch_type ?? 'RESTAURANT',
     loading,
+    // A branch account whose own branch no longer comes back: it was archived.
+    hasNoBranch: !!userBranchId && loadedFor === userBranchId && !loading && !branches.some((b) => b.id === userBranchId),
     setSelectedBranchId,
     refreshBranches: fetchBranches,
   };

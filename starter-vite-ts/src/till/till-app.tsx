@@ -101,6 +101,8 @@ export function TillApp() {
       isHeadOffice: false,
       selectedBranchType: selected ? 'RESTAURANT' : null,
       loading: false,
+      // The offline till runs on its own branch's PC; an archived branch's agent is refused.
+      hasNoBranch: false,
       setSelectedBranchId: () => undefined,
       refreshBranches: async () => undefined,
     };

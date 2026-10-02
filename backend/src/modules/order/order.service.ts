@@ -492,7 +492,13 @@ export class OrderService {
   /** An archived branch takes no new orders. Closed by its hours is not this: that only warns. */
   private async assertBranchSells(em: EntityManager, tenantId: string, branchId?: string | null) {
     if (!branchId) return;
-    const branch = await em.findOne(Branch, { where: { id: branchId, tenant_id: tenantId }, withDeleted: true });
+    // Shares the lock archiving takes: an order started while its branch is being archived
+    // waits for the archive, then finds the branch archived.
+    const branch = await em.findOne(Branch, {
+      where: { id: branchId, tenant_id: tenantId },
+      withDeleted: true,
+      lock: { mode: 'pessimistic_read' },
+    });
     if (branch && (branch.deleted_at || branch.is_active === false)) {
       throw new BadRequestException({
         code: 'BRANCH_ARCHIVED',
@@ -852,9 +858,11 @@ export class OrderService {
       const fromState = order.state;
       order.state = targetState;
       order.status = targetState;
+      // The first send decides the after-hours mark; sending a reopened order again keeps it.
+      const firstSend = !order.submitted_at;
       order.submitted_at = new Date();
       // Outside its hours a branch still sells; the order is only marked, once, as it is sent.
-      order.after_hours = await isAfterHours(em, tenantId, order.branch_id, order.submitted_at);
+      if (firstSend) order.after_hours = await isAfterHours(em, tenantId, order.branch_id, order.submitted_at);
 
       await em.save(OrderHeader, order);
       // The number the counter calls it by, given as it goes to the kitchen so an abandoned
