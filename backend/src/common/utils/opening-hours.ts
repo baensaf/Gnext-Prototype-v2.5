@@ -32,10 +32,12 @@ export function shiftSpan(row: Pick<OpeningHoursRow, 'open_time' | 'close_time'>
   return { start, end: close <= start ? close + 1440 : close };
 }
 
-/** True when `at`, on the branch's clock, falls inside one of its shifts. No hours at all: always open. */
+/**
+ * True when `at`, on the branch's clock, falls inside one of its shifts. A branch with no
+ * hours is closed: missing hours never mean "always open" (Branch Management spec).
+ */
 export function isOpenAt(rows: OpeningHoursRow[], at: Date, timeZone: string): boolean {
   const shifts = rows.filter((r) => !r.is_closed && r.open_time && r.close_time);
-  if (rows.length === 0) return true;
   const { day, minute } = localClock(at, timeZone);
   const yesterday = (day + 6) % 7;
   return shifts.some((row) => {
@@ -70,8 +72,7 @@ export function hoursProblem(rows: OpeningHoursRow[]): string | null {
 
 /**
  * Whether a branch was outside its opening hours at `at`, read from the database. An order
- * sent then is marked after hours; nothing is refused. A branch with no hours is never
- * outside them.
+ * sent then is marked after hours; nothing is refused.
  */
 export async function isAfterHours(em: EntityManager, tenantId: string, branchId: string | null | undefined, at: Date): Promise<boolean> {
   if (!branchId) return false;

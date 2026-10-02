@@ -4260,7 +4260,8 @@
       "clickToPlace": "Click the map to place the pin",
       "none": "No pin yet",
       "missing": "No pin on the map",
-      "help": "Delivery zones are drawn around this pin, and couriers will use it. The pin can be moved but not removed."
+      "help": "Delivery zones are drawn around this pin, and couriers will use it. The pin can be moved but not removed.",
+      "searchFailed": "Address search is unavailable right now. Click the map to place the pin."
     },
     "new": {
       "heading": "Add a branch",
@@ -4301,7 +4302,15 @@
       "confirm": "Archive",
       "done": "Branch archived. Its history stays. {{staff}} staff now have no branch until you give them another.",
       "refusedTitle": "The branch cannot be archived yet",
-      "openShifts": "Shifts still open: {{count}}"
+      "openShifts": "Shifts still open: {{count}}",
+      "kinds": {
+        "shift": "Cash shift not closed",
+        "order": "Order unpaid or in progress",
+        "refundDue": "Cancelled order, money not given back",
+        "delivery": "Delivery not finished",
+        "settlement": "Courier settlement open",
+        "heldOrder": "Held order (discard it first)"
+      }
     },
     "archived": {
       "titleOn": "Archived on {{date}}",

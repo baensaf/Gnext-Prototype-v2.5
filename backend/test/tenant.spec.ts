@@ -51,67 +51,60 @@ describe('TenantService (Unit)', () => {
     em.transaction = jest.fn((work: any) => work(em));
     return { em, saved };
   };
-  const titleFree = (clash: any = null) => ({
-    where: jest.fn().mockReturnThis(),
-    andWhere: jest.fn().mockReturnThis(),
-    getOne: jest.fn().mockResolvedValue(clash),
-  });
+  /** The chain's branches as assertTitleFree reads them, archived ones included. */
+  const existingBranches = (rows: any[] = []) => branchRepo.find.mockResolvedValue(rows);
   const pin = { latitude: 35.6997, longitude: 51.338 };
+  /** A whole week: Saturday split for lunch and dinner, Friday closed, other days 11:00-04:00. */
+  const week = [
+    { day_of_week: 6, open_time: '11:00', close_time: '15:00' },
+    { day_of_week: 6, open_time: '18:00', close_time: '02:00' },
+    { day_of_week: 5, is_closed: true },
+    ...[0, 1, 2, 3, 4].map((day) => ({ day_of_week: day, open_time: '11:00', close_time: '04:00' })),
+  ];
 
   it('refuses a new branch without a pin on the map', async () => {
-    branchRepo.createQueryBuilder = jest.fn(() => titleFree());
-    await expect(service.createBranch('t-1', { name: 'Tehran South' }, 'corr-1')).rejects.toThrow(BadRequestException);
+    existingBranches();
+    await expect(service.createBranch('t-1', { name: 'Tehran South', hours: week }, 'corr-1')).rejects.toThrow(BadRequestException);
   });
 
-  it('refuses a title another branch of the chain already has', async () => {
-    branchRepo.createQueryBuilder = jest.fn(() => titleFree({ id: 'b-1', name: 'Tehran South' }));
-    await expect(service.createBranch('t-1', { name: 'tehran south', ...pin }, 'corr-1')).rejects.toThrow(ConflictException);
+  it('refuses a new branch without hours for all seven days', async () => {
+    existingBranches();
+    await expect(service.createBranch('t-1', { name: 'Tehran South', ...pin, hours: week.slice(0, 3) }, 'corr-1')).rejects.toThrow(
+      'all seven days',
+    );
+  });
+
+  it('refuses a title another branch of the chain already has, ignoring case and spaces', async () => {
+    existingBranches([{ id: 'b-1', name: 'Tehran South', deleted_at: null }]);
+    await expect(service.createBranch('t-1', { name: '  tehran south ', ...pin, hours: week }, 'corr-1')).rejects.toThrow(ConflictException);
+  });
+
+  it('keeps an archived branch title reserved', async () => {
+    existingBranches([{ id: 'b-1', name: 'Tehran South', deleted_at: new Date() }]);
+    await expect(service.createBranch('t-1', { name: 'Tehran South', ...pin, hours: week }, 'corr-1')).rejects.toThrow('reserved');
   });
 
   it('creates a branch with its pin, a made-up code and its week of hours in one go', async () => {
-    branchRepo.createQueryBuilder = jest.fn(() => titleFree());
+    existingBranches();
     const { em, saved } = fakeManager(['B01']);
     branchRepo.manager = em;
 
-    const result = await service.createBranch(
-      't-1',
-      {
-        name: 'Tehran South',
-        ...pin,
-        hours: [
-          { day_of_week: 6, open_time: '11:00', close_time: '15:00' },
-          { day_of_week: 6, open_time: '18:00', close_time: '02:00' },
-          { day_of_week: 5, is_closed: true },
-        ],
-      },
-      'corr-1',
-    );
+    const result = await service.createBranch('t-1', { name: 'Tehran South', ...pin, hours: week }, 'corr-1');
 
     expect(result.code).toBe('B02');
     expect(result.latitude).toBe(35.6997);
     expect(em.transaction).toHaveBeenCalledTimes(1);
     const hours = saved.filter((row) => row.day_of_week !== undefined);
-    expect(hours).toHaveLength(3);
+    expect(hours).toHaveLength(8);
     expect(hours.find((h) => h.open_time === '18:00:00')).toMatchObject({ close_time: '02:00:00', spans_midnight: true });
+    expect(hours.find((h) => h.day_of_week === 5)).toMatchObject({ is_closed: true });
     expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'BRANCH_CREATED' }));
   });
 
   it('refuses a shift past midnight that runs into the next day', async () => {
-    branchRepo.createQueryBuilder = jest.fn(() => titleFree());
-    await expect(
-      service.createBranch(
-        't-1',
-        {
-          name: 'Tehran South',
-          ...pin,
-          hours: [
-            { day_of_week: 6, open_time: '18:00', close_time: '03:00' },
-            { day_of_week: 0, open_time: '02:00', close_time: '15:00' },
-          ],
-        },
-        'corr-1',
-      ),
-    ).rejects.toThrow('runs into');
+    existingBranches();
+    const late = week.map((h) => (h.day_of_week === 6 && h.open_time === '18:00' ? { ...h, close_time: '12:00' } : h));
+    await expect(service.createBranch('t-1', { name: 'Tehran South', ...pin, hours: late }, 'corr-1')).rejects.toThrow('runs into');
   });
 
   it('should get terminals filtered by branchId', async () => {

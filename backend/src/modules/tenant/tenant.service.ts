@@ -39,14 +39,23 @@ export interface OpeningHoursInput {
   is_closed?: boolean;
 }
 
-/** A new branch given no hours opens 08:00 to 23:00 every day, as branches always have. */
-const DEFAULT_WEEK = Array.from({ length: 7 }, (_, day) => ({
-  day_of_week: day,
-  open_time: '08:00:00',
-  close_time: '23:00:00',
-  is_closed: false,
-  spans_midnight: false,
-}));
+/** Kinds of unfinished work that stop a branch being archived, as the refusal lists them. */
+export type ArchiveBlockerKind = 'SHIFT' | 'ORDER' | 'REFUND_DUE' | 'DELIVERY' | 'SETTLEMENT' | 'HELD_ORDER';
+
+const ARCHIVE_BLOCKER_WORDS: Record<string, string> = {
+  SHIFT: 'cash shift(s) open',
+  ORDER: 'order(s) unpaid or in progress',
+  REFUND_DUE: 'cancelled order(s) with money not given back',
+  DELIVERY: 'delivery(ies) not finished',
+  SETTLEMENT: 'courier settlement(s) open',
+  HELD_ORDER: 'held order(s)',
+};
+
+/**
+ * A title as it is compared: Unicode-normalised, without surrounding spaces, Latin letters in
+ * one case. Persian letters and inner spaces are compared as typed.
+ */
+const titleKey = (title: string) => title.normalize('NFC').trim().toLowerCase();
 
 @Injectable()
 export class TenantService {
@@ -139,7 +148,7 @@ export class TenantService {
    * branch code to type; one is made for the places that still key on it.
    */
   async createBranch(tenantId: string, data: BranchInput & { hours?: OpeningHoursInput[] }, correlationId: string) {
-    const name = String(data.name || '').trim();
+    const name = String(data.name || '').normalize('NFC').trim();
     if (!name) throw new BadRequestException({ code: 'BRANCH_TITLE_REQUIRED', message: 'A branch needs a title' });
     if (data.branch_type && !BRANCH_TYPES.includes(data.branch_type)) {
       throw new BadRequestException(`branch_type is one of ${BRANCH_TYPES.join(', ')}`);
@@ -149,7 +158,13 @@ export class TenantService {
     if (!pin) throw new BadRequestException({ code: 'BRANCH_PIN_REQUIRED', message: 'Place the branch on the map before saving it' });
     await this.assertTitleFree(tenantId, name);
 
-    const hours = data.hours?.length ? this.normaliseHours(data.hours) : DEFAULT_WEEK;
+    // The week is set explicitly: every day either has shifts or is marked closed. A branch
+    // with no hours would otherwise look closed every day, or (as it once did) always open.
+    const days = new Set((data.hours || []).map((h) => h.day_of_week));
+    if (days.size < 7) {
+      throw new BadRequestException({ code: 'BRANCH_HOURS_REQUIRED', message: 'Set the opening hours for all seven days' });
+    }
+    const hours = this.normaliseHours(data.hours || []);
     const problem = hoursProblem(hours);
     if (problem) throw new BadRequestException({ code: 'BRANCH_HOURS_OVERLAP', message: problem });
 
@@ -197,10 +212,22 @@ export class TenantService {
       throw new BadRequestException(`branch_type is one of ${BRANCH_TYPES.join(', ')}`);
     }
     if (data.name !== undefined) {
-      const name = String(data.name).trim();
+      const name = String(data.name).normalize('NFC').trim();
       if (!name) throw new BadRequestException({ code: 'BRANCH_TITLE_REQUIRED', message: 'A branch needs a title' });
-      if (name.toLowerCase() !== branch.name.toLowerCase()) await this.assertTitleFree(tenantId, name, branchId);
+      if (titleKey(name) !== titleKey(branch.name)) await this.assertTitleFree(tenantId, name, branchId);
       branch.name = name;
+    }
+    // Moving the clock under an open drawer would put its sales in a day it never opened in.
+    if (data.time_zone && data.time_zone !== branch.time_zone) {
+      const openShifts = await this.branchRepo.manager.count(CashierShift, {
+        where: { tenant_id: tenantId, branch_id: branchId, state: In(['OPEN', 'CLOSING_REVIEW']) },
+      });
+      if (openShifts > 0) {
+        throw new ConflictException({
+          code: 'BRANCH_HAS_OPEN_SHIFT',
+          message: `Close the ${openShifts} open cash shift(s) at ${branch.name} before changing its time zone`,
+        });
+      }
     }
     if (data.latitude !== undefined || data.longitude !== undefined) {
       const pin = this.readPin(data);
@@ -229,51 +256,49 @@ export class TenantService {
   }
 
   /**
-   * Head office archives a branch that has closed for good. Refused while a shift is open or
-   * an order is unfinished. Its agent is revoked, so it must be enrolled again on restore.
-   * Its staff keep their accounts: they can sign in, with no branch to work in, until head
-   * office gives them another.
+   * Head office archives a branch that has closed for good. Refused while anything there is
+   * unfinished (archiveBlockers). The branch row stays locked from the check to the archive, so
+   * a shift or order starting meanwhile waits and then finds the branch archived. Its agent is
+   * revoked, so it must be enrolled again on restore. The branch is taken away from its staff:
+   * their accounts stay active, with no branch, until head office gives them one.
    */
   async archiveBranch(tenantId: string, branchId: string, correlationId: string, actorId?: string | null) {
-    const branch = await this.getBranchById(tenantId, branchId);
-    // Same reason as a register: a till left open in a closed shop can never be counted.
-    const openShifts = await this.branchRepo.manager.count(CashierShift, {
-      where: { tenant_id: tenantId, branch_id: branchId, state: In(['OPEN', 'CLOSING_REVIEW']) },
-    });
-    const unfinished: Array<{ order_number: string; call_number: number | null; status: string }> =
-      await this.branchRepo.manager.query(
-        `SELECT order_number, call_number, status FROM order_header
-          WHERE tenant_id = $1 AND branch_id = $2
-            AND (status IN ('PENDING_ACCEPTANCE', ${OPEN_STATUSES.map((s) => `'${s}'`).join(', ')})
-                 OR (status NOT IN ('DRAFT', 'CANCELLED', 'REJECTED', 'REFUNDED') AND outstanding_total > 0))
-          ORDER BY placed_at DESC NULLS LAST LIMIT 20`,
-        [tenantId, branchId],
-      );
-    if (openShifts > 0 || unfinished.length > 0) {
-      const parts = [
-        openShifts > 0 ? `${openShifts} shift(s) open` : '',
-        unfinished.length > 0 ? `${unfinished.length} order(s) unpaid or not finished` : '',
-      ].filter(Boolean);
-      throw new ConflictException({
-        code: openShifts > 0 ? 'BRANCH_HAS_OPEN_SHIFT' : 'BRANCH_HAS_OPEN_ORDERS',
-        message: `${branch.name} has ${parts.join(' and ')}. Close them before archiving the branch.`,
-        context: { openShifts, orders: unfinished },
+    const result = await this.branchRepo.manager.transaction(async (em) => {
+      const branch = await em.findOne(Branch, {
+        where: { id: branchId, tenant_id: tenantId },
+        lock: { mode: 'pessimistic_write' },
       });
-    }
+      if (!branch) throw new NotFoundException('Branch not found');
 
-    const agents = await this.branchRepo.manager.update(
-      Agent,
-      { tenant_id: tenantId, branch_id: branchId, status: 'ACTIVE' },
-      { status: 'REVOKED', revoked_at: new Date(), revoked_by: actorId ?? null },
-    );
-    branch.is_active = false;
-    branch.archived_by = actorId ?? null;
-    await this.branchRepo.save(branch);
-    await this.branchRepo.softRemove(branch);
+      const blockers = await this.archiveBlockers(em, tenantId, branchId);
+      if (blockers.length > 0) {
+        const counts = new Map<string, number>();
+        for (const b of blockers) counts.set(b.kind, (counts.get(b.kind) || 0) + 1);
+        const summary = [...counts].map(([kind, n]) => `${n} ${ARCHIVE_BLOCKER_WORDS[kind]}`).join(', ');
+        throw new ConflictException({
+          code: 'BRANCH_HAS_UNFINISHED_WORK',
+          message: `${branch.name} has ${summary}. Finish them before archiving the branch.`,
+          context: { items: blockers },
+        });
+      }
 
-    const staff = await this.branchRepo.manager
-      .getRepository(AdminUser)
-      .count({ where: { tenant_id: tenantId, branch_id: branchId, is_active: true } });
+      const agents = await em.update(
+        Agent,
+        { tenant_id: tenantId, branch_id: branchId, status: 'ACTIVE' },
+        { status: 'REVOKED', revoked_at: new Date(), revoked_by: actorId ?? null },
+      );
+      const staff = await em
+        .createQueryBuilder()
+        .update(AdminUser)
+        .set({ branch_removed_at: () => 'now()' })
+        .where('tenant_id = :tenantId AND branch_id = :branchId AND branch_removed_at IS NULL', { tenantId, branchId })
+        .execute();
+      branch.is_active = false;
+      branch.archived_by = actorId ?? null;
+      await em.save(Branch, branch);
+      await em.softRemove(Branch, branch);
+      return { agentsRevoked: agents.affected ?? 0, staffWithoutBranch: staff.affected ?? 0 };
+    });
 
     await this.auditWriter.write({
       tenantId,
@@ -282,9 +307,46 @@ export class TenantService {
       entityType: 'Branch',
       entityId: branchId,
       correlationId,
-      details: { agentsRevoked: agents.affected ?? 0, staffWithoutBranch: staff },
+      details: result,
     });
-    return { success: true, agentsRevoked: agents.affected ?? 0, staffWithoutBranch: staff };
+    return { success: true, ...result };
+  }
+
+  /**
+   * What stops a branch being archived (Branch Management spec, B4): a cash shift not yet
+   * counted and closed; a sent order with money owed or still in progress; a cancelled order
+   * whose money has not gone back; a delivery not delivered or failed, prepaid or not; a courier
+   * settlement still open; and a held order, which is discarded first. At most 50 are listed.
+   */
+  private async archiveBlockers(em: EntityManager, tenantId: string, branchId: string) {
+    const rows: Array<{ kind: ArchiveBlockerKind; label: string }> = await em.query(
+      `SELECT * FROM (
+         SELECT 'SHIFT' AS kind, COALESCE(s.shift_number, s.id::text) AS label, 1 AS ord
+           FROM cashier_shift s
+          WHERE s.tenant_id = $1 AND s.branch_id = $2 AND s.state IN ('OPEN', 'CLOSING_REVIEW')
+         UNION ALL
+         SELECT 'ORDER', o.order_number, 2 FROM order_header o
+          WHERE o.tenant_id = $1 AND o.branch_id = $2
+            AND (o.status IN ('PENDING_ACCEPTANCE', ${OPEN_STATUSES.map((s) => `'${s}'`).join(', ')})
+                 OR (o.status NOT IN ('DRAFT', 'CANCELLED', 'REJECTED', 'REFUNDED') AND o.outstanding_total > 0))
+         UNION ALL
+         SELECT 'REFUND_DUE', o.order_number, 3 FROM order_header o
+          WHERE o.tenant_id = $1 AND o.branch_id = $2 AND o.status IN ('CANCELLED', 'REJECTED')
+            AND COALESCE(o.paid_total, 0) > COALESCE(o.refunded_total, 0)
+         UNION ALL
+         SELECT 'DELIVERY', o.order_number, 4 FROM delivery d
+           JOIN order_header o ON o.id = d.order_id AND o.tenant_id = d.tenant_id
+          WHERE d.tenant_id = $1 AND o.branch_id = $2 AND d.state NOT IN ('DELIVERED', 'FAILED', 'CANCELLED')
+         UNION ALL
+         SELECT 'SETTLEMENT', cs.settlement_number, 5 FROM courier_settlement cs
+          WHERE cs.tenant_id = $1 AND cs.branch_id = $2 AND cs.status IN ('DRAFT', 'UNDER_REVIEW')
+         UNION ALL
+         SELECT 'HELD_ORDER', o.order_number, 6 FROM order_header o
+          WHERE o.tenant_id = $1 AND o.branch_id = $2 AND o.status = 'DRAFT'
+       ) blockers ORDER BY ord, label LIMIT 50`,
+      [tenantId, branchId],
+    );
+    return rows.map(({ kind, label }) => ({ kind, label }));
   }
 
   /** Brings an archived branch back as it was: data, tills, printers, hours. Its agent enrols again. */
@@ -393,14 +455,26 @@ export class TenantService {
     return { latitude: Math.round(latitude * 1e6) / 1e6, longitude: Math.round(longitude * 1e6) / 1e6 };
   }
 
-  /** Two live branches of one chain cannot share a title; an archived one keeps its own. */
+  /**
+   * No two branches of one chain share a title, archived ones included: an archived branch
+   * keeps its title reserved, so it can always be restored. Compared as titleKey does.
+   */
   private async assertTitleFree(tenantId: string, name: string, exceptId?: string) {
-    const clash = await this.branchRepo
-      .createQueryBuilder('b')
-      .where('b.tenant_id = :tenantId AND LOWER(b.name) = LOWER(:name)', { tenantId, name })
-      .andWhere(exceptId ? 'b.id <> :exceptId' : '1 = 1', { exceptId })
-      .getOne();
-    if (clash) throw new ConflictException({ code: 'BRANCH_TITLE_TAKEN', message: `Another branch is already called ${name}` });
+    const branches = await this.branchRepo.find({
+      where: { tenant_id: tenantId },
+      withDeleted: true,
+      select: ['id', 'name', 'deleted_at'],
+    });
+    const key = titleKey(name);
+    const clash = branches.find((b) => b.id !== exceptId && titleKey(b.name) === key);
+    if (clash) {
+      throw new ConflictException({
+        code: 'BRANCH_TITLE_TAKEN',
+        message: clash.deleted_at
+          ? `An archived branch is already called ${name}; its title stays reserved`
+          : `Another branch is already called ${name}`,
+      });
+    }
   }
 
   /** The code other screens still key on: the one given, or B01, B02… whichever is free. */

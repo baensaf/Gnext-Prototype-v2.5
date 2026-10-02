@@ -5,7 +5,9 @@ import { Repository } from 'typeorm';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { SessionService } from '../../modules/auth/session.service';
 import { AdminUser } from '../../entities/AdminUser.entity';
+import { Branch } from '../../entities/Branch.entity';
 import { setRequestActor } from '../utils/till-context';
+import { NO_BRANCH_SCOPE } from '../utils/user-scope.util';
 
 @Injectable()
 export class SessionGuard implements CanActivate {
@@ -72,7 +74,22 @@ export class SessionGuard implements CanActivate {
     // NULL here means head office. Handlers use it to decide what a request may reach,
     // so it has to come from the stored account rather than anything the client sends.
     req.userBranchId = user.branch_id ?? null;
+    // An account whose branch was archived has none: read on every request, so it holds
+    // even in a session opened before the archive.
+    if (user.branch_id && (user.branch_removed_at || (await this.branchArchived(user.tenant_id, user.branch_id)))) {
+      req.userBranchId = NO_BRANCH_SCOPE;
+      req.userHasNoBranch = true;
+    }
 
     return true;
+  }
+
+  private async branchArchived(tenantId: string, branchId: string): Promise<boolean> {
+    const branch = await this.userRepo.manager.findOne(Branch, {
+      where: { id: branchId, tenant_id: tenantId },
+      withDeleted: true,
+      select: ['id', 'is_active', 'deleted_at'],
+    });
+    return !branch || !!branch.deleted_at || branch.is_active === false;
   }
 }

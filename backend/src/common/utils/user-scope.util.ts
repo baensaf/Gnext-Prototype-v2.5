@@ -52,6 +52,13 @@ export type UserScope = {
 };
 
 /**
+ * The branch scope of an account that has none: its branch was archived and taken away from
+ * it. No branch has this id, so every branch-confined query finds nothing, and because it is
+ * not NULL the account is never mistaken for head office.
+ */
+export const NO_BRANCH_SCOPE = '00000000-0000-0000-0000-000000000000';
+
+/**
  * Head office is both things at once: a chain-wide role AND no branch confinement.
  * Either alone is not enough — an ADMIN pinned to one site is that site's administrator,
  * and a CASHIER with no branch is a misconfiguration, not an executive.

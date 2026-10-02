@@ -33,23 +33,9 @@ export function RequiresBranch({ children, rollup }: RequiresBranchProps) {
 
   if (!branchScope) return <>{children}</>;
 
-  const { isHeadOffice, branches, selectedBranch, setSelectedBranchId, loading } = branchScope;
+  const { isHeadOffice, branches, selectedBranch, setSelectedBranchId, hasNoBranch } = branchScope;
 
-  if (!isHeadOffice && !loading && !selectedBranch && branches.length === 0) {
-    // The account's branch was archived. It stays active, with no branch to work in, until
-    // head office gives it another.
-    return (
-      <Box sx={{ p: 3, maxWidth: 640, mx: 'auto' }}>
-        <Alert severity="info">
-          <AlertTitle>{t('branchMgmt.noBranch.title', 'You have no branch to work in')}</AlertTitle>
-          {t(
-            'branchMgmt.noBranch.body',
-            'The branch you worked at has been archived. Ask head office to give you another branch; your account and PIN stay as they are.'
-          )}
-        </Alert>
-      </Box>
-    );
-  }
+  if (hasNoBranch) return <NoBranchNotice />;
 
   if (!isHeadOffice) {
     // No branch yet means the list has not arrived (the provider reports "not loading" while
@@ -92,4 +78,29 @@ export function RequiresBranch({ children, rollup }: RequiresBranchProps) {
       </Stack>
     </Box>
   );
+}
+
+/**
+ * For an account whose branch was archived: it stays active, with no branch to work in,
+ * until head office gives it another. Shown instead of any page.
+ */
+export function NoBranchNotice() {
+  const { t } = useTranslation();
+  return (
+    <Box sx={{ p: 3, maxWidth: 640, mx: 'auto' }}>
+      <Alert severity="info">
+        <AlertTitle>{t('branchMgmt.noBranch.title', 'You have no branch to work in')}</AlertTitle>
+        {t(
+          'branchMgmt.noBranch.body',
+          'The branch you worked at has been archived. Ask head office to give you another branch; your account and PIN stay as they are.'
+        )}
+      </Alert>
+    </Box>
+  );
+}
+
+/** Every page of the app sits behind this: an account with no branch sees only the notice. */
+export function NoBranchGate({ children }: { children: React.ReactNode }) {
+  const branchScope = useBranchContextOptional();
+  return branchScope?.hasNoBranch ? <NoBranchNotice /> : <>{children}</>;
 }

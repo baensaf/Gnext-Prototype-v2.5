@@ -80,6 +80,9 @@ export function BranchLocationMap({ value, onChange, height = 380 }: BranchLocat
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [searching, setSearching] = useState(false);
+  // The address search is a separate service from the map: "nothing found" and "could not
+  // ask" are different answers, and neither touches the pin already placed.
+  const [searchFailed, setSearchFailed] = useState(false);
   const [moved, setMoved] = useState(0);
 
   const center: [number, number] = value ? [value.latitude, value.longitude] : TEHRAN;
@@ -88,12 +91,15 @@ export function BranchLocationMap({ value, onChange, height = 380 }: BranchLocat
     const q = query.trim();
     if (!q) return;
     setSearching(true);
+    setSearchFailed(false);
     try {
       const params = new URLSearchParams({ q, format: 'json', limit: '5', countrycodes: 'ir', 'accept-language': i18n.language });
       const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`);
-      setHits(res.ok ? await res.json() : []);
+      if (!res.ok) throw new Error(`search ${res.status}`);
+      setHits(await res.json());
     } catch {
       setHits([]);
+      setSearchFailed(true);
     } finally {
       setSearching(false);
     }
@@ -139,8 +145,10 @@ export function BranchLocationMap({ value, onChange, height = 380 }: BranchLocat
           {hits && (
             <Paper elevation={6} sx={{ position: 'absolute', zIndex: 1000, left: 0, right: 0, mt: 0.5, maxHeight: 260, overflow: 'auto' }}>
               {hits.length === 0 ? (
-                <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-                  {t('branchMgmt.location.noResults', 'Nothing found. Try another name, or click the map.')}
+                <Typography variant="body2" color={searchFailed ? 'error' : 'text.secondary'} sx={{ p: 2 }}>
+                  {searchFailed
+                    ? t('branchMgmt.location.searchFailed', 'Address search is unavailable right now. Click the map to place the pin.')
+                    : t('branchMgmt.location.noResults', 'Nothing found. Try another name, or click the map.')}
                 </Typography>
               ) : (
                 <List dense disablePadding>

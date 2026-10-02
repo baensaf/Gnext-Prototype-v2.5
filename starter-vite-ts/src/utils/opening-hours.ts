@@ -3,7 +3,7 @@ import type { BranchOperatingHour } from 'src/api/tenantApi';
 // A branch's weekly opening hours, as the screens edit them, and whether it is open now.
 // The server reads the same rules (backend common/utils/opening-hours.ts): a shift that closes
 // at or before it opens runs past midnight and belongs to the day it opened on; equal times
-// are the whole day; no hours at all is always open.
+// are the whole day; a shift ends just before its closing minute; no hours at all is closed.
 
 /** Iran's week, Saturday first. `day` is JavaScript's day number (0 = Sunday), as stored. */
 export const WEEK = [
@@ -48,11 +48,10 @@ const span = (shift: Shift) => {
 };
 
 /**
- * The stored rows as a week, read as the server reads them: no hours at all is open around
- * the clock every day; once there are hours, a day without any is closed.
+ * The stored rows as a week, read as the server reads them: a day without shifts is closed,
+ * and so is every day of a branch with no hours at all. Missing hours never mean "always open".
  */
 export function weekFromRows(rows: BranchOperatingHour[]): WeekHours {
-  if (!rows.length) return Object.fromEntries(WEEK.map(({ day }) => [day, [{ open: '00:00', close: '00:00' }]])) as WeekHours;
   const week: WeekHours = {};
   for (const { day } of WEEK) {
     week[day] = rows
@@ -111,10 +110,9 @@ export type OpenStatus =
 
 /**
  * Whether the branch is open at `at` and, if not, when it next opens. `rows` are the stored
- * hours; a branch with none is always open.
+ * hours; a branch with none is closed every day.
  */
 export function openStatus(rows: BranchOperatingHour[], timeZone: string, at: Date = new Date()): OpenStatus {
-  if (!rows.length) return { open: true, allDay: true };
   const week = weekFromRows(rows);
   const { day, minute } = localClock(at, timeZone || 'Asia/Tehran');
   const yesterday = (day + 6) % 7;

@@ -198,7 +198,11 @@ export class UsersService {
 
     if (data.display_name !== undefined) user.display_name = data.display_name;
     if (data.role !== undefined) user.role = data.role.toUpperCase();
-    if (data.branch_id !== undefined) user.branch_id = data.branch_id || null;
+    if (data.branch_id !== undefined) {
+      user.branch_id = data.branch_id || null;
+      // Head office has given the account a branch again (validate refuses an archived one).
+      user.branch_removed_at = null;
+    }
     if (data.is_active !== undefined) user.is_active = data.is_active;
     if (data.preferred_locale !== undefined) user.preferred_locale = data.preferred_locale;
     if (data.pin) user.pin_hash = await argon2.hash(data.pin);
