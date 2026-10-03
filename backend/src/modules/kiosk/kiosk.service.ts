@@ -79,10 +79,13 @@ export class KioskService {
       order: { sort_order: 'ASC', name: 'ASC' },
     });
 
-    const products = await this.productRepo.find({
+    const listedProducts = await this.productRepo.find({
       where: { tenant_id: tenantId, is_active: true },
       order: { name: 'ASC' },
     });
+    // A category taken off the menu hides its products too.
+    const liveCategoryIds = new Set(categories.map((c) => c.id));
+    const products =listedProducts.filter((p) => !p.category_id || liveCategoryIds.has(p.category_id));
 
     const optionGroups = await this.optionGroupRepo.find({
       where: { tenant_id: tenantId },
@@ -191,6 +194,7 @@ export class KioskService {
       const product = await this.productRepo.findOne({ where: { id: input.product_id, tenant_id: tenantId } });
       if (!product) throw new NotFoundException(`Product ${input.product_id} not found`);
       if (product.is_active === false) throw refuse('PRODUCT_INACTIVE', `${product.name} is not on the menu`);
+      if (await this.catalogService.isCategoryOff(tenantId, product.category_id)) throw refuse('PRODUCT_INACTIVE', `${product.name} is not on the menu`);
 
       const quantity = Number(input.quantity);
       if (!Number.isInteger(quantity) || quantity < 1) throw refuse('INVALID_QUANTITY', 'A quantity is a whole number, 1 or more');

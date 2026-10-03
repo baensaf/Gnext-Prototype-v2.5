@@ -131,7 +131,10 @@ type is V4.
 item at one price, in a category. Categories don't nest: sub-categories were removed from
 the prototype (migration 083 makes each one a category of its own). The add-ons page
 (`/app/catalog/modifiers`) and the 86 report (`/app/catalog/availability/report`) are V4.
-Today's stock and importing products and categories are V1.
+Today's stock and importing products and categories are V1. So is the on/off-menu switch
+(added 2026-10-03): it hides an item or a whole category everywhere until it is turned back on,
+separate from a stop (sold out for now) and from archive (gone). An item keeps its own
+switch, so a category turned back on brings its items back as they were.
 
 | Feature | Label |
 |---|---|

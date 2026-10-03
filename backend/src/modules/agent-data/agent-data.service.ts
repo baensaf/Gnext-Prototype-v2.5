@@ -180,7 +180,7 @@ export class AgentDataService {
     const clock = await loadBusinessClock(this.settings.manager, tenantId, branchId);
     const businessDate = clock.today(now);
 
-    const [categories, products, variants, groups, items, links, off, windows, stock, listed, stops] = await Promise.all([
+    const [categories, listedProducts, variants, groups, items, links, off, windows, stock, listed, stops] = await Promise.all([
       this.categories.find({ where: { tenant_id: tenantId, is_active: true }, order: { sort_order: 'ASC', name: 'ASC', id: 'ASC' } }),
       this.products.find({ where: { tenant_id: tenantId, is_active: true }, order: { name: 'ASC', id: 'ASC' } }),
       this.variants.find({ where: { tenant_id: tenantId, is_active: true }, order: { sort_order: 'ASC', code: 'ASC', id: 'ASC' } }),
@@ -193,6 +193,9 @@ export class AgentDataService {
       this.priceLists.pricesForBranch(tenantId, branchId, now),
       this.catalog.getAvailabilities(tenantId, branchId),
     ]);
+    // A category taken off the menu hides its products too; they keep their own switch.
+    const liveCategoryIds = new Set(categories.map((c) => c.id));
+    const products = listedProducts.filter((p) => !p.category_id || liveCategoryIds.has(p.category_id));
 
     const groupById = new Map(groups.map((g) => [g.id, g]));
     const catalogProducts = products.map((p) => {

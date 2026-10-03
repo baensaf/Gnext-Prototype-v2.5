@@ -2445,6 +2445,9 @@ export class OrderService {
         if (product.is_active === false) {
           throw new BadRequestException({ statusCode: 400, code: 'PRODUCT_INACTIVE', message: `${product.name} is not on the menu` });
         }
+        if (await this.catalogService.isCategoryOff(tenantId, product.category_id)) {
+          throw new BadRequestException({ statusCode: 400, code: 'PRODUCT_INACTIVE', message: `${product.name} is not on the menu: its category is off` });
+        }
 
         // Spec 4.7: an 86'd item is off sale everywhere it can be ordered. Register
         // orders land here, so the stop is enforced on the line rather than trusted to

@@ -423,8 +423,10 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       const liveCategories = cList.filter((c) => c.is_active !== false);
       setCategories(liveCategories);
       if (liveCategories.length > 0) setActiveTab(liveCategories[0].id);
-      // A product taken off the menu is not sold; the register refuses it too.
-      setProducts(pList.filter((p) => p.is_active !== false));
+      // A product taken off the menu, or in a category taken off it, is not sold; the register
+      // refuses it too.
+      const offCategoryIds = new Set(cList.filter((c) => c.is_active === false).map((c) => c.id));
+      setProducts(pList.filter((p) => p.is_active !== false && !offCategoryIds.has(p.category_id)));
       setCustomers(custs);
       setDiningTables(tList);
       if (tList.length > 0 && (!tableNumber || tableNumber === 'T-01')) {
