@@ -132,7 +132,9 @@ type is V4.
 the V1 menu is complete: a V1 product sits in a category and can have sizes (each with its own
 price), add-on groups (the add-ons page `/app/catalog/modifiers`, set up from one sheet,
 inherited from the category, asked at the POS or not) and a packaging price; combos, whose
-choices are add-on groups, are V1 too. All of it works on the POS. Categories don't nest:
+choices are add-on groups, are V1 too. All of it works on the POS. The packaging price is
+charged per item on delivery and takeaway orders, as its own line on the bill and receipt, not
+on dine-in (the prototype still only records it). Categories don't nest:
 sub-categories were removed from the prototype (migration 083 makes each one a category of
 its own). The 86 report (`/app/catalog/availability/report`) is V4.
 Today's stock and importing products and categories are V1. So is the on/off-menu switch
