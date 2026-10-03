@@ -4282,7 +4282,7 @@
     },
     "saved": {
       "details": "Details saved.",
-      "hours": "Opening hours saved. They apply from the next minute.",
+      "hours": "Opening hours saved. They apply now.",
       "location": "Location saved."
     },
     "archive": {
@@ -4303,6 +4303,7 @@
         "order": "Order unpaid or in progress",
         "refundDue": "Cancelled order, money not given back",
         "delivery": "Delivery not finished",
+        "courierPay": "Delivered, courier not settled yet",
         "settlement": "Courier settlement open",
         "heldOrder": "Held order (discard it first)"
       }

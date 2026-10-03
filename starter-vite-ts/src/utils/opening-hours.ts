@@ -115,7 +115,9 @@ export type OpenStatus =
 
 /**
  * Whether the branch is open at `at` and, if not, when it next opens. `rows` are the stored
- * hours; a branch with none is closed every day.
+ * hours; a branch with none is closed every day. Hours that run straight into the next day's
+ * opening are one stretch: "until" is when the branch really closes, and a stretch that never
+ * ends is open all day (Branch Management, H2).
  */
 export function openStatus(rows: BranchOperatingHour[], timeZone: string, at: Date = new Date()): OpenStatus {
   const week = weekFromRows(rows);
@@ -127,8 +129,17 @@ export function openStatus(rows: BranchOperatingHour[], timeZone: string, at: Da
     ...(week[yesterday] || []).map((s) => ({ s, ...span(s), offset: 1440 })),
   ].find(({ start, end, offset }) => minute + offset >= start && minute + offset < end);
   if (current) {
-    const allDay = current.s.open === current.s.close;
-    return { open: true, allDay, until: allDay ? undefined : current.s.close };
+    // Minutes from today's midnight to the end of the stretch, followed day by day.
+    let end = current.end - current.offset;
+    for (let hops = 0; hops < 8 && end - minute < 7 * 1440; hops++) {
+      const dayStart = Math.floor(end / 1440) * 1440;
+      const next = (week[(day + dayStart / 1440 + 7) % 7] || []).map(span).find((s) => s.start === end - dayStart);
+      if (!next) break;
+      end = dayStart + next.end;
+    }
+    if (end - minute >= 7 * 1440) return { open: true, allDay: true };
+    const m = ((end % 1440) + 1440) % 1440;
+    return { open: true, allDay: false, until: `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` };
   }
 
   for (let ahead = 0; ahead <= 7; ahead++) {

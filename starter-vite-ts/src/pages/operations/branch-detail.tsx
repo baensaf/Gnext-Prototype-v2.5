@@ -66,7 +66,7 @@ const pinOf = (branch: Branch): Pin | null =>
 
 /** What the server says stops the archive: one entry per shift, order, delivery or settlement. */
 type ArchiveBlocker = {
-  kind: 'SHIFT' | 'ORDER' | 'REFUND_DUE' | 'DELIVERY' | 'SETTLEMENT' | 'HELD_ORDER';
+  kind: 'SHIFT' | 'ORDER' | 'REFUND_DUE' | 'DELIVERY' | 'COURIER_PAY' | 'SETTLEMENT' | 'HELD_ORDER';
   label: string;
 };
 
@@ -106,6 +106,7 @@ export function BranchDetailPage() {
       ORDER: t('branchMgmt.archive.kinds.order', 'Order unpaid or in progress'),
       REFUND_DUE: t('branchMgmt.archive.kinds.refundDue', 'Cancelled order, money not given back'),
       DELIVERY: t('branchMgmt.archive.kinds.delivery', 'Delivery not finished'),
+      COURIER_PAY: t('branchMgmt.archive.kinds.courierPay', 'Delivered, courier not settled yet'),
       SETTLEMENT: t('branchMgmt.archive.kinds.settlement', 'Courier settlement open'),
       HELD_ORDER: t('branchMgmt.archive.kinds.heldOrder', 'Held order (discard it first)'),
     })[kind] || kind;
@@ -190,7 +191,7 @@ export function BranchDetailPage() {
       const saved = await tenantApi.updateBranchHours(branch.id, rowsFromWeek(week));
       setRows(saved);
       setWeek(weekFromRows(saved));
-    }, t('branchMgmt.saved.hours', 'Opening hours saved. They apply from the next minute.'));
+    }, t('branchMgmt.saved.hours', 'Opening hours saved. They apply now.'));
 
   const savePin = () =>
     run(async () => {

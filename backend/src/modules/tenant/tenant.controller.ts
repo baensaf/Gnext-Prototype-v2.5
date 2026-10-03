@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Post, Delete, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Delete, Body, Param, Query, Req, UseGuards, NotFoundException } from '@nestjs/common';
 import { Request } from 'express';
 import { TenantService } from './tenant.service';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
@@ -6,6 +6,17 @@ import { effectiveBranchId } from '../../common/utils/user-scope.util';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { Terminal } from '../../entities/Terminal.entity';
 import { CreateTerminalDto, UpdateTerminalDto } from './dtos/terminal.dto';
+
+/**
+ * A branch account reaches only its own branch by id; head office (no branch) reaches any branch
+ * of its chain, the service keeping it inside the tenant. An account with no branch carries a
+ * scope that matches no branch, so it reaches none. Another branch answers as not found, the
+ * same as one that does not exist.
+ */
+function assertOwnBranch(req: Request, branchId: string) {
+  const own = (req as any).userBranchId ?? null;
+  if (own && own !== branchId) throw new NotFoundException(`Branch ${branchId} not found`);
+}
 
 @Controller('api/v1')
 export class TenantController {
@@ -39,6 +50,7 @@ export class TenantController {
   @Get('branches/:id')
   async getBranchById(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
+    assertOwnBranch(req, id);
     // Head office still opens an archived branch's page, to read it or restore it.
     return await this.tenantService.getBranchById(tenantId, id, !(req as any).userBranchId);
   }
@@ -80,6 +92,7 @@ export class TenantController {
   @Get('branches/:id/operating-hours')
   async getBranchHours(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
+    assertOwnBranch(req, id);
     return await this.tenantService.getBranchHours(tenantId, id);
   }
 

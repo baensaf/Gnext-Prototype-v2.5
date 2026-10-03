@@ -95,6 +95,7 @@ export class AgentLocalService {
       !user.is_active ||
       user.tenant_id !== agent.tenant_id ||
       user.branch_id !== agent.branch_id ||
+      !!user.branch_removed_at ||
       !OFFLINE_TILL_ROLES.includes(role) ||
       !user.pin_hash
     ) {
