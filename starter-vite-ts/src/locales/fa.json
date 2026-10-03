@@ -247,7 +247,6 @@
     "customer": "مشتری",
     "walkInCustomer": "مشتری حضوری",
     "selectCustomer": "انتخاب مشتری",
-    "quickRegisterCustomer": "ثبت سریع مشتری",
     "amountIrr": "{{amount}} {{currency}}",
     "totals": {
       "subtotal": "جمع جزء:",
@@ -338,8 +337,8 @@
       "typeMore": "دست‌کم {{count}} حرف یا رقم از موبایل یا نام را وارد کنید",
       "searching": "در حال جست‌وجو…",
       "noMatch": "مشتری‌ای پیدا نشد",
-      "register": "ثبت مشتری",
-      "failed": "جست‌وجو در حال حاضر در دسترس نیست"
+      "failed": "جست‌وجو در حال حاضر در دسترس نیست",
+      "registerNew": "ثبت مشتری جدید"
     }
   },
   "till": {

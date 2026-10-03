@@ -247,7 +247,6 @@
     "customer": "Customer",
     "walkInCustomer": "Walk-In Customer",
     "selectCustomer": "Select customer",
-    "quickRegisterCustomer": "Quick Register Customer",
     "amountIrr": "{{amount}} {{currency}}",
     "totals": {
       "subtotal": "Subtotal:",
@@ -338,8 +337,8 @@
       "typeMore": "Type at least {{count}} characters of the mobile or name",
       "searching": "Searching…",
       "noMatch": "No customer found",
-      "register": "Register",
-      "failed": "Search is unavailable right now"
+      "failed": "Search is unavailable right now",
+      "registerNew": "Register new customer"
     }
   },
   "till": {

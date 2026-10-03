@@ -30,7 +30,6 @@ import EditNoteIcon from '@mui/icons-material/EditNote';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import TableBarIcon from '@mui/icons-material/TableBar';
 import VerifiedIcon from '@mui/icons-material/Verified';
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
@@ -225,7 +224,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
   // Quick Add Customer Dialog state
   const [quickAddCustomerOpen, setQuickAddCustomerOpen] = useState(false);
-  const [registerMobile, setRegisterMobile] = useState('');
+  const [registerPrefill, setRegisterPrefill] = useState<{ mobile?: string; name?: string }>({});
 
   // Picking (or clearing) the customer starts the delivery choices over.
   const pickCustomer = (customer: Customer | null) => {
@@ -2071,38 +2070,14 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                     value={selectedCustomer}
                     onChange={pickCustomer}
                     search={(q) => pos.customers.searchCustomers(q, 20)}
-                    onRegister={(typed) => {
-                      setRegisterMobile(typed);
+                    // Registering lives at the bottom of the picker's list (no separate button):
+                    // whatever was typed carries over as the mobile or the name.
+                    onRegister={(prefill) => {
+                      setRegisterPrefill(prefill);
                       setQuickAddCustomerOpen(true);
                     }}
                     placeholder={orderType === 'DELIVERY' ? t('pos.deliveryContext.customerRequired') : t('pos.customerSearch.placeholder')}
                   />
-                  </PosFeatureGate>
-
-                  <PosFeatureGate off={!features.customers} title={t('pos.quickRegisterCustomer')}>
-                    <IconButton
-                      color="primary"
-                      disabled={!features.customers}
-                      onClick={() => {
-                        setRegisterMobile('');
-                        setQuickAddCustomerOpen(true);
-                      }}
-                      sx={{
-                        bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 167, 111, 0.16)' : 'primary.lighter',
-                        color: 'primary.main',
-                        borderRadius: 1.25,
-                        p: 0.85,
-                        border: '1px solid',
-                        borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 167, 111, 0.24)' : 'primary.light',
-                        '&:hover': {
-                          bgcolor: 'primary.main',
-                          color: 'primary.contrastText',
-                        },
-                        flexShrink: 0,
-                      }}
-                    >
-                      <PersonAddIcon fontSize="small" />
-                    </IconButton>
                   </PosFeatureGate>
 
                   <Tooltip title={orderNotes ? "Edit Order / Kitchen Note" : "Add Order / Kitchen Note"}>
@@ -3116,7 +3091,8 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         onCreated={handleCustomerRegistered}
         createCustomer={pos.customers.createCustomer}
         startWithAddress={orderType === 'DELIVERY'}
-        initialMobile={registerMobile}
+        initialMobile={registerPrefill.mobile}
+        initialName={registerPrefill.name}
       />
 
       {/* Order Notes Dialog */}

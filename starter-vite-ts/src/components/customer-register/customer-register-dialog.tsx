@@ -55,6 +55,8 @@ type Props = {
   startWithAddress?: boolean;
   /** Pre-fills the mobile, e.g. what the cashier typed into the search. */
   initialMobile?: string;
+  /** Pre-fills the name, when the cashier searched by name. */
+  initialName?: string;
 };
 
 /**
@@ -62,7 +64,7 @@ type Props = {
  * customer code), optional gender, birthday and wedding date, and any delivery addresses,
  * each with an optional pin on the map. Used by the customers page and the POS.
  */
-export function CustomerRegisterDialog({ open, onClose, onCreated, createCustomer, showCredit, startWithAddress, initialMobile }: Props) {
+export function CustomerRegisterDialog({ open, onClose, onCreated, createCustomer, showCredit, startWithAddress, initialMobile, initialName }: Props) {
   const { t } = useTranslation();
   const currency = useCurrencyLabel();
 
@@ -82,7 +84,7 @@ export function CustomerRegisterDialog({ open, onClose, onCreated, createCustome
   // A fresh form each time it opens.
   useEffect(() => {
     if (!open) return;
-    setName('');
+    setName(initialName || '');
     setMobile(initialMobile || '');
     setGender(null);
     setBirthDate('');
