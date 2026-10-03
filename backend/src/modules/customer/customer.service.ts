@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In, Like } from 'typeorm';
+import { Repository, DataSource, In, Like, SelectQueryBuilder } from 'typeorm';
 import { Customer } from '../../entities/Customer.entity';
 import { CustomerPhone } from '../../entities/CustomerPhone.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
@@ -18,13 +18,18 @@ import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../co
 import { TransactionUtil } from '../../common/utils/transaction.util';
 import { AppDataSource } from '../../data-source';
 
+/** Persian (۰-۹) and Arabic (٠-٩) digits as 0-9. */
+export function toWesternDigits(text: string): string {
+  return text
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+}
+
 export function normalizePhone(rawPhone: string): string {
   if (!rawPhone) return '';
   // A number typed on a Persian keyboard arrives in Persian (or Arabic) digits, which `\d`
   // does not match: they were stripped to nothing and the raw text kept as the number.
-  const western = rawPhone
-    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
-    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+  const western = toWesternDigits(rawPhone);
   let cleaned = western.replace(/[^\d+]/g, '');
   if (cleaned.startsWith('09') && cleaned.length === 11) {
     cleaned = '+98' + cleaned.substring(1);
@@ -161,18 +166,12 @@ export class CustomerService {
       return await this.enrichCustomersWithCredit(tenantId, items);
     }
 
-    const page = query.page || 1;
-    const limit = query.limit || 20;
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
     const qb = this.customerRepo.createQueryBuilder('c')
       .where('c.tenant_id = :tenantId', { tenantId });
 
-    if (query.search) {
-      const norm = normalizePhone(query.search);
-      qb.andWhere(
-        '(LOWER(c.code) LIKE :search OR LOWER(c.first_name) LIKE :search OR LOWER(c.last_name) LIKE :search OR c.mobile LIKE :search OR c.mobile LIKE :normPhone)',
-        { search: `%${query.search.toLowerCase()}%`, normPhone: `%${norm}%` },
-      );
-    }
+    const searching = this.applyCustomerSearch(qb, query.search);
 
     if (query.status === 'ACTIVE') {
       qb.andWhere('c.is_active = true');
@@ -180,13 +179,58 @@ export class CustomerService {
       qb.andWhere('c.is_active = false');
     }
 
-    qb.orderBy('c.code', 'ASC')
-      .skip((page - 1) * limit)
-      .take(limit);
+    if (!searching) qb.orderBy('c.created_at', 'DESC').addOrderBy('c.id', 'ASC');
+    qb.skip((page - 1) * limit).take(limit);
 
     const [items, total] = await qb.getManyAndCount();
     const enriched = await this.enrichCustomersWithCredit(tenantId, items);
     return createPagedResponse(enriched, total, page, limit);
+  }
+
+  /**
+   * The POS customer picker: up to `limit` matches for what the cashier typed, best first, no
+   * count and no credit lookups, so it stays quick with hundreds of thousands of customers.
+   * Fewer than 3 characters returns nothing (the trigram indexes need 3).
+   */
+  async searchCustomers(tenantId: string, q: string | undefined, limit = 20) {
+    const take = Math.min(50, Math.max(1, Number(limit) || 20));
+    const qb = this.customerRepo.createQueryBuilder('c').where('c.tenant_id = :tenantId', { tenantId });
+    if (!this.applyCustomerSearch(qb, q)) return [];
+    return qb.take(take).getMany();
+  }
+
+  /**
+   * Adds the search filter and ranking. Digits search the mobile (Persian or Arabic digits,
+   * 0912…, +98 912… all match the same number); anything with letters searches the name
+   * (Arabic ي/ك match Persian ی/ک). An exact mobile comes first, then mobiles that start
+   * with what was typed, then the rest by name. Returns false when the text is too short.
+   */
+  private applyCustomerSearch(qb: SelectQueryBuilder<Customer>, raw: string | undefined): boolean {
+    const text = toWesternDigits(String(raw || '')).trim();
+    if (text.length < 3) return false;
+    const like = (s: string) => s.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+    const nameExpr = `translate(lower(c.first_name || ' ' || c.last_name), 'يك', 'یک')`;
+
+    const hasLetters = /\p{L}/u.test(text);
+    if (!hasLetters) {
+      // A mobile is stored as +98 9xx…: drop a typed 0, 98 or +98 so "0912" finds "+98912…".
+      let digits = text.replace(/\D/g, '');
+      if (digits.startsWith('98') && digits.length > 10) digits = digits.slice(2);
+      else if (digits.startsWith('0')) digits = digits.slice(1);
+      if (digits.length < 3) return false;
+      qb.andWhere(`c.mobile LIKE :mobileLike ESCAPE '\\'`, { mobileLike: `%${like(digits)}%` })
+        .orderBy(`CASE WHEN c.mobile = :mobileExact THEN 0 WHEN c.mobile LIKE :mobilePrefix ESCAPE '\\' THEN 1 ELSE 2 END`, 'ASC')
+        .setParameters({ mobileExact: `+98${digits}`, mobilePrefix: `+98${like(digits)}%` })
+        .addOrderBy('c.mobile', 'ASC');
+    } else {
+      const name = text.toLowerCase().replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/\s+/g, ' ');
+      qb.andWhere(`${nameExpr} LIKE :nameLike ESCAPE '\\'`, { nameLike: `%${like(name)}%` })
+        .orderBy(`CASE WHEN ${nameExpr} LIKE :namePrefix ESCAPE '\\' THEN 0 ELSE 1 END`, 'ASC')
+        .setParameters({ namePrefix: `${like(name)}%` })
+        .addOrderBy('c.first_name', 'ASC');
+    }
+    qb.addOrderBy('c.id', 'ASC');
+    return true;
   }
 
   async getCustomerById(tenantId: string, id: string) {

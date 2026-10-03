@@ -1,3 +1,4 @@
+import type { GridPaginationModel } from '@mui/x-data-grid-premium';
 import type { AddressDraftState } from 'src/components/customer-register';
 import type {
   Customer,
@@ -100,17 +101,32 @@ export function CustomersPage() {
   });
   const [draft, setDraft] = useState<AddressDraftState>(emptyDraft);
 
+  // Paged on the server: a chain can have 500,000 customers. Search waits for a pause in
+  // typing and needs 3 characters (fewer lists everyone, newest first).
+  const [paging, setPaging] = useState<GridPaginationModel>({ page: 0, pageSize: 25 });
+  const [total, setTotal] = useState(0);
+  const [query, setQuery] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setQuery(search.trim());
+      setPaging((p) => ({ ...p, page: 0 }));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      setCustomers(await customerApi.getCustomers(search || undefined));
+      const res = await customerApi.getCustomersPage({ search: query.length >= 3 ? query : undefined, page: paging.page + 1, limit: paging.pageSize });
+      setCustomers(res.items);
+      setTotal(res.total);
       setError(null);
     } catch (err: any) {
       setError(err.detail || t('customers.directory.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [search, t]);
+  }, [query, paging, t]);
 
   useEffect(() => {
     loadData();
@@ -382,6 +398,10 @@ export function CustomersPage() {
           },
         ]}
         loading={loading}
+        rowCount={total}
+        paginationModel={paging}
+        onPaginationModelChange={setPaging}
+        pageSizeOptions={[25, 50, 100]}
         height={600}
         emptyTitle={t('customers.directory.emptyTitle')}
         emptyDescription={t('customers.directory.emptyDescription')}

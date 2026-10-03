@@ -24,6 +24,12 @@ export class CustomerController {
     return await this.customerService.getCustomers(tenantId, query || { search, status });
   }
 
+  // The POS picker: best matches for what the cashier typed (3+ characters), no paging.
+  @Get('customers/search')
+  async searchCustomers(@Query('q') q: string, @Query('limit') limit: string, @Req() req: Request) {
+    return await this.customerService.searchCustomers((req as any).tenantId, q, Number(limit) || 20);
+  }
+
   @Get('customers/duplicates')
   async getDuplicateCandidates(@Req() req: Request) {
     const tenantId = (req as any).tenantId;
