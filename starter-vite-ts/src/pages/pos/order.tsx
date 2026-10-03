@@ -1920,26 +1920,15 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                                 sx={{ fontSize: '0.625rem', height: 18, mb: 0.75, fontWeight: 700 }}
                               />
                             )}
-                            {p.code && (
-                              <Chip
-                                label={p.code}
-                                size="small"
-                                variant="outlined"
-                                sx={{
-                                  fontSize: '0.625rem',
-                                  height: 18,
-                                  mb: 0.75,
-                                  fontWeight: 700,
-                                  letterSpacing: 0.5,
-                                }}
-                              />
-                            )}
                             </Box>
+                            {/* No product code on the tile (PM, 2026-10-03); search still finds it.
+                                The name keeps clear of the stop button now that it is the top line. */}
                             <Typography
                               variant="subtitle2"
                               sx={{
                                 fontWeight: 'bold',
                                 mb: 0.5,
+                                paddingInlineEnd: '24px',
                                 lineHeight: 1.25,
                                 color: 'text.primary',
                                 display: '-webkit-box',
