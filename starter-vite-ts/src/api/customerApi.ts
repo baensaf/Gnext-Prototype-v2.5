@@ -75,10 +75,33 @@ export interface CustomerCreditTransaction {
   recorded_at: string;
 }
 
+export interface CustomerPage {
+  items: Customer[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export const customerApi = {
 
-  getCustomers: async (search?: string): Promise<Customer[]> => {
-    const res = await httpClient.get('/api/v1/customers', { params: { search } });
+  /** Every customer, unpaged. Only for small lists (the V3 credit screens); the POS and the
+   *  customers page search on the server instead. */
+  getCustomers: async (): Promise<Customer[]> => {
+    const res = await httpClient.get('/api/v1/customers');
+    return res.data;
+  },
+  /** One page of the customers list, newest first, or the best matches when searching. */
+  getCustomersPage: async (params: { search?: string; page: number; limit: number }): Promise<CustomerPage> => {
+    const res = await httpClient.get('/api/v1/customers', { params: { ...params, search: params.search || undefined } });
+    return res.data;
+  },
+  /** The POS picker: up to `limit` best matches for 3+ typed characters (mobile or name). */
+  searchCustomers: async (q: string, limit = 20): Promise<Customer[]> => {
+    const res = await httpClient.get('/api/v1/customers/search', { params: { q, limit } });
+    return res.data;
+  },
+  getCustomer: async (id: string): Promise<Customer> => {
+    const res = await httpClient.get(`/api/v1/customers/${id}`);
     return res.data;
   },
   createCustomer: async (data: (Partial<Customer> & { credit_limit?: string }) | CustomerRegistration): Promise<Customer> => {

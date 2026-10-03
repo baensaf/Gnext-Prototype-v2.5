@@ -471,7 +471,10 @@ export const agentPosSource: PosSource = {
   } as unknown as PosSource['payments'],
 
   customers: {
-    getCustomers: async () => [],
+    searchCustomers: async () => [],
+    getCustomer: async () => {
+      throw unavailable();
+    },
     getAddresses: async () => [],
     createCustomer: async () => {
       throw unavailable();

@@ -172,6 +172,11 @@ wedding date (recorded in V1, used by the customer club later); and delivery add
 in the same step, each with an optional pin on the map. The credit limit field opens at 0, is
 shown to head office only, and carries the V3 chip.
 
+Finding a customer is V1 and searches the server, sized for 500,000 customers per chain. At
+the POS: type 3+ characters of the mobile (any form: 0912…, +98…, Persian digits) or the
+name; the best 20 come back, the exact mobile first; "Register" opens the form with the
+typed mobile when nothing matches. The customers page pages on the server, newest first.
+
 | Feature | Label |
 |---|---|
 | Blocking a customer (refuse to serve) | F |

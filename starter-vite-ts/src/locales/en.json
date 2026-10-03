@@ -332,6 +332,14 @@
       "title": "The internet is down",
       "body": "Gnext cannot be reached. On the branch PC, keep selling on the offline till; its orders come here when the internet is back.",
       "open": "Open offline till"
+    },
+    "customerSearch": {
+      "placeholder": "Walk-in, or search mobile / name",
+      "typeMore": "Type at least {{count}} characters of the mobile or name",
+      "searching": "Searching…",
+      "noMatch": "No customer found",
+      "register": "Register",
+      "failed": "Search is unavailable right now"
     }
   },
   "till": {

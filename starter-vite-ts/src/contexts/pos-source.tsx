@@ -65,7 +65,7 @@ export type PosSource = {
   tables: Pick<typeof dineInApi, 'getTables'>;
   settings: Pick<typeof settingsApi, 'getReasonCodes' | 'getPaymentMethods'>;
   payments: Pick<typeof paymentApi, 'postPayment' | 'getOrderPayments' | 'voidPayment'>;
-  customers: Pick<typeof customerApi, 'getCustomers' | 'createCustomer' | 'getAddresses' | 'createAddress'>;
+  customers: Pick<typeof customerApi, 'searchCustomers' | 'getCustomer' | 'createCustomer' | 'getAddresses' | 'createAddress'>;
   delivery: Pick<typeof deliveryApi, 'getZones'>;
   /** The live quote: tax, delivery fee and any discount on the cart. */
   discounts: Pick<typeof discountsApi, 'quoteDiscounts' | 'getManualDiscountLimits'>;

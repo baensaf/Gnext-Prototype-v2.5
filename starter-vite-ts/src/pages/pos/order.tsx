@@ -96,6 +96,7 @@ import { CustomerRegisterDialog } from 'src/components/customer-register';
 import { PosShiftBar, PosShiftGate } from 'src/components/shift/pos-shift';
 
 import { PosStopDialog } from './pos-stop-dialog';
+import { PosCustomerPicker } from './pos-customer-picker';
 import { OfflineTillBanner } from './offline-till-banner';
 import { ClosedBranchBanner } from './closed-branch-banner';
 
@@ -194,7 +195,9 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       branchPrices.get(`${product.id}:${variant?.id || ''}`) ?? (variant ? variant.base_price : product.base_price || '0'),
     [branchPrices]
   );
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  // The picked customer itself, for the picker's label: the till no longer loads a customer
+  // list, it searches the server (see PosCustomerPicker).
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [customerAddresses, setCustomerAddresses] = useState<CustomerAddress[]>([]);
   const [selectedDeliveryAddressId, setSelectedDeliveryAddressId] = useState<string>('');
@@ -222,12 +225,22 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
   // Quick Add Customer Dialog state
   const [quickAddCustomerOpen, setQuickAddCustomerOpen] = useState(false);
+  const [registerMobile, setRegisterMobile] = useState('');
+
+  // Picking (or clearing) the customer starts the delivery choices over.
+  const pickCustomer = (customer: Customer | null) => {
+    deliveryRestoreRef.current = {};
+    setSelectedCustomer(customer);
+    setSelectedCustomerId(customer?.id || '');
+    setSelectedDeliveryAddressId('');
+    setSelectedDeliveryZoneId('');
+  };
+
   // A customer registered at the till is selected on the order straight away; their first
   // address (typed in the same dialog) becomes the delivery address.
-  const handleCustomerRegistered = async (created: Customer) => {
+  const handleCustomerRegistered = (created: Customer) => {
     setQuickAddCustomerOpen(false);
-    setCustomers(await pos.customers.getCustomers());
-    setSelectedCustomerId(created.id);
+    pickCustomer(created);
   };
 
   // Search & Filtering
@@ -362,7 +375,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
   const [error, setError] = useState<string | null>(null);
 
   const searchInputRef = React.useRef<HTMLInputElement | null>(null);
-  const customerSelectRef = React.useRef<HTMLDivElement | null>(null);
+  const customerSelectRef = React.useRef<HTMLInputElement | null>(null);
   const deliveryRestoreRef = React.useRef<{ customerId?: string; addressId?: string; zoneId?: string }>({});
 
   const fetchHeldOrders = useCallback(async (branchId?: string) => {
@@ -382,10 +395,9 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     try {
       setLoadingInitialData(true);
       // Today's stops load with the stock counts below, for the selected branch.
-      const [cList, pList, custs, tList] = await Promise.all([
+      const [cList, pList, tList] = await Promise.all([
         pos.catalog.getCategories(),
         pos.catalog.getProducts(),
-        pos.customers.getCustomers(),
         pos.tables.getTables(undefined, selectedBranchId).catch(() => [] as DiningTable[]),
       ]);
       // Categories taken off the menu hold no sellable products; showing them (and opening on
@@ -397,7 +409,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       // refuses it too.
       const offCategoryIds = new Set(cList.filter((c) => c.is_active === false).map((c) => c.id));
       setProducts(pList.filter((p) => p.is_active !== false && !offCategoryIds.has(p.category_id)));
-      setCustomers(custs);
       setDiningTables(tList);
       if (tList.length > 0 && (!tableNumber || tableNumber === 'T-01')) {
         setTableNumber(tList[0].code || tList[0].table_number || 'T-01');
@@ -763,6 +774,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     setApprovalRequired(false);
     setApprovalReason(null);
     setOrderNotes('');
+    setSelectedCustomer(null);
     setSelectedCustomerId('');
     setSelectedDeliveryAddressId('');
     setSelectedDeliveryZoneId('');
@@ -889,6 +901,17 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       if (fullOrder.table_number) setTableNumber(fullOrder.table_number);
       setSelectedTableId(fullOrder.table_id || '');
       setSelectedCustomerId(fullOrder.customer_id || '');
+      // The picker shows the customer's name; fetch it, falling back to what the order kept.
+      setSelectedCustomer(null);
+      if (fullOrder.customer_id) {
+        const customerId = fullOrder.customer_id;
+        pos.customers
+          .getCustomer(customerId)
+          .then(setSelectedCustomer)
+          .catch(() =>
+            setSelectedCustomer({ id: customerId, first_name: fullOrder.customer_name || '', last_name: '', mobile: fullOrder.customer_mobile || '', code: '', is_active: true })
+          );
+      }
       setSelectedDeliveryAddressId(fullOrder.customer_address_id || '');
       setSelectedDeliveryZoneId(fullOrder.delivery_zone_id || '');
       setCouponInput(fullOrder.coupon_code || '');
@@ -2053,36 +2076,18 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <PosFeatureGate off={!features.customers} grow>
-                  <FormControl fullWidth size="small" disabled={!features.customers}>
-                    <InputLabel>{t('pos.customer')}</InputLabel>
-                    <Select
-                      inputRef={customerSelectRef}
-                      value={selectedCustomerId}
-                      label={t('pos.customer')}
-                      displayEmpty
-                      renderValue={(value) => {
-                        if (!value)
-                          return orderType === 'DELIVERY'
-                            ? t('pos.deliveryContext.customerRequired')
-                            : t('pos.walkInCustomer');
-                        const customer = customers.find((item) => item.id === value);
-                        return customer ? `${customer.first_name} ${customer.last_name} (${customer.mobile})` : t('pos.selectCustomer');
-                      }}
-                      onChange={(e) => {
-                        deliveryRestoreRef.current = {};
-                        setSelectedCustomerId(e.target.value);
-                        setSelectedDeliveryAddressId('');
-                        setSelectedDeliveryZoneId('');
-                      }}
-                    >
-                      {orderType !== 'DELIVERY' && <MenuItem value="">{t('pos.walkInCustomer')}</MenuItem>}
-                      {customers.map((c) => (
-                        <MenuItem key={c.id} value={c.id}>
-                          {c.first_name} {c.last_name} ({c.mobile})
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <PosCustomerPicker
+                    inputRef={customerSelectRef}
+                    disabled={!features.customers}
+                    value={selectedCustomer}
+                    onChange={pickCustomer}
+                    search={(q) => pos.customers.searchCustomers(q, 20)}
+                    onRegister={(typed) => {
+                      setRegisterMobile(typed);
+                      setQuickAddCustomerOpen(true);
+                    }}
+                    placeholder={orderType === 'DELIVERY' ? t('pos.deliveryContext.customerRequired') : t('pos.customerSearch.placeholder')}
+                  />
                   </PosFeatureGate>
 
                   <PosFeatureGate off={!features.customers} title={t('pos.quickRegisterCustomer')}>
@@ -2090,6 +2095,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                       color="primary"
                       disabled={!features.customers}
                       onClick={() => {
+                        setRegisterMobile('');
                         setQuickAddCustomerOpen(true);
                       }}
                       sx={{
@@ -3119,6 +3125,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         onCreated={handleCustomerRegistered}
         createCustomer={pos.customers.createCustomer}
         startWithAddress={orderType === 'DELIVERY'}
+        initialMobile={registerMobile}
       />
 
       {/* Order Notes Dialog */}
