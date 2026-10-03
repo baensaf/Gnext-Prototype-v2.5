@@ -43,14 +43,14 @@ export function normalizePhone(rawPhone: string): string {
  * Tehran becomes the previous day once it passes through UTC, which would move a customer's
  * birthday by one day for everyone born in the evening.
  */
-export function normalizeBirthDate(raw?: string | null): string | null {
+export function normalizeBirthDate(raw?: string | null, field = 'birth_date'): string | null {
   if (!raw) return null;
   const trimmed = String(raw).trim();
   if (!trimmed) return null;
 
   const datePart = trimmed.split('T')[0];
   if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
-    throw new BadRequestException('birth_date must be a calendar date in YYYY-MM-DD form');
+    throw new BadRequestException(`${field} must be a calendar date in YYYY-MM-DD form`);
   }
 
   const [year, month, day] = datePart.split('-').map(Number);
@@ -60,14 +60,58 @@ export function normalizeBirthDate(raw?: string | null): string | null {
     probe.getUTCMonth() !== month - 1 ||
     probe.getUTCDate() !== day
   ) {
-    throw new BadRequestException(`birth_date ${datePart} is not a real date`);
+    throw new BadRequestException(`${field} ${datePart} is not a real date`);
   }
-  // A birthday in the future is a typed year, not a fact.
+  // A birthday (or wedding) in the future is a typed year, not a fact.
   if (probe.getTime() > Date.now()) {
-    throw new BadRequestException('birth_date cannot be in the future');
+    throw new BadRequestException(`${field} cannot be in the future`);
   }
 
   return datePart;
+}
+
+export function normalizeGender(raw?: string | null): 'MALE' | 'FEMALE' | null {
+  if (!raw) return null;
+  const value = String(raw).trim().toUpperCase();
+  if (!value) return null;
+  if (value !== 'MALE' && value !== 'FEMALE') throw new BadRequestException('gender is MALE or FEMALE');
+  return value;
+}
+
+/** A delivery address typed with the customer, or added later. The map pin is optional. */
+export interface CustomerAddressInput {
+  title?: string;
+  address_text: string;
+  postal_code?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  is_default?: boolean;
+}
+
+function normalizeAddress(data: CustomerAddressInput) {
+  const addressText = String(data?.address_text || '').trim();
+  if (!addressText) throw new BadRequestException({ code: 'ADDRESS_REQUIRED', message: 'An address needs its text' });
+  const hasLat = data.latitude !== undefined && data.latitude !== null && data.latitude !== '';
+  const hasLng = data.longitude !== undefined && data.longitude !== null && data.longitude !== '';
+  if (hasLat !== hasLng) throw new BadRequestException({ code: 'ADDRESS_PIN_INVALID', message: 'A map pin needs both latitude and longitude' });
+  let latitude: string | null = null;
+  let longitude: string | null = null;
+  if (hasLat) {
+    const lat = Number(data.latitude);
+    const lng = Number(data.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      throw new BadRequestException({ code: 'ADDRESS_PIN_INVALID', message: 'The map pin is not a place on the map' });
+    }
+    latitude = lat.toFixed(7);
+    longitude = lng.toFixed(7);
+  }
+  return {
+    title: String(data.title || '').trim() || 'Home',
+    address_text: addressText,
+    postal_code: String(data.postal_code || '').trim() || null,
+    latitude,
+    longitude,
+  };
 }
 
 @Injectable()
@@ -169,17 +213,30 @@ export class CustomerService {
     tenantId: string,
     data: {
       code?: string;
-      first_name: string;
-      last_name: string;
+      /** The whole name in one box (the register form). Wins over first_name/last_name. */
+      name?: string;
+      first_name?: string;
+      last_name?: string;
       mobile: string;
       email?: string;
       national_id?: string;
       birth_date?: string;
+      gender?: string | null;
+      marriage_date?: string | null;
       credit_limit?: string;
+      /** Delivery addresses typed with the customer; the first is the default. */
+      addresses?: CustomerAddressInput[];
     },
     correlationId: string,
     actorId?: string,
   ) {
+    const fullName = data.name !== undefined ? String(data.name || '').trim() : null;
+    if (fullName === '') throw new BadRequestException({ code: 'NAME_REQUIRED', message: 'A customer needs a name' });
+    // Checked before anything is saved, so a bad address doesn't leave a customer behind.
+    const addresses = (Array.isArray(data.addresses) ? data.addresses : []).map(normalizeAddress);
+    const gender = normalizeGender(data.gender);
+    const marriageDate = normalizeBirthDate(data.marriage_date, 'marriage_date');
+
     const normMobile = normalizePhone(data.mobile);
     const rawMobile = data.mobile ? data.mobile.trim() : '';
     const rawCode = data.code ? data.code.trim() : '';
@@ -215,12 +272,14 @@ export class CustomerService {
     const customer = this.customerRepo.create({
       tenant_id: tenantId,
       code,
-      first_name: data.first_name,
-      last_name: data.last_name,
+      first_name: fullName ?? data.first_name ?? '',
+      last_name: fullName !== null ? '' : (data.last_name ?? ''),
       mobile: normMobile || rawMobile,
       email: data.email || null,
       national_id: data.national_id || null,
       birth_date: normalizeBirthDate(data.birth_date),
+      gender,
+      marriage_date: marriageDate,
       is_active: true,
     });
 
@@ -250,6 +309,12 @@ export class CustomerService {
       is_blocked: false,
     });
     await this.accountRepo.save(account);
+
+    for (const [index, address] of addresses.entries()) {
+      await this.addressRepo.save(
+        this.addressRepo.create({ tenant_id: tenantId, customer_id: saved.id, ...address, is_default: index === 0, created_by: actorId || null }),
+      );
+    }
 
     await this.auditWriter.write({
       tenantId,
@@ -282,6 +347,8 @@ export class CustomerService {
       email?: string | null;
       national_id?: string | null;
       birth_date?: string | null;
+      gender?: string | null;
+      marriage_date?: string | null;
       is_active?: boolean;
     },
     correlationId?: string,
@@ -296,14 +363,13 @@ export class CustomerService {
       if (!name) throw new BadRequestException('first_name cannot be empty');
       customer.first_name = name;
     }
-    if (data.last_name !== undefined) {
-      const name = data.last_name.trim();
-      if (!name) throw new BadRequestException('last_name cannot be empty');
-      customer.last_name = name;
-    }
+    // The register form takes the whole name in one box, so last_name may be empty.
+    if (data.last_name !== undefined) customer.last_name = (data.last_name || '').trim();
     if (data.email !== undefined) customer.email = data.email?.trim() || null;
     if (data.national_id !== undefined) customer.national_id = data.national_id?.trim() || null;
     if (data.birth_date !== undefined) customer.birth_date = normalizeBirthDate(data.birth_date);
+    if (data.gender !== undefined) customer.gender = normalizeGender(data.gender);
+    if (data.marriage_date !== undefined) customer.marriage_date = normalizeBirthDate(data.marriage_date, 'marriage_date');
     if (data.is_active !== undefined) customer.is_active = Boolean(data.is_active);
     customer.updated_by = actorId || null;
 
@@ -556,10 +622,11 @@ export class CustomerService {
   async createAddress(
     tenantId: string,
     customerId: string,
-    data: { title: string; address_text: string; postal_code?: string; is_default?: boolean },
+    data: CustomerAddressInput,
     actorId?: string,
   ) {
     await this.getCustomerById(tenantId, customerId);
+    const address = normalizeAddress(data);
 
     if (data.is_default) {
       await this.addressRepo.update({ tenant_id: tenantId, customer_id: customerId }, { is_default: false });
@@ -568,10 +635,9 @@ export class CustomerService {
     const addr = this.addressRepo.create({
       tenant_id: tenantId,
       customer_id: customerId,
-      title: data.title,
-      address_text: data.address_text,
-      postal_code: data.postal_code || null,
+      ...address,
       is_default: data.is_default ?? false,
+      created_by: actorId || null,
     });
 
     const saved = await this.addressRepo.save(addr);

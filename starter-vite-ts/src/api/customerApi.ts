@@ -10,6 +10,9 @@ export interface Customer {
   national_id?: string;
   /** Gregorian YYYY-MM-DD; the picker shows it in the chain's calendar. */
   birth_date?: string | null;
+  gender?: 'MALE' | 'FEMALE' | null;
+  /** Wedding date, Gregorian YYYY-MM-DD. */
+  marriage_date?: string | null;
   /**
    * The chain refuses to serve this customer: they cannot be put on a new order at all.
    * Not the same as a blocked credit account, which only stops them paying on account.
@@ -29,7 +32,30 @@ export interface CustomerAddress {
   title: string;
   address_text: string;
   postal_code?: string;
+  /** The optional map pin. */
+  latitude?: string | number | null;
+  longitude?: string | number | null;
   is_default: boolean;
+}
+
+/** A delivery address as the register form sends it; the pin is optional. */
+export interface CustomerAddressDraft {
+  title: string;
+  address_text: string;
+  postal_code?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+/** What the register form sends: the whole name in one box, the mobile as the code. */
+export interface CustomerRegistration {
+  name: string;
+  mobile: string;
+  gender?: 'MALE' | 'FEMALE' | null;
+  birth_date?: string;
+  marriage_date?: string;
+  credit_limit?: string;
+  addresses?: CustomerAddressDraft[];
 }
 
 export interface CustomerCreditAccount {
@@ -55,7 +81,7 @@ export const customerApi = {
     const res = await httpClient.get('/api/v1/customers', { params: { search } });
     return res.data;
   },
-  createCustomer: async (data: Partial<Customer> & { credit_limit?: string }): Promise<Customer> => {
+  createCustomer: async (data: (Partial<Customer> & { credit_limit?: string }) | CustomerRegistration): Promise<Customer> => {
     const res = await httpClient.post('/api/v1/customers', data);
     return res.data;
   },
@@ -77,7 +103,7 @@ export const customerApi = {
     const res = await httpClient.get(`/api/v1/customers/${customerId}/addresses`);
     return res.data;
   },
-  createAddress: async (customerId: string, data: Partial<CustomerAddress>): Promise<CustomerAddress> => {
+  createAddress: async (customerId: string, data: Partial<CustomerAddress> | (CustomerAddressDraft & { is_default?: boolean })): Promise<CustomerAddress> => {
     const res = await httpClient.post(`/api/v1/customers/${customerId}/addresses`, data);
     return res.data;
   },

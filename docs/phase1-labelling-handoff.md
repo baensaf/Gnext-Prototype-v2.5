@@ -166,6 +166,12 @@ profile page (`/app/customers/:id`) is V4. Credit accounts (`/app/credit/account
 Coupons (`/app/discounts/coupons`) are V3; customer-specific rates and the wallet with
 cashback (`/app/discounts/…`) are V4, with the customer club.
 
+The V1 register form (2026-10-03, the same dialog on the customers page and the POS): the
+name in one box; the mobile, which is also the customer code; optional gender, birthday and
+wedding date (recorded in V1, used by the customer club later); and delivery addresses typed
+in the same step, each with an optional pin on the map. The credit limit field opens at 0, is
+shown to head office only, and carries the V3 chip.
+
 | Feature | Label |
 |---|---|
 | Blocking a customer (refuse to serve) | F |

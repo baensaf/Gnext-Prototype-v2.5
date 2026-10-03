@@ -34,6 +34,14 @@ export class Customer {
   @Column({ type: 'date', nullable: true })
   birth_date: string | null;
 
+  /** MALE or FEMALE, optional. */
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  gender: 'MALE' | 'FEMALE' | null;
+
+  /** Wedding date, optional; a plain date like `birth_date`. */
+  @Column({ type: 'date', nullable: true })
+  marriage_date: string | null;
+
   /**
    * A customer the chain refuses to serve — repeated false addresses, abuse of a courier.
    * Distinct from `is_active`, which retires a record, and from a blocked credit account,
