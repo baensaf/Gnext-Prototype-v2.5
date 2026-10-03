@@ -27,7 +27,7 @@ type CalendarState = {
   setBusinessDay: (value: { cutoff?: string } | null | undefined) => void;
 };
 
-const DEFAULT_CUTOFF = '04:00';
+const DEFAULT_CUTOFF = '05:00';
 
 export const useCalendarStore = create<CalendarState>((set) => ({
   calendar: 'JALALI',

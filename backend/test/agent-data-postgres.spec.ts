@@ -220,7 +220,7 @@ describe('agent branch snapshot (PostgreSQL)', () => {
       // How the till dates what it sells offline: the same cutoff as every other channel.
       business_day: {
         business_date: businessToday(),
-        cutoff: '04:00',
+        cutoff: '05:00',
         time_zone: 'Asia/Tehran',
         opens_at: '08:00',
         closes_at: '04:00',

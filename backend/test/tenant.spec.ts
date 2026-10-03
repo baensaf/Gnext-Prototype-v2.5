@@ -54,9 +54,8 @@ describe('TenantService (Unit)', () => {
   /** The chain's branches as assertTitleFree reads them, archived ones included. */
   const existingBranches = (rows: any[] = []) => branchRepo.find.mockResolvedValue(rows);
   const pin = { latitude: 35.6997, longitude: 51.338 };
-  /** A whole week: Saturday split for lunch and dinner, Friday closed, other days 11:00-04:00. */
+  /** A whole week: Saturday 18:00-02:00, Friday closed, other days 11:00-04:00. */
   const week = [
-    { day_of_week: 6, open_time: '11:00', close_time: '15:00' },
     { day_of_week: 6, open_time: '18:00', close_time: '02:00' },
     { day_of_week: 5, is_closed: true },
     ...[0, 1, 2, 3, 4].map((day) => ({ day_of_week: day, open_time: '11:00', close_time: '04:00' })),
@@ -95,16 +94,26 @@ describe('TenantService (Unit)', () => {
     expect(result.latitude).toBe(35.6997);
     expect(em.transaction).toHaveBeenCalledTimes(1);
     const hours = saved.filter((row) => row.day_of_week !== undefined);
-    expect(hours).toHaveLength(8);
+    expect(hours).toHaveLength(7);
     expect(hours.find((h) => h.open_time === '18:00:00')).toMatchObject({ close_time: '02:00:00', spans_midnight: true });
     expect(hours.find((h) => h.day_of_week === 5)).toMatchObject({ is_closed: true });
     expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'BRANCH_CREATED' }));
   });
 
-  it('refuses a shift past midnight that runs into the next day', async () => {
+  it('refuses hours past midnight that close after the next day opens', async () => {
     existingBranches();
-    const late = week.map((h) => (h.day_of_week === 6 && h.open_time === '18:00' ? { ...h, close_time: '12:00' } : h));
-    await expect(service.createBranch('t-1', { name: 'Tehran South', ...pin, hours: late }, 'corr-1')).rejects.toThrow('runs into');
+    const late = week.map((h) => (h.day_of_week === 6 ? { ...h, close_time: '12:00' } : h));
+    await expect(service.createBranch('t-1', { name: 'Tehran South', ...pin, hours: late }, 'corr-1')).rejects.toThrow(
+      'after the next day opens',
+    );
+  });
+
+  it('refuses a second opening time on the same day (V4)', async () => {
+    existingBranches();
+    const split = [...week, { day_of_week: 6, open_time: '11:00', close_time: '15:00' }];
+    await expect(service.createBranch('t-1', { name: 'Tehran South', ...pin, hours: split }, 'corr-1')).rejects.toThrow(
+      'more than one opening time',
+    );
   });
 
   it('should get terminals filtered by branchId', async () => {

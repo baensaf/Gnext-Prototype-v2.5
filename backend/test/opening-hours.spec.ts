@@ -36,10 +36,10 @@ describe('opening hours', () => {
     expect(isOpenAt([], tehran('2026-10-05T03:00:00'), 'Asia/Tehran')).toBe(false);
   });
 
-  it('refuses overlapping shifts, and a late shift running into the next day', () => {
-    expect(hoursProblem(week)).toBeNull();
-    expect(hoursProblem([shift(1, '12:00', '16:00'), shift(1, '15:00', '23:00')])).toMatch('overlap');
+  it('takes one opening time a day, which may close as the next day opens but not after', () => {
+    expect(hoursProblem([shift(6, '11:00', '04:00'), shift(0, '11:00', '04:00')])).toBeNull();
+    expect(hoursProblem(week)).toMatch('more than one opening time');
     expect(hoursProblem([shift(6, '18:00', '02:00'), shift(0, '02:00', '15:00')])).toBeNull();
-    expect(hoursProblem([shift(6, '18:00', '03:00'), shift(0, '02:00', '15:00')])).toMatch('runs into');
+    expect(hoursProblem([shift(6, '18:00', '03:00'), shift(0, '02:00', '15:00')])).toMatch('after the next day opens');
   });
 });

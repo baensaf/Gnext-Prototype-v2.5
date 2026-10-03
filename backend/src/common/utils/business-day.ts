@@ -3,11 +3,14 @@ import { BUSINESS_TIME_ZONE } from './business-date.util';
 /**
  * The business day: the operating day a sale, a payment, a shift or a call number belongs to.
  *
- * A restaurant open 08:00 to 04:00 does not start a new day at midnight. Its day ends at the
- * cutoff (04:00 by default), so a sale at 01:30 on the 25th belongs to the 24th and one at
- * 04:00 belongs to the 25th. Head office sets the cutoff and the opening hours once for the
- * chain (setting group BUSINESS_DAY); a branch may override them. The cutoff is read on the
- * branch's own clock, so two branches in different time zones each turn over at their own 04:00.
+ * A restaurant open 11:00 to 04:00 does not start a new day at midnight. Its day ends at the
+ * cutoff (05:00 by default, after the latest closing time), so a sale at 01:30 on the 25th
+ * belongs to the 24th and one at 05:00 belongs to the 25th. Head office sets the cutoff once for
+ * the chain (setting group BUSINESS_DAY); a branch may override it. The cutoff is read on the
+ * branch's own clock, so two branches in different time zones each turn over at their own 05:00.
+ *
+ * Opening hours are not part of this setting: each branch keeps its own (opening-hours.ts). The
+ * opensAt/closesAt still stored here are old chain-wide values nobody edits any more.
  *
  * A date is decided once, when the thing happens, and stored. Nothing here re-dates what is
  * already stored: a changed cutoff or time zone applies from the moment it changes, and the
@@ -16,7 +19,7 @@ import { BUSINESS_TIME_ZONE } from './business-date.util';
 export const BUSINESS_DAY_SETTING_KEY = 'BUSINESS_DAY';
 
 export const DEFAULT_BUSINESS_DAY = {
-  cutoff: '04:00',
+  cutoff: '05:00',
   opensAt: '08:00',
   closesAt: '04:00',
   autoClose: true,
@@ -28,7 +31,7 @@ export const LATEST_CUTOFF = '12:00';
 export interface BusinessDayConfig {
   /** When one business day ends and the next begins, HH:MM on the branch's clock. */
   cutoff: string;
-  /** Operating hours: shown to staff, not enforced. closesAt may run past midnight up to the cutoff. */
+  /** Old chain-wide hours, no longer edited or shown; each branch's opening hours replaced them. */
   opensAt: string;
   closesAt: string;
   /** Close the previous business day by itself once its shifts are reconciled. */
@@ -103,9 +106,6 @@ export function businessDaySettingProblem(value: Record<string, any>): string | 
   const config = { ...DEFAULT_BUSINESS_DAY, ...pickConfig(value) };
   if (toMinutes(config.cutoff) >= toMinutes(LATEST_CUTOFF)) {
     return `BUSINESS_DAY cutoff must be before ${LATEST_CUTOFF}: the business day is named after the morning it opens`;
-  }
-  if (sinceCutoff(config.opensAt, config.cutoff, false) >= sinceCutoff(config.closesAt, config.cutoff, true)) {
-    return `BUSINESS_DAY opening hours ${config.opensAt}–${config.closesAt} must fall inside one business day, which ends at ${config.cutoff}`;
   }
   return null;
 }

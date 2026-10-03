@@ -118,30 +118,28 @@ describe('Snappfood-style menu controls (PostgreSQL)', () => {
     await expect(order(withSauce(ketchup))).resolves.toBeDefined();
   });
 
-  it('keeps two shifts on one day and comes back at the next one', async () => {
+  it('keeps one opening time a day and comes back at the next one', async () => {
     const days = [0, 1, 2, 3, 4, 5, 6];
     await tenants.updateBranchHours(
       tenantId,
       branchId,
-      days.flatMap((d) => [
-        { day_of_week: d, open_time: '12:00:00', close_time: '16:00:00' },
-        { day_of_week: d, open_time: '19:00:00', close_time: '23:00:00' },
-      ]),
+      days.map((d) => ({ day_of_week: d, open_time: '12:00:00', close_time: '23:00:00' })),
       'test',
     );
     const hours = await tenants.getBranchHours(tenantId, branchId);
-    expect(hours).toHaveLength(14);
+    expect(hours).toHaveLength(7);
 
+    // A second opening time on a day (lunch and dinner) is V4.
     await expect(
       tenants.updateBranchHours(tenantId, branchId, [
         { day_of_week: 1, open_time: '12:00:00', close_time: '16:00:00' },
-        { day_of_week: 1, open_time: '15:00:00', close_time: '23:00:00' },
+        { day_of_week: 1, open_time: '19:00:00', close_time: '23:00:00' },
       ], 'test'),
-    ).rejects.toThrow('overlap');
+    ).rejects.toThrow('more than one opening time');
 
-    // 10:00Z is 13:30 in Tehran, inside lunch: the next shift is dinner at 19:00, 15:30Z.
+    // 10:00Z is 13:30 in Tehran, while open: the next opening is 12:00 the next day, 08:30Z.
     const next = await catalog.nextShiftStart(tenantId, branchId, new Date('2026-09-16T10:00:00Z'));
-    expect(next.toISOString()).toBe('2026-09-16T15:30:00.000Z');
+    expect(next.toISOString()).toBe('2026-09-17T08:30:00.000Z');
 
     const stop = await catalog.suspendProduct(tenantId, lasagne, branchId, undefined, 'Ran out', 'test', { untilNextShift: true });
     expect(new Date(stop.suspended_until!).getTime()).toBeGreaterThan(Date.now());

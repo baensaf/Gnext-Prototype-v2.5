@@ -348,11 +348,9 @@ export function BusinessDaysPage() {
           </Typography>
           {currentDay && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              {t('cashier.currentDay', 'Business day now: {{date}} · turns over at {{cutoff}} · hours {{opens}}–{{closes}}', {
+              {t('cashier.currentDay', 'Business day now: {{date}} · turns over at {{cutoff}}', {
                 date: fDate(currentDay.businessDate),
                 cutoff: currentDay.cutoff,
-                opens: currentDay.operatingHours.opensAt,
-                closes: currentDay.operatingHours.closesAt,
               })}
             </Typography>
           )}
