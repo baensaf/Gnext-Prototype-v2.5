@@ -1861,7 +1861,8 @@
         "loadFailed": "خطا در بارگذاری فهرست کالاها",
         "selectCategory": "لطفاً دسته‌بندی را انتخاب کنید",
         "createFailed": "خطا در ثبت کالا",
-        "archiveFailed": "خطا در بایگانی کالا"
+        "archiveFailed": "خطا در بایگانی کالا",
+        "toggleFailed": "تغییر وضعیت منوی این آیتم انجام نشد"
       },
       "codeHint": "مثلاً PROD-DOUBLEBURGER",
       "identifiersTitle": "کدها (اختیاری)",
@@ -1880,7 +1881,8 @@
       "statusAll": "همه",
       "onMenu": "در منو",
       "offMenu": "خارج از منو",
-      "noMatches": "محصولی پیدا نشد."
+      "noMatches": "محصولی پیدا نشد.",
+      "categoryOff": "پنهان: دسته‌بندی آن خارج از منو است"
     },
     "categoriesPage": {
       "title": "دسته‌بندی‌های منو و کالا",

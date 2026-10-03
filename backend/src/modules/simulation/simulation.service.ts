@@ -1,6 +1,6 @@
 import { Inject, Injectable, NotFoundException, BadRequestException, Optional, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Raw, Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import { AgentSyncOrder } from '../../entities/AgentSyncOrder.entity';
 import { IntegrationLog } from '../../entities/IntegrationLog.entity';
@@ -836,9 +836,15 @@ export class SimulationService {
 
   /** One to three of the tenant's active, priced products, as Snappfood lines in Toman. */
   private async menuBasket(tenantId: string) {
-    const products = (await this.productRepo.find({ where: { tenant_id: tenantId, is_active: true } })).filter((p) =>
-      MoneyUtil.greaterThan(p.base_price || '0', '0'),
-    );
+    // Products whose category is off the menu are hidden with it.
+    const listed = await this.productRepo.find({
+      where: {
+        tenant_id: tenantId,
+        is_active: true,
+        category_id: Raw((column) => `(${column} IS NULL OR ${column} IN (SELECT id FROM category WHERE is_active = true))`),
+      },
+    });
+    const products = listed.filter((p) => MoneyUtil.greaterThan(p.base_price || '0', '0'));
     if (!products.length) return null;
     const picks = [...products].sort(() => Math.random() - 0.5).slice(0, 1 + Math.floor(Math.random() * 3));
     return picks.map((p, i) => {

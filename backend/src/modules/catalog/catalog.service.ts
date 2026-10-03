@@ -945,6 +945,16 @@ export class CatalogService {
   // Product Availability & Temporary Suspension
 
   /**
+   * Whether a product's category is switched off the menu. That hides the product too (it
+   * keeps its own switch), so the register and kiosk refuse it the same way as an off product.
+   */
+  async isCategoryOff(tenantId: string, categoryId: string | null | undefined): Promise<boolean> {
+    if (!categoryId) return false;
+    const category = await this.catRepo.findOne({ where: { id: categoryId, tenant_id: tenantId } });
+    return category?.is_active === false;
+  }
+
+  /**
    * Whether a product is 86'd right now, honouring the auto-reactivation timer.
    *
    * A suspension row outlives its window: a `suspended_until` in the past means

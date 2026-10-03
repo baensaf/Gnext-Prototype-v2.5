@@ -23,6 +23,7 @@ import {
   Button,
   Drawer,
   Select,
+  Switch,
   TableRow,
   MenuItem,
   TableBody,
@@ -162,6 +163,17 @@ export function ProductsPage() {
         (!q || [p.name, p.code, p.barcode].some((field) => (field || '').toLowerCase().includes(q)))
     );
   }, [products, search, statusFilter]);
+
+  // Off menu is separate from a stop: a stop is "sold out for now", off menu hides the item
+  // everywhere until someone turns it back on (seasonal items, items not launched yet).
+  const handleToggleActive = async (p: Product) => {
+    try {
+      const saved = await catalogApi.updateProduct(p.id, { is_active: !p.is_active });
+      setProducts((list) => list.map((o) => (o.id === p.id ? { ...o, is_active: saved.is_active } : o)));
+    } catch (err: any) {
+      setError(err.detail || t('catalog.productsPage.errors.toggleFailed'));
+    }
+  };
 
   const handleArchive = async (id: string, prodName: string) => {
     if (window.confirm(t('catalog.productsPage.archiveConfirm', { name: prodName }))) {
@@ -319,11 +331,30 @@ export function ProductsPage() {
                         <Chip label={`${taxRateToPercent(p.tax_rate)}%`} size="small" />
                       </TableCell>
                       <TableCell>
-                        <Chip
-                          label={p.is_active ? t('catalog.productsPage.onMenu') : t('catalog.productsPage.offMenu')}
-                          color={p.is_active ? 'success' : 'default'}
-                          size="small"
-                        />
+                        {canAuthor ? (
+                          <Stack direction="row" sx={{ alignItems: 'center' }}>
+                            <Switch
+                              size="small"
+                              checked={p.is_active}
+                              onChange={() => handleToggleActive(p)}
+                              slotProps={{ input: { 'aria-label': t('catalog.productsPage.onMenu') } }}
+                            />
+                            <Typography variant="caption" color={p.is_active ? 'success.main' : 'text.secondary'}>
+                              {p.is_active ? t('catalog.productsPage.onMenu') : t('catalog.productsPage.offMenu')}
+                            </Typography>
+                          </Stack>
+                        ) : (
+                          <Chip
+                            label={p.is_active ? t('catalog.productsPage.onMenu') : t('catalog.productsPage.offMenu')}
+                            color={p.is_active ? 'success' : 'default'}
+                            size="small"
+                          />
+                        )}
+                        {p.is_active && catObj?.is_active === false && (
+                          <Typography variant="caption" color="warning.main" sx={{ display: 'block' }}>
+                            {t('catalog.productsPage.categoryOff')}
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell align="center">
                         <IconButton

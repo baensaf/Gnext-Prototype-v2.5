@@ -1861,7 +1861,8 @@
         "loadFailed": "Failed to load products",
         "selectCategory": "Please select a category",
         "createFailed": "Failed to create product",
-        "archiveFailed": "Failed to archive product"
+        "archiveFailed": "Failed to archive product",
+        "toggleFailed": "Could not change whether this item is on the menu"
       },
       "codeHint": "e.g. PROD-DOUBLEBURGER",
       "identifiersTitle": "Codes (optional)",
@@ -1880,7 +1881,8 @@
       "statusAll": "All",
       "onMenu": "On the menu",
       "offMenu": "Off the menu",
-      "noMatches": "No products match."
+      "noMatches": "No products match.",
+      "categoryOff": "Hidden: its category is off the menu"
     },
     "categoriesPage": {
       "title": "Catalog Categories",

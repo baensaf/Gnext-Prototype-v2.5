@@ -18,6 +18,7 @@ import {
   Button,
   Dialog,
   Drawer,
+  Switch,
   MenuItem,
   TableRow,
   TableBody,
@@ -110,6 +111,17 @@ export function CategoriesPage() {
     }
   };
 
+  // Off menu hides the category and every item in it from the till, kiosk and Snappfood menu.
+  // The items keep their own switch, so turning the category back on brings them back as they were.
+  const toggleActive = async (c: Category) => {
+    try {
+      const saved = await catalogApi.updateCategory(c.id, { is_active: !c.is_active });
+      setCategories((list) => list.map((o) => (o.id === c.id ? { ...o, is_active: saved.is_active } : o)));
+    } catch (err: any) {
+      setError(err.detail || t('catalog.categoriesPage.errors.saveFailed'));
+    }
+  };
+
   const openArchive = (c: Category) => {
     setArchiving(c);
     setMoveTo('');
@@ -159,6 +171,7 @@ export function CategoriesPage() {
                 <TableRow>
                   <TableCell>{t('catalog.categoriesPage.name')}</TableCell>
                   <TableCell align="center">{t('catalog.categoriesPage.products')}</TableCell>
+                  <TableCell>{t('common.status', 'Status')}</TableCell>
                   <TableCell align="center">{t('catalog.categoriesPage.order')}</TableCell>
                   <TableCell align="center">{t('catalog.categoriesPage.actions')}</TableCell>
                 </TableRow>
@@ -173,6 +186,19 @@ export function CategoriesPage() {
                         </Typography>
                       </TableCell>
                       <TableCell align="center">{c.product_count ?? 0}</TableCell>
+                      <TableCell>
+                        <Stack direction="row" sx={{ alignItems: 'center' }}>
+                          <Switch
+                            size="small"
+                            checked={c.is_active !== false}
+                            onChange={() => toggleActive(c)}
+                            slotProps={{ input: { 'aria-label': t('catalog.productsPage.onMenu') } }}
+                          />
+                          <Typography variant="caption" color={c.is_active !== false ? 'success.main' : 'text.secondary'}>
+                            {c.is_active !== false ? t('catalog.productsPage.onMenu') : t('catalog.productsPage.offMenu')}
+                          </Typography>
+                        </Stack>
+                      </TableCell>
                       <TableCell align="center">
                         <IconButton
                           size="small"
