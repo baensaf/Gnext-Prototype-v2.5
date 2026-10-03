@@ -2285,7 +2285,20 @@
       "fromList": "In-store prices from the {{name}} list",
       "noList": "This branch has no price list, so it uses base prices",
       "off": "Off on Snappfood",
-      "offUntil": "Off until {{time}}"
+      "offUntil": "Off until {{time}}",
+      "shownDiscount": {
+        "default": "Shown discount",
+        "help": "The menu also shows a struck-through price this much higher. Nothing is taken off the bill.",
+        "column": "Shown discount",
+        "categoryTitle": "Shown discount for a category",
+        "categoryHelp": "Sets the shown discount on every item in the category. Leave the percent empty to put them back on the default; 0 shows none.",
+        "category": "Category",
+        "percent": "Percent",
+        "useDefault": "Default",
+        "apply": "Apply to category",
+        "applied": "Shown discount set on {{count}} items",
+        "strikeHint": "Shown as {{percent}}% off; the customer pays the price beside it"
+      }
     },
     "changes": {
       "title": "Price changes",

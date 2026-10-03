@@ -26,7 +26,7 @@ import { PriceListService } from './price-lists.service';
 import { PriceEntry } from '../../entities/PriceEntry.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
-import { CHANNEL_PRICING_KEY, applyChannelRule, readChannelRule } from '../../common/utils/channel-price.util';
+import { CHANNEL_PRICING_KEY, applyChannelRule, readChannelRule, displayDiscountFor, beforeDiscountPrice } from '../../common/utils/channel-price.util';
 import { inStorePrice } from '../../common/utils/price-list.util';
 
 /** What besides a whole product a stop can be on, and how long it lasts. */
@@ -1831,6 +1831,8 @@ export class CatalogService {
       const base = inStorePrice(listed, product, variant);
       const rulePrice = applyChannelRule(base, rule);
       const own = fixed.find((e) => e.product_id === product.id && (e.variant_id || null) === (variant?.id || null));
+      const price = own ? MoneyUtil.format(own.amount) : rulePrice;
+      const shownDiscount = displayDiscountFor(rule, product.id, variant?.id || null);
       return {
         product_id: product.id,
         variant_id: variant?.id || null,
@@ -1839,7 +1841,11 @@ export class CatalogService {
         base_price: MoneyUtil.format(base),
         rule_price: rulePrice,
         fixed_price: own ? MoneyUtil.format(own.amount) : null,
-        price: own ? MoneyUtil.format(own.amount) : rulePrice,
+        price,
+        // The menu's struck-through price (V3): shown only, never charged.
+        display_discount_percent: shownDiscount,
+        display_discount_own: rule.item_display_discounts[`${product.id}:${variant?.id || ''}`] !== undefined,
+        before_price: beforeDiscountPrice(price, shownDiscount, rule.round_to),
         off: offOf(product, variant),
       };
     };
