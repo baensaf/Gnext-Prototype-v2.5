@@ -92,6 +92,7 @@ import { CheckoutModal } from 'src/components/CheckoutModal';
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { toast, showErrorToast } from 'src/components/snackbar';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
+import { CustomerRegisterDialog } from 'src/components/customer-register';
 import { PosShiftBar, PosShiftGate } from 'src/components/shift/pos-shift';
 
 import { PosStopDialog } from './pos-stop-dialog';
@@ -221,43 +222,12 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
   // Quick Add Customer Dialog state
   const [quickAddCustomerOpen, setQuickAddCustomerOpen] = useState(false);
-  const [newCustFirstName, setNewCustFirstName] = useState('');
-  const [newCustLastName, setNewCustLastName] = useState('');
-  const [newCustMobile, setNewCustMobile] = useState('');
-  const [newCustEmail, setNewCustEmail] = useState('');
-  const [creatingCustomer, setCreatingCustomer] = useState(false);
-  const [customerError, setCustomerError] = useState<string | null>(null);
-
-  const handleQuickAddCustomer = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!newCustFirstName.trim() || !newCustMobile.trim()) {
-      setCustomerError('First name and Mobile number are required');
-      return;
-    }
-    try {
-      setCreatingCustomer(true);
-      setCustomerError(null);
-      const created = await pos.customers.createCustomer({
-        code: newCustMobile.trim(),
-        first_name: newCustFirstName.trim(),
-        last_name: newCustLastName.trim(),
-        mobile: newCustMobile.trim(),
-        // No credit limit: credit is granted centrally, by head office, not at the counter.
-        email: newCustEmail.trim() || undefined,
-      });
-      const updatedList = await pos.customers.getCustomers();
-      setCustomers(updatedList);
-      setSelectedCustomerId(created.id);
-      setNewCustFirstName('');
-      setNewCustLastName('');
-      setNewCustMobile('');
-      setNewCustEmail('');
-      setQuickAddCustomerOpen(false);
-    } catch (err: any) {
-      setCustomerError(err.detail || err.message || 'Failed to create customer');
-    } finally {
-      setCreatingCustomer(false);
-    }
+  // A customer registered at the till is selected on the order straight away; their first
+  // address (typed in the same dialog) becomes the delivery address.
+  const handleCustomerRegistered = async (created: Customer) => {
+    setQuickAddCustomerOpen(false);
+    setCustomers(await pos.customers.getCustomers());
+    setSelectedCustomerId(created.id);
   };
 
   // Search & Filtering
@@ -2118,7 +2088,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                       color="primary"
                       disabled={!features.customers}
                       onClick={() => {
-                        setCustomerError(null);
                         setQuickAddCustomerOpen(true);
                       }}
                       sx={{
@@ -3141,80 +3110,14 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         </DialogActions>
       </Dialog>
 
-      {/* Quick Add Customer Dialog */}
-      <Dialog
+      {/* Register a customer: name, mobile, optional details and addresses with a map pin */}
+      <CustomerRegisterDialog
         open={quickAddCustomerOpen}
-        onClose={() => !creatingCustomer && setQuickAddCustomerOpen(false)}
-        maxWidth="xs"
-        fullWidth
-        aria-keyshortcuts="Escape"
-      >
-        <form onSubmit={handleQuickAddCustomer}>
-          <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-            <PersonAddIcon color="primary" />
-            Quick Register Customer
-          </DialogTitle>
-          <DialogContent sx={{ pt: 1 }}>
-            {customerError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {customerError}
-              </Alert>
-            )}
-            <Stack spacing={2} sx={{ mt: 1 }}>
-              <TextField
-                size="small"
-                label="First Name"
-                required
-                fullWidth
-                autoFocus
-                value={newCustFirstName}
-                onChange={(e) => setNewCustFirstName(e.target.value)}
-              />
-              <TextField
-                size="small"
-                label="Last Name"
-                fullWidth
-                value={newCustLastName}
-                onChange={(e) => setNewCustLastName(e.target.value)}
-              />
-              <TextField
-                size="small"
-                label="Mobile / Phone Number"
-                required
-                fullWidth
-                value={newCustMobile}
-                placeholder="0912..."
-                onChange={(e) => setNewCustMobile(e.target.value)}
-              />
-              <TextField
-                size="small"
-                label="Email (Optional)"
-                type="email"
-                fullWidth
-                value={newCustEmail}
-                onChange={(e) => setNewCustEmail(e.target.value)}
-              />
-            </Stack>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2.5 }}>
-            <Button
-              onClick={() => setQuickAddCustomerOpen(false)}
-              disabled={creatingCustomer}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={creatingCustomer}
-              startIcon={creatingCustomer ? <CircularProgress size={16} color="inherit" /> : <PersonAddIcon />}
-              sx={{ fontWeight: 'bold' }}
-            >
-              {creatingCustomer ? 'Saving...' : 'Save & Select'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+        onClose={() => setQuickAddCustomerOpen(false)}
+        onCreated={handleCustomerRegistered}
+        createCustomer={pos.customers.createCustomer}
+        startWithAddress={orderType === 'DELIVERY'}
+      />
 
       {/* Order Notes Dialog */}
       <Dialog

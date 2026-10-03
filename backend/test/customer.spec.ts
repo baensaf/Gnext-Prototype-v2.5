@@ -23,18 +23,20 @@ describe('CustomerService (Unit)', () => {
   let customerRepo: any;
   let accountRepo: any;
   let auditWriter: any;
+  let addressRepo: any;
 
   beforeEach(async () => {
     customerRepo = { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
     accountRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
     auditWriter = { write: jest.fn() };
+    addressRepo = { create: jest.fn((dto: any) => dto), save: jest.fn((a: any) => Promise.resolve(a)), update: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CustomerService,
         { provide: getRepositoryToken(Customer), useValue: customerRepo },
         { provide: getRepositoryToken(CustomerPhone), useValue: { create: jest.fn(), save: jest.fn() } },
-        { provide: getRepositoryToken(CustomerAddress), useValue: {} },
+        { provide: getRepositoryToken(CustomerAddress), useValue: addressRepo },
         { provide: getRepositoryToken(CustomerCreditAccount), useValue: accountRepo },
         { provide: getRepositoryToken(CustomFieldDefinition), useValue: {} },
         { provide: getRepositoryToken(CustomerCustomValue), useValue: {} },
@@ -242,4 +244,59 @@ describe('CustomerService (Unit)', () => {
       ),
     ).rejects.toThrow(BadRequestException);
   });
+
+  describe('one-step registration (2026-10-03)', () => {
+    beforeEach(() => {
+      customerRepo.findOne.mockResolvedValue(null);
+      customerRepo.find.mockResolvedValue([]);
+      customerRepo.create.mockImplementation((dto: any) => ({ id: 'new-c', ...dto }));
+      customerRepo.save.mockImplementation((c: any) => Promise.resolve(c));
+      accountRepo.create.mockImplementation((dto: any) => dto);
+    });
+
+    it('takes the whole name in one box, the mobile as the code, gender and wedding date', async () => {
+      const saved = await service.createCustomer(
+        't-1',
+        { name: '  Sara Ahmadi ', mobile: '09121234567', gender: 'female', marriage_date: '2015-06-01' } as any,
+        'corr',
+      );
+      expect(saved).toMatchObject({ first_name: 'Sara Ahmadi', last_name: '', code: '+989121234567', gender: 'FEMALE', marriage_date: '2015-06-01' });
+    });
+
+    it('refuses an empty name, an unknown gender and a wedding date in the future', async () => {
+      await expect(service.createCustomer('t-1', { name: ' ', mobile: '09121234567' } as any, 'corr')).rejects.toThrow(BadRequestException);
+      await expect(service.createCustomer('t-1', { name: 'A', mobile: '09121234567', gender: 'X' } as any, 'corr')).rejects.toThrow('gender');
+      await expect(service.createCustomer('t-1', { name: 'A', mobile: '09121234567', marriage_date: '2999-01-01' } as any, 'corr')).rejects.toThrow('marriage_date');
+      expect(customerRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('saves the addresses typed with the customer, the first as default, with an optional pin', async () => {
+      await service.createCustomer(
+        't-1',
+        {
+          name: 'Sara',
+          mobile: '09121234567',
+          addresses: [
+            { title: 'Home', address_text: 'Valiasr St. 12', postal_code: '1234567890', latitude: 35.7, longitude: 51.4 },
+            { title: '', address_text: 'Office tower' },
+          ],
+        } as any,
+        'corr',
+      );
+      expect(addressRepo.save).toHaveBeenCalledTimes(2);
+      expect(addressRepo.create.mock.calls[0][0]).toMatchObject({ customer_id: 'new-c', title: 'Home', latitude: '35.7000000', longitude: '51.4000000', is_default: true });
+      expect(addressRepo.create.mock.calls[1][0]).toMatchObject({ title: 'Home', address_text: 'Office tower', latitude: null, is_default: false });
+    });
+
+    it('refuses an address with no text or half a pin before saving anything', async () => {
+      await expect(
+        service.createCustomer('t-1', { name: 'Sara', mobile: '09121234567', addresses: [{ title: 'Home', address_text: ' ' }] } as any, 'corr'),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.createCustomer('t-1', { name: 'Sara', mobile: '09121234567', addresses: [{ address_text: 'x', latitude: 35 }] } as any, 'corr'),
+      ).rejects.toThrow(BadRequestException);
+      expect(customerRepo.save).not.toHaveBeenCalled();
+    });
+  });
 });
+
