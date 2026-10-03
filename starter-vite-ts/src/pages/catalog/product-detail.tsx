@@ -417,8 +417,8 @@ export function ProductDetailPage() {
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={currentTab} onChange={(_, val) => setCurrentTab(val)}>
           <Tab label={t('catalog.productDetailPage.tabs.general')} />
-          <Tab label={<Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><span>{t('catalog.productDetailPage.tabs.variants', { count: variants.length })}</span><VersionTag feature="catalog.sizes" /></Stack>} />
-          <Tab label={<Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><span>{t('catalog.productDetailPage.tabs.modifiers', { count: product?.optionGroups?.length || 0 })}</span><VersionTag feature="catalog.addonGroups" /></Stack>} />
+          <Tab label={t('catalog.productDetailPage.tabs.variants', { count: variants.length })} />
+          <Tab label={t('catalog.productDetailPage.tabs.modifiers', { count: product?.optionGroups?.length || 0 })} />
           <Tab label={<Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><span>{t('catalog.productDetailPage.tabs.priceHistory')}</span><VersionTag feature="catalog.priceHistory" /></Stack>} />
         </Tabs>
       </Box>
@@ -488,8 +488,7 @@ export function ProductDetailPage() {
                           {t(
                             'catalog.productDetailPage.general.containerPriceHelp',
                             'Per unit, for delivery apps. Recorded for the Snappfood menu; not charged on orders here yet.'
-                          )}{' '}
-                          <VersionTag feature="catalog.packagingPrice" />
+                          )}
                         </>
                       }
                       fullWidth

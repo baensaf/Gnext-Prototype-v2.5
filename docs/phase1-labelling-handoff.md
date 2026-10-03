@@ -55,7 +55,8 @@ tickets are printed. Kitchen stations and routing rules stay V1, because the pri
 
 Everything else on the POS page is V1: delivery orders, quick customer registration,
 manual discount with the cashier's limit, hold and resume, and the cash, card and split
-payments. Combos moved to V4 with page group 8: a combo's choices are add-on groups.
+payments. Sizes, add-ons and combos on the POS are V1 too (moved back from V4 on 2026-10-04,
+with page group 8).
 
 **Page group 2, orders list and order drawer (`/app/orders`): V1. Incoming orders
 (`/app/orders/incoming`): V3.** These features of the orders page ship later:
@@ -127,10 +128,13 @@ type is V4.
 | The delivery audit tab | F |
 | Head office's fleet roll-up (`/app/delivery/rollup`) | V4 |
 
-**Page group 8, catalog (`/app/catalog/…`): V1.** Decided 2026-09-29. A V1 product is one
-item at one price, in a category. Categories don't nest: sub-categories were removed from
-the prototype (migration 083 makes each one a category of its own). The add-ons page
-(`/app/catalog/modifiers`) and the 86 report (`/app/catalog/availability/report`) are V4.
+**Page group 8, catalog (`/app/catalog/…`): V1.** Decided 2026-09-29, extended 2026-10-04 so
+the V1 menu is complete: a V1 product sits in a category and can have sizes (each with its own
+price), add-on groups (the add-ons page `/app/catalog/modifiers`, set up from one sheet,
+inherited from the category, asked at the POS or not) and a packaging price; combos, whose
+choices are add-on groups, are V1 too. All of it works on the POS. Categories don't nest:
+sub-categories were removed from the prototype (migration 083 makes each one a category of
+its own). The 86 report (`/app/catalog/availability/report`) is V4.
 Today's stock and importing products and categories are V1. So is the on/off-menu switch
 (added 2026-10-03): it hides an item or a whole category everywhere until it is turned back on,
 separate from a stop (sold out for now) and from archive (gone). An item keeps its own
@@ -138,9 +142,7 @@ switch, so a category turned back on brings its items back as they were.
 
 | Feature | Label |
 |---|---|
-| Sizes | V4 |
-| Add-on groups, and combos (built from them), on the POS too | V4 |
-| Packaging price, most per order | V4 |
+| Most per order | V4 |
 | A product's price history tab | V4 |
 | Stopping an item on Snappfood only | V3 |
 | A reason when stopping an item | F |
@@ -231,7 +233,7 @@ Courier pay and branch overrides are V4. The localization demo and data reset pa
 
 **Page group 14, kiosk (`/app/kiosk`): V3.** Decided 2026-09-29: ordering, card payment on the
 terminal, the order number, the customer's phone and name, and setting up the kiosk device.
-Sizes and add-ons on the kiosk are V4, as in the catalog. The simulated card terminal is F.
+Sizes and add-ons on the kiosk ship with the kiosk (V1 in the catalog since 2026-10-04). The simulated card terminal is F.
 
 **Page group 15, dashboard, simulators and tools.** Decided 2026-09-29. The dashboard
 (`/app/dashboard`) is V1 and is V1's one basic report: today's sales, open orders and open
