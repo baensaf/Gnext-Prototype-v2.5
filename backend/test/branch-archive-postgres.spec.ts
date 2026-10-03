@@ -80,6 +80,26 @@ describe('Archiving a branch (PostgreSQL)', () => {
     await dataSource.query(`UPDATE delivery SET state = 'DELIVERED' WHERE order_id = $1`, [paid.id]);
   });
 
+  // Codex review 2, F-05: a delivered, prepaid order owes the customer nothing and has no open
+  // settlement, but the courier has not been paid for it yet.
+  it('is refused while a finished delivery is not settled with the courier', async () => {
+    const done = await save(OrderHeader, {
+      tenant_id: tenantId, branch_id: branchId, order_number: 'ARC-UNSETTLED', channel: 'POS', order_type: 'DELIVERY',
+      state: 'COMPLETED', status: 'COMPLETED', currency_code: 'IRR', grand_total: '300000.0000', paid_total: '300000.0000', outstanding_total: '0.0000',
+    });
+    const [{ id: courierId }] = await dataSource.query(
+      `INSERT INTO courier (tenant_id, branch_id, code, name, phone) VALUES ($1, $2, 'ARC-C1', 'Courier', '09120000000') RETURNING id`,
+      [tenantId, branchId],
+    );
+    await dataSource.query(
+      `INSERT INTO delivery_assignment (tenant_id, order_id, courier_id, status, assigned_at, delivered_at, is_settled)
+       VALUES ($1, $2, $3, 'DELIVERED', now(), now(), false)`,
+      [tenantId, done.id, courierId],
+    );
+    expect((await blockers())?.context.items).toEqual([{ kind: 'COURIER_PAY', label: 'ARC-UNSETTLED' }]);
+    await dataSource.query(`UPDATE delivery_assignment SET is_settled = true WHERE order_id = $1`, [done.id]);
+  });
+
   it('is refused while a cancelled order still owes the customer money', async () => {
     const refund = await save(OrderHeader, {
       tenant_id: tenantId, branch_id: branchId, order_number: 'ARC-REFUND', channel: 'POS', order_type: 'TAKEAWAY',

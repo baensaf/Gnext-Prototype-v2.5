@@ -142,7 +142,7 @@ export class AgentDataService {
    */
   async buildStaff(tenantId: string, branchId: string, now = new Date()): Promise<StaffList> {
     const rows = await this.users.find({
-      where: { tenant_id: tenantId, branch_id: branchId, is_active: true, pin_hash: Not(IsNull()), role: In(OFFLINE_TILL_ROLES) },
+      where: { tenant_id: tenantId, branch_id: branchId, branch_removed_at: IsNull(), is_active: true, pin_hash: Not(IsNull()), role: In(OFFLINE_TILL_ROLES) },
       order: { display_name: 'ASC', id: 'ASC' },
     });
     const users = rows

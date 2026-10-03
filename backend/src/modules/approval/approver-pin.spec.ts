@@ -93,6 +93,17 @@ describe('verifyApproverPin', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
+  // Branch Management, B5: archiving took the branch away; restoring it does not give the
+  // manager their authority back until head office assigns them again.
+  it('ignores a manager whose branch was taken away when it was archived', async () => {
+    const removed = user({ id: 'm3', role: 'MANAGER', branch_id: BRANCH_A, pin_hash: managerPin, branch_removed_at: new Date() });
+    const { service } = serviceWith([removed]);
+
+    await expect(
+      service.verifyApproverPin('t1', '2468', 'REFUND_ORDER', 'cashier-1', BRANCH_A),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
   it('lets head office release anything, wherever the register is', async () => {
     const admin = user({ id: 'a1', role: 'SUPER_ADMIN', branch_id: null, pin_hash: managerPin });
     const { service } = serviceWith([admin]);

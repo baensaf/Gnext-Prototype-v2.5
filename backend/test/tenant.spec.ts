@@ -73,6 +73,19 @@ describe('TenantService (Unit)', () => {
     );
   });
 
+  // Codex review 2, F-23: seven values are not seven days, and an open day says both times.
+  it('refuses a week with a day that does not exist, or an open day without its times', async () => {
+    existingBranches();
+    const badDay = week.map((h) => (h.day_of_week === 5 ? { ...h, day_of_week: 7 } : h));
+    await expect(service.createBranch('t-1', { name: 'Tehran South', ...pin, hours: badDay }, 'corr-1')).rejects.toThrow(
+      'not a day of the week',
+    );
+    const noClose = week.map((h) => (h.day_of_week === 0 ? { day_of_week: 0, open_time: '11:00' } : h));
+    await expect(service.createBranch('t-1', { name: 'Tehran South', ...pin, hours: noClose }, 'corr-1')).rejects.toThrow(
+      'not a time',
+    );
+  });
+
   it('refuses a title another branch of the chain already has, ignoring case and spaces', async () => {
     existingBranches([{ id: 'b-1', name: 'Tehran South', deleted_at: null }]);
     await expect(service.createBranch('t-1', { name: '  tehran south ', ...pin, hours: week }, 'corr-1')).rejects.toThrow(ConflictException);

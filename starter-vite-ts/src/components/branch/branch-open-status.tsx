@@ -28,11 +28,14 @@ export function describeOpenStatus(status: OpenStatus, t: TFunction): string {
 
 /**
  * Whether a branch is open now, by its weekly hours on its own clock. Re-read every minute.
- * `rows` may be given when the page already has them; otherwise they are fetched.
+ * `rows` may be given when the page already has them; otherwise they are fetched, and fetched
+ * again every five minutes and whenever the window comes back into focus, so a till left open
+ * picks up hours head office changed (they apply as soon as they are saved).
  */
 export function useBranchOpenStatus(branchId: string | null | undefined, timeZone?: string, rows?: BranchOperatingHour[]) {
   const [fetched, setFetched] = useState<BranchOperatingHour[] | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     if (rows || !branchId) return undefined;
@@ -44,11 +47,18 @@ export function useBranchOpenStatus(branchId: string | null | undefined, timeZon
     return () => {
       live = false;
     };
-  }, [branchId, rows]);
+  }, [branchId, rows, reload]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(timer);
+    const refetch = setInterval(() => setReload((n) => n + 1), 5 * 60_000);
+    const onFocus = () => setReload((n) => n + 1);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(timer);
+      clearInterval(refetch);
+      window.removeEventListener('focus', onFocus);
+    };
   }, []);
 
   const hours = rows ?? fetched;

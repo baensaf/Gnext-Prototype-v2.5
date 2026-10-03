@@ -148,7 +148,7 @@ export class AgentHealthService implements OnApplicationBootstrap, OnApplication
         problems.push('NO_SHIFT');
       }
       const staff = await this.userRepo.count({
-        where: { tenant_id: tenantId, branch_id: agent.branch_id, is_active: true, pin_hash: Not(IsNull()), role: In(TILL_ROLES) },
+        where: { tenant_id: tenantId, branch_id: agent.branch_id, branch_removed_at: IsNull(), is_active: true, pin_hash: Not(IsNull()), role: In(TILL_ROLES) },
       });
       if (staff === 0) problems.push('NO_STAFF');
       const pulled = live.sync?.data_pulled_at ? new Date(live.sync.data_pulled_at).getTime() : 0;

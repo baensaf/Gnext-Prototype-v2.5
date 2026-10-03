@@ -40,13 +40,14 @@ export interface OpeningHoursInput {
 }
 
 /** Kinds of unfinished work that stop a branch being archived, as the refusal lists them. */
-export type ArchiveBlockerKind = 'SHIFT' | 'ORDER' | 'REFUND_DUE' | 'DELIVERY' | 'SETTLEMENT' | 'HELD_ORDER';
+export type ArchiveBlockerKind = 'SHIFT' | 'ORDER' | 'REFUND_DUE' | 'DELIVERY' | 'COURIER_PAY' | 'SETTLEMENT' | 'HELD_ORDER';
 
 const ARCHIVE_BLOCKER_WORDS: Record<string, string> = {
   SHIFT: 'cash shift(s) open',
   ORDER: 'order(s) unpaid or in progress',
   REFUND_DUE: 'cancelled order(s) with money not given back',
   DELIVERY: 'delivery(ies) not finished',
+  COURIER_PAY: 'finished delivery(ies) the courier is not settled for',
   SETTLEMENT: 'courier settlement(s) open',
   HELD_ORDER: 'held order(s)',
 };
@@ -217,18 +218,7 @@ export class TenantService {
       if (titleKey(name) !== titleKey(branch.name)) await this.assertTitleFree(tenantId, name, branchId);
       branch.name = name;
     }
-    // Moving the clock under an open drawer would put its sales in a day it never opened in.
-    if (data.time_zone && data.time_zone !== branch.time_zone) {
-      const openShifts = await this.branchRepo.manager.count(CashierShift, {
-        where: { tenant_id: tenantId, branch_id: branchId, state: In(['OPEN', 'CLOSING_REVIEW']) },
-      });
-      if (openShifts > 0) {
-        throw new ConflictException({
-          code: 'BRANCH_HAS_OPEN_SHIFT',
-          message: `Close the ${openShifts} open cash shift(s) at ${branch.name} before changing its time zone`,
-        });
-      }
-    }
+    const zoneChanges = !!data.time_zone && data.time_zone !== branch.time_zone;
     if (data.latitude !== undefined || data.longitude !== undefined) {
       const pin = this.readPin(data);
       if (!pin) throw new BadRequestException({ code: 'BRANCH_PIN_REQUIRED', message: 'The pin can be moved but not removed' });
@@ -239,8 +229,25 @@ export class TenantService {
     if (data.address !== undefined) branch.address = data.address?.trim() || null;
     if (data.time_zone) branch.time_zone = data.time_zone;
     if (data.branch_type) branch.branch_type = data.branch_type;
-    // A new time zone moves when the branch's day turns over, from now on.
-    const updated = await trackBusinessDayChange(this.branchRepo.manager, tenantId, () => this.branchRepo.save(branch));
+    // A new time zone moves when the branch's day turns over, from now on. Moving the clock under
+    // an open drawer would put its sales in a day it never opened in, so the change takes the
+    // branch row exclusively: opening a shift takes it shared, so one waits for the other, and
+    // the count of open shifts cannot go stale before the save.
+    const updated = zoneChanges
+      ? await this.branchRepo.manager.transaction(async (em) => {
+          await em.findOne(Branch, { where: { id: branchId, tenant_id: tenantId }, lock: { mode: 'pessimistic_write' } });
+          const openShifts = await em.count(CashierShift, {
+            where: { tenant_id: tenantId, branch_id: branchId, state: In(['OPEN', 'CLOSING_REVIEW']) },
+          });
+          if (openShifts > 0) {
+            throw new ConflictException({
+              code: 'BRANCH_HAS_OPEN_SHIFT',
+              message: `Close the ${openShifts} open cash shift(s) at ${branch.name} before changing its time zone`,
+            });
+          }
+          return await trackBusinessDayChange(em, tenantId, () => em.save(branch));
+        })
+      : await trackBusinessDayChange(this.branchRepo.manager, tenantId, () => this.branchRepo.save(branch));
 
     await this.auditWriter.write({
       tenantId,
@@ -315,8 +322,10 @@ export class TenantService {
   /**
    * What stops a branch being archived (Branch Management spec, B4): a cash shift not yet
    * counted and closed; a sent order with money owed or still in progress; a cancelled order
-   * whose money has not gone back; a delivery not delivered or failed, prepaid or not; a courier
-   * settlement still open; and a held order, which is discarded first. At most 50 are listed.
+   * whose money has not gone back; a delivery not delivered or failed, prepaid or not; a finished
+   * delivery the courier has not been settled for, with or without a settlement started; a
+   * courier settlement still open; and a held order, which is discarded first. At most 50 are
+   * listed.
    */
   private async archiveBlockers(em: EntityManager, tenantId: string, branchId: string) {
     const rows: Array<{ kind: ArchiveBlockerKind; label: string }> = await em.query(
@@ -337,6 +346,11 @@ export class TenantService {
          SELECT 'DELIVERY', o.order_number, 4 FROM delivery d
            JOIN order_header o ON o.id = d.order_id AND o.tenant_id = d.tenant_id
           WHERE d.tenant_id = $1 AND o.branch_id = $2 AND d.state NOT IN ('DELIVERED', 'FAILED', 'CANCELLED')
+         UNION ALL
+         SELECT 'COURIER_PAY', o.order_number, 5 FROM delivery_assignment a
+           JOIN order_header o ON o.id = a.order_id AND o.tenant_id = a.tenant_id
+          WHERE a.tenant_id = $1 AND o.branch_id = $2 AND a.is_settled = false
+            AND a.status IN ('DELIVERED', 'FAILED', 'RETURNED')
          UNION ALL
          SELECT 'SETTLEMENT', cs.settlement_number, 5 FROM courier_settlement cs
           WHERE cs.tenant_id = $1 AND cs.branch_id = $2 AND cs.status IN ('DRAFT', 'UNDER_REVIEW')
@@ -420,9 +434,18 @@ export class TenantService {
 
   /** Rows as stored: one per shift, or one closed row for a day with none. */
   private normaliseHours(hours: OpeningHoursInput[]) {
-    const time = (value: string | undefined, fallback: string) => {
-      const text = String(value || fallback).slice(0, 5);
-      if (!isHhMm(text)) throw new BadRequestException(`${value} is not a time (HH:MM)`);
+    // Every row names a real weekday, and an open day says both times: nothing is guessed or
+    // dropped on the way to the database.
+    for (const h of hours) {
+      if (!Number.isInteger(h.day_of_week) || h.day_of_week < 0 || h.day_of_week > 6) {
+        throw new BadRequestException({ code: 'BRANCH_HOURS_INVALID', message: `${h.day_of_week} is not a day of the week (0-6)` });
+      }
+    }
+    const time = (value: string | undefined) => {
+      const text = String(value ?? '').slice(0, 5);
+      if (!isHhMm(text)) {
+        throw new BadRequestException({ code: 'BRANCH_HOURS_INVALID', message: `${value ?? 'A missing time'} is not a time (HH:MM)` });
+      }
       return `${text}:00`;
     };
     const rows: Array<{ day_of_week: number; open_time: string; close_time: string; is_closed: boolean; spans_midnight: boolean }> = [];
@@ -435,8 +458,8 @@ export class TenantService {
         continue;
       }
       for (const h of open) {
-        const open_time = time(h.open_time, '08:00');
-        const close_time = time(h.close_time, '23:00');
+        const open_time = time(h.open_time);
+        const close_time = time(h.close_time);
         rows.push({ day_of_week: day, open_time, close_time, is_closed: false, spans_midnight: close_time <= open_time });
       }
     }

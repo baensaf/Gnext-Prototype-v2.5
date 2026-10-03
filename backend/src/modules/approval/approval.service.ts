@@ -102,6 +102,9 @@ export class ApprovalService {
 
     const user = await this.userRepo.findOne({ where: { id: userId, tenant_id: tenantId } });
     if (!user) throw new NotFoundException('User not found');
+    if (user.branch_removed_at) {
+      throw new ForbiddenException({ code: 'APPROVER_HAS_NO_BRANCH', title: 'No Branch', detail: 'This account has no branch, so it cannot approve here.' });
+    }
 
     let isPinValid = false;
 
@@ -184,6 +187,9 @@ export class ApprovalService {
       (u) =>
         APPROVER_ROLES.includes((u.role || '').toUpperCase()) &&
         !!u.pin_hash &&
+        // A manager whose branch was archived has no authority there, even once it is
+        // restored, until head office assigns them again (Branch Management, B5).
+        !u.branch_removed_at &&
         // An approver at head office can release anything; a branch approver only their
         // own site, which is also the only register they could be standing at.
         (!u.branch_id || !branchId || u.branch_id === branchId),
@@ -279,7 +285,7 @@ export class ApprovalService {
       where: { id: claimedUserId, tenant_id: tenantId },
     });
 
-    if (claimed?.is_active && isApprover(claimed.role) && claimed.pin_hash) {
+    if (claimed?.is_active && isApprover(claimed.role) && claimed.pin_hash && !claimed.branch_removed_at) {
       await this.verifyManagerPin(tenantId, claimed.id, pin, action);
       return claimed.id;
     }
