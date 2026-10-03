@@ -57,10 +57,9 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/delivery': 'V1',
   '/app/delivery/rollup': 'V4',
   '/app/moadian': 'F',
-  // Categories, products, availability, today's stock and the product and category import
+  // Categories, products with sizes, add-on groups and combos, availability, today's stock
+  // and the product and category import
   '/app/catalog': 'V1',
-  // Add-on groups, and the combos built from them
-  '/app/catalog/modifiers': 'V4',
   '/app/catalog/availability/report': 'V4',
   // A V1 branch sells at base prices; price lists are chain-scale pricing.
   '/app/pricing/price-lists': 'V4',
@@ -124,11 +123,7 @@ export const FEATURE_LABELS = {
   // station, one chit layout, one copy.
   'routing.productRule': 'F',
   'routing.printerOptions': 'F',
-  // Catalog. A V1 product is one item at one price, in a category.
-  'catalog.sizes': 'V4',
-  'catalog.addonGroups': 'V4',
-  'catalog.combo': 'V4',
-  'catalog.packagingPrice': 'V4',
+  // Catalog. Sizes, add-on groups, combos and the packaging price are V1 (2026-10-04).
   'catalog.maxPerOrder': 'V4',
   'catalog.priceHistory': 'V4',
   // Availability: a V1 item is available, or off until someone puts it back.
@@ -142,6 +137,7 @@ export const FEATURE_LABELS = {
   // Price changes: V1 changes base prices now.
   'pricing.scheduled': 'V4',
   'pricing.listPrices': 'V4',
+  'pricing.addonPrices': 'V4',
   // Customers and credit
   'customers.block': 'F',
   'customers.credit': 'V3',
@@ -166,7 +162,7 @@ export const FEATURE_LABELS = {
   'settings.requireTable': 'V2',
   'settings.incomingOrders': 'V3',
   'settings.refundMethods': 'V2',
-  // Kiosk (V3): sizes and add-ons follow the catalog (V4).
+  // Kiosk (V3): sizes and add-ons ship with the kiosk.
   'kiosk.simulatedTerminal': 'F',
   // Dashboard: head office's view across branches
   'dashboard.branchHealth': 'V4',

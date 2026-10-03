@@ -2964,7 +2964,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
                   {t('pos.options.variant')}
                 </Typography>
-                <VersionTag feature="catalog.sizes" />
               </Stack>
               <Grid container spacing={1}>
                 {productVariants.map((v) => {
@@ -3018,7 +3017,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                         variant={addonMin(g) > 0 ? 'filled' : 'outlined'}
                         label={addonRuleLabel(t, g)}
                       />
-                      <VersionTag feature="catalog.addonGroups" />
                     </Stack>
                     <Grid container spacing={1}>
                       {(g.items || []).map((item) => {

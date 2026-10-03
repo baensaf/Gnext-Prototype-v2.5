@@ -448,7 +448,7 @@ export function AvailabilityPage() {
       {optionGroups.some((g) => (g.items || []).length > 0) && (
         <Box sx={{ mt: 4 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-            {t('catalog.availabilityPage.addonsTitle', 'Add-ons')} <VersionTag feature="catalog.addonGroups" />
+            {t('catalog.availabilityPage.addonsTitle', 'Add-ons')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {t(

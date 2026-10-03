@@ -196,7 +196,7 @@ export function PriceChangesPage() {
           >
             <ToggleButton value="ITEMS">{t('pricing.changes.targetItems')}</ToggleButton>
             <ToggleButton value="ADDONS">
-              {t('pricing.changes.targetAddons')} <VersionTag feature="catalog.addonGroups" sx={{ ml: 1 }} />
+              {t('pricing.changes.targetAddons')} <VersionTag feature="pricing.addonPrices" sx={{ ml: 1 }} />
             </ToggleButton>
           </ToggleButtonGroup>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>

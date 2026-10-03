@@ -46,7 +46,6 @@ import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 import { catalogApi } from 'src/api/catalogApi';
 import { useAuthStore } from 'src/store/useAuthStore';
 
-import { VersionTag } from 'src/components/version-tag';
 import { ImageUploader } from 'src/components/ImageUploader';
 
 // The whole catalog is rated at the standard 9% VAT, so a product added through
@@ -290,7 +289,7 @@ export function ProductsPage() {
                   <TableCell>{t('catalog.productsPage.category')}</TableCell>
                   <TableCell align="right">{t('catalog.productsPage.basePrice')}</TableCell>
                   <TableCell align="center">
-                    {t('catalog.productsPage.sizes')} <VersionTag feature="catalog.sizes" />
+                    {t('catalog.productsPage.sizes')}
                   </TableCell>
                   <TableCell align="center">{t('catalog.productsPage.taxRate')}</TableCell>
                   <TableCell>{t('common.status', 'Status')}</TableCell>
@@ -435,7 +434,7 @@ export function ProductsPage() {
                 >
                   <MenuItem value="STANDARD">{t('catalog.productsPage.typeStandard')}</MenuItem>
                   <MenuItem value="COMBO">
-                    {t('catalog.productsPage.typeCombo')} <VersionTag feature="catalog.combo" sx={{ ml: 1 }} />
+                    {t('catalog.productsPage.typeCombo')}
                   </MenuItem>
                 </Select>
               </FormControl>

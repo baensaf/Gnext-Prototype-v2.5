@@ -704,7 +704,7 @@ export function KioskPage() {
                 {(customizingProduct.variants || []).length > 0 && (
                   <Box>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                      Size <VersionTag feature="catalog.sizes" />
+                      Size
                     </Typography>
                     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
                       {(customizingProduct.variants || []).map((v) => (
@@ -724,7 +724,7 @@ export function KioskPage() {
                 {customizingProduct.option_groups?.map((group) => (
                   <Box key={group.id}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                      {group.name} {isRequiredGroup(group) ? '(Required)' : ''} <VersionTag feature="catalog.addonGroups" />
+                      {group.name} {isRequiredGroup(group) ? '(Required)' : ''}
                       {pickHint(group) && (
                         <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
                           {pickHint(group)}
