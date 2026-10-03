@@ -232,19 +232,8 @@ export class SimulationService {
       }),
     );
 
-    // History only. The Notification Center mirrors the arrival; the Incoming Orders queue
-    // is where the order is answered.
-    await this.alertRepo.save(
-      this.alertRepo.create({
-        tenant_id: tenantId,
-        branch_id: branchId,
-        type: 'INCOMING_ORDER',
-        severity: 'INFO',
-        title: `New Snappfood order ${savedHeader.order_number}`,
-        message: `${payload.fullName || 'A customer'}: ${MoneyUtil.formatCurrency(savedHeader.grand_total)} IRR waiting for acceptance`,
-        acknowledged: false,
-      }),
-    );
+    // No Notification Center entry for the arrival: the chime, the toast and the header's
+    // Incoming Orders count announce it, and the bell is kept for things that went wrong.
 
     await this.auditWriter.write({
       tenantId,
@@ -392,21 +381,8 @@ export class SimulationService {
     order.aggregator_issue_at = null;
     order.aggregator_issue = null;
     this.markAwaitingAcceptance(order);
+    // Back in the Incoming Orders queue, which announces it like any new arrival.
     await this.orderRepo.save(order);
-
-    await this.alertRepo.save(
-      this.alertRepo.create({
-        tenant_id: tenantId,
-        branch_id: order.branch_id,
-        type: 'INCOMING_ORDER',
-        severity: 'INFO',
-        title: unchanged
-          ? `Snappfood sent order ${order.order_number} back to accept with a new time`
-          : `Snappfood sent order ${order.order_number} again, changed`,
-        message: `${payload.fullName || 'A customer'}: ${MoneyUtil.formatCurrency(order.grand_total)} IRR waiting for acceptance`,
-        acknowledged: false,
-      }),
-    );
   }
 
   /** Whether Snappfood's lines are the order's active lines: same dishes, quantities and prices. */

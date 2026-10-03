@@ -9,7 +9,6 @@ import { pageLabel } from 'src/config/version-labels';
 import { useWorkspaceScope } from 'src/contexts/branch-context';
 import { canReachPath, fitsWorkspace } from 'src/config/role-access';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
-import { useIncomingOrders } from 'src/contexts/incoming-orders-context';
 
 import { Label } from 'src/components/label';
 import { SvgColor } from 'src/components/svg-color';
@@ -51,7 +50,6 @@ export function useNavData(): NavSectionProps['data'] {
   const workspace = useWorkspaceScope();
   const visible = (path: string) =>
     canReachPath(role, path, isHeadOffice) && fitsWorkspace(path, workspace);
-  const incomingCount = useIncomingOrders()?.orders.length ?? 0;
   const showVersions = useVersionLabels((s) => s.show);
 
   // A page that ships after V1 carries its Phase 1 version beside its menu entry, after any
@@ -101,8 +99,8 @@ export function useNavData(): NavSectionProps['data'] {
         {
           title: t('nav.incomingOrders', 'Incoming Orders'),
           path: '/app/orders/incoming',
+          // No count here: the header's Incoming Orders icon carries it, on every screen size.
           icon: ICONS.coupons,
-          info: incomingCount ? <Label color="error">{incomingCount}</Label> : undefined,
         },
         {
           title: t('nav.deliveryHub', 'Delivery & Fleet Hub'),
