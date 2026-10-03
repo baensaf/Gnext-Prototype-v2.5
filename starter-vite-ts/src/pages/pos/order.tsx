@@ -2435,17 +2435,19 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                               <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                                 {MoneyUtil.formatCurrency(item.lineSubtotal)} {currency}
                               </Typography>
-                              {/* Change a line's size and add-ons without ringing it up again. */}
+                              {/* Change a line's size and add-ons without ringing it up again.
+                                  Icon only (PM, 2026-10-03); the label stays as the tooltip. */}
                               {(item.hasChoices || item.selectedOptions.length > 0 || !!item.selectedVariant) && (
-                                <Button
+                                <IconButton
                                   size="small"
-                                  variant="text"
-                                  startIcon={<TuneIcon sx={{ fontSize: 14 }} />}
+                                  color="primary"
+                                  title={t('pos.options.editLine')}
+                                  aria-label={t('pos.options.editLine')}
                                   onClick={() => handleOpenProductOptions(item.product, idx)}
-                                  sx={{ minWidth: 0, py: 0, px: 0.5, fontSize: '0.7rem' }}
+                                  sx={{ p: 0.25 }}
                                 >
-                                  {t('pos.options.editLine')}
-                                </Button>
+                                  <TuneIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
                               )}
                             </Stack>
                             {item.refused && (
