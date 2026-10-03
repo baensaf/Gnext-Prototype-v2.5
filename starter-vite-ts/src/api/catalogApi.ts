@@ -289,7 +289,14 @@ export interface OffScheduleProduct {
 
 export interface ChannelPriceSheet {
   channel: string;
-  rule: { markup_percent: number; round_to: number };
+  rule: {
+    markup_percent: number;
+    round_to: number;
+    /** The shown ("fake") discount the menu prints, V3; 0 for none. */
+    display_discount_percent: number;
+    /** Per item, keyed `productId:variantId`; 0 turns it off for that item. */
+    item_display_discounts: Record<string, number>;
+  };
   branch_id: string | null;
   /** The list the branch's in-store prices come from, when it is on one. */
   price_list: { id: string; name: string } | null;
@@ -302,6 +309,11 @@ export interface ChannelPriceSheet {
     rule_price: string;
     fixed_price: string | null;
     price: string;
+    /** The shown discount for this item and whether it is the item's own (not the default). */
+    display_discount_percent: number;
+    display_discount_own: boolean;
+    /** The struck-through price the menu prints; never charged. Null for no shown discount. */
+    before_price: string | null;
     /** Off on the channel right now: a stop on it or everywhere. */
     off: { reason: string | null; until: string | null; everywhere: boolean; chain_wide: boolean } | null;
   }>;
