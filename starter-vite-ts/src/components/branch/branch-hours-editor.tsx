@@ -5,7 +5,6 @@ import dayjs from 'dayjs';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -37,34 +36,12 @@ type BranchHoursEditorProps = {
 
 const toTime = (hhmm: string) => dayjs(`2000-01-01T${hhmm}`);
 const fromTime = (value: Dayjs | null) => (value && value.isValid() ? value.format('HH:mm') : null);
-const minutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
-const hhmmOf = (total: number) => {
-  const m = ((total % 1440) + 1440) % 1440;
-  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-};
 
 /**
- * The next shift for a day. One long shift that covers the afternoon is split into lunch and
- * dinner (11:00–23:00 becomes 11:00–15:00 and 18:00–23:00), the usual reason to add one;
- * otherwise the new shift starts an hour after the last one ends and runs three hours.
- */
-function withAnotherShift(shifts: Shift[]): Shift[] {
-  if (!shifts.length) return [{ ...DEFAULT_SHIFT }];
-  const last = shifts[shifts.length - 1];
-  if (shifts.length === 1 && !runsPastMidnight(last) && minutes(last.open) < 15 * 60 && minutes(last.close) > 18 * 60) {
-    return [
-      { open: last.open, close: '15:00' },
-      { open: '18:00', close: last.close },
-    ];
-  }
-  const start = (runsPastMidnight(last) ? minutes(last.close) + 1440 : minutes(last.close)) + 60;
-  return [...shifts, { open: hhmmOf(start), close: hhmmOf(start + 180) }];
-}
-
-/**
- * The weekly hours: each day open or closed, with one or more shifts, on a 24-hour clock. A
- * shift that closes at or before it opens runs past midnight, and says so. "Copy to" repeats
- * a day on others.
+ * The weekly hours: each day closed or open with one opening time, on a 24-hour clock (several
+ * a day, such as lunch and dinner, are V4). Hours that close at or before they open run past
+ * midnight, and say so. "Copy to" repeats a day on others. A day saved with more than one
+ * before V1 shows them all, each removable, until one is left.
  */
 export function BranchHoursEditor({ value, onChange, disabled }: BranchHoursEditorProps) {
   const { t } = useTranslation();
@@ -153,12 +130,12 @@ export function BranchHoursEditor({ value, onChange, disabled }: BranchHoursEdit
                           )
                         )}
                         {shifts.length > 1 && (
-                          <Tooltip title={t('branchMgmt.hours.removeShift', 'Remove shift')}>
+                          <Tooltip title={t('branchMgmt.hours.removeShift', 'Remove')}>
                             <span>
                               <IconButton
                                 size="small"
                                 disabled={disabled}
-                                aria-label={t('branchMgmt.hours.removeShift', 'Remove shift')}
+                                aria-label={t('branchMgmt.hours.removeShift', 'Remove')}
                                 onClick={() => setDay(day, shifts.filter((_, i) => i !== index))}
                               >
                                 <CloseIcon fontSize="small" />
@@ -170,9 +147,9 @@ export function BranchHoursEditor({ value, onChange, disabled }: BranchHoursEdit
                     ))}
                     {problem && (
                       <Typography variant="caption" color="error">
-                        {problem === 'overlap'
-                          ? t('branchMgmt.hours.overlap', 'Two shifts on this day overlap.')
-                          : t('branchMgmt.hours.runsIntoNextDay', "The late shift runs into the next day's first shift.")}
+                        {problem === 'several'
+                          ? t('branchMgmt.hours.several', 'V1 takes one opening time a day. Remove the extra one.')
+                          : t('branchMgmt.hours.runsIntoNextDay', 'It closes after the next day opens.')}
                       </Typography>
                     )}
                   </Stack>
@@ -183,16 +160,6 @@ export function BranchHoursEditor({ value, onChange, disabled }: BranchHoursEdit
                 )}
 
                 <Stack direction="row" spacing={1} sx={{ mt: 0.5, ml: -1 }}>
-                  {open && (
-                    <Button
-                      size="small"
-                      startIcon={<AddIcon />}
-                      disabled={disabled}
-                      onClick={() => setDay(day, withAnotherShift(shifts))}
-                    >
-                      {t('branchMgmt.hours.addShift', 'Add shift')}
-                    </Button>
-                  )}
                   <Button
                     size="small"
                     color="inherit"

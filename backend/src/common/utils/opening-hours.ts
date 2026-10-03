@@ -5,9 +5,10 @@ import { localClock } from './availability-schedule.util';
 import { BUSINESS_TIME_ZONE } from './business-date.util';
 
 /**
- * A branch's weekly opening hours: each weekday has zero or more shifts (lunch, dinner). A
- * shift that closes at or before it opens runs past midnight into the next day and belongs to
- * the day it opened on; equal times are the whole day. The same reading as selling windows.
+ * A branch's weekly opening hours: each weekday is closed or has one opening time (a row; the
+ * code calls one a shift, which has nothing to do with a cashier's cash shift). One that closes
+ * at or before it opens runs past midnight into the next day and belongs to the day it opened
+ * on; equal times are the whole day. The same reading as selling windows.
  *
  * Hours do not stop the till. They decide whether an order is marked after hours, and from
  * V3 they will close the online channels.
@@ -49,21 +50,20 @@ export function isOpenAt(rows: OpeningHoursRow[], at: Date, timeZone: string): b
 }
 
 /**
- * Why a week of shifts cannot be saved, or null when it can. Shifts on one day may not
- * overlap, and a shift past midnight may touch the next day's first shift but not run into it.
+ * Why a week of hours cannot be saved, or null when it can. V1 takes one opening time a day
+ * (several a day, such as lunch and dinner, are V4), and one that runs past midnight may close
+ * as the next day opens but not after.
  */
 export function hoursProblem(rows: OpeningHoursRow[]): string | null {
   const open = rows.filter((r) => !r.is_closed);
   for (let day = 0; day < 7; day++) {
-    const today = open.filter((r) => r.day_of_week === day).map(shiftSpan).sort((a, b) => a.start - b.start);
-    for (let i = 1; i < today.length; i++) {
-      if (today[i].start < today[i - 1].end) return `Two shifts on day ${day} overlap`;
-    }
-    const last = today[today.length - 1];
-    if (last && last.end > 1440) {
+    const today = open.filter((r) => r.day_of_week === day).map(shiftSpan);
+    if (today.length > 1) return `Day ${day} has more than one opening time; V1 takes one a day`;
+    const [hours] = today;
+    if (hours && hours.end > 1440) {
       const tomorrow = open.filter((r) => r.day_of_week === (day + 1) % 7).map(shiftSpan);
-      if (tomorrow.some((s) => s.start < last.end - 1440)) {
-        return `The shift past midnight on day ${day} runs into the next day's first shift`;
+      if (tomorrow.some((s) => s.start < hours.end - 1440)) {
+        return `The opening time past midnight on day ${day} closes after the next day opens`;
       }
     }
   }

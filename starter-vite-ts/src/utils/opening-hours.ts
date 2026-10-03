@@ -18,10 +18,10 @@ export const WEEK = [
 
 export type DayKey = (typeof WEEK)[number]['key'];
 
-/** One opening window, HH:MM. */
+/** One opening time, HH:MM. Called a shift in the code; nothing to do with a cash shift. */
 export type Shift = { open: string; close: string };
 
-/** A day's shifts; none means closed that day. */
+/** A day's opening time (one in V1); none means closed that day. */
 export type WeekHours = Record<number, Shift[]>;
 
 export const DEFAULT_SHIFT: Shift = { open: '11:00', close: '23:00' };
@@ -73,18 +73,23 @@ export function rowsFromWeek(week: WeekHours) {
   });
 }
 
-/** What is wrong with a day's shifts, by day; empty when the week can be saved. */
-export function weekProblems(week: WeekHours): Partial<Record<number, 'overlap' | 'runsIntoNextDay'>> {
-  const problems: Partial<Record<number, 'overlap' | 'runsIntoNextDay'>> = {};
+/**
+ * What is wrong with a day's hours, by day; empty when the week can be saved. V1 takes one
+ * opening time a day (several, such as lunch and dinner, are V4); one past midnight may close
+ * as the next day opens but not after.
+ */
+export function weekProblems(week: WeekHours): Partial<Record<number, 'several' | 'runsIntoNextDay'>> {
+  const problems: Partial<Record<number, 'several' | 'runsIntoNextDay'>> = {};
   for (const { day } of WEEK) {
-    const today = (week[day] || []).map(span).sort((a, b) => a.start - b.start);
-    for (let i = 1; i < today.length; i++) {
-      if (today[i].start < today[i - 1].end) problems[day] = 'overlap';
+    const today = (week[day] || []).map(span);
+    if (today.length > 1) {
+      problems[day] = 'several';
+      continue;
     }
-    const last = today[today.length - 1];
-    if (!problems[day] && last && last.end > 1440) {
+    const [hours] = today;
+    if (hours && hours.end > 1440) {
       const tomorrow = (week[(day + 1) % 7] || []).map(span);
-      if (tomorrow.some((s) => s.start < last.end - 1440)) problems[day] = 'runsIntoNextDay';
+      if (tomorrow.some((s) => s.start < hours.end - 1440)) problems[day] = 'runsIntoNextDay';
     }
   }
   return problems;

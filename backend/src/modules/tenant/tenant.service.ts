@@ -166,7 +166,7 @@ export class TenantService {
     }
     const hours = this.normaliseHours(data.hours || []);
     const problem = hoursProblem(hours);
-    if (problem) throw new BadRequestException({ code: 'BRANCH_HOURS_OVERLAP', message: problem });
+    if (problem) throw new BadRequestException({ code: 'BRANCH_HOURS_INVALID', message: problem });
 
     const saved = await this.branchRepo.manager.transaction(async (em) => {
       const branch = em.create(Branch, {
@@ -394,7 +394,7 @@ export class TenantService {
     const days = new Set(incoming.map((h) => h.day_of_week));
     const kept = (await this.getBranchHours(tenantId, branchId)).filter((h) => !days.has(h.day_of_week));
     const problem = hoursProblem([...kept, ...incoming]);
-    if (problem) throw new BadRequestException({ code: 'BRANCH_HOURS_OVERLAP', message: problem });
+    if (problem) throw new BadRequestException({ code: 'BRANCH_HOURS_INVALID', message: problem });
 
     await this.hoursRepo.manager.transaction(async (em) => {
       for (const day of days) {

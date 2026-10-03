@@ -91,7 +91,7 @@ describe('Daily stock under concurrent sales (PostgreSQL)', () => {
   });
 
   // An open order (a draft, a kiosk order awaiting its card) has no business date until it is
-  // submitted or paid. Placed at 01:30 it counts against the day that began at 04:00 the
+  // submitted or paid. Placed at 01:30 it counts against the day that began at 05:00 the
   // morning before, not against the calendar date: the night's sales used to go uncounted and
   // the last unit sold three times over (found at 03:59 in Tehran).
   it("counts an open order placed after midnight against the night's business day", async () => {
@@ -103,8 +103,8 @@ describe('Daily stock under concurrent sales (PostgreSQL)', () => {
       await dataSource.getRepository(OrderHeader).update({ id: order.id }, { placed_at: new Date(placedAt), business_date: null } as any);
     };
     await placeAt('2026-03-10T22:00:00Z'); // 01:30 on the 11th in Tehran: the 10th's business day
-    await placeAt('2026-03-11T00:29:00Z'); // 03:59: still the 10th
-    await placeAt('2026-03-11T00:30:00Z'); // 04:00: the 11th
+    await placeAt('2026-03-11T01:29:00Z'); // 04:59: still the 10th (the default cutoff is 05:00)
+    await placeAt('2026-03-11T01:30:00Z'); // 05:00: the 11th
     for (const business_date of ['2026-03-10', '2026-03-11']) {
       await dataSource.getRepository(DailyStock).save({ tenant_id: tenantId, branch_id: branchId, business_date, product_id: moussaka, variant_id: null, quantity: 5 });
     }

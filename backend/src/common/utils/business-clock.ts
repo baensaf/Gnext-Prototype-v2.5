@@ -26,7 +26,7 @@ function canRead(em: any): em is Reader {
  * The business clock of a branch (or, without one, of the chain): head office's BUSINESS_DAY
  * setting under the branch's own override, on the branch's time zone, through the rules the
  * branch has run under. A caller with no real entity manager (a unit test's fake) gets the
- * default clock: a 04:00 cutoff on BUSINESS_TIME_ZONE.
+ * default clock: a 05:00 cutoff on BUSINESS_TIME_ZONE.
  */
 export async function loadBusinessClock(em: any, tenantId: string, branchId?: string | null): Promise<BusinessClock> {
   if (!canRead(em) || !tenantId) return BusinessClock.fromConfig();

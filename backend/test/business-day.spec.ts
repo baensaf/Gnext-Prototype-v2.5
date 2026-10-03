@@ -8,10 +8,11 @@ import {
 } from '../src/common/utils/business-day';
 
 // The overnight business day: a restaurant open 08:00–04:00 turns its day over at 04:00, not at
-// midnight, on its own branch's clock.
-const tehran = BusinessClock.fromConfig({}, 'Asia/Tehran'); // UTC+03:30 all year
-const dubai = BusinessClock.fromConfig({}, 'Asia/Dubai'); // UTC+04:00
-const london = BusinessClock.fromConfig({}, 'Europe/London'); // BST/GMT
+// midnight, on its own branch's clock. (The default cutoff is 05:00; these spell out 04:00.)
+const at4 = { cutoff: '04:00' };
+const tehran = BusinessClock.fromConfig(at4, 'Asia/Tehran'); // UTC+03:30 all year
+const dubai = BusinessClock.fromConfig(at4, 'Asia/Dubai'); // UTC+04:00
+const london = BusinessClock.fromConfig(at4, 'Europe/London'); // BST/GMT
 
 /** A wall-clock time in Tehran, as an instant. */
 const tehranAt = (local: string) => new Date(`${local}+03:30`);
@@ -156,8 +157,8 @@ describe('the BUSINESS_DAY setting', () => {
     expect(businessDaySettingProblem({ cutoff: '13:00' })).toMatch(/before 12:00/);
   });
 
-  it('refuses hours that run past the cutoff', () => {
-    expect(businessDaySettingProblem({ cutoff: '04:00', opensAt: '08:00', closesAt: '05:00' })).toMatch(/inside one business day/);
+  it('no longer checks the old chain-wide hours: each branch has its own opening hours', () => {
+    expect(businessDaySettingProblem({ cutoff: '04:00', opensAt: '08:00', closesAt: '05:00' })).toBeNull();
   });
 
   it('refuses a time that is not HH:MM', () => {
@@ -166,6 +167,6 @@ describe('the BUSINESS_DAY setting', () => {
   });
 
   it('fills what is missing from the defaults', () => {
-    expect(readBusinessDayConfig({ opensAt: '09:00' })).toEqual({ cutoff: '04:00', opensAt: '09:00', closesAt: '04:00', autoClose: true });
+    expect(readBusinessDayConfig({ opensAt: '09:00' })).toEqual({ cutoff: '05:00', opensAt: '09:00', closesAt: '04:00', autoClose: true });
   });
 });

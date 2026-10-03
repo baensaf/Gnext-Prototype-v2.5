@@ -30,20 +30,21 @@ import { useBranchContext } from 'src/contexts/branch-context';
 import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
-type BusinessDaySetting = { cutoff: string; opensAt: string; closesAt: string; autoClose: boolean };
+type BusinessDaySetting = { cutoff: string; autoClose: boolean };
 
 /** The server's defaults, used until head office writes a BUSINESS_DAY row. */
-const DEFAULTS: BusinessDaySetting = { cutoff: '04:00', opensAt: '08:00', closesAt: '04:00', autoClose: true };
+const DEFAULTS: BusinessDaySetting = { cutoff: '05:00', autoClose: true };
 
 const hhmm = (value: unknown, fallback: string) =>
   typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : fallback;
 
 /**
- * When the business day turns over and the shop's hours. A restaurant open 08:00 to 04:00 keeps
- * the night's trade on the day it opened: a sale at 01:30 belongs to the day before, and the new
- * day starts at the cutoff. Every channel, payment, refund, call number and report follows it.
- * Head office sets it for the chain; a branch may keep its own. A change applies from now on and
- * never re-dates what is already recorded.
+ * When the business day turns over. A restaurant open 11:00 to 04:00 keeps the night's trade on
+ * the day it opened: a sale at 01:30 belongs to the day before, and the new day starts at the
+ * cutoff, set after the latest closing time. Every channel, payment, refund, call number and
+ * report follows it. Head office sets it for the chain; a branch may keep its own. A change
+ * applies from now on and never re-dates what is already recorded. Opening hours are not set
+ * here: each branch has its own (Branch Management).
  */
 export function BusinessDaySettingsPage() {
   const { t } = useTranslation();
@@ -70,8 +71,6 @@ export function BusinessDaySettingsPage() {
       const v = group?.value || {};
       setValue({
         cutoff: hhmm(v.cutoff, DEFAULTS.cutoff),
-        opensAt: hhmm(v.opensAt, DEFAULTS.opensAt),
-        closesAt: hhmm(v.closesAt, hhmm(v.cutoff, DEFAULTS.closesAt)),
         autoClose: typeof v.autoClose === 'boolean' ? v.autoClose : DEFAULTS.autoClose,
       });
       setSource(group?.source || 'ORG');
@@ -131,7 +130,7 @@ export function BusinessDaySettingsPage() {
     );
   }
 
-  const timeField = (key: 'cutoff' | 'opensAt' | 'closesAt', label: string, help: string) => (
+  const timeField = (key: 'cutoff', label: string, help: string) => (
     <TextField
       fullWidth
       type="time"
@@ -204,18 +203,9 @@ export function BusinessDaySettingsPage() {
               t('settings.businessDay.cutoffLabel', 'Business day cutoff'),
               t(
                 'settings.businessDay.cutoffHelp',
-                'The new business day starts here, on the branch’s own clock. With 04:00, a sale at 01:30 belongs to the day before and one at 04:00 to the new day. Orders, payments, refunds, call numbers and reports all follow it.'
+                'The new business day starts here, on the branch’s own clock. Set it after the latest closing time: with 05:00, a sale at 01:30 belongs to the day before and one at 05:00 to the new day. Orders, payments, refunds, call numbers and reports all follow it. Opening hours are set on each branch.'
               )
             )}
-
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              {timeField('opensAt', t('settings.businessDay.opensLabel', 'Opens at'), t('settings.businessDay.opensHelp', 'When the shop opens for the day.'))}
-              {timeField(
-                'closesAt',
-                t('settings.businessDay.closesLabel', 'Closes at'),
-                t('settings.businessDay.closesHelp', 'May run past midnight, up to the cutoff.')
-              )}
-            </Stack>
 
             <Divider />
 
