@@ -78,7 +78,7 @@ function playChime() {
 }
 
 /**
- * One watcher for the whole app, so the header badge, the sidebar count, the toast and the
+ * One watcher for the whole app, so the header badge, the chime, the toast and the
  * Incoming Orders page all read the same list and the queue is polled once, not per screen.
  */
 export function IncomingOrdersProvider({ children }: { children: React.ReactNode }) {

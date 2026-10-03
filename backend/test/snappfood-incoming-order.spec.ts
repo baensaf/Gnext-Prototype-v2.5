@@ -96,15 +96,12 @@ describe('an incoming Snappfood order carries what the store needs to answer it'
     expect(result.order.branch_id).toBe('br-tajrish');
   });
 
-  it('records its arrival in the Notification Center, for the branch that received it', async () => {
-    const result: any = await service.generateSnappfoodOrder('t-1', { ...simulatorOrder, branch_id: 'br-tajrish' });
+  // The chime, the toast and the header's Incoming Orders count announce an arrival; the
+  // Notification Center is kept for things that went wrong.
+  it('does not post its arrival to the Notification Center', async () => {
+    await service.generateSnappfoodOrder('t-1', { ...simulatorOrder, branch_id: 'br-tajrish' });
 
-    expect(alertRepo.save).toHaveBeenCalledTimes(1);
-    const [alert] = alertRepo.save.mock.calls[0];
-    expect(alert).toEqual(
-      expect.objectContaining({ tenant_id: 't-1', branch_id: 'br-tajrish', type: 'INCOMING_ORDER', severity: 'INFO', acknowledged: false }),
-    );
-    expect(alert.title).toContain(result.order.order_number);
+    expect(alertRepo.save).not.toHaveBeenCalled();
   });
 
   // Slice 4: the branch's acceptance policy decides, as the order lands, whether it waits.
