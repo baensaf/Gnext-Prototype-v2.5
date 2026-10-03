@@ -6,20 +6,34 @@ import React, { useRef, useState, useEffect } from 'react';
 import BlockIcon from '@mui/icons-material/Block';
 import SearchIcon from '@mui/icons-material/Search';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
-import { Box, Chip, Stack, Button, TextField, Typography, Autocomplete, InputAdornment, CircularProgress } from '@mui/material';
+import { Box, Chip, Stack, TextField, Typography, Autocomplete, InputAdornment, CircularProgress } from '@mui/material';
 
 const MIN_CHARS = 3;
 const DEBOUNCE_MS = 300;
 
+/** The "Register new customer" row, always last in the list. */
+const REGISTER_ID = '__register__';
+const REGISTER = { id: REGISTER_ID } as Customer;
+const isRegister = (c: Customer | null | undefined) => c?.id === REGISTER_ID;
+
 const label = (c: Customer) => `${`${c.first_name || ''} ${c.last_name || ''}`.trim()} (${c.mobile})`;
+
+/** What the cashier typed, as the register form's mobile (digits) or name (letters). */
+const prefillFrom = (typed: string): { mobile?: string; name?: string } => {
+  const text = typed.trim();
+  if (!text) return {};
+  if (/^[\d\s+۰-۹٠-٩-]+$/.test(text)) return { mobile: text };
+  if (/\p{L}/u.test(text)) return { name: text };
+  return {};
+};
 
 type Props = {
   value: Customer | null;
   onChange: (customer: Customer | null) => void;
   /** Best matches for what was typed (3+ characters), from the server. */
   search: (q: string) => Promise<Customer[]>;
-  /** Opens the register dialog, with the digits typed so far as the mobile. */
-  onRegister: (typed: string) => void;
+  /** Opens the register dialog, with what was typed as the mobile or the name. */
+  onRegister: (prefill: { mobile?: string; name?: string }) => void;
   placeholder: string;
   disabled?: boolean;
   inputRef?: React.Ref<HTMLInputElement>;
@@ -28,24 +42,29 @@ type Props = {
 /**
  * The till's customer picker. It never loads the customer list (a chain can have 500,000):
  * the cashier types a mobile or a name, and after 3 characters the server sends the best 20,
- * the exact mobile first. When nothing matches, "Register" opens the register dialog with
- * what was typed.
+ * the exact mobile first. The last row is always "Register new customer" (matches or not,
+ * typed or not), so there is no separate add button; it opens the register form with what
+ * was typed.
  */
 export function PosCustomerPicker({ value, onChange, search, onRegister, placeholder, disabled, inputRef }: Props) {
   const { t } = useTranslation();
   const [input, setInput] = useState('');
-  const [options, setOptions] = useState<Customer[]>([]);
+  const [found, setFound] = useState<Customer[]>([]);
+  const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const latest = useRef(0);
 
   const typed = input.trim();
-  const tooShort = typed.length < MIN_CHARS;
+  const showingValue = !!value && input === label(value);
+  const tooShort = typed.length < MIN_CHARS || showingValue;
 
   useEffect(() => {
     // The input shows the picked customer's label; that is not a search.
-    if (tooShort || (value && input === label(value))) {
-      setOptions(value ? [value] : []);
+    if (tooShort) {
+      latest.current += 1;
+      setFound(value ? [value] : []);
+      setSearched(false);
       setLoading(false);
       return undefined;
     }
@@ -53,15 +72,17 @@ export function PosCustomerPicker({ value, onChange, search, onRegister, placeho
     setLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const found = await search(typed);
+        const result = await search(typed);
         if (call === latest.current) {
-          setOptions(found);
+          setFound(result);
           setFailed(false);
+          setSearched(true);
         }
       } catch {
         if (call === latest.current) {
-          setOptions([]);
+          setFound([]);
           setFailed(true);
+          setSearched(true);
         }
       } finally {
         if (call === latest.current) setLoading(false);
@@ -69,34 +90,19 @@ export function PosCustomerPicker({ value, onChange, search, onRegister, placeho
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typed]);
+  }, [typed, showingValue]);
 
-  const noOptions = tooShort ? (
-    <Typography variant="body2" color="text.secondary">
-      {t('pos.customerSearch.typeMore', { count: MIN_CHARS })}
-    </Typography>
-  ) : failed ? (
-    <Typography variant="body2" color="error">
-      {t('pos.customerSearch.failed')}
-    </Typography>
-  ) : (
-    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-      <Typography variant="body2" color="text.secondary">
-        {t('pos.customerSearch.noMatch')}
-      </Typography>
-      <Button
-        size="small"
-        startIcon={<PersonAddIcon />}
-        // The listbox closes on blur; act on mouse down so the click lands.
-        onMouseDown={(e) => {
-          e.preventDefault();
-          onRegister(/^[\d\s+۰-۹٠-٩]+$/.test(typed) ? typed : '');
-        }}
-      >
-        {t('pos.customerSearch.register')}
-      </Button>
-    </Stack>
-  );
+  // The note under "Register new customer": why the list above it is short or empty.
+  const hint =
+    typed.length < MIN_CHARS && !showingValue
+      ? t('pos.customerSearch.typeMore', { count: MIN_CHARS })
+      : loading
+        ? t('pos.customerSearch.searching')
+        : failed
+          ? t('pos.customerSearch.failed')
+          : searched && found.length === 0
+            ? t('pos.customerSearch.noMatch')
+            : '';
 
   return (
     <Autocomplete
@@ -104,19 +110,42 @@ export function PosCustomerPicker({ value, onChange, search, onRegister, placeho
       size="small"
       disabled={disabled}
       value={value}
-      options={options}
+      options={[...found, REGISTER]}
       // The server already filtered and ranked them.
       filterOptions={(o) => o}
-      getOptionLabel={label}
+      // The register row keeps whatever was typed in the box.
+      getOptionLabel={(c) => (isRegister(c) ? input : label(c))}
       isOptionEqualToValue={(a, b) => a.id === b.id}
       inputValue={input}
       onInputChange={(_e, next) => setInput(next)}
-      onChange={(_e, next) => onChange(next)}
-      loading={loading}
-      noOptionsText={noOptions}
-      loadingText={t('pos.customerSearch.searching')}
+      onChange={(_e, next) => {
+        if (isRegister(next)) {
+          onRegister(showingValue ? {} : prefillFrom(typed));
+          return;
+        }
+        onChange(next);
+      }}
       renderOption={(props, c) => {
         const { key, ...rest } = props as any;
+        if (isRegister(c)) {
+          return (
+            <Box component="li" key={key} {...rest} sx={{ borderTop: found.length ? 1 : 0, borderColor: 'divider' }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', width: 1 }}>
+                <PersonAddIcon fontSize="small" color="primary" />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" color="primary" sx={{ fontWeight: 600 }}>
+                    {t('pos.customerSearch.registerNew')}
+                  </Typography>
+                  {hint && (
+                    <Typography variant="caption" color={failed ? 'error' : 'text.secondary'}>
+                      {hint}
+                    </Typography>
+                  )}
+                </Box>
+              </Stack>
+            </Box>
+          );
+        }
         return (
           <Box component="li" key={key} {...rest}>
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', width: 1 }}>
