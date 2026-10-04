@@ -159,6 +159,20 @@ export class AgentHealthService implements OnApplicationBootstrap, OnApplication
     return out;
   }
 
+  /**
+   * Whether a register is the branch PC's Gnext POS (agent-protocol.md §16.10): a connected agent
+   * with `pos.till` is bound to it. The web POS then sends that register's cashier to the PC's
+   * till instead of selling beside it, so one drawer has one screen.
+   */
+  tillServedByAgent(tenantId: string, terminalId: string): { agent_id: string } | null {
+    for (const handle of this.sessions.all()) {
+      const live = handle as LiveAgentConnectionHandle;
+      if (live.tenantId !== tenantId || !live.capabilities.includes('pos.till')) continue;
+      if (live.till?.terminal_id === terminalId) return { agent_id: live.agentId };
+    }
+    return null;
+  }
+
   /** Everything the health screen shows for one agent. */
   async health(tenantId: string, agentId: string) {
     const agent = await this.registry.getAgent(tenantId, agentId);

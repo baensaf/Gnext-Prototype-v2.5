@@ -37,7 +37,7 @@ const windowTitle = "Gnext Agent — عامل شعبه"
 var (
 	settingsWindow = windowSpec{title: windowTitle, mutex: `Local\GnextAgentWindow`, data: "agent-window", width: 1120, height: 780, reopen: "open"}
 	// The till takes a larger window: it is the register the cashier works at all day.
-	tillWindow = windowSpec{title: "صندوق آفلاین — Gnext", path: tillPath, mutex: `Local\GnextTillWindow`, data: "till-window", width: 1366, height: 860}
+	tillWindow = windowSpec{title: "صندوق جی‌نکست — Gnext", path: tillPath, mutex: `Local\GnextTillWindow`, data: "till-window", width: 1366, height: 860}
 )
 
 // appIconID is the icon resource go-winres puts in the exe (winres/winres.json).

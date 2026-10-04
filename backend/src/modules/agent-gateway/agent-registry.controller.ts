@@ -78,6 +78,20 @@ export class AgentRegistryController {
   }
 }
 
+/**
+ * Whether a register is served by its branch PC's Gnext POS (agent-protocol.md §16.10). Asked by
+ * the web POS of any signed-in user, so it says only yes or no.
+ */
+@Controller('api/v1/terminals')
+export class TerminalAgentTillController {
+  constructor(private readonly health: AgentHealthService) {}
+
+  @Get(':id/agent-till')
+  agentTill(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
+    return { served_by_agent: this.health.tillServedByAgent((req as any).tenantId, id) !== null };
+  }
+}
+
 function actorOf(req: Request) {
   return { userId: (req as any).userId, correlationId: (req as any).correlationId };
 }
