@@ -36,6 +36,8 @@ type host struct {
 	orders   *till.Store
 	renderer *printing.BrowserRenderer
 	restart  chan struct{}
+	// lanURLs are where paired devices open the till (§18.6); set once the settings server exists.
+	lanURLs func() []string
 
 	mu      sync.Mutex
 	server  string
@@ -192,7 +194,14 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 	var a *agent.Agent
 	// The offline till sells from the snapshot and signs in from the staff list (§13).
 	tl := &till.Till{
-		Path: store.TillPath(), Staff: staff.Load, Snapshot: data.Load, Log: h.log,
+		Path: store.TillPath(), PairPath: store.TillPairingsPath(), Staff: staff.Load, Snapshot: data.Load, Log: h.log,
+		// Where paired devices open the till (§18.6), from the settings server once it is up.
+		LANURLs: func() []string {
+			if h.lanURLs == nil {
+				return nil
+			}
+			return h.lanURLs()
+		},
 		Connected:      func() bool { return a.Status().Connected },
 		ConnectedSince: func() *time.Time { return a.Status().ConnectedSince },
 		Store:          h.orders,

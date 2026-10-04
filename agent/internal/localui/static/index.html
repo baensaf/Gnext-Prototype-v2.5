@@ -81,6 +81,20 @@
             <a class="btn" id="t-open" href="/till/" target="_blank" rel="noopener">باز کردن صندوق جی‌نکست</a>
           </div>
         </div>
+        <!-- §18: other devices on the branch network (PCs, tablets, phones) sell through this PC. -->
+        <div class="card" id="lan-card" hidden>
+          <h2>دستگاه‌های شبکه</h2>
+          <p class="note">رایانه، تبلت یا گوشیِ دیگری در شبکهٔ شعبه این نشانی را در مرورگر باز کند و با کدی که این‌جا ساخته می‌شود به یک صندوق وصل شود. این رایانه باید روشن بماند.</p>
+          <dl class="facts">
+            <dt>نشانی</dt><dd id="lan-urls" class="ltr">—</dd>
+          </dl>
+          <div id="lan-devices"></div>
+          <div class="row">
+            <select id="lan-choose"></select>
+            <button class="btn primary" id="lan-code">ساختن کد</button>
+          </div>
+          <p id="lan-code-out" class="note" hidden></p>
+        </div>
       </div>
     </section>
 

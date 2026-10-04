@@ -176,7 +176,7 @@ func (t *Till) PayCard(id string, by User, amount string) (*Order, string, error
 		}
 		charge = n
 	}
-	terminal := t.terminal()
+	terminal := t.terminal(by.Register)
 	if terminal == "" || t.Charge == nil {
 		return nil, "", refuse(CodeNoTerminal, "برای این صندوق کارتخوانی تعریف نشده است؛ نقد بگیرید.")
 	}
@@ -197,9 +197,9 @@ func (t *Till) PayCard(id string, by User, amount string) (*Order, string, error
 	return o, p.ID, nil
 }
 
-// terminal is the bound till's card terminal in the snapshot, or "".
-func (t *Till) terminal() string {
-	st := t.State()
+// terminal is a register's card terminal in the snapshot, or "" (§18.4).
+func (t *Till) terminal(register string) string {
+	st := t.StateFor(register)
 	if st.Till == nil || st.Till.PaymentDeviceID == nil {
 		return ""
 	}
@@ -279,7 +279,7 @@ func (t *Till) afterPayment(o *Order, by User) error {
 	var recs []PrintRecord
 	if paid(o) && !o.charging() && !o.receiptPrinted() {
 		if c, err := t.catalog(); err == nil {
-			recs = t.queuePrints(o, t.documentTickets(c, o, DocReceipt, false))
+			recs = t.queuePrints(o, t.documentTickets(c, o, DocReceipt, false, by.Register))
 		}
 	}
 	var err error

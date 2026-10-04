@@ -69,8 +69,10 @@ func tillError(w http.ResponseWriter, err error) {
 // tillUser is who the request's till session belongs to; without one it answers 401.
 func (s *Server) tillUser(w http.ResponseWriter, r *http.Request, t *till.Till) (till.User, bool) {
 	u, ok := t.User(tillToken(r))
-	if !ok {
+	// A session is good only at the register it was opened at (§18.4).
+	if !ok || u.Register != registerID(r) {
 		fail(w, http.StatusUnauthorized, till.CodeUnauthenticated, "دوباره با پین وارد شوید.")
+		return till.User{}, false
 	}
 	return u, ok
 }
@@ -151,15 +153,31 @@ func (s *Server) tillState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := tillToken(r)
+	reg := registerOf(r)
+	// §18.6: which register this is, and where devices reach the till.
+	kind, deviceID := any("PC"), any(nil)
+	if reg.lan {
+		kind = nil
+		if reg.device != nil {
+			kind, deviceID = "DEVICE", reg.device.DeviceID
+		}
+	}
 	var user *till.User
-	if u, ok := t.User(token); ok {
+	if u, ok := t.User(token); ok && u.Register == registerID(r) {
 		user = &u
 	}
-	st := t.State()
+	st := t.StateFor(registerID(r))
+	if kind == nil {
+		// Not paired yet: nothing of the branch but that.
+		st = till.State{Mode: st.Mode, Branch: st.Branch, Tills: []till.Register{}, Staff: []till.User{}, Problems: []string{till.CodeNotPaired}}
+		user, token = nil, ""
+	}
 	reachable, since := t.Reachable()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"state": st,
-		"user":  user,
+		"state":    st,
+		"user":     user,
+		"register": map[string]any{"kind": kind, "device_id": deviceID},
+		"lan":      map[string]any{"urls": s.LANURLs()},
 		// §16.5: whether the till sells through the cloud, and the cashier's cloud session.
 		"cloud": map[string]any{
 			"reachable": reachable, "since": since.UTC(), "session": cloudSessionView(s.cloudFor(t, token)),
@@ -182,7 +200,7 @@ func (s *Server) tillLogin(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &in) {
 		return
 	}
-	token, user, err := t.Login(in.UserID, in.PIN)
+	token, user, err := t.LoginAt(in.UserID, in.PIN, registerID(r))
 	if err != nil {
 		tillError(w, err)
 		return
@@ -193,7 +211,7 @@ func (s *Server) tillLogin(w http.ResponseWriter, r *http.Request) {
 		cloudError(w, err)
 		return
 	}
-	s.keepCloud(token, session)
+	s.keepCloud(t, token, session)
 	setTillCookie(w, token)
 	writeJSON(w, http.StatusOK, map[string]any{"token": token, "user": user, "cloud_session": cloudSessionView(session)})
 }

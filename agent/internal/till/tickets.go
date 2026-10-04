@@ -228,10 +228,15 @@ func (b *chitBatch) routeCopies() int {
 // documentTargets is where a whole-order document prints, and on which paper (the cloud's
 // printersForDocument): the bound till's receipt printer with the till's copies, else the
 // branch's printer for documents that are not the kitchen's.
-func (t *Till) documentTargets(c *Catalog) ([]target, string) {
+func (t *Till) documentTargets(c *Catalog, register string) ([]target, string) {
 	copies, template, own := 1, "", (*string)(nil)
-	if b := t.Binding(); b != nil {
-		if i := slices.IndexFunc(c.Tills, func(r Register) bool { return r.ID == b.TerminalID }); i >= 0 {
+	if register == "" {
+		if b := t.Binding(); b != nil {
+			register = b.TerminalID
+		}
+	}
+	if register != "" {
+		if i := slices.IndexFunc(c.Tills, func(r Register) bool { return r.ID == register }); i >= 0 {
 			r := c.Tills[i]
 			copies, own = max(r.ReceiptCopies, 1), r.ReceiptPrinterID
 			if r.ReceiptTemplate != nil {
@@ -248,8 +253,8 @@ func (t *Till) documentTargets(c *Catalog) ([]target, string) {
 }
 
 // documentTickets prints a whole-order document at the till (§13.8).
-func (t *Till) documentTickets(c *Catalog, o *Order, documentType string, reprint bool) []PrintRecord {
-	targets, template := t.documentTargets(c)
+func (t *Till) documentTickets(c *Catalog, o *Order, documentType string, reprint bool, register string) []PrintRecord {
+	targets, template := t.documentTargets(c, register)
 	doc := heading(c, o, o.PlacedAt)
 	doc.DocumentType, doc.Template, doc.IsReprint = documentType, template, reprint
 	for _, l := range o.Lines {
@@ -341,6 +346,8 @@ type PrintInput struct {
 	Document  string `json:"document"`
 	PrintID   string `json:"print_id"`
 	PrinterID string `json:"printer_id"`
+	// Register is where it was asked for (§18.4): a bill or receipt prints at its printer.
+	Register string `json:"-"`
 }
 
 // PrintDocument prints on request. A receipt or a kitchen ticket already printed comes out marked
@@ -386,7 +393,7 @@ func (t *Till) PrintDocument(id string, in PrintInput) ([]PrintRecord, error) {
 		recs = t.records(p.DocumentType, p.Label, MarkAsReprint(p.HTML), []target{{printerID: printer, copies: max(copies, 1)}}, true)
 	case in.Document == DocBill || in.Document == DocReceipt:
 		reprint := in.Document == DocReceipt && o.receiptPrinted()
-		recs = t.documentTickets(c, o, in.Document, reprint)
+		recs = t.documentTickets(c, o, in.Document, reprint, in.Register)
 	case in.Document == DocKitchen:
 		lines := make([]kitchenLine, 0, len(o.Lines))
 		for _, l := range o.Lines {

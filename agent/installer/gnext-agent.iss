@@ -78,6 +78,8 @@ Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Description: "Open Gnext 
 
 [UninstallRun]
 Filename: "{app}\gnext-agent.exe"; Parameters: "service uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveService"
+; The rule the service added so devices on the LAN reach Gnext POS (agent-protocol §18.3).
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Gnext POS"""; Flags: runhidden waituntilterminated; RunOnceId: "RemoveFirewallRule"
 ; The tray icons run from the same exe in users' sessions; end them so it can be deleted.
 Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM gnext-agent.exe /FI ""SESSION ne 0"""; Flags: runhidden waituntilterminated; RunOnceId: "EndTrays"
 

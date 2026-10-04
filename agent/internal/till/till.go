@@ -76,12 +76,17 @@ type User struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"display_name"`
 	Role        string `json:"role"`
+	// Register is where the user signed in (§18.4): "" for the PC's own till (the binding), else
+	// a paired device's till.
+	Register string `json:"-"`
 }
 
 // Till holds the binding on disk and the sign-in state in memory.
 type Till struct {
 	// Path is the binding file.
-	Path      string
+	Path string
+	// PairPath keeps the devices paired on the LAN (§18.5); "" pairs none.
+	PairPath  string
 	Staff     func() (branchdata.StaffList, error)
 	Snapshot  func() ([]byte, error)
 	Connected func() bool
@@ -106,12 +111,16 @@ type Till struct {
 	// nothing. Printers lists the printers it can reach.
 	Print    func(printerID, documentType, label, html string, copies int) error
 	Printers func() []PrinterInfo
+	// LANURLs are the addresses paired devices reach the till at (§18.6); nil means none.
+	LANURLs func() []string
 
-	once     sync.Once
-	omu      sync.Mutex // orders: one change at a time
-	mu       sync.Mutex
-	binding  *Binding
-	session  *session
+	once    sync.Once
+	omu     sync.Mutex // orders: one change at a time
+	mu      sync.Mutex
+	binding *Binding
+	// sessions holds one till session a register (§18.4), keyed as User.Register.
+	sessions map[string]*session
+	pairing  pairing
 	failures map[string][]time.Time
 	locked   map[string]time.Time
 	reach    reach
@@ -135,6 +144,8 @@ func (t *Till) init() {
 		}
 		t.failures = map[string][]time.Time{}
 		t.locked = map[string]time.Time{}
+		t.sessions = map[string]*session{}
+		t.loadPairings()
 		var b Binding
 		if raw, err := os.ReadFile(t.Path); err == nil && json.Unmarshal(raw, &b) == nil && b.TerminalID != "" {
 			t.binding = &b
@@ -229,6 +240,9 @@ func (t *Till) Bind(terminalID, by string) (Binding, error) {
 	}
 	if !slices.ContainsFunc(s.Tills, func(x Register) bool { return x.ID == terminalID }) {
 		return Binding{}, refuse(CodeUnknownTill, "این صندوق در فهرست صندوق‌های شعبه نیست.")
+	}
+	if t.pairedTill(terminalID) {
+		return Binding{}, refuse(CodeTillTaken, "این صندوق روی دستگاه دیگری است؛ اول آن دستگاه را جدا کنید.")
 	}
 	b := Binding{TerminalID: terminalID, BoundBy: by, BoundAt: t.Now().UTC()}
 	if old := t.Binding(); old != nil {
@@ -326,18 +340,32 @@ func (t *Till) CheckPIN(userID, pin string) (User, error) {
 	return User{}, refuse(CodePINWrong, "پین نادرست است.")
 }
 
-// Login signs a user in by PIN. One session at a time: signing in ends the previous one.
+// Login signs a user in by PIN at the PC's own till.
 func (t *Till) Login(userID, pin string) (string, User, error) {
+	return t.LoginAt(userID, pin, "")
+}
+
+// LoginAt signs a user in by PIN at a register (§18.4: "" is the PC's till, else a paired
+// device's). One session a register: signing in ends that register's previous session.
+func (t *Till) LoginAt(userID, pin, register string) (string, User, error) {
 	u, err := t.CheckPIN(userID, pin)
 	if err != nil {
 		return "", User{}, err
 	}
+	u.Register = register
 	token := newToken()
 	t.mu.Lock()
-	t.session = &session{token: token, user: u, lastUsed: t.Now()}
+	t.sessions[register] = &session{token: token, user: u, lastUsed: t.Now()}
 	t.mu.Unlock()
-	t.Log.Info("signed in at the offline till", "user", u.ID, "role", u.Role)
+	t.Log.Info("signed in at the till", "user", u.ID, "role", u.Role, "register", registerLabel(register))
 	return token, u, nil
+}
+
+func registerLabel(register string) string {
+	if register == "" {
+		return "PC"
+	}
+	return register
 }
 
 // User returns who holds the session token, and keeps the session alive. A session ends after
@@ -347,17 +375,37 @@ func (t *Till) User(token string) (User, bool) {
 	idle := t.idle()
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	s := t.session
-	if s == nil || token == "" || s.token != token {
+	if token == "" {
 		return User{}, false
 	}
-	now := t.Now()
-	if now.Sub(s.lastUsed) > idle {
-		t.session = nil
-		return User{}, false
+	for register, s := range t.sessions {
+		if s.token != token {
+			continue
+		}
+		now := t.Now()
+		if now.Sub(s.lastUsed) > idle {
+			delete(t.sessions, register)
+			return User{}, false
+		}
+		s.lastUsed = now
+		return s.user, true
 	}
-	s.lastUsed = now
-	return s.user, true
+	return User{}, false
+}
+
+// SessionLive reports whether a till session still exists and has not idled out, without
+// counting this as a request.
+func (t *Till) SessionLive(token string) bool {
+	t.init()
+	idle := t.idle()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, s := range t.sessions {
+		if token != "" && s.token == token {
+			return t.Now().Sub(s.lastUsed) <= idle
+		}
+	}
+	return false
 }
 
 // Logout ends the session the token holds.
@@ -365,8 +413,10 @@ func (t *Till) Logout(token string) {
 	t.init()
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.session != nil && t.session.token == token {
-		t.session = nil
+	for register, s := range t.sessions {
+		if s.token == token {
+			delete(t.sessions, register)
+		}
 	}
 }
 
@@ -391,10 +441,16 @@ type State struct {
 	Problems []string `json:"problems"`
 }
 
-// State reports the mode, the till and its open shift, and who may sign in.
-func (t *Till) State() State {
+// State reports the mode, the PC's till and its open shift, and who may sign in.
+func (t *Till) State() State { return t.StateFor("") }
+
+// StateFor is State for a register (§18.6): "" is the PC's till, else a paired device's.
+func (t *Till) StateFor(register string) State {
 	t.init()
 	st := State{Mode: t.Mode(), Binding: t.Binding(), Tills: []Register{}, Staff: []User{}, Problems: []string{}}
+	if register != "" {
+		st.Binding = &Binding{TerminalID: register}
+	}
 	s, err := t.readSnapshot()
 	if err != nil {
 		st.Problems = append(st.Problems, CodeNoSnapshot)
@@ -429,13 +485,24 @@ func (t *Till) State() State {
 	return st
 }
 
-// Heartbeat is the heartbeat's `till` block (§13.10).
+// Heartbeat is the heartbeat's `till` block (§13.10), with the registers (§18.7).
 func (t *Till) Heartbeat() map[string]any {
 	var id any
+	registers := []map[string]any{}
 	if b := t.Binding(); b != nil {
 		id = b.TerminalID
+		registers = append(registers, map[string]any{"terminal_id": b.TerminalID, "kind": "PC"})
 	}
-	return map[string]any{"terminal_id": id, "mode": t.Mode(), "open_orders": t.openOrders()}
+	for _, p := range t.Pairings() {
+		registers = append(registers, map[string]any{"terminal_id": p.TerminalID, "kind": "DEVICE", "device_name": p.DeviceName})
+	}
+	hb := map[string]any{"terminal_id": id, "mode": t.Mode(), "open_orders": t.openOrders(), "registers": registers}
+	if t.LANURLs != nil {
+		if urls := t.LANURLs(); len(urls) > 0 {
+			hb["lan_url"] = urls[0]
+		}
+	}
+	return hb
 }
 
 func newToken() string {

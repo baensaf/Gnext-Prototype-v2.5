@@ -132,6 +132,16 @@ section numbers (§) in the code refer to it.
   the settings page's *باز شدن صندوق هنگام ورود به ویندوز* is on (the default; `open_at_sign_in`
   in `till.json`, changed by the manager signed in there).
 
+  Since 1.12.0 (§18): every register in the branch sells through the agent. A second listener on
+  TCP 47801 (every interface; `GNEXT_AGENT_LAN_ADDR` overrides it, `off` turns it off) serves only
+  the till and pairing to devices on the LAN (`internal/localui/lan.go`); the settings page stays
+  on 127.0.0.1. A manager makes a six-digit code for a register on the settings page (*دستگاه‌های
+  شبکه*); the device types it at `http://<PC>:47801/till/` and keeps a token in the
+  `gnext_device` cookie (`till-devices.json` keeps its SHA-256). Sessions, cloud sessions, the
+  shift, the card terminal and receipts are per register; mode, orders, call numbers and stock
+  are shared. The service adds the firewall rule *Gnext POS* (TCP 47801, local subnet) at start;
+  uninstalling removes it. The heartbeat's `till` lists the registers and the LAN address.
+
   Since 1.11.3 (§13.11): offline receipts and bills print at the bound till's own receipt
   printer, with its copies and paper, as they do online; a till without one, or with its printer
   off, prints on the branch's. Kitchen chits go to each product's prep station, which the cloud

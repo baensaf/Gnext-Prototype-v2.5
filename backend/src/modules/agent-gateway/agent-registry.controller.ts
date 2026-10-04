@@ -79,8 +79,8 @@ export class AgentRegistryController {
 }
 
 /**
- * Whether a register is served by its branch PC's Gnext POS (agent-protocol.md §16.10). Asked by
- * the web POS of any signed-in user, so it says only yes or no.
+ * Whether a register is served by its branch agent's Gnext POS (agent-protocol.md §16.10, §18.7),
+ * and where it opens it. Asked by the web POS of any signed-in user, so it says no more.
  */
 @Controller('api/v1/terminals')
 export class TerminalAgentTillController {
@@ -88,7 +88,8 @@ export class TerminalAgentTillController {
 
   @Get(':id/agent-till')
   agentTill(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    return { served_by_agent: this.health.tillServedByAgent((req as any).tenantId, id) !== null };
+    const served = this.health.tillServedByAgent((req as any).tenantId, id);
+    return { served_by_agent: served !== null, url: served?.url ?? null };
   }
 }
 

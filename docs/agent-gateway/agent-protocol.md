@@ -2257,3 +2257,145 @@ Phone delivery orders offline (still takeaway); answering Snappfood from the til
 to support, more time); a Snappfood order changed by Snappfood support while the cloud is away (it
 arrives changed with the pull, and `SNAPPFOOD_DIFFERS` says so); courier delivered, failed and
 cash on the till.
+
+## 18. Every register on the agent (v2, fifth step)
+
+Status: **agreed** (product owner, 2026-10-04). Protocol version stays **1**: a second local
+listener, new optional heartbeat fields, and a cloud field, switched on by a capability.
+
+§16 made Gnext POS the branch PC's register, online and offline. The branch's other registers
+(a second PC at the counter, a tablet, a phone) still ran the web POS, which stops when the
+internet does. Here **every register in the branch opens Gnext POS from the branch agent**, over
+the branch LAN. Online, each sells through the cloud by the agent (§16.4); offline, each sells on
+the agent (§13). There is one POS, on every device, online and offline.
+
+### 18.1 Decisions
+
+Confirmed by the product owner on 2026-10-04. They replace §13.1 decision 1 ("one offline till
+a branch") and §13.15's "more than one till" and "tills on the LAN".
+
+1. **Any device on the LAN.** A PC, tablet or phone opens `http://<branch PC>:47801/till/` in a
+   browser. Plain HTTP on the shop's network; no app to install.
+2. **Paired once, by code.** A device sells only once a manager has paired it: on the branch
+   PC's settings page the manager picks a register and gets a six-digit code; on the device they
+   type the code. The device keeps a token; from then on cashiers sign in by PIN, as on the PC.
+3. **The branch PC must be on.** It is the branch's server. If it is off, the other registers say
+   so and sell nothing; with the internet up, staff can still open the web POS by hand.
+4. **One device a register.** A register is served by one device at a time: the PC (§13.4) or
+   one paired device. Pairing a register that is taken is refused until the other is unpaired.
+5. **The settings page stays on the PC.** Only the till and pairing are served on the LAN.
+
+### 18.2 Capability
+
+| Capability | Means |
+|---|---|
+| `pos.lan` | The agent serves Gnext POS to paired devices on the LAN (§18). Requires `pos.till`. |
+
+### 18.3 The LAN listener
+
+The agent listens on **TCP 47801, every interface**, beside the settings server on
+`127.0.0.1:47800`. On start, the service adds a Windows Firewall rule *Gnext POS* (inbound, TCP
+47801, remote addresses `localsubnet`, every profile) if it is missing, so an agent that updated
+itself needs no installer run. The installer adds the same rule.
+
+The LAN listener serves only:
+
+- `GET /till/` (the page), `GET /till` (redirect);
+- `GET /api/till/state`, `POST /api/till/pair`, and, for a paired device, every other
+  `/api/till/*` route of §13.13 and §16 and the cloud path `/api/v1/*` (§16.4), except
+  `POST /api/till/binding` and `POST /api/till/open-at-sign-in`, which are the PC's.
+
+Anything else is `404`. Its rules, in place of §13.13's local-only ones (the `Host` of a LAN
+address is not known in advance):
+
+- A request that changes something needs `X-Gnext-Local: 1`, and an `Origin`, if sent, whose
+  host is the request's `Host`.
+- A paired device is known by the cookie `gnext_device` (`HttpOnly`, `SameSite=Strict`,
+  `Path=/`, ten years), set by `pair`. A request without a known device token: `401
+  NOT_PAIRED` (the page shows the pairing screen).
+- The responses carry §13.13's headers and the till's policy.
+
+On the loopback listener nothing changes: the PC's own register is the bound till (§13.4).
+
+### 18.4 Registers
+
+A **register** is one of the branch's tills (`terminal` in the cloud) served by the agent: the
+bound till (the PC), and each paired device's till. Each register has its own:
+
+| | Per register |
+|---|---|
+| Sign-in | One till session a register; signing in ends that register's previous session only. A session token is good only on the register it was issued for. |
+| Cloud session | §16.3, one per till session. The cloud path sends that register as `X-Terminal-Id`. |
+| Shift | The register's open shift in the snapshot (`open_shifts`, by `terminal_id`). Without one: `NO_SHIFT` on that register. |
+| Card terminal | The register's `payment_device_id` in the snapshot. |
+| Receipts | The register's receipt printer and copies (§13.8). |
+
+Shared by all registers: the mode (§16.5: the agent decides once for all), the order book (every
+register sees and can continue every offline order, as the web POS lists the branch's open
+orders; an order keeps the register it was started on), the call-number counter (§13.9), daily
+stock, the staff list, and the hand-over.
+
+### 18.5 Pairing
+
+**Code.** `POST /api/pairing-codes {terminal_id}` on the settings server, with the settings
+page's manager session (§13.4's rule). The terminal must be one of the snapshot's tills, and not
+the bound till nor a paired device's (`TILL_TAKEN`). Answers `{code, terminal_id, expires_at}`:
+six digits, good for **10 minutes**, once. A new code for the same register replaces the old.
+
+**Pair.** `POST /api/till/pair {code, device_name}` on the LAN listener. A right code answers
+`{register: {terminal_id, code, name}, device_id}` and sets `gnext_device`. A wrong or used code:
+`PAIR_CODE_WRONG`; ten wrong codes in 15 minutes, from anywhere: `PAIR_LOCKED` for 15 minutes.
+`device_name` (at most 60 characters) is what the settings page lists; the page suggests the
+browser's platform.
+
+**Kept.** `pairings.json` in the data folder: per device `device_id`, the SHA-256 of its token
+(never the token), `terminal_id`, `device_name`, `paired_by`, `paired_at`, `last_seen_at`.
+
+**Listed and removed** on the settings page: `GET /api/pairings`, `DELETE /api/pairings/{id}`
+(manager session). Removing a device ends its till session; it shows the pairing screen.
+
+### 18.6 State
+
+`GET /api/till/state` describes the register the request came from: `binding`, `till` and
+`shift` are that register's. It adds:
+
+```json
+{ "register": { "kind": "PC", "device_id": null },
+  "lan": { "urls": ["http://192.168.1.10:47801/till/"] } }
+```
+
+`kind` is `PC` on the loopback listener, `DEVICE` for a paired device, and `null` (with
+`problems: ["NOT_PAIRED"]`, and no staff list) for a device not paired yet. `lan.urls` are the
+PC's IPv4 addresses on private networks, for the settings page and the pairing screen.
+
+### 18.7 Heartbeat and cloud
+
+`heartbeat.till` adds the registers:
+
+```json
+{ "till": { "terminal_id": "…", "mode": "ONLINE", "open_orders": 0,
+            "registers": [ { "terminal_id": "…", "kind": "PC" },
+                           { "terminal_id": "…", "kind": "DEVICE", "device_name": "Tablet 1" } ],
+            "lan_url": "http://192.168.1.10:47801/till/" } }
+```
+
+§16.10's `GET /api/v1/terminals/{id}/agent-till` answers yes for every register of a connected
+agent, and adds `url`: `http://127.0.0.1:47800/till/` for the PC's, `lan_url` for a device's.
+The web POS's notice links there. **Branch Agents** lists each agent's registers.
+
+### 18.8 The page
+
+- Served from a LAN address and not paired: the pairing screen (code, device name), then the
+  sign-in.
+- The bar says which register this is, beside the mode.
+- *Branch PC unreachable*: a request that gets no answer from the agent says so (on a device:
+  the branch PC is not answering; check it is on and the device is on the branch network), and
+  the page asks again every 5 s.
+- The web POS's notice (§16.10) on a device's register links to `lan_url`.
+
+### 18.9 Not in this step
+
+HTTPS on the LAN (and so what a browser keeps for secure pages: install as an app, camera);
+finding the PC by name or QR code (the settings page shows the address; it is typed once and
+bookmarked);
+another PC taking over when the branch PC dies; KDS screens on the agent.

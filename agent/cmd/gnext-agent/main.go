@@ -169,7 +169,8 @@ func run(ctx context.Context, console io.Writer) int {
 	}
 	defer h.close()
 
-	ui := &localui.Server{Host: h, Version: version, LogFile: logFile(), Log: log, Addr: uiAddr()}
+	ui := &localui.Server{Host: h, Version: version, LogFile: logFile(), Log: log, Addr: uiAddr(), LANAddr: os.Getenv("GNEXT_AGENT_LAN_ADDR")}
+	h.lanURLs = ui.LANURLs
 	go func() {
 		if err := ui.ListenAndServe(ctx); err != nil {
 			log.Error("settings page could not start", "addr", uiAddr(), "err", err)

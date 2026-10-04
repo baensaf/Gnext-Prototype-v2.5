@@ -58,13 +58,16 @@ type Server struct {
 	LogFile string
 	Log     *slog.Logger
 	Addr    string
+	// LANAddr is where paired devices reach the till (§18.3): "" is every interface on
+	// DefaultLANPort, "off" serves none.
+	LANAddr string
 
 	mu       sync.Mutex
 	session  string
 	user     *cloud.LocalUser
 	lastUsed time.Time
-	// tillCloud is the till cashier's cloud session (§16.3), with the till session it belongs to.
-	tillCloud *cloudSession
+	// tillClouds are the till cashiers' cloud sessions (§16.3), by the till session they belong to.
+	tillClouds map[string]cloud.TillSession
 }
 
 // ListenAndServe serves until ctx ends.
@@ -78,6 +81,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		return err
 	}
 	srv := &http.Server{Handler: s.Handler(addr), ReadHeaderTimeout: 10 * time.Second}
+	go s.listenLAN(ctx)
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -134,6 +138,10 @@ func (s *Server) Handler(addr string) http.Handler {
 	// The till online (§16); see cloud.go. Methods named, since "/api/v1/" and "GET /" would
 	// each be the more specific for a GET and the mux refuses such a pair.
 	mux.HandleFunc("POST /api/till/cloud-login", s.tillCloudLogin)
+	// Devices on the LAN (§18.5); they pair on the LAN listener, see lan.go.
+	mux.HandleFunc("POST /api/pairing-codes", s.pairingCode)
+	mux.HandleFunc("GET /api/pairings", s.pairings)
+	mux.HandleFunc("DELETE /api/pairings/{id}", s.unpair)
 	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
 		mux.HandleFunc(method+" /api/v1/", s.cloudProxy)
 	}

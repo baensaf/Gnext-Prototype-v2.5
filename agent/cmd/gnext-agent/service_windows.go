@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"os/exec"
 	"syscall"
@@ -70,6 +71,7 @@ func (handler) Execute(_ []string, req <-chan svc.ChangeRequest, status chan<- s
 
 func runService() {
 	repairBinaryPermissions()
+	ensureLANFirewallRule()
 	_ = svc.Run(serviceName, handler{})
 }
 
@@ -85,4 +87,24 @@ func repairBinaryPermissions() {
 	cmd := exec.Command("icacls", exe, "/reset")
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	_ = cmd.Run()
+}
+
+// lanFirewallRule is the inbound rule that lets paired devices reach Gnext POS (§18.3).
+const lanFirewallRule = "Gnext POS"
+
+// ensureLANFirewallRule adds the rule once: TCP 47801 from the local subnet, every profile. The
+// service runs as SYSTEM, so an agent that updated itself needs no installer run. Any failure is
+// logged; the PC's own till does not need it.
+func ensureLANFirewallRule() {
+	show := exec.Command("netsh", "advfirewall", "firewall", "show", "rule", "name="+lanFirewallRule)
+	show.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	if show.Run() == nil {
+		return
+	}
+	add := exec.Command("netsh", "advfirewall", "firewall", "add", "rule", "name="+lanFirewallRule,
+		"dir=in", "action=allow", "protocol=TCP", "localport=47801", "remoteip=localsubnet", "profile=any")
+	add.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	if out, err := add.CombinedOutput(); err != nil {
+		slog.Warn("the firewall rule for Gnext POS on the LAN was not added", "err", err, "out", string(out))
+	}
 }

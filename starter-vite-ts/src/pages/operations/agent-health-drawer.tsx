@@ -256,6 +256,22 @@ export function AgentHealthDrawer({ agentId, branchId, onClose }: Props) {
                             : t('operations.agents.health.till.none', 'Not chosen yet')
                         }
                       />
+                      {/* §18.7: the devices on the branch LAN that sell through this agent. */}
+                      {(connection.till.registers ?? [])
+                        .filter((r) => r.kind === 'DEVICE')
+                        .map((r) => (
+                          <Row
+                            key={r.terminal_id}
+                            label={r.device_name || t('operations.agents.health.till.device', 'Device on the LAN')}
+                            value={deviceNames[`till:${r.terminal_id}`] || r.terminal_id}
+                          />
+                        ))}
+                      {connection.till.lan_url && (
+                        <Row
+                          label={t('operations.agents.health.till.lanUrl', 'Address on the LAN')}
+                          value={connection.till.lan_url}
+                        />
+                      )}
                       {connection.till.open_orders > 0 && (
                         <Alert severity="warning" sx={{ py: 0 }}>
                           {t('operations.agents.health.till.openOrders', '{{count}} offline orders are still open on the till', {
