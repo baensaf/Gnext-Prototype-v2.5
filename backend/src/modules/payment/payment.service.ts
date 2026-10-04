@@ -309,7 +309,8 @@ export class PaymentService {
         payment.status = 'SUCCEEDED';
       } else {
         // A card tender at a branch whose terminal the agent drives goes to the real terminal.
-        const terminal = await this.agentPayments.terminalFor(em, payment, order);
+        // Unless the cashier took it on another reader, the mobile one kept for when this fails.
+        const terminal = dto.offTerminal ? null : await this.agentPayments.terminalFor(em, payment, order);
         if (terminal) {
           agentBranchId = order.branch_id;
           return await this.agentPayments.startCharge(em, payment, order, terminal, { userId, correlationId });
@@ -317,7 +318,7 @@ export class PaymentService {
 
         // External POS / Simulated adapter scenario check
         const scenario = dto.scenarioId || 'SUCCESS';
-        const attemptNo = (payment.attempts?.length || 0) + 1;
+        const attemptNo = (await em.count(PaymentAttempt, { where: { payment_id: payment.id } })) + 1;
 
         if (scenario === 'FAIL' || scenario === 'DECLINED' || scenario === 'TIMEOUT') {
           payment.status = 'FAILED';
@@ -355,7 +356,7 @@ export class PaymentService {
           tenant_id: tenantId,
           payment_id: payment.id,
           attempt_no: attemptNo,
-          adapter: 'SIMULATED_POS',
+          adapter: dto.offTerminal ? 'MANUAL' : 'SIMULATED_POS',
           scenario_id: 'SUCCESS',
           status: 'SUCCEEDED',
           external_reference: dto.externalReference || `POS-REF-${Date.now()}`,
