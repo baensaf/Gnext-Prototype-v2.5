@@ -1996,6 +1996,21 @@ and at once after a `CLOUD_UNREACHABLE`:
 Tills on the LAN (every register on the agent: §13.15); KDS offline; an order placed in the cloud
 finished on the agent while offline; installing updates only outside business hours.
 
+### 16.10 One name, one screen per register (2026-10-04)
+
+The product owner did not want two tills on the branch PC, one online and one offline. The
+till is **Gnext POS** (*صندوق جی‌نکست*) everywhere a cashier meets it: the window, the tray, the
+Start-menu and desktop shortcuts (an install removes the old *Gnext Offline Till* ones), and the
+settings page. "Offline" names only the state, in the till's amber bar.
+
+The web POS does not sell on a register that Gnext POS serves. `GET /api/v1/terminals/{id}/agent-till`
+(any signed-in user) answers `{ "served_by_agent": true }` when a connected agent with `pos.till`
+reports that register in its heartbeat's `till.terminal_id` (§13.10). The web POS asks for its
+device's register on load and every minute; while the answer is yes it shows, in place of the
+register, *This register is Gnext POS on the branch PC* with a link to `/till/`. An error reads
+as no, so a failed check never stops a sale. This replaces §13.4's "binding does not stop that
+till's web POS".
+
 ## 17. Snappfood orders while the cloud is away (v2, fourth step)
 
 Status: **agreed** (product owner, 2026-09-26). Protocol version stays **1**: new optional

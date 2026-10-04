@@ -411,7 +411,7 @@ func (t *tray) menu() {
 	}
 	procAppendMenuW.Call(m, mfSeparator, 0, 0)
 	item(m, mfString, cmdOpen, "باز کردن صفحه تنظیمات عامل")
-	item(m, mfString, cmdTill, "صندوق آفلاین")
+	item(m, mfString, cmdTill, "صندوق جی‌نکست")
 	if len(v.Printers) > 0 {
 		sub, _, _ := procCreatePopupMenu.Call()
 		for i, p := range v.Printers {

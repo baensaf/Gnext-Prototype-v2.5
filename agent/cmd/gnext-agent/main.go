@@ -74,7 +74,7 @@ func usage() {
   gnext-agent enrol --code XXXX-XXXX [--server https://app.example.ir]
   gnext-agent run
   gnext-agent [open]      the settings window
-  gnext-agent till        the offline till, in a window of its own
+  gnext-agent till        Gnext POS, the branch register, in a window of its own
   gnext-agent tray
   gnext-agent service install|uninstall|start|stop
   gnext-agent version

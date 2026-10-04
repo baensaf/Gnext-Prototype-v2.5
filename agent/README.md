@@ -60,7 +60,7 @@ section numbers (§) in the code refer to it.
   - the POS call count from the last `heartbeat.ack` in `call-numbers.json`.
 
   Since 1.4.0 (`internal/till`): the till the agent sells as, chosen on the settings page (card
-  *صندوق آفلاین*) by a signed-in manager or, offline, by an approver's PIN, kept in `till.json`;
+  *صندوق جی‌نکست*) by a signed-in manager or, offline, by an approver's PIN, kept in `till.json`;
   sign-in by name and PIN checked here against the staff list (argon2, as the cloud stores it),
   five wrong PINs lock that user for 15 minutes; one session at a time, ended after the tenant's
   auto-logout time. Local API under `/api/till/*` (§13.13). Heartbeats carry `till` with the
@@ -106,7 +106,7 @@ section numbers (§) in the code refer to it.
   *Reprint*, to its printer or another.
 
   Since 1.10.0: `gnext-agent till` opens the till in a window of its own, from the tray menu
-  (*صندوق آفلاین*), the Start menu and desktop (*Gnext Offline Till*) or the settings page. The web
+  (*صندوق جی‌نکست*), the Start menu and desktop (*Gnext POS*) or the settings page. The web
   POS shows a banner with a link to it once the cloud has not answered for 30 seconds.
 
   Since 1.11.0 (§16): the till sells online too, and is the branch PC's register all the time.

@@ -53,6 +53,11 @@ Source: "{#SamanDir}\*"; DestDir: "{app}\saman"; Flags: ignoreversion recursesub
 Type: filesandordirs; Name: "{app}\saman"
 #endif
 
+[InstallDelete]
+; The till's shortcuts were called Gnext Offline Till before it became the branch register.
+Type: files; Name: "{autoprograms}\Gnext Offline Till.lnk"
+Type: files; Name: "{autodesktop}\Gnext Offline Till.lnk"
+
 [UninstallDelete]
 ; Agent updates write the bridge folder themselves, so the uninstaller does not know its files.
 Type: filesandordirs; Name: "{app}\saman"
@@ -65,8 +70,8 @@ Name: "desktopicon"; Description: "Create a desktop shortcut to Gnext Agent"
 [Icons]
 Name: "{autoprograms}\Gnext Agent"; Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Comment: "Gnext branch agent settings"
 Name: "{autodesktop}\Gnext Agent"; Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Comment: "Gnext branch agent settings"; Tasks: desktopicon
-Name: "{autoprograms}\Gnext Offline Till"; Filename: "{app}\gnext-agent.exe"; Parameters: "till"; Comment: "Sell while the internet is down"
-Name: "{autodesktop}\Gnext Offline Till"; Filename: "{app}\gnext-agent.exe"; Parameters: "till"; Comment: "Sell while the internet is down"; Tasks: desktopicon
+Name: "{autoprograms}\Gnext POS"; Filename: "{app}\gnext-agent.exe"; Parameters: "till"; Comment: "The branch register, online and offline"
+Name: "{autodesktop}\Gnext POS"; Filename: "{app}\gnext-agent.exe"; Parameters: "till"; Comment: "The branch register, online and offline"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Description: "Open Gnext Agent"; Flags: postinstall nowait skipifsilent runasoriginaluser

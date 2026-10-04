@@ -15,7 +15,7 @@ import { AgentAuthGuard } from './agent-auth.guard';
 import { AgentAuthService } from './agent-auth.service';
 import { AgentController } from './agent.controller';
 import { AgentEnrolmentService } from './agent-enrolment.service';
-import { AgentRegistryController } from './agent-registry.controller';
+import { AgentRegistryController, TerminalAgentTillController } from './agent-registry.controller';
 import { AgentRegistryService } from './agent-registry.service';
 import { AgentSessionsService } from './agent-sessions.service';
 import { AgentConfigService } from './agent-config.service';
@@ -29,7 +29,7 @@ import { AgentReleasesCiController, AgentReleasesController } from './agent-rele
 /** The cloud side of the branch agent (docs/agent-gateway/agent-protocol.md). */
 @Module({
   imports: [TypeOrmModule.forFeature([Agent, AgentEnrolmentCode, AgentCommand, AgentRelease, Branch, Printer, PaymentDevice, OperationalAlert, CashierShift, AdminUser]), AuditModule],
-  controllers: [AgentRegistryController, AgentController, AgentReleasesCiController, AgentReleasesController],
+  controllers: [AgentRegistryController, TerminalAgentTillController, AgentController, AgentReleasesCiController, AgentReleasesController],
   providers: [
     AgentRegistryService,
     AgentSessionsService,

@@ -329,8 +329,10 @@
     },
     "offlineTill": {
       "title": "The internet is down",
-      "body": "Gnext cannot be reached. On the branch PC, keep selling on the offline till; its orders come here when the internet is back.",
-      "open": "Open offline till"
+      "body": "Gnext cannot be reached. On the branch PC, Gnext POS keeps selling; its orders come here when the internet is back.",
+      "open": "Open Gnext POS",
+      "servedTitle": "This register is Gnext POS on the branch PC",
+      "servedBody": "Sell on Gnext POS on the branch PC: it keeps selling when the internet is down. To sell on this device too, set it up as another register."
     },
     "customerSearch": {
       "placeholder": "Walk-in, or search mobile / name",
@@ -3827,7 +3829,7 @@
           }
         },
         "till": {
-          "bound": "Offline till",
+          "bound": "Gnext POS",
           "none": "Not chosen yet",
           "openOrders": "{{count}} offline orders are still open on the till"
         }
@@ -3998,8 +4000,8 @@
     "selfEditNotice": "This is the account you are signed in as. Its role, scope and status are locked so you cannot lock yourself out.",
     "pin": "PIN",
     "pinInvalid": "A PIN is 4 to 8 digits.",
-    "pinHelp": "Signs this person in at the offline till; an approver also approves with it.",
-    "pinKeep": "Signs this person in at the offline till; an approver also approves with it. Leave empty to keep the current PIN."
+    "pinHelp": "Signs this person in at Gnext POS; an approver also approves with it.",
+    "pinKeep": "Signs this person in at Gnext POS; an approver also approves with it. Leave empty to keep the current PIN."
   },
   "rolesPage": {
     "title": "Roles & Permissions",

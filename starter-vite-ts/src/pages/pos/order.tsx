@@ -96,8 +96,8 @@ import { PosShiftBar, PosShiftGate } from 'src/components/shift/pos-shift';
 
 import { PosStopDialog } from './pos-stop-dialog';
 import { PosCustomerPicker } from './pos-customer-picker';
-import { OfflineTillBanner } from './offline-till-banner';
 import { ClosedBranchBanner } from './closed-branch-banner';
+import { AgentTillNotice, OfflineTillBanner, useServedByAgentTill } from './offline-till-banner';
 
 export interface CartItem {
   product: Product;
@@ -169,6 +169,8 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
   const { selectedBranchId, setSelectedBranchId } = useBranchContext();
   // The cloud for the web POS; the branch agent for the offline till.
   const pos = usePosSource();
+  // This register is the branch PC's Gnext POS (§16.10): one drawer, one screen.
+  const servedByAgentTill = useServedByAgentTill(pos.kind === 'cloud');
   const { features } = pos;
 
   // The register this device is and the shift open on it; the till stays shut without one.
@@ -1607,6 +1609,8 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
   const soldOutProductIds = new Set(
     dailyStock.filter((s) => !s.variant_id && s.remaining <= 0).map((s) => s.product_id)
   );
+
+  if (servedByAgentTill) return <AgentTillNotice />;
 
   return (
     <Box aria-busy={loadingInitialData || holdingOrder || Boolean(resumingOrderId)}>

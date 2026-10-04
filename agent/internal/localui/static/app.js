@@ -474,7 +474,7 @@ $('#t-bind').addEventListener('click', async () => {
       if (!ok) return;
       await api('POST', '/api/till/binding', { terminal_id, user_id: form.user_id.value, pin: form.pin.value });
     }
-    toast('صندوق آفلاین انتخاب شد.');
+    toast('صندوق جی‌نکست انتخاب شد.');
     loadTill();
   } catch (e) {
     toast(e.message, true);

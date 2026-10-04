@@ -119,7 +119,7 @@ func TestTillMenuAndPricesNeedASignedInCashier(t *testing.T) {
 	// scripts still only from the agent.
 	for _, path := range []string{"/till/", "/till/sell"} {
 		rec := call(h, "GET", path, "", nil)
-		if rec.Code != 200 || !strings.Contains(rec.Body.String(), "صندوق آفلاین") {
+		if rec.Code != 200 || !strings.Contains(rec.Body.String(), "صندوق جی‌نکست") {
 			t.Fatalf("%s: %d", path, rec.Code)
 		}
 		if csp := rec.Header().Get("Content-Security-Policy"); !strings.HasPrefix(csp, "default-src 'self';") || strings.Contains(csp, "script-src") {
