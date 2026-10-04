@@ -63,13 +63,26 @@ export interface AgentSyncReport {
   reported_at: string;
 }
 
-/** Which till an agent's offline till sells as, and what it still holds (§13.10). */
+/** A register the agent serves (§18.7): the PC's own till, or a paired device's. */
+export interface AgentRegisterReport {
+  terminal_id: string;
+  kind: 'PC' | 'DEVICE';
+  device_name: string | null;
+}
+
+/** Which till an agent's offline till sells as, and what it still holds (§13.10), with its registers (§18.7). */
 export interface AgentTillReport {
   terminal_id: string | null;
   mode: 'ONLINE' | 'OFFLINE' | 'HANDOVER';
   open_orders: number;
+  registers: AgentRegisterReport[];
+  /** Where paired devices open Gnext POS on the branch LAN. */
+  lan_url: string | null;
   reported_at: string;
 }
+
+const TERMINAL_ID = /^[0-9a-f-]{36}$/i;
+const LAN_URL = /^http:\/\/[0-9.]{7,15}:\d{2,5}\/till\/$/;
 
 export interface LiveAgentConnectionHandle extends AgentConnectionHandle {
   devices: Map<string, DeviceStatusEntry>;
@@ -87,10 +100,19 @@ export function readTillReport(raw: unknown, at = new Date()): AgentTillReport |
   const t = raw as Record<string, unknown>;
   const open = Number(t.open_orders);
   const id = text(t.terminal_id, 64);
+  const registers: AgentRegisterReport[] = [];
+  for (const r of Array.isArray(t.registers) ? t.registers.slice(0, 50) : []) {
+    const rid = text(r?.terminal_id, 64);
+    if (!rid || !TERMINAL_ID.test(rid)) continue;
+    registers.push({ terminal_id: rid, kind: r.kind === 'DEVICE' ? 'DEVICE' : 'PC', device_name: text(r.device_name, 60) });
+  }
+  const lanUrl = text(t.lan_url, 64);
   return {
-    terminal_id: id && /^[0-9a-f-]{36}$/i.test(id) ? id : null,
+    terminal_id: id && TERMINAL_ID.test(id) ? id : null,
     mode: TILL_MODES.has(t.mode as string) ? (t.mode as AgentTillReport['mode']) : 'ONLINE',
     open_orders: Number.isInteger(open) && open >= 0 ? open : 0,
+    registers,
+    lan_url: lanUrl && LAN_URL.test(lanUrl) ? lanUrl : null,
     reported_at: at.toISOString(),
   };
 }

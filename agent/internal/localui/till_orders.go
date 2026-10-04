@@ -151,7 +151,8 @@ func (s *Server) tillPay(w http.ResponseWriter, r *http.Request) {
 // tickets queued, which the order then shows printed or failed.
 func (s *Server) tillPrint(w http.ResponseWriter, r *http.Request) {
 	var in till.PrintInput
-	s.asCashier(w, r, &in, func(t *till.Till, _ till.User) (any, error) {
+	s.asCashier(w, r, &in, func(t *till.Till, u till.User) (any, error) {
+		in.Register = u.Register
 		prints, err := t.PrintDocument(r.PathValue("id"), in)
 		return map[string]any{"prints": prints}, err
 	})

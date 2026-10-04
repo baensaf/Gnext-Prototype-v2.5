@@ -331,8 +331,8 @@
       "title": "The internet is down",
       "body": "Gnext cannot be reached. On the branch PC, Gnext POS keeps selling; its orders come here when the internet is back.",
       "open": "Open Gnext POS",
-      "servedTitle": "This register is Gnext POS on the branch PC",
-      "servedBody": "Sell on Gnext POS on the branch PC: it keeps selling when the internet is down. To sell on this device too, set it up as another register."
+      "servedTitle": "This register sells on Gnext POS",
+      "servedBody": "Open Gnext POS from the branch agent: it keeps selling when the internet is down. To sell on this device with the web POS, set it up as another register."
     },
     "customerSearch": {
       "placeholder": "Walk-in, or search mobile / name",
@@ -344,7 +344,7 @@
     }
   },
   "till": {
-    "title": "Till",
+    "title": "Gnext POS",
     "signIn": {
       "who": "Who is selling?",
       "pin": "PIN",
@@ -372,7 +372,8 @@
       "NO_SNAPSHOT": "The branch menu has not come from the server yet.",
       "NO_STAFF": "The staff list has not come from the server yet, so nobody can sign in.",
       "NO_TILL": "No till has been chosen for selling offline. A manager chooses it on the Gnext Agent settings page.",
-      "NO_SHIFT": "This till has no open shift. Without one it cannot sell offline."
+      "NO_SHIFT": "This till has no open shift. Without one it cannot sell offline.",
+      "NOT_PAIRED": "This device is not connected to a register yet."
     },
     "orders": {
       "title": "Open orders",
@@ -403,6 +404,13 @@
       "printer": "Printer",
       "sent": "Sent to the printer.",
       "problems": "Tickets that did not print"
+    },
+    "pair": {
+      "title": "Connect this device",
+      "body": "A manager makes a code for this register on the branch PC (Gnext Agent → Devices on the LAN). Type it here; this device then sells as that register.",
+      "code": "Six-digit code",
+      "deviceName": "Name of this device",
+      "submit": "Connect"
     }
   },
   "kiosk": {
@@ -3831,7 +3839,9 @@
         "till": {
           "bound": "Gnext POS",
           "none": "Not chosen yet",
-          "openOrders": "{{count}} offline orders are still open on the till"
+          "openOrders": "{{count}} offline orders are still open on the till",
+          "device": "Device on the LAN",
+          "lanUrl": "Address on the LAN"
         }
       },
       "releases": {

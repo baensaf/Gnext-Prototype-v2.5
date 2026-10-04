@@ -296,12 +296,12 @@ func (t *Till) Place(by User, in PlaceInput) (*Order, error) {
 	return o, nil
 }
 
-// start makes a new order on the bound till and its open shift, not yet kept.
+// start makes a new order on the register the user signed in at and its open shift, not yet kept.
 func (t *Till) start(by User, orderType, tableID string, guests int) (*Order, *Catalog, error) {
 	if err := t.guard(true); err != nil {
 		return nil, nil, err
 	}
-	st := t.State()
+	st := t.StateFor(by.Register)
 	for _, p := range []string{CodeNoSnapshot, CodeNoTill, CodeNoShift} {
 		if slices.Contains(st.Problems, p) {
 			return nil, nil, refuse(p, problemText[p])

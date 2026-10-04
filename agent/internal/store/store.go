@@ -43,6 +43,9 @@ func CallNumbersPath() string { return filepath.Join(Home(), "call-numbers.json"
 // TillPath keeps which of the branch's tills the offline till sells as (§13.4).
 func TillPath() string { return filepath.Join(Home(), "till.json") }
 
+// TillPairingsPath keeps the devices paired on the LAN (§18.5).
+func TillPairingsPath() string { return filepath.Join(Home(), "till-devices.json") }
+
 // TillOrdersPath keeps the offline till's orders and call counts (§13.6, §13.9).
 func TillOrdersPath() string { return filepath.Join(Home(), "till-orders.db") }
 

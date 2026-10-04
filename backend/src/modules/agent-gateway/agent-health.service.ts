@@ -41,6 +41,9 @@ export type OfflineReadiness = { ready: boolean; problems: OfflineProblem[] };
 export type OfflineProblem = 'AGENT_TOO_OLD' | 'NO_TILL' | 'NO_SHIFT' | 'NO_STAFF' | 'SNAPSHOT_STALE' | 'UPLOADS_WAITING';
 export const AGENT_OFFLINE_ALERT = 'AGENT_OFFLINE';
 
+/** Where the branch PC opens its own Gnext POS (§13.13). */
+export const PC_TILL_URL = 'http://127.0.0.1:47800/till/';
+
 /**
  * Whether each branch agent is there, and what it last said about its devices (task 7).
  *
@@ -160,15 +163,18 @@ export class AgentHealthService implements OnApplicationBootstrap, OnApplication
   }
 
   /**
-   * Whether a register is the branch PC's Gnext POS (agent-protocol.md §16.10): a connected agent
-   * with `pos.till` is bound to it. The web POS then sends that register's cashier to the PC's
-   * till instead of selling beside it, so one drawer has one screen.
+   * Whether a register is served by the branch agent's Gnext POS (agent-protocol.md §16.10,
+   * §18.7): the PC's own till, or a device paired on the LAN. The web POS then sends that
+   * register's cashier to Gnext POS instead of selling beside it, so one drawer has one screen.
+   * `url` is where that register opens Gnext POS.
    */
-  tillServedByAgent(tenantId: string, terminalId: string): { agent_id: string } | null {
+  tillServedByAgent(tenantId: string, terminalId: string): { agent_id: string; url: string | null } | null {
     for (const handle of this.sessions.all()) {
       const live = handle as LiveAgentConnectionHandle;
-      if (live.tenantId !== tenantId || !live.capabilities.includes('pos.till')) continue;
-      if (live.till?.terminal_id === terminalId) return { agent_id: live.agentId };
+      if (live.tenantId !== tenantId || !live.capabilities.includes('pos.till') || !live.till) continue;
+      if (live.till.terminal_id === terminalId) return { agent_id: live.agentId, url: PC_TILL_URL };
+      const device = (live.till.registers ?? []).find((r) => r.kind === 'DEVICE' && r.terminal_id === terminalId);
+      if (device) return { agent_id: live.agentId, url: live.till.lan_url ?? null };
     }
     return null;
   }

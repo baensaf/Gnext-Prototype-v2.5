@@ -1610,7 +1610,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     dailyStock.filter((s) => !s.variant_id && s.remaining <= 0).map((s) => s.product_id)
   );
 
-  if (servedByAgentTill) return <AgentTillNotice />;
+  if (servedByAgentTill.served) return <AgentTillNotice url={servedByAgentTill.url} />;
 
   return (
     <Box aria-busy={loadingInitialData || holdingOrder || Boolean(resumingOrderId)}>

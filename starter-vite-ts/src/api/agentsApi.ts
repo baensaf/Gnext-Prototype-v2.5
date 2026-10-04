@@ -67,6 +67,9 @@ export interface AgentTillReport {
   terminal_id: string | null;
   mode: 'ONLINE' | 'OFFLINE' | 'HANDOVER';
   open_orders: number;
+  /** The registers the agent serves (§18.7): the PC's own till and the devices paired on the LAN. */
+  registers?: { terminal_id: string; kind: 'PC' | 'DEVICE'; device_name: string | null }[];
+  lan_url?: string | null;
   reported_at: string;
 }
 

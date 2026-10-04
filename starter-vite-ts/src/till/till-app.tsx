@@ -38,6 +38,7 @@ import { toast } from 'src/components/snackbar';
 import { useSettingsContext } from 'src/components/settings';
 
 import { carryTo } from './carry';
+import { TillPair } from './pair';
 import { TillSignIn } from './sign-in';
 import { TillContext } from './till-context';
 import { agentPosSource } from './agent-source';
@@ -114,6 +115,11 @@ export function TillApp() {
         {unreachable ? <Alert severity="error">{unreachable}</Alert> : <CircularProgress />}
       </Stack>
     );
+  }
+
+  // A device on the LAN not paired yet (§18.5), or unpaired since.
+  if (state.problems.includes('NOT_PAIRED')) {
+    return <TillPair branchName={state.branch?.name} onPaired={refresh} />;
   }
 
   if (!user) {

@@ -51,20 +51,33 @@ export async function agentRequest<T>(method: 'GET' | 'POST', path: string, body
   try {
     res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   } catch {
-    throw agentError(0, 'AGENT_UNREACHABLE', 'برنامهٔ جی‌نکست روی این رایانه پاسخ نمی‌دهد.');
+    // On a device on the LAN (§18), it is the branch PC that does not answer.
+    throw agentError(
+      0,
+      'AGENT_UNREACHABLE',
+      onBranchPC()
+        ? 'برنامهٔ جی‌نکست روی این رایانه پاسخ نمی‌دهد.'
+        : 'رایانهٔ شعبه پاسخ نمی‌دهد؛ روشن بودن آن و وصل بودن این دستگاه به شبکهٔ شعبه را بررسی کنید.'
+    );
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = agentError(res.status, data.code || 'ERROR', data.detail || res.statusText);
     // A refused cart names the line it refused (§13.13).
     if (typeof data.line === 'number') err.line = data.line;
-    if (res.status === 401 && err.code === 'UNAUTHENTICATED') {
+    // Signed out, or this device was unpaired on the branch PC (§18.5).
+    if (res.status === 401 && (err.code === 'UNAUTHENTICATED' || err.code === 'NOT_PAIRED')) {
       setTillToken(null);
       onSignedOut?.();
     }
     throw err;
   }
   return data as T;
+}
+
+/** Whether this page runs on the branch PC itself, rather than on a device on the LAN (§18). */
+export function onBranchPC(): boolean {
+  return ['127.0.0.1', 'localhost', '[::1]'].includes(window.location.hostname);
 }
 
 export function agentError(status: number, code: string, detail: string): AgentError {
@@ -196,8 +209,18 @@ export type PlaceInput = {
   lines: { product_id: string; variant_id: string; quantity: number; options: string[]; notes: string }[];
 };
 
+/** Which register this page is (§18.6): the PC's own, a paired device, or a device not paired yet. */
+export type TillRegister = { kind: 'PC' | 'DEVICE' | null; device_id: string | null };
+
 export const tillApi = {
-  state: () => agentRequest<{ state: TillState; user: TillUser | null; cloud?: TillCloud }>('GET', '/api/till/state'),
+  state: () =>
+    agentRequest<{ state: TillState; user: TillUser | null; cloud?: TillCloud; register?: TillRegister }>('GET', '/api/till/state'),
+  /** Pairs this device with the code a manager made on the branch PC (§18.5). */
+  pair: (code: string, deviceName: string) =>
+    agentRequest<{ device_id: string; register: { terminal_id: string; code?: string; name?: string } }>('POST', '/api/till/pair', {
+      code,
+      device_name: deviceName,
+    }),
   login: (userId: string, pin: string) =>
     agentRequest<{ token: string; user: TillUser; cloud_session?: CloudSession | null }>('POST', '/api/till/login', {
       user_id: userId,

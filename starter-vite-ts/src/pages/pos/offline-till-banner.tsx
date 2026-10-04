@@ -59,14 +59,18 @@ export function OfflineTillBanner() {
 
 const RECHECK_MS = 60_000;
 
+type ServedByAgentTill = { served: boolean; url: string | null };
+const NOT_SERVED: ServedByAgentTill = { served: false, url: null };
+
 /**
- * Whether this device's register is the branch PC's Gnext POS (§16.10): the branch agent's till
- * is bound to it. One drawer has one screen, so the web POS then does not sell on it. Asked on
- * load and every minute; an error reads as "no", so a failed check never stops a sale.
+ * Whether this device's register sells on Gnext POS (§16.10, §18.7): the branch agent serves it,
+ * on the branch PC or on a device paired on the LAN, and where it opens. One drawer has one
+ * screen, so the web POS then does not sell on it. Asked on load and every minute; an error reads
+ * as "no", so a failed check never stops a sale.
  */
-export function useServedByAgentTill(enabled: boolean): boolean {
+export function useServedByAgentTill(enabled: boolean): ServedByAgentTill {
   const [terminalId, setTerminalId] = useState(() => readDeviceTerminal()?.id ?? null);
-  const [served, setServed] = useState(false);
+  const [served, setServed] = useState<ServedByAgentTill>(NOT_SERVED);
 
   useEffect(() => {
     const sync = () => setTerminalId(readDeviceTerminal()?.id ?? null);
@@ -80,7 +84,7 @@ export function useServedByAgentTill(enabled: boolean): boolean {
 
   useEffect(() => {
     if (!enabled || !terminalId) {
-      setServed(false);
+      setServed(NOT_SERVED);
       return undefined;
     }
     let live = true;
@@ -88,10 +92,10 @@ export function useServedByAgentTill(enabled: boolean): boolean {
       httpClient
         .get(`/api/v1/terminals/${terminalId}/agent-till`, { headers: { 'X-Skip-Toast': 'true' } })
         .then((res) => {
-          if (live) setServed(Boolean(res.data?.served_by_agent));
+          if (live) setServed({ served: Boolean(res.data?.served_by_agent), url: res.data?.url ?? null });
         })
         .catch(() => {
-          if (live) setServed(false);
+          if (live) setServed(NOT_SERVED);
         });
     check();
     const timer = window.setInterval(check, RECHECK_MS);
@@ -104,8 +108,8 @@ export function useServedByAgentTill(enabled: boolean): boolean {
   return served;
 }
 
-/** In place of the web POS on a register that the branch PC's Gnext POS serves. */
-export function AgentTillNotice() {
+/** In place of the web POS on a register that Gnext POS serves; `url` is where it opens. */
+export function AgentTillNotice({ url }: { url: string | null }) {
   const { t } = useTranslation();
   return (
     <Card sx={{ p: { xs: 3, md: 5 }, maxWidth: 640, mx: 'auto', mt: { xs: 2, md: 6 } }}>
@@ -113,7 +117,7 @@ export function AgentTillNotice() {
         <PointOfSaleIcon sx={{ fontSize: 56, color: 'primary.main' }} />
         <Typography variant="h5">{t('pos.offlineTill.servedTitle')}</Typography>
         <Typography color="text.secondary">{t('pos.offlineTill.servedBody')}</Typography>
-        <Button variant="contained" size="large" href={OFFLINE_TILL_URL} endIcon={<OpenInNewIcon />} sx={{ fontWeight: 700 }}>
+        <Button variant="contained" size="large" href={url ?? OFFLINE_TILL_URL} endIcon={<OpenInNewIcon />} sx={{ fontWeight: 700 }}>
           {t('pos.offlineTill.open')}
         </Button>
       </Stack>

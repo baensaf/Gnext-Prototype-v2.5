@@ -434,7 +434,70 @@ async function loadTill() {
   $('#t-bind').disabled = t.tills.length === 0;
   $('#t-autostart').checked = !!t.binding && t.binding.open_at_sign_in !== false;
   $('#t-autostart').disabled = !t.binding;
+  loadLAN();
 }
+
+// ---- devices on the LAN (§18.5) ----
+async function loadLAN() {
+  let list;
+  try {
+    list = await api('GET', '/api/pairings');
+  } catch {
+    $('#lan-card').hidden = true;
+    return;
+  }
+  $('#lan-card').hidden = false;
+  $('#lan-urls').replaceChildren(
+    ...(list.urls?.length ? list.urls.map((u) => el('div', {}, u)) : ['این رایانه در شبکهٔ خصوصی‌ای نیست.']),
+  );
+  const t = tillState || { tills: [] };
+  const taken = new Set([t.binding?.terminal_id, ...list.devices.map((d) => d.terminal_id)]);
+  const name = (id) => {
+    const x = t.tills.find((r) => r.id === id);
+    return x ? `${x.name} (${x.code})` : id;
+  };
+  $('#lan-devices').replaceChildren(
+    ...list.devices.map((d) =>
+      el('div', { class: 'row' },
+        el('span', {}, `${d.device_name} · ${name(d.terminal_id)}`),
+        el('span', { class: 'note' }, d.last_seen_at ? when(d.last_seen_at) : '—'),
+        el('button', { class: 'btn', onclick: () => unpair(d) }, 'جدا کردن'),
+      ),
+    ),
+  );
+  const free = t.tills.filter((x) => !taken.has(x.id));
+  const key = JSON.stringify(free.map((x) => x.id));
+  if (key !== loadLAN.last) {
+    loadLAN.last = key;
+    $('#lan-choose').replaceChildren(...free.map((x) => el('option', { value: x.id }, `${x.name} (${x.code})`)));
+  }
+  $('#lan-code').disabled = free.length === 0;
+}
+
+function unpair(d) {
+  asManager(async () => {
+    if (!confirm(`«${d.device_name}» از صندوق جدا شود؟`)) return;
+    await api('DELETE', `/api/pairings/${encodeURIComponent(d.device_id)}`);
+    toast('دستگاه جدا شد.');
+    loadLAN();
+  });
+}
+
+$('#lan-code').addEventListener('click', () => {
+  const terminal_id = $('#lan-choose').value;
+  if (!terminal_id) return;
+  asManager(async () => {
+    const c = await api('POST', '/api/pairing-codes', { terminal_id });
+    const out = $('#lan-code-out');
+    out.hidden = false;
+    out.replaceChildren(
+      'کد ', el('strong', { class: 'ltr' }, c.code),
+      ` تا ${new Date(c.expires_at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })} معتبر است. روی دستگاه نشانی `,
+      el('span', { class: 'ltr' }, (c.urls && c.urls[0]) || ''),
+      ' را باز کنید و کد را وارد کنید.',
+    );
+  });
+});
 
 // A preference of this PC, changed by the manager signed in here (§16.8).
 $('#t-autostart').addEventListener('change', async (e) => {

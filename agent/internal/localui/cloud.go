@@ -39,12 +39,6 @@ var hopHeaders = map[string]bool{
 	"Te": true, "Trailer": true, "Transfer-Encoding": true, "Upgrade": true, "Set-Cookie": true,
 }
 
-// cloudSession is the cloud session that belongs to one till session.
-type cloudSession struct {
-	tillToken string
-	session   cloud.TillSession
-}
-
 // cloudSessionView is what the page is told about it: who, never the token.
 func cloudSessionView(cs *cloud.TillSession) any {
 	if cs == nil {
@@ -72,51 +66,62 @@ func setTillCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, c)
 }
 
-// cloudFor is the cloud session of a till session that is still signed in. One whose till
-// session ended (signed out, timed out, replaced) is ended in the cloud too.
+// cloudFor is the cloud session of a till session that is still signed in. Cloud sessions whose
+// till session ended (signed out, timed out, replaced at its register) are ended in the cloud too.
 func (s *Server) cloudFor(t *till.Till, token string) *cloud.TillSession {
+	s.sweepClouds(t)
 	s.mu.Lock()
-	cs := s.tillCloud
-	s.mu.Unlock()
-	if cs == nil {
+	defer s.mu.Unlock()
+	cs, ok := s.tillClouds[token]
+	if !ok || token == "" {
 		return nil
 	}
-	if _, ok := t.User(cs.tillToken); !ok {
-		s.dropCloud(cs.tillToken)
-		return nil
-	}
-	if cs.tillToken != token {
-		return nil
-	}
-	return &cs.session
+	return &cs
 }
 
-// keepCloud keeps a new cloud session for a till session, ending whichever one it replaces.
-func (s *Server) keepCloud(token string, session *cloud.TillSession) {
+// sweepClouds ends the cloud sessions of till sessions that are gone.
+func (s *Server) sweepClouds(t *till.Till) {
+	var gone []string
 	s.mu.Lock()
-	old := s.tillCloud
-	s.tillCloud = nil
-	if session != nil {
-		s.tillCloud = &cloudSession{tillToken: token, session: *session}
+	for token, cs := range s.tillClouds {
+		if !t.SessionLive(token) {
+			delete(s.tillClouds, token)
+			gone = append(gone, cs.Token)
+		}
 	}
 	s.mu.Unlock()
-	if old != nil && (session == nil || old.session.Token != session.Token) {
-		s.endCloud(old.session.Token)
+	for _, g := range gone {
+		s.endCloud(g)
 	}
+}
+
+// keepCloud keeps a new cloud session for a till session (one a register, §18.4), ending
+// whichever one it replaces.
+func (s *Server) keepCloud(t *till.Till, token string, session *cloud.TillSession) {
+	s.mu.Lock()
+	if s.tillClouds == nil {
+		s.tillClouds = map[string]cloud.TillSession{}
+	}
+	old, had := s.tillClouds[token]
+	delete(s.tillClouds, token)
+	if session != nil {
+		s.tillClouds[token] = *session
+	}
+	s.mu.Unlock()
+	if had && (session == nil || old.Token != session.Token) {
+		s.endCloud(old.Token)
+	}
+	s.sweepClouds(t)
 }
 
 // dropCloud forgets the cloud session of a till session, and ends it in the cloud.
 func (s *Server) dropCloud(token string) {
 	s.mu.Lock()
-	old := s.tillCloud
-	if old != nil && old.tillToken == token {
-		s.tillCloud = nil
-	} else {
-		old = nil
-	}
+	old, had := s.tillClouds[token]
+	delete(s.tillClouds, token)
 	s.mu.Unlock()
-	if old != nil {
-		s.endCloud(old.session.Token)
+	if had {
+		s.endCloud(old.Token)
 	}
 }
 
@@ -200,7 +205,7 @@ func (s *Server) tillCloudLogin(w http.ResponseWriter, r *http.Request) {
 	case session == nil:
 		fail(w, http.StatusBadGateway, "CLOUD_UNREACHABLE", "ارتباط با سرور برقرار نیست.")
 	default:
-		s.keepCloud(token, session)
+		s.keepCloud(t, token, session)
 		writeJSON(w, http.StatusOK, map[string]any{"cloud_session": cloudSessionView(session)})
 	}
 }
@@ -238,7 +243,8 @@ func (s *Server) cloudProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := tillToken(r)
-	if _, ok := t.User(token); !ok {
+	// A till session is good only at the register it was opened at (§18.4).
+	if u, ok := t.User(token); !ok || u.Register != registerID(r) {
 		fail(w, http.StatusUnauthorized, till.CodeUnauthenticated, "دوباره با پین وارد شوید.")
 		return
 	}
@@ -276,8 +282,9 @@ func (s *Server) cloudProxy(w http.ResponseWriter, r *http.Request) {
 	up.Header.Set("Authorization", "Bearer "+cs.Token)
 	up.Header.Set("X-CSRF-Token", cs.CSRF)
 	up.Header.Set("User-Agent", "gnext-agent/"+s.Version+" till")
-	if b := t.Binding(); b != nil {
-		up.Header.Set("X-Terminal-Id", b.TerminalID)
+	// The register the request came from (§18.4), so cash lands in its drawer.
+	if id := s.registerTerminal(r, t); id != "" {
+		up.Header.Set("X-Terminal-Id", id)
 	}
 
 	resp, err := c.Forward(up)
