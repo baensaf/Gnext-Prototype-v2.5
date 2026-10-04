@@ -2391,6 +2391,11 @@
         "scheduled": "Starts later",
         "ended": "Ended"
       },
+      "product": {
+        "help": "Taken off this item on every till sale, at every branch, before the order discount.",
+        "empty": "No discount on this item.",
+        "all": "All item discounts"
+      },
       "errors": {
         "loadFailed": "Could not load item discounts",
         "saveFailed": "Could not save the item discount",

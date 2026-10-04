@@ -71,6 +71,7 @@ import { AmountInWords } from 'src/components/amount-in-words';
 
 import { ProductPhotos } from './product-photos';
 import { ProductPriceHistory } from './product-price-history';
+import { ProductItemDiscounts } from './product-item-discounts';
 
 export function ProductDetailPage() {
   const currencyLabel = useCurrencyLabel();
@@ -584,7 +585,7 @@ export function ProductDetailPage() {
                 </Typography>
               </Card>
 
-              <Card sx={{ p: 3 }}>
+              <Card sx={{ p: 3, mb: 3 }}>
                 <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                   {t('catalog.productDetailPage.onSale.title', 'On sale')}
                 </Typography>
@@ -628,6 +629,8 @@ export function ProductDetailPage() {
                   </Button>
                 </Stack>
               </Card>
+
+              {id && <ProductItemDiscounts productId={id} canAuthor={canAuthor} />}
             </Grid>
           </Grid>
         </form>
