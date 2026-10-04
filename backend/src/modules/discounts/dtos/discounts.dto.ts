@@ -44,6 +44,16 @@ export class QuoteItemDto {
   @IsOptional()
   @IsBoolean()
   ownNonStackableApplied?: boolean;
+
+  /**
+   * The item discount this line already has (an order line keeps the one it was given), in
+   * percent; null for none. Left out, the engine looks up today's discount for the product.
+   */
+  @IsOptional()
+  itemDiscountPercent?: string | null;
+
+  @IsOptional()
+  itemDiscountId?: string | null;
 }
 
 export class ManualDiscountDto {

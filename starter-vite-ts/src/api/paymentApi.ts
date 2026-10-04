@@ -132,6 +132,8 @@ export interface ReceiptData {
   };
   items: Array<{
     product_name: string;
+    /** The automatic item discount on the line, in percent (0 for none). */
+    item_discount_percent?: number;
     quantity: number;
     unit_price: string;
     subtotal: string;

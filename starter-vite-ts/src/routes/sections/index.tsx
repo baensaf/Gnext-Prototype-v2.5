@@ -58,6 +58,7 @@ import { BusinessDaysPage } from 'src/pages/cashier/business-days';
 import { ReportViewerPage } from 'src/pages/reports/report-viewer';
 import { CalendarSettingsPage } from 'src/pages/settings/calendar';
 import { FleetRollupPage } from 'src/pages/operations/fleet-rollup';
+import { ItemDiscountsPage } from 'src/pages/catalog/item-discounts';
 import { ChannelPricesPage } from 'src/pages/catalog/channel-prices';
 import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
 import { ProductDetailPage } from 'src/pages/catalog/product-detail';
@@ -175,6 +176,7 @@ export const routesSection: RouteObject[] = [
       { path: 'catalog/import-export', element: <ImportWizardPage /> },
       { path: 'pricing/price-lists', element: <PriceListsPage /> },
       { path: 'pricing/changes', element: <PriceChangesPage /> },
+      { path: 'pricing/item-discounts', element: <ItemDiscountsPage /> },
       { path: 'pricing/snappfood', element: <ChannelPricesPage /> },
       // The old Price Book addresses, kept so bookmarks land on the lists.
       { path: 'pricing/price-book', element: <Navigate to="/app/pricing/price-lists" replace /> },

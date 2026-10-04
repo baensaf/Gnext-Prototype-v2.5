@@ -116,6 +116,10 @@ export class OrderHeader {
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
   discount_total: string;
 
+  /** The automatic item discounts inside discount_total; the rest is the one order discount. */
+  @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
+  item_discount_total: string;
+
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
   discount_amount: string; // legacy alias
 

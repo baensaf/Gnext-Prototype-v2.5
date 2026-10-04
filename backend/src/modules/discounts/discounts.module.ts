@@ -7,8 +7,10 @@ import { CustomerDiscount } from '../../entities/CustomerDiscount.entity';
 import { Customer } from '../../entities/Customer.entity';
 import { ApprovalRequest } from '../../entities/ApprovalRequest.entity';
 import { Product } from '../../entities/Product.entity';
+import { ItemDiscount } from '../../entities/ItemDiscount.entity';
 import { DiscountsService } from './discounts.service';
 import { DiscountEvaluationService } from './discount-evaluation.service';
+import { ItemDiscountsService } from './item-discounts.service';
 import { DiscountsController } from './discounts.controller';
 import { AuditModule } from '../audit/audit.module';
 
@@ -22,11 +24,12 @@ import { AuditModule } from '../audit/audit.module';
       Customer,
       ApprovalRequest,
       Product,
+      ItemDiscount,
     ]),
     AuditModule,
   ],
-  providers: [DiscountsService, DiscountEvaluationService],
+  providers: [DiscountsService, DiscountEvaluationService, ItemDiscountsService],
   controllers: [DiscountsController],
-  exports: [DiscountsService, DiscountEvaluationService],
+  exports: [DiscountsService, DiscountEvaluationService, ItemDiscountsService],
 })
 export class DiscountsModule {}

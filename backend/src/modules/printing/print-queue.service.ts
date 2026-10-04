@@ -114,7 +114,7 @@ export class PrintQueueService {
           documentType,
           isReprint,
           template,
-          items: activeLines.map((i) => this.renderLine(i)),
+          items: activeLines.map((i) => this.renderLine(i, undefined, true)),
         });
         return await this.recordJobs(tenantId, order, documentType, html, printers, opts);
       }
@@ -413,10 +413,13 @@ export class PrintQueueService {
     return money;
   }
 
-  private renderLine(i: OrderItem, change?: LineChange) {
+  /** One line of a ticket. A customer document marks a line's automatic item discount; the kitchen never sees it. */
+  private renderLine(i: OrderItem, change?: LineChange, forCustomer = false) {
     const lineTotal = [i.line_total, i.subtotal].find((v) => v && Number(v) > 0);
+    const name = i.variant_name ? `${i.product_name} (${i.variant_name})` : i.product_name;
+    const itemDiscount = forCustomer && Number(i.item_discount_percent || 0) > 0 ? ` (${Number(i.item_discount_percent)}٪ تخفیف)` : '';
     return {
-      product_name: i.variant_name ? `${i.product_name} (${i.variant_name})` : i.product_name,
+      product_name: `${name}${itemDiscount}`,
       quantity: i.quantity,
       unit_price: i.unit_price,
       total_price: lineTotal || String(Number(i.unit_price || 0) * Number(i.quantity || 1)),

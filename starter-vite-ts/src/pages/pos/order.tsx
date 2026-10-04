@@ -361,6 +361,8 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
   // Quote & Totals
   const [appliedDiscountAmount, setAppliedDiscountAmount] = useState<string>('0');
+  // Each cart line's automatic item discount, in percent, from the last quote ('0.00' for none).
+  const [lineItemDiscounts, setLineItemDiscounts] = useState<string[]>([]);
   const [quotedTaxAmount, setQuotedTaxAmount] = useState<string>('0');
   const [quotedDeliveryFee, setQuotedDeliveryFee] = useState<string>('0');
   const [discountMessage, setDiscountMessage] = useState<string | null>(null);
@@ -1090,13 +1092,15 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
       const discAmount = MoneyUtil.format(quoteRes.discountTotal || '0', 2);
       setAppliedDiscountAmount(discAmount);
+      setLineItemDiscounts((quoteRes.items || []).map((line) => line.itemDiscountPercent || '0'));
       setQuotedTaxAmount(MoneyUtil.format(quoteRes.taxTotal || '0', 2));
       setQuotedDeliveryFee(MoneyUtil.format(quoteRes.deliveryFee || (orderType === 'DELIVERY' ? deliveryZones.find((zone) => zone.id === selectedDeliveryZoneId)?.fee || '0' : '0'), 2));
 
       setApprovalRequired(!!quoteRes.approvalRequired);
       setApprovalReason(quoteRes.approvalReason || null);
 
-      const applied = quoteRes.consideredDiscounts?.find((d) => d.status === 'APPLIED');
+      // The order's own discount; item discounts show on their lines instead.
+      const applied = quoteRes.consideredDiscounts?.find((d) => d.status === 'APPLIED' && d.source !== 'ITEM');
       const rejected = quoteRes.consideredDiscounts?.find((d) => d.status === 'REJECTED');
 
       if (applied) {
@@ -2414,6 +2418,15 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                               <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                                 {MoneyUtil.formatCurrency(item.lineSubtotal)} {currency}
                               </Typography>
+                              {Number(lineItemDiscounts[idx] || 0) > 0 && (
+                                <Chip
+                                  size="small"
+                                  color="error"
+                                  variant="outlined"
+                                  label={t('pos.itemDiscount', { percent: Number(lineItemDiscounts[idx]) })}
+                                  sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }}
+                                />
+                              )}
                               {/* Change a line's size and add-ons without ringing it up again.
                                   Icon only (PM, 2026-10-03); the label stays as the tooltip. */}
                               {(item.hasChoices || item.selectedOptions.length > 0 || !!item.selectedVariant) && (

@@ -25,6 +25,7 @@ import { OptionItem } from '../../entities/OptionItem.entity';
 import { OptionGroup } from '../../entities/OptionGroup.entity';
 import { ProductOptionGroup } from '../../entities/ProductOptionGroup.entity';
 import { DiscountEvaluationService } from '../discounts/discount-evaluation.service';
+import { ItemDiscountsService } from '../discounts/item-discounts.service';
 import { OrderSequenceService } from './order-sequence.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { OutboxWriter } from '../outbox/outbox-writer.service';
@@ -113,6 +114,12 @@ const ACTIVE_LINE_STATE = 'ACTIVE';
 const isActiveLine = (item: { state?: string }): boolean =>
   (item.state || ACTIVE_LINE_STATE) === ACTIVE_LINE_STATE;
 
+/** The one order discount (manual, coupon or customer rate) inside an order's discount total. */
+const previousOrderDiscount = (order: OrderHeader): string => {
+  const rest = MoneyUtil.subtract(order.discount_total || order.discount_amount || '0.0000', order.item_discount_total || '0.0000');
+  return MoneyUtil.greaterThan(rest, '0.0000') ? rest : '0.0000';
+};
+
 // State Transition Matrix per Section 6.1
 const ALLOWED_TRANSITIONS: Record<OrderState, OrderState[]> = {
   DRAFT: ['SUBMITTED', 'CONFIRMED', 'CANCELLED'],
@@ -165,7 +172,28 @@ export class OrderService {
     @Optional() private readonly printQueueService?: PrintQueueService,
     @Optional() private readonly creditService?: CreditService,
     @Optional() @Inject(forwardRef(() => SimulationService)) private readonly simulationService?: SimulationService,
+    @Optional() private readonly itemDiscounts?: ItemDiscountsService,
   ) {}
+
+  /**
+   * Gives each active line that has not been priced yet the item discount its product has on
+   * the branch's business day today ('0.00' for none), and keeps it on the line. Lines are
+   * priced when the order is sent, and when added to an order already sent; from then on they
+   * keep that percent, so voids, additions and a re-send never move it.
+   */
+  private async priceItemDiscounts(em: EntityManager, tenantId: string, order: OrderHeader, items: OrderItem[]) {
+    const unpriced = items.filter((i) => i.item_discount_percent === null || i.item_discount_percent === undefined);
+    if (!unpriced.length) return;
+    const active = order.channel === 'POS' && this.itemDiscounts
+      ? await this.itemDiscounts.activeFor(tenantId, order.branch_id, unpriced.map((i) => i.product_id), em)
+      : new Map<string, { id: string; percent: string }>();
+    for (const line of unpriced) {
+      const found = active.get(line.product_id);
+      line.item_discount_percent = found ? found.percent : '0.00';
+      line.item_discount_id = found ? found.id : null;
+      await em.save(OrderItem, line);
+    }
+  }
 
   /**
    * One page of the order book, filtered and sorted on the server (see `order-list.ts`).
@@ -661,6 +689,10 @@ export class OrderService {
         variantId: i.variant_id || undefined,
         unitPrice: effectiveUnitPrice,
         quantity: i.quantity,
+        // A line already priced keeps its item discount; one not yet priced gets today's.
+        ...(i.item_discount_percent !== null && i.item_discount_percent !== undefined
+          ? { itemDiscountPercent: i.item_discount_percent, itemDiscountId: i.item_discount_id ?? null }
+          : {}),
       };
     });
 
@@ -728,13 +760,19 @@ export class OrderService {
             ...dto.manualDiscount,
             approvalRequestId: dto.manualDiscount.approvalRequestId || dto.approvalRequestIds?.[0],
           }
-        : MoneyUtil.greaterThan(order.discount_total || order.discount_amount || '0.0000', '0.0000')
+        : MoneyUtil.greaterThan(previousOrderDiscount(order), '0.0000')
           ? {
               calculation_type: 'FIXED_AMOUNT' as const,
-              value: order.discount_total || order.discount_amount,
+              // A re-sent order keeps its order discount; its item discounts are priced
+              // again from the lines below, so they are not part of this amount.
+              value: previousOrderDiscount(order),
               approvalRequestId: dto.approvalRequestIds?.[0],
             }
           : undefined;
+
+      // Each line gets the item discount its product has today, once, as it is sent.
+      const activeLines = order.items.filter(isActiveLine);
+      await this.priceItemDiscounts(em, tenantId, order, activeLines);
 
       // Evaluate discounts & totals
       const quoteRes = await this.discountEngine.evaluateQuote(tenantId, {
@@ -745,7 +783,7 @@ export class OrderService {
           orderType: order.order_type,
           currencyCode: order.currency_code,
           deliveryFee: order.delivery_fee,
-          items: order.items.filter(isActiveLine).map((i) => {
+          items: activeLines.map((i) => {
             const modPerUnit = (i.quantity && Number(i.quantity) > 0 && i.modifier_total)
               ? MoneyUtil.divide(i.modifier_total, i.quantity)
               : '0.0000';
@@ -755,6 +793,8 @@ export class OrderService {
               variantId: i.variant_id || undefined,
               unitPrice: effectiveUnitPrice,
               quantity: i.quantity,
+              itemDiscountPercent: i.item_discount_percent ?? null,
+              itemDiscountId: i.item_discount_id ?? null,
             };
           }),
         },
@@ -800,8 +840,8 @@ export class OrderService {
           order_id: order.id,
           type: 'DISCOUNT',
           source_type: disc.source,
-          source_id: disc.couponId || null,
-          code: disc.couponCode || (disc.source === 'MANUAL' ? 'MANUAL_DISCOUNT' : null),
+          source_id: disc.couponId || disc.itemDiscountId || null,
+          code: disc.couponCode || (disc.source === 'MANUAL' ? 'MANUAL_DISCOUNT' : disc.source === 'ITEM' ? 'ITEM_DISCOUNT' : null),
           name: disc.name,
           amount: disc.amount,
           funding_source: 'MERCHANT',
@@ -811,10 +851,21 @@ export class OrderService {
             discountType: disc.discountType,
             amount: disc.amount,
             ...(disc.source === 'MANUAL' ? { approvalRequestId: submittedManualDiscount?.approvalRequestId || null } : {}),
+            ...(disc.source === 'ITEM' ? { productId: disc.productId, percent: disc.percent } : {}),
           },
         });
         await em.save(OrderAdjustment, adj);
       }
+
+      // Each line keeps what its item discount took off; the order keeps their sum apart
+      // from the one order discount.
+      let itemDiscountTotal = '0.0000';
+      for (const [k, line] of activeLines.entries()) {
+        line.item_discount_total = quoteRes.items[k]?.itemDiscountTotal || '0.0000';
+        itemDiscountTotal = MoneyUtil.add(itemDiscountTotal, line.item_discount_total);
+        await em.save(OrderItem, line);
+      }
+      order.item_discount_total = itemDiscountTotal;
 
       // Snapshot totals
       order.subtotal = quoteRes.subtotal;
@@ -2631,10 +2682,20 @@ export class OrderService {
     let subtotal = '0.0000';
     let modifierTotal = '0.0000';
 
+    // A line added to an order already sent gets its item discount now; lines of an order not
+    // yet sent are priced when it is.
+    if (order.submitted_at) await this.priceItemDiscounts(em, tenantId, order, items);
+
+    let itemDiscountTotal = '0.0000';
     for (const item of items) {
       const lineBase = MoneyUtil.multiply(item.unit_price, item.quantity);
       item.base_total = lineBase;
       item.line_total = MoneyUtil.add(lineBase, item.modifier_total || '0.0000');
+      // The percent the line was given, on what the line now sells for.
+      item.item_discount_total = MoneyUtil.greaterThan(item.item_discount_percent || '0', '0')
+        ? MoneyUtil.multiply(item.line_total, MoneyUtil.divide(item.item_discount_percent!, '100', 6))
+        : '0.0000';
+      itemDiscountTotal = MoneyUtil.add(itemDiscountTotal, item.item_discount_total);
       subtotal = MoneyUtil.add(subtotal, item.line_total);
       modifierTotal = MoneyUtil.add(modifierTotal, item.modifier_total || '0.0000');
       await em.save(OrderItem, item);
@@ -2643,6 +2704,12 @@ export class OrderService {
     order.subtotal = subtotal;
     order.subtotal_amount = subtotal;
     order.modifier_total = modifierTotal;
+
+    // The discount total is the one order discount, unchanged, plus the item discounts of the
+    // lines as they are now (a voided discounted line takes its discount with it).
+    order.discount_total = MoneyUtil.add(previousOrderDiscount(order), itemDiscountTotal);
+    order.discount_amount = order.discount_total;
+    order.item_discount_total = itemDiscountTotal;
 
     // Tax has to move with the lines. Carrying order.tax_total forward would bill
     // the guest VAT on food that was voided off the order, which is the kind of
@@ -2660,7 +2727,9 @@ export class OrderService {
     let taxTotal = '0.0000';
     for (const item of items) {
       const rate = taxRateById.get(item.product_id) || '0.0000';
-      taxTotal = MoneyUtil.add(taxTotal, MoneyUtil.multiply(item.line_total, rate));
+      // Taxed on what the line sells for after its own item discount.
+      const taxable = MoneyUtil.subtract(item.line_total, item.item_discount_total || '0.0000');
+      taxTotal = MoneyUtil.add(taxTotal, MoneyUtil.multiply(taxable, rate));
     }
     order.tax_total = taxTotal;
     order.tax_amount = taxTotal;
@@ -3105,6 +3174,8 @@ export class OrderService {
       product_name: it.product_name,
       quantity: MoneyUtil.format(it.quantity, 4),
       subtotal: MoneyUtil.format(it.line_total, 2),
+      // The automatic item discount on the line, in percent (0 for none); its amount is in the discount total.
+      item_discount_percent: Number(it.item_discount_percent || 0),
       options: (it.options || []).map((opt) => ({
         name: opt.option_item_name,
         price_delta: MoneyUtil.format(opt.price_delta || '0', 2),

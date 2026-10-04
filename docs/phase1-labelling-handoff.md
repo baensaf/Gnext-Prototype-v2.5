@@ -193,6 +193,24 @@ typed mobile when nothing matches. The customers page pages on the server, newes
 | Credit aging | V4 |
 | The coupon test bench | F |
 
+**Automatic item discounts (`/app/pricing/item-discounts`): V1.** Decided 2026-10-03, from the
+Nasr HAMI backup (15% and 20% dated item discounts on 144 of 602 counter invoices). Head
+office sets a percent off one item between two business days (no end date runs until
+deleted); one item has one discount on any day. It comes off every till line of the item at
+every branch by itself, and the one order discount (manual, coupon, customer rate) then
+applies to what is left, as HAMI does. A line keeps the percent it was given when the order is
+sent. The till shows "−20%" on the cart line; the receipt marks the line and the discount total
+includes it. Not a discount campaign (no targeting, no conditions); campaigns stay cut.
+
+| Feature | Label |
+|---|---|
+| Category-wide item discounts | V2 |
+| Fixed-amount item discounts; time-of-day | V2 |
+| Item discounts on the kiosk | V3 |
+| Item discounts on offline agent tills (not built yet: needs an agent release; offline orders take no discounts today) | V1 |
+| Only some branches | V4 |
+| Sending item discounts to Moadian | F |
+
 **Page group 11, operations (`/app/operations/…`): V1.** Decided 2026-09-29: branches, tills,
 kitchen stations and routing, printers, the print queue and branch agents. Monitoring
 (`/app/operations/monitoring`) is V4. The kiosk moved from V4 to V3 (`/app/kiosk` is V3).

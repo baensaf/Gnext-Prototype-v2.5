@@ -118,7 +118,8 @@
     "dailyStock": "Today’s Stock",
     "snappfoodPrices": "Snappfood Prices",
     "priceChanges": "Price Changes",
-    "stopReport": "86 report"
+    "stopReport": "86 report",
+    "itemDiscounts": "Item Discounts"
   },
   "common": {
     "languages": "Languages",
@@ -341,7 +342,8 @@
       "noMatch": "No customer found",
       "failed": "Search is unavailable right now",
       "registerNew": "Register new customer"
-    }
+    },
+    "itemDiscount": "−{{percent}}%"
   },
   "till": {
     "title": "Gnext POS",
@@ -2367,6 +2369,36 @@
       "addonGroup": "Add-on group",
       "allAddonGroups": "All add-on groups",
       "addonPrices": "Add-on prices"
+    },
+    "itemDiscounts": {
+      "title": "Item discounts",
+      "subtitle": "A percent off an item between two dates, taken off every till sale of it at every branch. The order's own discount comes after it.",
+      "add": "New item discount",
+      "edit": "Edit item discount",
+      "delete": "Delete item discount",
+      "deleteConfirm": "Delete the discount on {{name}}? Orders already sent keep it.",
+      "item": "Item",
+      "percent": "Discount",
+      "from": "From",
+      "to": "To",
+      "toOptional": "To (optional)",
+      "toHelp": "Leave empty to run until you delete it.",
+      "noEnd": "No end",
+      "note": "Note",
+      "empty": "No item discounts yet.",
+      "status": {
+        "active": "Running",
+        "scheduled": "Starts later",
+        "ended": "Ended"
+      },
+      "errors": {
+        "loadFailed": "Could not load item discounts",
+        "saveFailed": "Could not save the item discount",
+        "overlap": "This item already has a discount on some of these days",
+        "percent": "A discount is more than 0% and at most 100%",
+        "dates": "The last day must be on or after the first day",
+        "product": "Pick the item the discount is for"
+      }
     }
   },
   "discounts": {
