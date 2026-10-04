@@ -255,6 +255,8 @@
       "overDue": "That is more than what is left to pay.",
       "remaining": "Everything left",
       "backspace": "Delete the last digit",
+      "clubCredit": "Club credit",
+      "clubCreditShort": "The customer has only {{amount}} {{currency}} of club credit.",
       "other": "Other",
       "otherReader": "Paid on another card reader",
       "otherReaderHint": "Charge this amount on the other reader, then record it here. Nothing is sent to the main terminal.",
