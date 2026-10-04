@@ -336,7 +336,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
 
   const tenderButton = (
     method: PaymentMethod | undefined,
-    label: string,
+    label: React.ReactNode,
     icon: React.ReactNode,
     /** The key that does the same, or what the method has to spend. */
     hint: string,
@@ -531,7 +531,10 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                     {hasClubCredit &&
                       tenderButton(
                         creditMethod,
-                        t('pos.pay.clubCredit'),
+                        <>
+                          {t('pos.pay.clubCredit')}
+                          <VersionTag feature="pos.customerCredit" sx={{ ml: 1 }} />
+                        </>,
                         <LoyaltyIcon />,
                         `${MoneyUtil.formatCurrency(clubCredit)} ${currency}`,
                         'outlined',
