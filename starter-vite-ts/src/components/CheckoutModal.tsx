@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 
 import PrintIcon from '@mui/icons-material/Print';
+import LoyaltyIcon from '@mui/icons-material/Loyalty';
 import PaymentIcon from '@mui/icons-material/Payment';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import BackspaceIcon from '@mui/icons-material/Backspace';
@@ -93,9 +94,21 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   // Cash handed over beyond what is due: the drawer keeps only the due amount, and the
   // cashier gives this back.
   const [changeDue, setChangeDue] = useState<string | null>(null);
+  // What the order's customer holds as club credit, in rials. Below zero is money owed, not credit.
+  const [clubCredit, setClubCredit] = useState('0');
 
   const offerRemainder = (o: OrderHeader | null) =>
     setEntry({ value: toToman(wholeRials(o?.due_amount || o?.outstanding_total)), fresh: true });
+
+  const loadClubCredit = useCallback(
+    async (customerId?: string) => {
+      // The agent selling offline knows no customers.
+      const customer =
+        customerId && pos.features.customers ? await pos.customers.getCustomer(customerId).catch(() => null) : null;
+      setClubCredit(wholeRials(customer?.wallet_balance));
+    },
+    [pos]
+  );
 
   const loadData = useCallback(async () => {
     if (!orderId) return;
@@ -109,13 +122,14 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       setPaymentMethods(pms.filter((m) => m.is_active));
 
       setPayments(await pos.payments.getOrderPayments(orderId));
+      await loadClubCredit(o.customer_id);
       setError(null);
     } catch (err: any) {
       setError(err.detail || t('pos.pay.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [orderId, pos, t]);
+  }, [orderId, pos, t, loadClubCredit]);
 
   useEffect(() => {
     if (open && orderId) {
@@ -130,6 +144,8 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
 
   const cashMethod = paymentMethods.find((m) => m.kind === 'CASH');
   const cardMethod = paymentMethods.find((m) => CARD_KINDS.includes(m.kind));
+  const creditMethod = paymentMethods.find((m) => m.kind === 'CUSTOMER_CREDIT');
+  const hasClubCredit = !!creditMethod && MoneyUtil.greaterThan(clubCredit, '0');
   const otherMethods = paymentMethods.filter(
     (m) => m.id !== cashMethod?.id && m.id !== cardMethod?.id && !COURIER_KINDS.includes(m.kind)
   );
@@ -188,6 +204,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         });
       }
       setPayments(await pos.payments.getOrderPayments(orderId));
+      if (method.kind === 'CUSTOMER_CREDIT') await loadClubCredit(order.customer_id);
 
       if (res.order && MoneyUtil.isZero(res.order.due_amount) && onPaymentComplete) {
         onPaymentComplete();
@@ -204,6 +221,16 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     } finally {
       setPayingId(null);
     }
+  };
+
+  /** Club credit pays what is typed, or as much of the remainder as the customer holds. Never more: that would be debt. */
+  const payClubCredit = () => {
+    const amount = entry.fresh && MoneyUtil.greaterThan(due, clubCredit) ? clubCredit : amountRials;
+    if (MoneyUtil.greaterThan(amount, clubCredit)) {
+      setError(t('pos.pay.clubCreditShort', { amount: MoneyUtil.formatCurrency(clubCredit), currency }));
+      return;
+    }
+    pay(creditMethod, { amount });
   };
 
   // The latest `pay`, for the key handler, which is bound once per open.
@@ -311,8 +338,10 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     method: PaymentMethod | undefined,
     label: string,
     icon: React.ReactNode,
-    shortcut: string,
-    variant: 'contained' | 'outlined'
+    /** The key that does the same, or what the method has to spend. */
+    hint: string,
+    variant: 'contained' | 'outlined',
+    onClick: () => void = () => pay(method)
   ) => (
     <Button
       fullWidth
@@ -320,17 +349,17 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       variant={variant}
       color={variant === 'contained' ? 'primary' : 'inherit'}
       disabled={busy || !method}
-      onClick={() => pay(method)}
-      aria-keyshortcuts={shortcut}
+      onClick={onClick}
+      aria-keyshortcuts={/^F\d+$/.test(hint) ? hint : undefined}
       startIcon={payingId && payingId === method?.id ? <CircularProgress size={22} color="inherit" /> : icon}
-      sx={{ py: 2, fontSize: '1.05rem', fontWeight: 800, justifyContent: 'space-between' }}
+      sx={{ py: 2, fontSize: '1.05rem', fontWeight: 800, justifyContent: 'space-between', whiteSpace: 'nowrap' }}
       endIcon={
         <Typography component="span" variant="caption" sx={{ opacity: 0.7 }}>
-          {shortcut}
+          {hint}
         </Typography>
       }
     >
-      <Box component="span" sx={{ flexGrow: 1, textAlign: 'start' }}>
+      <Box component="span" sx={{ flexGrow: 1, textAlign: 'start', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {label}
       </Box>
     </Button>
@@ -499,6 +528,15 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                   <Stack spacing={1.5}>
                     {tenderButton(cardMethod, t('pos.card', 'Card'), <PointOfSaleIcon />, 'F9', 'contained')}
                     {tenderButton(cashMethod, t('pos.cash', 'Cash'), <PaymentsIcon />, 'F8', 'outlined')}
+                    {hasClubCredit &&
+                      tenderButton(
+                        creditMethod,
+                        t('pos.pay.clubCredit'),
+                        <LoyaltyIcon />,
+                        `${MoneyUtil.formatCurrency(clubCredit)} ${currency}`,
+                        'outlined',
+                        payClubCredit
+                      )}
                     {(otherMethods.length > 0 || canUseOtherReader) && (
                       <Button
                         fullWidth
