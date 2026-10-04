@@ -69,6 +69,8 @@ export interface OrderHeader {
   modifier_total?: string;
   packaging_total?: string;
   delivery_fee?: string;
+  /** The delivery price typed at the register in place of the zone's fee; null is the zone's. */
+  delivery_fee_manual?: string | null;
   discount_total?: string;
   discount_amount?: string;
   tax_total?: string;

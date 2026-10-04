@@ -10,6 +10,16 @@ import { MoneyUtil } from '../../common/utils/money.util';
  *   created — the list price, not what the customer paid after a discount.
  * - ZONE_RATE: the courier rate set on the zone; a zone with no rate falls back to FLAT.
  */
+/**
+ * The fee a delivery is snapshotted with, which is what DELIVERY_FEE pays the courier: the
+ * zone's listed fee, or the price the cashier typed for this order when that is more (a far
+ * address). A price typed lower, or free, is the branch's gift and leaves the rider's pay alone.
+ */
+export function courierDeliveryFee(zoneFee: string | null | undefined, typedFee: string | null | undefined): string {
+  const listed = zoneFee || '0.0000';
+  return typedFee !== null && typedFee !== undefined && MoneyUtil.greaterThan(typedFee, listed) ? typedFee : listed;
+}
+
 export const COURIER_PAY_MODES = ['FLAT', 'DELIVERY_FEE', 'ZONE_RATE'] as const;
 export type CourierPayMode = (typeof COURIER_PAY_MODES)[number];
 

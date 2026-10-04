@@ -30,7 +30,7 @@ import { BusinessClock, loadBusinessClock } from '../../common/utils/business-cl
 import { normalizePhone } from '../customer/customer.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
-import { CourierPayMode, computeCourierPay, isCourierPayMode, resolveCourierPayPolicy } from './courier-pay';
+import { CourierPayMode, computeCourierPay, courierDeliveryFee, isCourierPayMode, resolveCourierPayPolicy } from './courier-pay';
 import { normalizeZonePolygon } from './zone-shape';
 
 const ACTIVE_DELIVERY_STATES: DeliveryState[] = ['ASSIGNED', 'PICKED_UP', 'EN_ROUTE'];
@@ -769,7 +769,7 @@ export class DeliveryService {
       order_id: orderId,
       zone_id: zone.id,
       state: 'UNASSIGNED',
-      fee: zone.fee,
+      fee: courierDeliveryFee(zone.fee, order.delivery_fee_manual),
       currency_code: order.currency_code || 'IRR',
       address_snapshot: {
         address_id: address.id,
