@@ -1,3 +1,4 @@
+import type { Theme } from '@mui/material/styles';
 import type { OrderHeader } from 'src/api/orderApi';
 import type { DiningTable } from 'src/api/dineInApi';
 import type { ReasonCode } from 'src/api/settingsApi';
@@ -71,6 +72,7 @@ import {
   ToggleButton,
   DialogContent,
   DialogActions,
+  useMediaQuery,
   InputAdornment,
   LinearProgress,
   CircularProgress,
@@ -92,9 +94,10 @@ import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { toast, showErrorToast } from 'src/components/snackbar';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 import { CustomerRegisterDialog } from 'src/components/customer-register';
-import { PosShiftBar, PosShiftGate } from 'src/components/shift/pos-shift';
+import { PosShiftBar, PosShiftChip, PosShiftGate } from 'src/components/shift/pos-shift';
 
 import { PosStopDialog } from './pos-stop-dialog';
+import { useFillViewport } from './use-fill-viewport';
 import { PosCustomerPicker } from './pos-customer-picker';
 import { ClosedBranchBanner } from './closed-branch-banner';
 import { AgentTillNotice, OfflineTillBanner, useServedByAgentTill } from './offline-till-banner';
@@ -204,6 +207,9 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
   const [selectedDeliveryAddressId, setSelectedDeliveryAddressId] = useState<string>('');
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
   const [selectedDeliveryZoneId, setSelectedDeliveryZoneId] = useState<string>('');
+  // The delivery price the cashier typed in place of the zone's fee, in rials; null charges the
+  // zone's. Empty while the field is being retyped.
+  const [manualDeliveryFee, setManualDeliveryFee] = useState<string | null>(null);
   const [deliveryOptionsLoading, setDeliveryOptionsLoading] = useState(false);
   const [deliveryOptionsError, setDeliveryOptionsError] = useState<string | null>(null);
   const [addAddressOpen, setAddAddressOpen] = useState(false);
@@ -235,6 +241,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     setSelectedCustomerId(customer?.id || '');
     setSelectedDeliveryAddressId('');
     setSelectedDeliveryZoneId('');
+    setManualDeliveryFee(null);
   };
 
   // A customer registered at the till is selected on the order straight away; their first
@@ -322,7 +329,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
   const [loadingInitialData, setLoadingInitialData] = useState(true);
   const [holdingOrder, setHoldingOrder] = useState(false);
   const [resumingOrderId, setResumingOrderId] = useState<string | null>(null);
-  const [holdSuccessMessage, setHoldSuccessMessage] = useState<string | null>(null);
   const [discardTarget, setDiscardTarget] = useState<OrderHeader | null>(null);
   const [discardReasonCodes, setDiscardReasonCodes] = useState<ReasonCode[]>([]);
   const [discardReasonCodeId, setDiscardReasonCodeId] = useState('');
@@ -378,6 +384,10 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
   const [error, setError] = useState<string | null>(null);
 
   const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+  // Side by side, the two columns are as tall as the window is and scroll inside themselves;
+  // stacked on a narrow screen, the page scrolls as before.
+  const sideBySide = useMediaQuery((theme: Theme) => theme.breakpoints.up('md'));
+  const [registerRef, registerHeight] = useFillViewport<HTMLDivElement>(sideBySide);
   const customerSelectRef = React.useRef<HTMLInputElement | null>(null);
   const deliveryRestoreRef = React.useRef<{ customerId?: string; addressId?: string; zoneId?: string }>({});
 
@@ -631,7 +641,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
   const addToCart = (product: Product, variant: ProductVariant | undefined, options: OptionItem[], hasChoices = false) => {
     if (placedOrder) setPlacedOrder(null);
-    if (holdSuccessMessage) setHoldSuccessMessage(null);
 
     const basePrice = priceOf(product, variant);
     const optionsSum = options.reduce((sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2), '0');
@@ -737,7 +746,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
   const updateQuantity = (index: number, delta: number) => {
     if (placedOrder) setPlacedOrder(null);
-    if (holdSuccessMessage) setHoldSuccessMessage(null);
 
     setCart((prev) => {
       const copy = [...prev];
@@ -781,6 +789,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     setSelectedCustomerId('');
     setSelectedDeliveryAddressId('');
     setSelectedDeliveryZoneId('');
+    setManualDeliveryFee(null);
     setCustomerAddresses([]);
     deliveryRestoreRef.current = {};
     setError(null);
@@ -854,6 +863,8 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         customer_id: selectedCustomerId || undefined,
         delivery_address_id: orderType === 'DELIVERY' ? selectedDeliveryAddressId : undefined,
         delivery_zone_id: orderType === 'DELIVERY' ? selectedDeliveryZoneId : undefined,
+        // Null goes back to the zone's fee on a draft that had a typed one.
+        delivery_fee: orderType === 'DELIVERY' ? typedDeliveryFee : undefined,
         coupon_code: appliedCouponCode || undefined,
         table_id: orderType === 'DINE_IN' ? selectedTableId || undefined : undefined,
         table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
@@ -874,7 +885,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         draft = await pos.orders.createOrder(orderPayload);
       }
 
-      setHoldSuccessMessage(`Order #${draft.order_number} held successfully in Drafts.`);
       toast.success(`Order #${draft.order_number} held in Drafts`);
       handleClearCart();
       await fetchHeldOrders(selectedBranchId);
@@ -917,6 +927,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       }
       setSelectedDeliveryAddressId(fullOrder.customer_address_id || '');
       setSelectedDeliveryZoneId(fullOrder.delivery_zone_id || '');
+      setManualDeliveryFee(fullOrder.delivery_fee_manual ? MoneyUtil.format(fullOrder.delivery_fee_manual, 0) : null);
       setCouponInput(fullOrder.coupon_code || '');
       setAppliedCouponCode(fullOrder.coupon_code || '');
       setOrderNotes(fullOrder.notes || '');
@@ -975,7 +986,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
       setCart(loadedCart);
       setHeldOrdersDrawerOpen(false);
-      setHoldSuccessMessage(null);
       setError(null);
       toast.success(`Resumed draft #${fullOrder.order_number}`);
     } catch (err: any) {
@@ -1042,6 +1052,15 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     ? MoneyUtil.subtract(subtotalPlusTax, appliedDiscountAmount, 2)
     : '0';
 
+  const zoneDeliveryFee = deliveryZones.find((zone) => zone.id === selectedDeliveryZoneId)?.fee || '0';
+  const typedDeliveryFee = manualDeliveryFee !== null && manualDeliveryFee !== '' ? manualDeliveryFee : null;
+  const deliveryFeeCharged = orderType === 'DELIVERY' ? (typedDeliveryFee ?? zoneDeliveryFee) : '0';
+
+  // A typed price belongs to the delivery it was typed for.
+  useEffect(() => {
+    if (orderType !== 'DELIVERY') setManualDeliveryFee(null);
+  }, [orderType]);
+
   // Live Auto-Quote
   const evaluateQuote = useCallback(async () => {
     if (cart.length === 0) {
@@ -1060,9 +1079,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
           branchId: selectedBranchId,
           customerId: selectedCustomerId || undefined,
           orderType,
-          deliveryFee: orderType === 'DELIVERY'
-            ? (deliveryZones.find((zone) => zone.id === selectedDeliveryZoneId)?.fee || '0')
-            : '0',
+          deliveryFee: deliveryFeeCharged,
           items: cart.map((ci) => ({
             productId: ci.product.id,
             variantId: ci.selectedVariant?.id || undefined,
@@ -1094,7 +1111,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       setAppliedDiscountAmount(discAmount);
       setLineItemDiscounts((quoteRes.items || []).map((line) => line.itemDiscountPercent || '0'));
       setQuotedTaxAmount(MoneyUtil.format(quoteRes.taxTotal || '0', 2));
-      setQuotedDeliveryFee(MoneyUtil.format(quoteRes.deliveryFee || (orderType === 'DELIVERY' ? deliveryZones.find((zone) => zone.id === selectedDeliveryZoneId)?.fee || '0' : '0'), 2));
+      setQuotedDeliveryFee(MoneyUtil.format(quoteRes.deliveryFee || deliveryFeeCharged, 2));
 
       setApprovalRequired(!!quoteRes.approvalRequired);
       setApprovalReason(quoteRes.approvalReason || null);
@@ -1127,11 +1144,13 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         setAppliedCouponCode('');
       }
     }
-  }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType, selectedDeliveryZoneId, deliveryZones, priceOf, pos, currency]);
+  }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType, deliveryFeeCharged, priceOf, pos, currency]);
 
   useEffect(() => {
     evaluateQuote();
   }, [evaluateQuote]);
+
+  const hasDiscount = Boolean(appliedCouponCode || appliedManualDiscount);
 
   // Coupon Actions
   const handleApplyCoupon = () => {
@@ -1146,6 +1165,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     }
     setAppliedManualDiscount(null);
     setAppliedCouponCode(trimmed);
+    setManualDiscountModalOpen(false);
   };
 
   const handleClearCoupon = () => {
@@ -1309,6 +1329,8 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         customer_id: selectedCustomerId || undefined,
         delivery_address_id: orderType === 'DELIVERY' ? selectedDeliveryAddressId : undefined,
         delivery_zone_id: orderType === 'DELIVERY' ? selectedDeliveryZoneId : undefined,
+        // Null goes back to the zone's fee on a draft that had a typed one.
+        delivery_fee: orderType === 'DELIVERY' ? typedDeliveryFee : undefined,
         coupon_code: appliedCouponCode || undefined,
         table_id: orderType === 'DINE_IN' ? selectedTableId || undefined : undefined,
         table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
@@ -1398,6 +1420,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     orderNotes,
     selectedDeliveryAddressId,
     selectedDeliveryZoneId,
+    typedDeliveryFee,
     deliveryReady,
     activeDraftOrderId,
     buildSubmitPayload,
@@ -1433,6 +1456,8 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         customer_id: selectedCustomerId || undefined,
         delivery_address_id: orderType === 'DELIVERY' ? selectedDeliveryAddressId : undefined,
         delivery_zone_id: orderType === 'DELIVERY' ? selectedDeliveryZoneId : undefined,
+        // Null goes back to the zone's fee on a draft that had a typed one.
+        delivery_fee: orderType === 'DELIVERY' ? typedDeliveryFee : undefined,
         coupon_code: appliedCouponCode || undefined,
         table_id: orderType === 'DINE_IN' ? selectedTableId || undefined : undefined,
         table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
@@ -1487,6 +1512,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     orderNotes,
     selectedDeliveryAddressId,
     selectedDeliveryZoneId,
+    typedDeliveryFee,
     deliveryReady,
     activeDraftOrderId,
     buildSubmitPayload,
@@ -1628,73 +1654,29 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         </Alert>
       )}
 
-      {holdSuccessMessage && (
-        <Alert severity="info" sx={{ mb: 2.5 }} onClose={() => setHoldSuccessMessage(null)}>
-          {holdSuccessMessage}
-        </Alert>
-      )}
-
-      {placedOrder && (
-        <Alert
-          severity="success"
-          icon={<CheckCircleIcon fontSize="inherit" />}
-          sx={{ mb: 2.5 }}
-          onClose={() => setPlacedOrder(null)}
-          action={
-            <Button
-              color="inherit"
-              size="small"
-              onClick={() => setCheckoutModalOpen(true)}
-              sx={{ fontWeight: 'bold' }}
-            >
-              Checkout / Pay Now
-            </Button>
-          }
-        >
-          <strong>{t('pos.orderPlaced', 'Order placed')}</strong>
-          {placedOrder.call_number ? (
-            <>
-              {' '}
-              {t('pos.callNumber', 'Number')}: <strong style={{ fontSize: '1.4em' }}>{placedOrder.call_number}</strong>
-            </>
-          ) : null}{' '}
-          | <code>{placedOrder.order_number}</code> | {MoneyUtil.formatCurrency(placedOrder.total_amount)} {currency}
-        </Alert>
-      )}
-
-      {activeDraftOrderId && (
-        <Alert
-          severity="warning"
-          sx={{ mb: 2.5, py: 0.5 }}
-          action={
-            <Button
-              color="inherit"
-              size="small"
-              onClick={handleClearCart}
-              sx={{ fontWeight: 600 }}
-            >
-              Cancel Resumed Draft
-            </Button>
-          }
-        >
-          Currently Editing Held Draft Order (Changes will update this draft upon hold or checkout).
-        </Alert>
-      )}
-
-      {shiftBlocked && !register.dayEnded ? <PosShiftGate register={register} /> : <PosShiftBar register={register} />}
+      {/* Selling, the register and its shift are a chip in the cart's header; the bar is kept
+          for a shift whose business day has ended, which has to be closed from here. */}
+      {shiftBlocked && !register.dayEnded && <PosShiftGate register={register} />}
+      {register.dayEnded && <PosShiftBar register={register} />}
 
       {/* Hidden rather than unmounted while no shift is open, so a half-built cart survives
           a shift being opened in the middle of it. */}
-      <Grid container spacing={2.5} sx={{ display: shiftBlocked ? 'none' : undefined }}>
+      <Grid
+        ref={registerRef}
+        container
+        spacing={2.5}
+        sx={{ display: shiftBlocked ? 'none' : undefined, height: registerHeight }}
+      >
         {/* Left Column: High-Density Product Catalog with Categories Rail */}
-        <Grid size={{ xs: 12, md: 7, lg: 8 }}>
+        <Grid size={{ xs: 12, md: 7, lg: 8 }} sx={{ height: { md: '100%' } }}>
           <Card
             sx={{
               borderRadius: 3,
               boxShadow: 2,
               display: 'flex',
               flexDirection: 'column',
-              minHeight: 700,
+              minHeight: { xs: 700, md: 0 },
+              height: { md: '100%' },
               overflow: 'hidden',
             }}
           >
@@ -1745,7 +1727,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
             </Box>
 
             {/* Catalog Body: Category Rail + Product Cards Grid */}
-            <Box sx={{ display: 'flex', flexGrow: 1, flexDirection: { xs: 'column', sm: 'row' } }}>
+            <Box sx={{ display: 'flex', flexGrow: 1, minHeight: 0, flexDirection: { xs: 'column', sm: 'row' } }}>
               {/* Vertical Category Rail */}
               <Box
                 sx={{
@@ -1758,6 +1740,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                   p: 1.25,
                   display: 'flex',
                   flexDirection: 'column',
+                  minHeight: 0,
                 }}
               >
                 <Typography
@@ -1821,7 +1804,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
               </Box>
 
               {/* Products Grid: Denser 3-4 column layout */}
-              <CardContent sx={{ p: 2, flexGrow: 1, overflowY: 'auto', maxHeight: { xs: 'auto', sm: 720 } }}>
+              <CardContent sx={{ p: 2, flexGrow: 1, minWidth: 0, overflowY: 'auto', maxHeight: { xs: 'auto', sm: 720, md: 'none' } }}>
                 {filteredProducts.length === 0 ? (
                   <Box sx={{ py: 8, textAlign: 'center' }}>
                     <Typography variant="body1" color="text.secondary">
@@ -1962,16 +1945,29 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         </Grid>
 
         {/* Right Column: High-Capacity Order Cart Panel */}
-        <Grid size={{ xs: 12, md: 5, lg: 4 }}>
-          <Card sx={{ borderRadius: 3, boxShadow: 3, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 700 }}>
-            <CardContent sx={{ p: 2.5, display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+        <Grid size={{ xs: 12, md: 5, lg: 4 }} sx={{ height: { md: '100%' } }}>
+          <Card sx={{ borderRadius: 3, boxShadow: 3, display: 'flex', flexDirection: 'column', height: '100%', minHeight: { xs: 700, md: 0 } }}>
+            {/* The lines scroll between the order's details above and the totals and pay buttons
+                below; on a very short window the whole panel scrolls instead. */}
+            <CardContent sx={{ p: 2, display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0, overflowY: { md: 'auto' } }}>
               {/* Header: Cart title + Quick Actions */}
-              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ShoppingCartIcon color="primary" fontSize="small" />
-                  Active Cart ({cart.reduce((s, i) => s + i.quantity, 0)} items)
-                </Typography>
-                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+              <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: 1.5, minWidth: 0 }}>
+                {/* No title: the panel is plainly the cart, and the words took the header's room. */}
+                <Badge badgeContent={cart.reduce((s, i) => s + i.quantity, 0)} color="primary" sx={{ flexShrink: 0, marginInlineEnd: 0.5 }}>
+                  <ShoppingCartIcon color="primary" />
+                </Badge>
+                {/* The chips take the room the buttons leave, and shorten first. */}
+                <Stack direction="row" sx={{ flex: '1 1 0', minWidth: 32, gap: 0.75, alignItems: 'center', overflow: 'hidden' }}>
+                  <PosShiftChip register={register} />
+                  {/* A resumed draft: holding or placing the cart updates that draft. */}
+                  {activeDraftOrderId && (
+                    <Tooltip title={t('pos.cartBar.draftCancel')}>
+                      <Chip size="small" color="warning" label={t('pos.cartBar.draft')} onDelete={handleClearCart} sx={{ fontWeight: 600 }} />
+                    </Tooltip>
+                  )}
+                </Stack>
+                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexShrink: 0 }}>
+                  {heldOrders.length > 0 && (
                   <PosFeatureGate off={!features.park} title="View and resume held draft orders">
                     <Button
                       size="small"
@@ -1997,6 +1993,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                       Held
                     </Button>
                   </PosFeatureGate>
+                  )}
                   {cart.length > 0 && (
                     <Button
                       size="small"
@@ -2296,7 +2293,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                           <FormControl fullWidth size="small" disabled={deliveryOptionsLoading} error={Boolean(selectedCustomerId && !selectedDeliveryAddressId)}>
                             <InputLabel>{t('pos.deliveryContext.addressLabel')}</InputLabel>
-                            <Select value={selectedDeliveryAddressId} label={t('pos.deliveryContext.addressLabel')} onChange={(e) => { setSelectedDeliveryAddressId(e.target.value); setSelectedDeliveryZoneId(''); }}>
+                            <Select value={selectedDeliveryAddressId} label={t('pos.deliveryContext.addressLabel')} onChange={(e) => { setSelectedDeliveryAddressId(e.target.value); setSelectedDeliveryZoneId(''); setManualDeliveryFee(null); }}>
                               {customerAddresses.map((address) => (
                                 <MenuItem key={address.id} value={address.id}>
                                   {address.title}{address.is_default ? ` (${t('pos.deliveryContext.addressDefault')})` : ''} — {address.address_text.length > 45 ? `${address.address_text.slice(0, 45)}…` : address.address_text}
@@ -2307,9 +2304,10 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                           <Button size="small" variant="outlined" onClick={() => setAddAddressOpen(true)} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>{t('pos.deliveryContext.addAddress')}</Button>
                         </Stack>
                         {customerAddresses.length === 0 && !deliveryOptionsLoading && <Alert severity="info" sx={{ py: 0.25 }}>{t('pos.deliveryContext.noAddresses')}</Alert>}
-                        <FormControl fullWidth size="small" disabled={deliveryOptionsLoading} error={Boolean(selectedCustomerId && !selectedDeliveryZoneId)}>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                        <FormControl fullWidth size="small" disabled={deliveryOptionsLoading} error={Boolean(selectedCustomerId && !selectedDeliveryZoneId)} sx={{ minWidth: 0 }}>
                           <InputLabel>{t('pos.deliveryContext.zoneLabel')}</InputLabel>
-                          <Select value={selectedDeliveryZoneId} label={t('pos.deliveryContext.zoneLabel')} onChange={(e) => setSelectedDeliveryZoneId(e.target.value)}>
+                          <Select value={selectedDeliveryZoneId} label={t('pos.deliveryContext.zoneLabel')} onChange={(e) => { setSelectedDeliveryZoneId(e.target.value); setManualDeliveryFee(null); }}>
                             {deliveryZones.map((zone) => (
                               <MenuItem key={zone.id} value={zone.id}>
                                 {t('pos.deliveryContext.zoneOption', { currency: currencyLabel,
@@ -2321,6 +2319,41 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                             ))}
                           </Select>
                         </FormControl>
+                        {/* The zone's fee, which the cashier may change for this order: a far
+                            address more, a regular nothing. Emptied, it goes back to the zone's. */}
+                        <TextField
+                          size="small"
+                          type="number"
+                          label={t('pos.deliveryContext.feeLabel', { currency: currencyLabel })}
+                          disabled={!selectedDeliveryZoneId}
+                          color={typedDeliveryFee !== null ? 'warning' : undefined}
+                          focused={typedDeliveryFee !== null ? true : undefined}
+                          value={!selectedDeliveryZoneId ? '' : toToman(manualDeliveryFee ?? zoneDeliveryFee)}
+                          onChange={(e) => {
+                            const typed = fromToman(e.target.value);
+                            // Nothing below zero; a half-typed value never reaches the order.
+                            setManualDeliveryFee(/^\d*$/.test(typed) ? typed : manualDeliveryFee);
+                          }}
+                          onBlur={() => {
+                            if (manualDeliveryFee === '' || manualDeliveryFee === MoneyUtil.format(zoneDeliveryFee, 0)) setManualDeliveryFee(null);
+                          }}
+                          slotProps={{
+                            htmlInput: { min: 0, inputMode: 'numeric' },
+                            input: {
+                              endAdornment: typedDeliveryFee !== null ? (
+                                <InputAdornment position="end">
+                                  <Tooltip title={t('pos.deliveryContext.feeReset')}>
+                                    <IconButton size="small" aria-label={t('pos.deliveryContext.feeReset')} onClick={() => setManualDeliveryFee(null)} sx={{ p: 0.25 }}>
+                                      <ClearIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                </InputAdornment>
+                              ) : null,
+                            },
+                          }}
+                          sx={{ width: 150, flexShrink: 0 }}
+                        />
+                        </Stack>
                         {deliveryOptionsLoading && <LinearProgress />}
                         {deliveryOptionsError && <Alert severity="error" sx={{ py: 0.25 }}>{deliveryOptionsError}</Alert>}
                       </>
@@ -2377,13 +2410,41 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
               <Divider sx={{ mb: 1.5 }} />
 
               {/* High-Capacity Scrollable Cart Items List (Displays multiple items comfortably) */}
-              <Box sx={{ flexGrow: 1, overflowY: 'auto', minHeight: 220, maxHeight: { xs: 260, md: 340 }, mb: 1.5, pr: 0.5 }}>
+              <Box sx={{ flexGrow: 1, overflowY: 'auto', minHeight: { xs: 220, md: 96 }, maxHeight: { xs: 260, md: 'none' }, mb: 1.5, pr: 0.5 }}>
                 {cart.length === 0 ? (
+                  placedOrder ? (
+                    // The order just placed, and the way back to its checkout. It sits in the
+                    // empty cart, not in a banner that pushed the register down after each sale.
+                    <Stack spacing={0.75} sx={{ py: 3, alignItems: 'center', textAlign: 'center' }}>
+                      <CheckCircleIcon color="success" />
+                      <Typography variant="subtitle2">
+                        {t('pos.orderPlaced', 'Order placed')}
+                        {placedOrder.call_number ? (
+                          <>
+                            {' · '}
+                            {t('pos.callNumber', 'Number')}: <strong style={{ fontSize: '1.4em' }}>{placedOrder.call_number}</strong>
+                          </>
+                        ) : null}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        <bdi><code>{placedOrder.order_number}</code></bdi> · <bdi>{MoneyUtil.formatCurrency(placedOrder.total_amount)} {currency}</bdi>
+                      </Typography>
+                      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                        <Button size="small" variant="outlined" color="success" onClick={() => setCheckoutModalOpen(true)} sx={{ fontWeight: 'bold' }}>
+                          {t('pos.cartBar.payNow')}
+                        </Button>
+                        <IconButton size="small" aria-label={t('common.close', 'Close')} onClick={() => setPlacedOrder(null)}>
+                          <ClearIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    </Stack>
+                  ) : (
                   <Box sx={{ py: 6, textAlign: 'center' }}>
                     <Typography variant="body2" color="text.secondary">
                       Cart is empty. Tap products to add items.
                     </Typography>
                   </Box>
+                  )
                 ) : (
                   <Stack spacing={1}>
                     {uncertainDraftId && <Alert severity="warning">{t('pos.carry.uncertain')}</Alert>}
@@ -2469,62 +2530,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
               <Divider sx={{ mb: 1.5 }} />
 
-              {/* Compact Coupon Code & Manual Discount Bar */}
-              <Stack direction="row" spacing={1} sx={{ mb: 1.25, alignItems: 'center' }}>
-                <VersionTag feature="pos.coupon" />
-                <PosFeatureGate off={!features.discounts} grow>
-                <TextField
-                  size="small"
-                  disabled={!features.discounts}
-                  placeholder="Coupon Code"
-                  value={couponInput}
-                  onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleApplyCoupon();
-                    }
-                  }}
-                  fullWidth
-                  slotProps={{
-                    input: {
-                      endAdornment: (couponInput || appliedCouponCode) ? (
-                        <InputAdornment position="end">
-                          <IconButton size="small" onClick={handleClearCoupon} sx={{ p: 0.25 }}>
-                            <ClearIcon fontSize="small" />
-                          </IconButton>
-                        </InputAdornment>
-                      ) : null,
-                    },
-                  }}
-                />
-                </PosFeatureGate>
-                <Button
-                  variant={appliedCouponCode && appliedCouponCode === couponInput.trim() ? 'contained' : 'outlined'}
-                  color={appliedCouponCode && appliedCouponCode === couponInput.trim() ? 'success' : 'primary'}
-                  size="small"
-                  onClick={handleApplyCoupon}
-                  disabled={!couponInput.trim() || (appliedCouponCode === couponInput.trim())}
-                  sx={{ fontWeight: 'bold', flexShrink: 0, px: 1.75 }}
-                >
-                  {appliedCouponCode && appliedCouponCode === couponInput.trim() ? 'Applied' : 'Apply'}
-                </Button>
-                <PosFeatureGate off={!features.discounts} title="Configure Cashier Manual Discount in modal">
-                  <Button
-                    variant={appliedManualDiscount ? 'contained' : 'outlined'}
-                    color={appliedManualDiscount ? 'warning' : 'inherit'}
-                    size="small"
-                    disabled={!features.discounts}
-                    startIcon={<LocalOfferIcon fontSize="small" />}
-                  onClick={() => setManualDiscountModalOpen(true)}
-                  aria-keyshortcuts="F6"
-                    sx={{ fontWeight: 600, flexShrink: 0, whiteSpace: 'nowrap' }}
-                  >
-                    {appliedManualDiscount ? 'Discount (Active)' : 'Discount'}
-                  </Button>
-                </PosFeatureGate>
-              </Stack>
-
               {/* Discount Feedback / Active Discount Chip */}
               {discountMessage && (
                 <Alert
@@ -2563,7 +2568,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
               )}
 
               {/* Financial Totals Summary */}
-              <Stack spacing={0.75} sx={{ mb: 2, mt: 'auto' }}>
+              <Stack spacing={0.5} sx={{ mb: 1.5, mt: 'auto', flexShrink: 0 }}>
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                   <Typography variant="body2" color="text.secondary">{t('pos.totals.subtotal')}</Typography>
                   <Typography variant="body2">{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(cartSubtotal) })}</Typography>
@@ -2578,16 +2583,31 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                     <Typography variant="body2">{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(quotedDeliveryFee) })}</Typography>
                   </Stack>
                 )}
-                {MoneyUtil.greaterThan(appliedDiscountAmount, '0') && (
-                  <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
+                {/* The discount line is always there: it is also the way to a discount or a coupon. */}
+                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                  <PosFeatureGate off={!features.discounts} title={t('pos.cartBar.discount')}>
+                    <Button
+                      size="small"
+                      color={hasDiscount ? 'error' : 'primary'}
+                      disabled={!features.discounts}
+                      startIcon={<LocalOfferIcon sx={{ fontSize: 16 }} />}
+                      onClick={() => setManualDiscountModalOpen(true)}
+                      aria-keyshortcuts="F6"
+                      sx={{ py: 0, px: 0.75, minWidth: 0, marginInlineStart: -0.75, fontWeight: 600, fontSize: '0.8125rem', lineHeight: 1.6 }}
+                    >
                       {t('pos.totals.discount')}
-                    </Typography>
+                    </Button>
+                  </PosFeatureGate>
+                  {MoneyUtil.greaterThan(appliedDiscountAmount, '0') ? (
                     <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold' }}>
                       -{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(appliedDiscountAmount) })}
                     </Typography>
-                  </Stack>
-                )}
+                  ) : (
+                    <Typography variant="body2" color="text.disabled">
+                      —
+                    </Typography>
+                  )}
+                </Stack>
                 <Divider />
                 <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', pt: 0.5 }}>
                   <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t('pos.totals.totalDue')}</Typography>
@@ -2597,57 +2617,52 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                 </Stack>
               </Stack>
 
-              {/* Bottom Place Order CTA */}
-              <Stack spacing={1}>
-                {/* 1-Click Direct Terminal Pay (90% Standard in Iran) */}
-                <Button
-                  variant="contained"
-                  color="primary"
-                  size="large"
-                  fullWidth
-                  disabled={cart.length === 0 || terminalPayLoading}
-                  onClick={handleDirectTerminalPay}
-                  aria-keyshortcuts="F9"
-                  startIcon={terminalPayLoading ? <CircularProgress size={22} color="inherit" /> : <PointOfSaleIcon sx={{ fontSize: 24 }} />}
-                  sx={{
-                    fontWeight: 800,
-                    py: 1.35,
-                    fontSize: '1.02rem',
-                    borderRadius: 1.5,
-                    boxShadow: (theme) => theme.customShadows?.primary || 3,
-                  }}
-                >
-                  {terminalPayLoading
-                    ? 'در حال ارسال به کارتخوان و تسویه...'
-                    : 'پرداخت سریع کارتخوان (PC-POS)'}
-                </Button>
-
-                <Stack direction="row" spacing={1.5}>
-                  <PosFeatureGate off={!features.park}>
+              {/* Hold, place and pay in one row: stacked, they took two rows from the cart's lines. */}
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'stretch', flexShrink: 0 }}>
+                <PosFeatureGate off={!features.park}>
                   <Button
                     variant="outlined"
                     color="warning"
                     disabled={!features.park || cart.length === 0 || holdingOrder}
                     onClick={handleHoldOrder}
                     startIcon={holdingOrder ? <CircularProgress size={18} color="inherit" /> : <PauseIcon />}
-                    sx={{ fontWeight: 'bold', py: 1, flexShrink: 0 }}
+                    sx={{ fontWeight: 'bold', flexShrink: 0, px: 1.5, whiteSpace: 'nowrap' }}
                   >
                     {holdingOrder ? 'Holding…' : 'Hold'}
                   </Button>
-                  </PosFeatureGate>
-                  <Button
-                    variant="outlined"
-                    color="inherit"
-                    size="medium"
-                    fullWidth
-                    disabled={cart.length === 0}
-                    onClick={handlePlaceOrder}
-                    aria-keyshortcuts="F8"
-                    sx={{ fontWeight: 'bold', py: 1, fontSize: '0.92rem' }}
-                  >
-                    {activeDraftOrderId ? 'Update & Place' : 'Place Order'}
-                  </Button>
-                </Stack>
+                </PosFeatureGate>
+                <Button
+                  variant="outlined"
+                  color="inherit"
+                  disabled={cart.length === 0}
+                  onClick={handlePlaceOrder}
+                  aria-keyshortcuts="F8"
+                  sx={{ fontWeight: 'bold', flexShrink: 0, px: 1.25, whiteSpace: 'nowrap' }}
+                >
+                  {activeDraftOrderId ? 'Update & Place' : 'Place Order'}
+                </Button>
+                {/* 1-Click Direct Terminal Pay (90% Standard in Iran) */}
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  disabled={cart.length === 0 || terminalPayLoading}
+                  onClick={handleDirectTerminalPay}
+                  aria-keyshortcuts="F9"
+                  startIcon={terminalPayLoading ? <CircularProgress size={20} color="inherit" /> : <PointOfSaleIcon sx={{ fontSize: 22 }} />}
+                  sx={{
+                    flexGrow: 1,
+                    minWidth: 0,
+                    fontWeight: 800,
+                    py: 1.25,
+                    fontSize: '1.02rem',
+                    borderRadius: 1.5,
+                    boxShadow: (theme) => theme.customShadows?.primary || 3,
+                  }}
+                >
+                  {/* The spinner says it is being sent; the label stays short (PM, 2026-10-05). */}
+                  PC-POS
+                </Button>
               </Stack>
             </CardContent>
           </Card>
@@ -2664,7 +2679,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       >
         <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
           <LocalOfferIcon color="primary" />
-          Apply Manual Cashier Discount
+          Discount & Coupon
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           {error && (
@@ -2673,8 +2688,48 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
             </Alert>
           )}
           <Stack spacing={2}>
-            {/* Calculation Type Toggle */}
+            {/* Coupon code: here rather than in the cart, where it held a row on every order. */}
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', pt: 1 }}>
+              <VersionTag feature="pos.coupon" />
+              <TextField
+                size="small"
+                placeholder="Coupon Code"
+                value={couponInput}
+                onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleApplyCoupon();
+                  }
+                }}
+                fullWidth
+                slotProps={{
+                  input: {
+                    endAdornment: (couponInput || appliedCouponCode) ? (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={handleClearCoupon} sx={{ p: 0.25 }}>
+                          <ClearIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ) : null,
+                  },
+                }}
+              />
+              <Button
+                variant={appliedCouponCode && appliedCouponCode === couponInput.trim() ? 'contained' : 'outlined'}
+                color={appliedCouponCode && appliedCouponCode === couponInput.trim() ? 'success' : 'primary'}
+                onClick={handleApplyCoupon}
+                disabled={!couponInput.trim() || (appliedCouponCode === couponInput.trim())}
+                sx={{ fontWeight: 'bold', flexShrink: 0, whiteSpace: 'nowrap' }}
+              >
+                {appliedCouponCode && appliedCouponCode === couponInput.trim() ? t('pos.cartBar.couponApplied') : t('pos.cartBar.couponApply')}
+              </Button>
+            </Stack>
+
+            <Divider />
+
+            {/* Calculation Type Toggle */}
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <ToggleButtonGroup
                 size="small"
                 exclusive

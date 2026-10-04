@@ -195,6 +195,15 @@
     "scopeChain": "All branches"
   },
   "pos": {
+    "cartBar": {
+      "draft": "Held draft",
+      "draftCancel": "Stop editing this held draft",
+      "discount": "Discount / coupon (F6)",
+      "payNow": "Checkout / pay now",
+      "couponApply": "Apply coupon",
+      "couponApplied": "Applied",
+      "shiftMenu": "Register and shift"
+    },
     "offline": {
       "unavailable": "Not available offline",
       "notOnMenu": "This item is not on the branch menu.",
@@ -257,6 +266,8 @@
       "totalDue": "Total Due:"
     },
     "deliveryContext": {
+      "feeLabel": "Delivery price ({{currency}})",
+      "feeReset": "Back to the zone's price",
       "customerRequired": "Select a customer for delivery",
       "addressRequired": "Select a delivery address",
       "zoneRequired": "Select a delivery zone",

@@ -113,6 +113,10 @@ export class OrderHeader {
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
   delivery_fee: string;
 
+  /** The delivery price a cashier typed in place of the zone's fee; null charges the zone's. */
+  @Column({ type: 'numeric', precision: 19, scale: 4, nullable: true })
+  delivery_fee_manual: string | null;
+
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
   discount_total: string;
 

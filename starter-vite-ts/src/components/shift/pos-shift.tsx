@@ -6,7 +6,19 @@ import { useTranslation } from 'react-i18next';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
-import { Card, Chip, Paper, Stack, Button, Typography, CircularProgress } from '@mui/material';
+import {
+  Card,
+  Chip,
+  Menu,
+  Paper,
+  Stack,
+  Button,
+  Divider,
+  MenuItem,
+  Typography,
+  ListItemIcon,
+  CircularProgress,
+} from '@mui/material';
 
 import { fTime, fDateTime } from 'src/utils/format-time';
 
@@ -83,6 +95,87 @@ export function PosShiftBar({ register }: { register: RegisterShiftState }) {
       </Paper>
 
       <BusinessDayEndedAlert register={register} />
+
+      <CloseShiftDialog
+        open={closeOpen}
+        onClose={() => setCloseOpen(false)}
+        shiftId={shift.id}
+        shiftNumber={shift.shift_number}
+        onClosed={register.refresh}
+      />
+    </>
+  );
+}
+
+/**
+ * The same controls as `PosShiftBar`, folded into a chip for the cart's header: a full-width
+ * bar above the register cost it a row of height all day for something used once a shift.
+ */
+export function PosShiftChip({ register }: { register: RegisterShiftState }) {
+  const { t } = useTranslation();
+  const { features } = usePosSource();
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [closeOpen, setCloseOpen] = useState(false);
+  const { terminal, shift } = register;
+
+  if (!terminal || !shift) return null;
+
+  const openedEarlier = !!shift.opened_at && new Date(shift.opened_at).toDateString() !== new Date().toDateString();
+
+  return (
+    <>
+      <Chip
+        size="small"
+        variant="outlined"
+        // A shift left open from an earlier day stands out, as it does on the bar.
+        color={openedEarlier ? 'warning' : 'success'}
+        icon={<PointOfSaleIcon />}
+        onClick={(e) => setAnchorEl(e.currentTarget)}
+        aria-label={t('pos.cartBar.shiftMenu')}
+        aria-haspopup="menu"
+        label={
+          <span>
+            {terminal.name} · {t('shift.bar.shift', 'Shift')} <span dir="ltr">#{shift.shift_number}</span>
+          </span>
+        }
+        // In a narrow cart header the chip gives way first, down to its icon.
+        sx={{ minWidth: 32, flexShrink: 100, fontWeight: 600 }}
+      />
+      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
+        <Stack sx={{ px: 2, py: 1, gap: 0.25 }}>
+          <Typography variant="subtitle2">
+            {terminal.name} ({terminal.code})
+          </Typography>
+          <Typography variant="body2">
+            {t('shift.bar.shift', 'Shift')} <span dir="ltr">#{shift.shift_number}</span>
+          </Typography>
+          <Typography
+            variant="caption"
+            color={openedEarlier ? 'warning.main' : 'text.secondary'}
+            sx={openedEarlier ? { fontWeight: 700 } : undefined}
+          >
+            {t('shift.bar.since', 'Open since {{time}}', {
+              time: openedEarlier ? fDateTime(shift.opened_at) : fTime(shift.opened_at),
+            })}
+          </Typography>
+        </Stack>
+        <Divider />
+        <PosFeatureGate off={!features.shiftActions}>
+          <MenuItem
+            disabled={!features.shiftActions}
+            onClick={() => {
+              setAnchorEl(null);
+              setCloseOpen(true);
+            }}
+            sx={{ color: 'error.main' }}
+          >
+            <ListItemIcon sx={{ color: 'inherit' }}>
+              <LockIcon fontSize="small" />
+            </ListItemIcon>
+            {t('shift.close.title', 'Close shift')}
+          </MenuItem>
+        </PosFeatureGate>
+      </Menu>
 
       <CloseShiftDialog
         open={closeOpen}

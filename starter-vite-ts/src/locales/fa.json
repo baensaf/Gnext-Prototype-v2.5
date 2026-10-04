@@ -195,6 +195,15 @@
     "scopeChain": "همه شعب"
   },
   "pos": {
+    "cartBar": {
+      "draft": "پیش‌نویس نگه‌داشته",
+      "draftCancel": "پایان ویرایش این پیش‌نویس",
+      "discount": "تخفیف / کد تخفیف (F6)",
+      "payNow": "تسویه / پرداخت",
+      "couponApply": "اعمال کد تخفیف",
+      "couponApplied": "اعمال شد",
+      "shiftMenu": "صندوق و شیفت"
+    },
     "offline": {
       "unavailable": "در حالت آفلاین در دسترس نیست",
       "notOnMenu": "این کالا در منوی شعبه نیست.",
@@ -257,6 +266,8 @@
       "totalDue": "مبلغ قابل پرداخت:"
     },
     "deliveryContext": {
+      "feeLabel": "هزینه ارسال ({{currency}})",
+      "feeReset": "بازگشت به هزینه محدوده",
       "customerRequired": "برای ارسال، یک مشتری انتخاب کنید",
       "addressRequired": "یک نشانی ارسال انتخاب کنید",
       "zoneRequired": "یک منطقه ارسال انتخاب کنید",

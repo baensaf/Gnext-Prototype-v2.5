@@ -10,6 +10,7 @@ import {
   Min,
   Max,
   IsNumberString,
+  Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ManualDiscountDto } from '../../discounts/dtos/discounts.dto';
@@ -107,6 +108,11 @@ export class OrderCreateDto {
   @IsUUID()
   delivery_zone_id?: string;
 
+  /** The delivery price typed at the register in place of the zone's fee; null goes back to it. */
+  @IsOptional()
+  @Matches(/^\d{1,15}(\.\d{1,4})?$/)
+  delivery_fee?: string | null;
+
   @IsOptional()
   @IsString()
   coupon_code?: string;
@@ -171,6 +177,11 @@ export class OrderUpdateDto {
   @IsOptional()
   @IsUUID()
   delivery_zone_id?: string;
+
+  /** The delivery price typed at the register in place of the zone's fee; null goes back to it. */
+  @IsOptional()
+  @Matches(/^\d{1,15}(\.\d{1,4})?$/)
+  delivery_fee?: string | null;
 
   @IsOptional()
   @IsString()

@@ -52,6 +52,7 @@ import {
 } from './order-list';
 import Decimal from 'decimal.js';
 import { MoneyUtil } from '../../common/utils/money.util';
+import { courierDeliveryFee } from '../delivery/courier-pay';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import {
@@ -560,6 +561,7 @@ export class OrderService {
         customer_id: dto.customer_id || null,
         customer_address_id: dto.delivery_address_id || null,
         delivery_zone_id: dto.delivery_zone_id || null,
+        delivery_fee_manual: dto.delivery_fee ?? null,
         table_id: dto.table_id || null,
         table_number: dto.table_number || null,
         guest_count: dto.guest_count || null,
@@ -634,6 +636,7 @@ export class OrderService {
       if (dto.channel !== undefined) order.channel = dto.channel;
       if (dto.delivery_address_id !== undefined) order.customer_address_id = dto.delivery_address_id;
       if (dto.delivery_zone_id !== undefined) order.delivery_zone_id = dto.delivery_zone_id;
+      if (dto.delivery_fee !== undefined) order.delivery_fee_manual = dto.delivery_fee;
       if (dto.currency_code !== undefined) order.currency_code = dto.currency_code;
 
       await this.applyDeliveryZoneFee(tenantId, order, em);
@@ -936,6 +939,10 @@ export class OrderService {
           discountTotal: order.discount_total,
           grandTotal: order.grand_total,
           consideredDiscounts: quoteRes.consideredDiscounts,
+          // Who changed a delivery price, from what: the zone's fee can change afterwards.
+          ...(deliveryContext && order.delivery_fee_manual !== null && order.delivery_fee_manual !== undefined
+            ? { deliveryFeeManual: order.delivery_fee_manual, deliveryZoneFee: deliveryContext.zone.fee }
+            : {}),
         },
       });
       await em.save(OrderStateEvent, stateEvt);
@@ -1065,27 +1072,30 @@ export class OrderService {
     return await this.completeWhenPaidInFull(tenantId, orderId, userId, correlationId);
   }
 
-  /** Derive delivery cost from the selected active branch zone; never accept a client fee. */
+  /**
+   * The delivery cost is the selected active branch zone's fee, unless the cashier typed a price
+   * for this order (`delivery_fee_manual`). A typed price belongs to a delivery with a zone: it
+   * is dropped when the order stops being one, so it cannot charge for a journey nobody makes.
+   */
   private async applyDeliveryZoneFee(tenantId: string, order: OrderHeader, em: EntityManager) {
-    if (order.order_type !== 'DELIVERY') {
+    if (order.order_type !== 'DELIVERY' || !order.delivery_zone_id) {
       order.delivery_fee = '0.0000';
-      return;
-    }
-    if (!order.delivery_zone_id) {
-      order.delivery_fee = '0.0000';
+      order.delivery_fee_manual = null;
       return;
     }
     const zone = await em.findOne(DeliveryZone, {
       where: { id: order.delivery_zone_id, tenant_id: tenantId, branch_id: order.branch_id, is_active: true },
     });
-    order.delivery_fee = zone?.fee || '0.0000';
+    order.delivery_fee = order.delivery_fee_manual ?? (zone?.fee || '0.0000');
   }
 
   /**
    * Puts a delivery order on the delivery board: a new record, or the one it had before it
    * stopped being a delivery, back to unassigned with today's address and zone. A delivery
    * already open is left as it is. A Snappfood order has no zone of ours; its fee is what
-   * Snappfood charged the customer for the ride.
+   * Snappfood charged the customer for the ride. The delivery's fee is what the courier is paid
+   * for the ride: the zone's, or the price the cashier typed when that is more. A price typed
+   * lower (a free delivery) is the branch's gift, not the courier's.
    */
   private async openDelivery(
     em: EntityManager,
@@ -1104,7 +1114,7 @@ export class OrderService {
       zone_id: context.zone?.id ?? null,
       courier_id: null,
       state: 'UNASSIGNED',
-      fee: context.fee ?? context.zone?.fee ?? '0.0000',
+      fee: context.fee ?? courierDeliveryFee(context.zone?.fee, order.delivery_fee_manual),
       currency_code: order.currency_code || 'IRR',
       failure_reason: null,
       address_snapshot: {
@@ -1151,7 +1161,7 @@ export class OrderService {
     if (!zone) throw new BadRequestException('DELIVERY_ZONE_NOT_FOUND');
     if (!zone.is_active) throw new BadRequestException('DELIVERY_ZONE_INACTIVE');
     if (zone.branch_id !== order.branch_id) throw new BadRequestException('DELIVERY_ZONE_BRANCH_MISMATCH');
-    order.delivery_fee = zone.fee;
+    order.delivery_fee = order.delivery_fee_manual ?? zone.fee;
     return { address, zone };
   }
 
@@ -1854,6 +1864,7 @@ export class OrderService {
         // would keep charging for a journey nobody is making.
         order.delivery_zone_id = null as any;
         order.delivery_fee = '0.0000';
+        order.delivery_fee_manual = null;
 
         if (to === 'DINE_IN') {
           if (dto.tableId) {
