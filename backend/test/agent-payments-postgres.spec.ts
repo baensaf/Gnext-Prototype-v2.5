@@ -244,6 +244,20 @@ describe('card payments via the branch agent (PostgreSQL)', () => {
     expect(await paymentRow(intent.id)).toMatchObject({ status: 'SUCCEEDED', reference: '999999999999', failure_code: null });
   });
 
+  it('records a card taken on another reader without sending it to the terminal', async () => {
+    const { agent } = await connect();
+    const { order, intent, command } = await charge(agent);
+    await answer(agent, command, { status: 'DECLINED', error: { code: 'DECLINED', message: 'Terminal out of paper' } });
+    expect(await paymentRow(intent.id)).toMatchObject({ status: 'FAILED' });
+
+    const paid = await payments.processPayment(tenantId, intent.id, { offTerminal: true, externalReference: '123456' }, cashierId);
+    expect(paid).toMatchObject({ status: 'SUCCEEDED', reference: '123456' });
+    const attempts = await attemptsOf(intent.id);
+    expect(attempts[attempts.length - 1]).toMatchObject({ adapter: 'MANUAL', status: 'SUCCEEDED' });
+    expect(attempts).toHaveLength(2);
+    expect((await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: order.id })).paid_total).toBe(`${AMOUNT}.0000`);
+  });
+
   it('never fails a charge the terminal could not confirm, and settles it by asking the terminal', async () => {
     const { agent } = await connect();
     const { order, intent, command } = await charge(agent);

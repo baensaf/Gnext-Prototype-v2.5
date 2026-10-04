@@ -4,43 +4,34 @@ import type { PaymentMethod } from 'src/api/settingsApi';
 
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 
 import PrintIcon from '@mui/icons-material/Print';
-import DialpadIcon from '@mui/icons-material/Dialpad';
-import FlashOnIcon from '@mui/icons-material/FlashOn';
 import PaymentIcon from '@mui/icons-material/Payment';
+import PaymentsIcon from '@mui/icons-material/Payments';
 import BackspaceIcon from '@mui/icons-material/Backspace';
+import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import {
   Box,
   Chip,
   Grid,
+  Menu,
   Stack,
   Alert,
   Paper,
-  Table,
   Dialog,
   Button,
-  Select,
   Divider,
   MenuItem,
-  TableRow,
   TextField,
-  TableBody,
-  TableCell,
-  TableHead,
   Typography,
-  InputLabel,
   DialogTitle,
-  FormControl,
   DialogContent,
   DialogActions,
-  TableContainer,
   CircularProgress,
 } from '@mui/material';
 
-import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
@@ -50,11 +41,28 @@ import { VersionTag } from 'src/components/version-tag';
 import { toast, showErrorToast } from 'src/components/snackbar';
 import { UnconfirmedChargeActions } from 'src/components/payment-terminal/unconfirmed-charge-actions';
 
-/**
- * The amount the keypad starts from. The API sends "42292000.0000": shown as is it looked odd,
- * and a digit typed after it made 42292000.00001.
- */
+/** The API sends "42292000.0000"; the keypad works on whole rials. */
 const wholeRials = (amount?: string | null) => String(amount || '0').replace(/\.0*$/, '');
+
+/** The counter's card terminal. Falling back to any other method recorded card sales wrongly. */
+const CARD_KINDS = ['CARD_POS', 'CARD', 'POS', 'NETWORK_POS'];
+/** A courier's reader is settled with the courier, never taken at the counter. */
+const COURIER_KINDS = ['MOBILE_POS', 'MOBILE'];
+
+/** How long the settled order stays on screen before the panel closes itself. */
+const CLOSE_AFTER_MS = 2500;
+
+const KEYPAD = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '000', '0'];
+
+/** A payment that needs a reference, or one taken on another reader, before it is recorded. */
+type ReferencePrompt = {
+  method: PaymentMethod;
+  offTerminal: boolean;
+  /** Rials. */
+  amount: string;
+  /** The failed charge this one replaces. */
+  replaces?: string;
+};
 
 interface CheckoutModalProps {
   open: boolean;
@@ -72,16 +80,22 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const [order, setOrder] = useState<OrderHeader | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [selectedMethodId, setSelectedMethodId] = useState('');
-  const [payAmount, setPayAmount] = useState('');
-  const [refNumber, setRefNumber] = useState('');
+  // The amount on the keypad, in tomans as typed. `fresh` is the remainder put there for the
+  // cashier: the first digit typed replaces it rather than adding to it.
+  const [entry, setEntry] = useState({ value: '', fresh: true });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [terminalProcessing, setTerminalProcessing] = useState(false);
-  const [showNumpad, setShowNumpad] = useState(false);
+  // The method being taken right now; the card terminal can hold this for minutes.
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const [otherAnchor, setOtherAnchor] = useState<HTMLElement | null>(null);
+  const [prompt, setPrompt] = useState<ReferencePrompt | null>(null);
+  const [reference, setReference] = useState('');
   // Cash handed over beyond what is due: the drawer keeps only the due amount, and the
   // cashier gives this back.
   const [changeDue, setChangeDue] = useState<string | null>(null);
+
+  const offerRemainder = (o: OrderHeader | null) =>
+    setEntry({ value: toToman(wholeRials(o?.due_amount || o?.outstanding_total)), fresh: true });
 
   const loadData = useCallback(async () => {
     if (!orderId) return;
@@ -89,34 +103,19 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     try {
       const o = await pos.orders.getOrderById(orderId);
       setOrder(o);
-      setPayAmount(wholeRials(o.due_amount || o.outstanding_total));
+      offerRemainder(o);
 
       const pms = await pos.settings.getPaymentMethods();
-      const activeMethods = pms.filter((m) => m.is_active);
-      setPaymentMethods(activeMethods);
+      setPaymentMethods(pms.filter((m) => m.is_active));
 
-      if (activeMethods.length > 0) {
-        // Prefer CARD / POS (کارتخوان) as the 90% default in Iran
-        const preferredPos = activeMethods.find(
-          (m) =>
-            m.kind === 'CARD' ||
-            m.kind === 'POS' ||
-            m.code?.toUpperCase().includes('POS') ||
-            m.name?.includes('کارتخوان') ||
-            m.name?.toLowerCase().includes('card')
-        );
-        setSelectedMethodId(preferredPos ? preferredPos.id : activeMethods[0].id);
-      }
-
-      const pays = await pos.payments.getOrderPayments(orderId);
-      setPayments(pays);
+      setPayments(await pos.payments.getOrderPayments(orderId));
       setError(null);
     } catch (err: any) {
-      setError(err.detail || 'Failed to load checkout details');
+      setError(err.detail || t('pos.pay.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [orderId, pos]);
+  }, [orderId, pos, t]);
 
   useEffect(() => {
     if (open && orderId) {
@@ -129,47 +128,101 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     setChangeDue(null);
   }, [orderId]);
 
-  const handleAddPayment = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!orderId || !selectedMethodId || !payAmount) return;
+  const cashMethod = paymentMethods.find((m) => m.kind === 'CASH');
+  const cardMethod = paymentMethods.find((m) => CARD_KINDS.includes(m.kind));
+  const otherMethods = paymentMethods.filter(
+    (m) => m.id !== cashMethod?.id && m.id !== cardMethod?.id && !COURIER_KINDS.includes(m.kind)
+  );
+  // The agent selling offline drives one terminal and records nothing taken elsewhere.
+  const canUseOtherReader = !!cardMethod && pos.kind !== 'agent';
 
-    const method = paymentMethods.find((m) => m.id === selectedMethodId);
-    const due = order?.due_amount || '0';
-    const overTendered = method?.kind === 'CASH' && MoneyUtil.greaterThan(payAmount, due);
+  const due = order?.due_amount || '0';
+  const isFullyPaid = order ? MoneyUtil.isZero(order.due_amount) : false;
+  const amountRials = fromToman(entry.value) || '0';
+  const busy = loading || !!payingId;
+
+  const pay = async (
+    method: PaymentMethod | undefined,
+    opts: { amount?: string; offTerminal?: boolean; reference?: string; replaces?: string } = {}
+  ) => {
+    if (!orderId || !order || busy) return;
+    if (!method) {
+      setError(t('pos.noTenderMethod', 'No active payment method for this tender'));
+      return;
+    }
+    const amount = opts.amount ?? amountRials;
+    if (!MoneyUtil.greaterThan(amount, '0')) {
+      setError(t('pos.pay.enterAmount'));
+      return;
+    }
+    const over = MoneyUtil.greaterThan(amount, due);
+    // Only cash can be handed over in excess; a card is charged what is typed.
+    if (over && method.kind !== 'CASH') {
+      setError(t('pos.pay.overDue'));
+      return;
+    }
+
+    // A charge recorded from another reader waits on nothing, so no button shows it as charging.
+    setPayingId(opts.offTerminal ? 'other-reader' : method.id);
+    setError(null);
     try {
-      setLoading(true);
+      // A failed charge is cleared before it is taken again, so the list shows one row for it.
+      if (opts.replaces) await pos.payments.voidPayment(opts.replaces).catch(() => undefined);
+
       const res = await pos.payments.postPayment({
         order_id: orderId,
-        payment_method_id: selectedMethodId,
-        amount: overTendered ? due : payAmount,
-        reference_number: refNumber || undefined,
+        payment_method_id: method.id,
+        amount: over ? due : amount,
+        reference_number: opts.reference || undefined,
+        off_terminal: opts.offTerminal || undefined,
       });
 
       setOrder(res.order);
-      setPayAmount(wholeRials(res.order?.due_amount));
-      setRefNumber('');
-      setChangeDue(overTendered ? MoneyUtil.subtract(payAmount, due) : null);
-      if (overTendered) {
+      offerRemainder(res.order);
+      const change = over ? MoneyUtil.subtract(amount, due) : null;
+      setChangeDue(change);
+      if (change) {
         // Screens that close this dialog once the order is settled would hide the alert.
-        toast.warning(
-          `${t('pos.changeDue', 'Change to give back')}: ${MoneyUtil.formatCurrency(MoneyUtil.subtract(payAmount, due))} ${currency}`,
-          { duration: 15000 }
-        );
+        toast.warning(`${t('pos.changeDue', 'Change to give back')}: ${MoneyUtil.formatCurrency(change)} ${currency}`, {
+          duration: 15000,
+        });
       }
-
-      const updatedPays = await pos.payments.getOrderPayments(orderId);
-      setPayments(updatedPays);
-      toast.success(t('pos.paymentSuccess', 'Payment recorded successfully'));
+      setPayments(await pos.payments.getOrderPayments(orderId));
 
       if (res.order && MoneyUtil.isZero(res.order.due_amount) && onPaymentComplete) {
         onPaymentComplete();
       }
     } catch (err: any) {
-      const errorMsg = err.detail || 'Payment failed';
+      const errorMsg = err.detail || t('pos.pay.failed');
       setError(errorMsg);
       showErrorToast(err, errorMsg);
+      // The charge that failed is in the list, with what to do about it.
+      pos.payments
+        .getOrderPayments(orderId)
+        .then(setPayments)
+        .catch(() => undefined);
     } finally {
-      setLoading(false);
+      setPayingId(null);
+    }
+  };
+
+  // The latest `pay`, for the key handler, which is bound once per open.
+  const payRef = useRef(pay);
+  payRef.current = pay;
+  const cashRef = useRef(cashMethod);
+  cashRef.current = cashMethod;
+  const cardRef = useRef(cardMethod);
+  cardRef.current = cardMethod;
+
+  /** Starts a method that may need a reference first: a bank transfer, or another reader. */
+  const start = (method: PaymentMethod | undefined, offTerminal = false, amount = amountRials, replaces?: string) => {
+    setOtherAnchor(null);
+    if (!method) return;
+    if (offTerminal || method.requires_reference) {
+      setReference('');
+      setPrompt({ method, offTerminal, amount, replaces });
+    } else {
+      pay(method, { amount, replaces });
     }
   };
 
@@ -178,12 +231,11 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     try {
       setLoading(true);
       await pos.payments.voidPayment(paymentId);
-      const updatedPays = await pos.payments.getOrderPayments(orderId);
-      setPayments(updatedPays);
+      setPayments(await pos.payments.getOrderPayments(orderId));
       setError(null);
       toast.success(t('pos.paymentVoided', 'Payment attempt voided'));
     } catch (err: any) {
-      const errorMsg = err.detail || 'Failed to void payment';
+      const errorMsg = err.detail || t('pos.pay.voidFailed');
       setError(errorMsg);
       showErrorToast(err, errorMsg);
     } finally {
@@ -191,63 +243,31 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     }
   };
 
-  const handleFastTender = useCallback(
-    async (methodKind: 'CASH' | 'CARD' | 'POS') => {
-      if (!order || !orderId || MoneyUtil.isZero(order.due_amount)) return;
+  const pressDigit = (digit: string) =>
+    setEntry((prev) => ({
+      value: ((prev.fresh ? '' : prev.value) + digit).replace(/^0+/, ''),
+      fresh: false,
+    }));
 
-      // The counter's card reader is kind CARD_POS. Falling back to the first method in the
-      // list recorded card sales as bank transfers, so a missing tender is reported instead.
-      const cardKinds = ['CARD_POS', 'CARD', 'POS'];
-      const matchedMethod = paymentMethods.find((m) =>
-        methodKind === 'CASH' ? m.kind === 'CASH' : cardKinds.includes(m.kind)
-      );
-      if (!matchedMethod) {
-        setError(t('pos.noTenderMethod', 'No active payment method for this tender'));
-        return;
-      }
+  const pressBackspace = () => setEntry((prev) => ({ value: prev.fresh ? '' : prev.value.slice(0, -1), fresh: false }));
 
-      try {
-        setTerminalProcessing(true);
-        const res = await pos.payments.postPayment({
-          order_id: orderId,
-          payment_method_id: matchedMethod.id,
-          amount: order.due_amount || '0',
-          reference_number: undefined,
-        });
-
-        setOrder(res.order);
-        setPayAmount(wholeRials(res.order?.due_amount));
-        setRefNumber('');
-
-        const updatedPays = await pos.payments.getOrderPayments(orderId);
-        setPayments(updatedPays);
-        toast.success(t('pos.paymentSuccess', 'Payment recorded successfully'));
-
-        if (res.order && MoneyUtil.isZero(res.order.due_amount) && onPaymentComplete) {
-          onPaymentComplete();
-        }
-      } catch (err: any) {
-        const errorMsg = err.detail || 'Fast tender payment failed';
-        setError(errorMsg);
-        showErrorToast(err, errorMsg);
-      } finally {
-        setTerminalProcessing(false);
-      }
-    },
-    [order, orderId, paymentMethods, t, onPaymentComplete, pos]
-  );
-
-  // Hotkeys: F8 = Cash, F9 = Terminal POS
+  // The keyboard works the panel: digits type the amount, F8 takes it in cash, F9 on the card.
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || isFullyPaid || prompt) return undefined;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F8') {
+      // A field in a dialog over this one keeps its own typing.
+      if ((e.target as HTMLElement | null)?.closest?.('input, textarea')) return;
+      if (/^[0-9]$/.test(e.key)) {
+        pressDigit(e.key);
+      } else if (e.key === 'Backspace') {
+        pressBackspace();
+      } else if (e.key === 'F8') {
         e.preventDefault();
-        handleFastTender('CASH');
+        payRef.current(cashRef.current);
       } else if (e.key === 'F9') {
         e.preventDefault();
-        handleFastTender('CARD');
+        payRef.current(cardRef.current);
       }
     };
 
@@ -255,28 +275,15 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [open, handleFastTender]);
+  }, [open, isFullyPaid, prompt]);
 
-  // Touch Numpad handlers
-  const handleNumpadDigit = (digit: string) => {
-    setPayAmount((prev) => {
-      if (!prev || prev === '0') return digit;
-      return prev + digit;
-    });
-  };
-
-  const handleNumpadBackspace = () => {
-    setPayAmount((prev) => {
-      if (!prev || prev.length <= 1) return '';
-      return prev.slice(0, -1);
-    });
-  };
-
-  const handleNumpadClear = () => {
-    setPayAmount('');
-  };
-
-  const isFullyPaid = order ? MoneyUtil.isZero(order.due_amount) : false;
+  // A settled order with no change to hand back needs nothing more from the cashier.
+  useEffect(() => {
+    if (!open || !isFullyPaid || changeDue || onPaymentComplete) return undefined;
+    const timer = setTimeout(onClose, CLOSE_AFTER_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isFullyPaid, changeDue]);
 
   // Another copy on the branch's receipt printer. The first one printed by itself when the
   // order was paid; the browser's print dialog only helps a till with a desktop printer.
@@ -294,22 +301,48 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     }
   };
 
+  const methodName = (p: Payment) =>
+    paymentMethods.find((m) => m.id === p.method_id)?.name || p.method_kind;
+
+  // A cancelled attempt took no money and has nothing left to do.
+  const parts = payments.filter((p) => p.status !== 'CANCELLED');
+
+  const tenderButton = (
+    method: PaymentMethod | undefined,
+    label: string,
+    icon: React.ReactNode,
+    shortcut: string,
+    variant: 'contained' | 'outlined'
+  ) => (
+    <Button
+      fullWidth
+      size="large"
+      variant={variant}
+      color={variant === 'contained' ? 'primary' : 'inherit'}
+      disabled={busy || !method}
+      onClick={() => pay(method)}
+      aria-keyshortcuts={shortcut}
+      startIcon={payingId && payingId === method?.id ? <CircularProgress size={22} color="inherit" /> : icon}
+      sx={{ py: 2, fontSize: '1.05rem', fontWeight: 800, justifyContent: 'space-between' }}
+      endIcon={
+        <Typography component="span" variant="caption" sx={{ opacity: 0.7 }}>
+          {shortcut}
+        </Typography>
+      }
+    >
+      <Box component="span" sx={{ flexGrow: 1, textAlign: 'start' }}>
+        {label}
+      </Box>
+    </Button>
+  );
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-          <PaymentIcon color="primary" />
-          <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>
-            {t('pos.checkout', 'Checkout & Settlement')} — #{order?.order_number || ''}
-          </Typography>
-        </Stack>
-        <Chip
-          label={t('pos.posReady', 'PC-POS ready')}
-          color="success"
-          size="small"
-          variant="outlined"
-          sx={{ fontWeight: 600 }}
-        />
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+        <PaymentIcon color="primary" />
+        <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>
+          {t('pos.checkout', 'Checkout & Settlement')} — #{order?.order_number || ''}
+        </Typography>
       </DialogTitle>
 
       <DialogContent sx={{ pt: 2 }}>
@@ -320,299 +353,183 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         )}
 
         {order && (
-          <Stack spacing={2} sx={{ mb: 2, mt: 1 }}>
-            {changeDue && (
-              <Alert severity="warning" sx={{ py: 1.5, fontWeight: 700, fontSize: '1.1rem' }}>
-                {t('pos.changeDue', 'Change to give back')}: {MoneyUtil.formatCurrency(changeDue)} {currency}
-              </Alert>
-            )}
-            {/* Financial Summary Box */}
-            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'background.neutral' }}>
-              <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2" color="text.secondary">
-                  {t('orders.totalAmount', 'Total Amount')}:
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                  {MoneyUtil.formatCurrency(order.total_amount)} {currency}
-                </Typography>
-              </Stack>
-              <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2" color="text.secondary">
-                  {t('orders.paidAmount', 'Paid Amount')}:
-                </Typography>
-                <Typography variant="body2" color="success.main" sx={{ fontWeight: 'bold' }}>
-                  {MoneyUtil.formatCurrency(order.paid_amount)} {currency}
-                </Typography>
-              </Stack>
-              <Divider sx={{ my: 1 }} />
-              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  {t('orders.dueAmount', 'Remaining Due')}:
-                </Typography>
-                <Typography
-                  variant="h5"
-                  sx={{ fontWeight: 'bold', color: isFullyPaid ? 'success.main' : 'error.main' }}
-                >
-                  {MoneyUtil.formatCurrency(order.due_amount)} {currency}
-                </Typography>
-              </Stack>
-            </Paper>
+          <Grid container spacing={3} sx={{ mt: 0 }}>
+            {/* What is left, and what has been taken so far. */}
+            <Grid size={{ xs: 12, md: isFullyPaid ? 12 : 4 }}>
+              <Typography variant="body2" color="text.secondary">
+                {t('orders.totalAmount', 'Total Amount')}: {MoneyUtil.formatCurrency(order.total_amount)} {currency}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+                {t('orders.dueAmount', 'Remaining Due')}
+              </Typography>
+              <Typography variant="h4" sx={{ fontWeight: 'bold', color: isFullyPaid ? 'success.main' : 'error.main' }}>
+                {MoneyUtil.formatCurrency(order.due_amount)} {currency}
+              </Typography>
 
-            {isFullyPaid ? (
-              <Alert severity="success" sx={{ py: 1.5, fontWeight: 700 }}>
-                {t('pos.orderSettled', 'Order is fully settled!')}
-              </Alert>
-            ) : (
-              <Box sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}>
-                {/* Hero action: the card terminal is the default tender here. */}
-                <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main', display: 'block', mb: 1, letterSpacing: 0.5 }}>
-                  {t('pos.posSettlementLabel', 'One-click POS terminal settlement')}
-                </Typography>
+              {changeDue && (
+                <Alert severity="warning" sx={{ mt: 1.5, py: 1.5, fontWeight: 700, fontSize: '1.1rem' }}>
+                  {t('pos.changeDue', 'Change to give back')}: {MoneyUtil.formatCurrency(changeDue)} {currency}
+                </Alert>
+              )}
+              {isFullyPaid && (
+                <Alert severity="success" sx={{ mt: 1.5, py: 1.5, fontWeight: 700 }}>
+                  {t('pos.orderSettled', 'Order is fully settled!')}
+                </Alert>
+              )}
 
-                <Button
-                  fullWidth
-                  variant="contained"
-                  color="primary"
-                  size="large"
-                  disabled={terminalProcessing || loading}
-                  startIcon={terminalProcessing ? <CircularProgress size={22} color="inherit" /> : <PointOfSaleIcon sx={{ fontSize: 26 }} />}
-                  onClick={() => handleFastTender('CARD')}
-                  sx={{
-                    py: 1.5,
-                    fontSize: '1.05rem',
-                    fontWeight: 800,
-                    borderRadius: 1.5,
-                    boxShadow: (theme) => theme.customShadows?.primary || 3,
-                    mb: 1.5,
-                  }}
-                >
-                  {terminalProcessing
-                    ? 'ارسال به کارتخوان و ثبت تراکنش...'
-                    : `پرداخت با کارتخوان بانکی (PC-POS) — ${MoneyUtil.formatCurrency(order.due_amount)} ${currency}`}
-                </Button>
-
-                {/* Secondary Fast Cash */}
-                <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    color="success"
-                    startIcon={<FlashOnIcon />}
-                    onClick={() => handleFastTender('CASH')}
-                    sx={{ fontWeight: 700, py: 0.75 }}
-                  >
-                    تسویه نقدی دقیق
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    color="inherit"
-                    startIcon={<DialpadIcon />}
-                    onClick={() => setShowNumpad((prev) => !prev)}
-                    sx={{ fontWeight: 600, py: 0.75, flexShrink: 0 }}
-                  >
-                    {showNumpad ? 'مخفی‌سازی کیپد' : 'کیپد لمسی'}
-                  </Button>
+              {parts.length > 0 && (
+                <Stack divider={<Divider flexItem />} sx={{ mt: 2 }}>
+                  {parts.map((p) => {
+                    const unconfirmed = p.status === 'PROCESSING' && !!p.needs_terminal_check;
+                    const failed = p.status === 'FAILED';
+                    const isVoidable = p.status === 'PENDING' || failed;
+                    const isCard = CARD_KINDS.includes(p.method_kind);
+                    // What this charge was for, or what is left of it.
+                    const again = MoneyUtil.greaterThan(p.amount, due) ? wholeRials(due) : wholeRials(p.amount);
+                    return (
+                      <Box key={p.id} sx={{ py: 1 }}>
+                        <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {methodName(p)}
+                          </Typography>
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                            <Typography
+                              variant="body2"
+                              sx={{ fontWeight: 'bold', color: p.status === 'SUCCEEDED' ? 'success.main' : 'text.secondary' }}
+                            >
+                              {MoneyUtil.formatCurrency(p.amount)} {currency}
+                            </Typography>
+                            {p.status !== 'SUCCEEDED' && (
+                              <Chip
+                                size="small"
+                                color={failed || unconfirmed ? 'error' : 'warning'}
+                                label={
+                                  unconfirmed
+                                    ? t('payments.unconfirmed.status', 'Check terminal')
+                                    : failed
+                                      ? t('pos.pay.statusFailed')
+                                      : t('pos.pay.statusWaiting')
+                                }
+                              />
+                            )}
+                          </Stack>
+                        </Stack>
+                        {(p.reference_number || p.reference) && (
+                          <Typography variant="caption" color="text.secondary">
+                            {p.reference_number || p.reference}
+                          </Typography>
+                        )}
+                        {failed && p.failure_message && (
+                          <Typography variant="caption" color="error" sx={{ display: 'block' }}>
+                            {p.failure_message}
+                          </Typography>
+                        )}
+                        {unconfirmed && <UnconfirmedChargeActions payment={p} onChanged={loadData} />}
+                        {isVoidable && !isFullyPaid && (
+                          <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, flexWrap: 'wrap' }}>
+                            {failed && isCard && (
+                              <Button size="small" disabled={busy} onClick={() => pay(cardMethod, { amount: again, replaces: p.id })}>
+                                {t('common.retry', 'Retry')}
+                              </Button>
+                            )}
+                            {failed && isCard && canUseOtherReader && (
+                              <Button size="small" disabled={busy} onClick={() => start(cardMethod, true, again, p.id)}>
+                                {t('pos.pay.otherReader')}
+                              </Button>
+                            )}
+                            <Button size="small" color="error" disabled={busy} onClick={() => handleVoidPayment(p.id)}>
+                              {t('payments.void', 'Cancel')}
+                            </Button>
+                          </Stack>
+                        )}
+                      </Box>
+                    );
+                  })}
                 </Stack>
+              )}
+            </Grid>
 
-                <Divider sx={{ my: 1.5 }}>
-                  <Chip label="پرداخت ترکیبی یا مبالغ دلخواه (Split / Custom)" size="small" />
-                </Divider>
-
-                <Box component="form" onSubmit={handleAddPayment}>
-                  <Grid container spacing={2} sx={{ mb: 1.5 }}>
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <FormControl fullWidth size="small">
-                        <InputLabel>{t('payments.instrument', 'Payment Instrument')}</InputLabel>
-                        <Select
-                          value={selectedMethodId}
-                          label={t('payments.instrument', 'Payment Instrument')}
-                          onChange={(e) => setSelectedMethodId(e.target.value)}
+            {!isFullyPaid && (
+              <>
+                {/* The amount for this part. It starts as everything left, so paying in one go is one tap. */}
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <Paper variant="outlined" sx={{ px: 2, py: 1, borderRadius: 1.5, borderColor: 'primary.main' }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('payments.amount', 'Amount')} ({currency})
+                    </Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 'bold', textAlign: 'end' }} data-testid="pay-amount">
+                      {MoneyUtil.formatCurrency(amountRials)}
+                    </Typography>
+                  </Paper>
+                  <Button size="small" sx={{ my: 1 }} onClick={() => offerRemainder(order)}>
+                    {t('pos.pay.remaining')}
+                  </Button>
+                  {/* A keypad reads 1 2 3 from the left in Persian too. */}
+                  <Grid container spacing={1} dir="ltr">
+                    {KEYPAD.map((digit) => (
+                      <Grid size={{ xs: 4 }} key={digit}>
+                        <Button
+                          fullWidth
+                          variant="outlined"
+                          color="inherit"
+                          sx={{ fontWeight: 800, fontSize: '1.1rem', py: 1.25 }}
+                          onClick={() => pressDigit(digit)}
                         >
-                          {paymentMethods.map((m) => (
-                            <MenuItem key={m.id} value={m.id}>
-                              {m.name} ({m.kind || m.code})
-                              {m.kind === 'CUSTOMER_CREDIT' && (
-                                <VersionTag feature="pos.customerCredit" sx={{ ml: 1 }} />
-                              )}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-
-                    <Grid size={{ xs: 12, sm: 6 }}>
-                      <TextField
-                        size="small"
-                        label={`${t('payments.amount', 'Amount')} (${currency})`}
-                        type="number"
-                        required
+                          {digit}
+                        </Button>
+                      </Grid>
+                    ))}
+                    <Grid size={{ xs: 4 }}>
+                      <Button
                         fullWidth
-                        value={toToman(payAmount)}
-                        onChange={(e) => setPayAmount(fromToman(e.target.value))}
-                      />
+                        variant="outlined"
+                        color="inherit"
+                        sx={{ py: 1.25, height: '100%' }}
+                        onClick={pressBackspace}
+                        aria-label={t('pos.pay.backspace')}
+                      >
+                        <BackspaceIcon fontSize="small" />
+                      </Button>
                     </Grid>
                   </Grid>
+                </Grid>
 
-                  {/* On-Screen Touch Numpad */}
-                  {showNumpad && (
-                    <Paper
-                      variant="outlined"
-                      sx={{
-                        p: 1.5,
-                        mb: 2,
-                        borderRadius: 2,
-                        bgcolor: 'background.paper',
-                        border: '1px dashed',
-                        borderColor: 'primary.light',
-                      }}
-                    >
-                      <Grid container spacing={1}>
-                        {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
-                          <Grid size={{ xs: 4 }} key={digit}>
-                            <Button
-                              fullWidth
-                              variant="outlined"
-                              size="medium"
-                              sx={{ fontWeight: 800, fontSize: '1.1rem', py: 0.75 }}
-                              onClick={() => handleNumpadDigit(digit)}
-                            >
-                              {digit}
-                            </Button>
-                          </Grid>
-                        ))}
-                        <Grid size={{ xs: 4 }}>
-                          <Button
-                            fullWidth
-                            variant="outlined"
-                            size="medium"
-                            sx={{ fontWeight: 800, fontSize: '0.95rem', py: 0.75 }}
-                            onClick={() => handleNumpadDigit('000')}
-                          >
-                            000
-                          </Button>
-                        </Grid>
-                        <Grid size={{ xs: 4 }}>
-                          <Button
-                            fullWidth
-                            variant="outlined"
-                            size="medium"
-                            sx={{ fontWeight: 800, fontSize: '1.1rem', py: 0.75 }}
-                            onClick={() => handleNumpadDigit('0')}
-                          >
-                            0
-                          </Button>
-                        </Grid>
-                        <Grid size={{ xs: 4 }}>
-                          <Button
-                            fullWidth
-                            variant="outlined"
-                            color="error"
-                            size="medium"
-                            sx={{ py: 0.75 }}
-                            onClick={handleNumpadBackspace}
-                          >
-                            <BackspaceIcon fontSize="small" />
-                          </Button>
-                        </Grid>
-                        <Grid size={{ xs: 6 }}>
-                          <Button
-                            fullWidth
-                            variant="text"
-                            color="warning"
-                            size="small"
-                            sx={{ fontWeight: 700 }}
-                            onClick={handleNumpadClear}
-                          >
-                            پاک‌کردن (Clear)
-                          </Button>
-                        </Grid>
-                        <Grid size={{ xs: 6 }}>
-                          <Button
-                            fullWidth
-                            variant="text"
-                            color="primary"
-                            size="small"
-                            sx={{ fontWeight: 700 }}
-                            onClick={() => setPayAmount(wholeRials(order.due_amount))}
-                          >
-                            تسویه کل مانده
-                          </Button>
-                        </Grid>
-                      </Grid>
-                    </Paper>
-                  )}
-
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    fullWidth
-                    disabled={loading || !payAmount}
-                    sx={{ fontWeight: 'bold', py: 1 }}
-                  >
-                    {loading ? <CircularProgress size={20} /> : `ثبت پرداخت بخش انتخابی (${MoneyUtil.formatCurrency(payAmount || '0')} ${currency})`}
-                  </Button>
-                </Box>
-              </Box>
+                {/* Tapping how it is paid takes the amount: there is no separate confirm. */}
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <Stack spacing={1.5}>
+                    {tenderButton(cardMethod, t('pos.card', 'Card'), <PointOfSaleIcon />, 'F9', 'contained')}
+                    {tenderButton(cashMethod, t('pos.cash', 'Cash'), <PaymentsIcon />, 'F8', 'outlined')}
+                    {(otherMethods.length > 0 || canUseOtherReader) && (
+                      <Button
+                        fullWidth
+                        variant="text"
+                        color="inherit"
+                        disabled={busy}
+                        startIcon={<MoreHorizIcon />}
+                        onClick={(e) => setOtherAnchor(e.currentTarget)}
+                      >
+                        {t('pos.pay.other')}
+                      </Button>
+                    )}
+                    {payingId && payingId === cardMethod?.id && (
+                      <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
+                        {t('pos.pay.waitingForTerminal')}
+                      </Typography>
+                    )}
+                  </Stack>
+                  <Menu anchorEl={otherAnchor} open={Boolean(otherAnchor)} onClose={() => setOtherAnchor(null)}>
+                    {canUseOtherReader && <MenuItem onClick={() => start(cardMethod, true)}>{t('pos.pay.otherReader')}</MenuItem>}
+                    {otherMethods.map((m) => (
+                      <MenuItem key={m.id} onClick={() => start(m)}>
+                        {m.name}
+                        {m.kind === 'CUSTOMER_CREDIT' && <VersionTag feature="pos.customerCredit" sx={{ ml: 1 }} />}
+                      </MenuItem>
+                    ))}
+                  </Menu>
+                </Grid>
+              </>
             )}
-
-            {/* Payments History Table */}
-            {payments.length > 0 && (
-              <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                  {t('payments.title', 'Recorded Payments')} ({payments.length})
-                </Typography>
-                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, maxHeight: 160 }}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>{t('common.time', 'Time')}</TableCell>
-                        <TableCell align="right">{t('payments.amount', 'Amount')}</TableCell>
-                        <TableCell>{t('payments.reference', 'Ref / POS')}</TableCell>
-                        <TableCell>{t('common.status', 'Status')}</TableCell>
-                        <TableCell />
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {payments.map((p) => {
-                        const isVoidable = p.status === 'PENDING' || p.status === 'FAILED';
-                        const unconfirmed = p.status === 'PROCESSING' && !!p.needs_terminal_check;
-                        const statusColor =
-                          p.status === 'SUCCEEDED'
-                            ? 'success'
-                            : p.status === 'FAILED' || p.status === 'CANCELLED'
-                              ? 'error'
-                              : 'warning';
-                        return (
-                          <TableRow key={p.id}>
-                            <TableCell>{fTime(p.recorded_at)}</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold', color: statusColor === 'success' ? 'success.main' : 'text.secondary' }}>
-                              {MoneyUtil.formatCurrency(p.amount)} {currency}
-                            </TableCell>
-                            <TableCell>{p.reference_number || p.reference || '—'}</TableCell>
-                            <TableCell>
-                              <Chip
-                                label={unconfirmed ? t('payments.unconfirmed.status', 'Check terminal') : p.status}
-                                color={unconfirmed ? 'error' : statusColor}
-                                size="small"
-                              />
-                            </TableCell>
-                            <TableCell align="right">
-                              {unconfirmed && <UnconfirmedChargeActions payment={p} onChanged={loadData} />}
-                              {isVoidable && (
-                                <Button size="small" color="error" onClick={() => handleVoidPayment(p.id)} disabled={loading}>
-                                  {t('payments.void', 'Cancel')}
-                                </Button>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Box>
-            )}
-          </Stack>
+          </Grid>
         )}
       </DialogContent>
 
@@ -633,6 +550,49 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         )}
         <Button onClick={onClose}>{t('common.close', 'Close')}</Button>
       </DialogActions>
+
+      {/* The reference for a transfer, or for a card charged by hand on another reader. */}
+      <Dialog open={Boolean(prompt)} onClose={() => setPrompt(null)} maxWidth="xs" fullWidth>
+        {prompt && (
+          <Box
+            component="form"
+            onSubmit={(e: React.FormEvent) => {
+              e.preventDefault();
+              const { method, amount, offTerminal, replaces } = prompt;
+              setPrompt(null);
+              pay(method, { amount, offTerminal, replaces, reference: reference.trim() });
+            }}
+          >
+            <DialogTitle sx={{ fontWeight: 'bold' }}>
+              {prompt.offTerminal ? t('pos.pay.otherReader') : prompt.method.name} — {MoneyUtil.formatCurrency(prompt.amount)}{' '}
+              {currency}
+            </DialogTitle>
+            <DialogContent>
+              {prompt.offTerminal && (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  {t('pos.pay.otherReaderHint')}
+                </Typography>
+              )}
+              <TextField
+                autoFocus
+                fullWidth
+                size="small"
+                sx={{ mt: 1 }}
+                label={prompt.offTerminal ? t('pos.pay.referenceOptional') : t('pos.pay.reference')}
+                required={!prompt.offTerminal}
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+              />
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+              <Button onClick={() => setPrompt(null)}>{t('common.cancel', 'Cancel')}</Button>
+              <Button type="submit" variant="contained">
+                {t('pos.pay.record')}
+              </Button>
+            </DialogActions>
+          </Box>
+        )}
+      </Dialog>
     </Dialog>
   );
 }

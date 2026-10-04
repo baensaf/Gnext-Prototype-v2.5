@@ -57,6 +57,11 @@ export class PaymentProcessDto {
   @IsOptional()
   @IsString()
   receiptNumber?: string;
+
+  /** The card was charged by hand on another reader, so nothing is sent to the branch's terminal. */
+  @IsOptional()
+  @IsBoolean()
+  offTerminal?: boolean;
 }
 
 export class PaymentCorrectionDto {

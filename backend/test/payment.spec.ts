@@ -93,6 +93,7 @@ describe('Payments & Split Settlement Suite (R15)', () => {
         if (entityClass === PaymentDevice) return await deviceRepo.findOne(options);
         return null;
       }),
+      count: jest.fn().mockResolvedValue(0),
       createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
     };
 

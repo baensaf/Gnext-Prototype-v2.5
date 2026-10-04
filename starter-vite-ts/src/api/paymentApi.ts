@@ -243,7 +243,7 @@ export const paymentApi = {
 
   processPayment: async (
     id: string,
-    data?: { scenarioId?: string; externalReference?: string; receiptNumber?: string },
+    data?: { scenarioId?: string; externalReference?: string; receiptNumber?: string; offTerminal?: boolean },
   ): Promise<PaymentRecord> => {
     const res = await httpClient.post(`/api/v1/payments/${id}/process`, data || {});
     return {
@@ -296,6 +296,8 @@ export const paymentApi = {
     amount: string;
     reference_number?: string;
     notes?: string;
+    /** Charged by hand on another card reader: recorded, not sent to the branch's terminal. */
+    off_terminal?: boolean;
   }): Promise<{ payment: PaymentRecord; order: any }> => {
     const intent = await paymentApi.createPaymentIntent({
       orderId: data.order_id,
@@ -303,7 +305,12 @@ export const paymentApi = {
       amount: data.amount,
       reference: data.reference_number,
     });
-    const processed = await awaitTerminal(await paymentApi.processPayment(intent.id, {}));
+    const processed = await awaitTerminal(
+      await paymentApi.processPayment(
+        intent.id,
+        data.off_terminal ? { offTerminal: true, externalReference: data.reference_number } : {}
+      )
+    );
     const resOrder = await httpClient.get(`/api/v1/orders/${data.order_id}`);
     const orderData = resOrder.data ? {
       ...resOrder.data,
