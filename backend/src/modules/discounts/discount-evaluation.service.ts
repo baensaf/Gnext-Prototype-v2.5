@@ -11,13 +11,20 @@ import { Product } from '../../entities/Product.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { HEAD_OFFICE_ROLES } from '../../common/utils/user-scope.util';
 import { DiscountQuoteRequestDto, QuoteItemDto, ManualDiscountDto } from './dtos/discounts.dto';
+import { ItemDiscountsService } from './item-discounts.service';
 
 export interface ConsideredDiscount {
-  /** Who granted it: the cashier, a coupon code, or the customer's own rate. */
-  source: 'MANUAL' | 'COUPON' | 'CUSTOMER';
+  /**
+   * Who granted it: an automatic item discount (one entry per discounted line, applied
+   * first), or the one order discount: the cashier, a coupon code, or the customer's own rate.
+   */
+  source: 'ITEM' | 'MANUAL' | 'COUPON' | 'CUSTOMER';
   name: string;
   couponId?: string;
   couponCode?: string;
+  itemDiscountId?: string;
+  productId?: string;
+  percent?: string;
   discountType: string;
   status: 'APPLIED' | 'REJECTED';
   rejectionReason?: string;
@@ -34,6 +41,10 @@ export interface QuotedLineItem {
   discountTotal: string;
   grandTotal: string;
   isRewardItem?: boolean;
+  /** The automatic item discount on this line: percent ('0.00' for none), its id and amount. */
+  itemDiscountPercent: string;
+  itemDiscountId: string | null;
+  itemDiscountTotal: string;
 }
 
 export interface DiscountQuoteResult {
@@ -67,6 +78,8 @@ export class DiscountEvaluationService {
     @Optional()
     @InjectRepository(Product)
     private readonly productRepo?: Repository<Product>,
+    @Optional()
+    private readonly itemDiscounts?: ItemDiscountsService,
   ) {}
 
   /**
@@ -135,6 +148,9 @@ export class DiscountEvaluationService {
         subtotal: sub,
         discountTotal: '0.0000',
         grandTotal: sub,
+        itemDiscountPercent: '0.00',
+        itemDiscountId: null,
+        itemDiscountTotal: '0.0000',
       };
     });
 
@@ -161,6 +177,47 @@ export class DiscountEvaluationService {
     let approvalRequired = false;
     let approvalReason: string | undefined;
     let singleDiscountApplied = false;
+
+    // 0. Automatic item discounts (V1, 2026-10-03), as HAMI does them: each line of a
+    // discounted product loses its percent first, and the one order discount below works on
+    // what is left. Till orders only; Snappfood and kiosk orders are priced elsewhere. A line
+    // that already carries its percent (an order line keeps the one it was given) uses that;
+    // otherwise today's discount for the product applies.
+    const channel = (orderDraft.channel || 'POS').toUpperCase();
+    if (channel === 'POS') {
+      const lookup = requestedItems.filter((item) => item.itemDiscountPercent === undefined).map((item) => item.productId);
+      const today = lookup.length && this.itemDiscounts
+        ? await this.itemDiscounts.activeFor(tenantId, orderDraft.branchId, lookup)
+        : new Map<string, { id: string; percent: string }>();
+      for (let i = 0; i < lineItems.length; i++) {
+        const item = requestedItems[i];
+        const found = item.itemDiscountPercent === undefined ? today.get(item.productId) : null;
+        const percent = found ? found.percent : MoneyUtil.format(item.itemDiscountPercent || '0', 2);
+        const itemDiscountId = found ? found.id : item.itemDiscountId || null;
+        lineItems[i].itemDiscountPercent = percent;
+        lineItems[i].itemDiscountId = MoneyUtil.greaterThan(percent, '0') ? itemDiscountId : null;
+        if (!MoneyUtil.greaterThan(percent, '0')) continue;
+        const amount = MoneyUtil.multiply(lineItems[i].subtotal, MoneyUtil.divide(percent, '100', 6));
+        if (!MoneyUtil.greaterThan(amount, '0')) continue;
+        lineItems[i].itemDiscountTotal = amount;
+        lineItems[i].discountTotal = MoneyUtil.add(lineItems[i].discountTotal, amount);
+        if (MoneyUtil.greaterThan(remainingBases[i], '0')) {
+          const left = MoneyUtil.subtract(remainingBases[i], amount);
+          remainingBases[i] = MoneyUtil.greaterThan(left, '0') ? left : '0.0000';
+        }
+        discountTotal = MoneyUtil.add(discountTotal, amount);
+        consideredDiscounts.push({
+          source: 'ITEM',
+          name: `${Number(percent)}% item discount`,
+          discountType: 'PERCENTAGE',
+          status: 'APPLIED',
+          amount,
+          itemDiscountId: itemDiscountId || undefined,
+          productId: item.productId,
+          percent,
+        });
+      }
+    }
 
     // Load discount authorization policy settings
     const limits = await this.getManualDiscountLimits(tenantId, callerRole);

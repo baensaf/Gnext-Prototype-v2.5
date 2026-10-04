@@ -3,15 +3,44 @@ import { Request } from 'express';
 import { DiscountsService } from './discounts.service';
 import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 import { DiscountQuoteRequestDto } from './dtos/discounts.dto';
+import { ItemDiscountsService, ItemDiscountInput } from './item-discounts.service';
 
 /**
- * Three ways an order is discounted, in precedence order: the cashier's manual discount, a
- * one-time coupon code, and the customer's own rate. Discount campaigns — automatic
- * promotions with scopes and stacking — are not part of the prototype.
+ * How an order is discounted. First the automatic item discounts (a dated percent off a
+ * product, V1), line by line; then at most one order discount on what is left, in precedence
+ * order: the cashier's manual discount, a one-time coupon code, and the customer's own rate.
+ * Discount campaigns (targeting, conditions, stacking rules) are not part of the prototype.
  */
 @Controller('api/v1')
 export class DiscountsController {
-  constructor(private readonly discountsService: DiscountsService) {}
+  constructor(
+    private readonly discountsService: DiscountsService,
+    private readonly itemDiscounts: ItemDiscountsService,
+  ) {}
+
+  // Automatic item discounts: head office sets them up; branches can see them.
+  @Get('item-discounts')
+  async listItemDiscounts(@Req() req: Request) {
+    return await this.itemDiscounts.list((req as any).tenantId);
+  }
+
+  @HeadOfficeOnly()
+  @Post('item-discounts')
+  async createItemDiscount(@Body() body: ItemDiscountInput, @Req() req: Request) {
+    return await this.itemDiscounts.create((req as any).tenantId, body, (req as any).userId, (req as any).correlationId);
+  }
+
+  @HeadOfficeOnly()
+  @Patch('item-discounts/:id')
+  async updateItemDiscount(@Param('id') id: string, @Body() body: Partial<ItemDiscountInput>, @Req() req: Request) {
+    return await this.itemDiscounts.update((req as any).tenantId, id, body, (req as any).userId, (req as any).correlationId);
+  }
+
+  @HeadOfficeOnly()
+  @Delete('item-discounts/:id')
+  async deleteItemDiscount(@Param('id') id: string, @Req() req: Request) {
+    return await this.itemDiscounts.remove((req as any).tenantId, id, (req as any).userId, (req as any).correlationId);
+  }
 
   // Coupons
   @Get('coupons')

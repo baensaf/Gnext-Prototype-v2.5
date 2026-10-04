@@ -128,6 +128,8 @@ export function ReceiptPage() {
               <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                 <Typography variant="body2" sx={{ fontFamily: 'inherit', fontWeight: 'bold' }}>
                   {MoneyUtil.format(item.quantity, 0)}x {item.product_name}
+                  {/* The line's automatic item discount; its amount is in the discount total. */}
+                  {Number(item.item_discount_percent || 0) > 0 ? ` (−${Number(item.item_discount_percent)}%)` : ''}
                 </Typography>
                 <Typography variant="body2" sx={{ fontFamily: 'inherit' }}>
                   {MoneyUtil.formatCurrency(item.subtotal)}

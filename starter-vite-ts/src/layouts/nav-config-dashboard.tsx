@@ -196,6 +196,11 @@ export function useNavData(): NavSectionProps['data'] {
           icon: ICONS.pricing,
         },
         {
+          title: t('nav.itemDiscounts', 'Item Discounts'),
+          path: '/app/pricing/item-discounts',
+          icon: ICONS.pricing,
+        },
+        {
           title: t('nav.snappfoodPrices', 'Snappfood Prices'),
           path: '/app/pricing/snappfood',
           icon: ICONS.pricing,

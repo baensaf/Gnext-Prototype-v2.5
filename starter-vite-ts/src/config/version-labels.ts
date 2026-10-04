@@ -65,6 +65,8 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/pricing/price-lists': 'V4',
   // Raising or lowering base prices now, by percent or amount
   '/app/pricing/changes': 'V1',
+  // A dated percent off an item, taken off till lines by itself (HAMI's item discounts)
+  '/app/pricing/item-discounts': 'V1',
   '/app/pricing/snappfood': 'V3',
   // Registering and finding customers, with their addresses
   '/app/customers': 'V1',

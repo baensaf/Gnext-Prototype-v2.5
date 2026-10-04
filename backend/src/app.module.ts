@@ -111,6 +111,7 @@ import { Coupon } from './entities/Coupon.entity';
 import { DiscountUsage } from './entities/DiscountUsage.entity';
 import { Customer } from './entities/Customer.entity';
 import { CustomerDiscount } from './entities/CustomerDiscount.entity';
+import { ItemDiscount } from './entities/ItemDiscount.entity';
 import { CustomerPhone } from './entities/CustomerPhone.entity';
 import { CustomerAddress } from './entities/CustomerAddress.entity';
 import { CustomerCreditAccount } from './entities/CustomerCreditAccount.entity';
@@ -178,7 +179,7 @@ import { ReportExportJob } from './entities/ReportExportJob.entity';
           PriceEntry, PriceGroupBranch, PriceBulkJob,
           Menu, MenuCategory, MenuProduct, ProductAvailability, AvailabilitySchedule,
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,
-          Coupon, DiscountUsage, CustomerDiscount,
+          Coupon, DiscountUsage, CustomerDiscount, ItemDiscount,
           Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CreditEntry,
           CustomFieldDefinition, CustomerCustomValue, CustomerTag, CustomerTagLink, CustomerSegment,
           CustomerConsent, CustomerMerge,

@@ -52,6 +52,21 @@ export class OrderItem {
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
   discount_amount: string = '0.0000'; // legacy alias
 
+  /**
+   * The automatic item discount this line was given, in percent: null until the line is
+   * priced (on send, or when added to a sent order), '0.00' for none. Kept, so later voids,
+   * additions and a re-send price the line the same way even after the discount ends.
+   */
+  @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true })
+  item_discount_percent: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  item_discount_id: string | null;
+
+  /** What the item discount took off this line (part of the order's discount_total). */
+  @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
+  item_discount_total: string = '0.0000';
+
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
   tax_total: string = '0.0000';
 
