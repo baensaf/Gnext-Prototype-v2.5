@@ -130,11 +130,6 @@ export function useNavData(): NavSectionProps['data'] {
           path: '/app/orders',
           icon: ICONS.inventory,
         },
-        {
-          title: t('nav.kiosk', 'Kiosk preview'),
-          path: '/app/kiosk',
-          icon: ICONS.terminal,
-        },
         // Pages that existed with no way in but the address bar.
         {
           title: t('nav.payments', 'Payments'),

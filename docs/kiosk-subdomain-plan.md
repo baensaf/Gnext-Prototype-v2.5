@@ -8,13 +8,17 @@ Date: 2026-10-05. Branch: `feat/kiosk-subdomain`. Worktree: `D:\VibeCode\ClaudeC
 |---|---|
 | Address | `kiosk.gnext.top` only (not gnextdev.ir) |
 | Device sign-in | A manager signs in on the device once; the existing session cookie keeps it signed in. No new auth. |
-| Lockdown | The subdomain shows the kiosk screen only — no sidebar, no way into `/app`. `/app/kiosk` on `gnext.top` redirects to the subdomain. |
+| Lockdown | The subdomain shows the kiosk screen only — no sidebar, no way into `/app`. |
+| `/app/kiosk` | Removed (follow-up, same day): the kiosk lives only on the kiosk host. No route, no `paths.app.kiosk`, no "Kiosk preview" sidebar item (`nav.kiosk`), and it is out of `CASHIER_PATHS` and `SHOP_FLOOR_PATHS`. |
+| Who may run it | MANAGER, OWNER, ADMIN, SUPER_ADMIN. A cashier who signs in on the kiosk host sees "not available for your role" with a Sign Out button (no PIN). |
+| Sign out | The kiosk's setup dialog has a Sign Out button that needs a manager PIN (`ApprovalModal`, action `SIGN_OUT_KIOSK`). |
+| Idle sign-out | `IdleLogout` does not run on the kiosk host. |
 | Build | Same frontend bundle; the app picks its routes by hostname. One container, one deploy. |
 | Shipping | Commit locally on the branch. Do not push, open a PR or merge. The user adds DNS in Arvan. |
 
 ## How it works today (verified)
 
-- Kiosk is `/app/kiosk` inside `AppShell`, behind `ProtectedRoute` and `RequiresBranch`
+- (Before this work) the kiosk was `/app/kiosk` inside `AppShell`, behind `ProtectedRoute` and `RequiresBranch`
   (`starter-vite-ts/src/routes/sections/index.tsx:141`).
 - `BranchProvider` wraps the whole app (`src/app.tsx:27`), so the kiosk page works outside `AppShell`.
 - Auth is the host-only `gnext_session` cookie (HttpOnly, Lax, 7 days) set by
@@ -33,9 +37,7 @@ Date: 2026-10-05. Branch: `feat/kiosk-subdomain`. Worktree: `D:\VibeCode\ClaudeC
 
 - `isKioskHost(): boolean` — `window.location.hostname` starts with `kiosk.`
   (covers `kiosk.gnext.top` and `kiosk.localhost` for local testing).
-- `kioskUrl(): string | null` — `'https://kiosk.gnext.top/'` when the hostname is `gnext.top` or
-  `www.gnext.top`; otherwise `null` (localhost, LAN IPs, gnextdev.ir and Playwright keep `/app/kiosk` as today).
-- Keep it tiny; short comment explaining why only gnext.top redirects.
+- (A `kioskUrl()` helper for the `/app/kiosk` redirect existed in the first commit and was removed with it.)
 
 ### 2. Kiosk-host routes
 
@@ -46,8 +48,8 @@ In `src/routes/sections/index.tsx`, export a second route list used when `isKios
 - `/` → `ProtectedRoute` → `RequiresBranch` → `KioskPage`, rendered full-screen with no `AppShell`
   and no `IncomingOrdersProvider`.
 - `*` → `<Navigate to="/" replace />` (so `/app/...` is unreachable on this host).
-- If the signed-in role cannot reach `/app/kiosk` (`canReachPath` in `src/config/role-access.ts`),
-  show a short message and a sign-out button instead of the kiosk.
+- If the signed-in role is not MANAGER, OWNER, ADMIN or SUPER_ADMIN, show the "not available for your
+  role" message and a sign-out button instead of the kiosk.
 
 `LoginPage`: on a kiosk host, navigate to `/` after login instead of `homePathForRole(...)`.
 
@@ -61,12 +63,13 @@ The device needs a way back out (e.g. to switch the account). Add a "Sign out" a
 existing settings dialog/area (next to `DeviceTerminalDialog`). Don't add a new PIN gate; reuse whatever
 already guards the settings button. Only show it on the kiosk host if it would be confusing inside `/app`.
 
-### 4. Main-site redirect
+### 4. `/app/kiosk` removed
 
-`/app/kiosk` on the main host: if `kioskUrl()` is non-null, `window.location.replace(kioskUrl())`;
-otherwise render the kiosk as today. The sidebar entry (`src/layouts/nav-config-dashboard.tsx:134`) can
-stay pointed at `/app/kiosk` — the redirect handles it. Don't break `starter-vite-ts/e2e/r27-workflow.spec.ts:432`
-(runs on localhost, so `kioskUrl()` is null there).
+The `/app/kiosk` route, the `KioskEntry` redirect, `paths.app.kiosk`, `kioskUrl()` and the sidebar item
+are gone; there is no redirect from the main site. The kiosk host checks the role itself (MANAGER and
+above) instead of `canReachPath`. The Playwright kiosk steps (`r27-workflow.spec.ts` journey 3 removed,
+`section-16-3-acceptance.spec.ts` §16.3.6a/b skipped) need a kiosk-host sign-in that the localhost run
+cannot do; try the kiosk by hand on `http://kiosk.localhost:<port>/`.
 
 ### 5. Local testing support
 
@@ -87,10 +90,8 @@ Any new UI text goes into both `src/locales/en.json` and `src/locales/fa.json` w
 - `npm run lint` and `npm run build` in `starter-vite-ts`. If the backend was touched: `npm run typecheck`
   and `npx jest` in `backend` (copy `backend/.env` from the main checkout; delete the copy afterwards).
 - In the browser: `http://kiosk.localhost:<port>/` → login → kiosk full-screen, place a cash order,
-  `/app/dashboard` on that host lands back on `/`, sign out works. `http://localhost:<port>/app/kiosk`
-  still renders inside the shell (no redirect locally).
-- Unit-check `kioskUrl()` mentally for `gnext.top`, `www.gnext.top`, `kiosk.gnext.top` (null — no loop),
-  `gnextdev.ir`, `localhost`.
+  `/app/dashboard` on that host lands back on `/`, sign out asks for a manager PIN. A cashier sees the
+  not-available screen. `http://localhost:<port>/app/kiosk` no longer renders the kiosk.
 
 ### 8. Commit
 
@@ -106,5 +107,5 @@ quotes). **Do not push.** Remove any copied `.env` files and any `node_modules` 
 
 ## Known limits (left as-is)
 
-- The session cookie lasts 7 days, so the kiosk needs a manager sign-in about weekly.
-- gnextdev.ir has no kiosk subdomain; `/app/kiosk` keeps working there.
+- The session cookie lasts 7 days, so the kiosk needs a manager sign-in about weekly. (Idle sign-out is off on the kiosk host, so only the cookie expiry ends the session.)
+- gnextdev.ir and LAN addresses have no kiosk subdomain, so the kiosk is not reachable there. The only way to see it locally is `kiosk.localhost`.

@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 
 import { usePathname } from 'src/routes/hooks';
 
+import { isKioskHost } from 'src/config/kiosk-host';
 import { themeConfig, ThemeProvider } from 'src/theme';
 import { BranchProvider } from 'src/contexts/branch-context';
 
@@ -34,7 +35,8 @@ export default function App({ children }: AppProps) {
             <Snackbar />
             <ProgressBar />
             <CalendarSync />
-            <IdleLogout />
+            {/* A kiosk sits idle between guests by design, so it is never signed out for it. */}
+            {!isKioskHost() && <IdleLogout />}
             <SettingsDrawer defaultSettings={defaultSettings} />
             {children}
           </MotionLazy>
