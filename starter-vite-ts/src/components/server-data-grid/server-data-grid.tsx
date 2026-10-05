@@ -15,13 +15,24 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { faIR } from '@mui/x-data-grid-premium/locales';
-import { DataGridPremium } from '@mui/x-data-grid-premium';
 import {
   Box,
   Card,
+  Badge,
+  Tooltip,
   Typography,
   CircularProgress,
 } from '@mui/material';
+import {
+  Toolbar,
+  ToolbarButton,
+  DataGridPremium,
+  useGridRootProps,
+  useGridApiContext,
+  FilterPanelTrigger,
+  ColumnsPanelTrigger,
+  GridToolbarQuickFilter,
+} from '@mui/x-data-grid-premium';
 
 // ----------------------------------------------------------------------
 
@@ -60,6 +71,45 @@ export interface ServerDataGridProps<T = any> {
   onColumnVisibilityModelChange?: (model: GridColumnVisibilityModel) => void;
   /** Columns held at the start or end while the rest scroll sideways. */
   pinnedColumns?: GridPinnedColumnFields;
+  /** Put on the toolbar's line, before the columns, filters and search: a page's tabs, say. */
+  toolbarStart?: React.ReactNode;
+}
+
+/**
+ * The grid's toolbar (columns, filters, search), with what the page puts before it on the
+ * same line: a page's tabs, say. Built from the grid's own pieces, as its default toolbar is.
+ */
+function ToolbarWithStart({
+  start,
+  quickFilterProps,
+}: {
+  start?: React.ReactNode;
+  quickFilterProps?: React.ComponentProps<typeof GridToolbarQuickFilter>;
+}) {
+  const apiRef = useGridApiContext();
+  const rootProps = useGridRootProps();
+  return (
+    <Toolbar>
+      <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>{start}</Box>
+      <Tooltip title={apiRef.current.getLocaleText('toolbarColumns')}>
+        <ColumnsPanelTrigger render={<ToolbarButton />}>
+          <rootProps.slots.columnSelectorIcon fontSize="small" />
+        </ColumnsPanelTrigger>
+      </Tooltip>
+      <Tooltip title={apiRef.current.getLocaleText('toolbarFilters')}>
+        <FilterPanelTrigger
+          render={(triggerProps, state) => (
+            <ToolbarButton {...(triggerProps as any)} color={state.filterCount > 0 ? 'primary' : 'default'}>
+              <Badge badgeContent={state.filterCount} color="primary" variant="dot">
+                <rootProps.slots.openFilterButtonIcon fontSize="small" />
+              </Badge>
+            </ToolbarButton>
+          )}
+        />
+      </Tooltip>
+      <GridToolbarQuickFilter {...quickFilterProps} />
+    </Toolbar>
+  );
 }
 
 // The grid's own words (the pager, the column menu, the toolbar) in the page's language.
@@ -102,6 +152,7 @@ export function ServerDataGrid<T extends { id?: string | number }>({
   columnVisibilityModel,
   onColumnVisibilityModelChange,
   pinnedColumns,
+  toolbarStart,
 }: ServerDataGridProps<T>) {
   const { t, i18n } = useTranslation();
   const localeText = i18n.language?.startsWith('fa') ? faLocaleText : undefined;
@@ -184,9 +235,11 @@ export function ServerDataGrid<T extends { id?: string | number }>({
               )}
             </Box>
           ),
+          ...(toolbarStart ? { toolbar: ToolbarWithStart as any } : {}),
         }}
         slotProps={{
           toolbar: {
+            ...(toolbarStart ? { start: toolbarStart } : {}),
             showQuickFilter: true,
             quickFilterProps: {
               debounceMs: 400,

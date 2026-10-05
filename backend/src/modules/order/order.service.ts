@@ -43,8 +43,6 @@ import { assignCallNumber } from './call-number';
 import {
   LIFECYCLE_SQL,
   LIFECYCLE_GROUPS,
-  OPEN_QUEUES,
-  OPEN_QUEUE_SQL,
   ORDER_EXPORT_LIMIT,
   UUID_PATTERN,
   applyOrderFilters,
@@ -202,8 +200,7 @@ export class OrderService {
    * One page of the order book, filtered and sorted on the server (see `order-list.ts`).
    * Each row also carries its customer's name and mobile and, for a delivery, where it is
    * going and who has it, so the list needs no second lookup. `counts=1` adds the count of
-   * every lifecycle group under the same filters, for the tabs, and of each queue inside
-   * Open, for its chips.
+   * every lifecycle group under the same filters, for the tabs.
    */
   async getOrders(tenantId: string, query: any) {
     const qb = this.orderRepo
@@ -222,8 +219,7 @@ export class OrderService {
     const data = await this.withListContext(tenantId, rows);
     const wantCounts = query.counts === '1' || query.counts === 'true';
     const counts = wantCounts ? await this.countOrderGroups(tenantId, query) : undefined;
-    const queues = wantCounts ? await this.countOpenQueues(tenantId, query) : undefined;
-    return { data, total, page, limit, ...(counts ? { counts, queues } : {}) };
+    return { data, total, page, limit, ...(counts ? { counts } : {}) };
   }
 
   /** How many orders fall in each lifecycle group, under every filter but the group. */
@@ -243,15 +239,6 @@ export class OrderService {
       counts.ALL += Number(row.n);
     }
     return counts;
-  }
-
-  /** How many open orders sit in each queue (to pay, ready, out for delivery), under the other filters. */
-  async countOpenQueues(tenantId: string, query: any): Promise<Record<string, number>> {
-    const qb = this.orderRepo.createQueryBuilder('o').select('COUNT(*)', 'n').where('o.tenant_id = :tenantId', { tenantId });
-    for (const queue of OPEN_QUEUES) qb.addSelect(`COUNT(*) FILTER (WHERE ${OPEN_QUEUE_SQL[queue]})`, queue);
-    applyOrderFilters(qb, { ...query, group: 'OPEN', queue: undefined }, { currentAnyDate: true });
-    const row = (await qb.getRawOne()) || {};
-    return Object.fromEntries(OPEN_QUEUES.map((queue) => [queue, Number(row[queue] || 0)]));
   }
 
   /** The names and places behind a page of orders: customer, delivery zone, delivery state, courier. */

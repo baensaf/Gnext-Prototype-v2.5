@@ -2,7 +2,7 @@ import type { GridColDef, GridSortModel, GridFilterModel, GridColumnVisibilityMo
 import type { RefundRecord } from 'src/api/refundApi';
 import type { ReasonCode } from 'src/api/settingsApi';
 import type { ReceiptData, PaymentRecord } from 'src/api/paymentApi';
-import type { OrderHeader, OrderListRow, DeclineReason, OrderOpenQueue, OrderLifecycle, OrderListQuery } from 'src/api/orderApi';
+import type { OrderHeader, OrderListRow, DeclineReason, OrderLifecycle, OrderListQuery } from 'src/api/orderApi';
 
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -28,7 +28,6 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import {
   Box,
   Tab,
-  Card,
   Chip,
   Grid,
   Tabs,
@@ -52,7 +51,6 @@ import {
   Typography,
   InputLabel,
   IconButton,
-  CardContent,
   DialogTitle,
   FormControl,
   ListItemIcon,
@@ -132,13 +130,6 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'CANCELLED', label: 'cancelled' },
   { key: 'REFUNDED', label: 'refunded' },
   { key: 'ALL', label: 'all' },
-];
-
-// The work inside Open. An order can be in more than one, so they narrow Open, not replace it.
-const QUEUES: Array<{ key: OrderOpenQueue; label: string }> = [
-  { key: 'TO_PAY', label: 'toPay' },
-  { key: 'READY', label: 'ready' },
-  { key: 'OUT_FOR_DELIVERY', label: 'outForDelivery' },
 ];
 
 // The date scopes the chip beside the tabs offers: the Placed filter's ranges, by their labels.
@@ -266,8 +257,6 @@ export function OrdersWorkflowPage() {
   const param = (key: keyof typeof DEFAULTS | string, fallback = '') =>
     searchParams.get(key) || (DEFAULTS as Record<string, string>)[key] || fallback;
   const tab = param('tab') as TabKey;
-  const queueParam = searchParams.get('queue');
-  const queue = tab === 'OPEN' ? QUEUES.find((q) => q.key === queueParam)?.key : undefined;
   const navigate = useNavigate();
   // The grid's column filters, under `f`. A link from before them still opens its filters.
   const filterParam = searchParams.get('f');
@@ -315,7 +304,6 @@ export function OrdersWorkflowPage() {
   const [rows, setRows] = useState<OrderListRow[]>([]);
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState<Partial<Record<TabKey, number>>>({});
-  const [queueCounts, setQueueCounts] = useState<Partial<Record<OrderOpenQueue, number>>>({});
   const [dateMenuAnchor, setDateMenuAnchor] = useState<HTMLElement | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -581,13 +569,12 @@ export function OrdersWorkflowPage() {
     () => ({
       branchId: branchId || undefined,
       group: tab,
-      queue,
       filters: JSON.parse(serverFilters) ?? undefined,
       q: query || undefined,
       sort: sortField,
       dir: sortDir,
     }),
-    [branchId, tab, queue, serverFilters, query, sortField, sortDir]
+    [branchId, tab, serverFilters, query, sortField, sortDir]
   );
 
   // Answers can come back out of order when filters change quickly; only the latest counts.
@@ -603,7 +590,6 @@ export function OrdersWorkflowPage() {
         setRows(res.data);
         setTotal(res.total);
         setCounts(res.counts || {});
-        setQueueCounts(res.queues || {});
         setError(null);
       } catch (err: any) {
         if (seq === requestSeq.current) setError(err.detail || t('orders.errors.loadFailed'));
@@ -1345,6 +1331,58 @@ export function OrdersWorkflowPage() {
   const sortModel = useMemo<GridSortModel>(() => [{ field: sortField || 'placed_at', sort: sortDir }], [sortField, sortDir]);
   const menuPrimary = menuOrder && !readOnly ? primaryActionOf(menuOrder) : null;
 
+  // Which orders: the tabs and their date range, on the grid's toolbar line beside the columns,
+  // filters and search.
+  const tabsBar = (
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+      <Tabs
+        onChange={(_, val) => setParams({ tab: val })}
+        sx={{ minHeight: 40, minWidth: 0 }}
+        value={TABS.some((x) => x.key === tab) ? tab : false}
+        variant="scrollable"
+        scrollButtons={false}
+      >
+        {TABS.map(({ key, label }) => (
+          <Tab key={key} label={t(`orders.tabs.${label}`, { count: counts[key] ?? 0 })} value={key} sx={{ minHeight: 40 }} />
+        ))}
+      </Tabs>
+      {/* The finished tabs count within this date range; open and held orders show whatever their date. */}
+      <Tooltip title={t('orders.dateScope.hint')}>
+        <Chip
+          icon={<EventIcon />}
+          label={dateScopeLabel}
+          onClick={(e) => setDateMenuAnchor(e.currentTarget)}
+          size="small"
+          variant="outlined"
+          sx={{ flexShrink: 0, fontWeight: 600 }}
+        />
+      </Tooltip>
+      <Menu anchorEl={dateMenuAnchor} open={!!dateMenuAnchor} onClose={() => setDateMenuAnchor(null)}>
+        {Object.entries(DATE_SCOPES).map(([operator, label]) => (
+          <MenuItem
+            key={operator}
+            selected={placedFilter?.operator === operator}
+            onClick={() => {
+              setDateMenuAnchor(null);
+              setDateScope(operator);
+            }}
+          >
+            {t(`orders.filters.ranges.${label}`)}
+          </MenuItem>
+        ))}
+        <MenuItem
+          selected={!placedFilter}
+          onClick={() => {
+            setDateMenuAnchor(null);
+            setDateScope(null);
+          }}
+        >
+          {t('orders.dateScope.anyDate')}
+        </MenuItem>
+      </Menu>
+    </Stack>
+  );
+
   return (
     <Box sx={{ pb: 6 }}>
       {/* Header Banner */}
@@ -1397,78 +1435,9 @@ export function OrdersWorkflowPage() {
         </Alert>
       )}
 
-      {/* Which orders. The grid's toolbar searches and filters the columns. */}
-      <Card sx={{ borderRadius: 3, boxShadow: 2, mb: 3 }}>
-        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <Tabs
-              onChange={(_, val) => setParams({ tab: val, queue: null })}
-              sx={{ minHeight: 40, flexGrow: 1, minWidth: 0 }}
-              value={TABS.some((x) => x.key === tab) ? tab : false}
-              variant="scrollable"
-            >
-              {TABS.map(({ key, label }) => (
-                <Tab key={key} label={t(`orders.tabs.${label}`, { count: counts[key] ?? 0 })} value={key} />
-              ))}
-            </Tabs>
-            {/* The finished tabs count within this date range; open and held orders show whatever their date. */}
-            <Tooltip title={t('orders.dateScope.hint')}>
-              <Chip
-                icon={<EventIcon />}
-                label={dateScopeLabel}
-                onClick={(e) => setDateMenuAnchor(e.currentTarget)}
-                variant="outlined"
-                sx={{ flexShrink: 0, fontWeight: 600 }}
-              />
-            </Tooltip>
-            <Menu anchorEl={dateMenuAnchor} open={!!dateMenuAnchor} onClose={() => setDateMenuAnchor(null)}>
-              {Object.entries(DATE_SCOPES).map(([operator, label]) => (
-                <MenuItem
-                  key={operator}
-                  selected={placedFilter?.operator === operator}
-                  onClick={() => {
-                    setDateMenuAnchor(null);
-                    setDateScope(operator);
-                  }}
-                >
-                  {t(`orders.filters.ranges.${label}`)}
-                </MenuItem>
-              ))}
-              <MenuItem
-                selected={!placedFilter}
-                onClick={() => {
-                  setDateMenuAnchor(null);
-                  setDateScope(null);
-                }}
-              >
-                {t('orders.dateScope.anyDate')}
-              </MenuItem>
-            </Menu>
-          </Stack>
-          {tab === 'OPEN' && (
-            <Stack direction="row" sx={{ mt: 1.5, gap: 1, flexWrap: 'wrap' }}>
-              <Chip
-                label={t('orders.queues.all', { count: counts.OPEN ?? 0 })}
-                color={queue ? 'default' : 'primary'}
-                variant={queue ? 'outlined' : 'filled'}
-                onClick={() => setParams({ queue: null })}
-              />
-              {QUEUES.map(({ key, label }) => (
-                <Chip
-                  key={key}
-                  label={t(`orders.queues.${label}`, { count: queueCounts[key] ?? 0 })}
-                  color={queue === key ? 'primary' : 'default'}
-                  variant={queue === key ? 'filled' : 'outlined'}
-                  onClick={() => setParams({ queue: queue === key ? null : key })}
-                />
-              ))}
-            </Stack>
-          )}
-        </CardContent>
-      </Card>
-
       <ServerDataGrid<OrderListRow>
         columns={columns}
+        toolbarStart={tabsBar}
         columnVisibilityModel={columnVisibilityModel}
         onColumnVisibilityModelChange={handleColumnVisibilityChange}
         pinnedColumns={PINNED_COLUMNS}
