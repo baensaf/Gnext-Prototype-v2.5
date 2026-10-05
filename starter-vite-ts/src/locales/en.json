@@ -839,12 +839,6 @@
       "anyDate": "Any date",
       "custom": "Custom dates",
       "hint": "Completed, cancelled and refunded orders count within this range. Open and held orders show whatever their date."
-    },
-    "queues": {
-      "all": "All open ({{count}})",
-      "toPay": "To pay ({{count}})",
-      "ready": "Ready ({{count}})",
-      "outForDelivery": "Out for delivery ({{count}})"
     }
   },
   "dineIn": {
