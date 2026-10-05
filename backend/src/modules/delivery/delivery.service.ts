@@ -828,16 +828,8 @@ export class DeliveryService {
       throw new BadRequestException(`Courier ${courier.name} is not checked in today`);
     }
 
-    if (attendance.availability_status !== 'AVAILABLE') {
-      throw new BadRequestException(`Courier ${courier.name} is currently ${attendance.availability_status}`);
-    }
-
-    const activeCount = await this.deliveryRepo.count({
-      where: { tenant_id: tenantId, courier_id: courierId, state: In(['ASSIGNED', 'PICKED_UP', 'EN_ROUTE']) },
-    });
-    if (activeCount >= 5) {
-      throw new BadRequestException(`Courier ${courier.name} has reached maximum active delivery capacity (5)`);
-    }
+    // Working today is the whole test: no separate available/busy switch, and no cap on how
+    // many deliveries one courier carries. The dispatcher at the counter decides both.
 
     const fromState = delivery.state;
     const previousCourierId = delivery.courier_id;

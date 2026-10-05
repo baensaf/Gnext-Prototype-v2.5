@@ -116,7 +116,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
     service = module.get<DeliveryService>(DeliveryService);
   });
 
-  it('should enforce courier eligibility check (checked-in & available) when assigning delivery', async () => {
+  it('assigns a delivery only to a courier who is working today', async () => {
     deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', state: 'UNASSIGNED' });
     orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', state: 'READY' });
     courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', name: 'Ali', is_active: true });
@@ -125,12 +125,14 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
     attendanceRepo.findOne.mockResolvedValue(null);
     await expect(service.assignCourier('t-1', 'del-1', 'cour-1')).rejects.toThrow(BadRequestException);
 
-    // Scenario 2: Checked in but BUSY
-    attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_IN', availability_status: 'BUSY' });
+    // Scenario 2: Checked out again
+    attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_OUT', availability_status: 'OFF_LINE' });
     await expect(service.assignCourier('t-1', 'del-1', 'cour-1')).rejects.toThrow(BadRequestException);
 
-    // Scenario 3: Checked in and AVAILABLE -> succeeds
-    attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_IN', availability_status: 'AVAILABLE' });
+    // Scenario 3: Working today -> succeeds, whatever the old available/busy flag says and
+    // however many deliveries the courier already carries.
+    attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_IN', availability_status: 'BUSY' });
+    deliveryRepo.count.mockResolvedValue(9);
     const assigned = await service.assignCourier('t-1', 'del-1', 'cour-1');
 
     expect(assigned.state).toBe('ASSIGNED');

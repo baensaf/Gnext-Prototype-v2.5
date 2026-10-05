@@ -8,6 +8,7 @@ import AddIcon from '@mui/icons-material/Add';
 import MapIcon from '@mui/icons-material/Map';
 import EditIcon from '@mui/icons-material/Edit';
 import UndoIcon from '@mui/icons-material/Undo';
+import CheckIcon from '@mui/icons-material/Check';
 import PersonIcon from '@mui/icons-material/Person';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import HistoryIcon from '@mui/icons-material/History';
@@ -481,15 +482,6 @@ export function DeliveryPage() {
     }
   };
 
-  const handleSetAvailability = async (courierId: string, availability: 'AVAILABLE' | 'BUSY' | 'OFF_LINE') => {
-    try {
-      await deliveryApi.setAvailability(courierId, availability);
-      loadData();
-    } catch (err: any) {
-      setError(err.detail || t('delivery.errors.availabilityFailed'));
-    }
-  };
-
   const handleCreateCourier = async () => {
     try {
       const targetBranchId = branchId;
@@ -610,48 +602,17 @@ export function DeliveryPage() {
     }
   };
 
-  const getVehicleTypeLabel = (vType?: string) => {
-    switch (vType) {
-      case 'MOTORCYCLE':
-        return t('delivery.couriers.vehicleTypes.motorcycle');
-      case 'BICYCLE':
-        return t('delivery.couriers.vehicleTypes.bicycle');
-      case 'CAR':
-        return t('delivery.couriers.vehicleTypes.car');
-      case 'ON_FOOT':
-        return t('delivery.couriers.vehicleTypes.onFoot');
-      default:
-        return vType || '';
-    }
-  };
-
-  const getAttendanceStatusLabel = (att?: string) => {
-    switch (att) {
-      case 'CHECKED_IN':
-        return t('delivery.couriers.attendanceStatus.checkedIn');
-      case 'CHECKED_OUT':
-        return t('delivery.couriers.attendanceStatus.checkedOut');
-      case 'PAUSED':
-        return t('delivery.couriers.attendanceStatus.paused');
-      default:
-        return att || t('delivery.couriers.attendanceStatus.checkedOut');
-    }
-  };
-
   const unassigned = deliveries.filter((d) => d.state === 'UNASSIGNED');
   const assigned = deliveries.filter((d) => d.state === 'ASSIGNED');
   const enRoute = deliveries.filter((d) => d.state === 'PICKED_UP' || d.state === 'EN_ROUTE');
   const finished = deliveries.filter((d) => d.state === 'DELIVERED' || d.state === 'FAILED' || d.state === 'CANCELLED');
 
   const eligibleCouriers = couriers.filter(
-    (c) => c.attendance?.status === 'CHECKED_IN' && c.attendance?.availability_status === 'AVAILABLE' && (c.active_delivery_count || 0) < 5
+    (c) => c.attendance?.status === 'CHECKED_IN'
   );
 
   return (
     <Box sx={{ p: 3 }} aria-busy={loading || Boolean(pendingAction)}>
-      <Alert severity="info" variant="filled" icon={<LocalShippingIcon />} sx={{ mb: 3, fontWeight: 'bold' }}>
-        {t('delivery.banner')}
-      </Alert>
 
       {/* Header */}
       <Stack direction="row" sx={{ mb: 3, justifyContent: 'space-between', alignItems: 'center' }}>
@@ -930,14 +891,8 @@ export function DeliveryPage() {
               <TableRow>
                 <TableCell>{t('delivery.couriers.code')}</TableCell>
                 <TableCell>{t('delivery.couriers.nameAndPhone')}</TableCell>
-                <TableCell>{t('delivery.couriers.vehicle')}</TableCell>
                 <TableCell>{t('delivery.couriers.compensationPerDelivery')}</TableCell>
-                <TableCell>{t('delivery.couriers.attendance')}</TableCell>
-                <TableCell>
-                  {t('delivery.couriers.availability')} <VersionTag feature="delivery.availability" />
-                </TableCell>
                 <TableCell>{t('delivery.couriers.mobilePosAssignment')}</TableCell>
-                <TableCell>{t('delivery.couriers.activeLoad')}</TableCell>
                 <TableCell align="right">{t('delivery.couriers.actions')}</TableCell>
               </TableRow>
             </TableHead>
@@ -958,7 +913,6 @@ export function DeliveryPage() {
                       </Link>
                       <Typography variant="caption" color="text.secondary">{c.phone || t('delivery.card.noPhone')}</Typography>
                     </TableCell>
-                    <TableCell><Chip label={getVehicleTypeLabel(c.vehicle_type)} size="small" /></TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                         <Box>
@@ -992,26 +946,6 @@ export function DeliveryPage() {
                       </Stack>
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={getAttendanceStatusLabel(c.attendance?.status)}
-                        color={isCheckedIn ? 'success' : 'default'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        size="small"
-                        value={c.attendance?.availability_status || 'OFF_LINE'}
-                        disabled={!isCheckedIn}
-                        onChange={(e) => handleSetAvailability(c.id, e.target.value as any)}
-                        sx={{ fontSize: '0.8125rem', py: 0 }}
-                      >
-                        <MenuItem value="AVAILABLE">{t('delivery.couriers.availabilityStatus.available')}</MenuItem>
-                        <MenuItem value="BUSY">{t('delivery.couriers.availabilityStatus.busy')}</MenuItem>
-                        <MenuItem value="OFF_LINE">{t('delivery.couriers.availabilityStatus.offline')}</MenuItem>
-                      </Select>
-                    </TableCell>
-                    <TableCell>
                       {c.active_terminal ? (
                         <Chip
                           icon={<PhoneAndroidIcon />}
@@ -1026,20 +960,21 @@ export function DeliveryPage() {
                         </Button>
                       )}
                     </TableCell>
-                    <TableCell>
-                      <Chip label={`${c.active_delivery_count || 0} / 5`} color={(c.active_delivery_count || 0) >= 5 ? 'error' : 'default'} size="small" />
-                    </TableCell>
                     <TableCell align="right">
                       <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
-                        {!isCheckedIn ? (
-                          <Button size="small" variant="contained" color="success" onClick={() => handleRecordAttendance(c.id, 'CHECKED_IN')}>
-                            {t('delivery.couriers.checkIn')}
-                          </Button>
-                        ) : (
-                          <Button size="small" variant="outlined" color="error" onClick={() => handleRecordAttendance(c.id, 'CHECKED_OUT')}>
-                            {t('delivery.couriers.checkOut')}
-                          </Button>
-                        )}
+                        {/* The one switch for a courier: green, they are working today and take
+                            deliveries; grey, they are not. Tapping it changes it. */}
+                        <Button
+                          size="small"
+                          variant={isCheckedIn ? 'contained' : 'outlined'}
+                          color={isCheckedIn ? 'success' : 'inherit'}
+                          aria-pressed={isCheckedIn}
+                          startIcon={isCheckedIn ? <CheckIcon /> : undefined}
+                          onClick={() => handleRecordAttendance(c.id, isCheckedIn ? 'CHECKED_OUT' : 'CHECKED_IN')}
+                          sx={isCheckedIn ? undefined : { color: 'text.secondary' }}
+                        >
+                          {t('delivery.couriers.checkIn')}
+                        </Button>
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -1182,7 +1117,7 @@ export function DeliveryPage() {
             <Select value={selectedCourierId} label={t('delivery.modals.assignCourier.eligibleCourier')} onChange={(e) => setSelectedCourierId(e.target.value)}>
               {eligibleCouriers.map((c) => (
                 <MenuItem key={c.id} value={c.id}>
-                  {c.name} ({getVehicleTypeLabel(c.vehicle_type)}) - {c.active_delivery_count || 0}/5 active
+                  {c.name}{c.active_delivery_count ? ` (${c.active_delivery_count})` : ''}
                 </MenuItem>
               ))}
             </Select>
@@ -1262,15 +1197,6 @@ export function DeliveryPage() {
               slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'tel' } }}
               fullWidth
             />
-            <FormControl fullWidth>
-              <InputLabel>{t('delivery.modals.addCourier.vehicleType')}</InputLabel>
-              <Select value={courierForm.vehicle_type} label={t('delivery.modals.addCourier.vehicleType')} onChange={(e) => setCourierForm({ ...courierForm, vehicle_type: e.target.value })}>
-                <MenuItem value="MOTORCYCLE">{t('delivery.couriers.vehicleTypes.motorcycle')}</MenuItem>
-                <MenuItem value="BICYCLE">{t('delivery.couriers.vehicleTypes.bicycle')}</MenuItem>
-                <MenuItem value="CAR">{t('delivery.couriers.vehicleTypes.car')}</MenuItem>
-                <MenuItem value="ON_FOOT">{t('delivery.couriers.vehicleTypes.onFoot')}</MenuItem>
-              </Select>
-            </FormControl>
             {isCashier ? (
               <Typography variant="caption" color="text.secondary">
                 {t('delivery.modals.addCourier.payByManager')}
