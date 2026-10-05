@@ -27,6 +27,20 @@ export const OPEN_STATUSES = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'KITCHEN_PR
  */
 const CURRENT_GROUPS: LifecycleGroup[] = ['WAITING', 'OPEN', 'HELD'];
 
+/**
+ * The work inside OPEN, for the cashier: money still to take, food ready to hand over, and
+ * orders out with a courier. Unlike the groups these overlap (an unpaid delivery can be on its
+ * way), so they narrow the Open tab rather than being tabs of their own. Snappfood collects
+ * for its orders, so they are never "to pay".
+ */
+export const OPEN_QUEUES = ['TO_PAY', 'READY', 'OUT_FOR_DELIVERY'] as const;
+export type OpenQueue = (typeof OPEN_QUEUES)[number];
+export const OPEN_QUEUE_SQL: Record<OpenQueue, string> = {
+  TO_PAY: `o.outstanding_total > 0 AND o.channel <> 'AGGREGATOR'`,
+  READY: `o.status = 'READY'`,
+  OUT_FOR_DELIVERY: `o.status = 'OUT_FOR_DELIVERY'`,
+};
+
 const inList = (values: string[]) => values.map((v) => `'${v}'`).join(', ');
 
 /** A SQL expression naming the lifecycle group of `o`. It follows `status`, as the screens do. */
@@ -112,6 +126,13 @@ export function applyOrderFilters(
     const group = String(query.group).toUpperCase();
     if ((LIFECYCLE_GROUPS as readonly string[]).includes(group)) {
       qb.andWhere(`(${LIFECYCLE_SQL}) = :group`, { group });
+    }
+  }
+  // A queue narrows the open orders; the tab counts leave it out along with the group.
+  if (withGroup && query.queue) {
+    const queue = String(query.queue).toUpperCase() as OpenQueue;
+    if ((OPEN_QUEUES as readonly string[]).includes(queue)) {
+      qb.andWhere(`(${LIFECYCLE_SQL}) = 'OPEN' AND (${OPEN_QUEUE_SQL[queue]})`);
     }
   }
 

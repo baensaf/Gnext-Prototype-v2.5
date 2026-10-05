@@ -2,13 +2,14 @@ import type { GridColDef, GridSortModel, GridFilterModel, GridColumnVisibilityMo
 import type { RefundRecord } from 'src/api/refundApi';
 import type { ReasonCode } from 'src/api/settingsApi';
 import type { ReceiptData, PaymentRecord } from 'src/api/paymentApi';
-import type { OrderHeader, OrderListRow, DeclineReason, OrderLifecycle, OrderListQuery } from 'src/api/orderApi';
+import type { OrderHeader, OrderListRow, DeclineReason, OrderOpenQueue, OrderLifecycle, OrderListQuery } from 'src/api/orderApi';
 
-import { useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { useNavigate, useSearchParams } from 'react-router';
 import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
 
 import EditIcon from '@mui/icons-material/Edit';
+import EventIcon from '@mui/icons-material/Event';
 import CloseIcon from '@mui/icons-material/Close';
 import PrintIcon from '@mui/icons-material/Print';
 import CancelIcon from '@mui/icons-material/Cancel';
@@ -22,6 +23,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import {
   Box,
@@ -60,6 +62,8 @@ import {
   TableContainer,
   CircularProgress,
 } from '@mui/material';
+
+import { paths } from 'src/routes/paths';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { useCurrencyLabel } from 'src/utils/currency';
@@ -119,15 +123,26 @@ type TabKey = Lifecycle | 'ALL';
 
 type ReprintDocumentType = 'CUSTOMER_RECEIPT' | 'KITCHEN_TICKET' | 'GUEST_BILL' | 'COURIER_SLIP';
 
+// No Waiting tab: a waiting order is answered on Incoming Orders, and nothing here can answer
+// it. A line above the tabs points there while one waits. Waiting orders still count in All.
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'OPEN', label: 'open' },
-  { key: 'WAITING', label: 'waiting' },
   { key: 'HELD', label: 'held' },
   { key: 'COMPLETED', label: 'completed' },
-  { key: 'REFUNDED', label: 'refunded' },
   { key: 'CANCELLED', label: 'cancelled' },
+  { key: 'REFUNDED', label: 'refunded' },
   { key: 'ALL', label: 'all' },
 ];
+
+// The work inside Open. An order can be in more than one, so they narrow Open, not replace it.
+const QUEUES: Array<{ key: OrderOpenQueue; label: string }> = [
+  { key: 'TO_PAY', label: 'toPay' },
+  { key: 'READY', label: 'ready' },
+  { key: 'OUT_FOR_DELIVERY', label: 'outForDelivery' },
+];
+
+// The date scopes the chip beside the tabs offers: the Placed filter's ranges, by their labels.
+const DATE_SCOPES: Record<string, string> = { today: 'today', yesterday: 'yesterday', last7: '7d', last30: '30d' };
 
 const ORDER_TYPES = ['DINE_IN', 'TAKEAWAY', 'PICKUP', 'DELIVERY', 'AGGREGATOR'];
 const CHANNELS = ['POS', 'KIOSK', 'ONLINE', 'AGGREGATOR'];
@@ -251,6 +266,9 @@ export function OrdersWorkflowPage() {
   const param = (key: keyof typeof DEFAULTS | string, fallback = '') =>
     searchParams.get(key) || (DEFAULTS as Record<string, string>)[key] || fallback;
   const tab = param('tab') as TabKey;
+  const queueParam = searchParams.get('queue');
+  const queue = tab === 'OPEN' ? QUEUES.find((q) => q.key === queueParam)?.key : undefined;
+  const navigate = useNavigate();
   // The grid's column filters, under `f`. A link from before them still opens its filters.
   const filterParam = searchParams.get('f');
   const legacyParams = Object.keys(LEGACY_FILTER_PARAMS)
@@ -261,6 +279,13 @@ export function OrdersWorkflowPage() {
     [filterParam, legacyParams]
   );
   const query = param('q');
+  // The date range sits on the Placed column's filter; the chip beside the tabs names and sets it.
+  const placedFilter = filterModel.items.find((item) => item.field === 'placed_at');
+  const dateScopeLabel = !placedFilter
+    ? t('orders.dateScope.anyDate')
+    : DATE_SCOPES[placedFilter.operator]
+      ? t(`orders.filters.ranges.${DATE_SCOPES[placedFilter.operator]}`)
+      : t('orders.dateScope.custom');
   const page = Math.max(0, Number(param('page', '0')) || 0);
   const pageSize = PAGE_SIZES.includes(Number(param('size'))) ? Number(param('size')) : 25;
   const sortField = (SORTABLE as readonly string[]).includes(param('sort')) ? (param('sort') as OrderListQuery['sort']) : 'placed_at';
@@ -290,6 +315,8 @@ export function OrdersWorkflowPage() {
   const [rows, setRows] = useState<OrderListRow[]>([]);
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState<Partial<Record<TabKey, number>>>({});
+  const [queueCounts, setQueueCounts] = useState<Partial<Record<OrderOpenQueue, number>>>({});
+  const [dateMenuAnchor, setDateMenuAnchor] = useState<HTMLElement | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [reasonCodes, setReasonCodes] = useState<ReasonCode[]>([]);
@@ -554,12 +581,13 @@ export function OrdersWorkflowPage() {
     () => ({
       branchId: branchId || undefined,
       group: tab,
+      queue,
       filters: JSON.parse(serverFilters) ?? undefined,
       q: query || undefined,
       sort: sortField,
       dir: sortDir,
     }),
-    [branchId, tab, serverFilters, query, sortField, sortDir]
+    [branchId, tab, queue, serverFilters, query, sortField, sortDir]
   );
 
   // Answers can come back out of order when filters change quickly; only the latest counts.
@@ -575,6 +603,7 @@ export function OrdersWorkflowPage() {
         setRows(res.data);
         setTotal(res.total);
         setCounts(res.counts || {});
+        setQueueCounts(res.queues || {});
         setError(null);
       } catch (err: any) {
         if (seq === requestSeq.current) setError(err.detail || t('orders.errors.loadFailed'));
@@ -641,6 +670,13 @@ export function OrdersWorkflowPage() {
   };
 
   const closeDrawer = () => setParams({ order: null }, true);
+
+  /** Puts the list on one of the chip's date ranges, or on any date, keeping the other filters. */
+  const setDateScope = (operator: string | null) => {
+    const others = filterModel.items.filter((item) => item.field !== 'placed_at');
+    const items = operator ? [{ id: 'placed_at', field: 'placed_at', operator }, ...others] : others;
+    setParams({ f: encodeFilterModel({ ...filterModel, items }), ...LEGACY_FILTER_PARAMS });
+  };
 
   const handleExport = async () => {
     setExporting(true);
@@ -882,8 +918,32 @@ export function OrdersWorkflowPage() {
 
   const activeItems = (order: OrderHeader) => (order.items || []).filter((it: any) => it.state !== 'VOID' && it.state !== 'REPLACED');
 
+  // A held order is picked up again at the till, where its lines can be changed and sent.
+  const canResume = (order: OrderHeader) => !readOnly && order.status === 'DRAFT';
+  const resumeAtTill = (order: OrderHeader) => navigate(`${paths.app.pos}?resume=${order.id}`);
+
+  /** A held order is not priced until it is placed, so its value is what its lines add up to. */
+  const displayTotalOf = (order: OrderHeader) => {
+    const priced = order.total_amount || order.grand_total || '0';
+    if (order.status !== 'DRAFT' || MoneyUtil.greaterThan(priced, '0')) return priced;
+    return activeItems(order).reduce(
+      (sum, it: any) => MoneyUtil.add(sum, it.total_amount || it.line_total || MoneyUtil.multiply(it.unit_price, it.quantity, 2), 2),
+      '0'
+    );
+  };
+
   /** The one thing a cashier most likely wants to do next with this order, if anything. */
   const primaryActionOf = (order: OrderListRow) => {
+    if (canResume(order)) {
+      return {
+        key: 'resume',
+        // Short enough for the row; the drawer says it in full.
+        label: t('orders.actions.resume'),
+        color: 'primary' as const,
+        icon: <PointOfSaleIcon />,
+        run: () => resumeAtTill(order),
+      };
+    }
     if (canPay(order)) {
       return { key: 'pay', label: t('orders.actions.pay'), color: 'success' as const, icon: <PaymentIcon />, run: () => handleOpenPayment(order) };
     }
@@ -990,7 +1050,7 @@ export function OrdersWorkflowPage() {
     return (
       <Box sx={{ textAlign: 'right' }}>
         <Typography variant="body2" sx={{ fontWeight: 700 }}>
-          <span dir="ltr">{MoneyUtil.formatCurrency(order.total_amount || order.grand_total)} {currency}</span>
+          <span dir="ltr">{MoneyUtil.formatCurrency(displayTotalOf(order))} {currency}</span>
         </Typography>
         {below}
       </Box>
@@ -1322,14 +1382,88 @@ export function OrdersWorkflowPage() {
         </Alert>
       )}
 
+      {/* Orders waiting to be accepted are answered on Incoming Orders, not here. */}
+      {!readOnly && (counts.WAITING ?? 0) > 0 && (
+        <Alert
+          severity="warning"
+          sx={{ mb: 2 }}
+          action={
+            <Button color="inherit" size="small" onClick={() => navigate(paths.app.orders.incoming)} sx={{ fontWeight: 700 }}>
+              {t('orders.waiting.answer')}
+            </Button>
+          }
+        >
+          {t('orders.waiting.line', { count: counts.WAITING })}
+        </Alert>
+      )}
+
       {/* Which orders. The grid's toolbar searches and filters the columns. */}
       <Card sx={{ borderRadius: 3, boxShadow: 2, mb: 3 }}>
         <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-          <Tabs onChange={(_, val) => setParams({ tab: val })} sx={{ minHeight: 40 }} value={tab} variant="scrollable">
-            {TABS.map(({ key, label }) => (
-              <Tab key={key} label={t(`orders.tabs.${label}`, { count: counts[key] ?? 0 })} value={key} />
-            ))}
-          </Tabs>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Tabs
+              onChange={(_, val) => setParams({ tab: val, queue: null })}
+              sx={{ minHeight: 40, flexGrow: 1, minWidth: 0 }}
+              value={TABS.some((x) => x.key === tab) ? tab : false}
+              variant="scrollable"
+            >
+              {TABS.map(({ key, label }) => (
+                <Tab key={key} label={t(`orders.tabs.${label}`, { count: counts[key] ?? 0 })} value={key} />
+              ))}
+            </Tabs>
+            {/* The finished tabs count within this date range; open and held orders show whatever their date. */}
+            <Tooltip title={t('orders.dateScope.hint')}>
+              <Chip
+                icon={<EventIcon />}
+                label={dateScopeLabel}
+                onClick={(e) => setDateMenuAnchor(e.currentTarget)}
+                variant="outlined"
+                sx={{ flexShrink: 0, fontWeight: 600 }}
+              />
+            </Tooltip>
+            <Menu anchorEl={dateMenuAnchor} open={!!dateMenuAnchor} onClose={() => setDateMenuAnchor(null)}>
+              {Object.entries(DATE_SCOPES).map(([operator, label]) => (
+                <MenuItem
+                  key={operator}
+                  selected={placedFilter?.operator === operator}
+                  onClick={() => {
+                    setDateMenuAnchor(null);
+                    setDateScope(operator);
+                  }}
+                >
+                  {t(`orders.filters.ranges.${label}`)}
+                </MenuItem>
+              ))}
+              <MenuItem
+                selected={!placedFilter}
+                onClick={() => {
+                  setDateMenuAnchor(null);
+                  setDateScope(null);
+                }}
+              >
+                {t('orders.dateScope.anyDate')}
+              </MenuItem>
+            </Menu>
+          </Stack>
+          {tab === 'OPEN' && (
+            <Stack direction="row" sx={{ mt: 1.5, gap: 1, flexWrap: 'wrap' }}>
+              <Chip
+                label={t('orders.queues.all', { count: counts.OPEN ?? 0 })}
+                color={queue ? 'default' : 'primary'}
+                variant={queue ? 'outlined' : 'filled'}
+                onClick={() => setParams({ queue: null })}
+              />
+              {QUEUES.map(({ key, label }) => (
+                <Chip
+                  key={key}
+                  label={t(`orders.queues.${label}`, { count: queueCounts[key] ?? 0 })}
+                  color={queue === key ? 'primary' : 'default'}
+                  variant={queue === key ? 'filled' : 'outlined'}
+                  onClick={() => setParams({ queue: queue === key ? null : key })}
+                />
+              ))}
+            </Stack>
+          )}
         </CardContent>
       </Card>
 
@@ -1395,7 +1529,8 @@ export function OrdersWorkflowPage() {
             <ListItemText>{t('orders.actions.receipt')}</ListItemText>
           </MenuItem>
         )}
-        {!readOnly && (
+        {/* A held order has printed nothing yet. */}
+        {!readOnly && menuOrder?.status !== 'DRAFT' && (
           <MenuItem onClick={fromMenu(handleOpenReprintDialog)}>
             <ListItemIcon>
               <PrintIcon fontSize="small" />
@@ -1898,7 +2033,7 @@ export function OrdersWorkflowPage() {
                     <Stack spacing={1}>
                       <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                         <Typography variant="body2" color="text.secondary">{t('orders.drawer.grossSubtotal')}</Typography>
-                        <Typography variant="body2" dir="ltr">{MoneyUtil.formatCurrency(selectedDrawerOrder.subtotal_amount || selectedDrawerOrder.total_amount)} {currency}</Typography>
+                        <Typography variant="body2" dir="ltr">{MoneyUtil.formatCurrency(selectedDrawerOrder.status === 'DRAFT' ? displayTotalOf(selectedDrawerOrder) : selectedDrawerOrder.subtotal_amount || selectedDrawerOrder.total_amount)} {currency}</Typography>
                       </Stack>
                       {MoneyUtil.greaterThan(selectedDrawerOrder.discount_amount || '0', '0') && (
                         <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
@@ -1922,7 +2057,7 @@ export function OrdersWorkflowPage() {
                       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{t('orders.drawer.grandTotal')}</Typography>
                         <Typography variant="subtitle1" sx={{ fontWeight: 800, color: 'primary.main' }} dir="ltr">
-                          {MoneyUtil.formatCurrency(selectedDrawerOrder.total_amount)} {currency}
+                          {MoneyUtil.formatCurrency(displayTotalOf(selectedDrawerOrder))} {currency}
                         </Typography>
                       </Stack>
                       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2097,10 +2232,18 @@ export function OrdersWorkflowPage() {
             {/* Footer: the one thing to do next, and everything else under More, as on the row. */}
             {(() => {
               const order = selectedDrawerOrder;
-              const primary = canPay(order) ? 'pay' : canComplete(order) ? 'complete' : canReport(order) ? 'report' : null;
+              const primary = canResume(order)
+                ? 'resume'
+                : canPay(order)
+                  ? 'pay'
+                  : canComplete(order)
+                    ? 'complete'
+                    : canReport(order)
+                      ? 'report'
+                      : null;
               const more = [
                 hasReceipt(order) && { key: 'receipt', icon: <ReceiptIcon fontSize="small" />, label: t('orders.actions.receipt'), run: () => handleViewReceipt(order.id) },
-                !readOnly && { key: 'reprint', icon: <PrintIcon fontSize="small" />, label: t('orders.actions.reprint'), run: () => handleOpenReprintDialog(order) },
+                !readOnly && order.status !== 'DRAFT' && { key: 'reprint', icon: <PrintIcon fontSize="small" />, label: t('orders.actions.reprint'), run: () => handleOpenReprintDialog(order) },
                 // Snappfood's lines are Snappfood's: it has no call for a store to change them.
                 canEditLines(order) && { key: 'edit', icon: <EditIcon fontSize="small" />, label: t('orders.actions.editOrder', 'Edit lines'), run: () => setEditDialogOpen(true) },
                 canReport(order) && primary !== 'report' && { key: 'report', icon: <ScheduleIcon fontSize="small" />, label: t('orders.actions.reportToSnappfood'), run: () => handleOpenReport(order) },
@@ -2154,6 +2297,11 @@ export function OrdersWorkflowPage() {
                         }}
                       >
                         {t('orders.actions.completeOrder')}
+                      </Button>
+                    )}
+                    {primary === 'resume' && (
+                      <Button variant="contained" startIcon={<PointOfSaleIcon />} onClick={() => resumeAtTill(order)}>
+                        {t('orders.actions.openAtTill')}
                       </Button>
                     )}
                     {primary === 'report' && (

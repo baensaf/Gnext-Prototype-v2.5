@@ -45,7 +45,7 @@
     "sell": "Sell",
     "pos": "POS Register",
     "dineIn": "Dine-In Floor",
-    "orders": "Orders Directory",
+    "orders": "Orders",
     "operations": "Operations",
     "kds": "Kitchen KDS",
     "incomingOrders": "Incoming Orders",
@@ -195,12 +195,17 @@
   },
   "pos": {
     "cartBar": {
-      "draft": "Held draft",
-      "draftCancel": "Stop editing this held draft",
+      "draft": "Held order",
+      "draftCancel": "Stop editing this held order",
       "discount": "Discount / coupon (F6)",
       "payNow": "Checkout / pay now",
       "couponApply": "Apply coupon",
-      "couponApplied": "Applied"
+      "couponApplied": "Applied",
+      "hold": "Hold",
+      "holding": "Holding…",
+      "heldToast": "Order #{{number}} held",
+      "resumedToast": "Held order #{{number}} is back in the cart",
+      "heldButton": "Held"
     },
     "offline": {
       "unavailable": "Not available offline",
@@ -375,7 +380,13 @@
       "failed": "Search is unavailable right now",
       "registerNew": "Register new customer"
     },
-    "itemDiscount": "−{{percent}}%"
+    "itemDiscount": "−{{percent}}%",
+    "heldDrawer": {
+      "title": "Held orders",
+      "subtitle": "Resume, change or discard an order put on hold",
+      "discarded": "Held order discarded",
+      "resumeFailed": "Could not bring the held order back"
+    }
   },
   "till": {
     "title": "Gnext POS",
@@ -495,7 +506,6 @@
     "searchPlaceholder": "Order or call no., customer, phone, item…",
     "tabs": {
       "all": "All ({{count}})",
-      "waiting": "Waiting ({{count}})",
       "open": "Open ({{count}})",
       "completed": "Completed ({{count}})",
       "cancelled": "Cancelled ({{count}})",
@@ -548,7 +558,7 @@
     },
     "statuses": {
       "pendingAcceptance": "AWAITING ACCEPTANCE",
-      "draft": "DRAFT",
+      "draft": "HELD",
       "open": "OPEN",
       "completed": "COMPLETED",
       "cancelled": "CANCELLED",
@@ -601,7 +611,9 @@
       "reportToSnappfood": "Report to Snappfood",
       "changeType": "Change type",
       "more": "More actions",
-      "moreShort": "More"
+      "moreShort": "More",
+      "openAtTill": "Open at the till",
+      "resume": "Resume"
     },
     "snappfood": {
       "withSupport": "With Snappfood support",
@@ -818,6 +830,21 @@
       "onOrAfter": "From",
       "onOrBefore": "Until",
       "between": "Between"
+    },
+    "waiting": {
+      "line": "Orders waiting to be accepted: {{count}}",
+      "answer": "Answer in Incoming Orders"
+    },
+    "dateScope": {
+      "anyDate": "Any date",
+      "custom": "Custom dates",
+      "hint": "Completed, cancelled and refunded orders count within this range. Open and held orders show whatever their date."
+    },
+    "queues": {
+      "all": "All open ({{count}})",
+      "toPay": "To pay ({{count}})",
+      "ready": "Ready ({{count}})",
+      "outForDelivery": "Out for delivery ({{count}})"
     }
   },
   "dineIn": {
@@ -1620,7 +1647,7 @@
     "reference": "Reference"
   },
   "refunds": {
-    "title": "Refunds & Returns",
+    "title": "Refunds",
     "subtitle": "Full and partial refunds of paid orders, released by a manager PIN.",
     "originalTender": "Original Payment Method Refund",
     "cashAlternative": "Alternative Cash Refund",
@@ -2689,7 +2716,7 @@
         "noOrder": "No order generated yet. Fill the form and click Submit Webhook.",
         "successAlert": "ORDER CREATED SUCCESSFULLY",
         "duplicateAlert": "DUPLICATE WEBHOOK IGNORED (Exactly-Once Enforced)",
-        "viewInOrders": "View in Orders Directory",
+        "viewInOrders": "View in Orders",
         "openInPos": "Open POS Register",
         "priceFromBasket": "0 = priced from the menu basket"
       },

@@ -126,7 +126,7 @@ export function useNavData(): NavSectionProps['data'] {
           ],
         },
         {
-          title: t('nav.orders', 'Orders Directory'),
+          title: t('nav.orders', 'Orders'),
           path: '/app/orders',
           icon: ICONS.inventory,
         },

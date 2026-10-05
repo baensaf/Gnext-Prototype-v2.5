@@ -94,6 +94,19 @@ describe('order list (PostgreSQL)', () => {
     expect(counts).toMatchObject({ ALL: 66, OPEN: 1, WAITING: 1, HELD: 1, CANCELLED: 1, REFUNDED: 1, COMPLETED: 61, OTHER: 0 });
   });
 
+  it('counts the queues inside Open, and a queue narrows the list but not the tab counts', async () => {
+    const all = await orders.getOrders(tenantId, { branchId: branchB, group: 'OPEN', counts: '1' });
+    expect(all.total).toBe(2);
+    expect(all.queues).toEqual({ TO_PAY: 0, READY: 0, OUT_FOR_DELIVERY: 1 });
+    const out = await orders.getOrders(tenantId, { branchId: branchB, group: 'OPEN', queue: 'OUT_FOR_DELIVERY', counts: '1' });
+    expect(out.total).toBe(1);
+    expect(out.data[0].status).toBe('OUT_FOR_DELIVERY');
+    expect(out.counts).toMatchObject({ OPEN: 2 });
+    expect(out.queues).toEqual(all.queues);
+    // An unknown queue is ignored rather than emptying the list.
+    expect((await orders.getOrders(tenantId, { branchId: branchB, group: 'OPEN', queue: 'NOPE' })).total).toBe(2);
+  });
+
   it('filters by lifecycle group, date range, channel and type', async () => {
     const open = await orders.getOrders(tenantId, { branchId: branchA, group: 'OPEN' });
     expect(open.data.map((o: any) => o.call_number)).toEqual([142]);
