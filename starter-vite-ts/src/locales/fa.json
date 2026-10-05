@@ -492,8 +492,6 @@
       "noCourier": "تخصیص داده نشده"
     },
     "title": "سفارش‌ها",
-    "subtitle": "همه سفارش‌های شعبه: با شماره، مشتری، تلفن یا کالا پیدا کنید و روی آن اقدام کنید.",
-    "refresh": "تازه‌سازی",
     "searchPlaceholder": "شماره سفارش یا نوبت، مشتری، تلفن، کالا…",
     "tabs": {
       "all": "همه ({{count}})",
@@ -566,16 +564,12 @@
     "table": {
       "orderNumber": "شماره سفارش",
       "customerName": "نام مشتری",
-      "type": "نوع سفارش",
       "itemsSummary": "خلاصه اقلام",
-      "totalAmount": "مبلغ کل",
-      "paidDue": "پرداختی / مانده",
       "placedAt": "زمان ثبت",
       "status": "وضعیت",
       "actions": "عملیات",
       "walkInCustomer": "مشتری حضوری",
       "tableNumber": "میز {{number}}",
-      "paid": "پرداخت: {{amount}}",
       "due": "مانده: {{amount}}",
       "refunded": "بازپرداخت شده: {{amount}}",
       "fullyPaid": "تسویه کامل",
@@ -583,14 +577,16 @@
       "empty": "هیچ سفارشی مطابق با فیلترهای انتخابی یافت نشد.",
       "branch": "شعبه",
       "channel": "کانال",
-      "where": "محل",
-      "delivery": "ارسال",
       "noCourierYet": "هنوز پیکی ندارد",
       "snappfoodCourier": "پیک اسنپ‌فود",
       "counter": "پیشخوان",
       "itemCount": "در مجموع {{count}} قلم",
       "emptyHint": "فیلترهای دیگر یا زبانه «همه» را امتحان کنید.",
-      "takenOffline": "ثبت‌شده در زمان قطع اینترنت شعبه"
+      "takenOffline": "ثبت‌شده در زمان قطع اینترنت شعبه",
+      "typeWhere": "نوع و محل",
+      "amount": "مبلغ",
+      "dueColumn": "مانده",
+      "paidToSnappfood": "پرداخت به اسنپ‌فود"
     },
     "actions": {
       "details": "جزئیات",
@@ -604,7 +600,8 @@
       "editOrder": "ویرایش اقلام",
       "reportToSnappfood": "گزارش به اسنپ‌فود",
       "changeType": "تغییر نوع فاکتور",
-      "more": "اقدامات بیشتر"
+      "more": "اقدامات بیشتر",
+      "moreShort": "بیشتر"
     },
     "snappfood": {
       "withSupport": "نزد پشتیبانی اسنپ‌فود",
@@ -683,22 +680,13 @@
       "grandTotal": "مبلغ نهایی سفارش",
       "paidAmount": "مبلغ پرداخت شده",
       "outstandingBalance": "مانده حساب / بدهی",
-      "auditLogTitle": "گزارش تغییرات و لاگ تغییر وضعیت",
-      "appendOnly": "گزارش سیستمی غیرقابل تغییر",
       "noEvents": "سفارش در وضعیت {{status}} ثبت شده است. رویداد قبلی دیگری ثبت نشده است.",
-      "actor": "انجام دهنده:",
       "authenticatedUser": "کاربر سیستم",
       "systemPos": "سیستم خودکار / صندوق POS",
-      "reasonCode": "کد علت:",
-      "corr": "شناسه رهگیری:",
-      "inspectSnapshot": "مشاهده داده خام",
-      "inspectTitle": "جزئیات داده‌های لاگ: {{action}}",
-      "timestamp": "زمان ثبت:",
       "close": "بستن",
       "takenBy": "ثبت‌کننده",
       "terminal": "صندوق",
       "deliveryZone": "منطقه ارسال",
-      "deliveryState": "وضعیت ارسال",
       "courier": "پیک",
       "deliveryAddress": "نشانی ارسال",
       "deliveryFee": "هزینه ارسال",
@@ -729,7 +717,19 @@
         "PARTIALLY_REFUNDED": "بخشی بازپرداخت شده",
         "REFUNDED": "بازپرداخت شده"
       },
-      "paidWithoutDetail": "سفارش پرداخت‌شده ثبت شده، اما سابقه پرداختی برای آن نگه داشته نشده است."
+      "paidWithoutDetail": "سفارش پرداخت‌شده ثبت شده، اما سابقه پرداختی برای آن نگه داشته نشده است.",
+      "orderTaken": "ثبت سفارش",
+      "reason": "علت: {{reason}}",
+      "events": {
+        "ORDER_EDITED": "اقلام ویرایش شد",
+        "ORDER_UPDATED": "سفارش تغییر کرد",
+        "ORDER_TYPE_CHANGED": "نوع سفارش تغییر کرد",
+        "DINING_TABLE_MOVED": "جابه‌جایی میز",
+        "DINING_ORDERS_MERGED": "ادغام با سفارش دیگر",
+        "ORDER_SPLIT": "تقسیم سفارش",
+        "ORDER_DELIVERY_FAILED": "تحویل نشد",
+        "other": "سفارش تغییر کرد"
+      }
     },
     "errors": {
       "loadFailed": "خطا در بارگذاری سفارش‌های فعال",

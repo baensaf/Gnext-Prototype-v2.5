@@ -492,8 +492,6 @@
       "noCourier": "Not assigned"
     },
     "title": "Orders",
-    "subtitle": "Every order at the branch: find one by number, customer, phone or item, and act on it.",
-    "refresh": "Refresh",
     "searchPlaceholder": "Order or call no., customer, phone, item…",
     "tabs": {
       "all": "All ({{count}})",
@@ -566,16 +564,12 @@
     "table": {
       "orderNumber": "Order Number",
       "customerName": "Customer Name",
-      "type": "Type",
       "itemsSummary": "Items Summary",
-      "totalAmount": "Total Amount",
-      "paidDue": "Paid / Due",
       "placedAt": "Placed At",
       "status": "Status",
       "actions": "Actions",
       "walkInCustomer": "Walk-in Customer",
       "tableNumber": "Table {{number}}",
-      "paid": "Paid: {{amount}}",
       "due": "Due: {{amount}}",
       "refunded": "Refunded: {{amount}}",
       "fullyPaid": "FULLY PAID",
@@ -583,14 +577,16 @@
       "empty": "No orders found matching your filter criteria.",
       "branch": "Branch",
       "channel": "Channel",
-      "where": "Where",
-      "delivery": "Delivery",
       "noCourierYet": "No courier yet",
       "snappfoodCourier": "Snappfood courier",
       "counter": "Counter",
       "itemCount": "{{count}} items in all",
       "emptyHint": "Try other filters or the All tab.",
-      "takenOffline": "Taken while the branch was offline"
+      "takenOffline": "Taken while the branch was offline",
+      "typeWhere": "Type & where",
+      "amount": "Amount",
+      "dueColumn": "Due",
+      "paidToSnappfood": "Paid to Snappfood"
     },
     "actions": {
       "details": "Details",
@@ -604,7 +600,8 @@
       "editOrder": "Edit lines",
       "reportToSnappfood": "Report to Snappfood",
       "changeType": "Change type",
-      "more": "More actions"
+      "more": "More actions",
+      "moreShort": "More"
     },
     "snappfood": {
       "withSupport": "With Snappfood support",
@@ -683,22 +680,13 @@
       "grandTotal": "Grand Total",
       "paidAmount": "Paid Amount",
       "outstandingBalance": "Outstanding Balance",
-      "auditLogTitle": "Immutable Order Audit Log",
-      "appendOnly": "Append-Only Trail",
       "noEvents": "Order was created as {{status}}. No previous lifecycle events registered.",
-      "actor": "Actor:",
       "authenticatedUser": "Authenticated User",
       "systemPos": "System / POS",
-      "reasonCode": "Reason Code:",
-      "corr": "Corr:",
-      "inspectSnapshot": "Inspect Snapshot",
-      "inspectTitle": "Audit Snapshot: {{action}}",
-      "timestamp": "Timestamp:",
       "close": "Close",
       "takenBy": "Taken by",
       "terminal": "Register",
       "deliveryZone": "Delivery zone",
-      "deliveryState": "Delivery",
       "courier": "Courier",
       "deliveryAddress": "Delivery address",
       "deliveryFee": "Delivery fee",
@@ -729,7 +717,19 @@
         "PARTIALLY_REFUNDED": "Partly refunded",
         "REFUNDED": "Refunded"
       },
-      "paidWithoutDetail": "The order is marked paid, but no payment record was kept for it."
+      "paidWithoutDetail": "The order is marked paid, but no payment record was kept for it.",
+      "orderTaken": "Order taken",
+      "reason": "Reason: {{reason}}",
+      "events": {
+        "ORDER_EDITED": "Lines edited",
+        "ORDER_UPDATED": "Order changed",
+        "ORDER_TYPE_CHANGED": "Type changed",
+        "DINING_TABLE_MOVED": "Moved to another table",
+        "DINING_ORDERS_MERGED": "Merged with another order",
+        "ORDER_SPLIT": "Order split",
+        "ORDER_DELIVERY_FAILED": "Not delivered",
+        "other": "Order changed"
+      }
     },
     "errors": {
       "loadFailed": "Failed to load active orders",

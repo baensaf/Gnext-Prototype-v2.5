@@ -95,7 +95,6 @@ export const FEATURE_LABELS = {
   'orders.kitchenProgress': 'F',
   'orders.takenOffline': 'F',
   'orders.headOfficeView': 'V4',
-  'orders.auditSnapshot': 'F',
   // Dine-in floor: running service from the floor (occupancy, seating, move, merge, split,
   // guest bill, pay, release) comes after Phase 1.
   'dineIn.liveFloor': 'F',
