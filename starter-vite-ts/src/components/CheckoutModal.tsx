@@ -541,12 +541,18 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                     {showClubCredit &&
                       tenderButton(
                         hasClubCredit ? creditMethod : undefined,
+                        // The balance goes under the name: beside it, the two don't fit the button.
                         <>
-                          {t('pos.pay.clubCredit')}
-                          <VersionTag feature="pos.customerCredit" sx={{ ml: 1 }} />
+                          <Box component="span" sx={{ display: 'flex', alignItems: 'center', lineHeight: 1.3 }}>
+                            {t('pos.pay.clubCredit')}
+                            <VersionTag feature="pos.customerCredit" sx={{ ml: 1 }} />
+                          </Box>
+                          <Typography component="span" variant="caption" sx={{ display: 'block', opacity: 0.7, lineHeight: 1.3 }}>
+                            {MoneyUtil.formatCurrency(hasClubCredit ? clubCredit : '0')} {currency}
+                          </Typography>
                         </>,
                         <LoyaltyIcon />,
-                        `${MoneyUtil.formatCurrency(hasClubCredit ? clubCredit : '0')} ${currency}`,
+                        '',
                         'outlined',
                         payClubCredit
                       )}
