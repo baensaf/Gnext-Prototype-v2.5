@@ -6,6 +6,7 @@ import { useBoolean } from 'minimal-shared/hooks';
 import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
 import Avatar from '@mui/material/Avatar';
+import Button from '@mui/material/Button';
 import Drawer from '@mui/material/Drawer';
 import MenuList from '@mui/material/MenuList';
 import MenuItem from '@mui/material/MenuItem';
@@ -16,6 +17,8 @@ import { paths } from 'src/routes/paths';
 import { usePathname } from 'src/routes/hooks';
 import { RouterLink } from 'src/routes/components';
 
+import { fTime, fDateTime } from 'src/utils/format-time';
+
 import { ROLE_LABELS } from 'src/config/role-access';
 import { useAuthStore } from 'src/store/useAuthStore';
 
@@ -23,6 +26,7 @@ import { Label } from 'src/components/label';
 import { Iconify } from 'src/components/iconify';
 import { Scrollbar } from 'src/components/scrollbar';
 import { AnimateBorder } from 'src/components/animate';
+import { useAccountShift } from 'src/components/shift/account-shift-store';
 
 import { AccountButton } from './account-button';
 import { SignOutButton } from './sign-out-button';
@@ -43,6 +47,7 @@ export function AccountDrawer({ data = [], sx, ...other }: AccountDrawerProps) {
   const pathname = usePathname();
 
   const user = useAuthStore((state) => state.user);
+  const shift = useAccountShift((state) => state.shift);
 
   const { value: open, onFalse: onClose, onTrue: onOpen } = useBoolean();
 
@@ -58,6 +63,48 @@ export function AccountDrawer({ data = [], sx, ...other }: AccountDrawerProps) {
       </Avatar>
     </AnimateBorder>
   );
+
+  // The shift open at the register on screen. A cashier comes here once, to close it.
+  const renderShift = () =>
+    shift && (
+      <Box
+        sx={(theme) => ({
+          py: 2.5,
+          px: 2.5,
+          gap: 0.5,
+          display: 'flex',
+          flexDirection: 'column',
+          borderTop: `dashed 1px ${theme.vars.palette.divider}`,
+        })}
+      >
+        <Typography variant="subtitle2">{shift.registerName}</Typography>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          {t('shift.bar.shift', 'Shift')} <span dir="ltr">#{shift.shiftNumber}</span>
+        </Typography>
+        <Typography
+          variant="caption"
+          sx={{ color: shift.openedEarlier ? 'warning.main' : 'text.secondary', fontWeight: shift.openedEarlier ? 700 : 400 }}
+        >
+          {t('shift.bar.since', 'Open since {{time}}', {
+            time: shift.openedEarlier ? fDateTime(shift.openedAt) : fTime(shift.openedAt),
+          })}
+        </Typography>
+        <Button
+          fullWidth
+          color="error"
+          variant="outlined"
+          disabled={!shift.canClose}
+          startIcon={<Iconify icon="solar:lock-password-outline" />}
+          onClick={() => {
+            onClose();
+            shift.close();
+          }}
+          sx={{ mt: 1.5 }}
+        >
+          {t('shift.close.title', 'Close shift')}
+        </Button>
+      </Box>
+    );
 
   const renderList = () => (
     <MenuList
@@ -176,6 +223,8 @@ export function AccountDrawer({ data = [], sx, ...other }: AccountDrawerProps) {
               </Box>
             )}
           </Box>
+
+          {renderShift()}
 
           {data.length > 0 && renderList()}
         </Scrollbar>

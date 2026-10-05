@@ -94,7 +94,7 @@ import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { toast, showErrorToast } from 'src/components/snackbar';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 import { CustomerRegisterDialog } from 'src/components/customer-register';
-import { PosShiftBar, PosShiftChip, PosShiftGate } from 'src/components/shift/pos-shift';
+import { PosShiftBar, PosShiftGate, PosShiftAccountLink } from 'src/components/shift/pos-shift';
 
 import { PosStopDialog } from './pos-stop-dialog';
 import { useFillViewport } from './use-fill-viewport';
@@ -1958,7 +1958,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                 </Badge>
                 {/* The chips take the room the buttons leave, and shorten first. */}
                 <Stack direction="row" sx={{ flex: '1 1 0', minWidth: 32, gap: 0.75, alignItems: 'center', overflow: 'hidden' }}>
-                  <PosShiftChip register={register} />
+                  <PosShiftAccountLink register={register} />
                   {/* A resumed draft: holding or placing the cart updates that draft. */}
                   {activeDraftOrderId && (
                     <Tooltip title={t('pos.cartBar.draftCancel')}>

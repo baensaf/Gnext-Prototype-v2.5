@@ -201,8 +201,7 @@
       "discount": "Discount / coupon (F6)",
       "payNow": "Checkout / pay now",
       "couponApply": "Apply coupon",
-      "couponApplied": "Applied",
-      "shiftMenu": "Register and shift"
+      "couponApplied": "Applied"
     },
     "offline": {
       "unavailable": "Not available offline",

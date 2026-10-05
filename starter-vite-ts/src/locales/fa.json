@@ -201,8 +201,7 @@
       "discount": "تخفیف / کد تخفیف (F6)",
       "payNow": "تسویه / پرداخت",
       "couponApply": "اعمال کد تخفیف",
-      "couponApplied": "اعمال شد",
-      "shiftMenu": "صندوق و شیفت"
+      "couponApplied": "اعمال شد"
     },
     "offline": {
       "unavailable": "در حالت آفلاین در دسترس نیست",
