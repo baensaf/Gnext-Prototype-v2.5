@@ -283,7 +283,9 @@
       "tax": "Tax / VAT:",
       "delivery": "Delivery:",
       "discount": "Discount:",
-      "totalDue": "Total Due:"
+      "totalDue": "Total Due:",
+      "addDiscount": "Add discount",
+      "breakdown": "Show or hide the breakdown"
     },
     "deliveryContext": {
       "feeLabel": "Delivery price ({{currency}})",

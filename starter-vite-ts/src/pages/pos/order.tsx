@@ -34,6 +34,8 @@ import VerifiedIcon from '@mui/icons-material/Verified';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import RestaurantIcon from '@mui/icons-material/Restaurant';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
@@ -339,6 +341,8 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
   // Manual Discount Modal state
   const [manualDiscountModalOpen, setManualDiscountModalOpen] = useState(false);
+  // Subtotal and VAT stay folded until the cashier asks: all day they read one number, the total.
+  const [totalsOpen, setTotalsOpen] = useState(false);
   const [manualCalcType, setManualCalcType] = useState<'PERCENTAGE' | 'FIXED_AMOUNT'>('PERCENTAGE');
   const [manualValue, setManualValue] = useState<string>('');
   // Head office's Discount Authorizations, as the server applies them to this account. The
@@ -2569,21 +2573,26 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
               {/* Financial Totals Summary */}
               <Stack spacing={0.5} sx={{ mb: 1.5, mt: 'auto', flexShrink: 0 }}>
-                <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">{t('pos.totals.subtotal')}</Typography>
-                  <Typography variant="body2">{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(cartSubtotal) })}</Typography>
-                </Stack>
-                <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">{t('pos.totals.tax')}</Typography>
-                  <Typography variant="body2">{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(cartTax) })}</Typography>
-                </Stack>
+                {totalsOpen && (
+                  <>
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">{t('pos.totals.subtotal')}</Typography>
+                      <Typography variant="body2">{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(cartSubtotal) })}</Typography>
+                    </Stack>
+                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">{t('pos.totals.tax')}</Typography>
+                      <Typography variant="body2">{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(cartTax) })}</Typography>
+                    </Stack>
+                  </>
+                )}
                 {orderType === 'DELIVERY' && (
                   <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">{t('pos.totals.delivery')}</Typography>
                     <Typography variant="body2">{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(quotedDeliveryFee) })}</Typography>
                   </Stack>
                 )}
-                {/* The discount line is always there: it is also the way to a discount or a coupon. */}
+                {/* The discount line is always there: it is also the way to a discount or a coupon.
+                    With none applied it names the action; applied, it reads as a total like the rest. */}
                 <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                   <PosFeatureGate off={!features.discounts} title={t('pos.cartBar.discount')}>
                     <Button
@@ -2595,26 +2604,31 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                       aria-keyshortcuts="F6"
                       sx={{ py: 0, px: 0.75, minWidth: 0, marginInlineStart: -0.75, fontWeight: 600, fontSize: '0.8125rem', lineHeight: 1.6 }}
                     >
-                      {t('pos.totals.discount')}
+                      {hasDiscount ? t('pos.totals.discount') : t('pos.totals.addDiscount')}
                     </Button>
                   </PosFeatureGate>
                   {MoneyUtil.greaterThan(appliedDiscountAmount, '0') ? (
                     <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold' }}>
                       -{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(appliedDiscountAmount) })}
                     </Typography>
-                  ) : (
-                    <Typography variant="body2" color="text.disabled">
-                      —
-                    </Typography>
-                  )}
+                  ) : null}
                 </Stack>
                 <Divider />
-                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', pt: 0.5 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t('pos.totals.totalDue')}</Typography>
+                {/* The total opens and folds the breakdown above it. */}
+                <ButtonBase
+                  onClick={() => setTotalsOpen((open) => !open)}
+                  aria-expanded={totalsOpen}
+                  aria-label={t('pos.totals.breakdown')}
+                  sx={{ width: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', pt: 0.5, borderRadius: 1 }}
+                >
+                  <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t('pos.totals.totalDue')}</Typography>
+                    {totalsOpen ? <ExpandMoreIcon fontSize="small" color="action" /> : <ExpandLessIcon fontSize="small" color="action" />}
+                  </Stack>
                   <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                     {t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(cartTotalDue) })}
                   </Typography>
-                </Stack>
+                </ButtonBase>
               </Stack>
 
               {/* Hold, place and pay in one row: stacked, they took two rows from the cart's lines. */}
