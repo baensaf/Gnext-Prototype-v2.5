@@ -17,6 +17,7 @@ import Button, { buttonClasses } from '@mui/material/Button';
 import { paths } from 'src/routes/paths';
 import { useRouter, usePathname } from 'src/routes/hooks';
 
+import { CONFIG } from 'src/global-config';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 import { canReachPath, fitsWorkspace, homePathForRole } from 'src/config/role-access';
 import { HEAD_OFFICE_SCOPE, useBranchContextOptional } from 'src/contexts/branch-context';
@@ -111,18 +112,12 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
       ]}
       {...other}
     >
+      {/* The demo tenant is Iran Burger, so the chain's emblem stands for every scope. */}
       <Avatar
-        sx={{
-          width: 26,
-          height: 26,
-          bgcolor: 'primary.main',
-          color: 'primary.contrastText',
-          fontSize: '0.75rem',
-          fontWeight: 700,
-        }}
-      >
-        {activeName.charAt(0).toUpperCase()}
-      </Avatar>
+        alt="Iran Burger"
+        src={`${CONFIG.assetsDir}/logo/iran-burger.png`}
+        sx={{ width: 26, height: 26, bgcolor: 'transparent' }}
+      />
 
       <Box
         component="span"
