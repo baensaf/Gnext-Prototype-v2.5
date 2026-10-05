@@ -36,6 +36,8 @@ export interface CustomerAddress {
   latitude?: string | number | null;
   longitude?: string | number | null;
   is_default: boolean;
+  /** Zones of past orders delivered to this address, the latest first. */
+  last_zone_ids?: string[];
 }
 
 /** A delivery address as the register form sends it; the pin is optional. */

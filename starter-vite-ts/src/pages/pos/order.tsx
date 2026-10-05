@@ -138,6 +138,9 @@ type PosOrderPageProps = {
   onCartChange?: (cart: CarriedCart) => void;
 };
 
+/** The address list's last entry: opens the add-address dialog. */
+const ADD_ADDRESS = '__add__';
+
 const DISCOUNT_REASONS = [
   { code: 'CUSTOMER_SATISFACTION', label: 'Customer Satisfaction / Courtesy' },
   { code: 'STAFF_DISCOUNT', label: 'Staff / Employee Privilege' },
@@ -545,7 +548,14 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
   useEffect(() => {
     if (orderType !== 'DELIVERY' || !selectedDeliveryAddressId || deliveryZones.length === 0 || selectedDeliveryZoneId) return;
-    const postalCode = customerAddresses.find((address) => address.id === selectedDeliveryAddressId)?.postal_code?.trim();
+    const chosen = customerAddresses.find((address) => address.id === selectedDeliveryAddressId);
+    // Where this address was last delivered from here: a returning customer needs no zone picked.
+    const remembered = chosen?.last_zone_ids?.find((id) => deliveryZones.some((zone) => zone.id === id));
+    if (remembered) {
+      setSelectedDeliveryZoneId(remembered);
+      return;
+    }
+    const postalCode = chosen?.postal_code?.trim();
     if (!postalCode) return;
     const matches = deliveryZones.filter((zone) => (zone.postal_prefixes || []).some((prefix) => postalCode.startsWith(prefix)));
     const longestPrefix = Math.max(...matches.flatMap((zone) => (zone.postal_prefixes || []).filter((prefix) => postalCode.startsWith(prefix)).map((prefix) => prefix.length)));
@@ -2303,24 +2313,38 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                       <Alert severity="warning" sx={{ py: 0.25 }}>{t('pos.deliveryContext.customerRequired')}</Alert>
                     ) : (
                       <>
-                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                        {/* The address has the row to itself: beside a button, its street was cut off. */}
                           <FormControl fullWidth size="small" disabled={deliveryOptionsLoading} error={Boolean(selectedCustomerId && !selectedDeliveryAddressId)}>
                             <InputLabel>{t('pos.deliveryContext.addressLabel')}</InputLabel>
-                            <Select value={selectedDeliveryAddressId} label={t('pos.deliveryContext.addressLabel')} onChange={(e) => { setSelectedDeliveryAddressId(e.target.value); setSelectedDeliveryZoneId(''); setManualDeliveryFee(null); }}>
+                            <Select value={selectedDeliveryAddressId} label={t('pos.deliveryContext.addressLabel')} onChange={(e) => {
+                                // The last entry adds an address; it is not one to select.
+                                if (e.target.value === ADD_ADDRESS) { setAddAddressOpen(true); return; }
+                                setSelectedDeliveryAddressId(e.target.value); setSelectedDeliveryZoneId(''); setManualDeliveryFee(null);
+                              }}
+                            >
                               {customerAddresses.map((address) => (
-                                <MenuItem key={address.id} value={address.id}>
-                                  {address.title}{address.is_default ? ` (${t('pos.deliveryContext.addressDefault')})` : ''} — {address.address_text.length > 45 ? `${address.address_text.slice(0, 45)}…` : address.address_text}
+                                <MenuItem key={address.id} value={address.id} sx={{ whiteSpace: 'normal' }}>
+                                  {address.title} — {address.address_text}
                                 </MenuItem>
                               ))}
+                              {customerAddresses.length > 0 && <Divider />}
+                              <MenuItem value={ADD_ADDRESS} sx={{ color: 'primary.main', fontWeight: 600 }}>
+                                + {t('pos.deliveryContext.addAddress')}
+                              </MenuItem>
                             </Select>
                           </FormControl>
-                          <Button size="small" variant="outlined" onClick={() => setAddAddressOpen(true)} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>{t('pos.deliveryContext.addAddress')}</Button>
-                        </Stack>
                         {customerAddresses.length === 0 && !deliveryOptionsLoading && <Alert severity="info" sx={{ py: 0.25 }}>{t('pos.deliveryContext.noAddresses')}</Alert>}
                         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                         <FormControl fullWidth size="small" disabled={deliveryOptionsLoading} error={Boolean(selectedCustomerId && !selectedDeliveryZoneId)} sx={{ minWidth: 0 }}>
                           <InputLabel>{t('pos.deliveryContext.zoneLabel')}</InputLabel>
-                          <Select value={selectedDeliveryZoneId} label={t('pos.deliveryContext.zoneLabel')} onChange={(e) => { setSelectedDeliveryZoneId(e.target.value); setManualDeliveryFee(null); }}>
+                          <Select value={selectedDeliveryZoneId} label={t('pos.deliveryContext.zoneLabel')}
+                            onChange={(e) => { setSelectedDeliveryZoneId(e.target.value); setManualDeliveryFee(null); }}
+                            // Chosen, it shows its name and time: its price is in the box beside it.
+                            renderValue={(id) => {
+                              const zone = deliveryZones.find((z) => z.id === id);
+                              return zone ? t('pos.deliveryContext.zoneShort', { name: zone.name, minutes: zone.estimated_minutes }) : '';
+                            }}
+                          >
                             {deliveryZones.map((zone) => (
                               <MenuItem key={zone.id} value={zone.id}>
                                 {t('pos.deliveryContext.zoneOption', { currency: currencyLabel,
@@ -2336,14 +2360,13 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                             address more, a regular nothing. Emptied, it goes back to the zone's. */}
                         <TextField
                           size="small"
-                          type="number"
                           label={t('pos.deliveryContext.feeLabel', { currency: currencyLabel })}
                           disabled={!selectedDeliveryZoneId}
                           color={typedDeliveryFee !== null ? 'warning' : undefined}
                           focused={typedDeliveryFee !== null ? true : undefined}
-                          value={!selectedDeliveryZoneId ? '' : toToman(manualDeliveryFee ?? zoneDeliveryFee)}
+                          value={!selectedDeliveryZoneId ? '' : toToman(manualDeliveryFee ?? zoneDeliveryFee).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                           onChange={(e) => {
-                            const typed = fromToman(e.target.value);
+                            const typed = fromToman(e.target.value.replace(/,/g, ''));
                             // Nothing below zero; a half-typed value never reaches the order.
                             setManualDeliveryFee(/^\d*$/.test(typed) ? typed : manualDeliveryFee);
                           }}
@@ -2351,7 +2374,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                             if (manualDeliveryFee === '' || manualDeliveryFee === MoneyUtil.format(zoneDeliveryFee, 0)) setManualDeliveryFee(null);
                           }}
                           slotProps={{
-                            htmlInput: { min: 0, inputMode: 'numeric' },
+                            htmlInput: { inputMode: 'numeric', dir: 'ltr' },
                             input: {
                               endAdornment: typedDeliveryFee !== null ? (
                                 <InputAdornment position="end">
@@ -2364,7 +2387,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                               ) : null,
                             },
                           }}
-                          sx={{ width: 150, flexShrink: 0 }}
+                          sx={{ width: 120, flexShrink: 0 }}
                         />
                         </Stack>
                         {deliveryOptionsLoading && <LinearProgress />}
