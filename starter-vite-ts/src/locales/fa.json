@@ -283,7 +283,9 @@
       "tax": "مالیات بر ارزش افزوده:",
       "delivery": "هزینه ارسال:",
       "discount": "تخفیف:",
-      "totalDue": "مبلغ قابل پرداخت:"
+      "totalDue": "مبلغ قابل پرداخت:",
+      "addDiscount": "افزودن تخفیف",
+      "breakdown": "نمایش یا پنهان‌کردن ریز مبلغ"
     },
     "deliveryContext": {
       "feeLabel": "هزینه ارسال ({{currency}})",
