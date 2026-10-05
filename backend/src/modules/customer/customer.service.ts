@@ -659,8 +659,32 @@ export class CustomerService {
   }
 
   // Addresses
+  /**
+   * A customer's addresses, each with the zones its past orders were delivered in, the latest
+   * first. The register picks the first one that is its own branch's, so a returning
+   * customer's zone and fee are there without the cashier choosing them again.
+   */
   async getAddressesByCustomer(tenantId: string, customerId: string) {
-    return await this.addressRepo.find({ where: { tenant_id: tenantId, customer_id: customerId } });
+    const addresses = await this.addressRepo.find({ where: { tenant_id: tenantId, customer_id: customerId } });
+    if (addresses.length === 0) return addresses;
+
+    const used: { address_id: string; zone_id: string }[] = await this.orderRepo
+      .createQueryBuilder('o')
+      .select('o.customer_address_id', 'address_id')
+      .addSelect('o.delivery_zone_id', 'zone_id')
+      .where('o.tenant_id = :tenantId', { tenantId })
+      .andWhere('o.customer_id = :customerId', { customerId })
+      .andWhere('o.customer_address_id IS NOT NULL')
+      .andWhere('o.delivery_zone_id IS NOT NULL')
+      .groupBy('o.customer_address_id')
+      .addGroupBy('o.delivery_zone_id')
+      .orderBy('MAX(o.placed_at)', 'DESC')
+      .getRawMany();
+
+    return addresses.map((address) => ({
+      ...address,
+      last_zone_ids: used.filter((row) => row.address_id === address.id).map((row) => row.zone_id),
+    }));
   }
 
   async createAddress(
