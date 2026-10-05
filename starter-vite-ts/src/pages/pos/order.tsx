@@ -2116,7 +2116,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
                   {orderType === 'DINE_IN' && (
                     <>
-                      <VersionTag feature="pos.tableAssignment" />
                       <Tooltip title={tableNumber ? `Dining Table: ${tableNumber}` : 'Select Dining Table'}>
                         <IconButton
                           color="warning"
@@ -2182,6 +2181,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                         <Box sx={{ px: 1, py: 0.5, mb: 0.5 }}>
                           <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                             Select Dining Table
+                            <VersionTag feature="pos.tableAssignment" sx={{ ml: 1 }} />
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             {tableNumber ? `Current Selection: ${tableNumber}` : 'Assign a table for this dine-in order'}
