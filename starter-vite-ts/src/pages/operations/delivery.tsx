@@ -9,7 +9,6 @@ import MapIcon from '@mui/icons-material/Map';
 import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
 import PersonIcon from '@mui/icons-material/Person';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import HistoryIcon from '@mui/icons-material/History';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
@@ -586,23 +585,10 @@ export function DeliveryPage() {
   return (
     <Box sx={{ p: 3 }} aria-busy={loading || Boolean(pendingAction)}>
 
-      {/* Header */}
-      <Stack direction="row" sx={{ mb: 3, justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-          {t('delivery.title')} <LocalShippingIcon color="primary" />
-        </Typography>
-
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Button
-            variant="outlined"
-            disabled={loading || Boolean(pendingAction)}
-            startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <RefreshIcon />}
-            onClick={() => loadData()}
-          >
-            {loading ? t('delivery.refreshing') : t('delivery.refresh')}
-          </Button>
-        </Stack>
-      </Stack>
+      {/* Header. No refresh button: the board is pushed live (useLiveRefresh), with a poll as backup. */}
+      <Typography variant="h4" sx={{ mb: 3, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+        {t('delivery.title')} <LocalShippingIcon color="primary" />
+      </Typography>
 
       {error && <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>{error}</Alert>}
       {notice && <Alert severity="success" sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice}</Alert>}
