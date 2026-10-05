@@ -13,7 +13,6 @@ import { NoBranchGate } from 'src/routes/components/requires-branch';
 
 import { Logo } from 'src/components/logo';
 import { useSettingsContext } from 'src/components/settings';
-import { VersionLabelsButton } from 'src/components/version-tag';
 
 import { NavMobile } from './nav-mobile';
 import { VerticalDivider } from './content';
@@ -23,8 +22,6 @@ import { Searchbar } from '../components/searchbar';
 import { useNavData } from '../nav-config-dashboard';
 import { MenuButton } from '../components/menu-button';
 import { AccountDrawer } from '../components/account-drawer';
-import { SettingsButton } from '../components/settings-button';
-import { LanguagePopover } from '../components/language-popover';
 import { WorkspacesPopover } from '../components/workspaces-popover';
 import { dashboardLayoutVars, dashboardNavColorVars } from './css-vars';
 import { NotificationsDrawer } from '../components/notifications-drawer';
@@ -136,29 +133,16 @@ export function DashboardLayout({
           {/** @slot Searchbar */}
           <Searchbar data={navData} extraItems={settingsSearchItems} />
 
-          {/** @slot Which Phase 1 version the page on screen ships in */}
-          <VersionLabelsButton />
-
-          {/** @slot Language popover */}
-          <LanguagePopover
-            data={[
-              { value: 'fa', label: 'فارسی', countryCode: 'IR' },
-              { value: 'en', label: 'English', countryCode: 'GB' },
-            ]}
-          />
-
           {/** @slot Orders waiting for the store to accept them */}
           <IncomingOrdersButton />
 
           {/** @slot Notifications popover */}
           <NotificationsDrawer />
 
-          {/** @slot Settings button */}
-          <SettingsButton />
-
           {/** @slot Account drawer */}
           {/* No links: the template's Profile / Projects / Subscription entries all went to
-              "#" and the real menu is the sidebar. */}
+              "#" and the real menu is the sidebar. Language, appearance and the version labels
+              live in it too. */}
           <AccountDrawer />
         </Box>
       ),

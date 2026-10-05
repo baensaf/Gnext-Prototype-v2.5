@@ -26,10 +26,13 @@ import { Label } from 'src/components/label';
 import { Iconify } from 'src/components/iconify';
 import { Scrollbar } from 'src/components/scrollbar';
 import { AnimateBorder } from 'src/components/animate';
+import { VersionLabelsButton } from 'src/components/version-tag';
 import { useAccountShift } from 'src/components/shift/account-shift-store';
 
 import { AccountButton } from './account-button';
 import { SignOutButton } from './sign-out-button';
+import { SettingsButton } from './settings-button';
+import { LanguagePopover } from './language-popover';
 
 // ----------------------------------------------------------------------
 
@@ -222,6 +225,16 @@ export function AccountDrawer({ data = [], sx, ...other }: AccountDrawerProps) {
                 )}
               </Box>
             )}
+
+            {/* Set once and left alone, so they sit here and not in the header. */}
+            <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <VersionLabelsButton />
+              <LanguagePopover />
+              {/* Appearance opens its own drawer over this one. */}
+              <Box component="span" onClick={onClose} sx={{ display: 'inline-flex' }}>
+                <SettingsButton />
+              </Box>
+            </Box>
           </Box>
 
           {renderShift()}
