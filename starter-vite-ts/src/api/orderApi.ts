@@ -130,10 +130,15 @@ export interface OrderGridFilters {
 }
 
 /** The filters the order book understands; everything runs on the server. */
+/** The work inside the Open tab. They overlap, unlike the lifecycle groups. */
+export type OrderOpenQueue = 'TO_PAY' | 'READY' | 'OUT_FOR_DELIVERY';
+
 export interface OrderListQuery {
   filters?: OrderGridFilters;
   branchId?: string;
   group?: OrderLifecycle | 'ALL';
+  /** Narrows Open to one piece of work. */
+  queue?: OrderOpenQueue;
   from?: string;
   to?: string;
   type?: string;
@@ -154,11 +159,13 @@ export interface OrderListPage {
   page: number;
   limit: number;
   counts?: Record<OrderLifecycle | 'ALL', number>;
+  queues?: Record<OrderOpenQueue, number>;
 }
 
 const listParams = (query: OrderListQuery) => ({
   branchId: query.branchId || undefined,
   group: query.group && query.group !== 'ALL' ? query.group : undefined,
+  queue: query.queue || undefined,
   from: query.from,
   to: query.to,
   type: query.type || undefined,

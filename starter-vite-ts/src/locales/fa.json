@@ -45,7 +45,7 @@
     "sell": "فروش",
     "pos": "صندوق فروش POS",
     "dineIn": "سالن و میزها",
-    "orders": "دفترچه سفارش‌ها",
+    "orders": "سفارش‌ها",
     "operations": "عملیات",
     "kds": "نمایشگر آشپزخانه KDS",
     "incomingOrders": "سفارش‌های ورودی",
@@ -57,7 +57,7 @@
     "cashier": "شیفت‌های صندوق‌دار",
     "businessDays": "روزهای کاری",
     "payments": "پرداخت‌ها",
-    "refunds": "بازپرداخت‌ها",
+    "refunds": "مرجوعی‌ها",
     "kdsConfig": "تنظیمات KDS",
     "printers": "چاپگرها و مسیریابی",
     "printQueue": "صف چاپ",
@@ -195,12 +195,17 @@
   },
   "pos": {
     "cartBar": {
-      "draft": "پیش‌نویس نگه‌داشته",
-      "draftCancel": "پایان ویرایش این پیش‌نویس",
+      "draft": "سفارش نگه‌داشته",
+      "draftCancel": "پایان ویرایش این سفارش نگه‌داشته",
       "discount": "تخفیف / کد تخفیف (F6)",
       "payNow": "تسویه / پرداخت",
       "couponApply": "اعمال کد تخفیف",
-      "couponApplied": "اعمال شد"
+      "couponApplied": "اعمال شد",
+      "hold": "نگه‌دار",
+      "holding": "در حال نگه‌داشتن…",
+      "heldToast": "سفارش {{number}} نگه داشته شد",
+      "resumedToast": "سفارش نگه‌داشته {{number}} به سبد برگشت",
+      "heldButton": "نگه‌داشته‌ها"
     },
     "offline": {
       "unavailable": "در حالت آفلاین در دسترس نیست",
@@ -375,7 +380,13 @@
       "failed": "جست‌وجو در حال حاضر در دسترس نیست",
       "registerNew": "ثبت مشتری جدید"
     },
-    "itemDiscount": "{{percent}}٪ تخفیف"
+    "itemDiscount": "{{percent}}٪ تخفیف",
+    "heldDrawer": {
+      "title": "سفارش‌های نگه‌داشته",
+      "subtitle": "ادامه، ویرایش یا حذف سفارش‌های نگه‌داشته",
+      "discarded": "سفارش نگه‌داشته حذف شد",
+      "resumeFailed": "سفارش نگه‌داشته باز نشد"
+    }
   },
   "till": {
     "title": "صندوق جی‌نکست",
@@ -495,12 +506,11 @@
     "searchPlaceholder": "شماره سفارش یا نوبت، مشتری، تلفن، کالا…",
     "tabs": {
       "all": "همه ({{count}})",
-      "waiting": "در انتظار تأیید ({{count}})",
       "open": "باز ({{count}})",
       "completed": "تکمیل شده ({{count}})",
       "cancelled": "لغو شده ({{count}})",
       "held": "نگه‌داشته ({{count}})",
-      "refunded": "بازپرداخت شده ({{count}})"
+      "refunded": "مرجوع شده ({{count}})"
     },
     "types": {
       "dineIn": "سالن",
@@ -548,7 +558,7 @@
     },
     "statuses": {
       "pendingAcceptance": "در انتظار تأیید",
-      "draft": "پیش‌نویس",
+      "draft": "نگه‌داشته",
       "open": "باز",
       "completed": "تکمیل شده",
       "cancelled": "لغو شده",
@@ -601,7 +611,9 @@
       "reportToSnappfood": "گزارش به اسنپ‌فود",
       "changeType": "تغییر نوع فاکتور",
       "more": "اقدامات بیشتر",
-      "moreShort": "بیشتر"
+      "moreShort": "بیشتر",
+      "openAtTill": "باز کردن در صندوق",
+      "resume": "ادامه"
     },
     "snappfood": {
       "withSupport": "نزد پشتیبانی اسنپ‌فود",
@@ -692,7 +704,7 @@
       "deliveryFee": "هزینه ارسال",
       "refundedAmount": "بازپرداخت شده",
       "paymentsTitle": "پرداخت‌ها",
-      "refundsTitle": "بازپرداخت‌ها",
+      "refundsTitle": "مرجوعی‌ها",
       "paidToSnappfood": "مبلغ سفارش‌های اسنپ‌فود را خود اسنپ‌فود می‌گیرد؛ صندوق پرداختی ثبت نمی‌کند.",
       "noPayments": "هنوز پرداختی ثبت نشده است.",
       "paymentMethod": "روش",
@@ -818,6 +830,21 @@
       "onOrAfter": "از تاریخ",
       "onOrBefore": "تا تاریخ",
       "between": "بین دو تاریخ"
+    },
+    "waiting": {
+      "line": "سفارش در انتظار تأیید: {{count}}",
+      "answer": "پاسخ در سفارش‌های ورودی"
+    },
+    "dateScope": {
+      "anyDate": "همه تاریخ‌ها",
+      "custom": "تاریخ دلخواه",
+      "hint": "سفارش‌های تکمیل‌شده، لغوشده و مرجوع‌شده در همین بازه شمرده می‌شوند. سفارش‌های باز و نگه‌داشته با هر تاریخی نمایش داده می‌شوند."
+    },
+    "queues": {
+      "all": "همه باز ({{count}})",
+      "toPay": "پرداخت‌نشده ({{count}})",
+      "ready": "آماده تحویل ({{count}})",
+      "outForDelivery": "در مسیر ارسال ({{count}})"
     }
   },
   "dineIn": {
@@ -1620,7 +1647,7 @@
     "reference": "کد پیگیری"
   },
   "refunds": {
-    "title": "استرداد و مرجوعی",
+    "title": "مرجوعی‌ها",
     "subtitle": "بازپرداخت کامل یا بخشی از سفارش‌های پرداخت‌شده، با رمز مدیر.",
     "originalTender": "استرداد به روش پرداخت اصلی",
     "cashAlternative": "استرداد نقدی جایگزین",
@@ -2689,7 +2716,7 @@
         "noOrder": "هنوز سفارشی ایجاد نشده است. فرم را تکمیل و روی «ارسال وب‌هوک» کلیک کنید.",
         "successAlert": "سفارش با موفقیت در موتور سفارشات ایجاد شد",
         "duplicateAlert": "وب‌هوک تکراری شناسایی و مهار شد (قانون Exactly-Once)",
-        "viewInOrders": "مشاهده در دایرکتوری سفارش‌ها",
+        "viewInOrders": "مشاهده در سفارش‌ها",
         "openInPos": "باز کردن در صندوق فروش (POS)",
         "priceFromBasket": "۰ = قیمت از سبد منو"
       },

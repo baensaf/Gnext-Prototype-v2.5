@@ -16,6 +16,7 @@ import type {
   ProductAvailability,
 } from 'src/api/catalogApi';
 
+import { useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
@@ -899,7 +900,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         draft = await pos.orders.createOrder(orderPayload);
       }
 
-      toast.success(`Order #${draft.order_number} held in Drafts`);
+      toast.success(t('pos.cartBar.heldToast', { number: draft.order_number }));
       handleClearCart();
       await fetchHeldOrders(selectedBranchId);
       setError(null);
@@ -1001,14 +1002,32 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       setCart(loadedCart);
       setHeldOrdersDrawerOpen(false);
       setError(null);
-      toast.success(`Resumed draft #${fullOrder.order_number}`);
+      toast.success(t('pos.cartBar.resumedToast', { number: fullOrder.order_number }));
     } catch (err: any) {
-      setError('Failed to resume held draft order');
-      showErrorToast(err, 'Failed to resume held draft order');
+      setError(t('pos.heldDrawer.resumeFailed'));
+      showErrorToast(err, t('pos.heldDrawer.resumeFailed'));
     } finally {
       setResumingOrderId(null);
     }
   };
+
+  // /app/pos?resume=<id> picks a held order up again; "Open at the till" on the Orders page
+  // sends the cashier here. It waits for the menu so the lines find their products.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const resumeId = searchParams.get('resume');
+  useEffect(() => {
+    if (!resumeId || products.length === 0) return;
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('resume');
+        return next;
+      },
+      { replace: true }
+    );
+    handleResumeOrder({ id: resumeId } as OrderHeader);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeId, products.length]);
 
   // Discard a Held Order. The backend refuses to cancel a draft with items on it
   // without a reason code (spec 6.1), so those go through the reason dialog; an
@@ -1047,7 +1066,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       } else if (selectedBranchId) {
         fetchHeldOrders(selectedBranchId);
       }
-      toast.info('Held draft order discarded');
+      toast.info(t('pos.heldDrawer.discarded'));
       setError(null);
       return true;
     } catch (err: any) {
@@ -2013,7 +2032,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                       aria-keyshortcuts="F4"
                       sx={{ textTransform: 'none', fontWeight: 600, py: 0.25, px: 1 }}
                     >
-                      Held
+                      {t('pos.cartBar.heldButton')}
                     </Button>
                   </PosFeatureGate>
                   )}
@@ -2667,9 +2686,22 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                     disabled={!features.park || cart.length === 0 || holdingOrder}
                     onClick={handleHoldOrder}
                     startIcon={holdingOrder ? <CircularProgress size={18} color="inherit" /> : <PauseIcon />}
-                    sx={{ fontWeight: 'bold', flexShrink: 0, px: 1.5, whiteSpace: 'nowrap' }}
+                    aria-label={t('pos.cartBar.hold')}
+                    title={t('pos.cartBar.hold')}
+                    // On a till-sized screen the row has no room for the word beside Place and PC-POS,
+                    // so Hold is its icon there and spells itself out on wider screens.
+                    sx={{
+                      fontWeight: 'bold',
+                      flexShrink: 0,
+                      px: 1.5,
+                      minWidth: 0,
+                      whiteSpace: 'nowrap',
+                      '& .MuiButton-startIcon': { marginInline: { xs: 0, xl: '-4px 8px' } },
+                    }}
                   >
-                    {holdingOrder ? 'Holding…' : 'Hold'}
+                    <Box component="span" sx={{ display: { xs: 'none', xl: 'inline' } }}>
+                      {holdingOrder ? t('pos.cartBar.holding') : t('pos.cartBar.hold')}
+                    </Box>
                   </Button>
                 </PosFeatureGate>
                 <Button
@@ -2916,10 +2948,10 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
               <PauseIcon color="warning" />
-              Held Draft Orders
+              {t('pos.heldDrawer.title')}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Resume, modify, or discard parked cashier carts
+              {t('pos.heldDrawer.subtitle')}
             </Typography>
           </Box>
           <IconButton size="small" onClick={() => setHeldOrdersDrawerOpen(false)}>

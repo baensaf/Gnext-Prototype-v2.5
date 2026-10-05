@@ -586,7 +586,7 @@ export function SimulationSnappfoodPage() {
                               size="small"
                               startIcon={<ReceiptLongIcon />}
                             >
-                              {t('simulation.snappfood.webhook.viewInOrders', 'View in Orders Directory')}
+                              {t('simulation.snappfood.webhook.viewInOrders', 'View in Orders')}
                             </Button>
                             <Button
                               component={RouterLink}
