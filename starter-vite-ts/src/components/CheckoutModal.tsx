@@ -145,7 +145,10 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const cashMethod = paymentMethods.find((m) => m.kind === 'CASH');
   const cardMethod = paymentMethods.find((m) => CARD_KINDS.includes(m.kind));
   const creditMethod = paymentMethods.find((m) => m.kind === 'CUSTOMER_CREDIT');
-  const hasClubCredit = !!creditMethod && MoneyUtil.greaterThan(clubCredit, '0');
+  const hasClubCredit = MoneyUtil.greaterThan(clubCredit, '0');
+  // Shown for any order with a customer, greyed out when there is nothing to spend, so the
+  // cashier sees the customer has no credit rather than wondering where the button went.
+  const showClubCredit = !!creditMethod && !!order?.customer_id && pos.features.customers;
   const otherMethods = paymentMethods.filter(
     (m) => m.id !== cashMethod?.id && m.id !== cardMethod?.id && !COURIER_KINDS.includes(m.kind)
   );
@@ -528,15 +531,15 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                   <Stack spacing={1.5}>
                     {tenderButton(cardMethod, t('pos.card', 'Card'), <PointOfSaleIcon />, 'F9', 'contained')}
                     {tenderButton(cashMethod, t('pos.cash', 'Cash'), <PaymentsIcon />, 'F8', 'outlined')}
-                    {hasClubCredit &&
+                    {showClubCredit &&
                       tenderButton(
-                        creditMethod,
+                        hasClubCredit ? creditMethod : undefined,
                         <>
                           {t('pos.pay.clubCredit')}
                           <VersionTag feature="pos.customerCredit" sx={{ ml: 1 }} />
                         </>,
                         <LoyaltyIcon />,
-                        `${MoneyUtil.formatCurrency(clubCredit)} ${currency}`,
+                        `${MoneyUtil.formatCurrency(hasClubCredit ? clubCredit : '0')} ${currency}`,
                         'outlined',
                         payClubCredit
                       )}
