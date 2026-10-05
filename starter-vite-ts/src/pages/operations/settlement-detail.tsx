@@ -333,7 +333,11 @@ export function SettlementDetailPage() {
                       <TableCell dir="ltr">{MoneyUtil.formatCurrency(line.cash_collected || 0)} {currency}</TableCell>
                       <TableCell dir="ltr">{MoneyUtil.formatCurrency(line.pos_collected || line.pos_amount || 0)} {currency}</TableCell>
                       <TableCell>
-                        <Chip size="small" label={line.status || line.state || 'COMPLETED'} color="success" />
+                        <Chip
+                          size="small"
+                          label={line.delivery_status === 'FAILED' ? t('delivery.states.failed') : t('delivery.states.delivered')}
+                          color={line.delivery_status === 'FAILED' ? 'error' : 'success'}
+                        />
                       </TableCell>
                     </TableRow>
                   ))

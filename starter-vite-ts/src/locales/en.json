@@ -51,7 +51,7 @@
     "kds": "Kitchen KDS",
     "incomingOrders": "Incoming Orders",
     "delivery": "Delivery Orders",
-    "deliveryHub": "Delivery & Fleet Hub",
+    "deliveryHub": "Delivery hub",
     "deliveryOrders": "Dispatch Board",
     "couriers": "Couriers Roster",
     "courierSettlements": "Courier Settlements",
@@ -954,7 +954,7 @@
     "orderNumber": "Order #"
   },
   "delivery": {
-    "title": "Delivery Management",
+    "title": "Delivery hub",
     "subtitle": "Dispatch delivery orders, enforce courier attendance & mobile terminal exclusivity, and instrument cash/POS expectations.",
     "banner": "DELIVERY EXECUTION & COURIER INSTRUMENT DISPATCHER",
     "activeBranch": "Active Branch",
@@ -975,9 +975,9 @@
       "settlementNet": "Cash to hand back"
     },
     "tabs": {
-      "board": "Dispatch Board",
+      "board": "Dispatch board",
       "couriers": "Couriers & Roster",
-      "settlements": "Fleet Settlements",
+      "settlements": "Courier settlements",
       "zones": "Zones & Fees",
       "audit": "Delivery Audit Log"
     },
@@ -994,27 +994,31 @@
     "card": {
       "order": "Order",
       "zone": "Zone",
-      "fee": "Fee",
+      "fee": "Delivery fee",
       "total": "Total",
       "courier": "Courier",
       "phone": "Phone",
       "noPhone": "N/A",
       "expCash": "Exp Cash",
-      "toCollect": "To collect",
+      "toCollect": "To collect from customer",
       "expPos": "Exp POS",
       "compensation": "Compensation",
       "assignCourier": "Send with courier",
-      "depart": "Depart",
-      "departing": "Departing…",
+      "depart": "Send out",
+      "departing": "Sending…",
       "reassign": "Change courier",
       "complete": "Delivered",
-      "failed": "Failed",
+      "failed": "Not delivered",
       "requeue": "Re-queue Delivery",
       "customer": "Customer",
       "noCustomer": "No customer on file",
       "callNumber": "#{{number}}",
       "waiting": "{{minutes}} min",
-      "waitingLate": "Past the zone estimate of {{minutes}} min"
+      "waitingLate": "Past the zone estimate of {{minutes}} min",
+      "noCourier": "No courier",
+      "elapsedMinutes": "{{n}} min",
+      "elapsedHours": "{{h}} h {{m}} min",
+      "elapsedDays": "{{n}} days"
     },
     "states": {
       "unassigned": "Unassigned",
@@ -1022,7 +1026,7 @@
       "pickedUp": "Picked Up",
       "enRoute": "En Route",
       "delivered": "Delivered",
-      "failed": "Failed",
+      "failed": "Not delivered",
       "cancelled": "Cancelled"
     },
     "couriers": {
@@ -1100,16 +1104,16 @@
       "complete": {
         "title": "Mark Delivered",
         "description": "Order #{{orderNumber}} was handed to the customer.",
-        "owedLabel": "The courier brings back",
+        "owedLabel": "To collect from customer",
         "settleNote": "How the customer paid — card on the courier's reader, cash, or both — is entered when the courier comes back and is settled, from the card slip.",
         "cancel": "Cancel",
         "submit": "Mark Delivered"
       },
       "fail": {
-        "title": "Record Delivery Failure",
-        "reasonLabel": "Failure Reason",
+        "title": "Not delivered",
+        "reasonLabel": "Why was it not delivered?",
         "cancel": "Cancel",
-        "submit": "Submit Failure"
+        "submit": "Record"
       },
       "addCourier": {
         "title": "Add Courier Profile",
@@ -1208,8 +1212,8 @@
     "subtitle": "Reconcile courier cash, mobile POS collections, discrepancies, and statements",
     "refresh": "Refresh",
     "tabs": {
-      "overview": "Unsettled Couriers Overview",
-      "batches": "Settlement Batches ({{count}})"
+      "overview": "Couriers to settle",
+      "batches": "Settlements ({{count}})"
     },
     "statuses": {
       "draft": "DRAFT",
@@ -1225,7 +1229,7 @@
       "expectedCash": "Expected Cash:",
       "expectedPos": "Expected Mobile POS:",
       "totalDeliveryFees": "Total Delivery Fees:",
-      "startBatch": "Start Settlement Batch",
+      "startBatch": "Start settlement",
       "empty": "No couriers found or no active delivery assignments."
     },
     "batches": {
@@ -1252,10 +1256,10 @@
       "orderNumber": "Order #",
       "status": "Status",
       "paymentMethod": "Payment Method",
-      "expCash": "Exp Cash",
-      "expPos": "Exp POS",
+      "expCash": "Expected cash",
+      "expPos": "Expected card",
       "cancel": "Cancel",
-      "createDraft": "Create Draft Settlement"
+      "createDraft": "Start settlement"
     },
     "detailModal": {
       "title": "Settlement #{{number}} - {{name}}",

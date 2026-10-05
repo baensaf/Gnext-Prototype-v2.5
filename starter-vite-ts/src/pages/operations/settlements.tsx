@@ -199,6 +199,17 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
     );
   };
 
+  // The server sends a ride's status and the payment method as codes; a cashier reads words.
+  const rideStatusLabel = (status?: string) => {
+    const key = { DELIVERED: 'delivered', FAILED: 'failed', CANCELLED: 'cancelled', OUT_FOR_DELIVERY: 'enRoute' }[status || ''];
+    return key ? t(`delivery.states.${key}`) : status || '';
+  };
+  const methodLabel = (code?: string) => {
+    if (code === 'CASH') return t('settlements.detailModal.methodCash');
+    if (code === 'MOBILE_POS') return t('settlements.detailModal.methodCard');
+    return code || '';
+  };
+
   const paidByLabel = (l: SettlementLine) => {
     const card = MoneyUtil.isValid(l.actual_pos) && MoneyUtil.greaterThan(l.actual_pos, '0');
     const cash = MoneyUtil.isValid(l.actual_cash) && MoneyUtil.greaterThan(l.actual_cash, '0');
@@ -367,14 +378,6 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                         {MoneyUtil.formatCurrency(summary.expected_pos || 0)} {currency}
                       </Typography>
                     </Stack>
-                    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        {t('settlements.overview.totalDeliveryFees')}
-                      </Typography>
-                      <Typography variant="body2" dir="ltr">
-                        {MoneyUtil.formatCurrency(summary.total_delivery_fees || 0)} {currency}
-                      </Typography>
-                    </Stack>
                   </Stack>
 
                   <Button
@@ -506,8 +509,8 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                     {previewData.lines?.map((l: any, idx: number) => (
                       <TableRow key={idx}>
                         <TableCell>{l.order_number}</TableCell>
-                        <TableCell>{l.delivery_status}</TableCell>
-                        <TableCell>{l.payment_method_code}</TableCell>
+                        <TableCell>{rideStatusLabel(l.delivery_status)}</TableCell>
+                        <TableCell>{methodLabel(l.payment_method_code)}</TableCell>
                         <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(l.expected_cash || 0)} {currency}</TableCell>
                         <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(l.expected_pos || 0)} {currency}</TableCell>
                       </TableRow>
@@ -649,7 +652,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                             />
                           </TableCell>
                           <TableCell sx={{ fontWeight: 'bold' }}>{line.order_number}</TableCell>
-                          <TableCell>{line.delivery_status}</TableCell>
+                          <TableCell>{rideStatusLabel(line.delivery_status)}</TableCell>
                           <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(lineOwed(line))} {currency}</TableCell>
                           <TableCell align="right">
                             {['DRAFT', 'UNDER_REVIEW'].includes(activeSettlementDetail.status) ? (
