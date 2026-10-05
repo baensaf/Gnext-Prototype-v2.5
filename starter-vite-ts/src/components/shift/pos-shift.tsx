@@ -1,6 +1,6 @@
 import type { RegisterShiftState } from './use-register-shift';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import LockIcon from '@mui/icons-material/Lock';
@@ -9,14 +9,10 @@ import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import {
   Card,
   Chip,
-  Menu,
   Paper,
   Stack,
   Button,
-  Divider,
-  MenuItem,
   Typography,
-  ListItemIcon,
   CircularProgress,
 } from '@mui/material';
 
@@ -26,6 +22,7 @@ import { usePosSource, PosFeatureGate } from 'src/contexts/pos-source';
 
 import { RegisterNotice } from './register-notice';
 import { OpenShiftDialog } from './open-shift-dialog';
+import { useAccountShift } from './account-shift-store';
 import { CloseShiftDialog } from './close-shift-dialog';
 import { DeviceTerminalDialog } from './device-terminal-dialog';
 import { BusinessDayEndedAlert } from './business-day-ended-alert';
@@ -108,83 +105,44 @@ export function PosShiftBar({ register }: { register: RegisterShiftState }) {
 }
 
 /**
- * The same controls as `PosShiftBar`, folded into a chip for the cart's header: a full-width
- * bar above the register cost it a row of height all day for something used once a shift.
+ * Hands the open shift to the account drawer, where a cashier closes it. Nothing shows on the
+ * register itself: the shift is touched once, at its end, and its name and number took the
+ * cart's header all day.
  */
-export function PosShiftChip({ register }: { register: RegisterShiftState }) {
-  const { t } = useTranslation();
+export function PosShiftAccountLink({ register }: { register: RegisterShiftState }) {
   const { features } = usePosSource();
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const publish = useAccountShift((state) => state.set);
   const [closeOpen, setCloseOpen] = useState(false);
   const { terminal, shift } = register;
 
+  const registerName = terminal ? `${terminal.name} (${terminal.code})` : '';
+  const shiftNumber = shift?.shift_number || '';
+  const openedAt = shift?.opened_at ? String(shift.opened_at) : '';
+  const canClose = features.shiftActions;
+
+  useEffect(() => {
+    if (!registerName || !shiftNumber) return undefined;
+    publish({
+      registerName,
+      shiftNumber,
+      openedAt,
+      openedEarlier: !!openedAt && new Date(openedAt).toDateString() !== new Date().toDateString(),
+      canClose,
+      close: () => setCloseOpen(true),
+    });
+    return () => publish(null);
+  }, [publish, registerName, shiftNumber, openedAt, canClose]);
+
   if (!terminal || !shift) return null;
 
-  const openedEarlier = !!shift.opened_at && new Date(shift.opened_at).toDateString() !== new Date().toDateString();
-
   return (
-    <>
-      <Chip
-        size="small"
-        variant="outlined"
-        // A shift left open from an earlier day stands out, as it does on the bar.
-        color={openedEarlier ? 'warning' : 'success'}
-        icon={<PointOfSaleIcon />}
-        onClick={(e) => setAnchorEl(e.currentTarget)}
-        aria-label={t('pos.cartBar.shiftMenu')}
-        aria-haspopup="menu"
-        label={
-          <span>
-            {terminal.name} · {t('shift.bar.shift', 'Shift')} <span dir="ltr">#{shift.shift_number}</span>
-          </span>
-        }
-        // In a narrow cart header the chip gives way first, down to its icon.
-        sx={{ minWidth: 32, flexShrink: 100, fontWeight: 600 }}
-      />
-      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
-        <Stack sx={{ px: 2, py: 1, gap: 0.25 }}>
-          <Typography variant="subtitle2">
-            {terminal.name} ({terminal.code})
-          </Typography>
-          <Typography variant="body2">
-            {t('shift.bar.shift', 'Shift')} <span dir="ltr">#{shift.shift_number}</span>
-          </Typography>
-          <Typography
-            variant="caption"
-            color={openedEarlier ? 'warning.main' : 'text.secondary'}
-            sx={openedEarlier ? { fontWeight: 700 } : undefined}
-          >
-            {t('shift.bar.since', 'Open since {{time}}', {
-              time: openedEarlier ? fDateTime(shift.opened_at) : fTime(shift.opened_at),
-            })}
-          </Typography>
-        </Stack>
-        <Divider />
-        <PosFeatureGate off={!features.shiftActions}>
-          <MenuItem
-            disabled={!features.shiftActions}
-            onClick={() => {
-              setAnchorEl(null);
-              setCloseOpen(true);
-            }}
-            sx={{ color: 'error.main' }}
-          >
-            <ListItemIcon sx={{ color: 'inherit' }}>
-              <LockIcon fontSize="small" />
-            </ListItemIcon>
-            {t('shift.close.title', 'Close shift')}
-          </MenuItem>
-        </PosFeatureGate>
-      </Menu>
-
-      <CloseShiftDialog
-        open={closeOpen}
-        onClose={() => setCloseOpen(false)}
-        shiftId={shift.id}
-        shiftNumber={shift.shift_number}
-        onClosed={register.refresh}
-      />
-    </>
+    <CloseShiftDialog
+      open={closeOpen}
+      onClose={() => setCloseOpen(false)}
+      shiftId={shift.id}
+      shiftNumber={shift.shift_number}
+      onClosed={register.refresh}
+    />
   );
 }
 
