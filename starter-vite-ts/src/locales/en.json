@@ -982,7 +982,7 @@
       "audit": "Delivery Audit Log"
     },
     "columns": {
-      "unassigned": "Unassigned",
+      "unassigned": "Waiting for courier",
       "needsCourier": "Needs Courier",
       "assigned": "Assigned",
       "readyToDepart": "Ready to Depart",
@@ -1003,10 +1003,10 @@
       "toCollect": "To collect",
       "expPos": "Exp POS",
       "compensation": "Compensation",
-      "assignCourier": "Assign Courier",
+      "assignCourier": "Send with courier",
       "depart": "Depart",
       "departing": "Departing…",
-      "reassign": "Reassign",
+      "reassign": "Change courier",
       "complete": "Delivered",
       "failed": "Failed",
       "requeue": "Re-queue Delivery",
@@ -1088,12 +1088,14 @@
     },
     "modals": {
       "assignCourier": {
-        "title": "Assign Courier to Delivery",
-        "description": "Assign an eligible checked-in & available courier to Order #{{orderNumber}}",
+        "title": "Send out with a courier",
+        "description": "Pick a checked-in courier for order #{{orderNumber}}. The order goes out with them now.",
         "eligibleCourier": "Eligible Courier",
         "noEligible": "No couriers are currently checked in and AVAILABLE under capacity limits.",
         "cancel": "Cancel",
-        "submit": "Assign Courier"
+        "submit": "Send out",
+        "changeDescription": "Order #{{orderNumber}} is already out. Pick the courier who is taking it instead.",
+        "changeSubmit": "Change courier"
       },
       "complete": {
         "title": "Mark Delivered",
@@ -1260,7 +1262,7 @@
       "expectedActualCash": "Expected Cash / Actual Cash",
       "expectedActualPos": "Expected POS / Actual POS",
       "discrepancy": "Discrepancy",
-      "compensationsAdjustments": "Compensations / Adjustments",
+      "compensationsAdjustments": "Adjustments",
       "comp": "Comp:",
       "adj": "Adj:",
       "netSettlementTotal": "Net Settlement Total",

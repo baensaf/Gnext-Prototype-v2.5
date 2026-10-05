@@ -9,7 +9,6 @@ import EditNoteIcon from '@mui/icons-material/EditNote';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import TranslateIcon from '@mui/icons-material/Translate';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
-import TwoWheelerIcon from '@mui/icons-material/TwoWheeler';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
@@ -266,15 +265,6 @@ export function useSettingsCatalogue(): SettingCategory[] {
           path: '/app/settings/business-day',
           icon: <NightsStayIcon sx={{ color: 'primary.main' }} />,
           tags: ['business day', 'cutoff', 'overnight', 'hours', 'day close', 'روز کاری', 'پایان روز', 'ساعت کاری', 'بستن روز'],
-        },
-        {
-          id: 'courierPay',
-          scope: 'BRANCH',
-          title: t('settings.hub.items.courierPay.title'),
-          description: t('settings.hub.items.courierPay.description'),
-          path: '/app/settings/courier-pay',
-          icon: <TwoWheelerIcon sx={{ color: 'primary.main' }} />,
-          tags: ['courier', 'pay', 'delivery fee', 'zone rate', 'failed delivery', 'سفیر', 'دستمزد', 'پیک', 'کرایه'],
         },
         {
           id: 'calendar',

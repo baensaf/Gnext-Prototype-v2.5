@@ -67,7 +67,6 @@ import { BranchDetailPage } from 'src/pages/operations/branch-detail';
 import { CardTerminalsPage } from 'src/pages/operations/card-terminals';
 import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
 import { CourierDetailPage } from 'src/pages/operations/courier-detail';
-import { CourierPaySettingsPage } from 'src/pages/settings/courier-pay';
 import { MoadianInvoicesPage } from 'src/pages/moadian/moadian-invoices';
 import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
 import { BranchOverridesPage } from 'src/pages/settings/branch-overrides';
@@ -214,7 +213,6 @@ export const routesSection: RouteObject[] = [
       { path: 'settings/order-workflow', element: <OrderWorkflowSettingsPage /> },
       { path: 'settings/shift-policy', element: <ShiftPolicySettingsPage /> },
       { path: 'settings/business-day', element: <BusinessDaySettingsPage /> },
-      { path: 'settings/courier-pay', element: <CourierPaySettingsPage /> },
       { path: 'settings/calendar', element: <CalendarSettingsPage /> },
       { path: 'settings/branch-overrides', element: <BranchOverridesPage /> },
       { path: 'settings/roles', element: <RolesMatrixPage /> },

@@ -785,6 +785,105 @@ export class DeliveryService {
     return saved;
   }
 
+  /**
+   * Working today is the whole test: no separate available/busy switch, and no cap on how many
+   * deliveries one courier carries. The dispatcher at the counter decides both.
+   */
+  private async courierWhoCanTake(tenantId: string, courierId: string, order: OrderHeader) {
+    const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
+    if (!courier) throw new NotFoundException('Courier not found');
+    if (!courier.is_active) throw new BadRequestException('Courier profile is inactive');
+    if (courier.branch_id && order.branch_id && courier.branch_id !== order.branch_id) {
+      throw new BadRequestException({
+        code: 'COURIER_OTHER_BRANCH',
+        title: 'Courier Works At Another Branch',
+        detail: `${courier.name} works at another branch and cannot take this branch's orders.`,
+      });
+    }
+
+    const todayStr = await this.businessToday(tenantId, courier.branch_id);
+    const attendance = await this.attendanceRepo.findOne({
+      where: { tenant_id: tenantId, courier_id: courierId, date: todayStr },
+    });
+    if (!attendance || attendance.status !== 'CHECKED_IN') {
+      throw new BadRequestException(`Courier ${courier.name} is not checked in today`);
+    }
+    return courier;
+  }
+
+  /**
+   * The dispatch board's one step (PM, 2026-10-05): at the counter the rider is standing there
+   * when the cashier picks them, so naming the courier sends the order out. On an order already
+   * out it changes the rider instead — a wrong pick fixed without failing the ride.
+   */
+  async dispatchCourier(tenantId: string, deliveryId: string, courierId: string, userId?: string) {
+    const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId, tenant_id: tenantId } });
+    if (!delivery) throw new NotFoundException('Delivery not found');
+    if (delivery.state === 'PICKED_UP' || delivery.state === 'EN_ROUTE') {
+      return await this.changeCourierOnTheWay(tenantId, delivery, courierId, userId);
+    }
+    await this.assignCourier(tenantId, deliveryId, courierId, userId);
+    return await this.departDelivery(tenantId, deliveryId, userId);
+  }
+
+  /**
+   * Swaps the rider on an order that is already out. The first courier's attempt is closed as
+   * reassigned, so it expects no cash and pays nothing, and the new courier's ride starts now.
+   */
+  private async changeCourierOnTheWay(tenantId: string, delivery: Delivery, courierId: string, userId?: string) {
+    if (delivery.courier_id === courierId) return delivery;
+    const order = await this.orderRepo.findOne({ where: { id: delivery.order_id, tenant_id: tenantId } });
+    if (!order) throw new NotFoundException('Parent order not found');
+    const courier = await this.courierWhoCanTake(tenantId, courierId, order);
+
+    const previousCourierId = delivery.courier_id;
+    if (previousCourierId) {
+      const previous = await this.assignmentRepo.findOne({
+        where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: previousCourierId, status: 'OUT_FOR_DELIVERY' },
+      });
+      if (previous) {
+        previous.status = 'REASSIGNED';
+        previous.compensation_amount = '0.00';
+        await this.assignmentRepo.save(previous);
+      }
+    }
+
+    const now = new Date();
+    delivery.courier_id = courierId;
+    delivery.assigned_at = now;
+    delivery.picked_up_at = now;
+    const saved = await this.deliveryRepo.save(delivery);
+    await this.logDeliveryEvent(tenantId, saved.id, delivery.state, delivery.state, `Courier changed to ${courier.name}`, userId);
+
+    let assignment = await this.assignmentRepo.findOne({
+      where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: courierId, status: Not('FAILED') },
+    });
+    if (!assignment) {
+      assignment = this.assignmentRepo.create({
+        tenant_id: tenantId,
+        order_id: delivery.order_id,
+        courier_id: courierId,
+        delivery_fee: delivery.fee || '0.00',
+        tip_amount: '0.00',
+      });
+    }
+    assignment.status = 'OUT_FOR_DELIVERY';
+    assignment.assigned_at = now;
+    assignment.picked_up_at = now;
+    await this.assignmentRepo.save(assignment);
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: userId ? 'ADMIN' : 'SYSTEM',
+      actorId: userId,
+      action: 'DELIVERY_COURIER_ASSIGNED',
+      correlationId: 'corr-change-courier',
+      details: { deliveryId: delivery.id, courierId, courierName: courier.name, previousCourierId },
+    });
+
+    return saved;
+  }
+
   async assignCourier(tenantId: string, deliveryId: string, courierId: string, userId?: string) {
     const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId, tenant_id: tenantId } });
     if (!delivery) throw new NotFoundException('Delivery not found');
@@ -809,27 +908,7 @@ export class DeliveryService {
       });
     }
 
-    const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
-    if (!courier) throw new NotFoundException('Courier not found');
-    if (!courier.is_active) throw new BadRequestException('Courier profile is inactive');
-    if (courier.branch_id && order.branch_id && courier.branch_id !== order.branch_id) {
-      throw new BadRequestException({
-        code: 'COURIER_OTHER_BRANCH',
-        title: 'Courier Works At Another Branch',
-        detail: `${courier.name} works at another branch and cannot take this branch's orders.`,
-      });
-    }
-
-    const todayStr = await this.businessToday(tenantId, courier.branch_id);
-    const attendance = await this.attendanceRepo.findOne({
-      where: { tenant_id: tenantId, courier_id: courierId, date: todayStr },
-    });
-    if (!attendance || attendance.status !== 'CHECKED_IN') {
-      throw new BadRequestException(`Courier ${courier.name} is not checked in today`);
-    }
-
-    // Working today is the whole test: no separate available/busy switch, and no cap on how
-    // many deliveries one courier carries. The dispatcher at the counter decides both.
+    const courier = await this.courierWhoCanTake(tenantId, courierId, order);
 
     const fromState = delivery.state;
     const previousCourierId = delivery.courier_id;

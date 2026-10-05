@@ -191,7 +191,6 @@ export function CourierDetailPage() {
           },
           { label: t('profile.kpi.orders'), value: stats.order_count },
           { label: t('profile.courier.orderValue'), value: formatMoney(stats.completed_value, currency) },
-          { label: t('profile.courier.compensationEarned'), value: formatMoney(stats.compensation_earned, currency) },
           {
             label: t('profile.courier.unsettled'),
             value: formatMoney(stats.unsettled_fees, currency),
@@ -225,13 +224,6 @@ export function CourierDetailPage() {
                 { label: t('profile.courier.phone'), value: <span dir="ltr">{courier.phone || '—'}</span> },
                 { label: t('profile.courier.branch'), value: courier.branch_name || '—' },
                 { label: t('profile.courier.vehicle'), value: courier.vehicle_type || '—' },
-                {
-                  label: t('delivery.payRules.label'),
-                  value:
-                    courier.pay_mode === 'DELIVERY_FEE'
-                      ? t('delivery.payRules.DELIVERY_FEE')
-                      : `${t(`delivery.payRules.${courier.pay_mode || 'FLAT'}`)} · ${formatMoney(courier.compensation_per_delivery, currency)}`,
-                },
                 {
                   label: t('profile.status'),
                   value: (

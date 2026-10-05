@@ -169,6 +169,15 @@ export class DeliveryController {
     return await this.deliveryService.assignCourier(tenantId, deliveryId, body.courierId, userId);
   }
 
+  // The board's one step: name the courier and the order leaves; on an order already out, swap the rider.
+  @BranchOwned(Delivery, BY_ORDER)
+  @Post(':id/dispatch')
+  async dispatchCourier(@Param('id') deliveryId: string, @Body() body: { courierId: string }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id;
+    return await this.deliveryService.dispatchCourier(tenantId, deliveryId, body.courierId, userId);
+  }
+
   @BranchOwned(Delivery, BY_ORDER)
   @Post(':id/depart')
   async departDelivery(@Param('id') deliveryId: string, @Req() req: Request) {

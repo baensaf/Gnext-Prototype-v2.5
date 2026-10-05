@@ -185,8 +185,9 @@ export const deliveryApi = {
     const res = await httpClient.post(`/api/v1/delivery/orders/${orderId}`, { zoneId, addressSnapshot });
     return res.data;
   },
-  assignCourier: async (deliveryId: string, courierId: string): Promise<Delivery> => {
-    const res = await httpClient.post(`/api/v1/delivery/${deliveryId}/assign`, { courierId });
+  /** Names the courier and sends the order out in one step; on an order already out, swaps the rider. */
+  dispatchCourier: async (deliveryId: string, courierId: string): Promise<Delivery> => {
+    const res = await httpClient.post(`/api/v1/delivery/${deliveryId}/dispatch`, { courierId });
     return res.data;
   },
   departDelivery: async (deliveryId: string): Promise<Delivery> => {

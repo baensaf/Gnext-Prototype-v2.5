@@ -113,7 +113,6 @@ export const paths = {
       orderWorkflow: `${ROOTS.APP}/settings/order-workflow`,
       shiftPolicy: `${ROOTS.APP}/settings/shift-policy`,
       businessDay: `${ROOTS.APP}/settings/business-day`,
-      courierPay: `${ROOTS.APP}/settings/courier-pay`,
       calendar: `${ROOTS.APP}/settings/calendar`,
       branchOverrides: `${ROOTS.APP}/settings/branch-overrides`,
       roles: `${ROOTS.APP}/settings/roles`,

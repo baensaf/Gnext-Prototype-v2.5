@@ -229,12 +229,6 @@ export function SettlementDetailPage() {
                   </Typography>
                 </Stack>
                 <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Typography color="text.secondary">{t('settlements.compensation', 'Courier Compensation/Fee')}:</Typography>
-                  <Typography sx={{ fontWeight: 600, color: 'success.main' }} dir="ltr">
-                    {MoneyUtil.formatCurrency(settlement.total_compensation || settlement.commission_amount || 0)} {currency}
-                  </Typography>
-                </Stack>
-                <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">{t('settlements.netRemittance', 'Net Cash Due to Merchant')}:</Typography>
                   <Typography sx={{ fontWeight: 700, color: 'primary.main' }} dir="ltr">
                     {MoneyUtil.formatCurrency(settlement.net_amount || Number(settlement.actual_cash || 0) - Number(settlement.total_compensation || 0))} {currency}
@@ -324,7 +318,6 @@ export function SettlementDetailPage() {
                   <TableCell>{t('delivery.grandTotal', 'Order Total')}</TableCell>
                   <TableCell>{t('delivery.cashCollected', 'Cash Collected')}</TableCell>
                   <TableCell>{t('delivery.posCollected', 'POS Collected')}</TableCell>
-                  <TableCell>{t('delivery.compensation', 'Fee')}</TableCell>
                   <TableCell>{t('common.status', 'Status')}</TableCell>
                 </TableRow>
               </TableHead>
@@ -339,9 +332,6 @@ export function SettlementDetailPage() {
                       <TableCell dir="ltr">{MoneyUtil.formatCurrency(line.order_total || line.grand_total || 0)} {currency}</TableCell>
                       <TableCell dir="ltr">{MoneyUtil.formatCurrency(line.cash_collected || 0)} {currency}</TableCell>
                       <TableCell dir="ltr">{MoneyUtil.formatCurrency(line.pos_collected || line.pos_amount || 0)} {currency}</TableCell>
-                      <TableCell dir="ltr" sx={{ color: 'success.main', fontWeight: 600 }}>
-                        {MoneyUtil.formatCurrency(line.compensation_amount || line.fee || 0)} {currency}
-                      </TableCell>
                       <TableCell>
                         <Chip size="small" label={line.status || line.state || 'COMPLETED'} color="success" />
                       </TableCell>
@@ -349,7 +339,7 @@ export function SettlementDetailPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                    <TableCell colSpan={6} align="center" sx={{ py: 3, color: 'text.secondary' }}>
                       {t('settlements.noLines', 'No individual delivery lines recorded for this settlement.')}
                     </TableCell>
                   </TableRow>

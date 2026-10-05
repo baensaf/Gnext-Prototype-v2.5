@@ -1,4 +1,4 @@
-import type { Courier, Delivery, DeliveryZone, CourierOnFile, DeliveryEvent, CourierPayMode } from 'src/api/deliveryApi';
+import type { Courier, Delivery, DeliveryZone, CourierOnFile, DeliveryEvent } from 'src/api/deliveryApi';
 
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
@@ -58,10 +58,9 @@ import { useLiveRefresh } from 'src/utils/use-live-refresh';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { tenantApi } from 'src/api/tenantApi';
-import { settingsApi } from 'src/api/settingsApi';
+import { deliveryApi } from 'src/api/deliveryApi';
 import { canReachPath } from 'src/config/role-access';
 import { useBranchContext } from 'src/contexts/branch-context';
-import { deliveryApi, COURIER_PAY_MODES } from 'src/api/deliveryApi';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
 import { VersionTag } from 'src/components/version-tag';
@@ -208,27 +207,18 @@ export function DeliveryPage() {
   const [failReason, setFailReason] = useState('');
 
   const [courierModalOpen, setCourierModalOpen] = useState(false);
-  const [defaultPayMode, setDefaultPayMode] = useState<CourierPayMode>('FLAT');
-  const emptyCourierForm = (payMode: CourierPayMode) => ({
-    code: '',
-    name: '',
-    phone: '',
-    vehicle_type: 'MOTORCYCLE',
-    pay_mode: payMode,
-    compensation_per_delivery: '400000',
-  });
-  const [courierForm, setCourierForm] = useState(() => emptyCourierForm('FLAT'));
-  const [payEdit, setPayEdit] = useState<{ courier: Courier; pay_mode: CourierPayMode; amount: string } | null>(null);
+  // Couriers are on a salary, so a new one carries no pay of their own (FLAT at zero).
+  const emptyCourierForm = () => ({ code: '', name: '', phone: '', vehicle_type: 'MOTORCYCLE' });
+  const [courierForm, setCourierForm] = useState(emptyCourierForm);
 
   const [zoneModalOpen, setZoneModalOpen] = useState(false);
-  const emptyZoneForm = () => ({ code: '', name: '', fee: '500000', estimated_minutes: 30, courier_pay: '', polygon: null as DeliveryZone['polygon'] });
+  const emptyZoneForm = () => ({ code: '', name: '', fee: '500000', estimated_minutes: 30, polygon: null as DeliveryZone['polygon'] });
   const [zoneForm, setZoneForm] = useState(emptyZoneForm);
   const [zoneEdit, setZoneEdit] = useState<{
     zone: DeliveryZone;
     name: string;
     fee: string;
     estimated_minutes: number;
-    courier_pay: string;
     polygon: DeliveryZone['polygon'];
   } | null>(null);
   const [zoneRemoveAsked, setZoneRemoveAsked] = useState(false);
@@ -272,41 +262,9 @@ export function DeliveryPage() {
     setNotice(null);
   }, [branchId]);
 
-  // The pay rule a new courier starts on is the branch's COURIER_PAY default.
-  useEffect(() => {
-    let cancelled = false;
-    settingsApi
-      .getScopedSettings(branchId)
-      .then((scoped: any) => {
-        const mode = scoped?.groups?.COURIER_PAY?.value?.defaultPayMode;
-        if (!cancelled) setDefaultPayMode((COURIER_PAY_MODES as readonly string[]).includes(mode) ? mode : 'FLAT');
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [branchId]);
-
   const openAddCourier = () => {
-    setCourierForm(emptyCourierForm(defaultPayMode));
+    setCourierForm(emptyCourierForm());
     setCourierModalOpen(true);
-  };
-
-  const handleSavePay = async () => {
-    if (!payEdit) return;
-    try {
-      setPendingAction(`pay:${payEdit.courier.id}`);
-      await deliveryApi.updateCourierPay(payEdit.courier.id, {
-        pay_mode: payEdit.pay_mode,
-        compensation_per_delivery: payEdit.amount || '0',
-      });
-      setPayEdit(null);
-      await loadData();
-    } catch (err: any) {
-      setError(err.detail || t('delivery.errors.updatePayFailed'));
-    } finally {
-      setPendingAction(null);
-    }
   };
 
   const handleSaveZone = async () => {
@@ -317,7 +275,6 @@ export function DeliveryPage() {
         name: zoneEdit.name,
         fee: zoneEdit.fee || '0',
         estimated_minutes: zoneEdit.estimated_minutes,
-        courier_pay: zoneEdit.courier_pay.trim() === '' ? null : zoneEdit.courier_pay,
         polygon: zoneEdit.polygon ?? null,
       });
       setZoneEdit(null);
@@ -344,38 +301,6 @@ export function DeliveryPage() {
     }
   };
 
-  /** A pay rule picker with the rule's meaning underneath, shared by the add and edit dialogs. */
-  const renderPayModeSelect = (value: CourierPayMode, onChange: (mode: CourierPayMode) => void) => (
-    <TextField
-      select
-      fullWidth
-      label={t('delivery.modals.addCourier.payMode')}
-      value={value}
-      onChange={(e) => onChange(e.target.value as CourierPayMode)}
-      helperText={`${t(`delivery.payRules.help_${value}`)} ${t('delivery.payRules.tipsNote')}`}
-    >
-      {COURIER_PAY_MODES.map((mode) => (
-        <MenuItem key={mode} value={mode}>
-          {t(`delivery.payRules.${mode}`)}
-          {/* V1 pays the courier the zone's delivery fee; the other rules come later. */}
-          {mode !== 'DELIVERY_FEE' && <VersionTag feature="delivery.payModes" sx={{ ml: 1 }} />}
-        </MenuItem>
-      ))}
-    </TextField>
-  );
-
-  /** The amount field only a rule that uses it shows: FLAT pays it, ZONE_RATE falls back to it. */
-  const renderPayAmount = (mode: CourierPayMode, value: string, onChange: (amount: string) => void) =>
-    mode === 'DELIVERY_FEE' ? null : (
-      <TextField
-        fullWidth
-        label={t(mode === 'FLAT' ? 'delivery.modals.addCourier.compensationFlat' : 'delivery.modals.addCourier.compensationFallback', { currency: currencyLabel })}
-        value={toToman(value)}
-        onChange={(e) => onChange(fromToman(e.target.value))}
-        slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
-      />
-    );
-
   const handleOpenAssignModal = (del: Delivery) => {
     setSelectedDeliveryForAssign(del);
     setSelectedCourierId('');
@@ -386,7 +311,7 @@ export function DeliveryPage() {
     if (!selectedDeliveryForAssign || !selectedCourierId) return;
     try {
       setPendingAction(`assign:${selectedDeliveryForAssign.id}`);
-      await deliveryApi.assignCourier(selectedDeliveryForAssign.id, selectedCourierId);
+      await deliveryApi.dispatchCourier(selectedDeliveryForAssign.id, selectedCourierId);
       setAssignCourierModalOpen(false);
       await loadData();
     } catch (err: any) {
@@ -489,15 +414,9 @@ export function DeliveryPage() {
         setError(t('delivery.errors.noBranch'));
         return;
       }
-      const { pay_mode, compensation_per_delivery, ...who } = courierForm;
-      await deliveryApi.createCourier({
-        branch_id: targetBranchId,
-        ...who,
-        // A cashier's courier starts on the branch's default pay.
-        ...(isCashier ? {} : { pay_mode, compensation_per_delivery: compensation_per_delivery.toString() }),
-      });
+      await deliveryApi.createCourier({ branch_id: targetBranchId, ...courierForm });
       setCourierModalOpen(false);
-      setCourierForm(emptyCourierForm(defaultPayMode));
+      setCourierForm(emptyCourierForm());
       loadData();
     } catch (err: any) {
       // Somebody already on file — here archived, or at another branch. Offer the move
@@ -518,7 +437,7 @@ export function DeliveryPage() {
       await deliveryApi.moveCourier(courierOnFile.id, branchId);
       setNotice(t('delivery.modals.moveCourier.moved', { name: courierOnFile.name }));
       setCourierOnFile(null);
-      setCourierForm(emptyCourierForm(defaultPayMode));
+      setCourierForm(emptyCourierForm());
       await loadData();
     } catch (err: any) {
       setCourierOnFile(null);
@@ -539,8 +458,6 @@ export function DeliveryPage() {
         branch_id: targetBranchId,
         ...zoneForm,
         fee: zoneForm.fee.toString(),
-        // Blank means "use each courier's own rate"; an empty string fails the amount check.
-        courier_pay: zoneForm.courier_pay.trim() === '' ? null : zoneForm.courier_pay,
       });
       setZoneModalOpen(false);
       setZoneForm(emptyZoneForm());
@@ -603,13 +520,14 @@ export function DeliveryPage() {
   };
 
   const unassigned = deliveries.filter((d) => d.state === 'UNASSIGNED');
-  const assigned = deliveries.filter((d) => d.state === 'ASSIGNED');
-  const enRoute = deliveries.filter((d) => d.state === 'PICKED_UP' || d.state === 'EN_ROUTE');
+  const enRoute = deliveries.filter((d) => d.state === 'ASSIGNED' || d.state === 'PICKED_UP' || d.state === 'EN_ROUTE');
   const finished = deliveries.filter((d) => d.state === 'DELIVERED' || d.state === 'FAILED' || d.state === 'CANCELLED');
 
   const eligibleCouriers = couriers.filter(
-    (c) => c.attendance?.status === 'CHECKED_IN'
+    (c) => c.attendance?.status === 'CHECKED_IN' && c.id !== selectedDeliveryForAssign?.courier_id
   );
+  // The same dialog sends an order out and, once it is out, swaps its rider.
+  const changingCourier = Boolean(selectedDeliveryForAssign && selectedDeliveryForAssign.state !== 'UNASSIGNED');
 
   return (
     <Box sx={{ p: 3 }} aria-busy={loading || Boolean(pendingAction)}>
@@ -668,7 +586,7 @@ export function DeliveryPage() {
       {tab === 'BOARD' && (
         <Grid container spacing={3}>
           {/* UNASSIGNED */}
-          <Grid size={{ xs: 12, md: 3 }}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Paper sx={{ p: 2, bg: '#fafafa', borderRadius: 2, minHeight: 600 }}>
               <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="h6" color="info.main" sx={{ fontWeight: 'bold' }}>
@@ -713,60 +631,8 @@ export function DeliveryPage() {
             </Paper>
           </Grid>
 
-          {/* ASSIGNED */}
-          <Grid size={{ xs: 12, md: 3 }}>
-            <Paper sx={{ p: 2, bg: '#fafafa', borderRadius: 2, minHeight: 600 }}>
-              <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6" color="warning.main" sx={{ fontWeight: 'bold' }}>
-                  {t('delivery.columns.assigned')} ({assigned.length})
-                </Typography>
-                <Chip label={t('delivery.columns.readyToDepart')} color="warning" size="small" />
-              </Stack>
-              <Divider sx={{ mb: 2 }} />
-
-              <Stack spacing={2}>
-                {assigned.map((del) => (
-                  <Card key={del.id} elevation={2} sx={{ borderRadius: 2 }}>
-                    <CardContent sx={{ p: 2 }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                        {t('delivery.card.order')} #{del.order_number}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {t('delivery.card.courier')}: <strong>{del.courier_name}</strong>
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                        {t('delivery.card.phone')}: {del.courier_phone || t('delivery.card.noPhone')}
-                      </Typography>
-                      <DispatchDetails delivery={del} now={now} />
-
-                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Button
-                          variant="contained"
-                          color="warning"
-                          size="small"
-                          disabled={Boolean(pendingAction)}
-                          startIcon={pendingAction === `depart:${del.id}` ? <CircularProgress size={16} color="inherit" /> : <LocalShippingIcon />}
-                          onClick={() => handleDepartDelivery(del.id)}
-                        >
-                          {pendingAction === `depart:${del.id}` ? t('delivery.card.departing') : t('delivery.card.depart')}
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => handleOpenAssignModal(del)}
-                        >
-                          {t('delivery.card.reassign')}
-                        </Button>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                ))}
-              </Stack>
-            </Paper>
-          </Grid>
-
-          {/* EN_ROUTE */}
-          <Grid size={{ xs: 12, md: 3 }}>
+          {/* EN_ROUTE — naming the courier sends the order out, so there is no "assigned" stop. */}
+          <Grid size={{ xs: 12, md: 4 }}>
             <Paper sx={{ p: 2, bg: '#fafafa', borderRadius: 2, minHeight: 600 }}>
               <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="h6" color="info.main" sx={{ fontWeight: 'bold' }}>
@@ -797,24 +663,49 @@ export function DeliveryPage() {
                         </Typography>
                       </Stack>
 
-                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', pt: 1 }}>
+                      <Stack direction="row" sx={{ alignItems: 'center', pt: 1, gap: 1, flexWrap: 'wrap' }}>
+                        {del.state === 'ASSIGNED' ? (
+                          // Named before the board went to one step, or the send-out did not go
+                          // through: the rider has not left yet.
+                          <Button
+                            variant="contained"
+                            color="warning"
+                            size="small"
+                            disabled={Boolean(pendingAction)}
+                            startIcon={pendingAction === `depart:${del.id}` ? <CircularProgress size={16} color="inherit" /> : <LocalShippingIcon />}
+                            onClick={() => handleDepartDelivery(del.id)}
+                          >
+                            {pendingAction === `depart:${del.id}` ? t('delivery.card.departing') : t('delivery.card.depart')}
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              variant="contained"
+                              color="success"
+                              size="small"
+                              disabled={Boolean(pendingAction)}
+                              onClick={() => handleOpenCompleteModal(del)}
+                            >
+                              {t('delivery.card.complete')}
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              color="error"
+                              size="small"
+                              disabled={Boolean(pendingAction)}
+                              onClick={() => handleOpenFailModal(del)}
+                            >
+                              {t('delivery.card.failed')}
+                            </Button>
+                          </>
+                        )}
                         <Button
-                          variant="contained"
-                          color="success"
                           size="small"
                           disabled={Boolean(pendingAction)}
-                          onClick={() => handleOpenCompleteModal(del)}
+                          onClick={() => handleOpenAssignModal(del)}
+                          sx={{ ml: 'auto' }}
                         >
-                          {t('delivery.card.complete')}
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          color="error"
-                          size="small"
-                          disabled={Boolean(pendingAction)}
-                          onClick={() => handleOpenFailModal(del)}
-                        >
-                          {t('delivery.card.failed')}
+                          {t('delivery.card.reassign')}
                         </Button>
                       </Stack>
                     </CardContent>
@@ -825,7 +716,7 @@ export function DeliveryPage() {
           </Grid>
 
           {/* DELIVERED / TERMINAL */}
-          <Grid size={{ xs: 12, md: 3 }}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Paper sx={{ p: 2, bg: '#fafafa', borderRadius: 2, minHeight: 600 }}>
               <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="h6" color="success.main" sx={{ fontWeight: 'bold' }}>
@@ -850,7 +741,7 @@ export function DeliveryPage() {
                         />
                       </Stack>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                        {t('delivery.card.courier')}: {del.courier_name} | {t('delivery.card.compensation')}: {MoneyUtil.formatCurrency(del.compensation_amount)} {currency}
+                        {t('delivery.card.courier')}: {del.courier_name}
                       </Typography>
 
                       {del.state === 'FAILED' && (
@@ -891,7 +782,6 @@ export function DeliveryPage() {
               <TableRow>
                 <TableCell>{t('delivery.couriers.code')}</TableCell>
                 <TableCell>{t('delivery.couriers.nameAndPhone')}</TableCell>
-                <TableCell>{t('delivery.couriers.compensationPerDelivery')}</TableCell>
                 <TableCell>{t('delivery.couriers.mobilePosAssignment')}</TableCell>
                 <TableCell align="right">{t('delivery.couriers.actions')}</TableCell>
               </TableRow>
@@ -912,38 +802,6 @@ export function DeliveryPage() {
                         {c.name}
                       </Link>
                       <Typography variant="caption" color="text.secondary">{c.phone || t('delivery.card.noPhone')}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                        <Box>
-                          <Typography variant="body2">
-                            {t(`delivery.payRules.${c.pay_mode || 'FLAT'}`)}{' '}
-                            {c.pay_mode !== 'DELIVERY_FEE' && <VersionTag feature="delivery.payModes" />}
-                          </Typography>
-                          {c.pay_mode !== 'DELIVERY_FEE' && (
-                            <Typography variant="caption" color="text.secondary">
-                              {t(c.pay_mode === 'ZONE_RATE' ? 'delivery.payRules.zoneFallback' : 'delivery.payRules.flatAmount', {
-                                amount: `${MoneyUtil.formatCurrency(c.compensation_per_delivery || '0')} ${currency}`,
-                              })}
-                            </Typography>
-                          )}
-                        </Box>
-                        {!isCashier && (
-                          <IconButton
-                            size="small"
-                            aria-label={t('delivery.couriers.editPay')}
-                            onClick={() =>
-                              setPayEdit({
-                                courier: c,
-                                pay_mode: (c.pay_mode || 'FLAT') as CourierPayMode,
-                                amount: String(Number(c.compensation_per_delivery || 0)),
-                              })
-                            }
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        )}
-                      </Stack>
                     </TableCell>
                     <TableCell>
                       {c.active_terminal ? (
@@ -1012,7 +870,6 @@ export function DeliveryPage() {
                 <TableCell>{t('delivery.zones.code')}</TableCell>
                 <TableCell>{t('delivery.zones.zoneName')}</TableCell>
                 <TableCell>{t('delivery.zones.standardFee')}</TableCell>
-                <TableCell>{t('delivery.zones.courierPay')}</TableCell>
                 <TableCell>{t('delivery.zones.estimatedMinutes')}</TableCell>
                 <TableCell>{t('delivery.zones.mapColumn')}</TableCell>
                 <TableCell>{t('delivery.zones.status')}</TableCell>
@@ -1025,13 +882,6 @@ export function DeliveryPage() {
                   <TableCell><strong>{z.code}</strong></TableCell>
                   <TableCell>{z.name}</TableCell>
                   <TableCell>{MoneyUtil.formatCurrency(z.fee)} {currency}</TableCell>
-                  <TableCell>
-                    {z.courier_pay !== null && z.courier_pay !== undefined ? (
-                      `${MoneyUtil.formatCurrency(z.courier_pay)} ${currency}`
-                    ) : (
-                      <Typography variant="caption" color="text.secondary">{t('delivery.zones.courierPayUnset')}</Typography>
-                    )}
-                  </TableCell>
                   <TableCell>{z.estimated_minutes} {t('delivery.zones.mins')}</TableCell>
                   <TableCell>
                     <Chip
@@ -1053,7 +903,6 @@ export function DeliveryPage() {
                           name: z.name,
                           fee: String(Number(z.fee || 0)),
                           estimated_minutes: z.estimated_minutes,
-                          courier_pay: z.courier_pay !== null && z.courier_pay !== undefined ? String(Number(z.courier_pay)) : '',
                           polygon: z.polygon ?? null,
                         });
                       }}
@@ -1107,10 +956,12 @@ export function DeliveryPage() {
 
       {/* Assign Courier Modal */}
       <Dialog open={assignCourierModalOpen} onClose={() => setAssignCourierModalOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>{t('delivery.modals.assignCourier.title')}</DialogTitle>
+        <DialogTitle>{changingCourier ? t('delivery.card.reassign') : t('delivery.modals.assignCourier.title')}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>
-            {t('delivery.modals.assignCourier.description', { orderNumber: selectedDeliveryForAssign?.order_number })}
+            {t(changingCourier ? 'delivery.modals.assignCourier.changeDescription' : 'delivery.modals.assignCourier.description', {
+              orderNumber: selectedDeliveryForAssign?.order_number,
+            })}
           </Typography>
           <FormControl fullWidth>
             <InputLabel>{t('delivery.modals.assignCourier.eligibleCourier')}</InputLabel>
@@ -1131,7 +982,11 @@ export function DeliveryPage() {
         <DialogActions>
           <Button onClick={() => setAssignCourierModalOpen(false)}>{t('delivery.modals.assignCourier.cancel')}</Button>
           <Button variant="contained" disabled={!selectedCourierId || Boolean(pendingAction)} onClick={handleAssignCourier}>
-            {pendingAction?.startsWith('assign:') ? <CircularProgress size={20} color="inherit" /> : t('delivery.modals.assignCourier.submit')}
+            {pendingAction?.startsWith('assign:') ? (
+              <CircularProgress size={20} color="inherit" />
+            ) : (
+              t(changingCourier ? 'delivery.modals.assignCourier.changeSubmit' : 'delivery.modals.assignCourier.submit')
+            )}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1197,18 +1052,6 @@ export function DeliveryPage() {
               slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'tel' } }}
               fullWidth
             />
-            {isCashier ? (
-              <Typography variant="caption" color="text.secondary">
-                {t('delivery.modals.addCourier.payByManager')}
-              </Typography>
-            ) : (
-              <>
-                {renderPayModeSelect(courierForm.pay_mode, (mode) => setCourierForm({ ...courierForm, pay_mode: mode }))}
-                {renderPayAmount(courierForm.pay_mode, courierForm.compensation_per_delivery, (amount) =>
-                  setCourierForm({ ...courierForm, compensation_per_delivery: amount })
-                )}
-              </>
-            )}
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -1263,26 +1106,6 @@ export function DeliveryPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Courier Pay Rule */}
-      <Dialog open={Boolean(payEdit)} onClose={() => setPayEdit(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>{t('delivery.modals.courierPay.title', { name: payEdit?.courier.name })}</DialogTitle>
-        <DialogContent>
-          {payEdit && (
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              {renderPayModeSelect(payEdit.pay_mode, (mode) => setPayEdit({ ...payEdit, pay_mode: mode }))}
-              {renderPayAmount(payEdit.pay_mode, payEdit.amount, (amount) => setPayEdit({ ...payEdit, amount }))}
-              <Alert severity="info">{t('delivery.modals.courierPay.note')}</Alert>
-            </Stack>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPayEdit(null)}>{t('delivery.modals.courierPay.cancel')}</Button>
-          <Button variant="contained" disabled={Boolean(pendingAction)} onClick={handleSavePay}>
-            {pendingAction?.startsWith('pay:') ? <CircularProgress size={20} color="inherit" /> : t('delivery.modals.courierPay.submit')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
       {/* Edit Zone */}
       <Dialog open={Boolean(zoneEdit)} onClose={() => setZoneEdit(null)} maxWidth="sm" fullWidth>
         <DialogTitle>{t('delivery.modals.editZone.title', { code: zoneEdit?.zone.code })}</DialogTitle>
@@ -1294,14 +1117,6 @@ export function DeliveryPage() {
                 label={t('delivery.modals.addZone.fee', { currency: currencyLabel })}
                 value={toToman(zoneEdit.fee)}
                 onChange={(e) => setZoneEdit({ ...zoneEdit, fee: fromToman(e.target.value) })}
-                slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
-                fullWidth
-              />
-              <TextField
-                label={t('delivery.modals.addZone.courierPay', { currency: currencyLabel })}
-                helperText={t('delivery.modals.addZone.courierPayHelp')}
-                value={toToman(zoneEdit.courier_pay)}
-                onChange={(e) => setZoneEdit({ ...zoneEdit, courier_pay: fromToman(e.target.value) })}
                 slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
                 fullWidth
               />
@@ -1365,14 +1180,6 @@ export function DeliveryPage() {
             <TextField label={t('delivery.modals.addZone.code')} value={zoneForm.code} onChange={(e) => setZoneForm({ ...zoneForm, code: e.target.value })} fullWidth />
             <TextField label={t('delivery.modals.addZone.name')} value={zoneForm.name} onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })} fullWidth />
             <TextField label={t('delivery.modals.addZone.fee', { currency: currencyLabel })} value={toToman(zoneForm.fee)} onChange={(e) => setZoneForm({ ...zoneForm, fee: fromToman(e.target.value) })} fullWidth />
-            <TextField
-              label={t('delivery.modals.addZone.courierPay', { currency: currencyLabel })}
-              helperText={t('delivery.modals.addZone.courierPayHelp')}
-              value={toToman(zoneForm.courier_pay)}
-              onChange={(e) => setZoneForm({ ...zoneForm, courier_pay: fromToman(e.target.value) })}
-              slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
-              fullWidth
-            />
             <TextField label={t('delivery.modals.addZone.estimatedMinutes')} type="number" value={zoneForm.estimated_minutes} onChange={(e) => setZoneForm({ ...zoneForm, estimated_minutes: Number(e.target.value) })} fullWidth />
             <Box>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
