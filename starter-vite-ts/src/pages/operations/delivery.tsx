@@ -7,7 +7,6 @@ import React, { lazy, useRef, useState, Suspense, useEffect, useCallback } from 
 import AddIcon from '@mui/icons-material/Add';
 import MapIcon from '@mui/icons-material/Map';
 import EditIcon from '@mui/icons-material/Edit';
-import UndoIcon from '@mui/icons-material/Undo';
 import CheckIcon from '@mui/icons-material/Check';
 import PersonIcon from '@mui/icons-material/Person';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -91,55 +90,119 @@ function tabFromPathname(pathname: string): DeliveryTab {
   return found ?? 'BOARD';
 }
 
+/** "12 دقیقه", "2 ساعت و 5 دقیقه", "3 روز": raw minutes read as nonsense past an hour. */
+function formatElapsed(minutes: number, t: (key: string, options?: any) => string) {
+  if (minutes < 60) return t('delivery.card.elapsedMinutes', { n: minutes });
+  if (minutes < 24 * 60) return t('delivery.card.elapsedHours', { h: Math.floor(minutes / 60), m: minutes % 60 });
+  return t('delivery.card.elapsedDays', { n: Math.floor(minutes / (24 * 60)) });
+}
+
 /**
- * What a dispatcher reads off a card: the number the counter calls, who the order is for and
- * where it goes, and how long it has waited since it was sent, in red once past the zone's
- * estimate. Every card used to say "Customer", with no address or phone.
+ * One card for both columns, in the order a cashier reads it: the number the counter calls,
+ * how long it has been, who it is for and where, who has it, and what to bring back. A waiting
+ * order counts from when it was placed; an order that is out counts from when it left.
  */
-function DispatchDetails({ delivery, now }: { delivery: Delivery; now: number }) {
+function DeliveryCard({
+  delivery,
+  now,
+  currency,
+  children,
+}: {
+  delivery: Delivery;
+  now: number;
+  currency: string;
+  children: React.ReactNode;
+}) {
   const { t } = useTranslation();
+  const out = delivery.state !== 'UNASSIGNED';
   const address = delivery.address_snapshot?.address_text;
-  const since = delivery.submitted_at || delivery.created_at;
+  const since = (out && delivery.picked_up_at) || delivery.submitted_at || delivery.created_at;
   const minutes = since ? Math.max(0, Math.floor((now - new Date(since).getTime()) / 60000)) : null;
   const estimate = delivery.zone_estimated_minutes ?? null;
   const late = minutes !== null && estimate !== null && minutes > estimate;
+  const toCollect = delivery.outstanding_total ?? delivery.grand_total ?? '0';
 
   return (
-    <Stack spacing={0.5} sx={{ my: 1 }}>
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-        {delivery.call_number != null && (
-          <Chip size="small" label={t('delivery.card.callNumber', { number: delivery.call_number })} />
-        )}
-        {minutes !== null && (
-          <Tooltip title={late ? t('delivery.card.waitingLate', { minutes: estimate }) : ''}>
-            <Chip
-              size="small"
-              color={late ? 'error' : 'default'}
-              variant={late ? 'filled' : 'outlined'}
-              label={t('delivery.card.waiting', { minutes })}
-            />
-          </Tooltip>
-        )}
-      </Stack>
-      <Typography variant="body2">
-        {t('delivery.card.customer')}: <strong>{delivery.customer_name || t('delivery.card.noCustomer')}</strong>
-        {delivery.customer_phone && (
-          <>
-            {' · '}
-            <span dir="ltr">{delivery.customer_phone}</span>
-          </>
-        )}
-      </Typography>
-      {address && (
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
-        >
-          {address}
-        </Typography>
-      )}
-    </Stack>
+    <Card elevation={2} sx={{ borderRadius: 2 }}>
+      <CardContent sx={{ p: 2 }}>
+        <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
+              {delivery.call_number != null
+                ? t('delivery.card.callNumber', { number: delivery.call_number })
+                : t('delivery.card.order')}
+            </Typography>
+            {/* The order code is Latin: isolated so the RTL line around it does not reorder it. */}
+            <Typography variant="caption" color="text.secondary" component="div">
+              <bdi dir="ltr">{delivery.order_number}</bdi>
+            </Typography>
+          </Box>
+          {minutes !== null && (
+            <Tooltip title={late ? t('delivery.card.waitingLate', { minutes: estimate }) : ''}>
+              <Chip
+                size="small"
+                color={late ? 'error' : 'default'}
+                variant={late ? 'filled' : 'outlined'}
+                label={formatElapsed(minutes, t)}
+              />
+            </Tooltip>
+          )}
+        </Stack>
+
+        <Stack spacing={0.5} sx={{ my: 1.5 }}>
+          <Typography variant="body2">
+            <strong>{delivery.customer_name || t('delivery.card.noCustomer')}</strong>
+            {delivery.customer_phone && (
+              <>
+                {' · '}
+                <bdi dir="ltr">{delivery.customer_phone}</bdi>
+              </>
+            )}
+          </Typography>
+          {address && (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+            >
+              {address}
+            </Typography>
+          )}
+          {!out && delivery.zone_name && (
+            <Typography variant="caption" color="text.secondary">
+              {delivery.zone_name} · {t('delivery.card.fee')} {MoneyUtil.formatCurrency(delivery.fee)} {currency}
+            </Typography>
+          )}
+          {out && (
+            <Typography variant="body2">
+              {t('delivery.card.courier')}:{' '}
+              {delivery.courier_id ? (
+                <>
+                  <strong>{delivery.courier_name}</strong>
+                  {delivery.courier_phone && (
+                    <>
+                      {' · '}
+                      <bdi dir="ltr">{delivery.courier_phone}</bdi>
+                    </>
+                  )}
+                </>
+              ) : (
+                <Box component="strong" sx={{ color: 'warning.main' }}>
+                  {t('delivery.card.noCourier')}
+                </Box>
+              )}
+            </Typography>
+          )}
+          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+            {t('delivery.card.toCollect')}: {MoneyUtil.formatCurrency(toCollect)} {currency}
+          </Typography>
+        </Stack>
+
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          {children}
+        </Stack>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -377,18 +440,6 @@ export function DeliveryPage() {
     }
   };
 
-  const handleRequeueDelivery = async (delId: string) => {
-    try {
-      setPendingAction(`requeue:${delId}`);
-      await deliveryApi.requeueDelivery(delId);
-      await loadData();
-    } catch (err: any) {
-      setError(err.detail || t('delivery.errors.requeueFailed'));
-    } finally {
-      setPendingAction(null);
-    }
-  };
-
   const handleRecordAttendance = async (courierId: string, status: 'CHECKED_IN' | 'CHECKED_OUT' | 'PAUSED') => {
     try {
       const targetBranchId = branchId;
@@ -519,29 +570,27 @@ export function DeliveryPage() {
     }
   };
 
+  // The board holds open deliveries only: a failed ride goes back to waiting by itself, and
+  // finished ones live in Orders and settlements, so a history column here never filled.
   const unassigned = deliveries.filter((d) => d.state === 'UNASSIGNED');
   const enRoute = deliveries.filter((d) => d.state === 'ASSIGNED' || d.state === 'PICKED_UP' || d.state === 'EN_ROUTE');
-  const finished = deliveries.filter((d) => d.state === 'DELIVERED' || d.state === 'FAILED' || d.state === 'CANCELLED');
 
   const eligibleCouriers = couriers.filter(
     (c) => c.attendance?.status === 'CHECKED_IN' && c.id !== selectedDeliveryForAssign?.courier_id
   );
-  // The same dialog sends an order out and, once it is out, swaps its rider.
-  const changingCourier = Boolean(selectedDeliveryForAssign && selectedDeliveryForAssign.state !== 'UNASSIGNED');
+  // The same dialog sends an order out and, once it is out with a rider, swaps that rider.
+  const changingCourier = Boolean(
+    selectedDeliveryForAssign && selectedDeliveryForAssign.state !== 'UNASSIGNED' && selectedDeliveryForAssign.courier_id
+  );
 
   return (
     <Box sx={{ p: 3 }} aria-busy={loading || Boolean(pendingAction)}>
 
       {/* Header */}
       <Stack direction="row" sx={{ mb: 3, justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-            {t('delivery.title')} <LocalShippingIcon color="primary" />
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t('delivery.subtitle')}
-          </Typography>
-        </Box>
+        <Typography variant="h4" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+          {t('delivery.title')} <LocalShippingIcon color="primary" />
+        </Typography>
 
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Button
@@ -585,180 +634,94 @@ export function DeliveryPage() {
       {/* BOARD TAB */}
       {tab === 'BOARD' && (
         <Grid container spacing={3}>
-          {/* UNASSIGNED */}
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Paper sx={{ p: 2, bg: '#fafafa', borderRadius: 2, minHeight: 600 }}>
-              <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6" color="info.main" sx={{ fontWeight: 'bold' }}>
-                  {t('delivery.columns.unassigned')} ({unassigned.length})
-                </Typography>
-                <Chip label={t('delivery.columns.needsCourier')} color="info" size="small" />
-              </Stack>
+          {/* WAITING FOR A COURIER */}
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Paper sx={{ p: 2, borderRadius: 2, minHeight: 600 }}>
+              <Typography variant="h6" color="info.main" sx={{ fontWeight: 'bold', mb: 2 }}>
+                {t('delivery.columns.unassigned')} ({unassigned.length})
+              </Typography>
               <Divider sx={{ mb: 2 }} />
 
               <Stack spacing={2}>
                 {unassigned.map((del) => (
-                  <Card key={del.id} elevation={2} sx={{ borderRadius: 2 }}>
-                    <CardContent sx={{ p: 2 }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                        {t('delivery.card.order')} #{del.order_number}
-                      </Typography>
-                      <DispatchDetails delivery={del} now={now} />
-                      <Typography variant="body2" color="text.secondary">
-                        {t('delivery.card.zone')}: {del.zone_name} | {t('delivery.card.fee')}: {MoneyUtil.formatCurrency(del.fee)} {currency}
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 'bold', mt: 1 }}>
-                        {t('delivery.card.total')}: {MoneyUtil.formatCurrency(del.grand_total)} {currency}
-                      </Typography>
-
-                      <Stack direction="row" sx={{ pt: 2, justifyContent: 'space-between', alignItems: 'center' }}>
-                        {/* The timeline opens on the Audit tab, which a cashier cannot reach. */}
-                        {canOpenTab('AUDIT') ? (
-                          <IconButton size="small" onClick={() => handleViewEvents(del.id)}>
-                            <HistoryIcon fontSize="small" />
-                          </IconButton>
-                        ) : (
-                          <span />
-                        )}
-                        <Button variant="contained" size="small" onClick={() => handleOpenAssignModal(del)}>
-                          {t('delivery.card.assignCourier')}
-                        </Button>
-                      </Stack>
-                    </CardContent>
-                  </Card>
+                  <DeliveryCard key={del.id} delivery={del} now={now} currency={currency}>
+                    {/* The timeline opens on the Audit tab, which a cashier cannot reach. */}
+                    {canOpenTab('AUDIT') && (
+                      <IconButton size="small" onClick={() => handleViewEvents(del.id)}>
+                        <HistoryIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                    <Button variant="contained" size="small" onClick={() => handleOpenAssignModal(del)} sx={{ ml: 'auto' }}>
+                      {t('delivery.card.assignCourier')}
+                    </Button>
+                  </DeliveryCard>
                 ))}
               </Stack>
             </Paper>
           </Grid>
 
-          {/* EN_ROUTE — naming the courier sends the order out, so there is no "assigned" stop. */}
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Paper sx={{ p: 2, bg: '#fafafa', borderRadius: 2, minHeight: 600 }}>
-              <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6" color="info.main" sx={{ fontWeight: 'bold' }}>
-                  {t('delivery.columns.enRoute')} ({enRoute.length})
-                </Typography>
-                <Chip label={t('delivery.columns.outForDelivery')} color="info" size="small" />
-              </Stack>
+          {/* OUT FOR DELIVERY — naming the courier sends the order out, so there is no "assigned" stop. */}
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Paper sx={{ p: 2, borderRadius: 2, minHeight: 600 }}>
+              <Typography variant="h6" color="info.main" sx={{ fontWeight: 'bold', mb: 2 }}>
+                {t('delivery.columns.enRoute')} ({enRoute.length})
+              </Typography>
               <Divider sx={{ mb: 2 }} />
 
               <Stack spacing={2}>
                 {enRoute.map((del) => (
-                  <Card key={del.id} elevation={2} sx={{ borderRadius: 2 }}>
-                    <CardContent sx={{ p: 2 }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                        {t('delivery.card.order')} #{del.order_number}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {t('delivery.card.courier')}: <strong>{del.courier_name}</strong>
-                      </Typography>
-                      <DispatchDetails delivery={del} now={now} />
-
-                      <Stack spacing={0.5} sx={{ my: 1 }}>
-                        {/* The expected cash and card figures are only written when the run is
-                            completed; until then what the rider must bring back is what the
-                            customer still owes. */}
-                        <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                          {t('delivery.card.toCollect', 'To collect')}: {MoneyUtil.formatCurrency((del as any).outstanding_total || '0')} {currency}
-                        </Typography>
-                      </Stack>
-
-                      <Stack direction="row" sx={{ alignItems: 'center', pt: 1, gap: 1, flexWrap: 'wrap' }}>
-                        {del.state === 'ASSIGNED' ? (
-                          // Named before the board went to one step, or the send-out did not go
-                          // through: the rider has not left yet.
-                          <Button
-                            variant="contained"
-                            color="warning"
-                            size="small"
-                            disabled={Boolean(pendingAction)}
-                            startIcon={pendingAction === `depart:${del.id}` ? <CircularProgress size={16} color="inherit" /> : <LocalShippingIcon />}
-                            onClick={() => handleDepartDelivery(del.id)}
-                          >
-                            {pendingAction === `depart:${del.id}` ? t('delivery.card.departing') : t('delivery.card.depart')}
-                          </Button>
-                        ) : (
-                          <>
-                            <Button
-                              variant="contained"
-                              color="success"
-                              size="small"
-                              disabled={Boolean(pendingAction)}
-                              onClick={() => handleOpenCompleteModal(del)}
-                            >
-                              {t('delivery.card.complete')}
-                            </Button>
-                            <Button
-                              variant="outlined"
-                              color="error"
-                              size="small"
-                              disabled={Boolean(pendingAction)}
-                              onClick={() => handleOpenFailModal(del)}
-                            >
-                              {t('delivery.card.failed')}
-                            </Button>
-                          </>
-                        )}
+                  <DeliveryCard key={del.id} delivery={del} now={now} currency={currency}>
+                    {!del.courier_id ? (
+                      // Moved out from the order without a rider: name one before anything else.
+                      <Button variant="contained" size="small" onClick={() => handleOpenAssignModal(del)}>
+                        {t('delivery.card.assignCourier')}
+                      </Button>
+                    ) : del.state === 'ASSIGNED' ? (
+                      // Named before the board went to one step, or the send-out did not go
+                      // through: the rider has not left yet.
+                      <Button
+                        variant="contained"
+                        color="warning"
+                        size="small"
+                        disabled={Boolean(pendingAction)}
+                        startIcon={pendingAction === `depart:${del.id}` ? <CircularProgress size={16} color="inherit" /> : <LocalShippingIcon />}
+                        onClick={() => handleDepartDelivery(del.id)}
+                      >
+                        {pendingAction === `depart:${del.id}` ? t('delivery.card.departing') : t('delivery.card.depart')}
+                      </Button>
+                    ) : (
+                      <>
                         <Button
+                          variant="contained"
+                          color="success"
                           size="small"
                           disabled={Boolean(pendingAction)}
-                          onClick={() => handleOpenAssignModal(del)}
-                          sx={{ ml: 'auto' }}
+                          onClick={() => handleOpenCompleteModal(del)}
                         >
-                          {t('delivery.card.reassign')}
+                          {t('delivery.card.complete')}
                         </Button>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                ))}
-              </Stack>
-            </Paper>
-          </Grid>
-
-          {/* DELIVERED / TERMINAL */}
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Paper sx={{ p: 2, bg: '#fafafa', borderRadius: 2, minHeight: 600 }}>
-              <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6" color="success.main" sx={{ fontWeight: 'bold' }}>
-                  {t('delivery.columns.history')} ({finished.length})
-                </Typography>
-                <Chip label={t('delivery.columns.terminal')} size="small" />
-              </Stack>
-              <Divider sx={{ mb: 2 }} />
-
-              <Stack spacing={2}>
-                {finished.map((del) => (
-                  <Card key={del.id} elevation={1} sx={{ borderRadius: 2 }}>
-                    <CardContent sx={{ p: 2 }}>
-                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                          {t('delivery.card.order')} #{del.order_number}
-                        </Typography>
-                        <Chip
-                          label={getDeliveryStateLabel(del.state)}
-                          color={del.state === 'DELIVERED' ? 'success' : 'error'}
-                          size="small"
-                        />
-                      </Stack>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                        {t('delivery.card.courier')}: {del.courier_name}
-                      </Typography>
-
-                      {del.state === 'FAILED' && (
                         <Button
                           variant="outlined"
+                          color="error"
                           size="small"
-                          color="warning"
                           disabled={Boolean(pendingAction)}
-                          startIcon={pendingAction === `requeue:${del.id}` ? <CircularProgress size={16} color="inherit" /> : <UndoIcon />}
-                          onClick={() => handleRequeueDelivery(del.id)}
-                          sx={{ mt: 1 }}
+                          onClick={() => handleOpenFailModal(del)}
                         >
-                          {t('delivery.card.requeue')}
+                          {t('delivery.card.failed')}
                         </Button>
-                      )}
-                    </CardContent>
-                  </Card>
+                      </>
+                    )}
+                    {del.courier_id && (
+                      <Button
+                        size="small"
+                        disabled={Boolean(pendingAction)}
+                        onClick={() => handleOpenAssignModal(del)}
+                        sx={{ ml: 'auto' }}
+                      >
+                        {t('delivery.card.reassign')}
+                      </Button>
+                    )}
+                  </DeliveryCard>
                 ))}
               </Stack>
             </Paper>
