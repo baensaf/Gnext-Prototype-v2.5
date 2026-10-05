@@ -375,7 +375,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
   const [lineItemDiscounts, setLineItemDiscounts] = useState<string[]>([]);
   const [quotedTaxAmount, setQuotedTaxAmount] = useState<string>('0');
   const [quotedDeliveryFee, setQuotedDeliveryFee] = useState<string>('0');
-  const [discountMessage, setDiscountMessage] = useState<string | null>(null);
+  const [appliedDiscountName, setAppliedDiscountName] = useState<string | null>(null);
   const [approvalRequired, setApprovalRequired] = useState(false);
   const [approvalReason, setApprovalReason] = useState<string | null>(null);
 
@@ -785,7 +785,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     setAppliedDiscountAmount('0');
     setQuotedTaxAmount('0');
     setQuotedDeliveryFee('0');
-    setDiscountMessage(null);
+    setAppliedDiscountName(null);
     setApprovalRequired(false);
     setApprovalReason(null);
     setOrderNotes('');
@@ -1071,7 +1071,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       setAppliedDiscountAmount('0');
       setQuotedTaxAmount('0');
       setQuotedDeliveryFee('0');
-      setDiscountMessage(null);
+      setAppliedDiscountName(null);
       setApprovalRequired(false);
       setApprovalReason(null);
       return;
@@ -1127,20 +1127,27 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       if (applied) {
         const approvedBadge = appliedManualDiscount?.approvalRequestId ? ' [Manager Approved]' : '';
         const msg = `Applied ${applied.name}${approvedBadge}: -${MoneyUtil.formatCurrency(discAmount)} ${currency}`;
-        setDiscountMessage(msg);
+        // The cashier's own discount shows as its rate; its name is the same on every order.
+        setAppliedDiscountName(
+          applied.source !== 'MANUAL'
+            ? applied.name
+            : appliedManualDiscount?.calculation_type === 'PERCENTAGE'
+              ? `${Number(appliedManualDiscount.value)}%`
+              : null
+        );
         setError(null);
         if (appliedCouponCode) {
           toast.success(msg);
         }
       } else if (rejected) {
-        setDiscountMessage(null);
+        setAppliedDiscountName(null);
         const reasonMsg = formatRejectionReason(rejected.rejectionReason);
         if (appliedCouponCode) {
           toast.error(reasonMsg);
           setAppliedCouponCode('');
         }
       } else {
-        setDiscountMessage(null);
+        setAppliedDiscountName(null);
       }
     } catch (err: any) {
       if (appliedCouponCode) {
@@ -1155,6 +1162,8 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
   }, [evaluateQuote]);
 
   const hasDiscount = Boolean(appliedCouponCode || appliedManualDiscount);
+  // Also true for one the cashier didn't add: an item's own discount, or the customer's rate.
+  const discountOn = hasDiscount || MoneyUtil.greaterThan(appliedDiscountAmount, '0');
 
   // Coupon Actions
   const handleApplyCoupon = () => {
@@ -1175,7 +1184,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
   const handleClearCoupon = () => {
     setCouponInput('');
     setAppliedCouponCode('');
-    setDiscountMessage(null);
+    setAppliedDiscountName(null);
     setError(null);
   };
 
@@ -1231,7 +1240,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     setManualApprovalRequestId(undefined);
     setApprovalRequired(false);
     setApprovalReason(null);
-    setDiscountMessage(null);
+    setAppliedDiscountName(null);
     setManualDiscountModalOpen(false);
     setError(null);
   };
@@ -2534,17 +2543,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
               <Divider sx={{ mb: 1.5 }} />
 
-              {/* Discount Feedback / Active Discount Chip */}
-              {discountMessage && (
-                <Alert
-                  severity="success"
-                  icon={<VerifiedIcon fontSize="inherit" />}
-                  sx={{ mb: 1.5, py: 0.25, alignItems: 'center', fontSize: '0.8rem' }}
-                >
-                  {discountMessage}
-                </Alert>
-              )}
-
               {/* Supervisor Approval Required Alert */}
               {approvalRequired && (
                 <Alert
@@ -2592,23 +2590,28 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                   </Stack>
                 )}
                 {/* The discount line is always there: it is also the way to a discount or a coupon.
-                    With none applied it names the action; applied, it reads as a total like the rest. */}
-                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                    With none applied it names the action; applied, it names the discount, so the
+                    cashier sees which one is on without opening it. */}
+                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1, minWidth: 0 }}>
                   <PosFeatureGate off={!features.discounts} title={t('pos.cartBar.discount')}>
                     <Button
                       size="small"
-                      color={hasDiscount ? 'error' : 'primary'}
+                      color={discountOn ? 'error' : 'primary'}
                       disabled={!features.discounts}
                       startIcon={<LocalOfferIcon sx={{ fontSize: 16 }} />}
                       onClick={() => setManualDiscountModalOpen(true)}
                       aria-keyshortcuts="F6"
+                      endIcon={appliedDiscountName && appliedManualDiscount?.approvalRequestId ? <VerifiedIcon sx={{ fontSize: 16 }} /> : undefined}
                       sx={{ py: 0, px: 0.75, minWidth: 0, marginInlineStart: -0.75, fontWeight: 600, fontSize: '0.8125rem', lineHeight: 1.6 }}
                     >
-                      {hasDiscount ? t('pos.totals.discount') : t('pos.totals.addDiscount')}
+                      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {discountOn ? t('pos.totals.discount') : t('pos.totals.addDiscount')}
+                        {appliedDiscountName ? ` ${appliedDiscountName}` : ''}
+                      </Box>
                     </Button>
                   </PosFeatureGate>
                   {MoneyUtil.greaterThan(appliedDiscountAmount, '0') ? (
-                    <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold' }}>
+                    <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold', flexShrink: 0 }}>
                       -{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(appliedDiscountAmount) })}
                     </Typography>
                   ) : null}
