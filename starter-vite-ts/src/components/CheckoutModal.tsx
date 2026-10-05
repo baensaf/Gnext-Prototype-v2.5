@@ -397,6 +397,13 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
               <Typography variant="h4" sx={{ fontWeight: 'bold', color: isFullyPaid ? 'success.main' : 'error.main' }}>
                 {MoneyUtil.formatCurrency(order.due_amount)} {currency}
               </Typography>
+              {/* What a delivery order leaves unpaid here is not unfinished: the courier brings it back. */}
+              {order.order_type === 'DELIVERY' && !isFullyPaid && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  {t('pos.pay.courierCollects')}
+                  <VersionTag feature="pos.pay.courierCollects" sx={{ ml: 1 }} />
+                </Typography>
+              )}
 
               {changeDue && (
                 <Alert severity="warning" sx={{ mt: 1.5, py: 1.5, fontWeight: 700, fontSize: '1.1rem' }}>
