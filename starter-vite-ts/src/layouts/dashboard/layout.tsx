@@ -18,16 +18,13 @@ import { NavMobile } from './nav-mobile';
 import { VerticalDivider } from './content';
 import { NavVertical } from './nav-vertical';
 import { NavHorizontal } from './nav-horizontal';
-import { Searchbar } from '../components/searchbar';
 import { useNavData } from '../nav-config-dashboard';
 import { MenuButton } from '../components/menu-button';
 import { AccountDrawer } from '../components/account-drawer';
 import { WorkspacesPopover } from '../components/workspaces-popover';
 import { dashboardLayoutVars, dashboardNavColorVars } from './css-vars';
-import { NotificationsDrawer } from '../components/notifications-drawer';
 import { IncomingOrdersButton } from '../components/incoming-orders-button';
 import { MainSection, layoutClasses, HeaderSection, LayoutSection } from '../core';
-import { useSettingsSearchItems } from '../components/searchbar/use-settings-search-items';
 
 // ----------------------------------------------------------------------
 
@@ -61,7 +58,6 @@ export function DashboardLayout({
 
   const dynamicNavData = useNavData();
   const navData = slotProps?.nav?.data ?? dynamicNavData;
-  const settingsSearchItems = useSettingsSearchItems();
 
   const isNavMini = settings.state.navLayout === 'mini';
   const isNavHorizontal = settings.state.navLayout === 'horizontal';
@@ -130,19 +126,13 @@ export function DashboardLayout({
       ),
       rightArea: (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0, sm: 0.75 } }}>
-          {/** @slot Searchbar */}
-          <Searchbar data={navData} extraItems={settingsSearchItems} />
-
           {/** @slot Orders waiting for the store to accept them */}
           <IncomingOrdersButton />
 
-          {/** @slot Notifications popover */}
-          <NotificationsDrawer />
-
           {/** @slot Account drawer */}
           {/* No links: the template's Profile / Projects / Subscription entries all went to
-              "#" and the real menu is the sidebar. Language, appearance and the version labels
-              live in it too. */}
+              "#" and the real menu is the sidebar. Language, appearance, the version labels and
+              the operational alerts live in it too; the header keeps only what a till needs. */}
           <AccountDrawer />
         </Box>
       ),
