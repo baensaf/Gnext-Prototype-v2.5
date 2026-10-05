@@ -87,6 +87,8 @@ export const FEATURE_LABELS = {
   'pos.tableAssignment': 'V2',
   'pos.coupon': 'V3',
   'pos.customerCredit': 'V3',
+  // The pay panel saying a delivery order's remainder goes with the courier
+  'pos.pay.courierCollects': 'V3',
   'pos.offlineTill': 'F',
   // Orders list and the order drawer
   'orders.snappfood': 'V3',
