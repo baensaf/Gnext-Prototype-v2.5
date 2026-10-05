@@ -14,6 +14,7 @@ import {
   IconButton,
 } from '@mui/material';
 
+import { isKioskHost } from 'src/config/kiosk-host';
 import { useAuthStore } from 'src/store/useAuthStore';
 import { AuthSplitLayout } from 'src/layouts/auth-split';
 import { homePathForRole } from 'src/config/role-access';
@@ -29,6 +30,9 @@ const DEMO_ACCOUNTS = [
   { username: 'manager.downtown@gnext.local', labelKey: 'auth.roles.MANAGER', label: 'Branch Manager' },
   { username: 'cashier.downtown@gnext.local', labelKey: 'auth.roles.CASHIER', label: 'Cashier' },
 ];
+
+// The kiosk host has one screen, at its root, whoever signs in.
+const homeFor = (role?: string | null) => (isKioskHost() ? '/' : homePathForRole(role));
 
 export function LoginPage() {
   const { t, i18n } = useTranslation();
@@ -46,7 +50,7 @@ export function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate(homePathForRole(user?.role), { replace: true });
+      navigate(homeFor(user?.role), { replace: true });
     }
   }, [isAuthenticated, user?.role, navigate]);
 
@@ -57,7 +61,7 @@ export function LoginPage() {
     if (success) {
       // Read the role back off the store rather than the closure: it only exists once
       // the login response has landed.
-      navigate(homePathForRole(useAuthStore.getState().user?.role));
+      navigate(homeFor(useAuthStore.getState().user?.role));
     }
   };
 

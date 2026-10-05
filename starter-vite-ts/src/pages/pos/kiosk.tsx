@@ -28,6 +28,7 @@ import {
 import { MoneyUtil } from 'src/utils/money.util';
 import { useCurrencyLabel } from 'src/utils/currency';
 
+import { isKioskHost } from 'src/config/kiosk-host';
 import { useAuthStore } from 'src/store/useAuthStore';
 import { httpClient as axios } from 'src/api/httpClient';
 import { useBranchContextOptional } from 'src/contexts/branch-context';
@@ -116,6 +117,9 @@ export function KioskPage() {
   const branchScope = useBranchContextOptional();
   const [kioskTerminal, setKioskTerminal] = useState<KioskTerminal | null>(() => readKioskTerminal());
   const [deviceDialogOpen, setDeviceDialogOpen] = useState(false);
+  // On its own host nothing surrounds the page, so it fills the screen and carries its own sign-out.
+  const kioskHost = isKioskHost();
+  const logout = useAuthStore((state) => state.logout);
   const kioskBranchId = kioskTerminal?.branch_id || branchScope?.selectedBranchId || undefined;
 
   // Kiosk Flow Steps: 0: WELCOME, 1: CATALOG, 2: PAYMENT_SIMULATION, 3: SUCCESS_RECEIPT, 4: PAYMENT_FAILED
@@ -384,7 +388,7 @@ export function KioskPage() {
     return (
       <Box
         sx={{
-          minHeight: '85vh',
+          minHeight: kioskHost ? '100vh' : '85vh',
           bgcolor: 'background.default',
           display: 'flex',
           flexDirection: 'column',
@@ -413,6 +417,7 @@ export function KioskPage() {
             branchName={bootstrapData?.branch?.name}
             current={kioskTerminal}
             terminalType="KIOSK"
+            onSignOut={kioskHost ? () => logout() : undefined}
             onAssigned={(term) => {
               const next = { id: term.id, code: term.code, name: term.name, branch_id: term.branch_id || kioskBranchId };
               try {
@@ -524,7 +529,7 @@ export function KioskPage() {
       : (bootstrapData?.products || []).filter((p: any) => p.category_id === selectedCategory);
 
   return (
-    <Box sx={{ minHeight: '85vh', p: 3, bgcolor: 'background.default' }}>
+    <Box sx={{ minHeight: kioskHost ? '100vh' : '85vh', p: 3, bgcolor: 'background.default' }}>
       {/* Kiosk Header */}
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>

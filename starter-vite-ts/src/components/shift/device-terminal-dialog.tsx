@@ -37,6 +37,8 @@ type Props = {
   onAssigned: (terminal: DeviceTerminal) => void;
   /** A till (the default) or a self-order kiosk, which has no drawer but may have a card terminal. */
   terminalType?: 'CASHIER' | 'KIOSK';
+  /** A kiosk on its own address has no menu to sign out from, so the setup dialog carries it. */
+  onSignOut?: () => void;
 };
 
 /**
@@ -44,7 +46,7 @@ type Props = {
  * same list but hands the choice to a manager's pin, because a till set up against the
  * wrong drawer puts every sale into somebody else's count.
  */
-export function DeviceTerminalDialog({ open, onClose, branchId, branchName, current, onAssigned, terminalType = 'CASHIER' }: Props) {
+export function DeviceTerminalDialog({ open, onClose, branchId, branchName, current, onAssigned, terminalType = 'CASHIER', onSignOut }: Props) {
   const isKiosk = terminalType === 'KIOSK';
   const { t } = useTranslation();
   const role = useAuthStore((state) => state.user?.role);
@@ -140,6 +142,11 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
           </Stack>
         </DialogContent>
         <DialogActions>
+          {onSignOut && (
+            <Button color="error" onClick={onSignOut} sx={{ mr: 'auto' }}>
+              {t('auth.logout', 'Sign Out')}
+            </Button>
+          )}
           <Button onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
           <Button
             variant="contained"
