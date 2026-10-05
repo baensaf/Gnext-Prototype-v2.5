@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Req, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Req, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Request } from 'express';
 import { DeliveryService } from './delivery.service';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
@@ -61,12 +61,29 @@ export class DeliveryController {
     return await this.deliveryService.getCourierById(tenantId, id);
   }
 
-  @Roles(...MANAGER_AND_ABOVE)
+  /**
+   * A manager adds a courier wherever they manage, on any pay. A cashier adds one to their
+   * own branch, on the branch's default pay: who is riding tonight is the counter's to know,
+   * what a courier earns is the manager's to decide.
+   */
+  @Roles(...MANAGER_AND_ABOVE, 'CASHIER')
   @Post('couriers')
   async createCourier(@Body() body: CreateCourierDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
-    return await this.deliveryService.createCourier(tenantId, body, correlationId, (req as any).userId);
+    let data = body;
+    if (String((req as any).userRole || '').toUpperCase() === 'CASHIER') {
+      const ownBranchId = (req as any).userBranchId;
+      if (!ownBranchId) {
+        throw new ForbiddenException({
+          code: 'COURIER_BRANCH_REQUIRED',
+          title: 'No Branch',
+          detail: 'A cashier adds couriers to their own branch, and this account has none.',
+        });
+      }
+      data = { ...body, branch_id: ownBranchId, pay_mode: undefined, compensation_per_delivery: undefined };
+    }
+    return await this.deliveryService.createCourier(tenantId, data, correlationId, (req as any).userId);
   }
 
   /**

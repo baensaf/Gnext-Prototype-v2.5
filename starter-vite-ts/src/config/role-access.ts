@@ -37,7 +37,8 @@ const CASHIER_PATHS = [
   // the money only moves once an approver has put their pin in.
   '/app/refunds',
   // At the counter it is the cashier who hands a delivery to the courier and counts the
-  // cash-on-delivery back in; the fleet itself (couriers, zones, pay) stays the manager's.
+  // cash-on-delivery back in, and who adds a courier who turns up to ride. The rest of the
+  // fleet (zones, pay, moving a courier between branches) stays the manager's.
   '/app/delivery/orders',
   '/app/delivery/couriers',
   '/app/delivery/settlements',

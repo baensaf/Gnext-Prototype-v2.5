@@ -497,10 +497,12 @@ export function DeliveryPage() {
         setError(t('delivery.errors.noBranch'));
         return;
       }
+      const { pay_mode, compensation_per_delivery, ...who } = courierForm;
       await deliveryApi.createCourier({
         branch_id: targetBranchId,
-        ...courierForm,
-        compensation_per_delivery: courierForm.compensation_per_delivery.toString(),
+        ...who,
+        // A cashier's courier starts on the branch's default pay.
+        ...(isCashier ? {} : { pay_mode, compensation_per_delivery: compensation_per_delivery.toString() }),
       });
       setCourierModalOpen(false);
       setCourierForm(emptyCourierForm(defaultPayMode));
@@ -917,11 +919,10 @@ export function DeliveryPage() {
         <Card sx={{ p: 3, borderRadius: 2 }}>
           <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t('delivery.couriers.title')} ({couriers.length})</Typography>
-            {!isCashier && (
-              <Button variant="contained" startIcon={<AddIcon />} onClick={openAddCourier}>
-                {t('delivery.couriers.addCourier')}
-              </Button>
-            )}
+            {/* A cashier adds a courier too; their pay is still the manager's. */}
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openAddCourier}>
+              {t('delivery.couriers.addCourier')}
+            </Button>
           </Stack>
 
           <Table>
@@ -1270,9 +1271,17 @@ export function DeliveryPage() {
                 <MenuItem value="ON_FOOT">{t('delivery.couriers.vehicleTypes.onFoot')}</MenuItem>
               </Select>
             </FormControl>
-            {renderPayModeSelect(courierForm.pay_mode, (mode) => setCourierForm({ ...courierForm, pay_mode: mode }))}
-            {renderPayAmount(courierForm.pay_mode, courierForm.compensation_per_delivery, (amount) =>
-              setCourierForm({ ...courierForm, compensation_per_delivery: amount })
+            {isCashier ? (
+              <Typography variant="caption" color="text.secondary">
+                {t('delivery.modals.addCourier.payByManager')}
+              </Typography>
+            ) : (
+              <>
+                {renderPayModeSelect(courierForm.pay_mode, (mode) => setCourierForm({ ...courierForm, pay_mode: mode }))}
+                {renderPayAmount(courierForm.pay_mode, courierForm.compensation_per_delivery, (amount) =>
+                  setCourierForm({ ...courierForm, compensation_per_delivery: amount })
+                )}
+              </>
             )}
           </Stack>
         </DialogContent>
@@ -1313,7 +1322,8 @@ export function DeliveryPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCourierOnFile(null)}>{t('delivery.modals.moveCourier.cancel')}</Button>
-          {courierOnFile && (courierOnFile.branch_id !== branchId || !courierOnFile.is_active) && (
+          {/* Moving a courier between branches, or bringing one back, stays the manager's. */}
+          {courierOnFile && !isCashier && (courierOnFile.branch_id !== branchId || !courierOnFile.is_active) && (
             <Button variant="contained" disabled={Boolean(pendingAction)} onClick={handleMoveCourier}>
               {pendingAction?.startsWith('move:') ? (
                 <CircularProgress size={20} color="inherit" />
