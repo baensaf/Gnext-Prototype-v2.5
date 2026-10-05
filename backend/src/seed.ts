@@ -304,8 +304,7 @@ export async function runSeed() {
     // Valiasr runs two bikes at lunch, so a second order can go out while the first is away.
     { branch: branchExpress, code: 'CR-003', name: 'مهدی کاظمی', phone: '09120000003' },
   ];
-  // Per-delivery pay at the menu's scale; the first figure (50,000 rial) was the generic demo's.
-  await courierRepo.update({ tenant_id: tenant.id, compensation_per_delivery: '50000.0000' }, { compensation_per_delivery: '400000.0000' });
+  // Iran Burger's couriers are on a salary, so a trip pays them nothing (migration 095).
   for (const courier of couriers) {
     const existing = await courierRepo.findOne({ where: { tenant_id: tenant.id, code: courier.code } });
     if (existing) continue;
@@ -332,7 +331,7 @@ export async function runSeed() {
       phone: courier.phone,
       vehicle_type: 'MOTORCYCLE',
       status: 'AVAILABLE',
-      compensation_per_delivery: '400000.0000',
+      compensation_per_delivery: '0.0000',
       currency_code: 'IRR',
       is_active: true,
     }));

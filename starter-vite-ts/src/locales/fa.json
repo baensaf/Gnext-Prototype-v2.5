@@ -982,7 +982,7 @@
       "audit": "گزارش رویدادهای تحویل"
     },
     "columns": {
-      "unassigned": "تخصیص‌نیافته",
+      "unassigned": "در انتظار سفیر",
       "needsCourier": "نیازمند سفیر",
       "assigned": "تخصیص‌یافته",
       "readyToDepart": "آماده ارسال",
@@ -1003,7 +1003,7 @@
       "toCollect": "مبلغ قابل دریافت از مشتری",
       "expPos": "کارت‌خوان مورد انتظار",
       "compensation": "دستمزد",
-      "assignCourier": "تخصیص سفیر",
+      "assignCourier": "ارسال با سفیر",
       "depart": "خروج / ارسال",
       "departing": "در حال ثبت خروج…",
       "reassign": "تغییر سفیر",
@@ -1088,12 +1088,14 @@
     },
     "modals": {
       "assignCourier": {
-        "title": "تخصیص سفیر به سفارش",
-        "description": "انتخاب سفیر حاضر و در دسترس برای سفارش شماره #{{orderNumber}}",
+        "title": "ارسال سفارش با سفیر",
+        "description": "سفیر حاضر را برای سفارش #{{orderNumber}} انتخاب کنید؛ سفارش همین حالا با او ارسال می‌شود.",
         "eligibleCourier": "سفیر واجد شرایط",
         "noEligible": "در حال حاضر هیچ سفیری حاضر و دارای ظرفیت خالی نیست.",
         "cancel": "انصراف",
-        "submit": "تخصیص سفیر"
+        "submit": "ارسال",
+        "changeDescription": "سفارش #{{orderNumber}} ارسال شده است. سفیری را که آن را می‌برد انتخاب کنید.",
+        "changeSubmit": "تغییر سفیر"
       },
       "complete": {
         "title": "ثبت تحویل",
@@ -1260,7 +1262,7 @@
       "expectedActualCash": "نقد انتظار / نقد دریافتی",
       "expectedActualPos": "کارت‌خوان انتظار / دریافتی",
       "discrepancy": "مغایرت",
-      "compensationsAdjustments": "دستمزدها و تعدیلات",
+      "compensationsAdjustments": "تعدیلات",
       "comp": "دستمزد:",
       "adj": "تعدیل:",
       "netSettlementTotal": "مبلغ خالص تسویه",

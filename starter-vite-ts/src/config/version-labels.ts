@@ -49,7 +49,6 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   // discount limits, payment methods, reason codes, note templates
   '/app/settings': 'V1',
   '/app/settings/approvals': 'V2',
-  '/app/settings/courier-pay': 'V4',
   '/app/settings/branch-overrides': 'V4',
   '/app/settings/localization': 'F',
   '/app/settings/data-reset': 'F',
@@ -112,8 +111,7 @@ export const FEATURE_LABELS = {
   'payments.onlineGateway': 'F',
   'payments.bankTransfer': 'V4',
   'payments.settlementAccounts': 'V4',
-  // Delivery. V1 couriers belong to one branch and are paid the zone's delivery fee.
-  'delivery.payModes': 'V4',
+  // Delivery. Couriers belong to one branch and are on a salary: a trip pays them nothing.
   'delivery.availability': 'V4',
   'delivery.moveCourier': 'V4',
   'delivery.courierDetail': 'V4',

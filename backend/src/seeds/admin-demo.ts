@@ -167,7 +167,7 @@ export async function seedAdminDemo(
     console.log('Seeded Valiasr kitchen: grill and fryer stations, routing and a screen');
   }
 
-  // A second, farther Valiasr delivery zone, so the fee and the courier's pay visibly differ.
+  // A second, farther Valiasr delivery zone with a higher fee.
   const zoneRepo = ds.getRepository('DeliveryZone');
   if (valiasr && !(await zoneRepo.findOne({ where: { tenant_id: tenantId, code: 'ZONE-DOWNTOWN-02' }, withDeleted: true }))) {
     await zoneRepo.save(
@@ -177,7 +177,6 @@ export async function seedAdminDemo(
         code: 'ZONE-DOWNTOWN-02',
         name: 'ولیعصر - محدوده دور (تا پارک وی)',
         fee: MoneyUtil.format(900_000),
-        courier_pay: MoneyUtil.format(600_000),
         currency_code: 'IRR',
         estimated_minutes: 35,
         is_active: true,
