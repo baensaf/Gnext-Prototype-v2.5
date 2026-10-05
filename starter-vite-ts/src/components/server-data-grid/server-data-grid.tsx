@@ -6,6 +6,7 @@ import type {
   GridRowHeightParams,
   GridPaginationModel,
   GridRowSelectionModel,
+  GridPinnedColumnFields,
   GridRowHeightReturnValue,
   GridColumnVisibilityModel,
 } from '@mui/x-data-grid-premium';
@@ -57,6 +58,8 @@ export interface ServerDataGridProps<T = any> {
   getRowClassName?: (params: GridRowParams) => string;
   columnVisibilityModel?: GridColumnVisibilityModel;
   onColumnVisibilityModelChange?: (model: GridColumnVisibilityModel) => void;
+  /** Columns held at the start or end while the rest scroll sideways. */
+  pinnedColumns?: GridPinnedColumnFields;
 }
 
 // The grid's own words (the pager, the column menu, the toolbar) in the page's language.
@@ -98,6 +101,7 @@ export function ServerDataGrid<T extends { id?: string | number }>({
   getRowClassName,
   columnVisibilityModel,
   onColumnVisibilityModelChange,
+  pinnedColumns,
 }: ServerDataGridProps<T>) {
   const { t, i18n } = useTranslation();
   const localeText = i18n.language?.startsWith('fa') ? faLocaleText : undefined;
@@ -143,6 +147,7 @@ export function ServerDataGrid<T extends { id?: string | number }>({
         getRowClassName={getRowClassName}
         columnVisibilityModel={columnVisibilityModel}
         onColumnVisibilityModelChange={onColumnVisibilityModelChange}
+        pinnedColumns={pinnedColumns}
         slots={{
           loadingOverlay: () => (
             <Box

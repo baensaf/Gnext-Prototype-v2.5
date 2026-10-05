@@ -1,4 +1,4 @@
-import type { GridColDef, GridSortModel, GridFilterModel } from '@mui/x-data-grid-premium';
+import type { GridColDef, GridSortModel, GridFilterModel, GridColumnVisibilityModel } from '@mui/x-data-grid-premium';
 import type { RefundRecord } from 'src/api/refundApi';
 import type { ReasonCode } from 'src/api/settingsApi';
 import type { ReceiptData, PaymentRecord } from 'src/api/paymentApi';
@@ -8,7 +8,6 @@ import { useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
 
-import CodeIcon from '@mui/icons-material/Code';
 import EditIcon from '@mui/icons-material/Edit';
 import CloseIcon from '@mui/icons-material/Close';
 import PrintIcon from '@mui/icons-material/Print';
@@ -16,13 +15,11 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import PersonIcon from '@mui/icons-material/Person';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
 import ReceiptIcon from '@mui/icons-material/Receipt';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import HistoryIcon from '@mui/icons-material/History';
 import PaymentIcon from '@mui/icons-material/Payment';
 import DownloadIcon from '@mui/icons-material/Download';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ScheduleIcon from '@mui/icons-material/Schedule';
-import SecurityIcon from '@mui/icons-material/Security';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
@@ -137,6 +134,58 @@ const CHANNELS = ['POS', 'KIOSK', 'ONLINE', 'AGGREGATOR'];
 const PAGE_SIZES = [25, 50, 100];
 const SORTABLE = ['placed_at', 'grand_total', 'outstanding_total', 'order_number'] as const;
 
+// Audit actions that only repeat one of the order's own state changes.
+const STATE_AUDIT_ACTIONS = new Set([
+  'ORDER_CREATED',
+  'ORDER_SUBMITTED',
+  'ORDER_ACCEPT',
+  'ORDER_REJECT',
+  'ORDER_START_PREPARATION',
+  'ORDER_MARK_READY',
+  'ORDER_DISPATCH',
+  'ORDER_COMPLETE',
+  'ORDER_CANCEL',
+  'ORDER_CANCELLED',
+]);
+// The other order changes the timeline names; anything else reads as "Order changed".
+const AUDIT_EVENT_KEYS = [
+  'ORDER_EDITED',
+  'ORDER_UPDATED',
+  'ORDER_TYPE_CHANGED',
+  'DINING_TABLE_MOVED',
+  'DINING_ORDERS_MERGED',
+  'ORDER_SPLIT',
+  'ORDER_DELIVERY_FAILED',
+];
+
+// Which columns each role starts without. Every column stays in the grid's Columns picker.
+type ColumnRole = 'cashier' | 'manager' | 'headOffice';
+const DEFAULT_HIDDEN_COLUMNS: Record<ColumnRole, GridColumnVisibilityModel> = {
+  // Nearly every order comes from the till in opening hours; Amount already shows what is due.
+  cashier: { channel: false, after_hours: false, outstanding_total: false },
+  manager: { outstanding_total: false },
+  // Head office compares branches and looks orders up; it seldom needs the lines.
+  headOffice: { items: false, outstanding_total: false },
+};
+// The order number is held at the start, and Status and the actions at the end, so a narrow
+// till screen scrolls the middle and never loses the state or the Pay button.
+const PINNED_COLUMNS = { left: ['order_number'], right: ['status', 'actions'] };
+const columnChoiceKey = (role: ColumnRole) => `gnext_orders_columns_${role}`;
+const readColumnChoice = (role: ColumnRole): GridColumnVisibilityModel => {
+  try {
+    return JSON.parse(localStorage.getItem(columnChoiceKey(role)) || '{}');
+  } catch {
+    return {};
+  }
+};
+const saveColumnChoice = (role: ColumnRole, model: GridColumnVisibilityModel) => {
+  try {
+    localStorage.setItem(columnChoiceKey(role), JSON.stringify(model));
+  } catch {
+    // Private windows may refuse storage; the choice then lasts until the page reloads.
+  }
+};
+
 // Defaults are left out of the address bar, so a plain /app/orders is today's open orders.
 const DEFAULTS = {
   tab: 'OPEN',
@@ -180,29 +229,6 @@ const progressKeyOf = (status: string): string | null => {
   }
 };
 
-/** The `delivery.states` key for a delivery's state. */
-const deliveryStateKeyOf = (state: string | null | undefined): string | null => {
-  switch (state) {
-    case 'PENDING':
-    case 'UNASSIGNED':
-      return 'unassigned';
-    case 'ASSIGNED':
-      return 'assigned';
-    case 'PICKED_UP':
-      return 'pickedUp';
-    case 'EN_ROUTE':
-      return 'enRoute';
-    case 'DELIVERED':
-      return 'delivered';
-    case 'FAILED':
-      return 'failed';
-    case 'CANCELLED':
-      return 'cancelled';
-    default:
-      return null;
-  }
-};
-
 export function OrdersWorkflowPage() {
   const { t } = useTranslation();
   const currency = useCurrencyLabel();
@@ -213,7 +239,8 @@ export function OrdersWorkflowPage() {
   // read: details and receipts, and none of the buttons that change an order.
   const readOnly = isHeadOffice;
   // The whole order book, customers' mobiles included, is a manager's to download.
-  const canExport = isManagerOrAbove(useAuthStore((state) => state.user?.role));
+  const userRole = useAuthStore((state) => state.user?.role);
+  const canExport = isManagerOrAbove(userRole);
   const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
   // Only head office ever sees more than one, and only there does the column mean anything.
   const showBranchColumn = !branchId && branches.length > 1;
@@ -320,7 +347,7 @@ export function OrdersWorkflowPage() {
   const [orderRefunds, setOrderRefunds] = useState<RefundRecord[]>([]);
   const [loadingDrawerDetails, setLoadingDrawerDetails] = useState(false);
   const [drawerTab, setDrawerTab] = useState<'details' | 'payments' | 'audit'>('details');
-  const [inspectingJson, setInspectingJson] = useState<any>(null);
+  const [drawerMenuAnchor, setDrawerMenuAnchor] = useState<HTMLElement | null>(null);
   const drawerOpen = !!drawerOrderId;
 
   // Report an accepted Snappfood order to Snappfood support: more time, or it cannot be made.
@@ -458,8 +485,12 @@ export function OrdersWorkflowPage() {
 
   // A waiting order is answered on Incoming Orders, and a finished one is refunded, not cancelled.
   // Only Snappfood cancels one of its orders; the store reports a problem to Snappfood instead.
+  // Nor once a courier has it: it comes back as a failed delivery, on the delivery hub.
   const canCancel = (order: OrderHeader) =>
-    !readOnly && !isSnappfoodOrder(order) && (lifecycleOf(order) === 'OPEN' || order.status === 'DRAFT');
+    !readOnly &&
+    !isSnappfoodOrder(order) &&
+    order.status !== 'OUT_FOR_DELIVERY' &&
+    (lifecycleOf(order) === 'OPEN' || order.status === 'DRAFT');
 
   // Snappfood collects for its orders, so the till never takes money for one.
   const canPay = (order: OrderHeader) =>
@@ -840,6 +871,15 @@ export function OrdersWorkflowPage() {
   const formatPlaced = (placedAt: string) =>
     businessDate(placedAt) === businessToday() ? formatCalendarTime(placedAt) : formatCalendarDateTime(placedAt);
 
+  // A Snappfood order's notes carry the whole order as Snappfood sent it (customer, phone,
+  // address, payment), all shown above already; only the guest's own words are worth reading.
+  const guestNoteOf = (order: OrderHeader): string | null => {
+    const notes = order.notes?.trim();
+    if (!notes || !isSnappfoodOrder(order) || !notes.startsWith('Snappfood order')) return notes || null;
+    const note = notes.split('\n').find((line) => line.startsWith('Note: '));
+    return note ? note.slice('Note: '.length).trim() || null : null;
+  };
+
   const activeItems = (order: OrderHeader) => (order.items || []).filter((it: any) => it.state !== 'VOID' && it.state !== 'REPLACED');
 
   /** The one thing a cashier most likely wants to do next with this order, if anything. */
@@ -868,95 +908,119 @@ export function OrdersWorkflowPage() {
     return null;
   };
 
-  /** Where the order is: its table, the counter, or where a delivery is going and who has it. */
+  /**
+   * What kind of order it is and where it is: the table, the counter, or where a delivery is
+   * going and who has it. How far the courier has got is the Status column's to say.
+   */
   const renderWhere = (order: OrderListRow) => {
-    if (order.table_number) {
-      return (
-        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {t('orders.table.tableNumber', { number: order.table_number })}
-          </Typography>
-          <VersionTag feature="orders.table" />
-        </Stack>
-      );
-    }
     const isDelivery = order.order_type === 'DELIVERY' || !!order.delivery_state || !!order.delivery_zone_name;
-    if (isDelivery) {
-      const stateKey = deliveryStateKeyOf(order.delivery_state);
-      // "No courier yet" only means something while the order is still on its way out.
-      const progress =
-        [stateKey ? t(`delivery.states.${stateKey}`) : null, order.courier_name].filter(Boolean).join(' · ') ||
-        (order.lifecycle === 'OPEN' ? t('orders.table.noCourierYet') : '');
-      return (
-        <Box>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {order.delivery_zone_name || t('orders.table.delivery')}
-          </Typography>
-          {progress && (
-            <Typography color="text.secondary" variant="caption" sx={{ display: 'block' }}>
-              {progress}
-            </Typography>
-          )}
-        </Box>
+    let place: React.ReactNode = null;
+    if (order.table_number) {
+      place = (
+        <>
+          {t('orders.table.tableNumber', { number: order.table_number })}
+          <VersionTag feature="orders.table" sx={{ ml: 0.5 }} />
+        </>
       );
+    } else if (isDelivery) {
+      // "No courier yet" only means something while the order is still on its way out.
+      place =
+        [order.delivery_zone_name, order.courier_name].filter(Boolean).join(' · ') ||
+        (order.lifecycle === 'OPEN' ? t('orders.table.noCourierYet') : '');
+    } else if (order.order_type === 'AGGREGATOR') {
+      place = t('orders.table.snappfoodCourier');
     }
-    if (order.order_type === 'AGGREGATOR') {
-      return <Typography variant="body2">{t('orders.table.snappfoodCourier')}</Typography>;
-    }
-    return <Typography variant="body2">{t('orders.table.counter')}</Typography>;
+    // The till is where nearly every order comes from, so only another channel is named.
+    const channel = order.channel === 'KIOSK' || order.channel === 'ONLINE' ? getChannelLabel(order.channel) : null;
+    return (
+      <Box sx={{ minWidth: 0 }}>
+        <Chip
+          color={getOrderTypeColor(order.order_type) as any}
+          label={getOrderTypeLabel(order.order_type)}
+          size="small"
+        />
+        {(place || channel) && (
+          <Typography color="text.secondary" variant="caption" sx={{ display: 'block', mt: 0.25 }} noWrap>
+            {place}
+            {place && channel ? ' · ' : null}
+            {channel}
+          </Typography>
+        )}
+      </Box>
+    );
   };
 
-  const renderPayment = (order: OrderListRow) => {
+  /** The order's total, and beneath it what is still owed, given back, or that it is settled. */
+  const renderAmount = (order: OrderListRow) => {
     const paidNothing = !MoneyUtil.greaterThan(order.paid_amount || order.paid_total || '0', '0');
     // A cancelled order owes nothing, whatever its total; with nothing taken it was never charged.
     const cancelled = order.status === 'CANCELLED' || order.status === 'REJECTED';
-    return (
-    <Box>
-      <Typography color="success.main" sx={{ display: 'block', fontWeight: 600 }} variant="caption">
-        <span dir="ltr">{t('orders.table.paid', { amount: MoneyUtil.formatCurrency(order.paid_amount || order.paid_total || '0') })} {currency}</span>
-      </Typography>
-      {/* Money given back outranks money taken: an order whose
-          tender was reversed must not keep reading as settled. */}
-      {MoneyUtil.greaterThan(order.refunded_total || '0', '0') ? (
+    let below: React.ReactNode;
+    // Money given back outranks money taken: an order whose tender was reversed must not keep
+    // reading as settled.
+    if (MoneyUtil.greaterThan(order.refunded_total || '0', '0')) {
+      below = (
         <Typography color="warning.main" sx={{ display: 'block', fontWeight: 700 }} variant="caption">
           <span dir="ltr">
-            {t('orders.table.refunded', { amount: MoneyUtil.formatCurrency(order.refunded_total || '0') })} {currency}
+            {t('orders.table.refunded', { amount: MoneyUtil.formatCurrency(order.refunded_total || '0') })}
           </span>
         </Typography>
-      ) : !cancelled && MoneyUtil.greaterThan(order.due_amount || '0', '0') ? (
-        <Typography color="error.main" sx={{ display: 'block', fontWeight: 700 }} variant="caption">
-          <span dir="ltr">{t('orders.table.due', { amount: MoneyUtil.formatCurrency(order.due_amount) })} {currency}</span>
+      );
+    } else if (isSnappfoodOrder(order) && !cancelled) {
+      // Snappfood collects for its orders, so nothing is owed to the till.
+      below = (
+        <Typography color="text.secondary" sx={{ display: 'block' }} variant="caption">
+          {t('orders.table.paidToSnappfood')}
         </Typography>
-      ) : paidNothing ? (
-        // Nothing owed and nothing taken (a cancelled order, or one discounted to zero) was
-        // never paid, so it does not read as settled.
-        <Chip label={t('orders.table.notCharged')} size="small" sx={{ fontSize: 9, height: 18 }} variant="outlined" />
-      ) : (
-        <Chip color="success" label={t('orders.table.fullyPaid')} size="small" sx={{ fontSize: 9, height: 18 }} />
-      )}
-    </Box>
+      );
+    } else if (!cancelled && MoneyUtil.greaterThan(order.due_amount || '0', '0')) {
+      below = (
+        <Typography color="error.main" sx={{ display: 'block', fontWeight: 700 }} variant="caption">
+          {/* The total above names the currency. */}
+          <span dir="ltr">{t('orders.table.due', { amount: MoneyUtil.formatCurrency(order.due_amount) })}</span>
+        </Typography>
+      );
+    } else if (paidNothing) {
+      // Nothing owed and nothing taken (a cancelled order, or one discounted to zero) was
+      // never paid, so it does not read as settled.
+      below = <Chip label={t('orders.table.notCharged')} size="small" sx={{ fontSize: 9, height: 18 }} variant="outlined" />;
+    } else {
+      below = <Chip color="success" label={t('orders.table.fullyPaid')} size="small" sx={{ fontSize: 9, height: 18 }} />;
+    }
+    return (
+      <Box sx={{ textAlign: 'right' }}>
+        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+          <span dir="ltr">{MoneyUtil.formatCurrency(order.total_amount || order.grand_total)} {currency}</span>
+        </Typography>
+        {below}
+      </Box>
     );
   };
 
   const columns: GridColDef<OrderListRow>[] = [
     {
+      // Guests are called by the call number, so it leads; the order code is for looking up.
       field: 'order_number',
       headerName: t('orders.table.orderNumber'),
-      width: 210,
+      width: 150,
       filterOperators: textFilters('order_number'),
       renderCell: ({ row }) => (
-        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-          {row.call_number ? <Chip label={row.call_number} size="small" color="primary" sx={{ fontWeight: 800 }} /> : null}
-          <Typography variant="caption" noWrap sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
-            {row.order_number}
+        <Box sx={{ minWidth: 0 }}>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
+              {row.call_number || '—'}
+            </Typography>
+            {row.source === 'AGENT_OFFLINE' ? (
+              <Tooltip title={t('orders.table.takenOffline', 'Taken while the branch was offline')}>
+                <CloudOffIcon fontSize="small" color="action" />
+              </Tooltip>
+            ) : null}
+            {row.source === 'AGENT_OFFLINE' ? <VersionTag feature="orders.takenOffline" /> : null}
+          </Stack>
+          <Typography color="text.secondary" variant="caption" noWrap sx={{ display: 'block', fontFamily: 'monospace' }}>
+            <bdi dir="ltr">{row.order_number}</bdi>
           </Typography>
-          {row.source === 'AGENT_OFFLINE' ? (
-            <Tooltip title={t('orders.table.takenOffline', 'Taken while the branch was offline')}>
-              <CloudOffIcon fontSize="small" color="action" />
-            </Tooltip>
-          ) : null}
-          {row.source === 'AGENT_OFFLINE' ? <VersionTag feature="orders.takenOffline" /> : null}
-        </Stack>
+        </Box>
       ),
     },
     ...(showBranchColumn
@@ -970,7 +1034,7 @@ export function OrdersWorkflowPage() {
                 <VersionTag feature="orders.headOfficeView" />
               </Stack>
             ),
-            width: 160,
+            width: 150,
             sortable: false,
             type: 'singleSelect',
             valueOptions: branches.map((b) => ({ value: b.id, label: b.name })),
@@ -982,7 +1046,7 @@ export function OrdersWorkflowPage() {
     {
       field: 'placed_at',
       headerName: t('orders.table.placedAt'),
-      width: 130,
+      width: 110,
       filterOperators: placedAtFilters(t),
       renderCell: ({ row }) => (
         <Typography variant="caption" dir="ltr">
@@ -991,65 +1055,27 @@ export function OrdersWorkflowPage() {
       ),
     },
     {
-      // Sent while the branch was closed by its hours. It still sold; this only marks it.
-      field: 'after_hours',
-      headerName: t('branchMgmt.orders.afterHours', 'After hours'),
-      width: 120,
-      sortable: false,
-      type: 'singleSelect',
-      valueGetter: (_value, row) => (row.after_hours ? 'yes' : 'no'),
-      valueOptions: [
-        { value: 'yes', label: t('branchMgmt.orders.afterHoursYes', 'After hours') },
-        { value: 'no', label: t('branchMgmt.orders.afterHoursNo', 'In hours') },
-      ],
-      filterOperators: selectFilters('after_hours'),
-      renderCell: ({ row }) =>
-        row.after_hours ? (
-          <Chip size="small" color="warning" variant="outlined" label={t('branchMgmt.orders.afterHours', 'After hours')} />
-        ) : null,
-    } as GridColDef<OrderListRow>,
-    {
-      field: 'channel',
-      headerName: t('orders.table.channel'),
-      width: 110,
-      sortable: false,
-      type: 'singleSelect',
-      valueOptions: CHANNELS.map((channel) => ({ value: channel, label: getChannelLabel(channel) })),
-      filterOperators: selectFilters('channel'),
-      renderCell: ({ row }) => <Chip label={getChannelLabel(row.channel)} size="small" variant="outlined" />,
-    },
-    {
       field: 'order_type',
-      headerName: t('orders.table.type'),
-      width: 110,
+      headerName: t('orders.table.typeWhere'),
+      minWidth: 115,
+      flex: 1,
       sortable: false,
       type: 'singleSelect',
       valueOptions: ORDER_TYPES.map((type) => ({ value: type, label: getOrderTypeLabel(type) })),
       filterOperators: selectFilters('order_type'),
-      renderCell: ({ row }) => (
-        <Chip color={getOrderTypeColor(row.order_type) as any} label={getOrderTypeLabel(row.order_type)} size="small" />
-      ),
-    },
-    {
-      field: 'where',
-      headerName: t('orders.table.where'),
-      minWidth: 150,
-      flex: 1,
-      sortable: false,
-      filterable: false,
       renderCell: ({ row }) => renderWhere(row),
     },
     {
       field: 'customer_name',
       headerName: t('orders.table.customerName'),
-      minWidth: 150,
+      minWidth: 90,
       flex: 1,
       sortable: false,
       // Name or mobile; "is empty" is a walk-in.
       filterOperators: textFilters('customer_name'),
       renderCell: ({ row }) => (
-        <Box>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
             {row.customer_name || t('orders.table.walkInCustomer')}
           </Typography>
           {row.customer_mobile && (
@@ -1063,7 +1089,7 @@ export function OrdersWorkflowPage() {
     {
       field: 'items',
       headerName: t('orders.table.itemsSummary'),
-      minWidth: 150,
+      minWidth: 90,
       flex: 1,
       sortable: false,
       filterOperators: textFilters('items'),
@@ -1091,33 +1117,62 @@ export function OrdersWorkflowPage() {
     },
     {
       field: 'grand_total',
-      headerName: t('orders.table.totalAmount'),
+      headerName: t('orders.table.amount'),
       width: 140,
       align: 'right',
       headerAlign: 'right',
       type: 'number',
       filterOperators: numberFilters('grand_total'),
-      renderCell: ({ row }) => (
-        <Typography variant="body2" sx={{ color: 'primary.main', fontWeight: 700 }}>
-          <span dir="ltr">{MoneyUtil.formatCurrency(row.total_amount || row.grand_total)} {currency}</span>
-        </Typography>
-      ),
+      renderCell: ({ row }) => renderAmount(row),
     },
     {
+      // Hidden by default: Amount shows what is due. Kept for sorting and filtering by it.
       field: 'outstanding_total',
-      headerName: t('orders.table.paidDue'),
-      width: 150,
+      headerName: t('orders.table.dueColumn'),
+      width: 130,
       align: 'right',
       headerAlign: 'right',
-      // Filters on what is still due.
       type: 'number',
       filterOperators: numberFilters('outstanding_total'),
-      renderCell: ({ row }) => renderPayment(row),
+      renderCell: ({ row }) =>
+        MoneyUtil.greaterThan(row.due_amount || '0', '0') ? (
+          <Typography variant="body2" color="error.main" sx={{ fontWeight: 700 }}>
+            <span dir="ltr">{MoneyUtil.formatCurrency(row.due_amount)} {currency}</span>
+          </Typography>
+        ) : null,
     },
+    {
+      field: 'channel',
+      headerName: t('orders.table.channel'),
+      width: 110,
+      sortable: false,
+      type: 'singleSelect',
+      valueOptions: CHANNELS.map((channel) => ({ value: channel, label: getChannelLabel(channel) })),
+      filterOperators: selectFilters('channel'),
+      renderCell: ({ row }) => <Chip label={getChannelLabel(row.channel)} size="small" variant="outlined" />,
+    },
+    {
+      // Sent while the branch was closed by its hours. It still sold; this only marks it.
+      field: 'after_hours',
+      headerName: t('branchMgmt.orders.afterHours', 'After hours'),
+      width: 120,
+      sortable: false,
+      type: 'singleSelect',
+      valueGetter: (_value, row) => (row.after_hours ? 'yes' : 'no'),
+      valueOptions: [
+        { value: 'yes', label: t('branchMgmt.orders.afterHoursYes', 'After hours') },
+        { value: 'no', label: t('branchMgmt.orders.afterHoursNo', 'In hours') },
+      ],
+      filterOperators: selectFilters('after_hours'),
+      renderCell: ({ row }) =>
+        row.after_hours ? (
+          <Chip size="small" color="warning" variant="outlined" label={t('branchMgmt.orders.afterHours', 'After hours')} />
+        ) : null,
+    } as GridColDef<OrderListRow>,
     {
       field: 'status',
       headerName: t('orders.table.status'),
-      width: 170,
+      width: 120,
       sortable: false,
       filterable: false,
       renderCell: ({ row }) => (
@@ -1136,7 +1191,7 @@ export function OrdersWorkflowPage() {
     {
       field: 'actions',
       headerName: t('orders.table.actions'),
-      width: 160,
+      width: readOnly ? 60 : 110,
       sortable: false,
       filterable: false,
       disableColumnMenu: true,
@@ -1167,6 +1222,61 @@ export function OrdersWorkflowPage() {
     },
   ];
 
+  // Each role starts from the columns it works with; anyone can show or hide the rest, and
+  // this device remembers that per role.
+  const columnRole: ColumnRole = isHeadOffice ? 'headOffice' : isManagerOrAbove(userRole) ? 'manager' : 'cashier';
+  const [columnChoices, setColumnChoices] = useState<Partial<Record<ColumnRole, GridColumnVisibilityModel>>>({});
+  const columnVisibilityModel = useMemo<GridColumnVisibilityModel>(
+    () => ({ ...DEFAULT_HIDDEN_COLUMNS[columnRole], ...(columnChoices[columnRole] ?? readColumnChoice(columnRole)) }),
+    [columnRole, columnChoices]
+  );
+  const handleColumnVisibilityChange = (model: GridColumnVisibilityModel) => {
+    setColumnChoices((prev) => ({ ...prev, [columnRole]: model }));
+    saveColumnChoice(columnRole, model);
+  };
+
+  /**
+   * The order's history, oldest first: its state changes, and the changes that are not a
+   * state of their own (lines edited, type changed, table moved). The audit log records each
+   * state change again, so those entries are left to the state events.
+   */
+  const timelineOf = (order: any) => {
+    const actorNames: Record<string, string> = order.context?.actor_names || {};
+    const nameOf = (id?: string | null) =>
+      id ? actorNames[id] || t('orders.drawer.authenticatedUser') : t('orders.drawer.systemPos');
+    const steps = [
+      ...(order.stateEvents || []).map((evt: any, idx: number) => ({
+        key: evt.id || `state-${idx}`,
+        at: evt.occurred_at as string | undefined,
+        label: evt.from_state ? getStateStepLabel(evt.to_state) : t('orders.drawer.orderTaken'),
+        color: evt.from_state ? getStatusChipColor({ status: evt.to_state }) : 'default',
+        actor: nameOf(evt.occurred_by),
+        detail: null as string | null,
+        reason: (evt.reason_text as string | null) || null,
+        cancelled: evt.to_state === 'CANCELLED',
+      })),
+      ...orderAuditLogs
+        .filter((log: any) => !STATE_AUDIT_ACTIONS.has(log.action))
+        .map((log: any, idx: number) => ({
+          key: log.id || `audit-${idx}`,
+          at: log.occurred_at as string | undefined,
+          label: AUDIT_EVENT_KEYS.includes(log.action)
+            ? t(`orders.drawer.events.${log.action}`)
+            : t('orders.drawer.events.other'),
+          color: 'default',
+          actor: nameOf(log.actor_id || log.user_id),
+          detail:
+            log.action === 'ORDER_TYPE_CHANGED' && log.details?.from && log.details?.to
+              ? `${getOrderTypeLabel(log.details.from)} → ${getOrderTypeLabel(log.details.to)}`
+              : null,
+          reason: (log.details?.reason as string | null) || null,
+          cancelled: false,
+        })),
+    ];
+    return steps.sort((x, y) => new Date(x.at || 0).getTime() - new Date(y.at || 0).getTime());
+  };
+  const drawerTimeline = selectedDrawerOrder ? timelineOf(selectedDrawerOrder) : [];
+
   // The toolbar's search box is the `q` search, over order and call numbers, customers, notes and items.
   const gridFilterModel = useMemo<GridFilterModel>(
     () => ({ ...filterModel, quickFilterValues: query ? [query] : [] }),
@@ -1183,17 +1293,12 @@ export function OrdersWorkflowPage() {
         spacing={3}
         sx={{ alignItems: { md: 'center', xs: 'flex-start' }, justifyContent: 'space-between', mb: 3 }}
       >
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 800 }}>
-            {t('orders.title')}
-          </Typography>
-          <Typography color="text.secondary" variant="body2">
-            {t('orders.subtitle')}
-          </Typography>
-        </Box>
+        <Typography variant="h4" sx={{ fontWeight: 800 }}>
+          {t('orders.title')}
+        </Typography>
 
-        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-          {canExport && (
+        {/* No refresh button: the list follows the branch live (useLiveRefresh below). */}
+        {canExport && (
           <Button
             disabled={exporting || total === 0}
             onClick={handleExport}
@@ -1202,11 +1307,7 @@ export function OrdersWorkflowPage() {
           >
             {t('orders.export')}
           </Button>
-          )}
-          <Button onClick={() => loadData()} startIcon={<RefreshIcon />} variant="outlined">
-            {t('orders.refresh')}
-          </Button>
-        </Stack>
+        )}
       </Stack>
 
       {error && (
@@ -1234,6 +1335,9 @@ export function OrdersWorkflowPage() {
 
       <ServerDataGrid<OrderListRow>
         columns={columns}
+        columnVisibilityModel={columnVisibilityModel}
+        onColumnVisibilityModelChange={handleColumnVisibilityChange}
+        pinnedColumns={PINNED_COLUMNS}
         density="compact"
         emptyTitle={t('orders.table.empty')}
         emptyDescription={filterModel.items.length ? t('orders.table.emptyHint') : undefined}
@@ -1599,14 +1703,19 @@ export function OrdersWorkflowPage() {
           <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             {/* Header */}
             <Box sx={{ p: 2.5, pb: 2, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.neutral' }}>
-              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
-                  <Typography variant="h6" sx={{ fontFamily: 'monospace', fontWeight: 800 }}>
-                    {selectedDrawerOrder.order_number}
+              <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                {/* The call number is what the guest hears; the order code is for looking it up. */}
+                <Box sx={{ flexShrink: 0 }}>
+                  <Typography variant="h4" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
+                    {selectedDrawerOrder.call_number || <bdi dir="ltr">{selectedDrawerOrder.order_number}</bdi>}
                   </Typography>
                   {selectedDrawerOrder.call_number ? (
-                    <Chip label={selectedDrawerOrder.call_number} color="primary" sx={{ fontWeight: 800 }} />
+                    <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                      <bdi dir="ltr">{selectedDrawerOrder.order_number}</bdi>
+                    </Typography>
                   ) : null}
+                </Box>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1, flexGrow: 1, pt: 0.5 }}>
                   <Chip
                     label={getOrderStatusLabel(selectedDrawerOrder.status, selectedDrawerOrder.refunded_total)}
                     color={getStatusChipColor(selectedDrawerOrder) as any}
@@ -1621,7 +1730,10 @@ export function OrdersWorkflowPage() {
                     variant="outlined"
                     color={getOrderTypeColor(selectedDrawerOrder.order_type) as any}
                   />
-                  <Chip label={getChannelLabel(selectedDrawerOrder.channel)} size="small" variant="outlined" />
+                  {/* The till and Snappfood go without saying; the type chip already names Snappfood. */}
+                  {(selectedDrawerOrder.channel === 'KIOSK' || selectedDrawerOrder.channel === 'ONLINE') && (
+                    <Chip label={getChannelLabel(selectedDrawerOrder.channel)} size="small" variant="outlined" />
+                  )}
                 </Stack>
                 <IconButton onClick={closeDrawer} size="small">
                   <CloseIcon />
@@ -1662,7 +1774,7 @@ export function OrdersWorkflowPage() {
                 />
                 <Tab
                   value="audit"
-                  label={t('orders.drawer.tabs.audit', { count: orderAuditLogs.length + (selectedDrawerOrder.stateEvents?.length || 0) })}
+                  label={t('orders.drawer.tabs.audit', { count: drawerTimeline.length })}
                   icon={<HistoryIcon sx={{ fontSize: 18 }} />}
                   iconPosition="start"
                   sx={{ minHeight: 38, py: 0.5, fontWeight: 700 }}
@@ -1693,9 +1805,6 @@ export function OrdersWorkflowPage() {
                         [t('orders.drawer.takenBy'), selectedDrawerOrder.people?.taken_by?.display_name || selectedDrawerOrder.people?.taken_by?.username],
                         [t('orders.drawer.terminal'), selectedDrawerOrder.context?.terminal_name],
                         [t('orders.drawer.deliveryZone'), selectedDrawerOrder.context?.delivery_zone_name],
-                        [t('orders.drawer.deliveryState'), deliveryStateKeyOf(selectedDrawerOrder.context?.delivery_state)
-                          ? t(`delivery.states.${deliveryStateKeyOf(selectedDrawerOrder.context?.delivery_state)}`)
-                          : null],
                         [t('orders.drawer.courier'), selectedDrawerOrder.people?.courier?.name],
                       ]
                         .filter(([, value]) => !!value)
@@ -1711,11 +1820,11 @@ export function OrdersWorkflowPage() {
                           <Typography variant="body2" sx={{ fontWeight: 500 }}>{selectedDrawerOrder.context.delivery_address}</Typography>
                         </Grid>
                       )}
-                      {selectedDrawerOrder.notes && (
+                      {guestNoteOf(selectedDrawerOrder) && (
                         <Grid size={{ xs: 12 }}>
                           <Typography variant="caption" color="text.secondary">{t('orders.drawer.specialInstructions')}</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 500, bgcolor: 'background.neutral', p: 1, borderRadius: 1 }}>
-                            {selectedDrawerOrder.notes}
+                          <Typography variant="body2" sx={{ fontWeight: 500, bgcolor: 'background.neutral', p: 1, borderRadius: 1, whiteSpace: 'pre-line' }}>
+                            {guestNoteOf(selectedDrawerOrder)}
                           </Typography>
                         </Grid>
                       )}
@@ -1832,9 +1941,16 @@ export function OrdersWorkflowPage() {
                       )}
                       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="body2" color="text.secondary">{t('orders.drawer.outstandingBalance')}</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 700, color: MoneyUtil.greaterThan(selectedDrawerOrder.due_amount || '0', '0') ? 'error.main' : 'success.main' }} dir="ltr">
-                          {MoneyUtil.formatCurrency(selectedDrawerOrder.due_amount || '0')} {currency}
-                        </Typography>
+                        {isSnappfoodOrder(selectedDrawerOrder) && selectedDrawerOrder.status !== 'CANCELLED' ? (
+                          // Snappfood collects for its orders, so nothing is owed to the till.
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                            {t('orders.table.paidToSnappfood')}
+                          </Typography>
+                        ) : (
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: MoneyUtil.greaterThan(selectedDrawerOrder.due_amount || '0', '0') ? 'error.main' : 'success.main' }} dir="ltr">
+                            {MoneyUtil.formatCurrency(selectedDrawerOrder.due_amount || '0')} {currency}
+                          </Typography>
+                        )}
                       </Stack>
                     </Stack>
                   </Paper>
@@ -1936,227 +2052,149 @@ export function OrdersWorkflowPage() {
                   )}
                 </Stack>
               ) : (
-                /* TAB 3: AUDIT TRAIL & TIMELINE */
-                <Stack spacing={2.5}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <SecurityIcon color="primary" fontSize="small" /> {t('orders.drawer.auditLogTitle')}
+                /* TAB 3: TIMELINE, one card per step: what happened, who did it, when and why. */
+                drawerTimeline.length === 0 ? (
+                  <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderRadius: 2 }}>
+                    <HistoryIcon color="disabled" sx={{ fontSize: 40, mb: 1 }} />
+                    <Typography variant="body2" color="text.secondary">
+                      {t('orders.drawer.noEvents', { status: getOrderStatusLabel(selectedDrawerOrder.status, selectedDrawerOrder.refunded_total) })}
                     </Typography>
-                    <Chip label={t('orders.drawer.appendOnly')} color="success" size="small" variant="outlined" />
-                  </Box>
-
-                  {/* One timeline, oldest first: the order's own state changes and the audit log. */}
-                  {orderAuditLogs.length === 0 && (!selectedDrawerOrder.stateEvents || selectedDrawerOrder.stateEvents.length === 0) ? (
-                    <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderRadius: 2 }}>
-                      <HistoryIcon color="disabled" sx={{ fontSize: 40, mb: 1 }} />
-                      <Typography variant="body2" color="text.secondary">
-                        {t('orders.drawer.noEvents', { status: getOrderStatusLabel(selectedDrawerOrder.status, selectedDrawerOrder.refunded_total) })}
-                      </Typography>
-                    </Paper>
-                  ) : (
-                    <Stack spacing={2} sx={{ position: 'relative', pl: 2, '&::before': { content: '""', position: 'absolute', top: 12, bottom: 12, left: 19, width: 2, bgcolor: 'divider' } }}>
-                      {[
-                        ...(selectedDrawerOrder.stateEvents || []).map((evt: any) => ({ kind: 'state' as const, at: evt.occurred_at, evt })),
-                        ...orderAuditLogs.map((log: any) => ({ kind: 'audit' as const, at: log.occurred_at, evt: log })),
-                      ]
-                        .sort((a, b) => new Date(a.at || 0).getTime() - new Date(b.at || 0).getTime())
-                        .map(({ kind, evt }, idx) => {
-                          const actorNames: Record<string, string> = selectedDrawerOrder.context?.actor_names || {};
-                          if (kind === 'state') {
-                            const actor = evt.occurred_by
-                              ? actorNames[evt.occurred_by] || t('orders.drawer.authenticatedUser')
-                              : t('orders.drawer.systemPos');
-                            return (
-                              <Paper
-                                key={evt.id || `state-${idx}`}
-                                variant="outlined"
-                                sx={{
-                                  p: 2,
-                                  borderRadius: 2,
-                                  position: 'relative',
-                                  bgcolor: 'background.paper',
-                                  borderColor: evt.to_state === 'CANCELLED' ? 'error.light' : 'divider',
-                                }}
-                              >
-                                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                                    <Chip
-                                      label={getStateStepLabel(evt.to_state)}
-                                      color={getStatusChipColor({ status: evt.to_state }) as any}
-                                      size="small"
-                                      sx={{ fontWeight: 700 }}
-                                    />
-                                    <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                                      {evt.from_state ? `${getStateStepLabel(evt.from_state)} → ${getStateStepLabel(evt.to_state)}` : getStateStepLabel(evt.to_state)}
-                                    </Typography>
-                                  </Stack>
-                                  <Typography variant="caption" color="text.secondary" dir="ltr">
-                                    {evt.occurred_at ? formatCalendarDateTime(evt.occurred_at) : t('orders.drawer.justNow')}
-                                  </Typography>
-                                </Stack>
-
-                                <Typography variant="body2" sx={{ mb: 0.5 }}>
-                                  <strong>{t('orders.drawer.actor')}</strong> {actor}
-                                </Typography>
-                                {evt.reason_text && (
-                                  <Typography variant="body2" color="error.main" sx={{ fontWeight: 600 }}>
-                                    <strong>{t('orders.drawer.reasonCode')}</strong> {evt.reason_text}
-                                  </Typography>
-                                )}
-                              </Paper>
-                            );
-                          }
-                          const actorId = evt.actor_id || evt.user_id;
-                          return (
-                            <Paper
-                              key={evt.id || `audit-${idx}`}
-                              variant="outlined"
-                              sx={{
-                                p: 2,
-                                borderRadius: 2,
-                                position: 'relative',
-                                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50',
-                              }}
-                            >
-                              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                                  <Chip label={evt.action} color="primary" size="small" sx={{ fontWeight: 700 }} />
-                                  <Chip
-                                    label={(actorId && actorNames[actorId]) || evt.actor_type || 'SYSTEM'}
-                                    size="small"
-                                    variant="outlined"
-                                    sx={{ fontSize: '0.7rem', height: 20 }}
-                                  />
-                                </Stack>
-                                <Typography variant="caption" color="text.secondary" dir="ltr">
-                                  {formatCalendarDateTime(evt.occurred_at)}
-                                </Typography>
-                              </Stack>
-
-                              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-                                <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
-                                  {t('orders.drawer.corr')} {evt.correlation_id ? evt.correlation_id.substring(0, 8) + '...' : '-'}
-                                </Typography>
-                                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                                  <Button
-                                    size="small"
-                                    startIcon={<CodeIcon />}
-                                    onClick={() => setInspectingJson(evt)}
-                                    sx={{ textTransform: 'none', py: 0.25, fontSize: '0.75rem' }}
-                                  >
-                                    {t('orders.drawer.inspectSnapshot')}
-                                  </Button>
-                                  <VersionTag feature="orders.auditSnapshot" />
-                                </Stack>
-                              </Stack>
-                            </Paper>
-                          );
-                        })}
-                    </Stack>
-                  )}
-                </Stack>
+                  </Paper>
+                ) : (
+                  <Stack spacing={1.5}>
+                    {drawerTimeline.map((step) => (
+                      <Paper
+                        key={step.key}
+                        variant="outlined"
+                        sx={{ p: 1.5, borderRadius: 2, borderColor: step.cancelled ? 'error.light' : 'divider' }}
+                      >
+                        <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Chip label={step.label} color={step.color as any} size="small" sx={{ fontWeight: 700 }} />
+                          <Typography variant="caption" color="text.secondary" dir="ltr">
+                            {step.at ? formatCalendarDateTime(step.at) : t('orders.drawer.justNow')}
+                          </Typography>
+                        </Stack>
+                        <Typography variant="body2" sx={{ mt: 1 }}>
+                          {step.actor}
+                          {step.detail ? <Box component="span" sx={{ color: 'text.secondary' }}> · {step.detail}</Box> : null}
+                        </Typography>
+                        {step.reason && (
+                          <Typography
+                            variant="body2"
+                            color={step.cancelled ? 'error.main' : 'text.secondary'}
+                            sx={{ fontWeight: 600, mt: 0.5 }}
+                          >
+                            {t('orders.drawer.reason', { reason: step.reason })}
+                          </Typography>
+                        )}
+                      </Paper>
+                    ))}
+                  </Stack>
+                )
               )}
             </Box>
 
-            {/* Footer Quick Actions */}
-            <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider', bgcolor: 'background.neutral' }}>
-              <Stack direction="row" sx={{ justifyContent: 'flex-end', flexWrap: 'wrap', gap: 1 }}>
-                {hasReceipt(selectedDrawerOrder) && (
-                  <Button
-                    startIcon={<ReceiptIcon />}
-                    variant="outlined"
-                    onClick={() => {
-                      handleViewReceipt(selectedDrawerOrder.id);
-                    }}
-                  >
-                    {t('orders.actions.receipt')}
-                  </Button>
-                )}
-                {!readOnly && (
-                  <Button
-                    startIcon={<PrintIcon />}
-                    variant="outlined"
-                    onClick={() => handleOpenReprintDialog(selectedDrawerOrder)}
-                  >
-                    {t('orders.actions.reprint')}
-                  </Button>
-                )}
-                {canPay(selectedDrawerOrder) && (
-                  <Button
-                    color="success"
-                    variant="contained"
-                    startIcon={<PaymentIcon />}
-                    onClick={() => {
-                      closeDrawer();
-                      handleOpenPayment(selectedDrawerOrder);
-                    }}
-                  >
-                    {t('orders.actions.pay')}
-                  </Button>
-                )}
-                {canComplete(selectedDrawerOrder) && (
-                  <Button
-                    color="primary"
-                    variant="contained"
-                    startIcon={<DoneAllIcon />}
-                    onClick={async () => {
-                      if (await handleUpdateStatus(selectedDrawerOrder.id, 'COMPLETED')) {
-                        loadDrawerDetails(selectedDrawerOrder.id);
-                      }
-                    }}
-                  >
-                    {t('orders.actions.completeOrder')}
-                  </Button>
-                )}
-                {/* Snappfood's lines are Snappfood's: it has no call for a store to change them. */}
-                {canEditLines(selectedDrawerOrder) && (
-                  <Button
-                    color="inherit"
-                    variant="outlined"
-                    startIcon={<EditIcon />}
-                    onClick={() => setEditDialogOpen(true)}
-                  >
-                    {t('orders.actions.editOrder', 'Edit lines')}
-                  </Button>
-                )}
-                {canReport(selectedDrawerOrder) && (
-                  <Button
-                    color="warning"
-                    variant="outlined"
-                    startIcon={<ScheduleIcon />}
-                    onClick={() => handleOpenReport(selectedDrawerOrder)}
-                  >
-                    {t('orders.actions.reportToSnappfood')}
-                  </Button>
-                )}
-                {canChangeType(selectedDrawerOrder) && (
-                  <Button
-                    color="info"
-                    variant="outlined"
-                    startIcon={<SwapHorizIcon />}
-                    onClick={() => {
-                      closeDrawer();
-                      handleOpenTypeDialog(selectedDrawerOrder);
-                    }}
-                  >
-                    {t('orders.actions.changeType', 'Change type')}
-                  </Button>
-                )}
-                {canCancel(selectedDrawerOrder) && (
-                  <Button
-                    color="error"
-                    variant="outlined"
-                    startIcon={<CancelIcon />}
-                    onClick={() => {
-                      closeDrawer();
-                      handleOpenCancelDialog(selectedDrawerOrder);
-                    }}
-                  >
-                    {t('orders.actions.cancelOrder')}
-                  </Button>
-                )}
-              </Stack>
-            </Box>
+            {/* Footer: the one thing to do next, and everything else under More, as on the row. */}
+            {(() => {
+              const order = selectedDrawerOrder;
+              const primary = canPay(order) ? 'pay' : canComplete(order) ? 'complete' : canReport(order) ? 'report' : null;
+              const more = [
+                hasReceipt(order) && { key: 'receipt', icon: <ReceiptIcon fontSize="small" />, label: t('orders.actions.receipt'), run: () => handleViewReceipt(order.id) },
+                !readOnly && { key: 'reprint', icon: <PrintIcon fontSize="small" />, label: t('orders.actions.reprint'), run: () => handleOpenReprintDialog(order) },
+                // Snappfood's lines are Snappfood's: it has no call for a store to change them.
+                canEditLines(order) && { key: 'edit', icon: <EditIcon fontSize="small" />, label: t('orders.actions.editOrder', 'Edit lines'), run: () => setEditDialogOpen(true) },
+                canReport(order) && primary !== 'report' && { key: 'report', icon: <ScheduleIcon fontSize="small" />, label: t('orders.actions.reportToSnappfood'), run: () => handleOpenReport(order) },
+                canChangeType(order) && {
+                  key: 'type',
+                  icon: <SwapHorizIcon fontSize="small" />,
+                  label: t('orders.actions.changeType', 'Change type'),
+                  run: () => {
+                    closeDrawer();
+                    handleOpenTypeDialog(order);
+                  },
+                },
+              ].filter(Boolean) as Array<{ key: string; icon: React.ReactNode; label: string; run: () => void }>;
+              const cancellable = canCancel(order);
+              if (!primary && more.length === 0 && !cancellable) return null;
+              return (
+                <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider', bgcolor: 'background.neutral' }}>
+                  <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+                    {(more.length > 0 || cancellable) && (
+                      <Button
+                        color="inherit"
+                        variant="outlined"
+                        endIcon={<MoreVertIcon />}
+                        onClick={(e) => setDrawerMenuAnchor(e.currentTarget)}
+                      >
+                        {t('orders.actions.moreShort')}
+                      </Button>
+                    )}
+                    {primary === 'pay' && (
+                      <Button
+                        color="success"
+                        variant="contained"
+                        startIcon={<PaymentIcon />}
+                        onClick={() => {
+                          closeDrawer();
+                          handleOpenPayment(order);
+                        }}
+                      >
+                        {t('orders.actions.pay')}
+                      </Button>
+                    )}
+                    {primary === 'complete' && (
+                      <Button
+                        color="primary"
+                        variant="contained"
+                        startIcon={<DoneAllIcon />}
+                        onClick={async () => {
+                          if (await handleUpdateStatus(order.id, 'COMPLETED')) {
+                            loadDrawerDetails(order.id);
+                          }
+                        }}
+                      >
+                        {t('orders.actions.completeOrder')}
+                      </Button>
+                    )}
+                    {primary === 'report' && (
+                      <Button color="warning" variant="contained" startIcon={<ScheduleIcon />} onClick={() => handleOpenReport(order)}>
+                        {t('orders.actions.reportToSnappfood')}
+                      </Button>
+                    )}
+                  </Stack>
+                  <Menu anchorEl={drawerMenuAnchor} open={!!drawerMenuAnchor} onClose={() => setDrawerMenuAnchor(null)}>
+                    {more.map((item) => (
+                      <MenuItem
+                        key={item.key}
+                        onClick={() => {
+                          setDrawerMenuAnchor(null);
+                          item.run();
+                        }}
+                      >
+                        <ListItemIcon>{item.icon}</ListItemIcon>
+                        <ListItemText>{item.label}</ListItemText>
+                      </MenuItem>
+                    ))}
+                    {cancellable && more.length > 0 && <Divider />}
+                    {cancellable && (
+                      <MenuItem
+                        onClick={() => {
+                          setDrawerMenuAnchor(null);
+                          closeDrawer();
+                          handleOpenCancelDialog(order);
+                        }}
+                        sx={{ color: 'error.main' }}
+                      >
+                        <ListItemIcon>
+                          <CancelIcon color="error" fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText>{t('orders.actions.cancelOrder')}</ListItemText>
+                      </MenuItem>
+                    )}
+                  </Menu>
+                </Box>
+              );
+            })()}
           </Box>
         )}
       </Drawer>
@@ -2303,52 +2341,6 @@ export function OrdersWorkflowPage() {
         }
         createRequest
       />
-
-      {/* JSON Snapshot Inspection Modal */}
-      <Dialog
-        open={Boolean(inspectingJson)}
-        onClose={() => setInspectingJson(null)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-          <CodeIcon color="primary" />
-          {t('orders.drawer.inspectTitle', { action: inspectingJson?.action })}
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-            {t('orders.drawer.timestamp')} {inspectingJson && fDateTime(inspectingJson.occurred_at)} • {t('orders.drawer.actor')} {inspectingJson?.actor_type}
-          </Typography>
-          <Box
-            component="pre"
-            sx={{
-              p: 2,
-              borderRadius: 1.5,
-              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100',
-              fontFamily: 'monospace',
-              fontSize: 12,
-              overflowX: 'auto',
-              maxHeight: 400,
-            }}
-          >
-            {JSON.stringify(
-              {
-                action: inspectingJson?.action,
-                actor_type: inspectingJson?.actor_type,
-                correlation_id: inspectingJson?.correlation_id,
-                before_data: inspectingJson?.before_data,
-                after_data: inspectingJson?.after_data,
-                details: inspectingJson?.details,
-              },
-              null,
-              2
-            )}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setInspectingJson(null)}>{t('orders.drawer.close')}</Button>
-        </DialogActions>
-      </Dialog>
 
       <CheckoutModal
         open={payModalOpen}
