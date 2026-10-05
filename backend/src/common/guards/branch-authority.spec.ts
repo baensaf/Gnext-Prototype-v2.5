@@ -37,7 +37,7 @@ function authorityOf(controller: any, method: string): Handler {
 
 /** Equipment and layout belonging to one shop: its manager's, never the register's. */
 const SITE_CONFIG: [any, string[]][] = [
-  [DeliveryController, ['createZone', 'updateZone', 'deleteZone', 'createCourier', 'updateCourierPay']],
+  [DeliveryController, ['createZone', 'updateZone', 'deleteZone', 'updateCourierPay']],
   [DineInController, ['createSection', 'updateSection', 'archiveSection', 'createTable', 'updateTable', 'archiveTable']],
   [KdsController, ['createStation', 'updateStation', 'deleteStation', 'createScreen', 'updateScreen', 'deleteScreen', 'createRoutingRule', 'deleteRoutingRule']],
   [PrintersController, ['createPrinter', 'updatePrinter', 'deletePrinter']],
@@ -54,6 +54,12 @@ const CHAIN_CONFIG: [any, string[]][] = [
 ];
 
 describe('authority declared on the routes', () => {
+  // Who is riding tonight is the counter's to know: a cashier adds a courier, to their own
+  // branch and on its default pay, both of which the handler enforces.
+  it('DeliveryController.createCourier is open to the cashier as well as managers', () => {
+    expect(authorityOf(DeliveryController, 'createCourier').roles).toEqual([...MANAGER_AND_ABOVE, 'CASHIER']);
+  });
+
   describe('a site’s own configuration is the branch manager’s', () => {
     for (const [controller, methods] of SITE_CONFIG) {
       for (const method of methods) {

@@ -1120,6 +1120,7 @@
         "payMode": "Pay rule",
         "compensationFlat": "Pay per delivery ({{currency}})",
         "compensationFallback": "Pay where a zone has no courier rate ({{currency}})",
+        "payByManager": "Starts on the branch’s default pay. A manager can change it.",
         "cancel": "Cancel",
         "submit": "Save Courier"
       },
