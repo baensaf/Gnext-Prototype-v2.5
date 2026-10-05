@@ -20,7 +20,6 @@ export const paths = {
     root: ROOTS.APP,
     dashboard: `${ROOTS.APP}/dashboard`,
     pos: `${ROOTS.APP}/pos`,
-    kiosk: `${ROOTS.APP}/kiosk`,
     orders: {
       root: `${ROOTS.APP}/orders`,
       incoming: `${ROOTS.APP}/orders/incoming`,

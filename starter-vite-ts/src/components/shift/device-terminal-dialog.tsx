@@ -37,7 +37,7 @@ type Props = {
   onAssigned: (terminal: DeviceTerminal) => void;
   /** A till (the default) or a self-order kiosk, which has no drawer but may have a card terminal. */
   terminalType?: 'CASHIER' | 'KIOSK';
-  /** A kiosk on its own address has no menu to sign out from, so the setup dialog carries it. */
+  /** A kiosk on its own address has no menu to sign out from, so the setup dialog carries it, behind a manager PIN. */
   onSignOut?: () => void;
 };
 
@@ -57,6 +57,7 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState('');
   const [pinOpen, setPinOpen] = useState(false);
+  const [signOutPinOpen, setSignOutPinOpen] = useState(false);
 
   useEffect(() => {
     if (!open || !branchId) return undefined;
@@ -96,7 +97,7 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
 
   return (
     <>
-      <Dialog open={open && !pinOpen} onClose={onClose} maxWidth="xs" fullWidth>
+      <Dialog open={open && !pinOpen && !signOutPinOpen} onClose={onClose} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ fontWeight: 'bold' }}>{isKiosk ? t('kiosk.device.title', 'Set up this kiosk') : t('shift.device.title', 'Set up this register')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2}>
@@ -143,7 +144,7 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
         </DialogContent>
         <DialogActions>
           {onSignOut && (
-            <Button color="error" onClick={onSignOut} sx={{ mr: 'auto' }}>
+            <Button color="error" onClick={() => setSignOutPinOpen(true)} sx={{ mr: 'auto' }}>
               {t('auth.logout', 'Sign Out')}
             </Button>
           )}
@@ -166,6 +167,17 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
         onSuccess={() => {
           setPinOpen(false);
           assign();
+        }}
+      />
+
+      <ApprovalModal
+        open={signOutPinOpen}
+        onClose={() => setSignOutPinOpen(false)}
+        actionName="SIGN_OUT_KIOSK"
+        detailsText={t('kiosk.device.signOutApproval', 'Sign this kiosk device out')}
+        onSuccess={() => {
+          setSignOutPinOpen(false);
+          onSignOut?.();
         }}
       />
     </>

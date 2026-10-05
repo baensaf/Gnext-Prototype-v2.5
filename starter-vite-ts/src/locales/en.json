@@ -46,7 +46,6 @@
     "pos": "POS Register",
     "dineIn": "Dine-In Floor",
     "orders": "Orders Directory",
-    "kiosk": "Kiosk preview",
     "operations": "Operations",
     "kds": "Kitchen KDS",
     "incomingOrders": "Incoming Orders",
@@ -464,7 +463,8 @@
       "title": "Set up this kiosk",
       "help": "Choose which kiosk this device is. Its card payments go to the card terminal linked to it under Terminals.",
       "none": "This branch has no active kiosk terminals. A manager can add one under Terminals.",
-      "assign": "Use this kiosk"
+      "assign": "Use this kiosk",
+      "signOutApproval": "Sign this kiosk device out"
     },
     "pay": {
       "insertCard": "Insert or tap your card",
@@ -4061,7 +4061,8 @@
     "pickBranchTitle": "Pick a branch to open this page",
     "pickBranchBody": "This page runs one branch at a time. The header is set to head office, which is not a branch, so it would show every branch mixed together.",
     "pickBranchNone": "No branch can run this page. Production kitchens and offices do not sell.",
-    "pickBranchRollup": "See all branches instead"
+    "pickBranchRollup": "See all branches instead",
+    "pickBranchKiosk": "Pick the branch this kiosk serves. Head office is not a branch, so it has no menu of its own to sell from."
   },
   "users": {
     "courierManagedOnDelivery": "Managed with the courier, on the delivery screen",

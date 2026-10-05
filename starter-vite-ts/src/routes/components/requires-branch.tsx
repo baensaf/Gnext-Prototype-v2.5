@@ -9,6 +9,7 @@ import AlertTitle from '@mui/material/AlertTitle';
 import { usePathname } from 'src/routes/hooks';
 import { RouterLink } from 'src/routes/components/router-link';
 
+import { isKioskHost } from 'src/config/kiosk-host';
 import { fitsWorkspace } from 'src/config/role-access';
 import { useBranchContextOptional } from 'src/contexts/branch-context';
 
@@ -47,16 +48,22 @@ export function RequiresBranch({ children, rollup }: RequiresBranchProps) {
   // "no branch can run this page".
   if (branches.length === 0) return null;
 
-  // A till has no place in a production kitchen, so only branches that run this page.
+  // A till has no place in a production kitchen, so only branches that run this page. The
+  // kiosk host has no path of its own to ask about; only a restaurant has guests to serve.
+  const kioskHost = isKioskHost();
   const fitting = branches.filter((branch) =>
-    fitsWorkspace(pathname, { isHeadOffice: false, branchType: branch.branch_type ?? 'RESTAURANT' })
+    kioskHost
+      ? (branch.branch_type ?? 'RESTAURANT') === 'RESTAURANT'
+      : fitsWorkspace(pathname, { isHeadOffice: false, branchType: branch.branch_type ?? 'RESTAURANT' })
   );
 
   return (
     <Box sx={{ p: 3, maxWidth: 640, mx: 'auto' }}>
       <Alert severity="info">
         <AlertTitle>{t('access.pickBranchTitle', 'Pick a branch to open this page')}</AlertTitle>
-        {fitting.length > 0
+        {kioskHost && fitting.length > 0
+          ? t('access.pickBranchKiosk', 'Pick the branch this kiosk serves. Head office is not a branch, so it has no menu of its own to sell from.')
+          : fitting.length > 0
           ? t(
               'access.pickBranchBody',
               'This page runs one branch at a time. The header is set to head office, which is not a branch, so it would show every branch mixed together.'

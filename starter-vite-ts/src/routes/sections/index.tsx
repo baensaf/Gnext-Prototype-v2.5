@@ -16,17 +16,18 @@ import Page404 from 'src/pages/error/404';
 import { LoginPage } from 'src/pages/login';
 import { AppShell } from 'src/layouts/AppShell';
 import { KioskPage } from 'src/pages/pos/kiosk';
-import { kioskUrl } from 'src/config/kiosk-host';
 import { KdsPage } from 'src/pages/operations/kds';
 import { PosOrderPage } from 'src/pages/pos/order';
 import { DashboardPage } from 'src/pages/dashboard';
 import { ReceiptPage } from 'src/pages/pos/receipt';
 import { UsersPage } from 'src/pages/settings/users';
+import { useAuthStore } from 'src/store/useAuthStore';
 import { RefundsPage } from 'src/pages/orders/refunds';
 import { OptionsPage } from 'src/pages/catalog/options';
 import { SettingsHubPage } from 'src/pages/settings/hub';
 import { AgentsPage } from 'src/pages/operations/agents';
 import { DailyStockPage } from 'src/pages/catalog/stock';
+import { homePathForRole } from 'src/config/role-access';
 import { ProductsPage } from 'src/pages/catalog/products';
 import { DineInPage } from 'src/pages/operations/dine-in';
 import { DataResetPage } from 'src/pages/tools/data-reset';
@@ -69,8 +70,6 @@ import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
 import { ProductDetailPage } from 'src/pages/catalog/product-detail';
 import { NoteTemplatesPage } from 'src/pages/settings/note-templates';
 import { BranchDetailPage } from 'src/pages/operations/branch-detail';
-import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
-import { canReachPath, homePathForRole } from 'src/config/role-access';
 import { CardTerminalsPage } from 'src/pages/operations/card-terminals';
 import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
 import { CourierDetailPage } from 'src/pages/operations/courier-detail';
@@ -122,23 +121,16 @@ function OrderRedirect() {
   return <Navigate to={paths.app.orders.detail(id)} replace />;
 }
 
-/** On gnext.top the kiosk lives at its own address; elsewhere it stays inside the app. */
-function KioskEntry({ children }: { children: React.ReactNode }) {
-  const subdomain = kioskUrl();
-  useEffect(() => {
-    if (subdomain) window.location.replace(subdomain);
-  }, [subdomain]);
-  return subdomain ? null : <>{children}</>;
-}
+/** Who may run a kiosk: a manager or above. A cashier is turned away with a way out. */
+const KIOSK_ROLES = ['MANAGER', 'OWNER', 'ADMIN', 'SUPER_ADMIN'];
 
 /** The kiosk host's only screen: the kiosk, or a note and a way out for an account that cannot run it. */
 function KioskHostPage() {
   const { t } = useTranslation();
   const role = useAuthStore((state) => state.user?.role);
   const logout = useAuthStore((state) => state.logout);
-  const isHeadOffice = useIsHeadOffice();
 
-  if (canReachPath(role, paths.app.kiosk, isHeadOffice)) {
+  if (KIOSK_ROLES.includes((role || '').toUpperCase())) {
     return (
       <RequiresBranch>
         <KioskPage />
@@ -186,7 +178,6 @@ export const routesSection: RouteObject[] = [
       /* --- Section 9.1 Exact Canonical Routes --- */
       { path: 'dashboard', element: <DashboardPage /> },
       { path: 'pos', element: <RequiresBranch><PosOrderPage /></RequiresBranch> },
-      { path: 'kiosk', element: <KioskEntry><RequiresBranch><KioskPage /></RequiresBranch></KioskEntry> },
       { path: 'orders', element: <OrdersWorkflowPage /> },
       { path: 'orders/incoming', element: <RequiresBranch><IncomingOrdersPage /></RequiresBranch> },
       { path: 'orders/:id', element: <OrderRedirect /> },
