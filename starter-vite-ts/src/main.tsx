@@ -5,8 +5,9 @@ import { Outlet, RouterProvider, createBrowserRouter } from 'react-router';
 import { LicenseInfo, muiXTelemetrySettings } from '@mui/x-license';
 
 import App from './app';
-import { routesSection } from './routes/sections';
+import { isKioskHost } from './config/kiosk-host';
 import { ErrorBoundary } from './routes/components';
+import { routesSection, kioskRoutesSection } from './routes/sections';
 
 // ----------------------------------------------------------------------
 
@@ -25,7 +26,7 @@ const router = createBrowserRouter([
       </App>
     ),
     errorElement: <ErrorBoundary />,
-    children: routesSection,
+    children: isKioskHost() ? kioskRoutesSection : routesSection,
   },
 ]);
 

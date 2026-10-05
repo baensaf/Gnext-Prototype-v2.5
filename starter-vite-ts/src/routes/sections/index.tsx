@@ -1,7 +1,13 @@
 import type { RouteObject } from 'react-router';
 
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Navigate, useParams } from 'react-router';
+
+import Box from '@mui/material/Box';
+import Alert from '@mui/material/Alert';
+import Button from '@mui/material/Button';
+import AlertTitle from '@mui/material/AlertTitle';
 
 import { paths } from 'src/routes/paths';
 import { RequiresBranch } from 'src/routes/components/requires-branch';
@@ -10,15 +16,14 @@ import Page404 from 'src/pages/error/404';
 import { LoginPage } from 'src/pages/login';
 import { AppShell } from 'src/layouts/AppShell';
 import { KioskPage } from 'src/pages/pos/kiosk';
+import { kioskUrl } from 'src/config/kiosk-host';
 import { KdsPage } from 'src/pages/operations/kds';
 import { PosOrderPage } from 'src/pages/pos/order';
 import { DashboardPage } from 'src/pages/dashboard';
 import { ReceiptPage } from 'src/pages/pos/receipt';
 import { UsersPage } from 'src/pages/settings/users';
-import { useAuthStore } from 'src/store/useAuthStore';
 import { RefundsPage } from 'src/pages/orders/refunds';
 import { OptionsPage } from 'src/pages/catalog/options';
-import { homePathForRole } from 'src/config/role-access';
 import { SettingsHubPage } from 'src/pages/settings/hub';
 import { AgentsPage } from 'src/pages/operations/agents';
 import { DailyStockPage } from 'src/pages/catalog/stock';
@@ -64,6 +69,8 @@ import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
 import { ProductDetailPage } from 'src/pages/catalog/product-detail';
 import { NoteTemplatesPage } from 'src/pages/settings/note-templates';
 import { BranchDetailPage } from 'src/pages/operations/branch-detail';
+import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
+import { canReachPath, homePathForRole } from 'src/config/role-access';
 import { CardTerminalsPage } from 'src/pages/operations/card-terminals';
 import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
 import { CourierDetailPage } from 'src/pages/operations/courier-detail';
@@ -115,6 +122,47 @@ function OrderRedirect() {
   return <Navigate to={paths.app.orders.detail(id)} replace />;
 }
 
+/** On gnext.top the kiosk lives at its own address; elsewhere it stays inside the app. */
+function KioskEntry({ children }: { children: React.ReactNode }) {
+  const subdomain = kioskUrl();
+  useEffect(() => {
+    if (subdomain) window.location.replace(subdomain);
+  }, [subdomain]);
+  return subdomain ? null : <>{children}</>;
+}
+
+/** The kiosk host's only screen: the kiosk, or a note and a way out for an account that cannot run it. */
+function KioskHostPage() {
+  const { t } = useTranslation();
+  const role = useAuthStore((state) => state.user?.role);
+  const logout = useAuthStore((state) => state.logout);
+  const isHeadOffice = useIsHeadOffice();
+
+  if (canReachPath(role, paths.app.kiosk, isHeadOffice)) {
+    return (
+      <RequiresBranch>
+        <KioskPage />
+      </RequiresBranch>
+    );
+  }
+
+  return (
+    <Box sx={{ p: 3, maxWidth: 640, mx: 'auto' }}>
+      <Alert
+        severity="warning"
+        action={
+          <Button color="inherit" size="small" onClick={() => logout()}>
+            {t('auth.logout', 'Sign Out')}
+          </Button>
+        }
+      >
+        <AlertTitle>{t('access.deniedTitle', 'Not available for your role')}</AlertTitle>
+        {t('access.deniedBody', 'This page belongs to another part of the organization. Your account does not have access to it.')}
+      </Alert>
+    </Box>
+  );
+}
+
 export const routesSection: RouteObject[] = [
   {
     path: '/',
@@ -138,7 +186,7 @@ export const routesSection: RouteObject[] = [
       /* --- Section 9.1 Exact Canonical Routes --- */
       { path: 'dashboard', element: <DashboardPage /> },
       { path: 'pos', element: <RequiresBranch><PosOrderPage /></RequiresBranch> },
-      { path: 'kiosk', element: <RequiresBranch><KioskPage /></RequiresBranch> },
+      { path: 'kiosk', element: <KioskEntry><RequiresBranch><KioskPage /></RequiresBranch></KioskEntry> },
       { path: 'orders', element: <OrdersWorkflowPage /> },
       { path: 'orders/incoming', element: <RequiresBranch><IncomingOrdersPage /></RequiresBranch> },
       { path: 'orders/:id', element: <OrderRedirect /> },
@@ -236,4 +284,11 @@ export const routesSection: RouteObject[] = [
     path: '*',
     element: <Page404 />,
   },
+];
+
+/** What kiosk.gnext.top serves: the sign-in and the kiosk, no shell, and no way into /app. */
+export const kioskRoutesSection: RouteObject[] = [
+  { path: '/login', element: <LoginPage /> },
+  { path: '/', element: <ProtectedRoute><KioskHostPage /></ProtectedRoute> },
+  { path: '*', element: <Navigate to="/" replace /> },
 ];

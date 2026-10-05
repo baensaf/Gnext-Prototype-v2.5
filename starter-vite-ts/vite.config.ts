@@ -30,6 +30,8 @@ export default defineConfig({
   server: {
     port: PORT,
     host: true,
+    // kiosk.localhost is how the kiosk host is tried out locally.
+    allowedHosts: ['.localhost'],
     watch: {
       ignored: ['**/Dockerfile', '**/nginx.conf', '**/*.log', '**/.git/**', '**/dist/**'],
     },
