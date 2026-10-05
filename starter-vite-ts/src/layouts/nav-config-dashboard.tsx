@@ -32,6 +32,8 @@ const ICONS = {
   pricing: icon('ic-invoice'),
   discounts: icon('ic-label'),
   coupons: icon('ic-order'),
+  // The MUI MoveToInbox shape, as the header's Incoming Orders button draws it.
+  inbox: icon('ic-inbox'),
   customers: icon('ic-user'),
   credit: icon('ic-banking'),
   settings: icon('ic-params'),
@@ -100,7 +102,8 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.incomingOrders', 'Incoming Orders'),
           path: '/app/orders/incoming',
           // No count here: the header's Incoming Orders icon carries it, on every screen size.
-          icon: ICONS.coupons,
+          // Same inbox tray as that header button, so the shortcut and the page match.
+          icon: ICONS.inbox,
         },
         {
           title: t('nav.deliveryHub', 'Delivery & Fleet Hub'),
