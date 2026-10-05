@@ -2604,13 +2604,14 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                       <Typography variant="body2" color="text.secondary">{t('pos.totals.tax')}</Typography>
                       <Typography variant="body2">{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(cartTax) })}</Typography>
                     </Stack>
+                    {/* The delivery box above already shows the fee; here it is only part of the breakdown. */}
+                    {orderType === 'DELIVERY' && (
+                      <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                        <Typography variant="body2" color="text.secondary">{t('pos.totals.delivery')}</Typography>
+                        <Typography variant="body2">{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(quotedDeliveryFee) })}</Typography>
+                      </Stack>
+                    )}
                   </>
-                )}
-                {orderType === 'DELIVERY' && (
-                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                    <Typography variant="body2" color="text.secondary">{t('pos.totals.delivery')}</Typography>
-                    <Typography variant="body2">{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(quotedDeliveryFee) })}</Typography>
-                  </Stack>
                 )}
                 {/* The discount line is always there: it is also the way to a discount or a coupon.
                     With none applied it names the action; applied, it names the discount, so the
