@@ -82,6 +82,8 @@ type Server struct {
 	Upstream     *Upstream
 	ProxyTimeout time.Duration
 	ProxyRetry   Retry
+	// Reach tracks whether the cloud answers (reach.go); nil takes the defaults. Tests set the pace.
+	Reach *Reach
 
 	initOnce  sync.Once
 	px        *Proxy
@@ -103,8 +105,12 @@ func (s *Server) init() {
 		if up == nil {
 			up = &Upstream{}
 		}
+		if s.Reach == nil {
+			s.Reach = NewReach()
+		}
 		s.px = &Proxy{
 			Up:      up,
+			Reach:   s.Reach,
 			Server:  func() string { return s.Host.State().Server },
 			Version: s.Version,
 			Log:     s.Log,
@@ -143,6 +149,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 			}
 		}()
 	}
+	go s.Reach.Run(ctx, s.probeCloud)
 	s.Log.Info("local app and settings page", "url", "http://"+addr, "settings", "http://"+addr+"/agent/")
 	return serve(ctx, ln, s.Handler(addr))
 }
@@ -267,9 +274,13 @@ func (s *Server) appStatus(lan bool) http.HandlerFunc {
 		if st.Agent != nil {
 			connected, since = st.Agent.Connection()
 		}
+		reachable, reachableSince := s.Reach.State()
 		out := map[string]any{
 			"version": s.Version,
-			"cloud":   map[string]any{"connected": connected, "since": protocol.Now(since)},
+			"cloud": map[string]any{
+				"connected": connected, "since": protocol.Now(since),
+				"reachable": reachable, "reachable_since": protocol.Now(reachableSince),
+			},
 			"app":     nil,
 		}
 		if b := s.currentBuild(); b != nil {

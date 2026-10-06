@@ -1,5 +1,7 @@
 import i18n from 'src/locales/i18n';
 
+import { isGatewayFailure } from './cloud-reachability';
+
 // ----------------------------------------------------------------------
 
 /**
@@ -14,12 +16,30 @@ import i18n from 'src/locales/i18n';
 export const CLOUD_UNREACHABLE = 'CLOUD_UNREACHABLE';
 export const CLOUD_NO_ANSWER = 'CLOUD_NO_ANSWER';
 export const NETWORK_ERROR = 'NETWORK_ERROR';
+/** Made by the HTTP client for a gateway's own failure page (no JSON body) outside the agent. */
+export const GATEWAY_ERROR = 'GATEWAY_ERROR';
 
 const CONNECTION_CODES = new Set([CLOUD_UNREACHABLE, CLOUD_NO_ANSWER, NETWORK_ERROR]);
 
 /** True for an answer that means the cloud could not be reached, not one the cloud gave. */
 export function isConnectionProblem(code: unknown): boolean {
   return typeof code === 'string' && CONNECTION_CODES.has(code);
+}
+
+/**
+ * Whether a failed `/auth/me` leaves it unknown if the person is signed in: the cloud did not
+ * answer (the agent's 502 or 504, no answer at all) or its gateway did (502, 503, 504, with the
+ * body the HTTP client makes of a page that is not the application's). A 401 is an answer, and
+ * says signed out.
+ */
+export function isSessionUnknown(problem: unknown): boolean {
+  if (typeof problem !== 'object' || problem === null) return false;
+  const { code, status } = problem as { code?: unknown; status?: unknown };
+  return (
+    isConnectionProblem(code) ||
+    code === GATEWAY_ERROR ||
+    (typeof status === 'number' && isGatewayFailure(status))
+  );
 }
 
 /**

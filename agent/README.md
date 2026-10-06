@@ -73,7 +73,11 @@ section numbers (§) in the code refer to it.
     build are kept in `%ProgramData%\Gnext\Agent\app\`, so a restart with no internet still opens
     the app. Until the first download the app routes answer a Persian *not downloaded yet* page.
   - `GET /agent/api/status` (both listeners, no sign-in) says whether the agent is connected to
-    the cloud and which build it serves.
+    the cloud (`cloud.connected`, the WebSocket) and whether the cloud answers HTTP
+    (`cloud.reachable`, since 2.2.0) and which build it serves. The agent probes
+    `<server>/health/live` every 3 s (5 s to answer): two failures in a row make the cloud
+    unreachable, one success makes it reachable, and a proxied request that gets no answer (or any
+    answer) moves it at once. The app's *Reconnecting* bar follows `reachable`.
   - The LAN listener serves the app only; the settings page and its API exist on `127.0.0.1`
     alone. The service adds the Windows Firewall rule *Gnext* (TCP 47801, private and domain
     profiles) at start, and the installer removes it on uninstall.

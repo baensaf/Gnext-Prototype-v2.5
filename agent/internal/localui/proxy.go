@@ -78,6 +78,8 @@ type Proxy struct {
 	Timeout time.Duration
 	// Retry times the retries of the requests retryable allows.
 	Retry Retry
+	// Reach, when set, is told what became of each attempt (reach.go).
+	Reach *Reach
 }
 
 func (p *Proxy) timeout() time.Duration {
@@ -151,12 +153,18 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		resp, fail := p.Up.Attempt(r.Context(), out, timeout)
 		if fail == nil {
+			p.Reach.Proxied(true)
 			defer resp.Body.Close()
 			p.relay(w, r, resp, live)
 			return
 		}
 		if r.Context().Err() != nil {
 			return // the page went away: nobody to answer, nothing more to try
+		}
+		// The cloud failed to answer, unless the failure was the page's own (its body could not be
+		// read): that says nothing of the cloud.
+		if body.err == nil || errors.Is(body.err, io.EOF) {
+			p.Reach.Proxied(false)
 		}
 		sawNoAnswer = sawNoAnswer || fail.Kind == NoAnswer
 		if !retry {

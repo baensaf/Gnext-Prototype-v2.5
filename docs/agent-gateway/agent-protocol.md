@@ -2731,8 +2731,9 @@ listener the answer also carries the agent's own fields for the settings page an
 the LAN listener answers only what is below. Both send `Cache-Control: no-store`.
 
 ```json
-{ "version": "2.1.0",
-  "cloud": { "connected": true, "since": "2026-10-06T08:15:30.123Z" },
+{ "version": "2.2.0",
+  "cloud": { "connected": true, "since": "2026-10-06T08:15:30.123Z",
+             "reachable": true, "reachable_since": "2026-10-06T08:15:31.004Z" },
   "app": { "build_id": "9f2c41d7ab03e5c8", "built_at": "2026-10-06T09:30:00.000Z",
            "downloaded_at": "2026-10-06T09:41:12.000Z" } }
 ```
@@ -2742,7 +2743,24 @@ the LAN listener answers only what is below. Both send `Cache-Control: no-store`
 | `version` | The agent's version. |
 | `cloud.connected` | The state of the agent's WebSocket session (§4). |
 | `cloud.since` | When `connected` last changed. |
+| `cloud.reachable` | Whether the cloud answers HTTP from this PC (2.2.0 on). The agent decides it (below); the app's bar uses it, not `connected`. |
+| `cloud.reachable_since` | When `reachable` last changed. |
 | `app` | The build being served; `null` while there is none. `built_at` is from the manifest; `downloaded_at` is when the agent switched to it. |
+
+**Reachable (2.2.0).** The WebSocket's state is noticed only after missed heartbeats, and says nothing
+of the plain requests the app makes, so the agent keeps a second, HTTP-level answer, once for the
+whole branch:
+
+- Every 3 s (from the end of one probe to the start of the next) it asks `GET <server>/health/live`,
+  the backend's liveness check, which nginx serves under `/health/`, needs no sign-in and touches no
+  database. A probe has 5 s to be answered; the cloud's gateway turning it away (502, 503, 504 with a
+  page that is not JSON) is no answer. **Two failures in a row** make the cloud unreachable; **one
+  success** makes it reachable.
+- What becomes of the requests it passes on feeds the same state: one that gets no answer (not sent,
+  or written and not answered, §19.10) makes the cloud unreachable at once, and any answer from the
+  cloud makes it reachable at once, so a busy register finds out before the next probe. A request the
+  page itself gave up on says nothing.
+- It starts out reachable. With no `server` configured nothing is probed.
 
 ### 19.9 Agent mode in the app (S4)
 
@@ -2782,7 +2800,7 @@ min(30 s, time left + 10 s). If the client goes away, the agent stops.
 
 **The app, in agent mode.**
 
-- **Reachability** is the status route's `cloud.connected` (§19.8), polled every 3 s, combined
+- **Reachability** is the status route's `cloud.reachable` (§19.8), polled every 3 s, combined
   with the requests that got no answer (`cloud-reachability.ts`). Outside agent mode today's
   behaviour stays.
 - Unreachable for more than 2 s: a thin amber bar at the top, *Reconnecting to Gnext… your
@@ -2815,6 +2833,8 @@ As built in 2.2.0 (S5), the agent:
   one; nothing more is sent to the cloud. `answerFor` is asked once, with whether any attempt was
   written and not answered, so a keyed write (S6) ends `504` if any of its attempts was.
 - The timing is `localui.Retry{Every, Window, Grace}` (2 s, 20 s, 10 s); the tests shorten it.
+- `localui.Reach` (`reach.go`) is the probe and its state machine of §19.8; `Proxy` tells it what
+  became of each attempt. `cloud.reachable` and `cloud.reachable_since` are on both listeners.
 
 The app, in agent mode:
 
@@ -2822,16 +2842,14 @@ The app, in agent mode:
   2 s out of reach and the *No internet* line from 2 minutes, green *Connected again* for 3 s. While it
   shows the page is moved down by its height (the sticky header and the side menu start under it) and a
   `resize` is sent so the register measures itself again.
-- "Out of reach" (`src/utils/cloud-link.ts`, `agent-link.ts`) is the earliest of three signals:
-  the status route's `cloud.connected` polled every 3 s (or the route not answering); the requests that
-  got no answer (`cloud-reachability.ts`); and a check of the app's own, `GET /api/v1/auth/me` with no
-  session (the cloud answers 401 before it looks anything up) every 3 s, 2 s while down, which is out
-  of reach if it is not answered within 1 s. The check is there because the agent notices a cut
-  network only after missed heartbeats, and a register that is idle makes no request to notice with.
-  A request answered after the agent said "down" shows the cloud is there, so from then on the agent's
-  word is ignored until it says "connected" and later "down" again. A window that is hidden does not
-  check.
-- The outage ends when none of the three says so. If the bar was up, the app sends the window event
+- "Out of reach" (`src/utils/cloud-link.ts`, `agent-link.ts`) is the earlier of two signals: the status
+  route's `cloud.reachable` polled every 3 s (or the route not answering), and the requests that got no
+  answer (`cloud-reachability.ts`). The page makes no requests of its own to find out: the agent probes
+  once for the branch (§19.8), and a request that fails marks it at once. A poll that finds `reachable`
+  true after the page's requests failed clears them, so a screen that has asked nothing since does not
+  keep the bar up. An agent older than 2.2.0, whose status has no `reachable`, leaves the requests alone
+  to say. A window that is hidden does not poll.
+- The outage ends when neither says so. If the bar was up, the app sends the window event
   `gnext:cloud-back` (`src/utils/cloud-back.ts`, `useCloudBack`). The POS reads the menu, the stops and
   stock, the open shift and the held orders again, quietly (it keeps the category the cashier is on and
   the cart); the incoming-orders queue and its policy are read again; the orders directory, the delivery
@@ -2849,8 +2867,17 @@ The app, in agent mode:
 - `showErrorToast` makes no toast for `CLOUD_UNREACHABLE`, `CLOUD_NO_ANSWER` or `NETWORK_ERROR` in agent
   mode, whether the bar is up yet or not; the bar and the inline message say it. Incoming orders, which
   has no place for a message, toasts the `detail` of a failed accept or reject itself.
-- Not covered: a page reloaded while the cloud is away asks `/auth/me`, gets no answer for 20 s and
-  shows the sign-in page; it works again after a reload once the cloud is back.
+- A reload during an outage does not sign anyone out. The session is an HttpOnly cookie the page cannot
+  see, so while a tab is signed in it keeps `gnext_session_hint` in `sessionStorage`. When
+  `/auth/me` then gets no answer (`CLOUD_UNREACHABLE`, `CLOUD_NO_ANSWER`, `NETWORK_ERROR`, or a gateway
+  502/503/504, which the HTTP client turns into a `GATEWAY_ERROR` problem when the body is not JSON)
+  and the hint is there, the session is *unknown*, not signed out: the app shows a full-page
+  *Connecting to Gnext…* (`src/components/connecting-page.tsx`; the bar sits above it) and asks
+  `/auth/me` again every 3 s, one at a time, and at once on `gnext:cloud-back`
+  (`useSessionRetry`). A `200` goes on as normal, a `401` goes to sign-in, as before. A tab already signed
+  in stays so when a later `/auth/me` gets no answer, and without the hint (never signed in) the
+  sign-in page shows as before. This is the same code path outside agent mode (the cloud's own
+  site), where it also covers a reload during a deploy or with the network down.
 
 ### 19.11 Idempotency (S6)
 

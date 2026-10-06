@@ -305,6 +305,13 @@ func TestStatusRouteShapeOnBothListeners(t *testing.T) {
 	if since, _ := cl["since"].(string); !regexp.MustCompile(`^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$`).MatchString(since) {
 		t.Errorf("cloud.since = %q, want a protocol timestamp", since)
 	}
+	// reachable is the HTTP probe's word, apart from the WebSocket's: true until two probes fail.
+	if cl["reachable"] != true {
+		t.Errorf("cloud.reachable = %v before anything is known against it", cl["reachable"])
+	}
+	if rs, _ := cl["reachable_since"].(string); !regexp.MustCompile(`^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$`).MatchString(rs) {
+		t.Errorf("cloud.reachable_since = %q, want a protocol timestamp", rs)
+	}
 	app, _ := lan["app"].(map[string]any)
 	if app["build_id"] != "9f2c41d7ab03e5c8" || app["built_at"] != "2026-10-06T09:30:00.000Z" || app["downloaded_at"] == "" || len(app) != 3 {
 		t.Errorf("app = %v", app)

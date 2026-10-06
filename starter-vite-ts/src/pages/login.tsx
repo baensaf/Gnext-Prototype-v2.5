@@ -14,12 +14,15 @@ import {
   IconButton,
 } from '@mui/material';
 
+import { useSessionRetry } from 'src/utils/use-session-retry';
+
 import { isKioskHost } from 'src/config/kiosk-host';
 import { useAuthStore } from 'src/store/useAuthStore';
 import { AuthSplitLayout } from 'src/layouts/auth-split';
 import { homePathForRole } from 'src/config/role-access';
 
 import { useSettingsContext } from 'src/components/settings';
+import { ConnectingPage } from 'src/components/connecting-page';
 
 /**
  * The three accounts the seed creates. They share one password, so the picker only fills
@@ -48,6 +51,9 @@ export function LoginPage() {
     fetchMe();
   }, [fetchMe]);
 
+  // Gnext was out of reach when the page asked whether a session is here: wait and ask again.
+  const sessionUnknown = useSessionRetry();
+
   useEffect(() => {
     if (isAuthenticated) {
       navigate(homeFor(user?.role), { replace: true });
@@ -71,6 +77,8 @@ export function LoginPage() {
     setLocale(nextLang);
     settings.setField('direction', nextLang === 'fa' ? 'rtl' : 'ltr');
   };
+
+  if (sessionUnknown) return <ConnectingPage />;
 
   return (
     <AuthSplitLayout

@@ -2,6 +2,8 @@ import type { ProblemDetails } from 'src/api/httpClient';
 
 import { create } from 'zustand';
 
+import { isSessionUnknown } from 'src/utils/connection-problem';
+
 import { httpClient, setCsrfToken } from 'src/api/httpClient';
 import i18n, { updateDocumentDirection } from 'src/locales/i18n';
 
@@ -13,6 +15,30 @@ import i18n, { updateDocumentDirection } from 'src/locales/i18n';
  * browser overwrite an account's saved preference with Persian.
  */
 const LOCALE_CHOSEN_KEY = 'gnext_locale_chosen';
+
+/**
+ * Set while this tab holds a signed-in session. The session itself is an HttpOnly cookie the page
+ * cannot see, so this is how a reload knows there was one to wait for when `/auth/me` cannot be
+ * answered. Per tab, like the session: sessionStorage.
+ */
+const SESSION_HINT_KEY = 'gnext_session_hint';
+
+function hasSessionHint(): boolean {
+  try {
+    return sessionStorage.getItem(SESSION_HINT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function setSessionHint(on: boolean) {
+  try {
+    if (on) sessionStorage.setItem(SESSION_HINT_KEY, '1');
+    else sessionStorage.removeItem(SESSION_HINT_KEY);
+  } catch {
+    // Storage blocked: a reload while Gnext is away then shows the sign-in page, as it used to.
+  }
+}
 
 export interface UserState {
   id: string;
@@ -42,6 +68,12 @@ interface AuthStore {
   csrfToken: string | null;
   isAuthenticated: boolean;
   isInitialized: boolean;
+  /**
+   * True while it is not known whether the session is good, because `/auth/me` could not be
+   * answered (Gnext is out of reach) and this tab had a session. Not signed out: the app waits
+   * and asks again, and only a real answer, 200 or 401, ends it.
+   */
+  sessionUnknown: boolean;
   isLoading: boolean;
   error: ProblemDetails | null;
   locale: string;
@@ -65,6 +97,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   csrfToken: null,
   isAuthenticated: false,
   isInitialized: false,
+  sessionUnknown: false,
   isLoading: false,
   error: null,
   // Persian is the default for a browser that has never chosen: this is an Iranian chain
@@ -86,9 +119,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         csrfToken,
         isAuthenticated: true,
         isInitialized: true,
+        sessionUnknown: false,
         isLoading: false,
         error: null,
       });
+      setSessionHint(true);
 
       // A language picked on the login screen is a real choice and follows the operator in;
       // the Persian default is not, and used to be handed to the account and saved, so
@@ -122,6 +157,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     } catch {
       // Ignore logout API error
     } finally {
+      setSessionHint(false);
       setCsrfToken(null);
       set({
         user: null,
@@ -129,6 +165,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         csrfToken: null,
         isAuthenticated: false,
         isInitialized: true,
+        sessionUnknown: false,
         isLoading: false,
       });
     }
@@ -150,21 +187,39 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         csrfToken,
         isAuthenticated: true,
         isInitialized: true,
+        sessionUnknown: false,
         isLoading: false,
         error: null,
       });
+      setSessionHint(true);
 
       // The account's own setting, read back from the server. Adopting it is not a change.
       if (user?.preferredLocale) {
         await get().setLocale(user.preferredLocale, { persist: false });
       }
-    } catch {
+    } catch (err) {
+      // Gnext did not answer. That says nothing about the session:
+      //  - someone already signed in stays so (a screen asking again must not drop them);
+      //  - a tab that had a session waits to hear, and the app asks again (ProtectedRoute);
+      //  - otherwise it is signed out, as when the answer is 401.
+      if (isSessionUnknown(err)) {
+        if (get().isAuthenticated) {
+          set({ isLoading: false });
+          return;
+        }
+        if (hasSessionHint()) {
+          set({ sessionUnknown: true, isLoading: false });
+          return;
+        }
+      }
+      setSessionHint(false);
       set({
         user: null,
         tenant: null,
         csrfToken: null,
         isAuthenticated: false,
         isInitialized: true,
+        sessionUnknown: false,
         isLoading: false,
       });
     }

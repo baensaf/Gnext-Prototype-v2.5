@@ -1,6 +1,6 @@
 import type { RouteObject } from 'react-router';
 
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useParams } from 'react-router';
 
@@ -11,6 +11,8 @@ import AlertTitle from '@mui/material/AlertTitle';
 
 import { paths } from 'src/routes/paths';
 import { RequiresBranch } from 'src/routes/components/requires-branch';
+
+import { useSessionRetry } from 'src/utils/use-session-retry';
 
 import Page404 from 'src/pages/error/404';
 import { LoginPage } from 'src/pages/login';
@@ -89,14 +91,41 @@ import { MediaLocalizationDemoPage } from 'src/pages/simulation/media-localizati
 import { SimulationSnappfoodPage } from 'src/pages/simulation/simulation-snappfood';
 import { SimulationPaymentsPrintersPage } from 'src/pages/simulation/simulation-payments-printers';
 
+import { ConnectingPage } from 'src/components/connecting-page';
+
+/** True once `active` has been true for `ms`; false again as soon as it is not. */
+function useAfter(active: boolean, ms: number): boolean {
+  const [elapsed, setElapsed] = useState(false);
+  useEffect(() => {
+    if (!active) {
+      setElapsed(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => setElapsed(true), ms);
+    return () => clearTimeout(timer);
+  }, [active, ms]);
+  return active && elapsed;
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, fetchMe, isInitialized } = useAuthStore();
+  const { isAuthenticated, fetchMe, isInitialized, sessionUnknown } = useAuthStore();
+  // Gnext out of reach when the page opened or reloaded, with a session in this tab: not signed
+  // out, not known. Ask again until it answers (useSessionRetry) and say so meanwhile.
+  useSessionRetry();
 
   useEffect(() => {
-    if (!isInitialized) {
+    if (!isInitialized && !sessionUnknown) {
       fetchMe();
     }
-  }, [fetchMe, isInitialized]);
+  }, [fetchMe, isInitialized, sessionUnknown]);
+
+  // The first answer takes a while when Gnext is far or away (a branch agent holds a read for up
+  // to 20 s): after a second, say what is going on rather than show an empty page.
+  const slow = useAfter(!isInitialized, 1000);
+
+  if (sessionUnknown || (!isInitialized && slow)) {
+    return <ConnectingPage />;
+  }
 
   if (!isInitialized) {
     return null;
