@@ -53,6 +53,7 @@ import { paths } from 'src/routes/paths';
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
 import { useLiveRefresh } from 'src/utils/use-live-refresh';
+import { orderRefOf, useShowsOrderCode } from 'src/utils/order-ref';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { tenantApi } from 'src/api/tenantApi';
@@ -113,6 +114,7 @@ function DeliveryCard({
   children: React.ReactNode;
 }) {
   const { t } = useTranslation();
+  const showOrderCode = useShowsOrderCode();
   const out = delivery.state !== 'UNASSIGNED';
   const address = delivery.address_snapshot?.address_text;
   const since = (out && delivery.picked_up_at) || delivery.submitted_at || delivery.created_at;
@@ -131,10 +133,13 @@ function DeliveryCard({
                 ? t('delivery.card.callNumber', { number: delivery.call_number })
                 : t('delivery.card.order')}
             </Typography>
-            {/* The order code is Latin: isolated so the RTL line around it does not reorder it. */}
-            <Typography variant="caption" color="text.secondary" component="div">
-              <bdi dir="ltr">{delivery.order_number}</bdi>
-            </Typography>
+            {/* A cashier goes by the call number; the code (Latin, isolated from the RTL line) is
+                for managers, or when the order has no call number. */}
+            {(showOrderCode || delivery.call_number == null) && (
+              <Typography variant="caption" color="text.secondary" component="div">
+                <bdi dir="ltr">{delivery.order_number}</bdi>
+              </Typography>
+            )}
           </Box>
           {minutes !== null && (
             <Tooltip title={late ? t('delivery.card.waitingLate', { minutes: estimate }) : ''}>
@@ -209,6 +214,7 @@ export function DeliveryPage() {
   const currencyLabel = useCurrencyLabel();
   const currency = useCurrencyLabel();
   const { t } = useTranslation();
+  const showOrderCode = useShowsOrderCode();
   // A cashier checks couriers in and out at the counter; taking one onto the roster is the
   // manager's (the API refuses a register account).
   const role = useAuthStore((state) => state.user?.role);
@@ -909,7 +915,7 @@ export function DeliveryPage() {
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>
             {t(changingCourier ? 'delivery.modals.assignCourier.changeDescription' : 'delivery.modals.assignCourier.description', {
-              orderNumber: selectedDeliveryForAssign?.order_number,
+              orderNumber: orderRefOf(selectedDeliveryForAssign, showOrderCode),
             })}
           </Typography>
           <FormControl fullWidth>
@@ -946,7 +952,7 @@ export function DeliveryPage() {
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Typography variant="body2">
-              {t('delivery.modals.complete.description', { orderNumber: selectedDeliveryForComplete?.order_number })}
+              {t('delivery.modals.complete.description', { orderNumber: orderRefOf(selectedDeliveryForComplete, showOrderCode) })}
             </Typography>
             <Typography variant="body2">
               {t('delivery.modals.complete.owedLabel')}: <strong>{MoneyUtil.formatCurrency(owedOnDelivery)} {currency}</strong>

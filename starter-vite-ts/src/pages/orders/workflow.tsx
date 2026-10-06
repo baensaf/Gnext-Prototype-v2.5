@@ -24,7 +24,6 @@ import ScheduleIcon from '@mui/icons-material/Schedule';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import RestaurantIcon from '@mui/icons-material/Restaurant';
-import StorefrontIcon from '@mui/icons-material/Storefront';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import TakeoutDiningIcon from '@mui/icons-material/TakeoutDining';
@@ -45,6 +44,7 @@ import {
   Dialog,
   Select,
   Drawer,
+  Avatar,
   Divider,
   Tooltip,
   TableRow,
@@ -72,6 +72,7 @@ import { MoneyUtil } from 'src/utils/money.util';
 import { useCurrencyLabel } from 'src/utils/currency';
 import { fTime, fDateTime } from 'src/utils/format-time';
 import { useLiveRefresh } from 'src/utils/use-live-refresh';
+import { orderRefOf, useShowsOrderCode } from 'src/utils/order-ref';
 import {
   businessDate,
   businessToday,
@@ -87,6 +88,7 @@ import {
 } from 'src/utils/snappfood-order';
 
 import { kdsApi } from 'src/api/kdsApi';
+import { CONFIG } from 'src/global-config';
 import { orderApi } from 'src/api/orderApi';
 import { refundApi } from 'src/api/refundApi';
 import { paymentApi } from 'src/api/paymentApi';
@@ -254,6 +256,8 @@ export function OrdersWorkflowPage() {
   // The whole order book, customers' mobiles included, is a manager's to download.
   const userRole = useAuthStore((state) => state.user?.role);
   const canExport = isManagerOrAbove(userRole);
+  // A cashier knows an order by its call number; the ORD- code is for managers and head office.
+  const showOrderCode = useShowsOrderCode();
   const branchNameById = new Map(branches.map((b) => [b.id, b.name]));
   // Only head office ever sees more than one, and only there does the column mean anything.
   const showBranchColumn = !branchId && branches.length > 1;
@@ -392,18 +396,19 @@ export function OrdersWorkflowPage() {
 
   // Colour on this page means the order's state (open, completed, cancelled...). The kind of
   // order is told apart by an icon on a neutral chip, so a blue Delivery never reads as Open.
-  const getOrderTypeIcon = (orderType: string) => {
+  // Snappfood shows its own logo, which a cashier knows at a glance.
+  const typeChipMark = (orderType: string) => {
     switch (orderType) {
       case 'DINE_IN':
-        return <RestaurantIcon />;
+        return { icon: <RestaurantIcon /> };
       case 'DELIVERY':
-        return <DeliveryDiningIcon />;
+        return { icon: <DeliveryDiningIcon /> };
       case 'AGGREGATOR':
-        return <StorefrontIcon />;
+        return { avatar: <Avatar alt="Snappfood" src={`${CONFIG.assetsDir}/logo/snappfood.png`} /> };
       case 'PICKUP':
-        return <DirectionsWalkIcon />;
+        return { icon: <DirectionsWalkIcon /> };
       default:
-        return <TakeoutDiningIcon />;
+        return { icon: <TakeoutDiningIcon /> };
     }
   };
 
@@ -552,7 +557,7 @@ export function OrdersWorkflowPage() {
         extraMinutes: reportReasonId === SNAPPFOOD_DELAY_REASON_ID ? reportExtraMinutes : undefined,
         comment: reportComment.trim(),
       });
-      setSuccess(t('orders.snappfood.reported', { orderNumber: reportOrder.order_number }));
+      setSuccess(t('orders.snappfood.reported', { orderNumber: orderRefOf(reportOrder, showOrderCode) }));
       setReportOrder(null);
       loadData();
       if (drawerOpen && selectedDrawerOrder?.id === reported.id) {
@@ -860,7 +865,7 @@ export function OrdersWorkflowPage() {
       }[reprintDocumentType];
       setSuccess(t('orders.reprintDialog.success', {
         document: documentLabel,
-        orderNumber: selectedOrder.order_number,
+        orderNumber: orderRefOf(selectedOrder, showOrderCode),
       }));
       setReprintDialogOpen(false);
       setSelectedOrder(null);
@@ -980,7 +985,7 @@ export function OrdersWorkflowPage() {
     return (
       <Box sx={{ minWidth: 0 }}>
         <Chip
-          icon={getOrderTypeIcon(order.order_type)}
+          {...typeChipMark(order.order_type)}
           label={getOrderTypeLabel(order.order_type)}
           size="small"
           variant="outlined"
@@ -1053,9 +1058,12 @@ export function OrdersWorkflowPage() {
       renderCell: ({ row }) => (
         <Box sx={{ minWidth: 0 }}>
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
-              {row.call_number || '—'}
-            </Typography>
+            {/* With no call number (a held order, an old Snappfood one) the code alone names it. */}
+            {row.call_number ? (
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
+                {row.call_number}
+              </Typography>
+            ) : null}
             {row.source === 'AGENT_OFFLINE' ? (
               <Tooltip title={t('orders.table.takenOffline', 'Taken while the branch was offline')}>
                 <CloudOffIcon fontSize="small" color="action" />
@@ -1063,9 +1071,11 @@ export function OrdersWorkflowPage() {
             ) : null}
             {row.source === 'AGENT_OFFLINE' ? <VersionTag feature="orders.takenOffline" /> : null}
           </Stack>
-          <Typography color="text.secondary" variant="caption" noWrap sx={{ display: 'block', fontFamily: 'monospace' }}>
-            <bdi dir="ltr">{row.order_number}</bdi>
-          </Typography>
+          {(showOrderCode || !row.call_number) && (
+            <Typography color="text.secondary" variant="caption" noWrap sx={{ display: 'block', fontFamily: 'monospace' }}>
+              <bdi dir="ltr">{row.order_number}</bdi>
+            </Typography>
+          )}
         </Box>
       ),
     },
@@ -1520,7 +1530,7 @@ export function OrdersWorkflowPage() {
       {/* Cancellation Reason Dialog */}
       <Dialog onClose={() => setCancelDialogOpen(false)} open={cancelDialogOpen}>
         <DialogTitle sx={{ fontWeight: 'bold' }}>
-          {t('orders.cancelDialog.title', { orderNumber: selectedOrder?.order_number })}
+          {t('orders.cancelDialog.title', { orderNumber: orderRefOf(selectedOrder, showOrderCode) })}
         </DialogTitle>
         <DialogContent sx={{ minWidth: 360, pt: 2 }}>
           <Typography color="text.secondary" sx={{ mb: 2 }} variant="body2">
@@ -1556,7 +1566,7 @@ export function OrdersWorkflowPage() {
       <Dialog fullWidth maxWidth="xs" onClose={() => !reportSubmitting && setReportOrder(null)} open={!!reportOrder}>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 'bold' }}>
           <ScheduleIcon color="warning" />
-          {t('orders.snappfood.reportTitle', { orderNumber: reportOrder?.order_number })}
+          {t('orders.snappfood.reportTitle', { orderNumber: orderRefOf(reportOrder, showOrderCode) })}
           <VersionTag feature="orders.snappfood" />
         </DialogTitle>
         <DialogContent>
@@ -1623,7 +1633,7 @@ export function OrdersWorkflowPage() {
       <Dialog fullWidth maxWidth="xs" onClose={handleCloseReprintDialog} open={reprintDialogOpen}>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 'bold' }}>
           <PrintIcon color="primary" />
-          {t('orders.reprintDialog.title', { orderNumber: selectedOrder?.order_number })}
+          {t('orders.reprintDialog.title', { orderNumber: orderRefOf(selectedOrder, showOrderCode) })}
         </DialogTitle>
         <DialogContent>
           <Typography color="text.secondary" sx={{ mb: 2 }} variant="body2">
@@ -1787,7 +1797,7 @@ export function OrdersWorkflowPage() {
                   <Typography variant="h4" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
                     {selectedDrawerOrder.call_number || <bdi dir="ltr">{selectedDrawerOrder.order_number}</bdi>}
                   </Typography>
-                  {selectedDrawerOrder.call_number ? (
+                  {selectedDrawerOrder.call_number && showOrderCode ? (
                     <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
                       <bdi dir="ltr">{selectedDrawerOrder.order_number}</bdi>
                     </Typography>
@@ -1806,7 +1816,7 @@ export function OrdersWorkflowPage() {
                     label={getOrderTypeLabel(selectedDrawerOrder.order_type)}
                     size="small"
                     variant="outlined"
-                    icon={getOrderTypeIcon(selectedDrawerOrder.order_type)}
+                    {...typeChipMark(selectedDrawerOrder.order_type)}
                   />
                   {/* The till and Snappfood go without saying; the type chip already names Snappfood. */}
                   {(selectedDrawerOrder.channel === 'KIOSK' || selectedDrawerOrder.channel === 'ONLINE') && (
