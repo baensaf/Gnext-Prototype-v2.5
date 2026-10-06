@@ -57,7 +57,20 @@
             <dt>کار در حال اجرا</dt><dd id="s-running">—</dd>
             <dt>دستگاه‌ها</dt><dd id="s-devices">—</dd>
           </dl>
+          <label class="check"><input type="checkbox" id="at-signin"> باز شدن جی‌نکست هنگام ورود به ویندوز</label>
         </div>
+      </div>
+      <div class="card" id="registers">
+        <h2>صندوق‌ها در این شبکه</h2>
+        <p class="muted">هر صندوق دیگر شعبه (رایانه، تبلت یا گوشی روی همین شبکه) با یکی از این آدرس‌ها جی‌نکست را باز می‌کند.</p>
+        <ul id="lan-urls" class="urls"></ul>
+        <p id="lan-none" class="note" hidden>این رایانه آدرسی روی شبکهٔ شعبه ندارد، یا درگاه شبکه در دسترس نیست.</p>
+        <dl class="facts">
+          <dt>نسخهٔ برنامه</dt><dd id="app-build" class="ltr small">—</dd>
+          <dt>ساخته‌شده در</dt><dd id="app-built">—</dd>
+          <dt>دریافت‌شده در</dt><dd id="app-downloaded">—</dd>
+        </dl>
+        <p><button class="btn" id="app-refresh">دریافت نسخهٔ جدید</button></p>
       </div>
     </section>
 

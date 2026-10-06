@@ -136,6 +136,43 @@ describe('agent health (PostgreSQL)', () => {
     expect(view).not.toHaveProperty('sync_warnings');
   });
 
+  // §19.12: an agent that serves the cashier app reports its build and LAN addresses in each heartbeat.
+  it('lists the capabilities, the build and the LAN addresses an agent reported, also once it is gone', async () => {
+    const list = async () => {
+      const rows = await moduleRef.get(AgentRegistryController).list({ tenantId } as any, branchId);
+      return rows.find((r) => r.id === agentId)!;
+    };
+    const agent = await connect(['print.html', 'payment.charge', 'app.serve']);
+    expect(await list()).toMatchObject({ capabilities: ['print.html', 'payment.charge', 'app.serve'], connected: true });
+
+    const lan = ['http://192.168.1.10:47801/', 'http://10.0.0.7:47801/'];
+    const hb = agent.send('heartbeat', { in_flight: 0, unacked_results: 0, app_build_id: '9f2c41d7ab03e5c8', lan_urls: lan });
+    await agent.next((m) => m.type === 'heartbeat.ack' && m.ref === hb);
+    await until(async () => (await list()).app_build_id === '9f2c41d7ab03e5c8');
+    expect(await list()).toMatchObject({ app_build_id: '9f2c41d7ab03e5c8', lan_urls: lan });
+    expect((await health.health(tenantId, agentId)).agent).toMatchObject({ app_build_id: '9f2c41d7ab03e5c8', lan_urls: lan });
+
+    // A heartbeat without the fields (an agent that cannot serve the app) changes nothing; null says "no build".
+    const plain = agent.send('heartbeat', { in_flight: 0, unacked_results: 0 });
+    await agent.next((m) => m.type === 'heartbeat.ack' && m.ref === plain);
+    expect(await list()).toMatchObject({ app_build_id: '9f2c41d7ab03e5c8', lan_urls: lan });
+    const none = agent.send('heartbeat', { app_build_id: null, lan_urls: [] });
+    await agent.next((m) => m.type === 'heartbeat.ack' && m.ref === none);
+    await until(async () => (await list()).app_build_id === null);
+    expect(await list()).toMatchObject({ app_build_id: null, lan_urls: [] });
+
+    // Whatever else it sent is not stored.
+    const bad = agent.send('heartbeat', { app_build_id: '<b>', lan_urls: ['javascript:alert(1)'] });
+    await agent.next((m) => m.type === 'heartbeat.ack' && m.ref === bad);
+    expect(await list()).toMatchObject({ app_build_id: null, lan_urls: [] });
+
+    // What it said stays when the PC is switched off.
+    agent.ws.terminate();
+    await agent.closed;
+    await until(() => !moduleRef.get(AgentSessionsService).isConnected(agentId));
+    expect(await list()).toMatchObject({ connected: false, capabilities: ['print.html', 'payment.charge', 'app.serve'] });
+  });
+
   it('raises one critical alert when the agent stays away, and closes it when it is back', async () => {
     await until(() => !moduleRef.get(AgentSessionsService).isConnected(agentId));
     const agent = await connect();

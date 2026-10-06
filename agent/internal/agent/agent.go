@@ -38,6 +38,9 @@ type Options struct {
 	SavedConfig *protocol.Config
 	// ConfigChanged is called with every config the cloud sends, to keep it on disk.
 	ConfigChanged func(*protocol.Config)
+	// AppReport is asked for each heartbeat: the build the agent serves ("" for none) and the LAN
+	// addresses of its app (§19.12). Nil sends a heartbeat without those fields.
+	AppReport func() (buildID string, lanURLs []string)
 
 	// Timings, overridable in tests.
 	HandshakeTimeout time.Duration
@@ -296,7 +299,19 @@ func (a *Agent) heartbeat(ctx context.Context, c *websocket.Conn, interval time.
 		}
 		unacked, _ := a.o.Journal.UnackedResults()
 		hb := protocol.Heartbeat{InFlight: int(a.running.Load()), UnackedResults: len(unacked)}
-		a.send(protocol.TypeHeartbeat, "", hb)
+		if a.o.AppReport == nil {
+			a.send(protocol.TypeHeartbeat, "", hb)
+			continue
+		}
+		build, urls := a.o.AppReport()
+		report := protocol.AppReport{LANURLs: urls}
+		if report.LANURLs == nil {
+			report.LANURLs = []string{}
+		}
+		if build != "" {
+			report.AppBuildID = &build
+		}
+		a.send(protocol.TypeHeartbeat, "", protocol.HeartbeatWithApp{Heartbeat: hb, AppReport: report})
 	}
 }
 

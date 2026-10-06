@@ -44,8 +44,8 @@ import {
 import { fDateTime } from 'src/utils/format-time';
 
 import { tenantApi } from 'src/api/tenantApi';
-import { agentsApi } from 'src/api/agentsApi';
 import { useScopedBranchId } from 'src/contexts/branch-context';
+import { agentsApi, agentAppState, fetchCloudBuildId } from 'src/api/agentsApi';
 
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
@@ -59,6 +59,44 @@ const CODE_STATE_COLOR: Record<EnrolmentCodeState, 'info' | 'success' | 'default
   EXPIRED: 'warning',
   CANCELLED: 'default',
 };
+
+const APP_STATE_COLOR = {
+  UP_TO_DATE: 'success',
+  BEHIND: 'warning',
+  NO_BUILD: 'warning',
+} as const;
+
+/** Whether an agent serves the cashier app, and how its build compares with the cloud's (§19.12). */
+function AgentAppCell({ agent, cloudBuild }: { agent: BranchAgent; cloudBuild: string | null }) {
+  const { t } = useTranslation();
+  const state = agentAppState(agent, cloudBuild);
+  if (state === 'UNKNOWN' && !agent.app_build_id && !agent.capabilities?.includes('app.serve')) return <>—</>;
+  if (state === 'NOT_SERVED') {
+    return <Chip size="small" label={t('operations.agents.appNotServed', 'No app on this agent')} />;
+  }
+  const label = {
+    UP_TO_DATE: t('operations.agents.appUpToDate', 'Up to date'),
+    BEHIND: t('operations.agents.appBehind', 'Behind the cloud'),
+    NO_BUILD: t('operations.agents.appNoBuild', 'No build yet'),
+    UNKNOWN: t('operations.agents.appServes', 'Serves the app'),
+  }[state];
+  const color = state === 'UNKNOWN' ? 'default' : APP_STATE_COLOR[state];
+  return (
+    <>
+      <Chip size="small" color={color} label={label} />
+      {agent.app_build_id && (
+        <Typography variant="caption" color="text.secondary" component="div" dir="ltr" sx={{ fontFamily: 'monospace' }}>
+          {t('operations.agents.appBuildId', 'Build {{id}}', { id: agent.app_build_id })}
+        </Typography>
+      )}
+      {state === 'BEHIND' && cloudBuild && (
+        <Typography variant="caption" color="text.secondary" component="div" dir="ltr" sx={{ fontFamily: 'monospace' }}>
+          {t('operations.agents.appCloudBuild', 'Cloud: {{id}}', { id: cloudBuild })}
+        </Typography>
+      )}
+    </>
+  );
+}
 
 /**
  * Head office decides which PC speaks for each branch: it hands out a one-time code for the
@@ -87,6 +125,8 @@ export function AgentsPage() {
   const [cancelTarget, setCancelTarget] = useState<EnrolmentCode | null>(null);
   const [healthAgent, setHealthAgent] = useState<BranchAgent | null>(null);
   const [latestPublished, setLatestPublished] = useState<string | null>(null);
+  // The build this page itself came from: the cloud's current one (§19.12).
+  const [cloudBuild, setCloudBuild] = useState<string | null>(null);
 
   const errorText = useCallback(
     (err: any, fallbackKey: string, fallback: string) => err?.detail || err?.message || t(fallbackKey, fallback),
@@ -96,11 +136,13 @@ export function AgentsPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [branchList, agentList, codeList] = await Promise.all([
+      const [branchList, agentList, codeList, build] = await Promise.all([
         tenantApi.getBranches(),
         agentsApi.list({ branchId: branchId || undefined, includeRevoked }),
         agentsApi.listCodes(branchId || undefined),
+        fetchCloudBuildId(),
       ]);
+      setCloudBuild(build);
       setBranches(branchList || []);
       setAgents(agentList || []);
       setCodes(codeList || []);
@@ -120,7 +162,12 @@ export function AgentsPage() {
   useEffect(() => {
     const timer = window.setInterval(async () => {
       try {
-        setAgents(await agentsApi.list({ branchId: branchId || undefined, includeRevoked }));
+        const [list, build] = await Promise.all([
+          agentsApi.list({ branchId: branchId || undefined, includeRevoked }),
+          fetchCloudBuildId(),
+        ]);
+        setAgents(list);
+        setCloudBuild(build);
       } catch {
         // The next tick, or the refresh button, tries again.
       }
@@ -268,6 +315,8 @@ export function AgentsPage() {
                 <TableCell>{t('operations.agents.colBranch', 'Branch')}</TableCell>
                 <TableCell>{t('operations.agents.colPc', 'PC')}</TableCell>
                 <TableCell>{t('operations.agents.colVersion', 'Version')}</TableCell>
+                <TableCell>{t('operations.agents.colApp', 'Cashier app')}</TableCell>
+                <TableCell>{t('operations.agents.colLan', 'Registers on the network')}</TableCell>
                 <TableCell>{t('operations.agents.colStatus', 'Status')}</TableCell>
                 <TableCell>{t('operations.agents.colEnrolled', 'Enrolled')}</TableCell>
                 <TableCell>{t('operations.agents.colLastSeen', 'Last seen')}</TableCell>
@@ -277,13 +326,13 @@ export function AgentsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 5 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 5 }}>
                     <CircularProgress size={28} />
                   </TableCell>
                 </TableRow>
               ) : agents.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
                     <Typography color="text.secondary">
                       {t('operations.agents.noAgents', 'No agent has enrolled for this selection yet.')}
                     </Typography>
@@ -313,6 +362,22 @@ export function AgentsPage() {
                             {t('operations.agents.behindLatest', 'Newest published: {{v}}', { v: latestPublished })}
                           </Typography>
                         )}
+                    </TableCell>
+                    <TableCell>
+                      <AgentAppCell agent={a} cloudBuild={cloudBuild} />
+                    </TableCell>
+                    <TableCell>
+                      {a.lan_urls?.length ? (
+                        a.lan_urls.map((u) => (
+                          <Typography key={u} variant="caption" component="div" dir="ltr" sx={{ fontFamily: 'monospace' }}>
+                            {u}
+                          </Typography>
+                        ))
+                      ) : (
+                        <Typography variant="caption" color="text.secondary">
+                          {a.lan_urls ? t('operations.agents.lanNone', 'No address') : '—'}
+                        </Typography>
+                      )}
                     </TableCell>
                     <TableCell>
                       {a.status === 'ACTIVE' ? (

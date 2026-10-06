@@ -87,7 +87,7 @@ describe('agent connection (protocol §4)', () => {
       expect(Date.parse(welcome.payload.server_time)).not.toBeNaN();
       expect(welcome.payload.session_id).toEqual(expect.any(String));
       expect(conn.isOpen).toBe(true);
-      expect(recordHello).toHaveBeenCalledWith(agent, { agentVersion: '1.0.0', protocolVersion: 1 });
+      expect(recordHello).toHaveBeenCalledWith(agent, { agentVersion: '1.0.0', protocolVersion: 1, capabilities: ['print.html'] });
 
       const handle = sessions.forBranch('tenant-1', 'branch-1')!;
       expect(handle).toMatchObject({ agentId: 'agent-1', agentVersion: '1.0.0', capabilities: ['print.html'] });
@@ -224,6 +224,90 @@ describe('agent connection (protocol §4)', () => {
       );
       expect(socket.last()).toMatchObject({ type: 'ack', ref: 'ds-1', payload: { ok: true } });
       expect(conn.connectionHandle!.devices.get('terminal:t1')).toMatchObject({ status: 'OFFLINE', detail: 'timeout' });
+    });
+
+    describe('the app an agent serves (§19.12)', () => {
+      const lan = ['http://192.168.1.10:47801/'];
+      let recordApp: jest.Mock;
+      let mine: any;
+      // recordApp keeps what it is given on the agent row, as the gateway does.
+      const openApp = async () => {
+        mine = { ...agent };
+        recordApp = jest.fn().mockImplementation(async (a, info) => {
+          if (info.appBuildId !== undefined) a.app_build_id = info.appBuildId;
+          if (info.lanUrls !== undefined) a.lan_urls = info.lanUrls;
+        });
+        const conn = new AgentConnection(socket, mine, { ...deps, recordApp });
+        await conn.onFrame(hello({ capabilities: ['print.html', 'app.serve'] }));
+        return conn;
+      };
+
+      it('keeps the capabilities from hello', async () => {
+        await openApp();
+        expect(recordHello).toHaveBeenCalledWith(mine, {
+          agentVersion: '1.0.0',
+          protocolVersion: 1,
+          capabilities: ['print.html', 'app.serve'],
+        });
+      });
+
+      it('stores the build and the LAN addresses from a heartbeat, and only when they change', async () => {
+        const conn = await openApp();
+        await conn.onFrame(frame('heartbeat', { app_build_id: 'b1', lan_urls: lan }, 'hb-1'));
+        expect(socket.last()).toMatchObject({ type: 'heartbeat.ack', ref: 'hb-1' });
+        expect(recordApp).toHaveBeenCalledTimes(1);
+        expect(recordApp).toHaveBeenLastCalledWith(mine, { appBuildId: 'b1', lanUrls: lan });
+
+        await conn.onFrame(frame('heartbeat', { app_build_id: 'b1', lan_urls: lan }));
+        expect(recordApp).toHaveBeenCalledTimes(1);
+
+        await conn.onFrame(frame('heartbeat', { app_build_id: 'b2', lan_urls: lan }));
+        expect(recordApp).toHaveBeenCalledTimes(2);
+        expect(recordApp).toHaveBeenLastCalledWith(mine, { appBuildId: 'b2' });
+
+        // No build yet is said with null; an empty list says the PC has no address.
+        await conn.onFrame(frame('heartbeat', { app_build_id: null, lan_urls: [] }));
+        expect(recordApp).toHaveBeenLastCalledWith(mine, { appBuildId: null, lanUrls: [] });
+        expect(mine).toMatchObject({ app_build_id: null, lan_urls: [] });
+      });
+
+      it('leaves what it holds alone when a heartbeat does not carry the fields', async () => {
+        const conn = await openApp();
+        await conn.onFrame(frame('heartbeat', { app_build_id: 'b1', lan_urls: lan }));
+        await conn.onFrame(frame('heartbeat', { in_flight: 0, unacked_results: 0 }));
+        expect(recordApp).toHaveBeenCalledTimes(1);
+        expect(mine).toMatchObject({ app_build_id: 'b1', lan_urls: lan });
+      });
+
+      it('ignores values that are not a build id or an http address, and keeps at most 16 addresses', async () => {
+        const conn = await openApp();
+        const many = Array.from({ length: 20 }, (_, i) => `http://10.0.0.${i + 1}:47801/`);
+        await conn.onFrame(
+          frame('heartbeat', {
+            app_build_id: '<script>',
+            lan_urls: ['javascript:alert(1)', 'http://a b/', 'http://<b>/', 42, lan[0], lan[0], ...many],
+          }),
+        );
+        const [, info] = recordApp.mock.calls[0];
+        expect(info.appBuildId).toBeUndefined();
+        expect(info.lanUrls).toHaveLength(16);
+        expect(info.lanUrls[0]).toBe(lan[0]);
+        expect(info.lanUrls).not.toContain('javascript:alert(1)');
+
+        await conn.onFrame(frame('heartbeat', { app_build_id: 7, lan_urls: 'http://x/' }));
+        expect(recordApp).toHaveBeenCalledTimes(1);
+      });
+
+      it('still answers the heartbeat when the database refuses the write', async () => {
+        const conn = await openApp();
+        recordApp.mockRejectedValueOnce(new Error('db down'));
+        await conn.onFrame(frame('heartbeat', { app_build_id: 'b1' }, 'hb-9'));
+        expect(socket.last()).toMatchObject({ type: 'heartbeat.ack', ref: 'hb-9' });
+        expect(socket.closed).toBeNull();
+        // Nothing was stored, so the next heartbeat tries again.
+        await conn.onFrame(frame('heartbeat', { app_build_id: 'b1' }));
+        expect(recordApp).toHaveBeenCalledTimes(2);
+      });
     });
 
     it('answers a malformed frame with an error and stays open', async () => {

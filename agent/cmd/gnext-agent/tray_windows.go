@@ -92,6 +92,7 @@ const (
 
 	cmdOpen      = 1
 	cmdHide      = 2
+	cmdOpenApp   = 3
 	cmdTestPrint = 100 // + the printer's index
 
 	addRetryTimer = 1
@@ -403,14 +404,17 @@ func (t *tray) menu() {
 	item := func(menu uintptr, flags, id uintptr, text string) {
 		procAppendMenuW.Call(menu, flags, id, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(text))))
 	}
+	// Gnext first, then the agent's settings, then what the agent is doing (§19.12).
+	item(m, mfString, cmdOpenApp, "باز کردن جی‌نکست")
+	item(m, mfString, cmdOpen, "تنظیمات عامل")
+	procAppendMenuW.Call(m, mfSeparator, 0, 0)
 	item(m, mfString|mfDisabled, 0, v.Title)
 	item(m, mfString|mfDisabled, 0, v.Cloud)
 	for _, it := range v.Items {
 		item(m, mfString|mfDisabled, 0, it.Label+": "+it.Text)
 	}
-	procAppendMenuW.Call(m, mfSeparator, 0, 0)
-	item(m, mfString, cmdOpen, "باز کردن صفحه تنظیمات عامل")
 	if len(v.Printers) > 0 {
+		procAppendMenuW.Call(m, mfSeparator, 0, 0)
 		sub, _, _ := procCreatePopupMenu.Call()
 		for i, p := range v.Printers {
 			item(sub, mfString, uintptr(cmdTestPrint+i), p.Name)
@@ -428,6 +432,8 @@ func (t *tray) menu() {
 	procPostMessageW.Call(uintptr(t.hwnd), wmNull, 0, 0)
 
 	switch {
+	case cmd == cmdOpenApp:
+		startApp()
 	case cmd == cmdOpen:
 		startWindow()
 	case cmd == cmdHide:

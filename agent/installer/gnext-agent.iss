@@ -68,9 +68,12 @@ Type: filesandordirs; Name: "{app}\saman.new"
 Type: filesandordirs; Name: "{app}\saman.old*"
 
 [Tasks]
-Name: "desktopicon"; Description: "Create a desktop shortcut to Gnext Agent"
+Name: "desktopicon"; Description: "Create desktop shortcuts to Gnext and Gnext Agent"
 
 [Icons]
+; Gnext, the cashier app the agent serves, opens in its own window (agent 2.4.0, agent-protocol 19.12).
+Name: "{autoprograms}\Gnext"; Filename: "{app}\gnext-agent.exe"; Parameters: "app"; Comment: "Gnext cashier"
+Name: "{autodesktop}\Gnext"; Filename: "{app}\gnext-agent.exe"; Parameters: "app"; Comment: "Gnext cashier"; Tasks: desktopicon
 Name: "{autoprograms}\Gnext Agent"; Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Comment: "Gnext branch agent settings"
 Name: "{autodesktop}\Gnext Agent"; Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Comment: "Gnext branch agent settings"; Tasks: desktopicon
 
@@ -89,7 +92,7 @@ Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=
 Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM gnext-agent.exe /FI ""SESSION ne 0"""; Flags: runhidden waituntilterminated; RunOnceId: "EndTrays"
 
 [Messages]
-FinishedLabel=The Gnext agent is installed and running. Its settings page (the Gnext Agent shortcut, or http://127.0.0.1:47800/agent/) shows the connection and lets a branch manager add printers and card terminals.%n%nLogs: C:\ProgramData\Gnext\Agent\logs\agent.log
+FinishedLabel=The Gnext agent is installed and running. The Gnext shortcut opens the cashier app, which also opens by itself when a user signs in to Windows (the agent's settings page can turn that off). The agent's settings page (the Gnext Agent shortcut, or http://127.0.0.1:47800/agent/) shows the connection and lets a branch manager add printers and card terminals.%n%nLogs: C:\ProgramData\Gnext\Agent\logs\agent.log
 
 [Code]
 var

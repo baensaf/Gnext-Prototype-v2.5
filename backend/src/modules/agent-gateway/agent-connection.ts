@@ -22,6 +22,12 @@ export interface AgentSocket {
   isOpen(): boolean;
 }
 
+/** The heartbeat fields of an agent with `app.serve` (§19.12), after checking. Absent means "not sent". */
+export interface AgentAppReport {
+  appBuildId?: string | null;
+  lanUrls?: string[];
+}
+
 export interface DeviceStatusEntry {
   kind: 'printer' | 'terminal';
   id: string;
@@ -39,7 +45,15 @@ export interface AgentConnectionDeps {
    * Stores what the agent said about itself in `hello`. Returns false when the agent is no
    * longer active: it was revoked between the upgrade and now.
    */
-  recordHello(agent: Agent, info: { agentVersion: string | null; protocolVersion: number }): Promise<boolean>;
+  recordHello(
+    agent: Agent,
+    info: { agentVersion: string | null; protocolVersion: number; capabilities: string[] },
+  ): Promise<boolean>;
+  /**
+   * Stores what a heartbeat said about the app the agent serves (§19.12). Called only when it
+   * differs from what the agent row holds, so a steady agent costs no write.
+   */
+  recordApp?(agent: Agent, info: AgentAppReport): Promise<void>;
   /** Stamps last_seen_at (throttled by the caller). */
   touch(agent: Agent): Promise<void>;
   minAgentVersion?: string | null;
@@ -157,7 +171,10 @@ export class AgentConnection {
     if (this.handshakeTimer) clearTimeout(this.handshakeTimer);
     this.handshakeTimer = null;
 
-    const stillActive = await this.deps.recordHello(this.agent, { agentVersion, protocolVersion: version });
+    const capabilities: string[] = Array.isArray(p.capabilities)
+      ? p.capabilities.filter((c: unknown): c is string => typeof c === 'string').slice(0, 32)
+      : [];
+    const stillActive = await this.deps.recordHello(this.agent, { agentVersion, protocolVersion: version, capabilities });
     if (!stillActive) {
       this.close(AGENT_CLOSE.REVOKED, 'AGENT_REVOKED');
       return;
@@ -215,6 +232,7 @@ export class AgentConnection {
       case 'heartbeat': {
         this.send(envelope('heartbeat.ack', { server_time: new Date().toISOString() }, message.id));
         await this.deps.touch(this.agent);
+        await this.recordApp(message.payload);
         return;
       }
       case 'device.status':
@@ -234,6 +252,22 @@ export class AgentConnection {
     }
     const result = await handler(message, this.handle!);
     if (result && message.type !== 'ack') this.sendAck(message.id, 'error' in result ? result.error : undefined);
+  }
+
+  /** Keeps `app_build_id` and `lan_urls` from a heartbeat, when they changed (§19.12). */
+  private async recordApp(payload: Record<string, any>) {
+    if (!this.deps.recordApp) return;
+    const report = parseAppReport(payload);
+    const changed: AgentAppReport = {};
+    if (report.appBuildId !== undefined && report.appBuildId !== (this.agent.app_build_id ?? null)) changed.appBuildId = report.appBuildId;
+    if (report.lanUrls !== undefined && !sameList(report.lanUrls, this.agent.lan_urls ?? null)) changed.lanUrls = report.lanUrls;
+    if (changed.appBuildId === undefined && changed.lanUrls === undefined) return;
+    try {
+      await this.deps.recordApp(this.agent, changed);
+    } catch (err: any) {
+      // The ack is already out; the next heartbeat tries again.
+      this.deps.log?.(`agent ${this.agent.id}: could not keep the app report: ${err?.message || err}`);
+    }
   }
 
   private recordDevices(handle: LiveAgentConnectionHandle, devices: unknown) {
@@ -289,6 +323,31 @@ export class AgentConnection {
   private sendError(code: EnvelopeErrorCode, message: string, ref: string | null) {
     this.send(envelope('error', { code, message }, ref));
   }
+}
+
+const BUILD_ID = /^[A-Za-z0-9_-]{1,64}$/;
+/** A LAN address is plain http(s) with no spaces or markup: head office's page shows it as text. */
+const LAN_URL = /^https?:\/\/[^\s<>"'\x60\x5c]{1,200}$/;
+const MAX_LAN_URLS = 16;
+
+/**
+ * Reads the heartbeat's app fields. A field that is missing, or not what it should be, is "not
+ * sent" and changes nothing; `app_build_id: null` is sent and means the agent has no build.
+ */
+export function parseAppReport(payload: Record<string, any>): AgentAppReport {
+  const out: AgentAppReport = {};
+  const id = payload.app_build_id;
+  if (id === null) out.appBuildId = null;
+  else if (typeof id === 'string' && BUILD_ID.test(id)) out.appBuildId = id;
+  const urls = payload.lan_urls;
+  if (Array.isArray(urls)) {
+    out.lanUrls = [...new Set(urls.filter((u): u is string => typeof u === 'string' && LAN_URL.test(u)))].slice(0, MAX_LAN_URLS);
+  }
+  return out;
+}
+
+function sameList(a: string[], b: string[] | null): boolean {
+  return !!b && a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
 function expectsAck(type: string): boolean {

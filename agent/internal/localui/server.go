@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gnext/agent/internal/agent"
@@ -65,6 +66,10 @@ type Host interface {
 	State() State
 	// Enrol redeems a code, saves the identity, and restarts the agent on it.
 	Enrol(ctx context.Context, server, code string) error
+	// AppAtSignIn says whether the app opens when a user signs in to Windows (§19.12), and
+	// SetAppAtSignIn changes it (config.json).
+	AppAtSignIn() bool
+	SetAppAtSignIn(on bool) error
 }
 
 type Server struct {
@@ -84,6 +89,11 @@ type Server struct {
 	ProxyRetry   Retry
 	// Reach tracks whether the cloud answers (reach.go); nil takes the defaults. Tests set the pace.
 	Reach *Reach
+	// Addresses lists the PC's private IPv4 addresses for LANURLs; nil takes PrivateIPv4s. For tests.
+	Addresses func() []string
+
+	// lanBound is the address the LAN listener is listening on, "" while it is not.
+	lanBound atomic.Value
 
 	initOnce  sync.Once
 	px        *Proxy
@@ -144,6 +154,8 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 				return
 			}
 			s.Log.Info("app for other registers on the network", "addr", lan)
+			s.lanBound.Store(lln.Addr().String())
+			defer s.lanBound.Store("")
 			if err := serve(ctx, lln, s.LANHandler()); err != nil {
 				s.Log.Error("the network listener stopped", "addr", lan, "err", err)
 			}
@@ -179,6 +191,7 @@ func (s *Server) Handler(addr string) http.Handler {
 	mux.Handle("GET /agent/", http.StripPrefix("/agent", http.FileServerFS(files)))
 
 	mux.HandleFunc("GET /agent/api/app/refresh", s.refreshApp)
+	mux.HandleFunc("POST /agent/api/settings", s.settings)
 	mux.HandleFunc("GET /agent/api/logs", s.logs)
 	mux.HandleFunc("POST /agent/api/enrol", s.enrol)
 	mux.HandleFunc("GET /agent/api/session", s.whoami)
@@ -293,6 +306,8 @@ func (s *Server) appStatus(lan bool) http.HandlerFunc {
 			out["branch_name"] = st.BranchName
 			out["stopped"] = st.Stopped
 			out["user"] = s.currentUser()
+			out["app_at_sign_in"] = s.Host.AppAtSignIn()
+			out["lan_urls"] = s.LANURLs()
 			if st.Agent != nil {
 				out["agent"] = st.Agent.Status()
 			}
@@ -330,6 +345,32 @@ func (s *Server) refreshApp(w http.ResponseWriter, r *http.Request) {
 		out["app"] = b.Info
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// settings is POST /agent/api/settings: this PC's own settings, for now whether the app opens at
+// Windows sign-in (§19.12). It needs the manager's session like the other changes.
+func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
+	if s.sessionToken() == "" {
+		fail(w, http.StatusUnauthorized, "UNAUTHENTICATED", "برای تغییر تنظیمات وارد شوید.")
+		return
+	}
+	var in struct {
+		AppAtSignIn *bool `json:"app_at_sign_in"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	if in.AppAtSignIn == nil {
+		fail(w, http.StatusBadRequest, "INVALID_PAYLOAD", "درخواست نامعتبر است.")
+		return
+	}
+	if err := s.Host.SetAppAtSignIn(*in.AppAtSignIn); err != nil {
+		s.Log.Warn("could not save a setting", "err", err)
+		fail(w, http.StatusInternalServerError, "SETTINGS_NOT_SAVED", "ذخیره‌ی تنظیمات انجام نشد: "+err.Error())
+		return
+	}
+	s.Log.Info("setting changed from the settings page", "app_at_sign_in", *in.AppAtSignIn)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "app_at_sign_in": *in.AppAtSignIn})
 }
 
 func (s *Server) logs(w http.ResponseWriter, r *http.Request) {

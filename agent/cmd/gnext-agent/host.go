@@ -31,8 +31,10 @@ type host struct {
 	renderer *printing.BrowserRenderer
 	restart  chan struct{}
 	app      *appcache.Cache
+	// lanURLs lists the addresses of the app for other registers (§19.12); set before the agent starts.
+	lanURLs func() []string
 
-	mu        sync.Mutex
+	mu       sync.Mutex
 	server    string
 	appOrigin string // where the frontend build comes from: app_url, else server (§19.7)
 	id        *store.Identity
@@ -85,6 +87,28 @@ func (h *host) State() localui.State {
 		st.Enrolled, st.AgentID, st.BranchName = true, h.id.AgentID, h.id.BranchName
 	}
 	return st
+}
+
+// AppAtSignIn implements localui.Host: config.json says whether the app opens at Windows sign-in.
+func (h *host) AppAtSignIn() bool {
+	c, _ := store.LoadInstallConfig()
+	return c.OpenAppAtSignIn()
+}
+
+// SetAppAtSignIn implements localui.Host.
+func (h *host) SetAppAtSignIn(on bool) error { return store.SetAppAtSignIn(on) }
+
+// appReport is what each heartbeat says about the app (§19.12).
+func (h *host) appReport() (string, []string) {
+	build := ""
+	if b := h.app.Current(); b != nil {
+		build = b.BuildID
+	}
+	var urls []string
+	if h.lanURLs != nil {
+		urls = h.lanURLs()
+	}
+	return build, urls
 }
 
 // Enrol implements localui.Host.
@@ -158,6 +182,7 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 		Printer:       &printing.Printer{Renderer: h.renderer},
 		Log:           h.log,
 		Welcomed:      func() { update.Cleanup(""); h.app.Kick() },
+		AppReport:     h.appReport,
 		SavedConfig:   loadDevices(h.log),
 		ConfigChanged: func(c *protocol.Config) { saveDevices(c, h.log) },
 	})

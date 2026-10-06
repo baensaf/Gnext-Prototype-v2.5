@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 // Home is the agent's data folder. GNEXT_AGENT_HOME overrides it for development.
@@ -84,7 +85,13 @@ type InstallConfig struct {
 	// AppURL, when set, is where the agent takes the frontend build from instead of Server: for local
 	// development, where the frontend is `vite preview` on another port (§19.7). The API is always Server.
 	AppURL string `json:"app_url,omitempty"`
+	// AppAtSignIn says whether the app opens when a user signs in to Windows (§19.12). Absent means
+	// yes: the setting is on until the settings page turns it off.
+	AppAtSignIn *bool `json:"app_at_sign_in,omitempty"`
 }
+
+// OpenAppAtSignIn reports whether the app opens at Windows sign-in: on unless the config says off.
+func (c InstallConfig) OpenAppAtSignIn() bool { return c.AppAtSignIn == nil || *c.AppAtSignIn }
 
 // AppOrigin is the frontend's address: AppURL if set, else Server.
 func (c InstallConfig) AppOrigin() string {
@@ -108,6 +115,28 @@ func LoadInstallConfig() (InstallConfig, error) {
 }
 
 func SaveInstallConfig(c InstallConfig) error { return writeJSON(ConfigPath(), c) }
+
+var configMu sync.Mutex
+
+// SetAppAtSignIn changes app_at_sign_in and nothing else in config.json, which it creates if the PC
+// has none yet (the setting is the PC's, not the enrolment's, so it does not wait for a server).
+func SetAppAtSignIn(on bool) error {
+	configMu.Lock()
+	defer configMu.Unlock()
+	var c InstallConfig
+	if err := readJSON(ConfigPath(), &c); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	c.AppAtSignIn = &on
+	return writeJSON(ConfigPath(), c)
+}
+
+// OpenAppAtSignIn is what the service asks when a user signs in: the setting is on and the PC knows
+// its server. A PC that was never configured has no app to open yet.
+func OpenAppAtSignIn() bool {
+	c, _ := LoadInstallConfig() // c is filled in even when the server is missing
+	return c.Server != "" && c.OpenAppAtSignIn()
+}
 
 // Identity is identity.json, written by enrol. The device key is kept encrypted with DPAPI
 // (machine scope) where the platform has it.

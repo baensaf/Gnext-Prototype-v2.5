@@ -107,6 +107,8 @@ function render() {
   const terminals = (cfg.terminals || []).filter((t) => t.active || t.driver);
   $('#s-devices').textContent = a ? `${fa((cfg.printers || []).length)} چاپگر، ${fa(terminals.length)} کارت‌خوان` : '—';
 
+  renderRegisters(s);
+
   const user = s.user;
   $('#who').textContent = user ? `${user.display_name || user.username} (${user.role})` : '';
   $('#signin').hidden = !!user || !s.enrolled;
@@ -120,6 +122,83 @@ function render() {
 
   renderDevices(a, cfg, terminals);
 }
+
+// ---- registers on this network, the app build, open at sign-in ----
+function renderRegisters(s) {
+  const urls = s.lan_urls || [];
+  // Redraw the list only when it changes, so the 3-second refresh does not steal a click on Copy.
+  const key = JSON.stringify(urls);
+  if (key !== renderRegisters.last) {
+    renderRegisters.last = key;
+    $('#lan-urls').replaceChildren(
+      ...urls.map((u) =>
+        el('li', {}, el('code', {}, u), el('button', { class: 'btn sm', type: 'button', onclick: (e) => copyText(u, e.currentTarget) }, 'کپی')),
+      ),
+    );
+  }
+  $('#lan-none').hidden = urls.length > 0;
+
+  const app = s.app;
+  $('#app-build').textContent = app?.build_id || 'هنوز دریافت نشده';
+  $('#app-built').textContent = when(app?.built_at);
+  $('#app-downloaded').textContent = when(app?.downloaded_at);
+
+  // Leave the box alone while a change is on its way, or it would flip back for a moment.
+  const box = $('#at-signin');
+  if (!box.disabled) box.checked = s.app_at_sign_in !== false;
+}
+
+async function copyText(text, button) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    // No clipboard API (or no permission): select the text in a hidden field and copy that.
+    const ta = el('textarea', { class: 'offscreen' });
+    ta.value = text;
+    document.body.append(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    if (!ok) return toast('کپی نشد؛ آدرس را با دست انتخاب کنید.', true);
+  }
+  const old = button.textContent;
+  button.textContent = 'کپی شد';
+  setTimeout(() => (button.textContent = old), 1500);
+}
+
+$('#app-refresh').addEventListener('click', () => {
+  asManager(async () => {
+    const btn = $('#app-refresh');
+    btn.disabled = true;
+    toast('در حال بررسی نسخهٔ جدید…');
+    try {
+      const res = await api('GET', '/agent/api/app/refresh');
+      toast(res.changed ? 'نسخهٔ جدید جی‌نکست دریافت شد.' : 'نسخهٔ برنامه به‌روز است.');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+});
+
+$('#at-signin').addEventListener('change', (e) => {
+  const box = e.currentTarget;
+  const wanted = box.checked;
+  box.disabled = true;
+  asManager(async () => {
+    try {
+      await api('POST', '/agent/api/settings', { app_at_sign_in: wanted });
+      state.app_at_sign_in = wanted;
+      toast(wanted ? 'جی‌نکست از ورود بعدی به ویندوز خودکار باز می‌شود.' : 'جی‌نکست دیگر هنگام ورود به ویندوز خودکار باز نمی‌شود.');
+    } catch (err) {
+      box.checked = !wanted; // not saved
+      throw err;
+    }
+  }).finally(() => {
+    box.disabled = false;
+    // Signing in was refused or cancelled: asManager returned without running the change.
+    if (state?.app_at_sign_in !== undefined) box.checked = state.app_at_sign_in !== false;
+  });
+});
 
 function statusOf(a, kind, id) {
   return (a?.devices || []).find((d) => d.kind === kind && d.id === id)?.status || 'UNKNOWN';

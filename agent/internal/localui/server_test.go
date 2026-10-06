@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -21,6 +22,19 @@ type fakeHost struct {
 	agent     *agent.Agent
 	enrols    []string
 	enrolOK   bool
+	// atSignIn is the app_at_sign_in setting; setErr makes saving it fail.
+	atSignIn bool
+	setErr   error
+}
+
+func (h *fakeHost) AppAtSignIn() bool { return h.atSignIn }
+
+func (h *fakeHost) SetAppAtSignIn(on bool) error {
+	if h.setErr != nil {
+		return h.setErr
+	}
+	h.atSignIn = on
+	return nil
 }
 
 func (h *fakeHost) State() State {
@@ -242,5 +256,110 @@ func TestRefreshNeedsTheManagersSession(t *testing.T) {
 	// Signed in, but this server has no app cache (App is nil): a clear answer, not a crash.
 	if rec := call(h, "GET", "/agent/api/app/refresh", "", nil); rec.Code != 409 || !strings.Contains(rec.Body.String(), "APP_CACHE_OFF") {
 		t.Fatalf("with a session and no cache: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// The settings page's own settings (§19.12): the status route shows them on the loopback listener
+// only, and changing one needs the manager's session.
+func TestSettingsAreShownOnLoopbackOnlyAndChangedByAManager(t *testing.T) {
+	var seen []string
+	srv := fakeCloud(t, &seen)
+	host := &fakeHost{cloud: &cloud.Client{Server: srv.URL, Key: "gak_k", Version: "1.0.0"}, atSignIn: true}
+	s := newServer(host)
+	s.Addresses = func() []string { return []string{"192.168.1.10", "10.0.0.7"} }
+	s.lanBound.Store("0.0.0.0:47801")
+	h := s.Handler(DefaultAddr)
+
+	var st struct {
+		AppAtSignIn *bool    `json:"app_at_sign_in"`
+		LANURLs     []string `json:"lan_urls"`
+	}
+	rec := call(h, "GET", "/agent/api/status", "", nil)
+	if err := json.Unmarshal(rec.Body.Bytes(), &st); err != nil || st.AppAtSignIn == nil || !*st.AppAtSignIn {
+		t.Fatalf("status: %s", rec.Body)
+	}
+	if len(st.LANURLs) != 2 || st.LANURLs[0] != "http://192.168.1.10:47801/" || st.LANURLs[1] != "http://10.0.0.7:47801/" {
+		t.Fatalf("lan_urls = %v", st.LANURLs)
+	}
+
+	// The LAN listener answers exactly §19.8: neither field.
+	lanReq := httptest.NewRequest("GET", "/agent/api/status", nil)
+	lanRec := httptest.NewRecorder()
+	s.LANHandler().ServeHTTP(lanRec, lanReq)
+	if strings.Contains(lanRec.Body.String(), "lan_urls") || strings.Contains(lanRec.Body.String(), "app_at_sign_in") {
+		t.Fatalf("the LAN listener leaks settings: %s", lanRec.Body)
+	}
+
+	if rec := call(h, "POST", "/agent/api/settings", `{"app_at_sign_in":false}`, nil); rec.Code != 401 || !host.atSignIn {
+		t.Fatalf("without a session: %d, setting %v", rec.Code, host.atSignIn)
+	}
+	if rec := call(h, "POST", "/agent/api/login", `{"username":"m","password":"right"}`, nil); rec.Code != 200 {
+		t.Fatalf("sign-in: %d", rec.Code)
+	}
+	if rec := call(h, "POST", "/agent/api/settings", `{}`, nil); rec.Code != 400 {
+		t.Fatalf("no field: %d", rec.Code)
+	}
+	if rec := call(h, "POST", "/agent/api/settings", `{"app_at_sign_in":false}`, map[string]string{"X-Gnext-Local": ""}); rec.Code != 403 {
+		t.Fatalf("without the local header: %d", rec.Code)
+	}
+	if rec := call(h, "POST", "/agent/api/settings", `{"app_at_sign_in":false}`, nil); rec.Code != 200 || host.atSignIn {
+		t.Fatalf("turn off: %d %s, setting %v", rec.Code, rec.Body, host.atSignIn)
+	}
+	rec = call(h, "GET", "/agent/api/status", "", nil)
+	if !strings.Contains(rec.Body.String(), `"app_at_sign_in":false`) {
+		t.Fatalf("status after: %s", rec.Body)
+	}
+	host.setErr = io.ErrClosedPipe
+	if rec := call(h, "POST", "/agent/api/settings", `{"app_at_sign_in":true}`, nil); rec.Code != 500 || !strings.Contains(rec.Body.String(), "SETTINGS_NOT_SAVED") {
+		t.Fatalf("a failed save: %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestLANURLsFollowTheListenerAndThePCsPrivateAddresses(t *testing.T) {
+	ips := []string{"192.168.1.10", "10.0.0.7"}
+	if got := lanURLs("0.0.0.0:47801", ips); len(got) != 2 || got[0] != "http://192.168.1.10:47801/" {
+		t.Errorf("all addresses: %v", got)
+	}
+	if got := lanURLs("[::]:47801", ips); len(got) != 2 {
+		t.Errorf("IPv6 any: %v", got)
+	}
+	if got := lanURLs("127.0.0.1:18801", ips); len(got) != 1 || got[0] != "http://127.0.0.1:18801/" {
+		t.Errorf("one address: %v", got)
+	}
+	for _, none := range []string{"", "garbage"} {
+		if got := lanURLs(none, ips); got == nil || len(got) != 0 {
+			t.Errorf("bound %q: %#v, want an empty list", none, got)
+		}
+	}
+	if got := lanURLs("0.0.0.0:47801", nil); got == nil || len(got) != 0 {
+		t.Errorf("no private address: %#v, want an empty list", got)
+	}
+	s := newServer(&fakeHost{})
+	if got := s.LANURLs(); got == nil || len(got) != 0 {
+		t.Errorf("a listener that is not listening: %#v", got)
+	}
+}
+
+func TestPrivateIPv4sKeepsTheBranchNetworkOnly(t *testing.T) {
+	addr := func(cidr string) net.Addr {
+		ip, n, _ := net.ParseCIDR(cidr)
+		n.IP = ip
+		return n
+	}
+	got := privateIPv4s([]netIface{
+		{Name: "Ethernet", Up: true, Addrs: []net.Addr{addr("192.168.1.10/24"), addr("fe80::1/64"), addr("2001:db8::1/64")}},
+		{Name: "Wi-Fi", Up: true, Addrs: []net.Addr{addr("10.0.0.7/8"), addr("192.168.1.10/24")}},
+		{Name: "Ethernet 2", Up: false, Addrs: []net.Addr{addr("192.168.9.9/24")}},
+		{Name: "Loopback Pseudo-Interface 1", Up: true, Loopback: true, Addrs: []net.Addr{addr("127.0.0.1/8")}},
+		{Name: "vEthernet (WSL)", Up: true, Addrs: []net.Addr{addr("172.20.0.1/20")}},
+		{Name: "VirtualBox Host-Only Network", Up: true, Addrs: []net.Addr{addr("192.168.56.1/24")}},
+		{Name: "Ethernet 3", Up: true, Addrs: []net.Addr{addr("169.254.3.4/16"), addr("8.8.4.4/24"), addr("172.16.5.5/12"), addr("100.64.0.9/10")}},
+	})
+	want := []string{"192.168.1.10", "10.0.0.7", "172.16.5.5"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("addresses = %v, want %v", got, want)
+	}
+	if got := privateIPv4s(nil); got == nil || len(got) != 0 {
+		t.Fatalf("no adapters: %#v, want an empty list", got)
 	}
 }

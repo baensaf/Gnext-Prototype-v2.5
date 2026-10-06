@@ -10,7 +10,7 @@ import { Agent } from '../../entities/Agent.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { AgentAuthService, deviceKeyFromHeader } from './agent-auth.service';
 import { AgentConfigService } from './agent-config.service';
-import { AgentConnection } from './agent-connection';
+import { AgentAppReport, AgentConnection } from './agent-connection';
 import { AgentMessageHandlers } from './agent-message-handlers.service';
 import { AGENT_CLOSE, MAX_FRAME_BYTES } from './agent-protocol';
 import { AgentSessionsService } from './agent-sessions.service';
@@ -94,6 +94,7 @@ export class AgentWsServer implements OnApplicationBootstrap, OnApplicationShutd
         branchName: async (a) =>
           (await this.branchRepo.findOne({ where: { id: a.branch_id, tenant_id: a.tenant_id }, withDeleted: true }))?.name ?? null,
         recordHello: (a, info) => this.recordHello(a, info),
+        recordApp: (a, info) => this.recordApp(a, info),
         touch: (a) => this.auth.touch(a),
         minAgentVersion: process.env.AGENT_MIN_VERSION || null,
         latestRelease: () => this.releases.latest(),
@@ -123,17 +124,31 @@ export class AgentWsServer implements OnApplicationBootstrap, OnApplicationShutd
     });
   }
 
-  private async recordHello(agent: Agent, info: { agentVersion: string | null; protocolVersion: number }) {
+  private async recordHello(
+    agent: Agent,
+    info: { agentVersion: string | null; protocolVersion: number; capabilities: string[] },
+  ) {
     const now = new Date();
     const result = await this.agentRepo.update(
       { id: agent.id, status: 'ACTIVE' },
-      { agent_version: info.agentVersion, protocol_version: info.protocolVersion, last_seen_at: now },
+      { agent_version: info.agentVersion, protocol_version: info.protocolVersion, capabilities: info.capabilities, last_seen_at: now },
     );
     if (!result.affected) return false;
     agent.agent_version = info.agentVersion;
     agent.protocol_version = info.protocolVersion;
+    agent.capabilities = info.capabilities;
     agent.last_seen_at = now;
     return true;
+  }
+
+  /** The build the agent serves and its LAN addresses, from a heartbeat (§19.12). */
+  private async recordApp(agent: Agent, info: AgentAppReport) {
+    const set: Partial<Agent> = {};
+    if (info.appBuildId !== undefined) set.app_build_id = info.appBuildId;
+    if (info.lanUrls !== undefined) set.lan_urls = info.lanUrls;
+    // Only these columns, and only while active: a concurrent revoke is never written back.
+    const result = await this.agentRepo.update({ id: agent.id, status: 'ACTIVE' }, set);
+    if (result.affected) Object.assign(agent, set);
   }
 }
 
