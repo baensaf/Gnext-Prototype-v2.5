@@ -134,6 +134,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
 
 const ORDER_TYPES = ['DINE_IN', 'TAKEAWAY', 'PICKUP', 'DELIVERY', 'AGGREGATOR'];
 const CHANNELS = ['POS', 'KIOSK', 'ONLINE', 'AGGREGATOR'];
+// A busy branch takes about 300 orders a day, so a page holds 100 by default.
 const PAGE_SIZES = [25, 50, 100];
 const SORTABLE = ['placed_at', 'grand_total', 'outstanding_total', 'order_number'] as const;
 
@@ -195,7 +196,7 @@ const DEFAULTS = {
   tab: 'ALL',
   f: encodeFilterModel(DEFAULT_FILTER_MODEL),
   page: '0',
-  size: '25',
+  size: '100',
   sort: 'placed_at',
   dir: 'desc',
 };
@@ -267,7 +268,7 @@ export function OrdersWorkflowPage() {
   );
   const query = param('q');
   const page = Math.max(0, Number(param('page', '0')) || 0);
-  const pageSize = PAGE_SIZES.includes(Number(param('size'))) ? Number(param('size')) : 25;
+  const pageSize = PAGE_SIZES.includes(Number(param('size'))) ? Number(param('size')) : 100;
   const sortField = (SORTABLE as readonly string[]).includes(param('sort')) ? (param('sort') as OrderListQuery['sort']) : 'placed_at';
   const sortDir: 'asc' | 'desc' = param('dir') === 'asc' ? 'asc' : 'desc';
   const drawerOrderId = searchParams.get('order');
