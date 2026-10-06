@@ -17,8 +17,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// A window of the agent's own: the settings page, or the offline till. Each is one per user; a
-// second start finds the first by its title and brings it to the front.
+// A window of the agent's own: the settings page. One per user; a second start finds the first by
+// its title and brings it to the front.
 type windowSpec struct {
 	title  string
 	path   string // on the settings server
@@ -27,7 +27,7 @@ type windowSpec struct {
 	width  uint
 	height uint
 	// reopen: after an update the window closes and opens again from the new binary, so the
-	// old one is not kept in use (§9). Not the till: its page holds the cart being rung up.
+	// old one is not kept in use (§9).
 	reopen string
 }
 
@@ -36,8 +36,6 @@ const windowTitle = "Gnext Agent — عامل شعبه"
 
 var (
 	settingsWindow = windowSpec{title: windowTitle, mutex: `Local\GnextAgentWindow`, data: "agent-window", width: 1120, height: 780, reopen: "open"}
-	// The till takes a larger window: it is the register the cashier works at all day.
-	tillWindow = windowSpec{title: "صندوق جی‌نکست — Gnext", path: tillPath, mutex: `Local\GnextTillWindow`, data: "till-window", width: 1366, height: 860}
 )
 
 // appIconID is the icon resource go-winres puts in the exe (winres/winres.json).
@@ -55,9 +53,6 @@ var (
 // tab. One window per user: a second call brings the first to the front. Without WebView2 the
 // page opens in the browser as before.
 func runWindow() int { return showWindow(settingsWindow) }
-
-// runTillWindow shows the offline till (§13.14) the same way, in a window of its own.
-func runTillWindow() int { return showWindow(tillWindow) }
 
 func showWindow(spec windowSpec) int {
 	runtime.LockOSThread()
@@ -159,9 +154,6 @@ func raiseWindow(title string) {
 
 // startWindow opens the settings window from the tray, as its own process.
 func startWindow() { startCommand("open") }
-
-// startTill opens the offline till from the tray, as its own process.
-func startTill() { startCommand("till") }
 
 func startCommand(command string) {
 	exe, err := os.Executable()

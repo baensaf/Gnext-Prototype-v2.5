@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"os"
@@ -13,16 +11,13 @@ import (
 	"time"
 
 	"gnext/agent/internal/agent"
-	"gnext/agent/internal/branchdata"
 	"gnext/agent/internal/cloud"
 	"gnext/agent/internal/journal"
 	"gnext/agent/internal/localui"
-	"gnext/agent/internal/offline"
 	"gnext/agent/internal/payment"
 	"gnext/agent/internal/printing"
 	"gnext/agent/internal/protocol"
 	"gnext/agent/internal/store"
-	"gnext/agent/internal/till"
 	"gnext/agent/internal/update"
 )
 
@@ -32,22 +27,15 @@ import (
 type host struct {
 	log      *slog.Logger
 	journal  *journal.Journal
-	outbox   *offline.Outbox
-	orders   *till.Store
 	renderer *printing.BrowserRenderer
 	restart  chan struct{}
-	// lanURLs are where paired devices open the till (§18.6); set once the settings server exists.
-	lanURLs func() []string
 
 	mu      sync.Mutex
 	server  string
 	id      *store.Identity
 	agent   *agent.Agent
 	client  *cloud.Client
-	till    *till.Till
 	stopped string
-	// callNumbers is the last POS call count written to disk.
-	callNumbers protocol.CallNumbers
 }
 
 func newHost(log *slog.Logger) (*host, error) {
@@ -55,66 +43,24 @@ func newHost(log *slog.Logger) (*host, error) {
 	if err != nil {
 		return nil, err
 	}
-	ob, err := offline.Open(store.OfflinePath())
-	if err != nil {
-		j.Close()
-		return nil, err
-	}
-	ob.Log = log
-	orders, err := till.OpenStore(store.TillOrdersPath())
-	if err != nil {
-		j.Close()
-		ob.Close()
-		return nil, err
-	}
-	h := &host{
+	return &host{
 		log:      log,
 		journal:  j,
-		outbox:   ob,
-		orders:   orders,
 		renderer: &printing.BrowserRenderer{ProfileDir: store.BrowserDir()},
 		restart:  make(chan struct{}, 1),
-	}
-	// The last count the cloud gave, for an agent that starts offline (§13.9).
-	_ = store.LoadJSON(store.CallNumbersPath(), &h.callNumbers)
-	return h, nil
+	}, nil
 }
 
 func (h *host) close() {
 	h.renderer.Close()
 	h.journal.Close()
-	h.outbox.Close()
-	h.orders.Close()
-}
-
-// cloudCallCount is the POS call count from the last heartbeat.ack (§13.9).
-func (h *host) cloudCallCount() (string, int) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.callNumbers.BusinessDate, h.callNumbers.POS
-}
-
-// upload hands an ended offline order to the outbox; one it already holds is handed over.
-func (h *host) upload(payload json.RawMessage) error {
-	if err := h.outbox.Add(payload); err != nil && !errors.Is(err, offline.ErrExists) {
-		return err
-	}
-	return nil
-}
-
-// tillOpensAtSignIn is whether the till window opens when a Windows user signs in (§16.8).
-func (h *host) tillOpensAtSignIn() bool {
-	h.mu.Lock()
-	t := h.till
-	h.mu.Unlock()
-	return t != nil && t.OpensAtSignIn()
 }
 
 // State implements localui.Host.
 func (h *host) State() localui.State {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	st := localui.State{Server: h.server, Agent: h.agent, Cloud: h.client, Till: h.till, Stopped: h.stopped}
+	st := localui.State{Server: h.server, Agent: h.agent, Cloud: h.client, Stopped: h.stopped}
 	if h.id != nil {
 		st.Enrolled, st.AgentID, st.BranchName = true, h.id.AgentID, h.id.BranchName
 	}
@@ -171,7 +117,7 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 	cfg, cfgErr := store.LoadInstallConfig()
 	id, idErr := store.LoadIdentity()
 	h.mu.Lock()
-	h.server, h.agent, h.client, h.till, h.id, h.stopped = cfg.Server, nil, nil, nil, nil, ""
+	h.server, h.agent, h.client, h.id, h.stopped = cfg.Server, nil, nil, nil, ""
 	h.mu.Unlock()
 	if cfgErr != nil || idErr != nil {
 		if !errors.Is(idErr, store.ErrNotEnrolled) && idErr != nil {
@@ -184,66 +130,14 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 	defer cancel()
 	var exitCode atomic.Int32
 	client := &cloud.Client{Server: cfg.Server, Key: id.DeviceKey, Version: version}
-	// The branch snapshot and the staff list are pulled after every welcome, where a 304 costs
-	// nothing, and on data.changed (§12.2, §13.3).
-	staff := &branchdata.Staff{
-		Dir: store.BranchDataDir(), Fetch: client.Staff, NotModified: cloud.ErrNotModified,
-		Seal: store.Seal, Unseal: store.Unseal, Log: h.log,
-	}
-	data := &branchdata.Keeper{Dir: store.BranchDataDir(), Fetch: client, NotModified: cloud.ErrNotModified, Log: h.log, Staff: staff}
-	var a *agent.Agent
-	// The offline till sells from the snapshot and signs in from the staff list (§13).
-	tl := &till.Till{
-		Path: store.TillPath(), PairPath: store.TillPairingsPath(), Staff: staff.Load, Snapshot: data.Load, Log: h.log,
-		// Where paired devices open the till (§18.6), from the settings server once it is up.
-		LANURLs: func() []string {
-			if h.lanURLs == nil {
-				return nil
-			}
-			return h.lanURLs()
-		},
-		Connected:      func() bool { return a.Status().Connected },
-		ConnectedSince: func() *time.Time { return a.Status().ConnectedSince },
-		Store:          h.orders,
-		Upload:         h.upload,
-		// The upload backlog, for the till's "orders being sent" (§16.7).
-		Backlog:        func() int { return h.outbox.Status().PendingOrders },
-		CloudCallCount: h.cloudCallCount,
-		// Offline card charges use the terminal's driver and queue, with no cloud command (§13.7).
-		Charge: func(terminalID, attemptID, amount string) (till.CardResult, error) {
-			out, err := a.ChargeLocal(terminalID, attemptID, amount)
-			if err != nil {
-				return till.CardResult{}, fmt.Errorf("%w: %v", till.ErrChargeNotStarted, err)
-			}
-			return till.CardResult{
-				Status: out.Status, RRN: out.RRN, STAN: out.STAN, CardPANMasked: out.CardPANMasked,
-				ResponseCode: out.BankResponseCode, Message: out.Message,
-			}, nil
-		},
-		// Offline tickets use the printer and queue a cloud print.job does (§13.8).
-		Print: func(printerID, documentType, label, html string, copies int) error {
-			return a.PrintLocal(printerID, documentType, label, html, copies)
-		},
-		Printers: func() []till.PrinterInfo {
-			var out []till.PrinterInfo
-			for _, p := range a.Printers() {
-				out = append(out, till.PrinterInfo{ID: p.ID, Code: p.Code, Name: p.Name})
-			}
-			return out
-		},
-	}
-	a = agent.New(agent.Options{
+	a := agent.New(agent.Options{
 		Version:       version,
 		WSURL:         id.WSURL,
 		Headers:       client.Headers(),
 		Journal:       h.journal,
 		Printer:       &printing.Printer{Renderer: h.renderer},
 		Log:           h.log,
-		Welcomed:      func() { update.Cleanup(""); data.Trigger(); h.outbox.Trigger() },
-		DataChanged:   data.Trigger,
-		SyncStatus:    func() any { return syncStatus(data.Status(), h.outbox.Status()) },
-		TillStatus:    func() any { return tl.Heartbeat() },
-		CallNumbers:   h.saveCallNumbers,
+		Welcomed:      func() { update.Cleanup("") },
 		SavedConfig:   loadDevices(h.log),
 		ConfigChanged: func(c *protocol.Config) { saveDevices(c, h.log) },
 	})
@@ -261,12 +155,9 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 		LockBridge: payment.LockBridge,
 	}
 	h.mu.Lock()
-	h.id, h.agent, h.client, h.till = &id, a, client, tl
+	h.id, h.agent, h.client = &id, a, client
 	h.mu.Unlock()
 	go updateLoop(runCtx, a, up, h.log)
-	go data.Run(runCtx)
-	go h.outbox.Run(runCtx, client)
-	go tl.Run(runCtx, 30*time.Second)
 
 	done := make(chan error, 1)
 	go func() { done <- a.Run(runCtx) }()
@@ -313,7 +204,7 @@ func updateLoop(ctx context.Context, a *agent.Agent, up *update.Updater, log *sl
 }
 
 // loadDevices returns the config the cloud last sent, kept for an agent that starts offline
-// (§13.2), or nil when there is none.
+// (devices.json), or nil when there is none.
 func loadDevices(log *slog.Logger) *protocol.Config {
 	var c protocol.Config
 	if err := store.LoadJSON(store.DevicesPath(), &c); err != nil {
@@ -328,32 +219,5 @@ func loadDevices(log *slog.Logger) *protocol.Config {
 func saveDevices(c *protocol.Config, log *slog.Logger) {
 	if err := store.SaveJSON(store.DevicesPath(), c); err != nil {
 		log.Warn("could not keep the device config on disk", "err", err)
-	}
-}
-
-// saveCallNumbers keeps the POS call count from the last heartbeat.ack (§13.9), writing only
-// when it moved: it changes with orders, not with every heartbeat.
-func (h *host) saveCallNumbers(n protocol.CallNumbers) {
-	h.mu.Lock()
-	same := h.callNumbers == n
-	h.callNumbers = n
-	h.mu.Unlock()
-	if same {
-		return
-	}
-	if err := store.SaveJSON(store.CallNumbersPath(), n); err != nil {
-		h.log.Warn("could not keep the call-number count", "err", err)
-	}
-}
-
-// syncStatus is the heartbeat's sync block (§12.7): the snapshot held and the order backlog.
-func syncStatus(data branchdata.Status, orders offline.Status) map[string]any {
-	return map[string]any{
-		"data_version":      data.DataVersion,
-		"data_pulled_at":    data.PulledAt,
-		"pending_orders":    orders.PendingOrders,
-		"oldest_pending_at": orders.OldestPendingAt,
-		"last_upload_at":    orders.LastUploadAt,
-		"last_upload_error": orders.LastUploadError,
 	}
 }

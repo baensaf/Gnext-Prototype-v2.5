@@ -22,19 +22,14 @@ func openBrowser(url string) error { return exec.Command("xdg-open", url).Start(
 
 func runTray() int { println("the tray is Windows only"); return 2 }
 
-func launchTrays(context.Context, *slog.Logger, func() bool) {}
+func launchTrays(context.Context, *slog.Logger) {}
+
+func removeLegacyFirewallRule(*slog.Logger) {}
 
 func attachConsole() {}
 
 func runWindow() int {
 	if err := openBrowser("http://" + uiAddr()); err != nil {
-		return 1
-	}
-	return 0
-}
-
-func runTillWindow() int {
-	if err := openBrowser("http://" + uiAddr() + tillPath); err != nil {
 		return 1
 	}
 	return 0

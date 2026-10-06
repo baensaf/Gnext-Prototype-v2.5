@@ -36,8 +36,6 @@ type fakeCloud struct {
 	closeWith websocket.StatusCode
 	// heartbeatS is welcome's heartbeat interval (20 s unless a test needs beats sooner).
 	heartbeatS int
-	// callNumbers, when set, goes in every heartbeat.ack.
-	callNumbers *protocol.CallNumbers
 
 	mu    sync.Mutex
 	conn  *websocket.Conn
@@ -106,7 +104,7 @@ func (fc *fakeCloud) serve(w http.ResponseWriter, r *http.Request) {
 			fc.sendOn(c, protocol.TypeAck, env.ID, protocol.Ack{OK: true})
 		}
 		if env.Type == protocol.TypeHeartbeat {
-			fc.sendOn(c, protocol.TypeHeartbeatAck, env.ID, protocol.HeartbeatAck{ServerTime: protocol.Now(time.Now()), CallNumbers: fc.callNumbers})
+			fc.sendOn(c, protocol.TypeHeartbeatAck, env.ID, protocol.HeartbeatAck{ServerTime: protocol.Now(time.Now())})
 			select {
 			case fc.beats <- env:
 			default:
@@ -259,8 +257,6 @@ type harness struct {
 	driver  *stubDriver
 	cancel  context.CancelFunc
 	done    chan error
-	// dataChanged receives each data.changed the agent passed on.
-	dataChanged chan struct{}
 }
 
 func testConfig(p *printerLAN) protocol.Config {
@@ -291,7 +287,7 @@ func startWith(t *testing.T, dir string, cloud *fakeCloud, drv *stubDriver, key 
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &harness{cloud: cloud, journal: j, driver: drv, done: make(chan error, 1), dataChanged: make(chan struct{}, 10)}
+	h := &harness{cloud: cloud, journal: j, driver: drv, done: make(chan error, 1)}
 	opts := Options{
 		Version: "1.0.0",
 		WSURL:   cloud.wsURL(),
@@ -305,7 +301,6 @@ func startWith(t *testing.T, dir string, cloud *fakeCloud, drv *stubDriver, key 
 			}
 			return nil
 		},
-		DataChanged:  func() { h.dataChanged <- struct{}{} },
 		ResultResend: 300 * time.Millisecond,
 		BackoffMax:   200 * time.Millisecond,
 	}
@@ -396,6 +391,10 @@ func TestRefusesExpiredAndUnknownDevices(t *testing.T) {
 
 	cloud.command("cmd-sync", "sync.orders", map[string]any{})
 	wantRefusal(t, cloud.next(ofType(protocol.TypeAck, "cmd-sync")), protocol.ErrUnknownType)
+
+	// The removed offline-selling commands (§19.2) are unknown to this agent.
+	cloud.command("cmd-data", "data.changed", map[string]any{"data_version": "abc"})
+	wantRefusal(t, cloud.next(ofType(protocol.TypeAck, "cmd-data")), protocol.ErrUnknownType)
 }
 
 func wantRefusal(t *testing.T, ack protocol.Envelope, code string) {
@@ -508,7 +507,7 @@ func TestUnknownKeyStops(t *testing.T) {
 	h.cancel()
 }
 
-// An agent restarted with the internet down still reaches its printers (§13.2).
+// An agent restarted with the internet down still reaches its printers (devices.json).
 func TestSavedConfigIsUsedWhileTheCloudIsUnreachable(t *testing.T) {
 	lan := newPrinterLAN(t)
 	cloud := newFakeCloud(t, protocol.Config{})
@@ -563,141 +562,25 @@ func TestEveryConfigFromTheCloudIsHandedOnToKeep(t *testing.T) {
 	}
 }
 
-func TestHeartbeatCarriesTheTillAndItsAckTheCallCount(t *testing.T) {
+// The offline-selling blocks (till, sync) are gone from the heartbeat (§19.2).
+func TestHeartbeatCarriesOnlyInFlightAndUnackedResults(t *testing.T) {
 	lan := newPrinterLAN(t)
 	cloud := newFakeCloud(t, testConfig(lan))
 	cloud.heartbeatS = 1
-	cloud.callNumbers = &protocol.CallNumbers{BusinessDate: "2026-09-24", POS: 41}
-	counts := make(chan protocol.CallNumbers, 10)
-	h := startWith(t, t.TempDir(), cloud, &stubDriver{}, "gak_test", func(o *Options) {
-		o.TillStatus = func() any { return map[string]any{"terminal_id": nil, "mode": "ONLINE", "open_orders": 0} }
-		o.CallNumbers = func(n protocol.CallNumbers) { counts <- n }
-	})
+	h := start(t, t.TempDir(), cloud, &stubDriver{})
 	defer h.stop(t)
 	cloud.waitConnected()
 
 	select {
 	case beat := <-cloud.beats:
-		var hb struct {
-			Till map[string]any `json:"till"`
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(beat.Payload, &fields); err != nil {
+			t.Fatal(err)
 		}
-		_ = json.Unmarshal(beat.Payload, &hb)
-		if hb.Till["mode"] != "ONLINE" || hb.Till["open_orders"] != float64(0) {
-			t.Fatalf("heartbeat till = %v", hb.Till)
+		if len(fields) != 2 || fields["in_flight"] == nil || fields["unacked_results"] == nil {
+			t.Fatalf("heartbeat fields = %v, want only in_flight and unacked_results", fields)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("no heartbeat")
-	}
-	select {
-	case n := <-counts:
-		if n != (protocol.CallNumbers{BusinessDate: "2026-09-24", POS: 41}) {
-			t.Fatalf("call count = %+v", n)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("heartbeat.ack's call count was not passed on")
-	}
-}
-
-func TestDataChangedIsAckedAndPassedOn(t *testing.T) {
-	lan := newPrinterLAN(t)
-	cloud := newFakeCloud(t, testConfig(lan))
-	h := start(t, t.TempDir(), cloud, &stubDriver{})
-	defer h.stop(t)
-	cloud.waitConnected()
-
-	cloud.command("cmd-data", protocol.TypeDataChanged, map[string]any{"data_version": "abc"})
-	var a protocol.Ack
-	_ = json.Unmarshal(cloud.next(ofType(protocol.TypeAck, "cmd-data")).Payload, &a)
-	if !a.OK {
-		t.Fatalf("data.changed ack = %+v, want ok", a)
-	}
-	select {
-	case <-h.dataChanged:
-	case <-time.After(5 * time.Second):
-		t.Fatal("data.changed was not passed on")
-	}
-}
-
-func TestChargeLocalUsesTheTerminalsDriverAndQueueWithoutTheCloud(t *testing.T) {
-	stub := "stub"
-	drv := &stubDriver{block: make(chan struct{})}
-	a := New(Options{
-		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
-		SavedConfig: &protocol.Config{Terminals: []protocol.Terminal{{ID: "t1", Active: true, Driver: &stub, ChargeTimeoutS: 5}}},
-		NewDriver: func(t protocol.Terminal) payment.Driver {
-			if t.Driver != nil && *t.Driver == "stub" {
-				return drv
-			}
-			return nil
-		},
-	})
-
-	if _, err := a.ChargeLocal("t9", "att-0", "1000"); !errors.Is(err, ErrNoTerminal) {
-		t.Fatalf("unknown terminal: %v", err)
-	}
-	a.Updating(true)
-	if _, err := a.ChargeLocal("t1", "att-0", "1000"); !errors.Is(err, ErrUpdating) {
-		t.Fatalf("while updating: %v", err)
-	}
-	a.Updating(false)
-	if drv.charges != 0 {
-		t.Fatalf("refused charges reached the terminal: %d", drv.charges)
-	}
-
-	type res struct {
-		out payment.Outcome
-		err error
-	}
-	got := make(chan res, 1)
-	go func() {
-		out, err := a.ChargeLocal("t1", "att-1", "1250000")
-		got <- res{out, err}
-	}()
-	// While the customer is at the terminal, an update waits.
-	deadline := time.Now().Add(2 * time.Second)
-	for a.Idle() && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if a.Idle() {
-		t.Fatal("the agent says idle during a charge")
-	}
-	close(drv.block)
-	r := <-got
-	if r.err != nil || r.out.Status != protocol.PayApproved || r.out.RRN == "" || drv.charges != 1 {
-		t.Fatalf("charge = %+v, %v (charges %d)", r.out, r.err, drv.charges)
-	}
-	if !a.Idle() {
-		t.Fatal("still busy after the charge")
-	}
-}
-
-func TestPrintLocalPrintsOnTheConfiguredPrinterWithoutTheCloud(t *testing.T) {
-	lan := newPrinterLAN(t)
-	cfg := testConfig(lan)
-	cfg.Printers = append(cfg.Printers, protocol.Printer{ID: "p-off", Code: "OFF", Active: false,
-		Connection: &protocol.Connection{Kind: "tcp", Host: "127.0.0.1", Port: lan.port()}})
-	a := New(Options{
-		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Printer:     &printing.Printer{Renderer: whiteRenderer{}, StatusTimeout: 50 * time.Millisecond},
-		SavedConfig: &cfg,
-	})
-	if ps := a.Printers(); len(ps) != 1 || ps[0].ID != "p1" {
-		t.Fatalf("printers = %+v", ps)
-	}
-	if err := a.PrintLocal("p-off", "KITCHEN_TICKET", "", "<p>x</p>", 1); !errors.Is(err, ErrNoPrinter) {
-		t.Fatalf("inactive printer: %v", err)
-	}
-	if err := a.PrintLocal("p9", "KITCHEN_TICKET", "", "<p>x</p>", 1); !errors.Is(err, ErrNoPrinter) {
-		t.Fatalf("unknown printer: %v", err)
-	}
-	if err := a.PrintLocal("p1", "KITCHEN_TICKET", "گریل", "<p>۱۳۷</p>", 1); err != nil {
-		t.Fatal(err)
-	}
-	deadline := time.Now().Add(3 * time.Second)
-	for lan.count() == 0 && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if lan.count() != 1 || !a.Idle() {
-		t.Fatalf("printed %d tickets, idle %v", lan.count(), a.Idle())
 	}
 }

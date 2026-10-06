@@ -11,18 +11,16 @@ import (
 	"testing"
 
 	"gnext/agent/internal/cloud"
-	"gnext/agent/internal/till"
 )
 
 type fakeHost struct {
 	cloud   *cloud.Client
-	till    *till.Till
 	enrols  []string
 	enrolOK bool
 }
 
 func (h *fakeHost) State() State {
-	return State{Enrolled: h.cloud != nil, Server: "https://gnext.test", Cloud: h.cloud, Till: h.till}
+	return State{Enrolled: h.cloud != nil, Server: "https://gnext.test", Cloud: h.cloud}
 }
 
 func (h *fakeHost) Enrol(_ context.Context, server, code string) error {
@@ -157,5 +155,20 @@ func TestEnrolPassesTheCloudsAnswerOn(t *testing.T) {
 	}
 	if host.enrols[0] != "https://gnext.test ABCD-EFGH" {
 		t.Fatalf("host got %v", host.enrols)
+	}
+}
+
+// Agent 2.0.0 has no till, no pairing and no proxy of the cloud API (§19.2).
+func TestTheOfflineTillRoutesAreGone(t *testing.T) {
+	h := newTestServer(&fakeHost{})
+	for _, path := range []string{"/till/", "/api/till/state", "/api/pairings", "/api/v1/orders"} {
+		if rec := call(h, "GET", path, "", nil); rec.Code != 404 {
+			t.Errorf("GET %s = %d, want 404", path, rec.Code)
+		}
+	}
+	for _, path := range []string{"/api/till/cloud-login", "/api/pairing-codes", "/api/v1/auth/login"} {
+		if rec := call(h, "POST", path, `{}`, nil); rec.Code != 404 && rec.Code != 405 {
+			t.Errorf("POST %s = %d, want 404 or 405", path, rec.Code)
+		}
 	}
 }

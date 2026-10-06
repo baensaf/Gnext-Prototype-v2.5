@@ -32,17 +32,9 @@ type Options struct {
 	NewDriver func(protocol.Terminal) payment.Driver
 	// Welcomed is called after every welcome (the updater deletes the old binary then).
 	Welcomed func()
-	// DataChanged is called when the cloud says the branch snapshot changed (§12.3).
-	DataChanged func()
-	// SyncStatus, when set, is sent in every heartbeat (§12.7).
-	SyncStatus func() any
-	// TillStatus, when set, is sent in every heartbeat as `till` (§13.10).
-	TillStatus func() any
-	// CallNumbers is called with the POS call count each heartbeat.ack carries (§13.9).
-	CallNumbers func(protocol.CallNumbers)
 
-	// SavedConfig is the config kept from the last run, used until the cloud sends one, so an
-	// agent restarted while offline still reaches its devices (§13.2).
+	// SavedConfig is the config kept from the last run (devices.json), used until the cloud sends
+	// one, so an agent restarted with no internet still reaches its devices.
 	SavedConfig *protocol.Config
 	// ConfigChanged is called with every config the cloud sends, to keep it on disk.
 	ConfigChanged func(*protocol.Config)
@@ -301,12 +293,6 @@ func (a *Agent) heartbeat(ctx context.Context, c *websocket.Conn, interval time.
 		}
 		unacked, _ := a.o.Journal.UnackedResults()
 		hb := protocol.Heartbeat{InFlight: int(a.running.Load()), UnackedResults: len(unacked)}
-		if a.o.SyncStatus != nil {
-			hb.Sync = a.o.SyncStatus()
-		}
-		if a.o.TillStatus != nil {
-			hb.Till = a.o.TillStatus()
-		}
 		a.send(protocol.TypeHeartbeat, "", hb)
 	}
 }
@@ -327,9 +313,6 @@ func (a *Agent) handle(data []byte) {
 		var p protocol.HeartbeatAck
 		if json.Unmarshal(env.Payload, &p) == nil {
 			a.applyClock(p.ServerTime)
-			if p.CallNumbers != nil && a.o.CallNumbers != nil {
-				a.o.CallNumbers(*p.CallNumbers)
-			}
 		}
 		a.lastBeat.Store(time.Now().UnixNano())
 	case protocol.TypeAck:
@@ -388,12 +371,6 @@ func (a *Agent) command(env protocol.Envelope) {
 	case protocol.TypeCheckUpdate:
 		a.ack(env.ID)
 		a.triggerUpdate()
-
-	case protocol.TypeDataChanged:
-		a.ack(env.ID)
-		if a.o.DataChanged != nil {
-			a.o.DataChanged()
-		}
 
 	case protocol.TypePrintJob:
 		var job protocol.PrintJob
@@ -514,82 +491,6 @@ func (a *Agent) runCharge(env protocol.Envelope, ch protocol.PaymentCharge, t pr
 		out = payment.Outcome{Status: protocol.PayUnknown, ErrorCode: protocol.ErrBadResponse, Message: err.Error()}
 	}
 	a.finish(env.ID, protocol.TypePaymentResult, paymentResult(ch.PaymentID, ch.AttemptID, ch.TerminalID, out, started))
-}
-
-// ErrNoPrinter: the printer is not in the config, not active, or on a connection this build
-// cannot drive.
-var ErrNoPrinter = errors.New("no active printer this agent can reach")
-
-// Printers are the active printers in the config that this build can drive, for the offline
-// till's routing and its reprint menu (§13.8).
-func (a *Agent) Printers() []protocol.Printer {
-	out := []protocol.Printer{}
-	for _, p := range a.cfg.Load().Printers {
-		if p.Active && printing.Supported(p) {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-// PrintLocal prints an offline ticket (§13.8) on the same printer and per-device queue as a
-// cloud print.job, with no cloud command, and returns once it printed or failed. A print is
-// not journaled: a ticket cut off by a restart is reprinted by hand, as online.
-func (a *Agent) PrintLocal(printerID, documentType, label, html string, copies int) error {
-	p, ok := findPrinter(a.cfg.Load(), printerID)
-	if !ok || !p.Active || !printing.Supported(p) {
-		return ErrNoPrinter
-	}
-	job := protocol.PrintJob{JobID: "offline", AttemptNo: 1, PrinterID: p.ID, DocumentType: documentType, Label: label, Copies: max(copies, 1)}
-	job.Content.Format, job.Content.HTML = "html", html
-	done := make(chan error, 1)
-	a.running.Add(1)
-	a.queue(p.ID) <- func() {
-		defer a.running.Add(-1)
-		done <- a.o.Printer.Print(context.Background(), p, job)
-	}
-	return <-done
-}
-
-// Refusals of ChargeLocal before the terminal is touched.
-var (
-	// ErrNoTerminal: the terminal is not in the config, not active, or its driver is not in this build.
-	ErrNoTerminal = errors.New("no active terminal with a supported driver")
-	// ErrUpdating: the agent is about to swap its binary and takes no new charge.
-	ErrUpdating = errors.New("the agent is updating")
-)
-
-// ChargeLocal charges a terminal for the offline till (§13.7): the same driver and per-device
-// queue as a cloud payment.charge, with no cloud command. The caller records the charge as
-// RUNNING on disk first (§4.6). It returns once the terminal has answered or the charge timed
-// out; only the errors above mean the amount never reached the terminal.
-func (a *Agent) ChargeLocal(terminalID, attemptID, amount string) (payment.Outcome, error) {
-	if a.updating.Load() {
-		return payment.Outcome{}, ErrUpdating
-	}
-	t, ok := findTerminal(a.cfg.Load(), terminalID)
-	var drv payment.Driver
-	if ok && t.Active {
-		drv = a.o.NewDriver(t)
-	}
-	if drv == nil {
-		return payment.Outcome{}, ErrNoTerminal
-	}
-	done := make(chan payment.Outcome, 1)
-	a.running.Add(1) // an update waits for it (Idle)
-	a.queue(t.ID) <- func() {
-		defer a.running.Add(-1)
-		timeout := time.Duration(max(t.ChargeTimeoutS, 90)) * time.Second
-		ctx, cancel := context.WithTimeout(context.Background(), timeout+15*time.Second)
-		defer cancel()
-		out, err := drv.Charge(ctx, payment.ChargeRequest{AttemptID: attemptID, Amount: amount, Timeout: timeout})
-		if err != nil {
-			// Once the amount may have reached the terminal, only UNKNOWN is honest (§7.3).
-			out = payment.Outcome{Status: protocol.PayUnknown, ErrorCode: protocol.ErrBadResponse, Message: err.Error()}
-		}
-		done <- out
-	}
-	return <-done, nil
 }
 
 func (a *Agent) runQuery(env protocol.Envelope, q protocol.PaymentQuery, drv payment.Driver) {

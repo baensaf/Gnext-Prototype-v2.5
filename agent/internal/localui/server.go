@@ -21,7 +21,6 @@ import (
 
 	"gnext/agent/internal/agent"
 	"gnext/agent/internal/cloud"
-	"gnext/agent/internal/till"
 )
 
 // DefaultAddr is where the page listens. Only this PC can reach it.
@@ -42,7 +41,6 @@ type State struct {
 	Stopped    string       // why the agent is not running, when it is not
 	Agent      *agent.Agent // nil while not running
 	Cloud      *cloud.Client
-	Till       *till.Till // nil while not enrolled
 }
 
 // Host is the agent process the page belongs to.
@@ -58,16 +56,11 @@ type Server struct {
 	LogFile string
 	Log     *slog.Logger
 	Addr    string
-	// LANAddr is where paired devices reach the till (§18.3): "" is every interface on
-	// DefaultLANPort, "off" serves none.
-	LANAddr string
 
 	mu       sync.Mutex
 	session  string
 	user     *cloud.LocalUser
 	lastUsed time.Time
-	// tillClouds are the till cashiers' cloud sessions (§16.3), by the till session they belong to.
-	tillClouds map[string]cloud.TillSession
 }
 
 // ListenAndServe serves until ctx ends.
@@ -81,7 +74,6 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		return err
 	}
 	srv := &http.Server{Handler: s.Handler(addr), ReadHeaderTimeout: 10 * time.Second}
-	go s.listenLAN(ctx)
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -109,42 +101,6 @@ func (s *Server) Handler(addr string) http.Handler {
 	mux.HandleFunc("POST /api/logout", s.logout)
 	mux.HandleFunc("POST /api/scan", s.scan)
 	mux.HandleFunc("POST /api/printers/{id}/test", s.testPrint)
-	// The offline till (§13.13); see till.go.
-	mux.HandleFunc("GET /api/till/state", s.tillState)
-	mux.HandleFunc("POST /api/till/login", s.tillLogin)
-	mux.HandleFunc("POST /api/till/logout", s.tillLogout)
-	mux.HandleFunc("POST /api/till/binding", s.tillBinding)
-	mux.HandleFunc("POST /api/till/open-at-sign-in", s.tillOpenAtSignIn)
-	mux.Handle("GET /till", http.RedirectHandler("/till/", http.StatusMovedPermanently))
-	mux.HandleFunc("GET /till/", s.tillScreen)
-	mux.HandleFunc("GET /api/till/menu", s.tillMenu)
-	mux.HandleFunc("POST /api/till/price", s.tillPrice)
-	// Its orders; see till_orders.go.
-	mux.HandleFunc("GET /api/till/orders", s.tillOrders)
-	mux.HandleFunc("POST /api/till/orders", s.tillNewOrder)
-	mux.HandleFunc("POST /api/till/orders/place", s.tillPlace)
-	mux.HandleFunc("GET /api/till/orders/{id}", s.tillOrder)
-	mux.HandleFunc("POST /api/till/orders/{id}/info", s.tillOrderInfo)
-	mux.HandleFunc("POST /api/till/orders/{id}/lines", s.tillAddLine)
-	mux.HandleFunc("POST /api/till/orders/{id}/lines/{line}/quantity", s.tillLineQuantity)
-	mux.HandleFunc("POST /api/till/orders/{id}/lines/{line}/void", s.tillVoidLine)
-	mux.HandleFunc("POST /api/till/orders/{id}/send", s.tillSend)
-	mux.HandleFunc("POST /api/till/orders/{id}/payments", s.tillPay)
-	mux.HandleFunc("POST /api/till/orders/{id}/finish", s.tillFinish)
-	mux.HandleFunc("POST /api/till/orders/{id}/print", s.tillPrint)
-	mux.HandleFunc("GET /api/till/printers", s.tillPrinters)
-	mux.HandleFunc("POST /api/till/orders/{id}/cancel", s.tillCancel)
-	mux.HandleFunc("POST /api/till/handover", s.tillHandover)
-	// The till online (§16); see cloud.go. Methods named, since "/api/v1/" and "GET /" would
-	// each be the more specific for a GET and the mux refuses such a pair.
-	mux.HandleFunc("POST /api/till/cloud-login", s.tillCloudLogin)
-	// Devices on the LAN (§18.5); they pair on the LAN listener, see lan.go.
-	mux.HandleFunc("POST /api/pairing-codes", s.pairingCode)
-	mux.HandleFunc("GET /api/pairings", s.pairings)
-	mux.HandleFunc("DELETE /api/pairings/{id}", s.unpair)
-	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
-		mux.HandleFunc(method+" /api/v1/", s.cloudProxy)
-	}
 	for _, kind := range []string{"printers", "terminals"} {
 		mux.HandleFunc("POST /api/"+kind, s.proxy(http.MethodPost, "/"+kind))
 		mux.HandleFunc("PATCH /api/"+kind+"/{id}", s.proxy(http.MethodPatch, "/"+kind+"/{id}"))
