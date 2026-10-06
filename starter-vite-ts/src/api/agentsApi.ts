@@ -22,6 +22,45 @@ export interface BranchAgent {
   revoke_reason?: string | null;
   /** Whether the agent holds a live connection to the cloud right now. */
   connected?: boolean;
+  /** What the agent announced in its last hello, e.g. `app.serve`; null before it ever connected. */
+  capabilities?: string[] | null;
+  /** The frontend build the agent serves, from its last heartbeat; null while it has none. */
+  app_build_id?: string | null;
+  /** The addresses other registers reach the agent on, from its last heartbeat. */
+  lan_urls?: string[] | null;
+}
+
+/** How the build an agent serves compares with the cloud's current one. */
+export type AgentAppState = 'NOT_SERVED' | 'UNKNOWN' | 'NO_BUILD' | 'UP_TO_DATE' | 'BEHIND';
+
+/**
+ * `cloudBuild` is the cloud's current build id (null when it could not be read). An agent without
+ * `app.serve` has no app; one that serves it but has not reported yet is UNKNOWN.
+ */
+export function agentAppState(agent: BranchAgent, cloudBuild: string | null): AgentAppState {
+  if (!agent.capabilities) return 'UNKNOWN';
+  if (!agent.capabilities.includes('app.serve')) return 'NOT_SERVED';
+  if (agent.app_build_id === undefined || (agent.app_build_id === null && agent.lan_urls == null)) return 'UNKNOWN';
+  if (agent.app_build_id === null) return 'NO_BUILD';
+  if (!cloudBuild) return 'UNKNOWN';
+  return agent.app_build_id === cloudBuild ? 'UP_TO_DATE' : 'BEHIND';
+}
+
+const BUILD_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * The build id of the frontend this page came from, read from its own /build-manifest.json (the
+ * cloud's current build, §19.7). Null when there is no manifest (a dev server) or it cannot be read.
+ */
+export async function fetchCloudBuildId(): Promise<string | null> {
+  try {
+    const res = await fetch('/build-manifest.json', { cache: 'no-store' });
+    if (!res.ok || !(res.headers.get('content-type') || '').includes('json')) return null;
+    const id = (await res.json())?.build_id;
+    return typeof id === 'string' && BUILD_ID.test(id) ? id : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface AgentDeviceStatus {

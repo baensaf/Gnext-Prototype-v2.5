@@ -34,8 +34,17 @@ type windowSpec struct {
 // windowTitle names the settings window.
 const windowTitle = "Gnext Agent — عامل شعبه"
 
+// appWindowTitle names the window of the cashier app (§19.12).
+const appWindowTitle = "Gnext"
+
 var (
 	settingsWindow = windowSpec{title: windowTitle, path: "/agent/", mutex: `Local\GnextAgentWindow`, data: "agent-window", width: 1120, height: 780, reopen: "open"}
+
+	// The app has a WebView2 folder of its own: its terminal id (localStorage) and its session cookie
+	// then stay with the register's window, and nothing the settings window does can touch them. It has
+	// no reopen: an update would otherwise close a register in the middle of a sale. The window keeps
+	// running on the old binary, which the updater only sets aside and deletes once it is free.
+	appWindow = windowSpec{title: appWindowTitle, path: "/", mutex: `Local\GnextAppWindow`, data: "app-window", width: 1280, height: 800}
 )
 
 // appIconID is the icon resource go-winres puts in the exe (winres/winres.json).
@@ -53,6 +62,9 @@ var (
 // tab. One window per user: a second call brings the first to the front. Without WebView2 the
 // page opens in the browser as before.
 func runWindow() int { return showWindow(settingsWindow) }
+
+// runApp shows Gnext, the cashier app the agent serves, the same way (§19.12).
+func runApp() int { return showWindow(appWindow) }
 
 func showWindow(spec windowSpec) int {
 	runtime.LockOSThread()
@@ -154,6 +166,9 @@ func raiseWindow(title string) {
 
 // startWindow opens the settings window from the tray, as its own process.
 func startWindow() { startCommand("open") }
+
+// startApp opens Gnext from the tray, as its own process.
+func startApp() { startCommand("app") }
 
 func startCommand(command string) {
 	exe, err := os.Executable()

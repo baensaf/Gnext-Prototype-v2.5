@@ -32,6 +32,18 @@ export class Agent {
   @Column({ type: 'int', nullable: true })
   protocol_version?: number | null;
 
+  /** What the agent said it can do in its last `hello` (protocol §4.2), e.g. `app.serve`. */
+  @Column({ type: 'jsonb', nullable: true })
+  capabilities?: string[] | null;
+
+  /** The frontend build the agent serves, from its last heartbeat (§19.12); null while it has none. */
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  app_build_id?: string | null;
+
+  /** The addresses other registers reach the agent on, from its last heartbeat (§19.12). */
+  @Column({ type: 'jsonb', nullable: true })
+  lan_urls?: string[] | null;
+
   @Column({ type: 'varchar', length: 128, nullable: true })
   hostname?: string | null;
 

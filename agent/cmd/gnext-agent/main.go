@@ -7,7 +7,8 @@
 //	gnext-agent.exe enrol --code XXXX-XXXX [--server https://…]
 //	gnext-agent.exe run        (console; the service runs the same loop)
 //	gnext-agent.exe [open]     (the settings window; the browser if WebView2 is missing)
-//	gnext-agent.exe tray       (status icon; the service starts one per signed-in user)
+//	gnext-agent.exe app        (Gnext, the cashier app, in a window; the Start-menu shortcut Gnext)
+//	gnext-agent.exe tray      (status icon; the service starts one per signed-in user)
 //	gnext-agent.exe version
 package main
 
@@ -45,6 +46,9 @@ func main() {
 	if len(os.Args) < 2 || os.Args[1] == "open" {
 		os.Exit(runWindow())
 	}
+	if os.Args[1] == "app" {
+		os.Exit(runApp())
+	}
 	if os.Args[1] == "tray" {
 		os.Exit(runTray())
 	}
@@ -72,6 +76,7 @@ func usage() {
   gnext-agent enrol --code XXXX-XXXX [--server https://app.example.ir]
   gnext-agent run
   gnext-agent [open]      the settings window
+  gnext-agent app         Gnext, the cashier app, in a window
   gnext-agent tray
   gnext-agent service install|uninstall|start|stop
   gnext-agent version
@@ -187,6 +192,7 @@ func run(ctx context.Context, console io.Writer) int {
 	go h.app.Run(ctx)
 
 	ui := &localui.Server{Host: h, Version: version, LogFile: logFile(), Log: log, Addr: uiAddr(), LANAddr: lanAddr(), App: h.app}
+	h.lanURLs = ui.LANURLs // before the agent starts: every heartbeat reports them (§19.12)
 	go func() {
 		if err := ui.ListenAndServe(ctx); err != nil {
 			log.Error("the app and settings page could not start", "addr", uiAddr(), "err", err)

@@ -151,6 +151,19 @@ type Heartbeat struct {
 	UnackedResults int `json:"unacked_results"`
 }
 
+// AppReport is what an agent with `app.serve` adds to every heartbeat (§19.12): the build it serves
+// (null while it has none) and the LAN addresses of its app (an empty list if the PC has none).
+type AppReport struct {
+	AppBuildID *string  `json:"app_build_id"`
+	LANURLs    []string `json:"lan_urls"`
+}
+
+// HeartbeatWithApp is a heartbeat that carries the app report.
+type HeartbeatWithApp struct {
+	Heartbeat
+	AppReport
+}
+
 type HeartbeatAck struct {
 	ServerTime string `json:"server_time"`
 }

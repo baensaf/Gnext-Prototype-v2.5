@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"gnext/agent/internal/store"
 	"gnext/agent/internal/winsession"
 )
 
@@ -31,6 +32,18 @@ func launchTrays(ctx context.Context, log *slog.Logger) {
 			log.Warn("tray not started", "session", session, "err", err)
 		}
 	}
+	// Gnext itself opens only for a user who signs in, never for those already signed in when the
+	// service starts: an update restarts the service, and would pull a register that is open, mid-sale,
+	// to the front (§19.12). The setting is read at each sign-in, so the settings page's change counts
+	// at the next one.
+	startApp := func(session uint32) {
+		if !store.OpenAppAtSignIn() {
+			return
+		}
+		if err := winsession.Start(session, []string{exe, "app"}, filepath.Dir(exe)); err != nil && !errors.Is(err, winsession.ErrNoUser) {
+			log.Warn("Gnext not opened at sign-in", "session", session, "err", err)
+		}
+	}
 	for _, s := range winsession.Active() {
 		start(s)
 	}
@@ -40,6 +53,7 @@ func launchTrays(ctx context.Context, log *slog.Logger) {
 			return
 		case s := <-trayLogons:
 			start(s)
+			startApp(s)
 		}
 	}
 }

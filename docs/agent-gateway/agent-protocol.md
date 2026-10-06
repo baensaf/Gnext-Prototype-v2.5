@@ -2987,6 +2987,37 @@ decoded counts as a charge route. `void` and `reverse` start nothing on a termin
   address. The page learns the cloud's current build by fetching its own
   `/build-manifest.json`.
 
+As built in 2.4.0 (S7):
+
+- **Window.** `gnext-agent app` (title *Gnext*, one window per user) uses a WebView2 folder of its own,
+  `%LOCALAPPDATA%\Gnext\app-window`, apart from the settings window's `agent-window`: the app's
+  `localStorage` (the register's terminal id) and its session cookie stay with it. Unlike the settings
+  window it is **not** closed and reopened after an agent update, which would drop a sale in
+  progress; it goes on running on the old binary, which the updater deletes once it is free (§9). The tray
+  menu is *Open Gnext*, *Agent settings*, then the status lines, test print and *hide*; a click on the
+  icon still opens the settings window.
+- **Sign-in.** The service starts `gnext-agent app` in a user's session on each `WTS_SESSION_LOGON`,
+  after the tray, if `app_at_sign_in` is not `false` and the PC has a `server`. Sessions already
+  signed in when the service starts get no app.
+- **Settings page.** `GET /agent/api/status` on the loopback listener adds `app_at_sign_in` (bool) and
+  `lan_urls`; the LAN listener's answer stays exactly §19.8. `POST /agent/api/settings`
+  `{ "app_at_sign_in": bool }` changes the setting and needs the manager session (`401 UNAUTHENTICATED`
+  otherwise).
+- **`lan_urls`** are `http://<ip>:<port>/` for each private IPv4 address (10/8, 172.16/12, 192.168/16)
+  of an adapter that is up and is not loopback or virtual (names with *vEthernet*, *WSL*, *VirtualBox*,
+  *VMware*, *Docker*, *Hyper-V*, *Bluetooth*, *Npcap*), with the port the LAN listener really
+  listens on; the list is empty while it is not listening. An agent started without a reporter sends the
+  heartbeat of §4.3 alone.
+- **Cloud.** Three nullable columns on `agent`: `capabilities` (from `hello`, so that the page knows
+  `app.serve` of a PC that is switched off), `app_build_id` and `lan_urls` (jsonb). A heartbeat updates a
+  column only when its value differs from the row's; a field that is absent, or that is not a build id
+  (`[A-Za-z0-9_-]{1,64}`) or not a list of at most 16 `http(s)://` addresses without spaces or markup,
+  leaves the column as it is. `GET /api/v1/agents` (and `/:id`, `/:id/health`) return them with the
+  rest of the row. The page compares `app_build_id` with the `build_id` of its own
+  `/build-manifest.json`: equal is *up to date*, different *behind*, `null` after a heartbeat *no build
+  yet*; with no readable manifest (a dev server, or the page itself served by an agent) it shows the
+  build id alone.
+
 ### 19.13 Files and config
 
 | Where | What |
@@ -3038,3 +3069,6 @@ For an agent that advertises `app.serve`:
       `resolve-terminal` of a payment are never retried, however the path is spelled; the key reaches
       the cloud under a lower-case header name.
 - [ ] `GET /agent/api/status` reports the WebSocket state and the served build.
+- [ ] Every `heartbeat` carries `app_build_id` (`null` while there is no build) and `lan_urls` (an empty list
+      if the PC has no private address); the app opens at Windows sign-in unless `app_at_sign_in` is off,
+      and never at the service's own start.

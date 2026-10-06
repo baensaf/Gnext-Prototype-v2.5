@@ -657,3 +657,58 @@ func TestHelloAdvertisesAppServe(t *testing.T) {
 		t.Fatalf("capabilities = %q", got)
 	}
 }
+
+// An agent with app.serve adds the build it serves and its LAN addresses to every heartbeat
+// (§19.12): null while it has no build, an empty list when the PC has no address.
+func TestHeartbeatCarriesTheAppBuildAndLANAddresses(t *testing.T) {
+	lan := newPrinterLAN(t)
+	cloud := newFakeCloud(t, testConfig(lan))
+	cloud.heartbeatS = 1
+	var mu sync.Mutex
+	build, urls := "9f2c41d7ab03e5c8", []string{"http://192.168.1.10:47801/"}
+	h := startWith(t, t.TempDir(), cloud, &stubDriver{}, "gak_test", func(o *Options) {
+		o.AppReport = func() (string, []string) {
+			mu.Lock()
+			defer mu.Unlock()
+			return build, urls
+		}
+	})
+	defer h.stop(t)
+	cloud.waitConnected()
+
+	next := func() map[string]json.RawMessage {
+		t.Helper()
+		select {
+		case beat := <-cloud.beats:
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal(beat.Payload, &fields); err != nil {
+				t.Fatal(err)
+			}
+			return fields
+		case <-time.After(5 * time.Second):
+			t.Fatal("no heartbeat")
+		}
+		return nil
+	}
+	f := next()
+	if string(f["app_build_id"]) != `"9f2c41d7ab03e5c8"` || string(f["lan_urls"]) != `["http://192.168.1.10:47801/"]` || f["in_flight"] == nil {
+		t.Fatalf("heartbeat = %v", f)
+	}
+
+	mu.Lock()
+	build, urls = "", nil
+	mu.Unlock()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		f = next()
+		if string(f["app_build_id"]) == "null" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("heartbeat still says %v", f)
+		}
+	}
+	if string(f["lan_urls"]) != "[]" {
+		t.Fatalf("lan_urls = %s, want an empty list", f["lan_urls"])
+	}
+}
