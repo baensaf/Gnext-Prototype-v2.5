@@ -79,14 +79,17 @@ Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Description: "Open Gnext 
 
 [UninstallRun]
 Filename: "{app}\gnext-agent.exe"; Parameters: "service uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveService"
-; The rule agents 1.x added so devices on the LAN reached Gnext POS (agent 2.0.0 deletes it itself at
-; service start; this covers an uninstall before that).
+; The rule the service adds at start so the branch's other registers reach the app on TCP 47801
+; (agent 2.1.0, agent-protocol 19.4).
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Gnext"""; Flags: runhidden waituntilterminated; RunOnceId: "RemoveLanFirewallRule"
+; The rule agents 1.x added so devices on the LAN reached Gnext POS (the service deletes it itself at
+; start; this covers an uninstall before that).
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Gnext POS"""; Flags: runhidden waituntilterminated; RunOnceId: "RemoveFirewallRule"
 ; The tray icons run from the same exe in users' sessions; end them so it can be deleted.
 Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM gnext-agent.exe /FI ""SESSION ne 0"""; Flags: runhidden waituntilterminated; RunOnceId: "EndTrays"
 
 [Messages]
-FinishedLabel=The Gnext agent is installed and running. Its settings page (the Gnext Agent shortcut, or http://127.0.0.1:47800) shows the connection and lets a branch manager add printers and card terminals.%n%nLogs: C:\ProgramData\Gnext\Agent\logs\agent.log
+FinishedLabel=The Gnext agent is installed and running. Its settings page (the Gnext Agent shortcut, or http://127.0.0.1:47800/agent/) shows the connection and lets a branch manager add printers and card terminals.%n%nLogs: C:\ProgramData\Gnext\Agent\logs\agent.log
 
 [Code]
 var

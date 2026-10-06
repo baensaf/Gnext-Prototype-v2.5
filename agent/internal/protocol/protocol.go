@@ -34,7 +34,8 @@ const (
 )
 
 // Capabilities this build advertises in hello.
-var Capabilities = []string{"print.html", "payment.charge", "payment.query"}
+// app.serve: the agent serves the cloud's cached frontend build and proxies the API (§19.3).
+var Capabilities = []string{"print.html", "payment.charge", "payment.query", "app.serve"}
 
 // Ack and envelope error codes (§8.1).
 const (

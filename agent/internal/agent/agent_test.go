@@ -39,6 +39,7 @@ type fakeCloud struct {
 
 	mu    sync.Mutex
 	conn  *websocket.Conn
+	hello protocol.Envelope // the last hello the agent sent
 	inbox chan protocol.Envelope
 	beats chan protocol.Envelope
 	conns chan struct{}
@@ -78,6 +79,9 @@ func (fc *fakeCloud) serve(w http.ResponseWriter, r *http.Request) {
 		c.Close(protocol.CloseHandshakeTimeout, "hello first")
 		return
 	}
+	fc.mu.Lock()
+	fc.hello = hello
+	fc.mu.Unlock()
 	fc.sendOn(c, protocol.TypeWelcome, hello.ID, map[string]any{
 		"protocol_version": 1, "session_id": "s", "server_time": protocol.Now(time.Now()),
 		"heartbeat_interval_s": fc.heartbeatS, "branch": map[string]string{"id": "b", "name": "Test"},
@@ -582,5 +586,74 @@ func TestHeartbeatCarriesOnlyInFlightAndUnackedResults(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("no heartbeat")
+	}
+}
+
+// The app's status route reads the session state from the agent (§19.8): down before the first
+// connect (since the agent started), up after welcome, down again when the cloud goes away, each
+// time with when it last changed.
+func TestConnectionReportsTheSessionAndWhenItChanged(t *testing.T) {
+	lan := newPrinterLAN(t)
+	cloud := newFakeCloud(t, testConfig(lan))
+	h := start(t, t.TempDir(), cloud, &stubDriver{})
+	defer h.stop(t)
+
+	if up, _ := h.agent.Connection(); up {
+		t.Fatal("connected before any welcome")
+	}
+	cloud.waitConnected()
+	var since time.Time
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var up bool
+		if up, since = h.agent.Connection(); up {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("Connection() never reported the session")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if d := time.Since(since); d < 0 || d > 5*time.Second {
+		t.Fatalf("since = %v, want about now", since)
+	}
+
+	cloud.mu.Lock()
+	sock := cloud.conn
+	cloud.mu.Unlock()
+	_ = sock.Close(websocket.StatusGoingAway, "test") // the cloud hangs up
+	for {
+		up, at := h.agent.Connection()
+		if !up {
+			if at.Before(since) {
+				t.Fatalf("down since %v, before the session came up at %v", at, since)
+			}
+			break
+		}
+		if time.Now().After(deadline.Add(5 * time.Second)) {
+			t.Fatal("Connection() never reported the drop")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// §19.3: the agent advertises app.serve in hello, beside the capabilities it already had.
+func TestHelloAdvertisesAppServe(t *testing.T) {
+	lan := newPrinterLAN(t)
+	cloud := newFakeCloud(t, testConfig(lan))
+	h := start(t, t.TempDir(), cloud, &stubDriver{})
+	defer h.stop(t)
+	cloud.waitConnected()
+
+	cloud.mu.Lock()
+	raw := cloud.hello.Payload
+	cloud.mu.Unlock()
+	var hello protocol.Hello
+	if err := json.Unmarshal(raw, &hello); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(hello.Capabilities, " ")
+	if got != "print.html payment.charge payment.query app.serve" {
+		t.Fatalf("capabilities = %q", got)
 	}
 }

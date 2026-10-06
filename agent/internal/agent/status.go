@@ -65,3 +65,14 @@ p { margin: 4px 0; }
 	job.Content.Format, job.Content.HTML = "html", doc
 	return a.o.Printer.Print(ctx, p, job)
 }
+
+// Connection says whether the WebSocket session with the cloud is up, and since when it has been in
+// that state: the app's status route (§19.8). Before the first connect it is down since the agent
+// started.
+func (a *Agent) Connection() (connected bool, since time.Time) {
+	connected = a.connectedAt.Load() != 0
+	if at := a.changedAt.Load(); at != 0 {
+		return connected, time.Unix(0, at)
+	}
+	return connected, a.startedAt
+}

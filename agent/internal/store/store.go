@@ -31,6 +31,9 @@ func UpdatesDir() string   { return filepath.Join(Home(), "updates") }
 func LogsDir() string      { return filepath.Join(Home(), "logs") }
 func BrowserDir() string   { return filepath.Join(Home(), "browser-profile") }
 
+// AppDir holds the cloud frontend builds the agent serves (§19.7): one folder per build and current.json.
+func AppDir() string { return filepath.Join(Home(), "app") }
+
 // DevicesPath keeps the last config the cloud sent (§6.1): the branch's printers and terminals,
 // for an agent restarted while offline.
 func DevicesPath() string { return filepath.Join(Home(), "devices.json") }
@@ -78,6 +81,17 @@ const (
 // InstallConfig is config.json, written by the installer.
 type InstallConfig struct {
 	Server string `json:"server"`
+	// AppURL, when set, is where the agent takes the frontend build from instead of Server: for local
+	// development, where the frontend is `vite preview` on another port (§19.7). The API is always Server.
+	AppURL string `json:"app_url,omitempty"`
+}
+
+// AppOrigin is the frontend's address: AppURL if set, else Server.
+func (c InstallConfig) AppOrigin() string {
+	if c.AppURL != "" {
+		return c.AppURL
+	}
+	return c.Server
 }
 
 func LoadInstallConfig() (InstallConfig, error) {
@@ -86,6 +100,7 @@ func LoadInstallConfig() (InstallConfig, error) {
 		return c, err
 	}
 	c.Server = strings.TrimRight(c.Server, "/")
+	c.AppURL = strings.TrimRight(strings.TrimSpace(c.AppURL), "/")
 	if c.Server == "" {
 		return c, fmt.Errorf("%s has no server", ConfigPath())
 	}

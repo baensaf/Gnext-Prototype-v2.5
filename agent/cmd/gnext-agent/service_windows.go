@@ -88,25 +88,52 @@ func repairBinaryPermissions() {
 	_ = cmd.Run()
 }
 
+// lanFirewallRule is the inbound rule that lets the branch's other registers reach the app on
+// TCP 47801 (§19.4). The installer deletes it on uninstall.
+const lanFirewallRule = "Gnext"
+
 // legacyFirewallRule is the inbound rule agents 1.x and the old installer added so that paired
-// devices on the LAN reached Gnext POS on TCP 47801. Agent 2.0.0 has no till and listens on no
-// such port, so it deletes the rule (§19.2). The next version brings its own rule back.
+// devices on the LAN reached Gnext POS on TCP 47801. Agent 2.0.0 deleted it (§19.2); it stays
+// deleted from PCs that skipped that version.
 const legacyFirewallRule = "Gnext POS"
 
-// removeLegacyFirewallRule deletes the old Gnext POS rule when it is there, at service start. The
-// service runs as SYSTEM, so an agent that updated itself needs no installer run. Any failure is
-// only logged: a rule for a port nothing listens on does no harm.
-func removeLegacyFirewallRule(log *slog.Logger) {
-	show := exec.Command("netsh", "advfirewall", "firewall", "show", "rule", "name="+legacyFirewallRule)
-	show.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	if show.Run() != nil {
+// manageFirewallRules runs at service start, one rule after the other: the old Gnext POS rule is
+// deleted, and the Gnext rule for the LAN listener is added if it is not there. The service runs as
+// SYSTEM, so an agent that updated itself needs no installer run. Any failure is only logged: the
+// register on this PC does not need the rule.
+func manageFirewallRules(log *slog.Logger) {
+	removeFirewallRule(log, legacyFirewallRule, "the old Gnext POS firewall rule")
+	ensureLANFirewallRule(log)
+}
+
+func netsh(args ...string) ([]byte, error) {
+	cmd := exec.Command("netsh", append([]string{"advfirewall", "firewall"}, args...)...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	return cmd.CombinedOutput()
+}
+
+func removeFirewallRule(log *slog.Logger, name, what string) {
+	if _, err := netsh("show", "rule", "name="+name); err != nil {
 		return // no such rule (netsh exits non-zero then)
 	}
-	del := exec.Command("netsh", "advfirewall", "firewall", "delete", "rule", "name="+legacyFirewallRule)
-	del.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	if out, err := del.CombinedOutput(); err != nil {
-		log.Warn("the old Gnext POS firewall rule was not removed", "err", err, "out", string(out))
+	if out, err := netsh("delete", "rule", "name="+name); err != nil {
+		log.Warn(what+" was not removed", "err", err, "out", string(out))
 		return
 	}
-	log.Info("removed the old Gnext POS firewall rule (agent 2.0.0 has no till)")
+	log.Info("removed " + what)
+}
+
+// ensureLANFirewallRule adds the Gnext rule: inbound TCP 47801 on the private and domain profiles
+// (not the public one: a café's network is not the branch's).
+func ensureLANFirewallRule(log *slog.Logger) {
+	if _, err := netsh("show", "rule", "name="+lanFirewallRule); err == nil {
+		return
+	}
+	out, err := netsh("add", "rule", "name="+lanFirewallRule, "dir=in", "action=allow", "protocol=TCP",
+		"localport=47801", "profile=private,domain")
+	if err != nil {
+		log.Warn("the firewall rule for the app on the branch network was not added", "err", err, "out", string(out))
+		return
+	}
+	log.Info("added the Gnext firewall rule for the branch network (TCP 47801, private and domain)")
 }

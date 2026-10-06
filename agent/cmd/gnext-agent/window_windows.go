@@ -35,7 +35,7 @@ type windowSpec struct {
 const windowTitle = "Gnext Agent — عامل شعبه"
 
 var (
-	settingsWindow = windowSpec{title: windowTitle, mutex: `Local\GnextAgentWindow`, data: "agent-window", width: 1120, height: 780, reopen: "open"}
+	settingsWindow = windowSpec{title: windowTitle, path: "/agent/", mutex: `Local\GnextAgentWindow`, data: "agent-window", width: 1120, height: 780, reopen: "open"}
 )
 
 // appIconID is the icon resource go-winres puts in the exe (winres/winres.json).
@@ -132,7 +132,7 @@ func showWindow(spec windowSpec) int {
 
 func agentAnswers(url string) bool {
 	c := http.Client{Timeout: 2 * time.Second}
-	resp, err := c.Get(url + "/api/status")
+	resp, err := c.Get(url + "/agent/api/status")
 	if err != nil {
 		return false
 	}

@@ -2537,7 +2537,9 @@ cloud that does not know the word ignores it (§2.1).
 
 - The LAN listener is on by default. The service adds the Windows Firewall rule *Gnext* (inbound,
   TCP 47801, private and domain profiles) when it starts, and the installer removes it on
-  uninstall.
+  uninstall. If the port is taken the agent logs it and goes on with the loopback listener alone.
+  For development `GNEXT_AGENT_UI_ADDR` and `GNEXT_AGENT_LAN_ADDR` (`off` for none) move the
+  listeners.
 - The page is plain HTTP on the shop's network, so it is not a secure context on the LAN (no
   `crypto.randomUUID`, no install-as-app). §19.11 says what the page does about it.
 - A browser keeps `sessionStorage` and `localStorage` per origin. `127.0.0.1:47800` and
@@ -2561,7 +2563,15 @@ cloud that does not know the word ignores it (§2.1).
   Its local-only rules (§13.13: `X-Gnext-Local: 1` and a local `Origin` on a request that
   changes something) belong to `/agent/api/*`. The proxied `/api/*` is the cloud's, and the
   page does not send them.
-- Any other method on an app path (not `/api/`, `/uploads/` or `/agent/`) is `405`.
+- Any other method on an app path (not `/api/`, `/uploads/` or `/agent/`) is `405`, with `Allow: GET, HEAD`.
+- As built in 2.1.0 (S3): `/agent` redirects to `/agent/`. On the loopback listener,
+  `/agent/api/status` also carries the agent's own fields that the settings page and the tray
+  read (`enrolled`, `server`, `agent_id`, `branch_name`, `stopped`, `user`, `agent`); the LAN
+  listener answers exactly §19.8. `/agent/api/app/refresh` answers `{ "ok": true, "changed":
+  bool, "files_fetched": n, "bytes": n, "app": {…}|null }`, `401 UNAUTHENTICATED` without the
+  manager session, and `502 APP_DOWNLOAD_FAILED` when the check failed. The agent's own
+  `/agent/*` answers carry the settings page's security headers (`X-Frame-Options`, a CSP,
+  `no-store`); the app and the proxied answers do not, they are the cloud's.
 
 ### 19.6 The proxy (S3)
 
@@ -2586,8 +2596,11 @@ gets the cloud's `3xx` as it is.
 plain HTTP on another host, and a browser would drop the cookie otherwise. The page's `Cookie` is
 passed on like any other header.
 
-**Time.** A request that takes over 30 s is cut off. `GET /api/v1/live/stream` (Server-Sent
-Events) has no time limit and is flushed event by event as it arrives.
+**Time.** The cloud has 30 s to answer a request (S3 counts it from the start of the attempt, to the
+cloud's response headers; an answer that has begun then streams with no further limit). `GET
+/api/v1/live/stream` (Server-Sent Events) has no time limit and is flushed event by event as it
+arrives; any answer of unknown length is flushed as it arrives too. A body cut off by the cloud
+after its headers ends the page's request as a failure, not as a short answer.
 
 **Failures.** When the cloud does not answer, the agent answers by the table in §19.10, with
 the web app's problem body:
@@ -2600,8 +2613,25 @@ the web app's problem body:
 `correlationId` is the page's `X-Correlation-Id`. S3 builds the first row of the table and the
 `504` row without retries; S5 adds the read retries.
 
+As built in 2.1.0 (S3):
+
+- A `502`, `503` or `504` from the cloud counts as its gateway's failure only when its body is not
+  JSON: nginx and the CDN answer HTML or plain text, the application always answers JSON, and a
+  route that answers `503` on purpose is passed on to the page as it is.
+- A request body over 16 MB is `413 PAYLOAD_TOO_LARGE` (at once when `Content-Length` says so,
+  else when the 16 MB are reached); a body the page's connection could not deliver is `400`.
+- An agent with no `server` answers `503 AGENT_NOT_CONFIGURED`. The page's `Accept-Encoding` goes
+  to the cloud and the answer comes back as the cloud sent it (the agent does not compress or
+  unpack).
+- The problem body is built by one function and the attempt to the cloud by another
+  (`localui/upstream.go`: `Attempt`, `classify`, `gatewayKind`, `answerFor`), so the retries of S5 and
+  S6 repeat an attempt and ask `answerFor` for the answer without touching the proxy.
+
 **Not proxied.** `/api/v1/agent/*` (the agent's own routes) and `/api/v1/agent-releases/*` are
-refused with `403`, on both listeners. A page of the agent's origin must not reach them.
+refused with `403` (`AGENT_ROUTE_BLOCKED`), on both listeners. A page of the agent's origin must not
+reach them. The path is decoded, cleaned of dot segments and doubled slashes and lower-cased
+before it is compared, as the cloud's nginx and Express would read it, so `/api/v1/%61gent/…` and
+`/api/v1/AGENT/…` are refused too, and so is a path that cannot be decoded.
 
 ### 19.7 The frontend cache (S3)
 
@@ -2652,6 +2682,28 @@ The frontend's `nginx.conf` serves `/build-manifest.json` and `/index.html` with
 A failed check or download keeps the current build and tries again with backoff. A build the
 agent serves is never changed while it serves it.
 
+As built in 2.1.0 (S3):
+
+- A failed check is tried again after 5 s, then 10 s, 20 s… up to the 5-minute interval; with no
+  `server` configured the agent looks again every 30 s. Checks run one at a time; the refresh route
+  waits for one in progress.
+- A new build is assembled in `<data>pp.tmp-<build_id>-…` and renamed to `<data>pp<build_id>`
+  only when every file is there and checked. Each build folder also holds the manifest as the
+  cloud sent it (`.manifest.json`), and **only the paths that manifest lists are ever served**;
+  `.manifest.json` and `build-manifest.json` themselves are not files of the app (the app routes
+  answer `index.html` for them). A file the agent already holds is hard-linked from the current or
+  previous build, or copied and checked against its hash where the disk does not allow a link.
+- A manifest is refused whole if a `path` is empty, absolute, has `..` or `.` elements, a backslash
+  or a colon, or is listed twice; if `sha256` is not 64 lower-case hex characters; if `size` is
+  negative; if `build_id` is not 1 to 64 letters, digits, `_` or `-`; or if there is no
+  `index.html`. A file is refused if its size or hash differs from the manifest.
+- `current.json` is `{ "build_id", "built_at", "downloaded_at", "previous" }`. If the cloud goes back
+  to the previous build, the agent switches to it from disk with no download. At start a build
+  with a file missing or of the wrong size is dropped and fetched again; folders an interrupted
+  download left are removed.
+- The `Content-Type` of a file comes from a table in the agent (`.js` is `text/javascript`, and so
+  on), not from the Windows registry.
+
 **Serving.** A path that is a file of the current build is that file. Any other path (not
 `/api/`, `/uploads/` or `/agent/`) is `index.html`, so the app's own routes work on reload.
 
@@ -2674,7 +2726,9 @@ The settings page and `/agent/api/status` still work.
 
 ### 19.8 `GET /agent/api/status`
 
-On both listeners, no authentication. For the app, which polls it (§19.10).
+On both listeners, no authentication. For the app, which polls it (§19.10). On the loopback
+listener the answer also carries the agent's own fields for the settings page and the tray (§19.5);
+the LAN listener answers only what is below. Both send `Cache-Control: no-store`.
 
 ```json
 { "version": "2.1.0",
