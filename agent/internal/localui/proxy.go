@@ -199,18 +199,22 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// retryable says whether a request may be sent to the cloud again after a failure (§19.10): a read
-// (GET, HEAD), except the live stream, which the page reconnects by itself. This is the one place
-// that decides it. S6 adds the writes that carry an Idempotency-Key here, and must keep out
-// every route that starts or checks a terminal charge (§19.11):
-//
-//	POST /api/v1/payments/:id/process
-//	POST /api/v1/payments/:id/check-terminal
+// idempotencyKeyHeader is the header that makes a write safe to repeat (§19.11): the cloud answers
+// a repeat of a request with the same key and body with the first answer, and does the work once.
+const idempotencyKeyHeader = "Idempotency-Key"
+
+// retryable says whether a request may be sent to the cloud again after a failure (§19.10, §19.11):
+// a read (GET, HEAD), or a write that carries an Idempotency-Key. Never the live stream, which the
+// page reconnects by itself, and never a route that starts or checks a terminal charge, key or not
+// (see isTerminalChargePath). This is the one place that decides it.
 func (p *Proxy) retryable(r *http.Request) bool {
 	if r.URL.Path == liveStreamPath {
 		return false
 	}
-	return isRead(r.Method)
+	if isRead(r.Method) {
+		return true
+	}
+	return strings.TrimSpace(r.Header.Get(idempotencyKeyHeader)) != "" && !isTerminalChargePath(r.URL.EscapedPath())
 }
 
 func hasBody(r *http.Request) bool {
@@ -237,6 +241,18 @@ func (p *Proxy) upstreamRequest(r *http.Request, server string, body io.Reader) 
 	stripHop(out.Header)
 	out.Header.Del("Expect")
 	out.Header.Del("Host")
+	// Go's transport repeats, by itself and unseen, a request that carries one of these headers when a
+	// kept-alive connection breaks after the request went out. The agent decides what is repeated, and
+	// has to know which attempts were written (§19.10): a card charge is never repeated (§19.11), and a
+	// repeat the transport made would hide whether an earlier attempt was written. The transport looks
+	// for the headers by their canonical name, and HTTP header names are not case-sensitive, so they
+	// go to the cloud under a lower-case one.
+	for _, name := range []string{idempotencyKeyHeader, "X-Idempotency-Key"} {
+		if v, ok := out.Header[name]; ok {
+			delete(out.Header, name)
+			out.Header[strings.ToLower(name)] = v
+		}
+	}
 	out.Host = "" // the cloud's own host name, from the URL
 
 	if ip, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
@@ -363,17 +379,52 @@ func rewriteCookie(c string) string {
 // first, as the cloud's nginx and Express would read it, so %61gent, dot segments, doubled slashes
 // and capitals do not get round it. A path that cannot be decoded is refused.
 func blockedPath(escaped string) bool {
-	p, err := url.PathUnescape(escaped)
-	if err != nil {
+	p, ok := cleanPath(escaped)
+	if !ok {
 		return true
 	}
-	p = strings.ToLower(path.Clean("/" + p))
 	for _, prefix := range []string{"/api/v1/agent", "/api/v1/agent-releases"} {
 		if p == prefix || strings.HasPrefix(p, prefix+"/") {
 			return true
 		}
 	}
 	return false
+}
+
+// cleanPath reads a request path as the cloud's nginx and Express would: decoded, cleaned of dot
+// segments, doubled slashes and a trailing slash, and lower-cased (Express routes ignore case). ok is
+// false for a path that cannot be decoded.
+func cleanPath(escaped string) (clean string, ok bool) {
+	p, err := url.PathUnescape(escaped)
+	if err != nil {
+		return "", false
+	}
+	return strings.ToLower(path.Clean("/" + p)), true
+}
+
+// terminalChargeRoutes are the routes under /api/v1/payments/:id/ that start or check a charge on a
+// card terminal, or settle one (§19.11), by the last segment of their path. The agent never repeats
+// them, key or not: a charge that was written and not answered may have reached the customer's card.
+//
+//	process           starts the charge on the terminal (POST /api/v1/payments/:id/process)
+//	check-terminal    asks the terminal how an unconfirmed charge ended
+//	correct           reverses a payment and takes a replacement, which may be a new card charge
+//	resolve-terminal  a manager settles an unconfirmed charge by hand from the terminal's report
+var terminalChargeRoutes = map[string]bool{
+	"process": true, "check-terminal": true, "correct": true, "resolve-terminal": true,
+}
+
+// isTerminalChargePath reports whether a request path is one of terminalChargeRoutes. The path is
+// read the way blockedPath reads it, so %70rocess, capitals and doubled slashes do not get round
+// it; one that cannot be decoded counts as one.
+func isTerminalChargePath(escaped string) bool {
+	p, ok := cleanPath(escaped)
+	if !ok {
+		return true
+	}
+	parts := strings.Split(strings.TrimPrefix(p, "/"), "/")
+	// api / v1 / payments / <id> / <route>
+	return len(parts) == 5 && parts[0] == "api" && parts[1] == "v1" && parts[2] == "payments" && terminalChargeRoutes[parts[4]]
 }
 
 // trackedBody remembers the error its reader gave, to tell a request that was too large or cut off

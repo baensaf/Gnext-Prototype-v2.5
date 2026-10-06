@@ -2,6 +2,7 @@ import type { AxiosError } from 'axios';
 
 import axios from 'axios';
 
+import { generateUuid } from 'src/utils/uuid';
 import { readDeviceTerminal } from 'src/utils/device-terminal';
 import { GATEWAY_ERROR, connectionProblemMessage } from 'src/utils/connection-problem';
 import { isGatewayFailure, reportCloudAnswered, reportCloudUnreachable } from 'src/utils/cloud-reachability';
@@ -31,17 +32,6 @@ export const setCsrfToken = (token: string | null) => {
 
 export const getCsrfToken = () => csrfTokenInMemory;
 
-const generateCorrelationId = (): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = Math.floor(Math.random() * 16);
-    const v = c === 'x' ? r : (r % 4) + 8;
-    return v.toString(16);
-  });
-};
-
 export const httpClient = axios.create({
   baseURL: CONFIG.serverUrl || '',
   withCredentials: true,
@@ -57,7 +47,7 @@ httpClient.interceptors.request.use((config) => {
   }
 
   // Attach Correlation ID
-  config.headers['X-Correlation-Id'] = generateCorrelationId();
+  config.headers['X-Correlation-Id'] = generateUuid();
 
   // Attach Accept-Language
   const currentLang = localStorage.getItem('gnext_locale') || 'fa';

@@ -86,6 +86,7 @@ import {
 import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 import { useCloudBack } from 'src/utils/cloud-back';
+import { newIdempotencyKey } from 'src/utils/idempotency';
 import { isNotSentMessage } from 'src/utils/connection-problem';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 import { addonMin, isPickOne, addonRuleLabel } from 'src/utils/addon-rule';
@@ -863,11 +864,14 @@ export function PosOrderPage() {
         })),
       };
 
+      // One key for this press: if the agent repeats the request after a lost answer, the cloud
+      // answers the first one's draft instead of making a second (agent-protocol §19.11).
+      const idempotencyKey = newIdempotencyKey();
       let draft: OrderHeader;
       if (activeDraftOrderId) {
-        draft = await orderApi.updateDraft(activeDraftOrderId, orderPayload);
+        draft = await orderApi.updateDraft(activeDraftOrderId, orderPayload, { idempotencyKey });
       } else {
-        draft = await orderApi.createOrder(orderPayload);
+        draft = await orderApi.createOrder(orderPayload, { idempotencyKey });
       }
 
       toast.success(t('pos.cartBar.heldToast', { number: draft.order_number }));
@@ -1324,17 +1328,20 @@ export function PosOrderPage() {
         })),
       };
 
+      // One key for this press, on every write of it: the order routes and the payment's intent keep
+      // their keys apart by route (agent-protocol §19.11).
+      const idempotencyKey = newIdempotencyKey();
       let draftId: string;
       if (activeDraftOrderId) {
-        const updated = await orderApi.updateDraft(activeDraftOrderId, orderPayload);
+        const updated = await orderApi.updateDraft(activeDraftOrderId, orderPayload, { idempotencyKey });
         draftId = updated.id;
       } else {
-        const draft = await orderApi.createOrder(orderPayload);
+        const draft = await orderApi.createOrder(orderPayload, { idempotencyKey });
         draftId = draft.id;
       }
 
       const submitPayload = buildSubmitPayload();
-      submitted = await orderApi.submitOrder(draftId, submitPayload);
+      submitted = await orderApi.submitOrder(draftId, submitPayload, { idempotencyKey });
 
       // Instantly query active payment methods to find POS / CARD
       const pms = await settingsApi.getPaymentMethods();
@@ -1355,6 +1362,7 @@ export function PosOrderPage() {
           payment_method_id: preferredPos.id,
           amount: submitted.due_amount || submitted.total_amount || '0',
           reference_number: undefined,
+          idempotency_key: idempotencyKey,
         });
         setPlacedOrder(payRes.order || submitted);
       } else {
@@ -1441,17 +1449,19 @@ export function PosOrderPage() {
         })),
       };
 
+      // One key for this press, on both writes of it (agent-protocol §19.11).
+      const idempotencyKey = newIdempotencyKey();
       let draftId: string;
       if (activeDraftOrderId) {
-        const updated = await orderApi.updateDraft(activeDraftOrderId, orderPayload);
+        const updated = await orderApi.updateDraft(activeDraftOrderId, orderPayload, { idempotencyKey });
         draftId = updated.id;
       } else {
-        const draft = await orderApi.createOrder(orderPayload);
+        const draft = await orderApi.createOrder(orderPayload, { idempotencyKey });
         draftId = draft.id;
       }
 
       const submitPayload = buildSubmitPayload();
-      const submitted = await orderApi.submitOrder(draftId, submitPayload);
+      const submitted = await orderApi.submitOrder(draftId, submitPayload, { idempotencyKey });
 
       setPlacedOrder(submitted);
       setCheckoutModalOpen(true);
