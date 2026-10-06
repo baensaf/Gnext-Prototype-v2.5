@@ -505,12 +505,11 @@
     "title": "Orders",
     "searchPlaceholder": "Order or call no., customer, phone, item…",
     "tabs": {
-      "all": "All ({{count}})",
-      "open": "Open ({{count}})",
-      "completed": "Completed ({{count}})",
-      "cancelled": "Cancelled ({{count}})",
-      "held": "Held ({{count}})",
-      "refunded": "Refunded ({{count}})"
+      "all": "All",
+      "open": "Open",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "refunded": "Refunded"
     },
     "types": {
       "dineIn": "Dine-In",

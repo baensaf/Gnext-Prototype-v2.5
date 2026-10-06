@@ -505,12 +505,11 @@
     "title": "سفارش‌ها",
     "searchPlaceholder": "شماره سفارش یا نوبت، مشتری، تلفن، کالا…",
     "tabs": {
-      "all": "همه ({{count}})",
-      "open": "باز ({{count}})",
-      "completed": "تکمیل شده ({{count}})",
-      "cancelled": "لغو شده ({{count}})",
-      "held": "نگه‌داشته ({{count}})",
-      "refunded": "مرجوع شده ({{count}})"
+      "all": "همه",
+      "open": "باز",
+      "completed": "تکمیل شده",
+      "cancelled": "لغو شده",
+      "refunded": "مرجوع شده"
     },
     "types": {
       "dineIn": "سالن",

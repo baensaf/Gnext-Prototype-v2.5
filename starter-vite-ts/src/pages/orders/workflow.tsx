@@ -1,6 +1,7 @@
 import type { GridColDef, GridSortModel, GridFilterModel, GridColumnVisibilityModel } from '@mui/x-data-grid-premium';
 import type { RefundRecord } from 'src/api/refundApi';
 import type { ReasonCode } from 'src/api/settingsApi';
+import type { LabelColor } from 'src/components/label';
 import type { ReceiptData, PaymentRecord } from 'src/api/paymentApi';
 import type { OrderHeader, OrderListRow, DeclineReason, OrderLifecycle, OrderListQuery } from 'src/api/orderApi';
 
@@ -90,6 +91,7 @@ import { httpClient as axios } from 'src/api/httpClient';
 import { isManagerOrAbove } from 'src/config/role-access';
 import { useBranchContext, useScopedBranchId } from 'src/contexts/branch-context';
 
+import { Label } from 'src/components/label';
 import { VersionTag } from 'src/components/version-tag';
 import { CheckoutModal } from 'src/components/CheckoutModal';
 import { ServerDataGrid } from 'src/components/server-data-grid';
@@ -121,15 +123,16 @@ type TabKey = Lifecycle | 'ALL';
 type ReprintDocumentType = 'CUSTOMER_RECEIPT' | 'KITCHEN_TICKET' | 'GUEST_BILL' | 'COURIER_SLIP';
 
 // No Waiting tab: a waiting order is answered on Incoming Orders, and nothing here can answer
-// it. A line above the tabs points there while one waits. Waiting orders still count in All.
-// All comes first and is where the page opens: the whole day, before narrowing it down.
-const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: 'ALL', label: 'all' },
-  { key: 'OPEN', label: 'open' },
-  { key: 'HELD', label: 'held' },
-  { key: 'COMPLETED', label: 'completed' },
-  { key: 'CANCELLED', label: 'cancelled' },
-  { key: 'REFUNDED', label: 'refunded' },
+// it. A line above the tabs points there while one waits. No Held tab either: a held order is
+// picked up from the till's own held list, or from All, where it says Held and offers Resume.
+// Both still count in All. All comes first and is where the page opens: the whole day.
+// Each tab's count sits in a label coloured like the orders' own status chips.
+const TABS: Array<{ key: TabKey; label: string; color: LabelColor }> = [
+  { key: 'ALL', label: 'all', color: 'default' },
+  { key: 'OPEN', label: 'open', color: 'info' },
+  { key: 'COMPLETED', label: 'completed', color: 'success' },
+  { key: 'CANCELLED', label: 'cancelled', color: 'error' },
+  { key: 'REFUNDED', label: 'refunded', color: 'default' },
 ];
 
 const ORDER_TYPES = ['DINE_IN', 'TAKEAWAY', 'PICKUP', 'DELIVERY', 'AGGREGATOR'];
@@ -1320,13 +1323,24 @@ export function OrdersWorkflowPage() {
   const tabsBar = (
     <Tabs
       onChange={(_, val) => setParams({ tab: val })}
-      sx={{ minHeight: 40, minWidth: 0 }}
+      sx={{ minHeight: 48, minWidth: 0 }}
       value={TABS.some((x) => x.key === tab) ? tab : false}
       variant="scrollable"
       scrollButtons={false}
     >
-      {TABS.map(({ key, label }) => (
-        <Tab key={key} label={t(`orders.tabs.${label}`, { count: counts[key] ?? 0 })} value={key} sx={{ minHeight: 40 }} />
+      {TABS.map(({ key, label, color }) => (
+        <Tab
+          key={key}
+          value={key}
+          iconPosition="end"
+          label={t(`orders.tabs.${label}`)}
+          icon={
+            <Label variant={key === tab ? 'filled' : 'soft'} color={key === 'ALL' && key === tab ? 'default' : color}>
+              {counts[key] ?? 0}
+            </Label>
+          }
+          sx={{ minHeight: 48 }}
+        />
       ))}
     </Tabs>
   );
