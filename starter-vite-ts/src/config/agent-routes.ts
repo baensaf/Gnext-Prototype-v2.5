@@ -48,6 +48,11 @@ export const AGENT_ROUTES: AgentRoute[] = [
   // The cashier's shifts and drawer. Below it: one shift (/app/cashier/shifts/:shiftId).
   // Business days and the roll-up are not the cashier's.
   { path: '/app/cashier/shifts' },
+
+  // Counter work a cashier does today: the dine-in floor (tables) and refunds, which a manager's
+  // PIN approves. The kitchen screen stays on Gnext itself.
+  { path: '/app/dine-in/floor' },
+  { path: '/app/refunds' },
 ];
 
 function stripTrailingSlash(pathname: string): string {

@@ -3908,7 +3908,7 @@
   "agent": {
     "cloudOnly": {
       "title": "This page opens on {{host}}",
-      "body": "This PC runs the register, orders, delivery and shifts. Management and head-office pages open on Gnext itself, in a new tab.",
+      "body": "This PC runs the register, orders, tables, refunds, delivery and shifts. Management and head-office pages open on Gnext itself, in a new tab.",
       "open": "Open on {{host}}",
       "back": "Back to the register"
     },
