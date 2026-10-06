@@ -338,8 +338,8 @@ export function UsersPage() {
                 pinInvalid
                   ? t('users.pinInvalid', 'A PIN is 4 to 8 digits.')
                   : editing?.has_pin
-                    ? t('users.pinKeep', 'Signs this person in at the offline till; an approver also approves with it. Leave empty to keep the current PIN.')
-                    : t('users.pinHelp', 'Signs this person in at the offline till; an approver also approves with it.')
+                    ? t('users.pinKeep', 'Used at the POS to approve and confirm actions. Leave empty to keep the current PIN.')
+                    : t('users.pinHelp', 'Used at the POS to approve and confirm actions.')
               }
               slotProps={{ htmlInput: { inputMode: 'numeric', autoComplete: 'new-password' } }}
               fullWidth
