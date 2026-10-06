@@ -501,6 +501,64 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       const closed = { ...statement, state: 'CLOSED' };
       await expect(shiftService.redactForBlindCount('t-1', closed, { role: 'CASHIER' })).resolves.toBe(closed);
     });
+
+    describe('the shift summary', () => {
+      beforeEach(() => {
+        branchRepo.findOne = jest.fn().mockResolvedValue({ id: 'b-1', name: 'Nasr' });
+        shiftRepo.findOne.mockResolvedValue({ ...openShift(), shift_number: 'SHF-1', opened_at: new Date() });
+        movementRepo.find.mockResolvedValue([
+          { type: 'OPENING_FLOAT', amount: '50000.0000' },
+          { type: 'CASH_PAYMENT', amount: '300000.0000' },
+        ]);
+        orderRepo.find.mockResolvedValue([
+          { state: 'COMPLETED', order_type: 'TAKEAWAY', grand_total: '300000.0000', discount_total: '0', delivery_fee: '0', outstanding_total: '0' },
+          { state: 'COMPLETED', order_type: 'DELIVERY', grand_total: '500000.0000', discount_total: '20000.0000', delivery_fee: '40000.0000', outstanding_total: '0' },
+          { state: 'CANCELLED', order_type: 'TAKEAWAY', grand_total: '90000.0000', outstanding_total: '0' },
+          { state: 'DRAFT', order_type: 'TAKEAWAY', grand_total: '70000.0000', outstanding_total: '70000.0000' },
+        ]);
+        paymentRepo.find.mockResolvedValue([
+          { method_kind: 'CASH', amount: '300000.0000' },
+          { method_kind: 'CARD_POS', amount: '200000.0000' },
+          { method_kind: 'CARD_POS', amount: '300000.0000' },
+        ]);
+      });
+
+      it('gives a manager every figure: orders by type, payments by kind, the drawer', async () => {
+        const summary = await shiftService.getSalesSummary('t-1', 'shf-1', { role: 'MANAGER' });
+
+        expect(summary).toMatchObject({ blind: false, orderCount: 2, cancelledCount: 1, salesTotal: '800000.0000', discountTotal: '20000.0000' });
+        expect(summary.byType).toEqual(
+          expect.arrayContaining([
+            { type: 'TAKEAWAY', count: 1, total: '300000.0000' },
+            { type: 'DELIVERY', count: 1, total: '500000.0000' },
+          ]),
+        );
+        expect(summary.tenders).toEqual(
+          expect.arrayContaining([
+            { kind: 'CASH', count: 1, amount: '300000.0000' },
+            { kind: 'CARD_POS', count: 2, amount: '500000.0000' },
+          ]),
+        );
+        expect(summary.cash).toMatchObject({ openingFloat: '50000.0000', expectedCash: '350000.0000', actualCash: null });
+      });
+
+      it('leaves a counting cashier the card figures, and nothing the cash could be worked out from', async () => {
+        const summary = await shiftService.getSalesSummary('t-1', 'shf-1', { role: 'CASHIER' });
+
+        expect(summary).toMatchObject({ blind: true, orderCount: 2, salesTotal: null, discountTotal: null, unpaidTotal: null });
+        expect(summary.byType.every((b) => b.total === null)).toBe(true);
+        expect(summary.tenders).toEqual([{ kind: 'CARD_POS', count: 2, amount: '500000.0000' }]);
+        expect(summary.cash).toMatchObject({ openingFloat: '50000.0000', cashSales: null, expectedCash: null });
+      });
+
+      it('gives a cashier everything once the shift is closed', async () => {
+        shiftRepo.findOne.mockResolvedValue({ ...openShift(), state: 'CLOSED', shift_number: 'SHF-1', actual_cash: '340000.0000', short_over: '-10000.0000' });
+
+        const summary = await shiftService.getSalesSummary('t-1', 'shf-1', { role: 'CASHIER' });
+        expect(summary).toMatchObject({ blind: false, closed: true, salesTotal: '800000.0000' });
+        expect(summary.cash).toMatchObject({ actualCash: '340000.0000', shortOver: '-10000.0000' });
+      });
+    });
   });
 
   describe('What a till leaves behind at close', () => {

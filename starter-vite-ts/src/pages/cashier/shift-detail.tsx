@@ -42,6 +42,7 @@ import { tenantApi } from 'src/api/tenantApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 
 import { VersionTag } from 'src/components/version-tag';
+import { ShiftSummaryButton } from 'src/components/shift/shift-summary';
 
 // ----------------------------------------------------------------------
 
@@ -170,6 +171,7 @@ export function ShiftDetailPage() {
             }
             color={closed ? 'default' : 'success'}
           />
+          <ShiftSummaryButton size="small" shiftId={statement.shiftId} />
           <IconButton onClick={fetchStatement} title={t('common.refresh', 'Refresh')}>
             <RefreshIcon />
           </IconButton>

@@ -3,6 +3,7 @@ import { create } from 'zustand';
 // ----------------------------------------------------------------------
 
 export type AccountShift = {
+  shiftId: string;
   registerName: string;
   shiftNumber: string;
   openedAt: string;

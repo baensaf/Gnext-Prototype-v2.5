@@ -27,6 +27,7 @@ import { Iconify } from 'src/components/iconify';
 import { Scrollbar } from 'src/components/scrollbar';
 import { AnimateBorder } from 'src/components/animate';
 import { VersionLabelsButton } from 'src/components/version-tag';
+import { ShiftSummaryButton } from 'src/components/shift/shift-summary';
 import { useAccountShift } from 'src/components/shift/account-shift-store';
 
 import { AccountButton } from './account-button';
@@ -68,7 +69,8 @@ export function AccountDrawer({ data = [], sx, ...other }: AccountDrawerProps) {
     </AnimateBorder>
   );
 
-  // The shift open at the register on screen. A cashier comes here once, to close it.
+  // The shift open at the register on screen. A cashier comes here at its end: to read the
+  // shift summary and check the card terminal against it, then to close it.
   const renderShift = () =>
     shift && (
       <Box
@@ -93,6 +95,7 @@ export function AccountDrawer({ data = [], sx, ...other }: AccountDrawerProps) {
             time: shift.openedEarlier ? fDateTime(shift.openedAt) : fTime(shift.openedAt),
           })}
         </Typography>
+        <ShiftSummaryButton fullWidth color="inherit" shiftId={shift.shiftId} sx={{ mt: 1.5 }} />
         <Button
           fullWidth
           color="error"
@@ -102,7 +105,7 @@ export function AccountDrawer({ data = [], sx, ...other }: AccountDrawerProps) {
             onClose();
             shift.close();
           }}
-          sx={{ mt: 1.5 }}
+          sx={{ mt: 1 }}
         >
           {t('shift.close.title', 'Close shift')}
         </Button>

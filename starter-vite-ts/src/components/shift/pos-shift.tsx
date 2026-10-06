@@ -19,6 +19,7 @@ import {
 import { fTime, fDateTime } from 'src/utils/format-time';
 
 import { RegisterNotice } from './register-notice';
+import { ShiftSummaryButton } from './shift-summary';
 import { OpenShiftDialog } from './open-shift-dialog';
 import { useAccountShift } from './account-shift-store';
 import { CloseShiftDialog } from './close-shift-dialog';
@@ -72,13 +73,13 @@ export function PosShiftBar({ register }: { register: RegisterShiftState }) {
             time: openedEarlier ? fDateTime(shift.opened_at) : fTime(shift.opened_at),
           })}
         </Typography>
+        <ShiftSummaryButton size="small" shiftId={shift.id} sx={{ ml: 'auto' }} />
         <Button
           size="small"
           color="error"
           variant="outlined"
           startIcon={<LockIcon />}
           onClick={() => setCloseOpen(true)}
-          sx={{ ml: 'auto' }}
         >
           {t('shift.close.title', 'Close shift')}
         </Button>
@@ -108,11 +109,13 @@ export function PosShiftAccountLink({ register }: { register: RegisterShiftState
   const { terminal, shift } = register;
 
   const registerName = terminal ? `${terminal.name} (${terminal.code})` : '';
+  const shiftId = shift?.id || '';
   const shiftNumber = shift?.shift_number || '';
   const openedAt = shift?.opened_at ? String(shift.opened_at) : '';
   useEffect(() => {
     if (!registerName || !shiftNumber) return undefined;
     publish({
+      shiftId,
       registerName,
       shiftNumber,
       openedAt,
@@ -120,7 +123,7 @@ export function PosShiftAccountLink({ register }: { register: RegisterShiftState
       close: () => setCloseOpen(true),
     });
     return () => publish(null);
-  }, [publish, registerName, shiftNumber, openedAt]);
+  }, [publish, shiftId, registerName, shiftNumber, openedAt]);
 
   if (!terminal || !shift) return null;
 
