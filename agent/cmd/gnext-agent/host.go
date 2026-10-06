@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"gnext/agent/internal/agent"
+	"gnext/agent/internal/appcache"
 	"gnext/agent/internal/cloud"
 	"gnext/agent/internal/journal"
 	"gnext/agent/internal/localui"
@@ -29,13 +30,15 @@ type host struct {
 	journal  *journal.Journal
 	renderer *printing.BrowserRenderer
 	restart  chan struct{}
+	app      *appcache.Cache
 
-	mu      sync.Mutex
-	server  string
-	id      *store.Identity
-	agent   *agent.Agent
-	client  *cloud.Client
-	stopped string
+	mu        sync.Mutex
+	server    string
+	appOrigin string // where the frontend build comes from: app_url, else server (§19.7)
+	id        *store.Identity
+	agent     *agent.Agent
+	client    *cloud.Client
+	stopped   string
 }
 
 func newHost(log *slog.Logger) (*host, error) {
@@ -43,12 +46,29 @@ func newHost(log *slog.Logger) (*host, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &host{
+	h := &host{
 		log:      log,
 		journal:  j,
 		renderer: &printing.BrowserRenderer{ProfileDir: store.BrowserDir()},
 		restart:  make(chan struct{}, 1),
-	}, nil
+	}
+	// Known before the first check of the frontend build, which starts with the process.
+	cfg, _ := store.LoadInstallConfig() // empty until the PC is configured
+	h.server, h.appOrigin = cfg.Server, cfg.AppOrigin()
+	h.app = &appcache.Cache{
+		Dir:       store.AppDir(),
+		Origin:    h.frontendOrigin,
+		Log:       log,
+		UserAgent: "gnext-agent/" + version + " (windows)",
+	}
+	return h, nil
+}
+
+// frontendOrigin is where the frontend build comes from (§19.7).
+func (h *host) frontendOrigin() string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.appOrigin
 }
 
 func (h *host) close() {
@@ -60,7 +80,7 @@ func (h *host) close() {
 func (h *host) State() localui.State {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	st := localui.State{Server: h.server, Agent: h.agent, Cloud: h.client, Stopped: h.stopped}
+	st := localui.State{Server: h.server, AppOrigin: h.appOrigin, Agent: h.agent, Cloud: h.client, Stopped: h.stopped}
 	if h.id != nil {
 		st.Enrolled, st.AgentID, st.BranchName = true, h.id.AgentID, h.id.BranchName
 	}
@@ -91,7 +111,7 @@ func (h *host) supervise(ctx context.Context) int {
 		case errors.Is(err, errRestart):
 			h.log.Info("restarting the agent with the new enrolment")
 		case errors.Is(err, errNotEnrolled):
-			h.log.Warn("not enrolled; waiting for an enrolment code on the settings page", "url", "http://"+uiAddr())
+			h.log.Warn("not enrolled; waiting for an enrolment code on the settings page", "url", "http://"+uiAddr()+"/agent/")
 			waitOrSignal(ctx, h.restart)
 		case errors.Is(err, agent.ErrStopped):
 			h.setStopped("کلید این عامل در سرور لغو شده است؛ با کد جدید دوباره ثبت کنید.")
@@ -117,7 +137,7 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 	cfg, cfgErr := store.LoadInstallConfig()
 	id, idErr := store.LoadIdentity()
 	h.mu.Lock()
-	h.server, h.agent, h.client, h.id, h.stopped = cfg.Server, nil, nil, nil, ""
+	h.server, h.appOrigin, h.agent, h.client, h.id, h.stopped = cfg.Server, cfg.AppOrigin(), nil, nil, nil, ""
 	h.mu.Unlock()
 	if cfgErr != nil || idErr != nil {
 		if !errors.Is(idErr, store.ErrNotEnrolled) && idErr != nil {
@@ -137,7 +157,7 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 		Journal:       h.journal,
 		Printer:       &printing.Printer{Renderer: h.renderer},
 		Log:           h.log,
-		Welcomed:      func() { update.Cleanup("") },
+		Welcomed:      func() { update.Cleanup(""); h.app.Kick() },
 		SavedConfig:   loadDevices(h.log),
 		ConfigChanged: func(c *protocol.Config) { saveDevices(c, h.log) },
 	})

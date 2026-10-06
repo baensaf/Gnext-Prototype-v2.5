@@ -9,11 +9,11 @@ import (
 )
 
 // The tray (`gnext-agent tray`) runs in each signed-in user's session, since the service in
-// session 0 cannot show anything. It reads the settings page's /api/status every few seconds,
+// session 0 cannot show anything. It reads the settings page's /agent/api/status every few seconds,
 // colours its icon, lists the devices in its menu and pops a notice when something breaks.
 // This file holds what it shows; tray_windows.go draws it.
 
-// trayStatus is the part of /api/status the tray reads.
+// trayStatus is the part of /agent/api/status the tray reads (loopback only, §19.8).
 type trayStatus struct {
 	Version    string `json:"version"`
 	Enrolled   bool   `json:"enrolled"`

@@ -1,6 +1,8 @@
 // Command gnext-agent is the Gnext branch agent: a Windows service that connects a branch's
-// printers and card terminals to the Gnext cloud (docs/agent-gateway/agent-protocol.md), with a
-// settings page on http://127.0.0.1:47800.
+// printers and card terminals to the Gnext cloud (docs/agent-gateway/agent-protocol.md). It also
+// serves the cloud's cached frontend and passes its API calls on (§19): the app on
+// http://127.0.0.1:47800/ and, for the other registers of the branch, http://<pc-address>:47801/;
+// its own settings page is http://127.0.0.1:47800/agent/.
 //
 //	gnext-agent.exe enrol --code XXXX-XXXX [--server https://…]
 //	gnext-agent.exe run        (console; the service runs the same loop)
@@ -75,16 +77,26 @@ func usage() {
   gnext-agent version
 
 Data folder:   %s
-Settings page: http://%s
+Settings page: http://%s/agent/
 `, version, store.Home(), uiAddr())
 }
 
-// uiAddr is where the settings page listens; GNEXT_AGENT_UI_ADDR overrides it for development.
+// uiAddr is where the app and the settings page listen for this PC; GNEXT_AGENT_UI_ADDR overrides
+// it for development.
 func uiAddr() string {
 	if a := os.Getenv("GNEXT_AGENT_UI_ADDR"); a != "" {
 		return a
 	}
 	return localui.DefaultAddr
+}
+
+// lanAddr is where the app listens for the branch's other registers; GNEXT_AGENT_LAN_ADDR overrides
+// it for development, and "off" turns the listener off.
+func lanAddr() string {
+	if a := os.Getenv("GNEXT_AGENT_LAN_ADDR"); a != "" {
+		return a
+	}
+	return localui.DefaultLANAddr
 }
 
 func enrol(args []string) int {
@@ -132,7 +144,10 @@ func enrolWith(ctx context.Context, server, code string) (store.Identity, error)
 	if _, err := c.Me(ctx); err != nil {
 		return id, fmt.Errorf("the new key does not work: %w", err)
 	}
-	if err := store.SaveInstallConfig(store.InstallConfig{Server: server}); err != nil {
+	// Keep what else config.json holds (app_url), and change only the server.
+	cfg, _ := store.LoadInstallConfig()
+	cfg.Server = server
+	if err := store.SaveInstallConfig(cfg); err != nil {
 		return id, err
 	}
 	return id, store.SaveIdentity(id)
@@ -157,7 +172,7 @@ func run(ctx context.Context, console io.Writer) int {
 	// The offline till of agents 1.x is gone (§19.2); its files are of no use to anything now.
 	removeLegacyData(log)
 	if isService() {
-		go removeLegacyFirewallRule(log)
+		go manageFirewallRules(log)
 	}
 
 	h, err := newHost(log)
@@ -167,10 +182,14 @@ func run(ctx context.Context, console io.Writer) int {
 	}
 	defer h.close()
 
-	ui := &localui.Server{Host: h, Version: version, LogFile: logFile(), Log: log, Addr: uiAddr()}
+	// The saved build is served at once, with no internet; the checks for a newer one run beside the agent.
+	h.app.Load()
+	go h.app.Run(ctx)
+
+	ui := &localui.Server{Host: h, Version: version, LogFile: logFile(), Log: log, Addr: uiAddr(), LANAddr: lanAddr(), App: h.app}
 	go func() {
 		if err := ui.ListenAndServe(ctx); err != nil {
-			log.Error("settings page could not start", "addr", uiAddr(), "err", err)
+			log.Error("the app and settings page could not start", "addr", uiAddr(), "err", err)
 		}
 	}()
 

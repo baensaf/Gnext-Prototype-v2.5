@@ -463,7 +463,7 @@ func replaced(exe string, was os.FileInfo) bool {
 }
 
 func fetchTrayStatus() (*trayStatus, error) {
-	resp, err := trayHTTP.Get("http://" + uiAddr() + "/api/status")
+	resp, err := trayHTTP.Get("http://" + uiAddr() + "/agent/api/status")
 	if err != nil {
 		return nil, err
 	}
@@ -479,7 +479,7 @@ func fetchTrayStatus() (*trayStatus, error) {
 }
 
 func (t *tray) testPrint(p trayPrinter) {
-	req, _ := http.NewRequest(http.MethodPost, "http://"+uiAddr()+"/api/printers/"+p.ID+"/test", strings.NewReader("{}"))
+	req, _ := http.NewRequest(http.MethodPost, "http://"+uiAddr()+"/agent/api/printers/"+p.ID+"/test", strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Gnext-Local", "1")
 	client := &http.Client{Timeout: 100 * time.Second}

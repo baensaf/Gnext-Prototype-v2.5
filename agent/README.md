@@ -49,15 +49,37 @@ section numbers (§) in the code refer to it.
   binary still held by an open window no longer blocks the next update (§9), and the settings
   window reopens itself on the new binary. Since 1.11.5 it also brings `saman\` up to the
   Saman bridge published with its version (§9.3).
+- **The app** (since 2.1.0, `app.serve`; [§19](../docs/agent-gateway/agent-protocol.md#19-the-agent-serves-the-cashier-v3)):
+  the agent serves the cloud's own web app from disk and passes every API call to the cloud.
+  - `http://127.0.0.1:47800/` on the branch PC and `http://<this PC's address>:47801/` for any
+    other register on the branch network. `/` is the cached frontend build (`index.html` for any
+    path that is not a file, with a `<meta name="gnext-agent">` tag added); `/api/*` and
+    `/uploads/*` go to the cloud with the page's headers, `Cookie` and `Set-Cookie` (less
+    `Domain` and `Secure`) passed through, 16 MB bodies, 30 s to answer, and no session held by
+    the agent. `/api/v1/agent/*` and `/api/v1/agent-releases/*` are refused with `403`. A cloud
+    that does not answer is `502 CLOUD_UNREACHABLE`, or `504 CLOUD_NO_ANSWER` for a write that
+    was sent and not answered. No retries yet.
+  - **The build** is downloaded from `<server>/build-manifest.json` (or `app_url` in
+    `config.json`, for a frontend on another port while developing) every 5 minutes, after each
+    connect and on `GET /agent/api/app/refresh`; only files whose SHA-256 it does not hold are
+    fetched, every hash is checked, and it switches in one step. The current and the previous
+    build are kept in `%ProgramData%\Gnext\Agent\app\`, so a restart with no internet still opens
+    the app. Until the first download the app routes answer a Persian *not downloaded yet* page.
+  - `GET /agent/api/status` (both listeners, no sign-in) says whether the agent is connected to
+    the cloud and which build it serves.
+  - The LAN listener serves the app only; the settings page and its API exist on `127.0.0.1`
+    alone. The service adds the Windows Firewall rule *Gnext* (TCP 47801, private and domain
+    profiles) at start, and the installer removes it on uninstall.
 - **Settings window** (Start-menu and desktop shortcut *Gnext Agent*, the tray, or running the
-  exe): the page on `http://127.0.0.1:47800` in a window of its own, drawn by WebView2, the Edge
+  exe): the page on `http://127.0.0.1:47800/agent/` in a window of its own, drawn by WebView2, the Edge
   engine in Windows 10 and 11 (in the browser if it is missing). One window per user; opening it
   again brings it to the front. In Persian: connection status, enrol or re-enrol with a server and a
   code, printers and card terminals with live status, test print, LAN scan for port-9100
   printers, and logs. Anyone at the PC can look and test-print; adding, editing or removing a
   device needs a Gnext sign-in by this branch's manager or head office. Changes are made in
   the cloud (`/api/v1/agent/local`, audited under that user) and pushed back to the agent. The
-  page only listens on 127.0.0.1 and refuses other hosts and cross-site writes.
+  page and its API (`/agent/api/*`) only exist on 127.0.0.1, which refuses other hosts and
+  cross-site writes.
 
 ## Version 2.0.0 removed the offline till
 
@@ -69,8 +91,8 @@ shortcuts, the pairing and LAN listener (TCP 47801), the snapshot and staff pull
 `data.changed`, the offline upload and its conflict rules, offline Snappfood matching, and the
 call numbers kept by the agent. The capabilities `data.pull`, `sync.orders`, `pos.offline`,
 `pos.till` and `pos.lan` (`pos.snappfood` was specified but this agent never advertised it) and
-the `till` and `sync` blocks of the heartbeat go with them. The agent advertises `print.html`,
-`payment.charge` and `payment.query` only.
+the `till` and `sync` blocks of the heartbeat go with them. Agent 2.0.0 advertises `print.html`,
+`payment.charge` and `payment.query` only; 2.1.0 adds `app.serve`.
 
 At service start the agent deletes what 1.x left on the PC (`branch-data\`, `offline-orders.db`,
 `till.json`, `till-orders.db`, `till-devices.json`, `call-numbers.json`) and the *Gnext POS*
@@ -79,7 +101,8 @@ firewall rule, and logs what it removed. `devices.json` stays.
 Why, and what comes next (the agent serving the cashier the cloud's own app, with offline
 features returning one at a time inside it): [`agent-protocol.md` §19](../docs/agent-gateway/agent-protocol.md#19-the-agent-serves-the-cashier-v3).
 §12, §13, §16, §17 and §18 of that file describe what was removed and stay there for history.
-The README is rewritten for the new design in a later slice.
+Version 2.1.0 is its first step (a LAN listener on TCP 47801 is back, for the app only); the rest of this
+README is rewritten in a later slice.
 
 ## Layout
 
@@ -93,10 +116,11 @@ The README is rewritten for the new design in a later slice.
 | `internal/payment` | Terminal driver interface, the `sep` (Saman) and `fake` drivers |
 | `saman-bridge` | .NET Framework bridge to Saman's PC-POS SDK (vendor DLLs), built in CI |
 | `internal/cloud` | HTTPS calls: enrol, me, releases, the settings page's device changes |
-| `internal/localui` | Settings page (embedded HTML/JS) and its local API, LAN scan |
+| `internal/appcache` | The cloud frontend build on disk: manifest, download by hash, atomic switch, two builds kept |
+| `internal/localui` | The local web server: the app, the proxy to the cloud (`proxy.go`, `upstream.go`), the settings page (embedded HTML/JS) and its API under `/agent/api/`, LAN scan |
 | `internal/update` | Release check, download, verify, swap |
 | `internal/winsession` | Starts the ticket browser and the tray as the signed-in user |
-| `internal/store` | `config.json`, `identity.json`, `devices.json`, DPAPI, removal of 1.x's offline files |
+| `internal/store` | `config.json` (`server`, optional `app_url`), `identity.json`, `devices.json`, DPAPI, removal of 1.x's offline files |
 | `installer/gnext-agent.iss` | Setup wizard (Inno Setup): server, enrolment code, service |
 
 ## Develop
@@ -118,6 +142,12 @@ $env:GNEXT_AGENT_HOME = "$PWD\.dev"
 ```
 
 `GNEXT_AGENT_BROWSER` points the renderer at a specific Edge or Chrome binary.
+
+For the app: `GNEXT_AGENT_UI_ADDR` moves the loopback listener (default `127.0.0.1:47800`) and
+`GNEXT_AGENT_LAN_ADDR` the network one (default `0.0.0.0:47801`; `off` turns it off), for running a
+second agent beside a real one. To serve a frontend that is not on the cloud's address, add
+`"app_url": "http://localhost:4173"` to `config.json` in the data folder (build it with
+`VITE_SERVER_URL=` empty so the page calls the same origin, then `npx vite preview --port 4173`).
 
 ## Install on a branch PC
 

@@ -77,6 +77,7 @@ type Agent struct {
 
 	// For the local settings page.
 	connectedAt atomic.Int64 // unix nanos of the current welcome, 0 while disconnected
+	changedAt   atomic.Int64 // unix nanos of the last time the session came up or went down
 	branchName  atomic.Value // string
 	lastError   atomic.Value // string
 }
@@ -228,7 +229,9 @@ func (a *Agent) session(ctx context.Context) (welcomed bool, err error) {
 	a.setConn(c)
 	defer a.setConn(nil)
 	a.branchName.Store(welcome.Branch.Name)
-	a.connectedAt.Store(time.Now().UnixNano())
+	now := time.Now().UnixNano()
+	a.connectedAt.Store(now)
+	a.changedAt.Store(now)
 	a.lastError.Store("")
 	a.o.Log.Info("connected", "branch", welcome.Branch.Name, "session", welcome.SessionID)
 	if a.o.Welcomed != nil {
@@ -673,8 +676,8 @@ func (a *Agent) setConn(c *websocket.Conn) {
 	a.connMu.Lock()
 	a.conn = c
 	a.connMu.Unlock()
-	if c == nil {
-		a.connectedAt.Store(0)
+	if c == nil && a.connectedAt.Swap(0) != 0 {
+		a.changedAt.Store(time.Now().UnixNano())
 	}
 }
 

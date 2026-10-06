@@ -73,7 +73,7 @@ document.querySelectorAll('[data-goto]').forEach((b) => b.addEventListener('clic
 // ---- status ----
 async function refresh() {
   try {
-    state = await api('GET', '/api/status');
+    state = await api('GET', '/agent/api/status');
   } catch (e) {
     $('#conn').textContent = 'عامل در دسترس نیست';
     $('#conn').className = 'badge bad';
@@ -194,7 +194,7 @@ function requireSignIn() {
     dlg.onclose = async () => {
       if (dlg.returnValue !== 'ok') return resolve(false);
       try {
-        const { user } = await api('POST', '/api/login', { username: form.username.value, password: form.password.value });
+        const { user } = await api('POST', '/agent/api/login', { username: form.username.value, password: form.password.value });
         state.user = user;
         render();
         toast(`خوش آمدید، ${user.display_name || user.username}`);
@@ -209,7 +209,7 @@ function requireSignIn() {
 }
 $('#signin').addEventListener('click', () => requireSignIn());
 $('#signout').addEventListener('click', async () => {
-  await api('POST', '/api/logout').catch(() => {});
+  await api('POST', '/agent/api/logout').catch(() => {});
   await refresh();
 });
 
@@ -260,8 +260,8 @@ function editPrinter(p) {
       paper_width_mm: Number(form.paper_width_mm.value),
       connection: { kind: 'tcp', host: form.host.value.trim(), port: Number(form.port.value) },
     };
-    if (p) await api('PATCH', `/api/printers/${p.id}`, body);
-    else await api('POST', '/api/printers', body);
+    if (p) await api('PATCH', `/agent/api/printers/${p.id}`, body);
+    else await api('POST', '/agent/api/printers', body);
     toast('چاپگر ذخیره شد.');
   });
 }
@@ -272,7 +272,7 @@ $('#scan').addEventListener('click', async () => {
   btn.disabled = true;
   $('#scan-result').textContent = 'در حال جستجو… (تا ۳۰ ثانیه)';
   try {
-    const { found } = await api('POST', '/api/scan', { port: Number($('#printer-form').port.value) || 9100 });
+    const { found } = await api('POST', '/agent/api/scan', { port: Number($('#printer-form').port.value) || 9100 });
     $('#scan-result').textContent = found.length ? `${fa(found.length)} دستگاه پیدا شد:` : 'دستگاهی پیدا نشد.';
     $('#found-hosts').replaceChildren(...found.map((f) => el('option', { value: f.host })));
     $('#found-list').replaceChildren(
@@ -288,7 +288,7 @@ $('#scan').addEventListener('click', async () => {
 async function testPrint(p) {
   toast(`در حال ارسال چاپ آزمایشی به ${p.name}…`);
   try {
-    await api('POST', `/api/printers/${p.id}/test`);
+    await api('POST', `/agent/api/printers/${p.id}/test`);
     toast('چاپ آزمایشی ارسال شد.');
   } catch (e) {
     toast(e.message, true);
@@ -332,8 +332,8 @@ function editTerminal(t) {
       driver: form.driver.value,
       connection,
     };
-    if (t) await api('PATCH', `/api/terminals/${t.id}`, body);
-    else await api('POST', '/api/terminals', body);
+    if (t) await api('PATCH', `/agent/api/terminals/${t.id}`, body);
+    else await api('POST', '/agent/api/terminals', body);
     toast('کارت‌خوان ذخیره شد.');
   });
 }
@@ -350,7 +350,7 @@ function removeDevice(kind, d) {
   const what = kind === 'printers' ? 'چاپگر' : 'کارت‌خوان';
   if (!confirm(`${what} «${d.name}» حذف شود؟`)) return;
   asManager(async () => {
-    await api('DELETE', `/api/${kind}/${d.id}`);
+    await api('DELETE', `/agent/api/${kind}/${d.id}`);
     toast(`${what} حذف شد.`);
   });
 }
@@ -364,7 +364,7 @@ $('#enrol-form').addEventListener('submit', async (e) => {
   const btn = form.querySelector('button[type=submit]');
   btn.disabled = true;
   try {
-    await api('POST', '/api/enrol', { server: form.server.value, code: form.code.value });
+    await api('POST', '/agent/api/enrol', { server: form.server.value, code: form.code.value });
     form.code.value = '';
     delete form.dataset.touched;
     toast('ثبت شد. در حال اتصال…');
@@ -380,7 +380,7 @@ $('#enrol-form').addEventListener('submit', async (e) => {
 // ---- logs ----
 async function loadLogs() {
   try {
-    const { lines } = await api('GET', '/api/logs?lines=400');
+    const { lines } = await api('GET', '/agent/api/logs?lines=400');
     const pre = $('#logs');
     pre.textContent = lines.join('\n') || '—';
     pre.scrollTop = pre.scrollHeight;

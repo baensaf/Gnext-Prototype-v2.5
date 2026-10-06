@@ -24,12 +24,12 @@ func runTray() int { println("the tray is Windows only"); return 2 }
 
 func launchTrays(context.Context, *slog.Logger) {}
 
-func removeLegacyFirewallRule(*slog.Logger) {}
+func manageFirewallRules(*slog.Logger) {}
 
 func attachConsole() {}
 
 func runWindow() int {
-	if err := openBrowser("http://" + uiAddr()); err != nil {
+	if err := openBrowser("http://" + uiAddr() + "/agent/"); err != nil {
 		return 1
 	}
 	return 0
