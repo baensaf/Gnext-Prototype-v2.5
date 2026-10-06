@@ -141,6 +141,17 @@ export class ShiftsController {
     return await this.shiftService.redactForBlindCount(tenantId, statement, this.viewer(req));
   }
 
+  /**
+   * What the register did in this shift: orders by type, payments by kind, refunds, the drawer.
+   * The cashier reads it before closing to check the card terminal against; blind-count rules
+   * as for the statement.
+   */
+  @Get(':id/summary')
+  async getSalesSummary(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.shiftService.getSalesSummary(tenantId, id, this.viewer(req));
+  }
+
   private viewer(req: Request) {
     return { role: (req as any).userRole ?? null };
   }

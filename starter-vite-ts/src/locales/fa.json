@@ -1405,6 +1405,38 @@
       "dayClosedDone": "روز کاری بسته شد.",
       "dayFailed": "بستن روز کاری ممکن نشد"
     },
+    "summary": {
+      "open": "خلاصه شیفت",
+      "title": "خلاصه شیفت",
+      "loadError": "خلاصه شیفت بارگذاری نشد",
+      "openedAt": "باز شده {{time}}",
+      "closedAt": "بسته شده {{time}}",
+      "blind": "جمع فروش و مبالغ نقدی پس از شمارش صندوق در زمان بستن نمایش داده می‌شود.",
+      "orders": "سفارش‌ها",
+      "orderCount": "سفارش‌های فروخته‌شده",
+      "cancelled": "لغو شده",
+      "discounts": "تخفیف",
+      "deliveryFees": "هزینه ارسال",
+      "salesTotal": "جمع فروش",
+      "unpaid": "مانده پرداخت‌نشده",
+      "payments": "دریافتی به تفکیک روش پرداخت",
+      "noPayments": "هنوز پرداختی ثبت نشده است.",
+      "refunds": "برگشت وجه",
+      "drawer": "صندوق نقدی",
+      "difference": "اختلاف",
+      "methods": {
+        "CASH": "نقد",
+        "CARD": "کارت",
+        "CARD_POS": "کارتخوان",
+        "POS": "کارتخوان",
+        "NETWORK_POS": "کارتخوان",
+        "MOBILE_POS": "کارتخوان سیار پیک",
+        "CUSTOMER_CREDIT": "اعتبار مشتری",
+        "BANK_TRANSFER": "کارت به کارت",
+        "ONLINE": "پرداخت آنلاین"
+      },
+      "amountsIn": "مبالغ به {{currency}}"
+    },
     "bar": {
       "shift": "شیفت",
       "since": "باز از ساعت {{time}}"

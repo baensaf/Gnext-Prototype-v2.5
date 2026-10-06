@@ -13,6 +13,8 @@ import { Terminal } from '../../entities/Terminal.entity';
 import { Payment } from '../../entities/Payment.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
+import { Refund } from '../../entities/Refund.entity';
+import { AdminUser } from '../../entities/AdminUser.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { AuditEvent } from '../../entities/AuditEvent.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
@@ -46,6 +48,47 @@ import {
  * and a paid delivery out with a courier is settled at the courier's handover.
  */
 const TILL_OPEN_ORDER_ISSUES: OpenOrderIssue[] = ['NOT_SUBMITTED', 'UNPAID', 'AWAITING_ACCEPTANCE'];
+
+/** Orders that never became a sale: held, waiting to be accepted, cancelled or turned down. */
+const UNSOLD_ORDER_STATES: string[] = ['DRAFT', 'PENDING_ACCEPTANCE', 'CANCELLED', 'REJECTED'];
+
+/**
+ * What one register did in a shift, for the cashier to read on screen. A null amount is one the
+ * reader may not see yet: under a blind count, what the drawer should hold, and any total it
+ * could be worked out from, waits for the count.
+ */
+export interface ShiftSalesSummary {
+  shiftId: string;
+  shiftNumber: string;
+  registerName: string | null;
+  openedBy: string | null;
+  openedAt: Date;
+  closedAt: Date | null;
+  closed: boolean;
+  blind: boolean;
+  orderCount: number;
+  cancelledCount: number;
+  salesTotal: string | null;
+  discountTotal: string | null;
+  deliveryFeeTotal: string | null;
+  unpaidTotal: string | null;
+  byType: Array<{ type: string; count: number; total: string | null }>;
+  /** Money taken at this register, by kind of payment. Cash is left out under a blind count. */
+  tenders: Array<{ kind: string; count: number; amount: string }>;
+  refundCount: number;
+  refundTotal: string | null;
+  cash: {
+    openingFloat: string;
+    cashSales: string | null;
+    cashRefunds: string | null;
+    paidIn: string;
+    paidOut: string;
+    safeDrops: string;
+    expectedCash: string | null;
+    actualCash: string | null;
+    shortOver: string | null;
+  };
+}
 
 /** A cash payment begun at a drawer and never taken or cancelled. */
 export interface PendingCashPayment {
@@ -1009,6 +1052,97 @@ export class ShiftService {
 
     if (entityManager) return await execute(entityManager);
     return await this.dataSource.transaction(execute);
+  }
+
+  /**
+   * What one register sold in a shift, for the cashier's shift summary: its orders by type, the
+   * money it took by kind of payment, its refunds and its drawer.
+   *
+   * The same blind-count rule as the statement: while the shift is open and the branch counts
+   * blind, someone who is not an approver gets no cash figure, and no sales total either,
+   * since the total less the card and other payments is the cash. The card figures stay, as
+   * checking them against the card terminal's slip is what a cashier reads this for.
+   */
+  async getSalesSummary(tenantId: string, shiftId: string, viewer: { role?: string | null }): Promise<ShiftSalesSummary> {
+    const em = this.dataSource.manager;
+    const statement = await this.getShiftStatement(tenantId, shiftId, em);
+    const shift = await this.shiftRepo.findOne({ where: { id: shiftId, tenant_id: tenantId } });
+    if (!shift) throw new NotFoundException(`Shift ${shiftId} not found`);
+    const closed = statement.state === 'CLOSED';
+    const blind = !closed && !isApprover(viewer.role) && (await this.policyFor(tenantId, shift.branch_id)).blindClose;
+    const hidden = <T>(value: T): T | null => (blind ? null : value);
+
+    const orders = await this.orderRepo.find({ where: { tenant_id: tenantId, shift_id: shiftId } });
+    const sold = orders.filter((o) => !UNSOLD_ORDER_STATES.includes(o.state));
+    let salesTotal = '0.0000';
+    let discountTotal = '0.0000';
+    let deliveryFeeTotal = '0.0000';
+    let unpaidTotal = '0.0000';
+    const byType = new Map<string, { type: string; count: number; total: string }>();
+    for (const o of sold) {
+      salesTotal = MoneyUtil.add(salesTotal, o.grand_total || '0');
+      discountTotal = MoneyUtil.add(discountTotal, o.discount_total || '0');
+      deliveryFeeTotal = MoneyUtil.add(deliveryFeeTotal, o.delivery_fee || '0');
+      if (MoneyUtil.greaterThan(o.outstanding_total || '0', '0')) unpaidTotal = MoneyUtil.add(unpaidTotal, o.outstanding_total);
+      const bucket = byType.get(o.order_type) ?? { type: o.order_type, count: 0, total: '0.0000' };
+      bucket.count += 1;
+      bucket.total = MoneyUtil.add(bucket.total, o.grand_total || '0');
+      byType.set(o.order_type, bucket);
+    }
+
+    // A payment refunded later was still taken here; the refund is counted under refunds.
+    const payments = await this.paymentRepo.find({
+      where: { tenant_id: tenantId, shift_id: shiftId, status: In(['SUCCEEDED', 'COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED']) },
+    });
+    const tenders = new Map<string, { kind: string; count: number; amount: string }>();
+    for (const p of payments) {
+      const kind = p.method_kind || 'OTHER';
+      if (blind && kind === 'CASH') continue;
+      const bucket = tenders.get(kind) ?? { kind, count: 0, amount: '0.0000' };
+      bucket.count += 1;
+      bucket.amount = MoneyUtil.add(bucket.amount, p.amount || '0');
+      tenders.set(kind, bucket);
+    }
+
+    const refunds = await em.find(Refund, { where: { tenant_id: tenantId, shift_id: shiftId, status: 'SUCCEEDED' } });
+    const refundTotal = refunds.reduce((sum, r) => MoneyUtil.add(sum, r.amount || '0'), '0.0000');
+
+    const [terminal, cashier] = await Promise.all([
+      shift.terminal_id ? this.terminalRepo.findOne({ where: { id: shift.terminal_id, tenant_id: tenantId } }) : null,
+      shift.opened_by ? em.findOne(AdminUser, { where: { id: shift.opened_by, tenant_id: tenantId } }) : null,
+    ]);
+
+    return {
+      shiftId: shift.id,
+      shiftNumber: shift.shift_number,
+      registerName: terminal ? `${terminal.name} (${terminal.code})` : null,
+      closed,
+      blind,
+      openedBy: cashier?.display_name || cashier?.username || null,
+      openedAt: shift.opened_at,
+      closedAt: shift.closed_at || null,
+      orderCount: sold.length,
+      cancelledCount: orders.filter((o) => o.state === 'CANCELLED').length,
+      salesTotal: hidden(salesTotal),
+      discountTotal: hidden(discountTotal),
+      deliveryFeeTotal: hidden(deliveryFeeTotal),
+      unpaidTotal: hidden(unpaidTotal),
+      byType: [...byType.values()].map((b) => ({ ...b, total: hidden(b.total) })),
+      tenders: [...tenders.values()],
+      refundCount: refunds.length,
+      refundTotal: hidden(refundTotal),
+      cash: {
+        openingFloat: statement.openingFloat,
+        cashSales: hidden(statement.cashSales),
+        cashRefunds: hidden(statement.cashRefunds),
+        paidIn: statement.paidIn,
+        paidOut: statement.paidOut,
+        safeDrops: statement.safeDrops,
+        expectedCash: hidden(statement.expectedCash),
+        actualCash: closed ? statement.actualCash : null,
+        shortOver: closed ? statement.shortOver : null,
+      },
+    };
   }
 
   // --- CHAIN ROLL-UP (READ ONLY) ---

@@ -139,6 +139,39 @@ export interface ShiftCloseCheck {
   dayClosed: boolean;
 }
 
+/** One register's shift at a glance. A null amount waits for the blind count. */
+export interface ShiftSalesSummary {
+  shiftId: string;
+  shiftNumber: string;
+  registerName: string | null;
+  openedBy: string | null;
+  openedAt: string;
+  closedAt: string | null;
+  closed: boolean;
+  blind: boolean;
+  orderCount: number;
+  cancelledCount: number;
+  salesTotal: string | null;
+  discountTotal: string | null;
+  deliveryFeeTotal: string | null;
+  unpaidTotal: string | null;
+  byType: Array<{ type: string; count: number; total: string | null }>;
+  tenders: Array<{ kind: string; count: number; amount: string }>;
+  refundCount: number;
+  refundTotal: string | null;
+  cash: {
+    openingFloat: string;
+    cashSales: string | null;
+    cashRefunds: string | null;
+    paidIn: string;
+    paidOut: string;
+    safeDrops: string;
+    expectedCash: string | null;
+    actualCash: string | null;
+    shortOver: string | null;
+  };
+}
+
 export const shiftApi = {
   getShifts: async (params?: Record<string, any>): Promise<{ data: CashierShift[]; total: number }> => {
     const res = await httpClient.get('/api/v1/shifts', { params });
@@ -224,6 +257,15 @@ export const shiftApi = {
 
   getShiftStatement: async (shiftId: string): Promise<ShiftStatement> => {
     const res = await httpClient.get(`/api/v1/shifts/${shiftId}/statement`);
+    return res.data;
+  },
+
+  /**
+   * What the register did in the shift. While it is open and the branch counts blind, a
+   * cashier gets no cash figure and no sales total (they come back null).
+   */
+  getSummary: async (shiftId: string): Promise<ShiftSalesSummary> => {
+    const res = await httpClient.get(`/api/v1/shifts/${shiftId}/summary`);
     return res.data;
   },
 

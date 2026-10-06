@@ -1405,6 +1405,38 @@
       "dayClosedDone": "Business day closed.",
       "dayFailed": "Could not close the business day"
     },
+    "summary": {
+      "open": "Shift summary",
+      "title": "Shift summary",
+      "loadError": "Could not load the shift summary",
+      "openedAt": "Opened {{time}}",
+      "closedAt": "Closed {{time}}",
+      "blind": "The sales total and the cash figures show once the drawer has been counted at close.",
+      "orders": "Orders",
+      "orderCount": "Orders sold",
+      "cancelled": "Cancelled",
+      "discounts": "Discounts",
+      "deliveryFees": "Delivery fees",
+      "salesTotal": "Total sales",
+      "unpaid": "Still unpaid",
+      "payments": "Payments taken",
+      "noPayments": "No payments yet.",
+      "refunds": "Refunds",
+      "drawer": "Cash drawer",
+      "difference": "Difference",
+      "methods": {
+        "CASH": "Cash",
+        "CARD": "Card",
+        "CARD_POS": "Card terminal",
+        "POS": "Card terminal",
+        "NETWORK_POS": "Card terminal",
+        "MOBILE_POS": "Courier card reader",
+        "CUSTOMER_CREDIT": "Customer credit",
+        "BANK_TRANSFER": "Bank transfer",
+        "ONLINE": "Online"
+      },
+      "amountsIn": "Amounts in {{currency}}"
+    },
     "bar": {
       "shift": "Shift",
       "since": "Open since {{time}}"
