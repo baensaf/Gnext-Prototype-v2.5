@@ -31,6 +31,7 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
+import { useShowsOrderCode } from 'src/utils/order-ref';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { httpClient as axios } from 'src/api/httpClient';
@@ -91,6 +92,7 @@ interface CourierSettlementsPageProps {
 export function CourierSettlementsPage({ hideHeader = false }: CourierSettlementsPageProps = {}) {
   const currency = useCurrencyLabel();
   const { t } = useTranslation();
+  const showOrderCode = useShowsOrderCode();
   const [tabValue, setTabValue] = useState(0);
 
   const [unsettledSummaries, setUnsettledSummaries] = useState<CourierUnsettledSummary[]>([]);
@@ -541,9 +543,11 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                       <TableRow key={r.assignment_id}>
                         <TableCell>
                           <Typography variant="subtitle2">{r.call_number ?? '—'}</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
-                            <bdi dir="ltr">{r.order_number}</bdi>
-                          </Typography>
+                          {(showOrderCode || r.call_number == null) && (
+                            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                              <bdi dir="ltr">{r.order_number}</bdi>
+                            </Typography>
+                          )}
                         </TableCell>
                         <TableCell>{rideStatusLabel(r.delivery_status)}</TableCell>
                         <TableCell align="right" dir="ltr">
