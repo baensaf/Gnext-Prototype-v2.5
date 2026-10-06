@@ -34,3 +34,11 @@ func runWindow() int {
 	}
 	return 0
 }
+
+// runApp opens the cashier app the agent serves (§19.12) in the browser.
+func runApp() int {
+	if err := openBrowser("http://" + uiAddr() + "/"); err != nil {
+		return 1
+	}
+	return 0
+}
