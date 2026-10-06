@@ -9,6 +9,10 @@
 
 import type { BranchType } from 'src/api/tenantApi';
 
+import { agentMode } from 'src/utils/agent-mode';
+
+import { isAgentRoute } from 'src/config/agent-routes';
+
 /** Roles the prototype seeds or recognises. Anything else is treated as a register account. */
 export type AppRole = 'SUPER_ADMIN' | 'ADMIN' | 'OWNER' | 'MANAGER' | 'CASHIER';
 
@@ -213,6 +217,9 @@ export function canReachPath(
   pathname: string,
   isHeadOffice: boolean = true
 ): boolean {
+  // On a branch agent the app opens the cashier's pages only (agent-routes.ts), whoever signs in.
+  // The page that explains this is drawn before the role guard, so this only trims what is offered.
+  if (agentMode && !isAgentRoute(pathname)) return false;
   const access = accessForRole(role);
   if (!access) return true;
   if (!isHeadOffice && isChainOnlyPath(pathname)) return false;
@@ -264,6 +271,8 @@ export function isManagerOrAbove(role?: string | null): boolean {
 }
 
 export function homePathForRole(role?: string | null): string {
+  // A branch agent's app starts at the register for every role: a manager's dashboard is not served there.
+  if (agentMode) return '/app/pos';
   return accessForRole(role)?.home ?? '/app/dashboard';
 }
 

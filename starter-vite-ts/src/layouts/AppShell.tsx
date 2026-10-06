@@ -4,6 +4,7 @@ import { Outlet } from 'react-router';
 import { paths } from 'src/routes/paths';
 import { usePathname } from 'src/routes/hooks';
 import { RoleGuard } from 'src/routes/components/role-guard';
+import { AgentGuard } from 'src/routes/components/agent-guard';
 
 import { DashboardLayout } from './dashboard';
 import { useNavData } from './nav-config-dashboard';
@@ -23,9 +24,11 @@ export function AppShell() {
         main: isRegister ? { sx: { pb: 1 } } : undefined,
       }}
     >
-      <RoleGuard>
-        <Outlet />
-      </RoleGuard>
+      <AgentGuard>
+        <RoleGuard>
+          <Outlet />
+        </RoleGuard>
+      </AgentGuard>
     </DashboardLayout>
   );
 }

@@ -19,6 +19,7 @@ import { VerticalDivider } from './content';
 import { NavVertical } from './nav-vertical';
 import { NavHorizontal } from './nav-horizontal';
 import { useNavData } from '../nav-config-dashboard';
+import { AgentChip } from '../components/agent-chip';
 import { MenuButton } from '../components/menu-button';
 import { AccountDrawer } from '../components/account-drawer';
 import { WorkspacesPopover } from '../components/workspaces-popover';
@@ -126,6 +127,9 @@ export function DashboardLayout({
       ),
       rightArea: (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0, sm: 0.75 } }}>
+          {/** @slot Where this app runs, on a branch agent only */}
+          <AgentChip />
+
           {/** @slot Orders waiting for the store to accept them */}
           <IncomingOrdersButton />
 
