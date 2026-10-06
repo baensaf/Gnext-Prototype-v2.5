@@ -1,4 +1,4 @@
-| S7 | this PR | agent 2.4.0 || S6 | #222 | merged (agent 2.3.0) || S5 | #221 | merged (agent 2.2.0) || S4 | #220 | merged || S3 | #219 | merged (agent 2.1.0) || S2 | #218 | merged || S1 | #217 | merged (agent 2.0.0) || S0 | #216 | merged |# Plan: the branch agent serves the cashier
+# Plan: the branch agent serves the cashier
 
 Written 2026-10-06 by the lead session, for Sonnet workers. One slice per worker, in order.
 The lead audits each slice, opens its PR, waits for CI and merges it before the next slice
@@ -420,11 +420,11 @@ you changed and that CI will build it.
 
 | Slice | PR | State |
 |---|---|---|
-| S0 | | |
-| S1 | | |
-| S2 | | |
-| S3 | | |
-| S4 | | |
-| S5 | | |
-| S6 | | |
-| S7 | | |
+| S0 | #216 | Merged |
+| S1 | #217 | Merged, agent 2.0.0 |
+| S2 | #218 | Merged |
+| S3 | #219 | Merged, agent 2.1.0 |
+| S4 | #220 | Merged |
+| S5 | #221 | Merged, agent 2.2.0 |
+| S6 | #222 | Merged, agent 2.3.0 |
+| S7 | #223 | Agent 2.4.0 |
