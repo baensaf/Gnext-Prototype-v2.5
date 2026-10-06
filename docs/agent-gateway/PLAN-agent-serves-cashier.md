@@ -1,4 +1,4 @@
-# Plan: the branch agent serves the cashier
+| S7 | this PR | agent 2.4.0 || S6 | #222 | merged (agent 2.3.0) || S5 | #221 | merged (agent 2.2.0) || S4 | #220 | merged || S3 | #219 | merged (agent 2.1.0) || S2 | #218 | merged || S1 | #217 | merged (agent 2.0.0) || S0 | #216 | merged |# Plan: the branch agent serves the cashier
 
 Written 2026-10-06 by the lead session, for Sonnet workers. One slice per worker, in order.
 The lead audits each slice, opens its PR, waits for CI and merges it before the next slice
