@@ -23,8 +23,13 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import RestaurantIcon from '@mui/icons-material/Restaurant';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import TakeoutDiningIcon from '@mui/icons-material/TakeoutDining';
+import DeliveryDiningIcon from '@mui/icons-material/DeliveryDining';
+import DirectionsWalkIcon from '@mui/icons-material/DirectionsWalk';
 import {
   Box,
   Tab,
@@ -132,7 +137,7 @@ const TABS: Array<{ key: TabKey; label: string; color: LabelColor }> = [
   { key: 'OPEN', label: 'open', color: 'info' },
   { key: 'COMPLETED', label: 'completed', color: 'success' },
   { key: 'CANCELLED', label: 'cancelled', color: 'error' },
-  { key: 'REFUNDED', label: 'refunded', color: 'default' },
+  { key: 'REFUNDED', label: 'refunded', color: 'secondary' },
 ];
 
 const ORDER_TYPES = ['DINE_IN', 'TAKEAWAY', 'PICKUP', 'DELIVERY', 'AGGREGATOR'];
@@ -385,16 +390,20 @@ export function OrdersWorkflowPage() {
     }
   };
 
-  const getOrderTypeColor = (orderType: string) => {
+  // Colour on this page means the order's state (open, completed, cancelled...). The kind of
+  // order is told apart by an icon on a neutral chip, so a blue Delivery never reads as Open.
+  const getOrderTypeIcon = (orderType: string) => {
     switch (orderType) {
       case 'DINE_IN':
-        return 'primary';
+        return <RestaurantIcon />;
       case 'DELIVERY':
-        return 'info';
+        return <DeliveryDiningIcon />;
       case 'AGGREGATOR':
-        return 'warning';
+        return <StorefrontIcon />;
+      case 'PICKUP':
+        return <DirectionsWalkIcon />;
       default:
-        return 'secondary';
+        return <TakeoutDiningIcon />;
     }
   };
 
@@ -872,6 +881,8 @@ export function OrdersWorkflowPage() {
         return 'secondary';
       case 'CANCELLED':
         return 'error';
+      case 'COMPLETED':
+        return 'success';
       default:
         return 'default';
     }
@@ -969,9 +980,10 @@ export function OrdersWorkflowPage() {
     return (
       <Box sx={{ minWidth: 0 }}>
         <Chip
-          color={getOrderTypeColor(order.order_type) as any}
+          icon={getOrderTypeIcon(order.order_type)}
           label={getOrderTypeLabel(order.order_type)}
           size="small"
+          variant="outlined"
         />
         {(place || channel) && (
           <Typography color="text.secondary" variant="caption" sx={{ display: 'block', mt: 0.25 }} noWrap>
@@ -1200,7 +1212,7 @@ export function OrdersWorkflowPage() {
       filterOperators: selectFilters('after_hours'),
       renderCell: ({ row }) =>
         row.after_hours ? (
-          <Chip size="small" color="warning" variant="outlined" label={t('branchMgmt.orders.afterHours', 'After hours')} />
+          <Chip size="small" variant="outlined" label={t('branchMgmt.orders.afterHours', 'After hours')} />
         ) : null,
     } as GridColDef<OrderListRow>,
     {
@@ -1794,7 +1806,7 @@ export function OrdersWorkflowPage() {
                     label={getOrderTypeLabel(selectedDrawerOrder.order_type)}
                     size="small"
                     variant="outlined"
-                    color={getOrderTypeColor(selectedDrawerOrder.order_type) as any}
+                    icon={getOrderTypeIcon(selectedDrawerOrder.order_type)}
                   />
                   {/* The till and Snappfood go without saying; the type chip already names Snappfood. */}
                   {(selectedDrawerOrder.channel === 'KIOSK' || selectedDrawerOrder.channel === 'ONLINE') && (
