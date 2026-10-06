@@ -1554,6 +1554,111 @@ export class DeliveryService {
     return { ...savedSettlement, lines };
   }
 
+  /**
+   * Settles a courier in one step, as the cashier does it at the counter: for each delivered
+   * ride the card slip's amount (the rest of what the order owed is cash), and the cash the
+   * courier hands over. The batch is created and closed together, so the orders are paid and
+   * completed and the cash is in the drawer the moment the cashier confirms.
+   *
+   * A gap between the cash handed over and the cash expected, or a card slip larger than what
+   * an order owed, needs a manager. That is checked before anything is written, so asking for
+   * the PIN leaves no half-made batch behind; with the approval the same call goes through.
+   */
+  async settleCourier(
+    tenantId: string,
+    userId: string,
+    data: {
+      courier_id: string;
+      branch_id?: string;
+      /** Card slip amount per ride, by assignment id. Missing means paid in cash. */
+      card?: Record<string, string | number>;
+      /** Cash the courier handed over. Missing means exactly what was expected. */
+      actual_cash_amount?: string | number;
+      approvalRequestId?: string;
+    },
+    correlationId?: string,
+  ) {
+    const preview = await this.previewSettlement(tenantId, data.courier_id, undefined, data.branch_id);
+    if (preview.line_count === 0) {
+      throw new BadRequestException('This courier has no unsettled deliveries to settle');
+    }
+
+    // The split each ride ends up with, worked out the way updateSettlement will store it.
+    const card = data.card || {};
+    let expectedCash = '0.00';
+    let expectedPos = '0.00';
+    let actualPos = '0.00';
+    for (const line of preview.lines) {
+      if (line.delivery_status !== 'DELIVERED') continue;
+      const owed = MoneyUtil.add(line.expected_cash || '0', line.expected_pos || '0', 2);
+      const slip = card[line.assignment_id] ?? line.expected_pos ?? '0';
+      const { cash, pos } = this.splitCollection(owed, slip);
+      expectedCash = MoneyUtil.add(expectedCash, cash, 2);
+      expectedPos = MoneyUtil.add(expectedPos, pos, 2);
+      actualPos = MoneyUtil.add(actualPos, MoneyUtil.format(slip || 0, 2), 2);
+    }
+    const actualCash =
+      data.actual_cash_amount === undefined || data.actual_cash_amount === null || data.actual_cash_amount === ''
+        ? expectedCash
+        : MoneyUtil.format(data.actual_cash_amount, 2);
+    const cashGap = MoneyUtil.subtract(actualCash, expectedCash, 2);
+    const posGap = MoneyUtil.subtract(actualPos, expectedPos, 2);
+
+    if (!MoneyUtil.isZero(cashGap) || !MoneyUtil.isZero(posGap)) {
+      const approval = data.approvalRequestId
+        ? await this.approvalRepo.findOne({ where: { id: data.approvalRequestId, tenant_id: tenantId, status: 'APPROVED' } })
+        : null;
+      const valid =
+        approval &&
+        approval.action === 'SETTLEMENT_DISCREPANCY' &&
+        approval.entity_id === data.courier_id &&
+        new Date(approval.expires_at) > new Date();
+      if (!valid) {
+        throw new ForbiddenException({
+          statusCode: 403,
+          code: 'APPROVAL_REQUIRED',
+          message: 'The money handed over does not match what the courier collected; a manager has to approve it.',
+          expected_cash: expectedCash,
+          actual_cash: actualCash,
+          cash_gap: cashGap,
+          pos_gap: posGap,
+        });
+      }
+    }
+
+    const created = await this.createSettlement(
+      tenantId,
+      userId,
+      { courier_id: data.courier_id, branch_id: data.branch_id, assignment_ids: preview.assignment_ids },
+      correlationId,
+    );
+    try {
+      await this.updateSettlement(
+        tenantId,
+        created.id,
+        {
+          lines: created.lines.map((l: CourierSettlementLine) => {
+            if (l.delivery_status !== 'DELIVERED') return { id: l.id };
+            const owed = MoneyUtil.add(l.expected_cash || '0', l.expected_pos || '0', 2);
+            const slip = card[l.delivery_assignment_id || ''] ?? l.expected_pos ?? '0';
+            const { cash } = this.splitCollection(owed, slip);
+            return { id: l.id, actual_pos: slip, actual_cash: cash };
+          }),
+          actual_cash_amount: actualCash,
+          actual_pos_amount: actualPos,
+        },
+        correlationId,
+      );
+      return await this.closeSettlement(tenantId, created.id, userId, data.approvalRequestId, correlationId);
+    } catch (err) {
+      // Closing posts nothing unless it all goes through, so a batch that failed to close
+      // (no open drawer, say) is only a draft; take it away rather than leave it reserved.
+      await this.settlementLineRepo.delete({ settlement_id: created.id });
+      await this.settlementRepo.delete({ id: created.id, tenant_id: tenantId, status: 'DRAFT' });
+      throw err;
+    }
+  }
+
   async updateSettlement(tenantId: string, id: string, data: any, correlationId?: string) {
     const settlement = await this.settlementRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!settlement) throw new NotFoundException('Settlement not found');

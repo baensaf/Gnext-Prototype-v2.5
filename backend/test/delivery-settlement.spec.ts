@@ -529,4 +529,67 @@ describe('DeliveryService (Courier Settlement)', () => {
     expect(statement.summary.net_settlement_amount).toBe('285.00');
     expect(statement.lines.length).toBe(1);
   });
+
+  describe('settling a courier in one step', () => {
+    const preview = {
+      line_count: 2,
+      assignment_ids: ['a1', 'a2'],
+      lines: [
+        { assignment_id: 'a1', delivery_status: 'DELIVERED', expected_cash: '1000.00', expected_pos: '0.00' },
+        { assignment_id: 'a2', delivery_status: 'FAILED', expected_cash: '0.00', expected_pos: '0.00' },
+      ],
+    };
+    const created = {
+      id: 'set-1',
+      lines: [
+        { id: 'l1', delivery_assignment_id: 'a1', delivery_status: 'DELIVERED', expected_cash: '1000.00', expected_pos: '0.00' },
+        { id: 'l2', delivery_assignment_id: 'a2', delivery_status: 'FAILED', expected_cash: '0.00', expected_pos: '0.00' },
+      ],
+    };
+
+    beforeEach(() => {
+      jest.spyOn(service, 'previewSettlement').mockResolvedValue(preview as any);
+      jest.spyOn(service, 'createSettlement').mockResolvedValue(created as any);
+      jest.spyOn(service, 'updateSettlement').mockResolvedValue({} as any);
+      jest.spyOn(service, 'closeSettlement').mockResolvedValue({ id: 'set-1', status: 'CLOSED' } as any);
+      settlementLineRepo.delete = jest.fn();
+      settlementRepo.delete = jest.fn();
+    });
+
+    it('takes the card slip, counts the rest as cash, and closes the batch it makes', async () => {
+      const result = await service.settleCourier('t1', 'u1', { courier_id: 'c1', branch_id: 'b1', card: { a1: '400' }, actual_cash_amount: '600' });
+      expect(result).toEqual({ id: 'set-1', status: 'CLOSED' });
+      expect(service.updateSettlement).toHaveBeenCalledWith(
+        't1',
+        'set-1',
+        expect.objectContaining({
+          lines: [{ id: 'l1', actual_pos: '400', actual_cash: '600.0000' }, { id: 'l2' }],
+          actual_cash_amount: '600.00',
+          actual_pos_amount: '400.00',
+        }),
+        undefined,
+      );
+      expect(service.closeSettlement).toHaveBeenCalledWith('t1', 'set-1', 'u1', undefined, undefined);
+    });
+
+    it('asks for a manager before writing anything when the cash does not match', async () => {
+      await expect(service.settleCourier('t1', 'u1', { courier_id: 'c1', actual_cash_amount: '900' })).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'APPROVAL_REQUIRED', cash_gap: '-100.00' }),
+      });
+      expect(service.createSettlement).not.toHaveBeenCalled();
+    });
+
+    it('goes through with an approval given for that courier', async () => {
+      approvalRepo.findOne.mockResolvedValue({ id: 'apr-1', action: 'SETTLEMENT_DISCREPANCY', entity_id: 'c1', expires_at: new Date(Date.now() + 60000) });
+      await service.settleCourier('t1', 'u1', { courier_id: 'c1', actual_cash_amount: '900', approvalRequestId: 'apr-1' });
+      expect(service.closeSettlement).toHaveBeenCalledWith('t1', 'set-1', 'u1', 'apr-1', undefined);
+    });
+
+    it('takes the draft away again when closing fails, so the rides are free to settle', async () => {
+      (service.closeSettlement as jest.Mock).mockRejectedValue(new Error('no open drawer'));
+      await expect(service.settleCourier('t1', 'u1', { courier_id: 'c1' })).rejects.toThrow('no open drawer');
+      expect(settlementLineRepo.delete).toHaveBeenCalledWith({ settlement_id: 'set-1' });
+      expect(settlementRepo.delete).toHaveBeenCalledWith({ id: 'set-1', tenant_id: 't1', status: 'DRAFT' });
+    });
+  });
 });
