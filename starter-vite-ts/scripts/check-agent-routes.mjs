@@ -41,13 +41,13 @@ const OPENS = [
   '/app/delivery/settlements/7',
   '/app/cashier/shifts',
   '/app/cashier/shifts/42',
+  '/app/dine-in/floor',
+  '/app/refunds',
 ];
 const CLOUD = [
   '/app',
   '/app/dashboard',
   '/app/kds',
-  '/app/dine-in/floor',
-  '/app/refunds',
   '/app/payments',
   '/app/delivery/zones',
   '/app/delivery/audit',
