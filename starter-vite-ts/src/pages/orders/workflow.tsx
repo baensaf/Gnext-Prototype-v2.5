@@ -9,7 +9,6 @@ import { useNavigate, useSearchParams } from 'react-router';
 import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
 
 import EditIcon from '@mui/icons-material/Edit';
-import EventIcon from '@mui/icons-material/Event';
 import CloseIcon from '@mui/icons-material/Close';
 import PrintIcon from '@mui/icons-material/Print';
 import CancelIcon from '@mui/icons-material/Cancel';
@@ -131,9 +130,6 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'REFUNDED', label: 'refunded' },
   { key: 'ALL', label: 'all' },
 ];
-
-// The date scopes the chip beside the tabs offers: the Placed filter's ranges, by their labels.
-const DATE_SCOPES: Record<string, string> = { today: 'today', yesterday: 'yesterday', last7: '7d', last30: '30d' };
 
 const ORDER_TYPES = ['DINE_IN', 'TAKEAWAY', 'PICKUP', 'DELIVERY', 'AGGREGATOR'];
 const CHANNELS = ['POS', 'KIOSK', 'ONLINE', 'AGGREGATOR'];
@@ -268,13 +264,6 @@ export function OrdersWorkflowPage() {
     [filterParam, legacyParams]
   );
   const query = param('q');
-  // The date range sits on the Placed column's filter; the chip beside the tabs names and sets it.
-  const placedFilter = filterModel.items.find((item) => item.field === 'placed_at');
-  const dateScopeLabel = !placedFilter
-    ? t('orders.dateScope.anyDate')
-    : DATE_SCOPES[placedFilter.operator]
-      ? t(`orders.filters.ranges.${DATE_SCOPES[placedFilter.operator]}`)
-      : t('orders.dateScope.custom');
   const page = Math.max(0, Number(param('page', '0')) || 0);
   const pageSize = PAGE_SIZES.includes(Number(param('size'))) ? Number(param('size')) : 25;
   const sortField = (SORTABLE as readonly string[]).includes(param('sort')) ? (param('sort') as OrderListQuery['sort']) : 'placed_at';
@@ -304,7 +293,6 @@ export function OrdersWorkflowPage() {
   const [rows, setRows] = useState<OrderListRow[]>([]);
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState<Partial<Record<TabKey, number>>>({});
-  const [dateMenuAnchor, setDateMenuAnchor] = useState<HTMLElement | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [reasonCodes, setReasonCodes] = useState<ReasonCode[]>([]);
@@ -657,12 +645,6 @@ export function OrdersWorkflowPage() {
 
   const closeDrawer = () => setParams({ order: null }, true);
 
-  /** Puts the list on one of the chip's date ranges, or on any date, keeping the other filters. */
-  const setDateScope = (operator: string | null) => {
-    const others = filterModel.items.filter((item) => item.field !== 'placed_at');
-    const items = operator ? [{ id: 'placed_at', field: 'placed_at', operator }, ...others] : others;
-    setParams({ f: encodeFilterModel({ ...filterModel, items }), ...LEGACY_FILTER_PARAMS });
-  };
 
   const handleExport = async () => {
     setExporting(true);
@@ -1331,56 +1313,19 @@ export function OrdersWorkflowPage() {
   const sortModel = useMemo<GridSortModel>(() => [{ field: sortField || 'placed_at', sort: sortDir }], [sortField, sortDir]);
   const menuPrimary = menuOrder && !readOnly ? primaryActionOf(menuOrder) : null;
 
-  // Which orders: the tabs and their date range, on the grid's toolbar line beside the columns,
-  // filters and search.
+  // Which orders: the tabs, on the grid's toolbar line beside the columns, filters and search.
   const tabsBar = (
-    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
-      <Tabs
-        onChange={(_, val) => setParams({ tab: val })}
-        sx={{ minHeight: 40, minWidth: 0 }}
-        value={TABS.some((x) => x.key === tab) ? tab : false}
-        variant="scrollable"
-        scrollButtons={false}
-      >
-        {TABS.map(({ key, label }) => (
-          <Tab key={key} label={t(`orders.tabs.${label}`, { count: counts[key] ?? 0 })} value={key} sx={{ minHeight: 40 }} />
-        ))}
-      </Tabs>
-      {/* The finished tabs count within this date range; open and held orders show whatever their date. */}
-      <Tooltip title={t('orders.dateScope.hint')}>
-        <Chip
-          icon={<EventIcon />}
-          label={dateScopeLabel}
-          onClick={(e) => setDateMenuAnchor(e.currentTarget)}
-          size="small"
-          variant="outlined"
-          sx={{ flexShrink: 0, fontWeight: 600 }}
-        />
-      </Tooltip>
-      <Menu anchorEl={dateMenuAnchor} open={!!dateMenuAnchor} onClose={() => setDateMenuAnchor(null)}>
-        {Object.entries(DATE_SCOPES).map(([operator, label]) => (
-          <MenuItem
-            key={operator}
-            selected={placedFilter?.operator === operator}
-            onClick={() => {
-              setDateMenuAnchor(null);
-              setDateScope(operator);
-            }}
-          >
-            {t(`orders.filters.ranges.${label}`)}
-          </MenuItem>
-        ))}
-        <MenuItem
-          selected={!placedFilter}
-          onClick={() => {
-            setDateMenuAnchor(null);
-            setDateScope(null);
-          }}
-        >
-          {t('orders.dateScope.anyDate')}
-        </MenuItem>
-      </Menu>
-    </Stack>
+    <Tabs
+      onChange={(_, val) => setParams({ tab: val })}
+      sx={{ minHeight: 40, minWidth: 0 }}
+      value={TABS.some((x) => x.key === tab) ? tab : false}
+      variant="scrollable"
+      scrollButtons={false}
+    >
+      {TABS.map(({ key, label }) => (
+        <Tab key={key} label={t(`orders.tabs.${label}`, { count: counts[key] ?? 0 })} value={key} sx={{ minHeight: 40 }} />
+      ))}
+    </Tabs>
   );
 
   return (
