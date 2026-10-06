@@ -1146,7 +1146,7 @@
       "expectedCash": "Expected Cash:",
       "expectedPos": "Expected Mobile POS:",
       "totalDeliveryFees": "Total Delivery Fees:",
-      "startBatch": "Start settlement",
+      "startBatch": "Settle",
       "empty": "No couriers found or no active delivery assignments."
     },
     "batches": {
@@ -1165,18 +1165,9 @@
       "empty": "No settlement batches created yet."
     },
     "previewModal": {
-      "title": "Preview New Courier Settlement",
-      "courier": "Courier",
-      "expectedCash": "Expected Cash Collection",
-      "expectedPos": "Expected Mobile POS Collection",
-      "deliveriesIncluded": "Deliveries Included ({{count}}):",
       "orderNumber": "Order #",
       "status": "Status",
-      "paymentMethod": "Payment Method",
-      "expCash": "Expected cash",
-      "expPos": "Expected card",
-      "cancel": "Cancel",
-      "createDraft": "Start settlement"
+      "cancel": "Cancel"
     },
     "detailModal": {
       "title": "Settlement #{{number}} - {{name}}",
@@ -1261,7 +1252,22 @@
     "close": "Close Settlement",
     "deliveries": "Included Deliveries & Orders",
     "noLines": "No individual delivery lines recorded for this settlement.",
-    "notFound": "Settlement not found"
+    "notFound": "Settlement not found",
+    "settleModal": {
+      "title": "Settle with {{name}}",
+      "cardHelp": "Type each card slip; the rest of the order is cash. Then count the cash the courier hands over.",
+      "owed": "Order amount",
+      "card": "Card slip",
+      "cash": "Cash",
+      "expectedCash": "Cash expected",
+      "cashHandedOver": "Cash handed over",
+      "gap": "Difference of {{amount}}: a manager has to approve.",
+      "cardOver": "A card slip is more than its order: a manager has to approve.",
+      "submit": "Settle",
+      "done": "{{name}} is settled: {{count}} orders paid.",
+      "failed": "Could not settle",
+      "approvalDetails": "Courier settlement does not match"
+    }
   },
   "cashier": {
     "title": "Cashier Shift Management",

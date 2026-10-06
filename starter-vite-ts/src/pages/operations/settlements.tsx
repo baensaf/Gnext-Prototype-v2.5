@@ -11,6 +11,7 @@ import {
   Table,
   Paper,
   Stack,
+  Alert,
   Button,
   Dialog,
   Divider,
@@ -37,6 +38,7 @@ import { useBranchContext } from 'src/contexts/branch-context';
 
 import { Iconify } from 'src/components/iconify';
 import { VersionTag } from 'src/components/version-tag';
+import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 
 interface CourierUnsettledSummary {
   courier_id: string;
@@ -98,6 +100,13 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedCourierId, setSelectedCourierId] = useState<string | null>(null);
   const [previewData, setPreviewData] = useState<any>(null);
+  // The settle dialog: the card slip per ride (rials, by assignment) and the cash handed over.
+  const [cardBy, setCardBy] = useState<Record<string, string>>({});
+  const [cashCounted, setCashCounted] = useState<string | null>(null);
+  const [settling, setSettling] = useState(false);
+  const [settleError, setSettleError] = useState<string | null>(null);
+  const [settleApprovalOpen, setSettleApprovalOpen] = useState(false);
+  const [settleDone, setSettleDone] = useState<string | null>(null);
 
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [activeSettlementDetail, setActiveSettlementDetail] = useState<any>(null);
@@ -141,25 +150,67 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
     fetchData();
   }, [fetchData]);
 
+  const errorText = (err: any, fallback: string) => err?.detail || err?.message || err?.response?.data?.message || fallback;
+
   const handleStartCreateSettlement = async (courierId: string) => {
     setSelectedCourierId(courierId);
+    setSettleError(null);
+    setCardBy({});
+    setCashCounted(null);
     try {
       const res = await axios.post('/api/v1/delivery/settlements/preview', { courier_id: courierId, branch_id: branchId });
       setPreviewData(res.data);
       setCreateDialogOpen(true);
     } catch (err) {
-      alert(t('settlements.errors.previewFailed') + ': ' + ((err as any).response?.data?.message || (err as any).message));
+      alert(t('settlements.errors.previewFailed') + ': ' + errorText(err, ''));
     }
   };
 
-  const handleConfirmCreateSettlement = async () => {
+  // What each delivered ride owed, how much of it the card slip took, and the cash that is left.
+  const settleRows = (previewData?.lines || []).map((l: any) => {
+    const delivered = l.delivery_status === 'DELIVERED';
+    const owed = delivered ? MoneyUtil.add(l.expected_cash || '0', l.expected_pos || '0', 2) : '0.00';
+    const typed = cardBy[l.assignment_id];
+    const card = typed !== undefined && MoneyUtil.isValid(typed) ? typed : l.expected_pos || '0';
+    const cardTaken = MoneyUtil.greaterThan(card, owed) ? owed : card;
+    return { ...l, delivered, owed, card, cash: MoneyUtil.subtract(owed, cardTaken, 2) };
+  });
+  const settleExpectedCash = MoneyUtil.sum(settleRows.map((r: any) => r.cash), 2);
+  const settleCash = cashCounted ?? settleExpectedCash;
+  const settleCashGap = MoneyUtil.subtract(MoneyUtil.isValid(settleCash) ? settleCash : '0', settleExpectedCash, 2);
+  const settleCardOver = settleRows.some((r: any) => MoneyUtil.greaterThan(r.card, r.owed));
+
+  // One step: the server makes the batch, records the payments and closes it. A gap in the
+  // money comes back as APPROVAL_REQUIRED; the manager's PIN then sends the same settlement.
+  const handleSettle = async (approvalRequestId?: string) => {
     if (!selectedCourierId) return;
+    setSettling(true);
+    setSettleError(null);
     try {
-      await axios.post('/api/v1/delivery/settlements', { courier_id: selectedCourierId, branch_id: branchId });
+      const card = Object.fromEntries(settleRows.filter((r: any) => r.delivered).map((r: any) => [r.assignment_id, r.card]));
+      await axios.post('/api/v1/delivery/settlements/settle', {
+        courier_id: selectedCourierId,
+        branch_id: branchId,
+        card,
+        actual_cash_amount: settleCash,
+        approvalRequestId,
+      });
       setCreateDialogOpen(false);
+      setSettleDone(
+        t('settlements.settleModal.done', {
+          name: previewData?.courier_name,
+          count: settleRows.filter((r: any) => r.delivered).length,
+        })
+      );
       fetchData();
-    } catch (err) {
-      alert(t('settlements.errors.createFailed') + ': ' + ((err as any).response?.data?.message || (err as any).message));
+    } catch (err: any) {
+      if ((err?.code || err?.response?.data?.code) === 'APPROVAL_REQUIRED') {
+        setSettleApprovalOpen(true);
+      } else {
+        setSettleError(errorText(err, t('settlements.settleModal.failed')));
+      }
+    } finally {
+      setSettling(false);
     }
   };
 
@@ -203,11 +254,6 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
   const rideStatusLabel = (status?: string) => {
     const key = { DELIVERED: 'delivered', FAILED: 'failed', CANCELLED: 'cancelled', OUT_FOR_DELIVERY: 'enRoute' }[status || ''];
     return key ? t(`delivery.states.${key}`) : status || '';
-  };
-  const methodLabel = (code?: string) => {
-    if (code === 'CASH') return t('settlements.detailModal.methodCash');
-    if (code === 'MOBILE_POS') return t('settlements.detailModal.methodCard');
-    return code || '';
   };
 
   const paidByLabel = (l: SettlementLine) => {
@@ -463,35 +509,20 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
         </Card>
       )}
 
-      {/* DIALOG: Create Settlement Preview */}
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{t('settlements.previewModal.title')}</DialogTitle>
+      {settleDone && (
+        <Alert severity="success" onClose={() => setSettleDone(null)} sx={{ mt: 3 }}>
+          {settleDone}
+        </Alert>
+      )}
+
+      {/* DIALOG: Settle a courier. The card slip per ride, the cash handed over, and done. */}
+      <Dialog open={createDialogOpen} onClose={() => !settling && setCreateDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>{t('settlements.settleModal.title', { name: previewData?.courier_name || '' })}</DialogTitle>
         <DialogContent dividers>
           {previewData && (
             <Stack spacing={2}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                {t('settlements.previewModal.courier')}: {previewData.courier_name} ({previewData.courier_code})
-              </Typography>
-
-              <Grid container spacing={2}>
-                {[
-                  { label: t('settlements.previewModal.expectedCash'), value: previewData.expected_cash_amount },
-                  { label: t('settlements.previewModal.expectedPos'), value: previewData.expected_pos_amount },
-                  // Couriers are on a salary, so nothing comes off the cash they hand in.
-                ].map((tile) => (
-                  <Grid key={tile.label} size={{ xs: 6 }}>
-                    <Paper sx={{ p: 2, bgcolor: 'background.neutral', height: '100%' }}>
-                      <Typography variant="caption" color="text.secondary">
-                        {tile.label}
-                      </Typography>
-                      <Typography variant="h6" dir="ltr">{MoneyUtil.formatCurrency(tile.value || 0)} {currency}</Typography>
-                    </Paper>
-                  </Grid>
-                ))}
-              </Grid>
-
-              <Typography variant="subtitle2" sx={{ mt: 2 }}>
-                {t('settlements.previewModal.deliveriesIncluded', { count: previewData.lines?.length || 0 })}
+              <Typography variant="body2" color="text.secondary">
+                {t('settlements.settleModal.cardHelp')}
               </Typography>
 
               <TableContainer component={Paper} variant="outlined">
@@ -500,34 +531,96 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                     <TableRow>
                       <TableCell>{t('settlements.previewModal.orderNumber')}</TableCell>
                       <TableCell>{t('settlements.previewModal.status')}</TableCell>
-                      <TableCell>{t('settlements.previewModal.paymentMethod')}</TableCell>
-                      <TableCell align="right">{t('settlements.previewModal.expCash')}</TableCell>
-                      <TableCell align="right">{t('settlements.previewModal.expPos')}</TableCell>
+                      <TableCell align="right">{t('settlements.settleModal.owed')}</TableCell>
+                      <TableCell align="right">{t('settlements.settleModal.card')}</TableCell>
+                      <TableCell align="right">{t('settlements.settleModal.cash')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {previewData.lines?.map((l: any, idx: number) => (
-                      <TableRow key={idx}>
-                        <TableCell>{l.order_number}</TableCell>
-                        <TableCell>{rideStatusLabel(l.delivery_status)}</TableCell>
-                        <TableCell>{methodLabel(l.payment_method_code)}</TableCell>
-                        <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(l.expected_cash || 0)} {currency}</TableCell>
-                        <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(l.expected_pos || 0)} {currency}</TableCell>
+                    {settleRows.map((r: any) => (
+                      <TableRow key={r.assignment_id}>
+                        <TableCell>
+                          <Typography variant="subtitle2">{r.call_number ?? '—'}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                            <bdi dir="ltr">{r.order_number}</bdi>
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{rideStatusLabel(r.delivery_status)}</TableCell>
+                        <TableCell align="right" dir="ltr">
+                          {MoneyUtil.formatCurrency(r.owed)} {currency}
+                        </TableCell>
+                        <TableCell align="right" sx={{ width: 170 }}>
+                          {r.delivered ? (
+                            <TextField
+                              size="small"
+                              value={toToman(r.card)}
+                              onChange={(e) => setCardBy((prev) => ({ ...prev, [r.assignment_id]: fromToman(e.target.value) || '0' }))}
+                              error={MoneyUtil.greaterThan(r.card, r.owed)}
+                              slotProps={{ htmlInput: { inputMode: 'numeric', style: { textAlign: 'right', padding: '4px 8px' } } }}
+                            />
+                          ) : null}
+                        </TableCell>
+                        <TableCell align="right" dir="ltr">
+                          {r.delivered ? `${MoneyUtil.formatCurrency(r.cash)} ${currency}` : null}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </TableContainer>
+
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('settlements.settleModal.expectedCash')}
+                  </Typography>
+                  <Typography variant="h6" dir="ltr" sx={{ textAlign: 'start' }}>
+                    {MoneyUtil.formatCurrency(settleExpectedCash)} {currency}
+                  </Typography>
+                </Box>
+                <TextField
+                  label={t('settlements.settleModal.cashHandedOver')}
+                  value={toToman(settleCash)}
+                  onChange={(e) => setCashCounted(fromToman(e.target.value) || '0')}
+                  slotProps={{ htmlInput: { inputMode: 'numeric', style: { textAlign: 'right' } } }}
+                  sx={{ width: { sm: 240 } }}
+                />
+              </Stack>
+
+              {(!MoneyUtil.isZero(settleCashGap) || settleCardOver) && (
+                <Alert severity="warning">
+                  {!MoneyUtil.isZero(settleCashGap)
+                    ? t('settlements.settleModal.gap', { amount: `${MoneyUtil.formatCurrency(settleCashGap)} ${currency}` })
+                    : t('settlements.settleModal.cardOver')}
+                </Alert>
+              )}
+              {settleError && <Alert severity="error">{settleError}</Alert>}
             </Stack>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)}>{t('settlements.previewModal.cancel')}</Button>
-          <Button variant="contained" color="primary" onClick={handleConfirmCreateSettlement}>
-            {t('settlements.previewModal.createDraft')}
+          <Button disabled={settling} onClick={() => setCreateDialogOpen(false)}>
+            {t('settlements.previewModal.cancel')}
+          </Button>
+          <Button variant="contained" color="primary" disabled={settling} onClick={() => handleSettle()}>
+            {t('settlements.settleModal.submit')}
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ApprovalModal
+        open={settleApprovalOpen}
+        onClose={() => setSettleApprovalOpen(false)}
+        onSuccess={(_pin, requestId) => {
+          setSettleApprovalOpen(false);
+          handleSettle(requestId);
+        }}
+        actionName="SETTLEMENT_DISCREPANCY"
+        entityType="CourierSettlement"
+        entityId={selectedCourierId || undefined}
+        detailsText={t('settlements.settleModal.approvalDetails')}
+        createRequest
+      />
 
       {/* DIALOG: Settlement Detail & Verification */}
       <Dialog open={detailDialogOpen} onClose={() => setDetailDialogOpen(false)} maxWidth="lg" fullWidth>

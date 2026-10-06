@@ -309,6 +309,26 @@ export class DeliveryController {
     );
   }
 
+  /** Settles a courier in one go: card slips per ride and the cash handed over, then closed. */
+  @Post('settlements/settle')
+  async settleCourier(@Body() body: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id;
+    if (!userId) throw new UnauthorizedException('User session required');
+    return await this.deliveryService.settleCourier(
+      tenantId,
+      userId,
+      {
+        courier_id: body.courier_id || body.courierId,
+        branch_id: body.branch_id || body.branchId,
+        card: body.card,
+        actual_cash_amount: body.actual_cash_amount ?? body.actualCashAmount,
+        approvalRequestId: body.approvalRequestId,
+      },
+      (req as any).correlationId,
+    );
+  }
+
   @BranchOwned(CourierSettlement)
   @Get('settlements/:id')
   async getSettlementDetail(@Param('id') id: string, @Req() req: Request) {
