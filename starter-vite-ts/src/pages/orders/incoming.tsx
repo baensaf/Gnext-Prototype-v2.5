@@ -27,6 +27,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { isConnectionProblem } from 'src/utils/connection-problem';
 import { isSnappfoodOrder, maxPromiseMinutes, promisesDeliveryTime } from 'src/utils/snappfood-order';
 
 import { orderApi } from 'src/api/orderApi';
@@ -251,7 +252,11 @@ function IncomingOrderDrawer({ order, reasons, policy, now, onClose, onAnswered 
       }
     } catch (err) {
       // Most often a 409: another till, or the time limit, answered it a moment earlier.
-      showErrorToast(err, t('orders.incoming.answerFailed'));
+      // This screen has no place of its own for a message, so a request the cloud did not answer
+      // (agent mode) is told by a toast of its own, which showErrorToast leaves out.
+      const unanswered = isConnectionProblem((err as { code?: string })?.code);
+      if (unanswered) toast.error((err as { detail?: string }).detail || t('orders.incoming.answerFailed'));
+      else showErrorToast(err, t('orders.incoming.answerFailed'));
     } finally {
       setBusy(null);
       await onAnswered();

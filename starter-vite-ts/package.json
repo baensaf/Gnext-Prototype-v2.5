@@ -24,6 +24,7 @@
     "tsc:check": "tsc --noEmit --pretty",
     "i18n:check": "node scripts/check-i18n.js",
     "agent-routes:check": "node scripts/check-agent-routes.mjs",
+    "cloud-link:check": "node scripts/check-cloud-link.mjs",
     "test:e2e": "playwright test"
   },
   "engines": {

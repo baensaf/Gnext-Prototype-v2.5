@@ -3,6 +3,8 @@ import type { ShiftPolicy, CashierShift } from 'src/api/shiftApi';
 
 import { useState, useEffect, useCallback } from 'react';
 
+import { useCloudBack } from 'src/utils/cloud-back';
+
 import { shiftApi } from 'src/api/shiftApi';
 import { businessDayApi } from 'src/api/businessDayApi';
 import { useBranchContext } from 'src/contexts/branch-context';
@@ -66,6 +68,9 @@ export function useRegisterShift() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // The cloud is back after the Reconnecting bar (agent mode): the shift may have moved on.
+  useCloudBack(refresh);
 
   // Look again when the day turns over, so an open till learns its shift has ended.
   useEffect(() => {

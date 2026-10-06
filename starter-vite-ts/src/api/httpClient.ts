@@ -3,6 +3,7 @@ import type { AxiosError } from 'axios';
 import axios from 'axios';
 
 import { readDeviceTerminal } from 'src/utils/device-terminal';
+import { connectionProblemMessage } from 'src/utils/connection-problem';
 import { isGatewayFailure, reportCloudAnswered, reportCloudUnreachable } from 'src/utils/cloud-reachability';
 
 import { CONFIG } from 'src/global-config';
@@ -18,6 +19,8 @@ export interface ProblemDetails {
   instance: string;
   correlationId: string;
   fieldErrors?: Array<{ field: string; code: string; messageKey?: string; message?: string }>;
+  /** What the agent said, when `detail` was replaced by the words for the cashier (see below). */
+  technicalDetail?: string;
 }
 
 let csrfTokenInMemory: string | null = null;
@@ -90,8 +93,19 @@ httpClient.interceptors.response.use(
     else reportCloudAnswered();
     const skipToast = error.config?.headers?.['X-Skip-Toast'] === 'true' || (error.config as any)?.skipToast;
 
+    // On a branch agent the Reconnecting bar says the cloud is out of reach (cloud-status-bar.tsx),
+    // and showErrorToast stays quiet about it; a screen that needs to say more shows the
+    // problem's `detail`, where the button was pressed.
     if (error.response?.data) {
       const problem = error.response.data;
+      // The agent's own answer for a cloud that did not answer (§19.10): put the words for the
+      // cashier where every screen already looks, in `detail`. A write that was not sent says
+      // so; one that may have been saved says that, and the cart is the screen's to keep.
+      const friendly = connectionProblemMessage(problem.code, error.config?.method);
+      if (friendly) {
+        problem.technicalDetail = problem.detail;
+        problem.detail = friendly;
+      }
       if (isServerError && !skipToast) {
         showErrorToast(problem);
       }

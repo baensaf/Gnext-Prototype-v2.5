@@ -77,9 +77,11 @@ type Server struct {
 	LANAddr string
 	// App is the cached frontend build; nil serves the "not downloaded yet" page.
 	App *appcache.Cache
-	// Upstream and ProxyTimeout are for tests; the defaults are a pooled transport and 30 s.
+	// Upstream, ProxyTimeout and ProxyRetry are for tests; the defaults are a pooled transport, 30 s
+	// for an attempt, and the retry window of §19.10.
 	Upstream     *Upstream
 	ProxyTimeout time.Duration
+	ProxyRetry   Retry
 
 	initOnce  sync.Once
 	px        *Proxy
@@ -107,6 +109,7 @@ func (s *Server) init() {
 			Version: s.Version,
 			Log:     s.Log,
 			Timeout: s.ProxyTimeout,
+			Retry:   s.ProxyRetry,
 		}
 	})
 }

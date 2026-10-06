@@ -1,6 +1,7 @@
 package localui
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -20,7 +21,7 @@ import (
 const (
 	// maxProxyBody is the largest request body passed on (photo uploads).
 	maxProxyBody = 16 << 20
-	// proxyTimeout is the time the cloud has to answer one request.
+	// proxyTimeout is the time the cloud has to answer one attempt.
 	proxyTimeout = 30 * time.Second
 	// liveStreamPath is the Server-Sent Events route: no time limit, flushed event by event.
 	liveStreamPath = "/api/v1/live/stream"
@@ -32,6 +33,39 @@ var hopByHop = []string{
 	"Te", "Trailer", "Transfer-Encoding", "Upgrade",
 }
 
+// Retry times the retries of a request that may be repeated (§19.10). The window is counted from
+// when the request arrived at the agent. A zero field takes its default; tests shorten them.
+type Retry struct {
+	// Every is the tick of the clock the attempts keep to, from the request's arrival; default 2 s.
+	// An attempt that used up its whole tick is followed by the next one at once.
+	Every time.Duration
+	// Window is how long after the request arrived a new attempt may still start; default 20 s.
+	Window time.Duration
+	// Grace is added to the time left in the window to give an attempt its own timeout,
+	// min(the proxy's timeout, time left + Grace); default 10 s.
+	Grace time.Duration
+}
+
+func (r Retry) withDefaults() Retry {
+	if r.Every <= 0 {
+		r.Every = 2 * time.Second
+	}
+	if r.Window <= 0 {
+		r.Window = 20 * time.Second
+	}
+	if r.Grace <= 0 {
+		r.Grace = 10 * time.Second
+	}
+	return r
+}
+
+// attemptTimeout is the time one attempt has to be answered: limit (the proxy's own, 30 s), or less
+// when the window is nearly over, time left plus Grace, so that the request is answered about
+// Grace after the window at the latest. elapsed is the time since the request arrived.
+func (r Retry) attemptTimeout(limit, elapsed time.Duration) time.Duration {
+	return min(limit, max(r.Window-elapsed, 0)+r.Grace)
+}
+
 // Proxy passes the page's API calls to the cloud.
 type Proxy struct {
 	Up *Upstream
@@ -40,8 +74,10 @@ type Proxy struct {
 	Version string
 	Log     *slog.Logger
 
-	// Timeout is how long the cloud has to answer; default 30 s. Tests shorten it.
+	// Timeout is how long the cloud has to answer one attempt; default 30 s. Tests shorten it.
 	Timeout time.Duration
+	// Retry times the retries of the requests retryable allows.
+	Retry Retry
 }
 
 func (p *Proxy) timeout() time.Duration {
@@ -52,6 +88,7 @@ func (p *Proxy) timeout() time.Duration {
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	arrived := time.Now()
 	if blockedPath(r.URL.EscapedPath()) {
 		writeProblem(w, r, http.StatusForbidden, "AGENT_ROUTE_BLOCKED", "Forbidden",
 			"This route belongs to the agent and is not passed to the cloud.")
@@ -75,21 +112,101 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timeout = 0
 	}
 	body := &trackedBody{r: http.MaxBytesReader(w, r.Body, maxProxyBody)}
-	out, err := p.upstreamRequest(r, server, body)
-	if err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "BAD_REQUEST", "Bad request", err.Error())
-		return
+
+	// A request that may be repeated has its body (if it has one) read once, here, so that every
+	// attempt can send it again.
+	retry := p.retryable(r)
+	var held []byte
+	if retry && hasBody(r) {
+		var err error
+		if held, err = io.ReadAll(body); err != nil {
+			p.fail(w, r, body, &Failure{Kind: NotSent, Err: err}, false)
+			return
+		}
+	}
+	attemptBody := func() io.Reader {
+		switch {
+		case !retry:
+			return body
+		case len(held) == 0:
+			return http.NoBody
+		}
+		return bytes.NewReader(held)
 	}
 
-	// One attempt. S5 and S6 turn this into a loop that repeats it, and then tell the page what
-	// happened with answerFor.
-	resp, fail := p.Up.Attempt(r.Context(), out, timeout)
-	if fail != nil {
-		p.fail(w, r, body, fail)
-		return
+	rp := p.Retry.withDefaults()
+	sawNoAnswer := false
+	for attempt := 1; ; attempt++ {
+		started := time.Now()
+		out, err := p.upstreamRequest(r, server, attemptBody())
+		if err != nil {
+			writeProblem(w, r, http.StatusBadRequest, "BAD_REQUEST", "Bad request", err.Error())
+			return
+		}
+		if retry {
+			out.ContentLength = int64(len(held))
+			// An attempt's own time: the proxy's, or less when the window is nearly over.
+			timeout = rp.attemptTimeout(p.timeout(), started.Sub(arrived))
+		}
+
+		resp, fail := p.Up.Attempt(r.Context(), out, timeout)
+		if fail == nil {
+			defer resp.Body.Close()
+			p.relay(w, r, resp, live)
+			return
+		}
+		if r.Context().Err() != nil {
+			return // the page went away: nobody to answer, nothing more to try
+		}
+		sawNoAnswer = sawNoAnswer || fail.Kind == NoAnswer
+		if !retry {
+			p.fail(w, r, body, fail, sawNoAnswer)
+			return
+		}
+
+		// The attempts keep to a clock that starts at the request's arrival, so that a request is
+		// tried at 0, 2, 4 ... 20 s however long each attempt took to fail: the next one is due at
+		// the next tick of that clock, or at once if this one used up its whole slot. It is made only
+		// if it is due inside the window.
+		now := time.Now()
+		next := arrived.Add((started.Sub(arrived)/rp.Every + 1) * rp.Every)
+		if now.Sub(started) >= rp.Every {
+			next = now
+		}
+		if next.Sub(arrived) > rp.Window {
+			p.fail(w, r, body, fail, sawNoAnswer)
+			return
+		}
+		if p.Log != nil {
+			p.Log.Debug("cloud did not answer, trying again", "method", r.Method, "path", r.URL.Path,
+				"attempt", attempt, "kind", fail.Kind.String(), "err", fail.Error())
+		}
+		timer := time.NewTimer(time.Until(next))
+		select {
+		case <-r.Context().Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
 	}
-	defer resp.Body.Close()
-	p.relay(w, r, resp, live)
+}
+
+// retryable says whether a request may be sent to the cloud again after a failure (§19.10): a read
+// (GET, HEAD), except the live stream, which the page reconnects by itself. This is the one place
+// that decides it. S6 adds the writes that carry an Idempotency-Key here, and must keep out
+// every route that starts or checks a terminal charge (§19.11):
+//
+//	POST /api/v1/payments/:id/process
+//	POST /api/v1/payments/:id/check-terminal
+func (p *Proxy) retryable(r *http.Request) bool {
+	if r.URL.Path == liveStreamPath {
+		return false
+	}
+	return isRead(r.Method)
+}
+
+func hasBody(r *http.Request) bool {
+	return r.ContentLength != 0 && r.Body != nil && r.Body != http.NoBody
 }
 
 // upstreamRequest builds the request to the cloud: the page's headers less the hop-by-hop ones and
@@ -125,8 +242,9 @@ func (p *Proxy) upstreamRequest(r *http.Request, server string, body io.Reader) 
 	return out, nil
 }
 
-// fail answers the page when the cloud did not (§19.10). A client that went away gets nothing.
-func (p *Proxy) fail(w http.ResponseWriter, r *http.Request, body *trackedBody, f *Failure) {
+// fail answers the page when the cloud did not (§19.10). A client that went away gets nothing. f is
+// the last attempt's failure; sawNoAnswer is true when any attempt was written and not answered.
+func (p *Proxy) fail(w http.ResponseWriter, r *http.Request, body *trackedBody, f *Failure, sawNoAnswer bool) {
 	if r.Context().Err() != nil {
 		return
 	}
@@ -140,7 +258,7 @@ func (p *Proxy) fail(w http.ResponseWriter, r *http.Request, body *trackedBody, 
 		writeProblem(w, r, http.StatusBadRequest, "BAD_REQUEST", "Bad request", "The request body could not be read.")
 		return
 	}
-	a := answerFor(isRead(r.Method), f.Kind == NoAnswer)
+	a := answerFor(isRead(r.Method), sawNoAnswer)
 	detail := a.Detail
 	if f.Err != nil {
 		detail += " (" + f.Err.Error() + ")"

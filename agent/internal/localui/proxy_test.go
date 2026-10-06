@@ -53,8 +53,12 @@ func (u *upstream) count() int {
 	return u.hits
 }
 
+// testRetry is the retry window of the tests: the same shape as the real one (§19.10), a hundred
+// times shorter.
+var testRetry = Retry{Every: 20 * time.Millisecond, Window: 100 * time.Millisecond, Grace: 50 * time.Millisecond}
+
 func newProxy(server string) *Proxy {
-	return &Proxy{Up: &Upstream{}, Server: func() string { return server }, Version: "2.1.0"}
+	return &Proxy{Up: &Upstream{}, Server: func() string { return server }, Version: "2.1.0", Retry: testRetry}
 }
 
 func doReq(p http.Handler, req *http.Request) *httptest.ResponseRecorder {
@@ -297,7 +301,7 @@ func TestProxyAnswers504ForAWriteTheCloudNeverAnsweredAnd502ForARead(t *testing.
 		}
 	}
 	if up.count() != 6 {
-		t.Errorf("the cloud saw %d requests, want 6 (no retries in S3)", up.count())
+		t.Errorf("the cloud saw %d requests, want 6 (a write is never repeated; a read whose first attempt used the whole window is not either)", up.count())
 	}
 }
 
@@ -704,4 +708,405 @@ func httpTraceOf(req *http.Request) func() {
 		return nil
 	}
 	return func() { tr.WroteRequest(httptrace.WroteRequestInfo{}) }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Retries (§19.10, S5)
+
+// gatewayDown answers as nginx does with the application stopped.
+func gatewayDown(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html")
+	w.WriteHeader(http.StatusBadGateway)
+	io.WriteString(w, "<html><title>502 Bad Gateway</title></html>")
+}
+
+func TestRetryDefaultsAndTheTimeOfAnAttempt(t *testing.T) {
+	d := Retry{}.withDefaults()
+	if d.Every != 2*time.Second || d.Window != 20*time.Second || d.Grace != 10*time.Second {
+		t.Fatalf("defaults = %+v, want 2 s, 20 s, 10 s", d)
+	}
+	// min(30 s, time left + 10 s): the first attempt has all of 30 s, a later one what is left of
+	// the window plus 10 s, and the last one possible (at 20 s) 10 s.
+	for _, c := range []struct{ elapsed, want time.Duration }{
+		{0, 30 * time.Second},
+		{2 * time.Second, 28 * time.Second},
+		{18 * time.Second, 12 * time.Second},
+		{20 * time.Second, 10 * time.Second},
+	} {
+		if got := d.attemptTimeout(30*time.Second, c.elapsed); got != c.want {
+			t.Errorf("attempt at %v has %v, want %v", c.elapsed, got, c.want)
+		}
+	}
+	if got := d.attemptTimeout(5*time.Second, 0); got != 5*time.Second {
+		t.Errorf("the proxy's own limit is the cap: %v", got)
+	}
+}
+
+// A read made while the cloud is down is held and answered when the cloud comes back inside the
+// window: the page never sees the failure.
+func TestAReadIsHeldAndAnsweredWhenTheCloudReturnsInsideTheWindow(t *testing.T) {
+	// The port is closed at first (connection refused), then a cloud starts on it.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	ln.Close()
+
+	p := newProxy("http://" + addr)
+	p.Retry = Retry{Every: 30 * time.Millisecond, Window: 2 * time.Second, Grace: time.Second}
+	started := make(chan *httptest.Server, 1)
+	go func() {
+		time.Sleep(250 * time.Millisecond)
+		l, err := net.Listen("tcp", addr)
+		if err != nil {
+			started <- nil
+			return
+		}
+		srv := &httptest.Server{Listener: l, Config: &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			io.WriteString(w, `{"ok":true}`)
+		})}}
+		srv.Start()
+		started <- srv
+	}()
+
+	begin := time.Now()
+	req := httptest.NewRequest("GET", "/api/v1/orders", nil)
+	req.Header.Set("X-Correlation-Id", "cid-9")
+	rec := doReq(p, req)
+	took := time.Since(begin)
+	if srv := <-started; srv != nil {
+		defer srv.Close()
+	}
+	if rec.Code != 200 || rec.Body.String() != `{"ok":true}` {
+		t.Fatalf("answer: %d %s", rec.Code, rec.Body)
+	}
+	if took < 200*time.Millisecond || took > 1500*time.Millisecond {
+		t.Errorf("answered after %v, want about the 250 ms the cloud was down", took)
+	}
+}
+
+// Every failure of the table is retried for a read: not sent, a gateway's 502, 503 and 504, and a
+// request that was written and never answered. The page sees the answer of the attempt that worked.
+func TestAReadIsRetriedAfterEveryKindOfFailureOfTheTable(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		fail func(w http.ResponseWriter, r *http.Request)
+	}{
+		{"gateway 502", func(w http.ResponseWriter, r *http.Request) { gatewayDown(w) }},
+		{"gateway 503", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(503)
+		}},
+		{"gateway 504", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(504)
+		}},
+		{"written, never answered", func(w http.ResponseWriter, r *http.Request) { <-r.Context().Done() }},
+	} {
+		for _, method := range []string{"GET", "HEAD"} {
+			var up *upstream
+			up = newUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+				if up.count() <= 2 {
+					c.fail(w, r)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				io.WriteString(w, `{"ok":true}`)
+			})
+			p := newProxy(up.srv.URL)
+			p.Timeout = 30 * time.Millisecond // an attempt that is never answered gives up quickly
+			p.Retry = Retry{Every: 20 * time.Millisecond, Window: time.Second, Grace: time.Second}
+			rec := doReq(p, httptest.NewRequest(method, "/api/v1/orders", nil))
+			if rec.Code != 200 || (method == "GET" && rec.Body.String() != `{"ok":true}`) {
+				t.Errorf("%s %s: %d %s", c.name, method, rec.Code, rec.Body)
+			}
+			if up.count() != 3 {
+				t.Errorf("%s %s: the cloud saw %d attempts, want 3 (two failures, then the answer)", c.name, method, up.count())
+			}
+		}
+	}
+}
+
+// Attempts start every 2 s (here 60 ms) from the first, none after the window (here 300 ms), and
+// the page is then told 502 CLOUD_UNREACHABLE.
+func TestAReadIsRetriedOnTheScheduleAndEndsInA502AfterTheWindow(t *testing.T) {
+	var mu sync.Mutex
+	var starts []time.Time
+	up := newUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		starts = append(starts, time.Now())
+		mu.Unlock()
+		gatewayDown(w)
+	})
+	p := newProxy(up.srv.URL)
+	p.Retry = Retry{Every: 60 * time.Millisecond, Window: 300 * time.Millisecond, Grace: 100 * time.Millisecond}
+
+	begin := time.Now()
+	req := httptest.NewRequest("GET", "/api/v1/orders?x=1", nil)
+	req.Header.Set("X-Correlation-Id", "cid-5")
+	rec := doReq(p, req)
+	took := time.Since(begin)
+
+	pr := problemOf(t, rec)
+	if rec.Code != 502 || pr["code"] != "CLOUD_UNREACHABLE" || pr["correlationId"] != "cid-5" {
+		t.Fatalf("final answer: %d %s", rec.Code, rec.Body)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	// Starts at 0, 60, 120, 180, 240 and 300 ms: five or six, depending on how the last falls.
+	if len(starts) < 5 || len(starts) > 6 {
+		t.Fatalf("%d attempts, want 5 or 6 (every 60 ms for 300 ms)", len(starts))
+	}
+	for i := 1; i < len(starts); i++ {
+		if gap := starts[i].Sub(starts[i-1]); gap < 50*time.Millisecond || gap > 150*time.Millisecond {
+			t.Errorf("attempt %d started %v after the one before, want about 60 ms", i+1, gap)
+		}
+	}
+	if last := starts[len(starts)-1].Sub(begin); last > 350*time.Millisecond {
+		t.Errorf("an attempt started %v after the request arrived, after the 300 ms window", last)
+	}
+	if took < 240*time.Millisecond || took > 600*time.Millisecond {
+		t.Errorf("the page waited %v, want about the 300 ms window", took)
+	}
+}
+
+// An attempt has min(limit, time left + grace). Here the cloud takes the request and never
+// answers: the first attempt starts inside the window and is given the window's end plus the
+// grace, not the proxy's whole limit, and nothing is started after it.
+func TestTheLastAttemptIsGivenOnlyWhatIsLeftOfTheWindowPlusTheGrace(t *testing.T) {
+	up := newUpstream(t, func(w http.ResponseWriter, r *http.Request) { <-r.Context().Done() })
+	p := newProxy(up.srv.URL)
+	p.Timeout = 5 * time.Second
+	p.Retry = Retry{Every: 40 * time.Millisecond, Window: 200 * time.Millisecond, Grace: 100 * time.Millisecond}
+
+	begin := time.Now()
+	rec := doReq(p, httptest.NewRequest("GET", "/api/v1/orders", nil))
+	took := time.Since(begin)
+	if rec.Code != 502 || problemOf(t, rec)["code"] != "CLOUD_UNREACHABLE" {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	if took < 250*time.Millisecond || took > 1500*time.Millisecond {
+		t.Errorf("answered after %v, want about 300 ms (window 200 + grace 100), not the 5 s limit", took)
+	}
+	if up.count() != 1 {
+		t.Errorf("%d attempts, want 1: the first used the whole window", up.count())
+	}
+
+	// The same cloud, answering 502 for the first 150 ms and then hanging: the attempt that starts
+	// at 160 ms has 200 - 160 + 100 = 140 ms.
+	var mu sync.Mutex
+	var firstAt time.Time
+	up2 := newUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		if firstAt.IsZero() {
+			firstAt = time.Now()
+		}
+		since := time.Since(firstAt)
+		mu.Unlock()
+		if since < 150*time.Millisecond {
+			gatewayDown(w)
+			return
+		}
+		<-r.Context().Done()
+	})
+	p = newProxy(up2.srv.URL)
+	p.Timeout = 5 * time.Second
+	p.Retry = Retry{Every: 40 * time.Millisecond, Window: 200 * time.Millisecond, Grace: 100 * time.Millisecond}
+	begin = time.Now()
+	rec = doReq(p, httptest.NewRequest("GET", "/api/v1/orders", nil))
+	took = time.Since(begin)
+	if rec.Code != 502 {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	if took < 250*time.Millisecond || took > 700*time.Millisecond {
+		t.Errorf("answered after %v, want about window + grace = 300 ms", took)
+	}
+}
+
+// A page that closes its request stops the retries, between two attempts and in the middle of
+// one, and nothing more is sent to the cloud.
+func TestRetriesStopWhenThePageGoesAway(t *testing.T) {
+	for _, hang := range []bool{false, true} {
+		name := "between attempts"
+		if hang {
+			name = "during an attempt"
+		}
+		up := newUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+			if hang {
+				<-r.Context().Done()
+				return
+			}
+			gatewayDown(w)
+		})
+		p := newProxy(up.srv.URL)
+		p.Timeout = 30 * time.Second
+		p.Retry = Retry{Every: 20 * time.Millisecond, Window: time.Minute, Grace: time.Minute}
+		done := make(chan struct{})
+		front := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			p.ServeHTTP(w, r)
+			close(done)
+		}))
+
+		ctx, cancel := context.WithCancel(context.Background())
+		req, _ := http.NewRequestWithContext(ctx, "GET", front.URL+"/api/v1/orders", nil)
+		go func() {
+			time.Sleep(150 * time.Millisecond)
+			cancel()
+		}()
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			resp.Body.Close()
+			t.Fatalf("%s: the page got an answer", name)
+		}
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s: the proxy was still at it 2 s after the page went away", name)
+		}
+		seen := up.count()
+		time.Sleep(150 * time.Millisecond)
+		if after := up.count(); after != seen {
+			t.Errorf("%s: %d requests reached the cloud after the page went away", name, after-seen)
+		}
+		if !hang && seen < 3 {
+			t.Errorf("%s: only %d attempts in 150 ms at 20 ms apart", name, seen)
+		}
+		front.Close()
+	}
+}
+
+// What a retry must not touch: the live stream, writes, and the application's own answers.
+func TestOnlyReadsAreRetriedNotTheLiveStreamNotWritesNotTheApplicationsAnswers(t *testing.T) {
+	for _, c := range []struct {
+		method, path string
+		retried      bool
+	}{
+		{"GET", "/api/v1/orders", true}, // control: it is retried until the window ends
+		{"HEAD", "/api/v1/orders", true},
+		{"GET", "/api/v1/live/stream?topics=orders", false},
+		{"POST", "/api/v1/orders", false},
+		{"PUT", "/api/v1/orders/1", false},
+		{"PATCH", "/api/v1/orders/1", false},
+		{"DELETE", "/api/v1/orders/1", false},
+		{"POST", "/api/v1/payments/1/process", false},
+		{"POST", "/api/v1/payments/1/check-terminal", false},
+	} {
+		up := newUpstream(t, func(w http.ResponseWriter, r *http.Request) { gatewayDown(w) })
+		p := newProxy(up.srv.URL)
+		p.Retry = Retry{Every: 40 * time.Millisecond, Window: 100 * time.Millisecond, Grace: 100 * time.Millisecond}
+		rec := doReq(p, httptest.NewRequest(c.method, c.path, strings.NewReader(`{"a":1}`)))
+		if rec.Code != 502 {
+			t.Errorf("%s %s: %d", c.method, c.path, rec.Code)
+		}
+		got := up.count()
+		if c.retried && (got < 3 || got > 4) || !c.retried && got != 1 {
+			t.Errorf("%s %s: %d attempts reached the cloud (retried=%v)", c.method, c.path, got, c.retried)
+		}
+	}
+
+	// The application answering 502, 503 or 504 with JSON is an answer, not a failure: once.
+	for _, status := range []int{502, 503, 504} {
+		up := newUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(status)
+			io.WriteString(w, `{"code":"FROM_THE_APP"}`)
+		})
+		rec := doReq(newProxy(up.srv.URL), httptest.NewRequest("GET", "/api/v1/orders", nil))
+		if rec.Code != status || rec.Body.String() != `{"code":"FROM_THE_APP"}` || up.count() != 1 {
+			t.Errorf("application %d: %d %s after %d attempts", status, rec.Code, rec.Body, up.count())
+		}
+	}
+	// 4xx and 500 are answers too.
+	for _, status := range []int{401, 404, 500} {
+		up := newUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(status)
+		})
+		rec := doReq(newProxy(up.srv.URL), httptest.NewRequest("GET", "/api/v1/orders", nil))
+		if rec.Code != status || up.count() != 1 {
+			t.Errorf("status %d: %d after %d attempts", status, rec.Code, up.count())
+		}
+	}
+}
+
+// A read that carries a body (rare, but legal) sends it again with each attempt.
+func TestARetriedReadSendsItsBodyAgainWithEachAttempt(t *testing.T) {
+	var mu sync.Mutex
+	var bodies []string
+	var up *upstream
+	up = newUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		_, b := up.seen()
+		mu.Lock()
+		bodies = append(bodies, string(b))
+		n := len(bodies)
+		mu.Unlock()
+		if n < 3 {
+			gatewayDown(w)
+			return
+		}
+		w.Header().Set("Content-Length", "2")
+		io.WriteString(w, "ok")
+	})
+	p := newProxy(up.srv.URL)
+	p.Retry = Retry{Every: 10 * time.Millisecond, Window: time.Second, Grace: time.Second}
+	rec := doReq(p, httptest.NewRequest("GET", "/api/v1/search", strings.NewReader(`{"q":"x"}`)))
+	if rec.Code != 200 || rec.Body.String() != "ok" {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(bodies) != 3 || bodies[0] != `{"q":"x"}` || bodies[1] != `{"q":"x"}` || bodies[2] != `{"q":"x"}` {
+		t.Errorf("the cloud received %q", bodies)
+	}
+}
+
+// Attempts that take a whole tick to fail follow one another at once, and the window still ends
+// them: the clock does not run ahead and fire a burst.
+func TestSlowAttemptsFollowAtOnceAndTheWindowStillEndsThem(t *testing.T) {
+	var mu sync.Mutex
+	var starts []time.Time
+	up := newUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		starts = append(starts, time.Now())
+		mu.Unlock()
+		<-r.Context().Done()
+	})
+	p := newProxy(up.srv.URL)
+	p.Timeout = 100 * time.Millisecond
+	p.Retry = Retry{Every: 40 * time.Millisecond, Window: 300 * time.Millisecond, Grace: 100 * time.Millisecond}
+	begin := time.Now()
+	rec := doReq(p, httptest.NewRequest("GET", "/api/v1/orders", nil))
+	took := time.Since(begin)
+	if rec.Code != 502 {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(starts) < 3 || len(starts) > 4 {
+		t.Fatalf("%d attempts, want 3 or 4 (each takes 100 ms, none starts after 300 ms)", len(starts))
+	}
+	for i := 1; i < len(starts); i++ {
+		if gap := starts[i].Sub(starts[i-1]); gap < 90*time.Millisecond || gap > 200*time.Millisecond {
+			t.Errorf("attempt %d started %v after the one before, want right after its 100 ms", i+1, gap)
+		}
+	}
+	if took > 600*time.Millisecond {
+		t.Errorf("answered after %v", took)
+	}
+}
+
+// Fast failures keep to the clock to the end: with the window a whole number of ticks, an attempt
+// is made at the end of the window itself (0, 2 ... 20 s in the real timings), and none after.
+func TestTheLastTickOfTheWindowStillGetsItsAttempt(t *testing.T) {
+	up := newUpstream(t, func(w http.ResponseWriter, r *http.Request) { gatewayDown(w) })
+	p := newProxy(up.srv.URL)
+	p.Retry = Retry{Every: 50 * time.Millisecond, Window: 250 * time.Millisecond, Grace: 100 * time.Millisecond}
+	rec := doReq(p, httptest.NewRequest("GET", "/api/v1/orders", nil))
+	if rec.Code != 502 {
+		t.Fatalf("%d", rec.Code)
+	}
+	if got := up.count(); got != 6 {
+		t.Errorf("%d attempts, want 6 (at 0, 50, 100, 150, 200 and 250 ms)", got)
+	}
 }

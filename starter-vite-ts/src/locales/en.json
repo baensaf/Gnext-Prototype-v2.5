@@ -3919,6 +3919,14 @@
       "branchPc": "Branch PC",
       "lan": "Register on the branch network",
       "tooltip": "Gnext agent {{version}}"
+    },
+    "reconnect": {
+      "reconnecting": "Reconnecting to Gnext… your screen and cart are kept",
+      "offline": "No internet. Orders can't be sent until it is back.",
+      "back": "Connected again",
+      "notSent": "Not sent. Try again when connected.",
+      "notConfirmed": "We couldn't confirm this was saved. Check the order before trying again.",
+      "readFailed": "Couldn't reach Gnext. Try again when connected."
     }
   },
   "users": {

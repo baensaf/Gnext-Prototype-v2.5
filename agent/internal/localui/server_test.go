@@ -70,7 +70,7 @@ func fakeCloud(t *testing.T, seen *[]string) *httptest.Server {
 }
 
 func newServer(h Host) *Server {
-	return &Server{Host: h, Version: "2.1.0", Log: slog.New(slog.NewTextHandler(io.Discard, nil)), LogFile: "missing.log"}
+	return &Server{Host: h, Version: "2.1.0", Log: slog.New(slog.NewTextHandler(io.Discard, nil)), LogFile: "missing.log", ProxyRetry: testRetry}
 }
 
 func newTestServer(h Host) http.Handler { return newServer(h).Handler(DefaultAddr) }

@@ -12,6 +12,7 @@ import { Snackbar } from 'src/components/snackbar';
 import { IdleLogout } from 'src/components/idle-logout';
 import { ProgressBar } from 'src/components/progress-bar';
 import { MotionLazy } from 'src/components/animate/motion-lazy';
+import { CloudStatusBar } from 'src/components/cloud-status-bar';
 import { CalendarSync } from 'src/components/calendar-date-field';
 import { SettingsDrawer, defaultSettings, SettingsProvider } from 'src/components/settings';
 
@@ -33,6 +34,8 @@ export default function App({ children }: AppProps) {
         >
           <MotionLazy>
             <Snackbar />
+            {/* On a branch agent: the Reconnecting bar. Nothing elsewhere. */}
+            <CloudStatusBar />
             <ProgressBar />
             <CalendarSync />
             {/* A kiosk sits idle between guests by design, so it is never signed out for it. */}
