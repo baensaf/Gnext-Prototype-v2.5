@@ -3923,8 +3923,8 @@
     "selfEditNotice": "This is the account you are signed in as. Its role, scope and status are locked so you cannot lock yourself out.",
     "pin": "PIN",
     "pinInvalid": "A PIN is 4 to 8 digits.",
-    "pinHelp": "Signs this person in at Gnext POS; an approver also approves with it.",
-    "pinKeep": "Signs this person in at Gnext POS; an approver also approves with it. Leave empty to keep the current PIN."
+    "pinHelp": "Used at the POS to approve and confirm actions.",
+    "pinKeep": "Used at the POS to approve and confirm actions. Leave empty to keep the current PIN."
   },
   "rolesPage": {
     "title": "Roles & Permissions",
