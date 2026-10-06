@@ -23,6 +23,7 @@
     "tsc:print": "tsc --showConfig",
     "tsc:check": "tsc --noEmit --pretty",
     "i18n:check": "node scripts/check-i18n.js",
+    "agent-routes:check": "node scripts/check-agent-routes.mjs",
     "test:e2e": "playwright test"
   },
   "engines": {

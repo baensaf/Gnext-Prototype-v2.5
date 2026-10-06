@@ -3905,6 +3905,22 @@
     "pickBranchRollup": "See all branches instead",
     "pickBranchKiosk": "Pick the branch this kiosk serves. Head office is not a branch, so it has no menu of its own to sell from."
   },
+  "agent": {
+    "cloudOnly": {
+      "title": "This page opens on {{host}}",
+      "body": "This PC runs the register, orders, delivery and shifts. Management and head-office pages open on Gnext itself, in a new tab.",
+      "open": "Open on {{host}}",
+      "back": "Back to the register"
+    },
+    "nav": {
+      "openGnext": "Open Gnext"
+    },
+    "chip": {
+      "branchPc": "Branch PC",
+      "lan": "Register on the branch network",
+      "tooltip": "Gnext agent {{version}}"
+    }
+  },
   "users": {
     "courierManagedOnDelivery": "Managed with the courier, on the delivery screen",
     "title": "Users & Roles",

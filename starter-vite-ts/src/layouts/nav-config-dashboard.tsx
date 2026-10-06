@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 
 import Box from '@mui/material/Box';
 
+import { agentMode } from 'src/utils/agent-mode';
+
 import { CONFIG } from 'src/global-config';
 import { pageLabel } from 'src/config/version-labels';
 import { useWorkspaceScope } from 'src/contexts/branch-context';
@@ -39,6 +41,7 @@ const ICONS = {
   settings: icon('ic-params'),
   reasons: icon('ic-lock'),
   media: icon('ic-file'),
+  external: icon('ic-external'),
 };
 
 export function useNavData(): NavSectionProps['data'] {
@@ -356,7 +359,7 @@ export function useNavData(): NavSectionProps['data'] {
     },
   ];
 
-  return sections
+  const nav = sections
     .map((section) => ({
       ...section,
       items: section.items
@@ -387,5 +390,23 @@ export function useNavData(): NavSectionProps['data'] {
         .filter((item): item is NonNullable<typeof item> => item !== null),
     }))
     .filter((section) => section.items.length > 0);
+
+  if (!agentMode) return nav;
+
+  // On a branch agent the menu above is already cut down to the cashier's pages (canReachPath).
+  // Everything else lives on the cloud, so one link there closes it.
+  return [
+    ...nav,
+    {
+      items: [
+        {
+          title: t('agent.nav.openGnext', 'Open Gnext'),
+          // An absolute address: the nav opens it in a new tab.
+          path: agentMode.cloud_url,
+          icon: ICONS.external,
+        },
+      ],
+    },
+  ];
 }
 
