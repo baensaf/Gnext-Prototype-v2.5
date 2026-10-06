@@ -976,7 +976,8 @@ func TestRetriesStopWhenThePageGoesAway(t *testing.T) {
 	}
 }
 
-// What a retry must not touch: the live stream, writes, and the application's own answers.
+// What a retry must not touch: the live stream, writes with no key (keyed ones are in
+// proxy_keyed_test.go), and the application's own answers.
 func TestOnlyReadsAreRetriedNotTheLiveStreamNotWritesNotTheApplicationsAnswers(t *testing.T) {
 	for _, c := range []struct {
 		method, path string

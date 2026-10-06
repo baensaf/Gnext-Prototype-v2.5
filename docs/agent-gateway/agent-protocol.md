@@ -2821,9 +2821,9 @@ an `en` and an `fa` value.
 As built in 2.2.0 (S5), the agent:
 
 - `(*Proxy).retryable` is the one place that decides what is repeated: a `GET` or `HEAD`, except
-  `/api/v1/live/stream`. S6 adds the writes that carry `Idempotency-Key` there, and keeps out
-  `POST /api/v1/payments/:id/process` and `POST /api/v1/payments/:id/check-terminal`. A request that
-  may be repeated has its body (a read rarely has one) read once and sent again with each attempt.
+  `/api/v1/live/stream`. Since 2.3.0 (S6) it also allows a write that carries `Idempotency-Key`, except
+  the card-charge routes of §19.11. A request that may be repeated has its body (a read rarely has one)
+  read once and sent again with each attempt.
 - The attempts keep to a clock that starts when the request arrives: one at 0, 2, 4 ... 20 s. The next
   one is due at the next tick, at once if the attempt used up its whole tick, and is made only if it is
   due at 20 s or earlier (so a dead cloud is tried at 0, 2 ... 20 s and the page is answered at about
@@ -2881,24 +2881,80 @@ The app, in agent mode:
 
 ### 19.11 Idempotency (S6)
 
-A write the agent may retry must be safe to repeat. The cloud's `IdempotencyInterceptor`
-and `@RequireIdempotency(scope)` decorator (`backend/src/common`) make it so for the routes that
-use them.
+A write the agent may retry must be safe to repeat. The cloud's `IdempotencyInterceptor` and the
+`@RequireIdempotency(scope, { optional })` decorator (`backend/src/common`) make it so for the routes
+that use them. As built in 2.3.0:
 
-- **Cloud.** The interceptor is put on order submit (place), cash payment, order create (draft)
-  and, if the POS writes it on *Place*, the add-lines or quote call. The same key with the same
-  body replays the first answer. The same key with a different body is `409`. A request with no
-  key stays allowed: other clients do not send one.
-- **App.** Those calls send `Idempotency-Key`: one UUID per user action, reused when the app
-  retries that action. The page makes it without `crypto.randomUUID` when that is missing (the
-  LAN listener is plain HTTP, §19.4).
-- **Agent.** A write with `Idempotency-Key` is retried like a read (§19.10), including after
-  a request that was written and never answered; its final answer is in the table there. A
-  write without the key is unchanged.
-- **Card charges are never retried by the agent**, key or not. The agent excludes, by path, every
-  route in `payment.controller.ts` that starts or checks a terminal charge: `POST
-  /api/v1/payments/:id/process`, `POST /api/v1/payments/:id/check-terminal`, and any other. S6
-  lists them here when it is built.
+**Cloud.** The interceptor is global; a route opts in with the decorator. The routes the register's
+Place, Hold and payment use carry it, all with `optional: true`:
+
+| Route | Scope | Used for |
+|---|---|---|
+| `POST /api/v1/orders` | `ORDER_CREATE` | Place and Hold make the draft |
+| `PATCH /api/v1/orders/:id` | `ORDER_UPDATE_DRAFT` | Place and Hold of a draft that was resumed |
+| `POST /api/v1/orders/:id/submit` | `ORDER_SUBMIT` | Place: the kitchen ticket, the print jobs and the call number |
+| `POST /api/v1/payments` | `PAYMENT_CREATE` | the first of the two calls of a payment (cash, card, credit): makes the intent |
+
+- The payment is two calls: this one makes the intent, `POST /api/v1/payments/:id/process` takes the
+  money. Only the intent is keyed. `process` is never retried by the agent (below), and a payment that
+  is already `SUCCEEDED` is answered as it is when it is processed again, so a cash payment is taken
+  once.
+- The POS's quote is `POST /api/v1/discount-quotes`, a preview that writes nothing; it has no key. The
+  POS makes no other write on *Place*.
+- **Same key, same body**: the first answer again, status and body, with `X-Cache-Replay: true`. The
+  answer is stored before it is sent, so a repeat that arrives as the first answer does finds it.
+  **Same key, another body** (the hash covers the scope, the URL and the body): `409
+  IDEMPOTENCY_CONFLICT`. **Same key while the first request is still running** (its record is
+  `PENDING`, or two requests arrive together): `409 IDEMPOTENCY_IN_PROGRESS`. This is an answer from the
+  application, so the agent passes it on and stops retrying; the app words it as a write that may have
+  been saved (`agent.reconnect.notConfirmed`).
+- A request that **fails** (a refusal or an error before it answers) frees its key at once, so a repeat
+  with the same key runs; a stored answer is never removed. A request whose answer could not be stored
+  stays `PENDING` for the day rather than free, so it is never run twice.
+- **No key** is allowed: `optional` runs the request as if the route had no decorator (the kiosk and
+  Snappfood intake send none). An empty or blank key counts as none. A decorator without `optional`
+  still answers `400 IDEMPOTENCY_KEY_REQUIRED` for a missing key; a key over 160 characters is `400
+  IDEMPOTENCY_KEY_INVALID`.
+- Keys are kept **per tenant**, route scope and key, for 24 hours (`idempotency_record`). One key may
+  serve every call of one press of *Place*, since the scopes differ.
+- The agent trusts the page: it retries any write that carries the header, though only the routes above
+  honour it. A page must send the key only on those.
+
+**App.** The POS makes a UUID (`generateUuid`: `crypto.randomUUID`, else `crypto.getRandomValues`, else
+`Math.random`, because the LAN listener is plain HTTP and not a secure context, §19.4) when a button is
+pressed, and sends it as `Idempotency-Key` on every one of that press's calls above: Place (create or
+update, then submit), Hold (create or update), a payment's intent (`postPayment`), and the direct card
+button (create or update, submit and the intent, one key). The next press makes another. The app does
+not repeat a write by itself; what repeats it is the agent, which sends the key it was given. A cashier
+who presses the button again after `CLOUD_NO_ANSWER` starts a new action with a new key, and is told to
+check the order first.
+
+**Agent.** A write (any method but `GET` and `HEAD`) with a non-blank `Idempotency-Key` is retried like a
+read (§19.10), also after an attempt that was written and never answered, with the same body and key.
+Its final answer is in the table of §19.10: `504 CLOUD_NO_ANSWER` if any attempt was written and
+unanswered, else `502 CLOUD_UNREACHABLE`. A write without the key is unchanged: one attempt. The
+cloud's own answers (`409`, `4xx`, `500`, a JSON `503`) are answers, not failures, and end the retries.
+The agent sends the key to the cloud under a lower-case header name: Go's HTTP client repeats by itself,
+and unseen, a request that carries `Idempotency-Key` when a kept-alive connection breaks after the
+request was written, which would hide a written attempt (and repeat a card charge). Header names are
+not case-sensitive, so the cloud reads it as before.
+
+**Card charges are never retried by the agent**, key or not. The agent excludes, by path, every route of
+`payment.controller.ts` that starts, checks or settles a charge on a card terminal, all of the form
+`POST /api/v1/payments/:id/<route>`:
+
+| Route | Why |
+|---|---|
+| `process` | Starts the charge on the terminal (cash and credit too: the agent cannot tell the tender from the path) |
+| `check-terminal` | Asks the terminal how an unconfirmed charge ended |
+| `correct` | Reverses a payment and takes a replacement through `process`, which may be a new card charge |
+| `resolve-terminal` | A manager settles an unconfirmed charge by hand from the terminal's report |
+
+The path is read decoded, cleaned of dot segments, doubled slashes and a trailing slash, and lower-cased,
+as the cloud's Express reads it, so `/API/V1/payments/1/%70rocess` is the same route; one that cannot be
+decoded counts as a charge route. `void` and `reverse` start nothing on a terminal and are not excluded
+(the page sends them no key). No other controller starts or checks a terminal charge: the kiosk calls
+`processPayment` itself, not through the agent.
 
 ### 19.12 Shortcuts, window and Branch Agents (S7)
 
@@ -2976,4 +3032,9 @@ For an agent that advertises `app.serve`:
       gets `502 CLOUD_UNREACHABLE`.
 - [ ] A read is retried every 2 s for 20 s (counted from arrival) and stops when the client goes
       away; a write is not retried without `Idempotency-Key`; a card charge is never retried.
+- [ ] A write with `Idempotency-Key` is retried after a drop mid-request and answered when the cloud
+      comes back; its answer after the window is `504 CLOUD_NO_ANSWER` if any attempt was written and
+      unanswered, else `502 CLOUD_UNREACHABLE`; `process`, `check-terminal`, `correct` and
+      `resolve-terminal` of a payment are never retried, however the path is spelled; the key reaches
+      the cloud under a lower-case header name.
 - [ ] `GET /agent/api/status` reports the WebSocket state and the served build.

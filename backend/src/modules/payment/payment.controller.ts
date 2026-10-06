@@ -13,6 +13,7 @@ import {
 } from './dtos/payment.dto';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
+import { RequireIdempotency } from '../../common/decorators/idempotency.decorator';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { Payment } from '../../entities/Payment.entity';
@@ -37,6 +38,13 @@ export class PaymentController {
   }
 
   // The order a payment is taken against is named in the body, not the path.
+  //
+  // The register's payment is two calls: this one makes the intent, `process` takes the money.
+  // Only this one is keyed (agent-protocol §19.11): a repeat gets the intent the first call made
+  // instead of "an active payment intent already exists". `process` is never repeated by the
+  // agent (it may start a card charge); on a cash payment it is idempotent by itself, a payment
+  // already SUCCEEDED is answered as it is. The key is optional, as on the order routes.
+  @RequireIdempotency('PAYMENT_CREATE', { optional: true })
   @BranchOwned(OrderHeader, { body: 'orderId' })
   @Post('payments')
   async createPaymentIntent(@Body() body: PaymentCreateDto, @Req() req: Request) {

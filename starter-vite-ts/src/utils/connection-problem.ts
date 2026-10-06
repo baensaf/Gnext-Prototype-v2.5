@@ -1,5 +1,6 @@
 import i18n from 'src/locales/i18n';
 
+import { IDEMPOTENCY_IN_PROGRESS } from './idempotency';
 import { isGatewayFailure } from './cloud-reachability';
 
 // ----------------------------------------------------------------------
@@ -61,7 +62,9 @@ export function isNotSentMessage(message: string | null | undefined): boolean {
  */
 export function connectionProblemMessage(code: unknown, method: string | undefined): string | null {
   const isRead = !method || ['get', 'head'].includes(method.toLowerCase());
-  if (code === CLOUD_NO_ANSWER && !isRead) {
+  // The cloud answered, but only that the first request with this write's key is still running (the
+  // agent repeated a keyed write that had not finished): the same as no answer, for the cashier.
+  if ((code === CLOUD_NO_ANSWER || code === IDEMPOTENCY_IN_PROGRESS) && !isRead) {
     return i18n.t(
       'agent.reconnect.notConfirmed',
       "We couldn't confirm this was saved. Check the order before trying again."

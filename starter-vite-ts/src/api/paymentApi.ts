@@ -1,3 +1,5 @@
+import { idempotencyHeaders } from 'src/utils/idempotency';
+
 import { httpClient } from './httpClient';
 
 export interface SettlementAccount {
@@ -232,8 +234,14 @@ export const paymentApi = {
     reference?: string;
     receiptNumber?: string;
     idempotencyKey?: string;
+  }, options?: {
+    /**
+     * The `Idempotency-Key` header of this payment (one per payment): a repeat by the
+     * branch agent gets the intent the first call made (§19.11). Not the body's `idempotencyKey`.
+     */
+    idempotencyKey?: string;
   }): Promise<PaymentRecord> => {
-    const res = await httpClient.post('/api/v1/payments', data);
+    const res = await httpClient.post('/api/v1/payments', data, idempotencyHeaders(options?.idempotencyKey));
     return {
       ...res.data,
       recorded_at: res.data.posted_at || res.data.initiated_at || new Date().toISOString(),
@@ -298,13 +306,18 @@ export const paymentApi = {
     notes?: string;
     /** Charged by hand on another card reader: recorded, not sent to the branch's terminal. */
     off_terminal?: boolean;
+    /** Sent as `Idempotency-Key` on the call that makes the payment's intent (the first of its two calls). */
+    idempotency_key?: string;
   }): Promise<{ payment: PaymentRecord; order: any }> => {
-    const intent = await paymentApi.createPaymentIntent({
-      orderId: data.order_id,
-      methodId: data.payment_method_id,
-      amount: data.amount,
-      reference: data.reference_number,
-    });
+    const intent = await paymentApi.createPaymentIntent(
+      {
+        orderId: data.order_id,
+        methodId: data.payment_method_id,
+        amount: data.amount,
+        reference: data.reference_number,
+      },
+      { idempotencyKey: data.idempotency_key }
+    );
     const processed = await awaitTerminal(
       await paymentApi.processPayment(
         intent.id,

@@ -34,6 +34,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { newIdempotencyKey } from 'src/utils/idempotency';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { kdsApi } from 'src/api/kdsApi';
@@ -190,6 +191,9 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         amount: over ? due : amount,
         reference_number: opts.reference || undefined,
         off_terminal: opts.offTerminal || undefined,
+        // One key for this payment: the branch agent may repeat the call that makes its intent after a
+        // lost answer, and the cloud answers the intent the first call made (agent-protocol §19.11).
+        idempotency_key: newIdempotencyKey(),
       });
 
       setOrder(res.order);

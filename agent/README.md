@@ -63,9 +63,19 @@ section numbers (§) in the code refer to it.
     (not `/api/v1/live/stream`) that the cloud does not answer is tried again every 2 s, counted
     from when it arrived, with no new attempt after 20 s; each attempt has `min(30 s, time left +
     10 s)`. The page waits, and gets the cloud's answer if it comes back in time, else `502
-    CLOUD_UNREACHABLE`. If the page goes away the retries stop. Writes are not retried yet (S6 does
-    it for writes with an `Idempotency-Key`, never for card charges). The app shows the amber
+    CLOUD_UNREACHABLE`. If the page goes away the retries stop. The app shows the amber
     *Reconnecting* bar meanwhile and reads its screens again when the cloud is back.
+  - **Safe write retries** (since 2.3.0, [§19.11](../docs/agent-gateway/agent-protocol.md)): a write
+    (`POST`, `PATCH`, `PUT`, `DELETE`) that carries an `Idempotency-Key` header is retried like a read,
+    also after an attempt that was written and never answered: the cloud answers a repeat of the same
+    key and body with the first answer, so the work is done once. The register's Place (create,
+    update and submit of the order) and its payment's intent send one key per press. The final answer
+    after the window is `504 CLOUD_NO_ANSWER` if any attempt was written and not answered, else `502
+    CLOUD_UNREACHABLE`. A write with no key is never retried. **Card charges are never retried, key or
+    not**: under `/api/v1/payments/:id/`, `process`, `check-terminal`, `correct` and `resolve-terminal`
+    (the path is read decoded, cleaned and lower-cased, as the cloud reads it). The key goes to the
+    cloud under a lower-case header name so that Go's HTTP client does not repeat the request by
+    itself and hide an attempt that was written.
   - **The build** is downloaded from `<server>/build-manifest.json` (or `app_url` in
     `config.json`, for a frontend on another port while developing) every 5 minutes, after each
     connect and on `GET /agent/api/app/refresh`; only files whose SHA-256 it does not hold are
@@ -112,8 +122,8 @@ firewall rule, and logs what it removed. `devices.json` stays.
 Why, and what comes next (the agent serving the cashier the cloud's own app, with offline
 features returning one at a time inside it): [`agent-protocol.md` §19](../docs/agent-gateway/agent-protocol.md#19-the-agent-serves-the-cashier-v3).
 §12, §13, §16, §17 and §18 of that file describe what was removed and stay there for history.
-Version 2.1.0 is its first step (a LAN listener on TCP 47801 is back, for the app only) and 2.2.0 adds the
-read retries; the rest of this README is rewritten in a later slice.
+Version 2.1.0 is its first step (a LAN listener on TCP 47801 is back, for the app only), 2.2.0 adds the
+read retries and 2.3.0 the retries of writes that carry an `Idempotency-Key`; the rest of this README is rewritten in a later slice.
 
 ## Layout
 

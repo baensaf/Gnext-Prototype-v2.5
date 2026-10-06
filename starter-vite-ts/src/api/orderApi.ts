@@ -1,5 +1,7 @@
 import type { ManualDiscount } from './discountsApi';
 
+import { idempotencyHeaders } from 'src/utils/idempotency';
+
 import { httpClient } from './httpClient';
 
 export interface OrderItemOption {
@@ -278,13 +280,17 @@ export const orderApi = {
     return res.data;
   },
 
-  createOrder: async (data: any): Promise<OrderHeader> => {
-    const res = await httpClient.post('/api/v1/orders', data);
+  /**
+   * Make a draft. `idempotencyKey` (one per press of Place or Hold) lets the branch
+   * agent repeat the request after a lost answer without making a second draft (§19.11).
+   */
+  createOrder: async (data: any, options?: { idempotencyKey?: string }): Promise<OrderHeader> => {
+    const res = await httpClient.post('/api/v1/orders', data, idempotencyHeaders(options?.idempotencyKey));
     return res.data;
   },
 
-  updateDraft: async (id: string, data: any): Promise<OrderHeader> => {
-    const res = await httpClient.patch(`/api/v1/orders/${id}`, data);
+  updateDraft: async (id: string, data: any, options?: { idempotencyKey?: string }): Promise<OrderHeader> => {
+    const res = await httpClient.patch(`/api/v1/orders/${id}`, data, idempotencyHeaders(options?.idempotencyKey));
     return res.data;
   },
 
@@ -293,11 +299,13 @@ export const orderApi = {
     return res.data;
   },
 
+  /** Place a draft: the kitchen ticket and the call number. The key is the press of Place's own. */
   submitOrder: async (
     id: string,
-    data?: { quoteVersion?: string; approvalRequestIds?: string[]; manualDiscount?: ManualDiscount }
+    data?: { quoteVersion?: string; approvalRequestIds?: string[]; manualDiscount?: ManualDiscount },
+    options?: { idempotencyKey?: string }
   ): Promise<OrderHeader> => {
-    const res = await httpClient.post(`/api/v1/orders/${id}/submit`, data || {});
+    const res = await httpClient.post(`/api/v1/orders/${id}/submit`, data || {}, idempotencyHeaders(options?.idempotencyKey));
     return res.data;
   },
 

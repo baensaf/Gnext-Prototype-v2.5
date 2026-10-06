@@ -22,6 +22,7 @@ import { SplitOrderDto, TransferItemsDto } from '../dine-in/dtos/dine-in.dto';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { IncomingOrderPolicyService } from './incoming-order-policy.service';
+import { RequireIdempotency } from '../../common/decorators/idempotency.decorator';
 
 // Every :id on this controller is an order id, and an order belongs to the shop that
 // took it. Marking the class covers the transitions too — a branch may not confirm,
@@ -75,6 +76,10 @@ export class OrdersController {
     });
   }
 
+  // The three writes of the register's Place (and Hold) carry an Idempotency-Key when they come
+  // through a branch agent, which repeats a request whose answer was lost (agent-protocol §19.11).
+  // The key is optional: the kiosk and other clients send none and run as they always did.
+  @RequireIdempotency('ORDER_CREATE', { optional: true })
   @Post()
   async createDraft(@Body() body: OrderCreateDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -138,6 +143,7 @@ export class OrdersController {
     return { ...order, people, context };
   }
 
+  @RequireIdempotency('ORDER_UPDATE_DRAFT', { optional: true })
   @Patch(':id')
   async updateDraft(@Param('id') id: string, @Body() body: OrderUpdateDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -152,6 +158,7 @@ export class OrdersController {
     return await this.orderService.getQuote(tenantId, id, body, (req as any).userRole);
   }
 
+  @RequireIdempotency('ORDER_SUBMIT', { optional: true })
   @Post(':id/submit')
   async submitOrder(@Param('id') id: string, @Body() body: OrderSubmitDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
