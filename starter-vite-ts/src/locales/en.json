@@ -17,6 +17,10 @@
     "logout": "Sign Out",
     "invalidCredentials": "Invalid username or password.",
     "sessionExpired": "Your session has expired. Please sign in again.",
+    "connecting": {
+      "title": "Connecting to Gnext…",
+      "body": "You stay signed in. This screen continues as soon as Gnext answers."
+    },
     "demoAccounts": "Demo accounts — the same password signs in all three",
     "headOffice": "Head office",
     "roles": {

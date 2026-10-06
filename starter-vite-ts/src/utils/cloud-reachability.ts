@@ -9,7 +9,6 @@ import { useState, useEffect, useSyncExternalStore } from 'react';
  */
 
 let failingSince: number | null = null;
-let lastAnsweredAt: number | null = null;
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -17,7 +16,6 @@ function emit() {
 }
 
 export function reportCloudAnswered() {
-  lastAnsweredAt = Date.now();
   if (failingSince !== null) {
     failingSince = null;
     emit();
@@ -27,11 +25,6 @@ export function reportCloudAnswered() {
 /** Since when the app's requests get no answer; null while they do. */
 export function getCloudFailingSince(): number | null {
   return failingSince;
-}
-
-/** When a request last got an answer from the cloud, or null if none has yet. */
-export function getCloudLastAnsweredAt(): number | null {
-  return lastAnsweredAt;
 }
 
 export function reportCloudUnreachable() {

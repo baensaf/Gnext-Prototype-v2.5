@@ -3,7 +3,7 @@ import type { AxiosError } from 'axios';
 import axios from 'axios';
 
 import { readDeviceTerminal } from 'src/utils/device-terminal';
-import { connectionProblemMessage } from 'src/utils/connection-problem';
+import { GATEWAY_ERROR, connectionProblemMessage } from 'src/utils/connection-problem';
 import { isGatewayFailure, reportCloudAnswered, reportCloudUnreachable } from 'src/utils/cloud-reachability';
 
 import { CONFIG } from 'src/global-config';
@@ -96,6 +96,29 @@ httpClient.interceptors.response.use(
     // On a branch agent the Reconnecting bar says the cloud is out of reach (cloud-status-bar.tsx),
     // and showErrorToast stays quiet about it; a screen that needs to say more shows the
     // problem's `detail`, where the button was pressed.
+    const answeredBody = error.response?.data;
+    const gatewayPage =
+      !!error.response &&
+      isGatewayFailure(error.response.status) &&
+      (typeof answeredBody !== 'object' || answeredBody === null);
+
+    if (gatewayPage) {
+      // nginx or the CDN answering for a server that is not there: not the application's problem
+      // JSON, so make one, and a screen reading `code` and `status` can tell.
+      const status = error.response?.status ?? 502;
+      const gatewayProblem: ProblemDetails = {
+        type: 'https://gnext.local/problems/gateway',
+        title: 'Gateway error',
+        status,
+        code: GATEWAY_ERROR,
+        detail: `The server did not answer (HTTP ${status}).`,
+        instance: error.config?.url || '',
+        correlationId: '00000000-0000-0000-0000-000000000000',
+      };
+      if (!skipToast) showErrorToast(gatewayProblem);
+      return Promise.reject(gatewayProblem);
+    }
+
     if (error.response?.data) {
       const problem = error.response.data;
       // The agent's own answer for a cloud that did not answer (§19.10): put the words for the

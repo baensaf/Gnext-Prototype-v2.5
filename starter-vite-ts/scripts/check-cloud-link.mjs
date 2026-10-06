@@ -12,6 +12,7 @@ import {
   BAR_AFTER_MS,
   OFFLINE_AFTER_MS,
   unreachableSince,
+  agentShowsRecovery,
 } from '../src/utils/cloud-link.ts';
 
 let failures = 0;
@@ -23,100 +24,33 @@ function check(ok, message) {
 }
 const eq = (got, want, message) => check(got === want, `${message}: got ${got}, want ${want}`);
 
-const none = {
-  requestsFailingSince: null,
-  probeDownSince: null,
-  agentDownSince: null,
-  lastAnsweredAt: null,
-};
+const none = { requestsFailingSince: null, agentUnreachableSince: null };
 
 // 1. Which signal counts, and since when.
 eq(unreachableSince(none), null, 'nothing wrong');
 eq(unreachableSince({ ...none, requestsFailingSince: 1000 }), 1000, 'requests with no answer');
+eq(unreachableSince({ ...none, agentUnreachableSince: 2000 }), 2000, 'the agent says unreachable');
 eq(
-  unreachableSince({ ...none, agentDownSince: 2000 }),
-  2000,
-  'the agent says its cloud connection is down'
-);
-eq(unreachableSince({ ...none, probeDownSince: 700 }), 700, 'the own check is not answered');
-eq(
-  unreachableSince({
-    ...none,
-    probeDownSince: 700,
-    requestsFailingSince: 900,
-    agentDownSince: 800,
-  }),
-  700,
-  'all three: the earliest'
-);
-eq(
-  unreachableSince({ ...none, probeDownSince: 700, agentDownSince: 500, lastAnsweredAt: 600 }),
-  700,
-  'the check still counts when a request was answered after the agent said down'
-);
-eq(
-  unreachableSince({
-    ...none,
-    requestsFailingSince: 3000,
-    agentDownSince: 2000,
-    lastAnsweredAt: 1000,
-  }),
+  unreachableSince({ requestsFailingSince: 3000, agentUnreachableSince: 2000 }),
   2000,
   'both: the earlier one'
 );
 eq(
-  unreachableSince({
-    ...none,
-    requestsFailingSince: 1500,
-    agentDownSince: 2000,
-    lastAnsweredAt: 1000,
-  }),
+  unreachableSince({ requestsFailingSince: 1500, agentUnreachableSince: 2000 }),
   1500,
   'both: the earlier one, the other way round'
 );
 
-// 2. A request answered after the agent said "down" shows the cloud is there: the agent's word no
-//    longer counts, the requests' still do.
+// 2. The agent saying "reachable" clears requests that failed before the poll began, and only
+//    those: not one that failed during it, not when the agent says unreachable, not when none failed.
 eq(
-  unreachableSince({
-    ...none,
-    requestsFailingSince: null,
-    agentDownSince: 2000,
-    lastAnsweredAt: 2500,
-  }),
-  null,
-  'answered since the agent said down'
+  agentShowsRecovery(true, 1000, 2000),
+  true,
+  'a failure before the poll, the agent says reachable'
 );
-eq(
-  unreachableSince({
-    ...none,
-    requestsFailingSince: null,
-    agentDownSince: 2000,
-    lastAnsweredAt: 2000,
-  }),
-  null,
-  'answered at the very moment'
-);
-eq(
-  unreachableSince({
-    ...none,
-    requestsFailingSince: null,
-    agentDownSince: 2000,
-    lastAnsweredAt: 1999,
-  }),
-  2000,
-  'answered before the agent said down'
-);
-eq(
-  unreachableSince({
-    ...none,
-    requestsFailingSince: 4000,
-    agentDownSince: 2000,
-    lastAnsweredAt: 3000,
-  }),
-  4000,
-  'answered since the agent said down, then the requests failed'
-);
+eq(agentShowsRecovery(true, 2500, 2000), false, 'a failure after the poll began');
+eq(agentShowsRecovery(false, 1000, 2000), false, 'the agent says unreachable');
+eq(agentShowsRecovery(true, null, 2000), false, 'no request is failing');
 
 // 3. The bar: hidden for 2 s, Reconnecting from 2 s, No internet from 2 minutes.
 eq(BAR_AFTER_MS, 2000, 'the bar waits 2 s');
