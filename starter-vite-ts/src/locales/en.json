@@ -834,11 +834,6 @@
     "waiting": {
       "line": "Orders waiting to be accepted: {{count}}",
       "answer": "Answer in Incoming Orders"
-    },
-    "dateScope": {
-      "anyDate": "Any date",
-      "custom": "Custom dates",
-      "hint": "Completed, cancelled and refunded orders count within this range. Open and held orders show whatever their date."
     }
   },
   "dineIn": {
