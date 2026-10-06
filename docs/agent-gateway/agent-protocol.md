@@ -2800,6 +2800,58 @@ min(30 s, time left + 10 s). If the client goes away, the agent stops.
 Persian text: *در حال اتصال دوباره به جی‌نکست… صفحه و سبد خرید سر جایش است*. Every new string has
 an `en` and an `fa` value.
 
+As built in 2.2.0 (S5), the agent:
+
+- `(*Proxy).retryable` is the one place that decides what is repeated: a `GET` or `HEAD`, except
+  `/api/v1/live/stream`. S6 adds the writes that carry `Idempotency-Key` there, and keeps out
+  `POST /api/v1/payments/:id/process` and `POST /api/v1/payments/:id/check-terminal`. A request that
+  may be repeated has its body (a read rarely has one) read once and sent again with each attempt.
+- The attempts keep to a clock that starts when the request arrives: one at 0, 2, 4 ... 20 s. The next
+  one is due at the next tick, at once if the attempt used up its whole tick, and is made only if it is
+  due at 20 s or earlier (so a dead cloud is tried at 0, 2 ... 20 s and the page is answered at about
+  20 s). The attempt's own time is `min(30 s, 20 s - time since arrival + 10 s)`: the first attempt
+  has 30 s, and a cloud that takes the request and never answers ends a read at 30 s, not 20.
+- A page that closes its request ends the retries at once, between two attempts or in the middle of
+  one; nothing more is sent to the cloud. `answerFor` is asked once, with whether any attempt was
+  written and not answered, so a keyed write (S6) ends `504` if any of its attempts was.
+- The timing is `localui.Retry{Every, Window, Grace}` (2 s, 20 s, 10 s); the tests shorten it.
+
+The app, in agent mode:
+
+- `src/components/cloud-status-bar.tsx` is the bar: fixed at the top, 28 px, amber *Reconnecting* from
+  2 s out of reach and the *No internet* line from 2 minutes, green *Connected again* for 3 s. While it
+  shows the page is moved down by its height (the sticky header and the side menu start under it) and a
+  `resize` is sent so the register measures itself again.
+- "Out of reach" (`src/utils/cloud-link.ts`, `agent-link.ts`) is the earliest of three signals:
+  the status route's `cloud.connected` polled every 3 s (or the route not answering); the requests that
+  got no answer (`cloud-reachability.ts`); and a check of the app's own, `GET /api/v1/auth/me` with no
+  session (the cloud answers 401 before it looks anything up) every 3 s, 2 s while down, which is out
+  of reach if it is not answered within 1 s. The check is there because the agent notices a cut
+  network only after missed heartbeats, and a register that is idle makes no request to notice with.
+  A request answered after the agent said "down" shows the cloud is there, so from then on the agent's
+  word is ignored until it says "connected" and later "down" again. A window that is hidden does not
+  check.
+- The outage ends when none of the three says so. If the bar was up, the app sends the window event
+  `gnext:cloud-back` (`src/utils/cloud-back.ts`, `useCloudBack`). The POS reads the menu, the stops and
+  stock, the open shift and the held orders again, quietly (it keeps the category the cashier is on and
+  the cart); the incoming-orders queue and its policy are read again; the orders directory, the delivery
+  hub, the kitchen screen and the print queue do it through `useLiveRefresh`, which also listens.
+- `useLiveRefresh`: a browser closes an event stream for good when its reconnect is answered with an
+  error status, and that is what the agent (`502`, the stream is never retried) or the cloud's gateway
+  answers while the cloud is down. A stream that finds itself closed is now opened again, after 1 s,
+  2 s ... up to 15 s, and at once on `gnext:cloud-back`; the next `ready` re-reads the board.
+- The words for a request the agent could not get answered are put in the problem's `detail` by the
+  HTTP client (the agent's own text goes to `technicalDetail`), where every screen already shows it:
+  `CLOUD_UNREACHABLE` on a write is *Not sent. Try again when connected.*, `CLOUD_NO_ANSWER` is *We
+  couldn't confirm this was saved. Check the order before trying again.*, and a read is *Couldn't reach
+  Gnext. Try again when connected.* The POS drops the first when the cloud is back and keeps the second.
+  A cart, a form or an open order is never cleared by either.
+- `showErrorToast` makes no toast for `CLOUD_UNREACHABLE`, `CLOUD_NO_ANSWER` or `NETWORK_ERROR` in agent
+  mode, whether the bar is up yet or not; the bar and the inline message say it. Incoming orders, which
+  has no place for a message, toasts the `detail` of a failed accept or reject itself.
+- Not covered: a page reloaded while the cloud is away asks `/auth/me`, gets no answer for 20 s and
+  shows the sign-in page; it works again after a reload once the cloud is back.
+
 ### 19.11 Idempotency (S6)
 
 A write the agent may retry must be safe to repeat. The cloud's `IdempotencyInterceptor`

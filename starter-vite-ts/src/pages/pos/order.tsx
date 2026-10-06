@@ -85,6 +85,8 @@ import {
 
 import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
+import { useCloudBack } from 'src/utils/cloud-back';
+import { isNotSentMessage } from 'src/utils/connection-problem';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 import { addonMin, isPickOne, addonRuleLabel } from 'src/utils/addon-rule';
 
@@ -151,6 +153,8 @@ function formatRejectionReason(reason?: string, fallback: string = 'Discount was
       return reason || fallback;
   }
 }
+
+const CATALOG_LOAD_FAILED = 'Failed to load POS catalog data';
 
 export function PosOrderPage() {
   const currencyLabel = useCurrencyLabel();
@@ -337,6 +341,9 @@ export function PosOrderPage() {
   const customerSelectRef = React.useRef<HTMLInputElement | null>(null);
   const deliveryRestoreRef = React.useRef<{ customerId?: string; addressId?: string; zoneId?: string }>({});
 
+  // Re-reads the stops, prices and stock of the minute-by-minute check below, on demand.
+  const sellingRefreshRef = React.useRef<(() => void) | null>(null);
+
   const fetchHeldOrders = useCallback(async (branchId?: string) => {
     try {
       setLoadingHeldOrders(true);
@@ -350,9 +357,11 @@ export function PosOrderPage() {
     }
   }, [selectedBranchId]);
 
-  const loadInitialData = async () => {
+  // The menu, read again. `quiet` is the read after the cloud came back (Reconnecting bar): it keeps
+  // the category the cashier is on and shows no spinner, and a failed one leaves the screen as it is.
+  const loadInitialData = async (quiet = false) => {
     try {
-      setLoadingInitialData(true);
+      if (!quiet) setLoadingInitialData(true);
       // Today's stops load with the stock counts below, for the selected branch.
       const [cList, pList, tList] = await Promise.all([
         catalogApi.getCategories(),
@@ -363,7 +372,11 @@ export function PosOrderPage() {
       // one) left the cashier looking at an empty grid.
       const liveCategories = cList.filter((c) => c.is_active !== false);
       setCategories(liveCategories);
-      if (liveCategories.length > 0) setActiveTab(liveCategories[0].id);
+      if (liveCategories.length > 0) {
+        setActiveTab((current) =>
+          quiet && liveCategories.some((c) => c.id === current) ? current : liveCategories[0].id
+        );
+      }
       // A product taken off the menu, or in a category taken off it, is not sold; the register
       // refuses it too.
       const offCategoryIds = new Set(cList.filter((c) => c.is_active === false).map((c) => c.id));
@@ -373,10 +386,12 @@ export function PosOrderPage() {
         setTableNumber(tList[0].code || tList[0].table_number || 'T-01');
         setSelectedTableId(tList[0].id);
       }
+      // The menu is here now: a "could not load" notice from before is out of date.
+      setError((current) => (current === CATALOG_LOAD_FAILED ? null : current));
     } catch {
-      setError('Failed to load POS catalog data');
+      if (!quiet) setError(CATALOG_LOAD_FAILED);
     } finally {
-      setLoadingInitialData(false);
+      if (!quiet) setLoadingInitialData(false);
     }
   };
 
@@ -384,6 +399,17 @@ export function PosOrderPage() {
     loadInitialData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The Reconnecting bar was up and the cloud is back (agent mode): read what is on screen again,
+  // quietly. The cart, the open order and the cashier's place are not touched. The open shift is
+  // re-read in useRegisterShift, and the open and held orders here.
+  useCloudBack(() => {
+    // "Not sent. Try again when connected." has done its job once connected.
+    setError((current) => (isNotSentMessage(current) ? null : current));
+    loadInitialData(true);
+    sellingRefreshRef.current?.();
+    if (selectedBranchId) fetchHeldOrders(selectedBranchId);
+  });
 
   // The note phrases change rarely, so they are fetched once with the till rather than each
   // time the dialog opens. An empty list is a legitimate answer: the dialog simply shows no
@@ -402,7 +428,8 @@ export function PosOrderPage() {
       catalogApi
         .getOffScheduleProducts(selectedBranchId || undefined)
         .then((list) => setOffSchedule(new Map(list.map((o) => [o.product_id, o.windows]))))
-        .catch(() => setOffSchedule(new Map()));
+        // A read that fails (the cloud is away) leaves what the screen knows as it is.
+        .catch(() => undefined);
       catalogApi
         .getAvailabilities(selectedBranchId || undefined)
         // A stop on one channel (Snappfood only) leaves the item on sale at the counter.
@@ -417,9 +444,14 @@ export function PosOrderPage() {
       catalogApi
         .getDailyStock(selectedBranchId || undefined)
         .then(setDailyStock)
-        .catch(() => setDailyStock([]));
+        .catch(() => undefined);
     refresh();
     refreshStock();
+    // The cloud came back: read the stops and stock again now, not at the next minute.
+    sellingRefreshRef.current = () => {
+      refresh();
+      refreshStock();
+    };
     const stockTimer = window.setInterval(refreshStock, 60_000);
     const timer = window.setInterval(refresh, 60_000);
     return () => {

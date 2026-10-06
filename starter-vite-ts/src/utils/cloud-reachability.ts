@@ -9,6 +9,7 @@ import { useState, useEffect, useSyncExternalStore } from 'react';
  */
 
 let failingSince: number | null = null;
+let lastAnsweredAt: number | null = null;
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -16,10 +17,21 @@ function emit() {
 }
 
 export function reportCloudAnswered() {
+  lastAnsweredAt = Date.now();
   if (failingSince !== null) {
     failingSince = null;
     emit();
   }
+}
+
+/** Since when the app's requests get no answer; null while they do. */
+export function getCloudFailingSince(): number | null {
+  return failingSince;
+}
+
+/** When a request last got an answer from the cloud, or null if none has yet. */
+export function getCloudLastAnsweredAt(): number | null {
+  return lastAnsweredAt;
 }
 
 export function reportCloudUnreachable() {
@@ -34,7 +46,7 @@ export function isGatewayFailure(status?: number) {
   return status === 502 || status === 503 || status === 504;
 }
 
-function subscribe(listener: () => void) {
+export function subscribeCloudReachability(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
@@ -46,7 +58,7 @@ const snapshot = () => failingSince;
  * clock, and one that got an answer stops it. The browser going offline counts as a failure.
  */
 export function useCloudUnreachable(afterMs = 30_000): boolean {
-  const since = useSyncExternalStore(subscribe, snapshot, snapshot);
+  const since = useSyncExternalStore(subscribeCloudReachability, snapshot, snapshot);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {

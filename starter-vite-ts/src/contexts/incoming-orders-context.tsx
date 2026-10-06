@@ -8,6 +8,7 @@ import { useRouter } from 'src/routes/hooks';
 
 import { moneyUnit } from 'src/utils/currency';
 import { MoneyUtil } from 'src/utils/money.util';
+import { useCloudBack } from 'src/utils/cloud-back';
 
 import i18n from 'src/locales/i18n';
 import { orderApi } from 'src/api/orderApi';
@@ -147,9 +148,28 @@ export function IncomingOrdersProvider({ children }: { children: React.ReactNode
   useEffect(() => {
     if (!enabled) return undefined;
     refresh();
-    const timer = setInterval(refresh, POLL_MS);
+    // One read at a time: on a branch agent a read made while the cloud is away is held for up to
+    // 20 s (agent-protocol.md §19.10), and a new one every 5 s would pile up behind it.
+    let reading = false;
+    const timer = setInterval(() => {
+      if (reading) return;
+      reading = true;
+      refresh().finally(() => {
+        reading = false;
+      });
+    }, POLL_MS);
     return () => clearInterval(timer);
   }, [enabled, refresh]);
+
+  // The cloud is back after the Reconnecting bar (agent mode): the queue and its policy now.
+  useCloudBack(() => {
+    if (!enabled) return;
+    refresh();
+    orderApi
+      .getIncomingPolicy(branchId)
+      .then(setPolicy)
+      .catch(() => undefined);
+  });
 
   const waiting = enabled && orders.length > 0;
 
