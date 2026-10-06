@@ -122,13 +122,14 @@ type ReprintDocumentType = 'CUSTOMER_RECEIPT' | 'KITCHEN_TICKET' | 'GUEST_BILL' 
 
 // No Waiting tab: a waiting order is answered on Incoming Orders, and nothing here can answer
 // it. A line above the tabs points there while one waits. Waiting orders still count in All.
+// All comes first and is where the page opens: the whole day, before narrowing it down.
 const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: 'ALL', label: 'all' },
   { key: 'OPEN', label: 'open' },
   { key: 'HELD', label: 'held' },
   { key: 'COMPLETED', label: 'completed' },
   { key: 'CANCELLED', label: 'cancelled' },
   { key: 'REFUNDED', label: 'refunded' },
-  { key: 'ALL', label: 'all' },
 ];
 
 const ORDER_TYPES = ['DINE_IN', 'TAKEAWAY', 'PICKUP', 'DELIVERY', 'AGGREGATOR'];
@@ -188,9 +189,10 @@ const saveColumnChoice = (role: ColumnRole, model: GridColumnVisibilityModel) =>
   }
 };
 
-// Defaults are left out of the address bar, so a plain /app/orders is today's open orders.
+// Defaults are left out of the address bar, so a plain /app/orders is today's orders, all of
+// them, with anything still open from an earlier day.
 const DEFAULTS = {
-  tab: 'OPEN',
+  tab: 'ALL',
   f: encodeFilterModel(DEFAULT_FILTER_MODEL),
   page: '0',
   size: '25',
