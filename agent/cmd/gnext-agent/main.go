@@ -46,10 +46,6 @@ func main() {
 	if os.Args[1] == "tray" {
 		os.Exit(runTray())
 	}
-	// The offline till (§13.14), in a window of its own, from the tray or the Start menu.
-	if os.Args[1] == "till" {
-		os.Exit(runTillWindow())
-	}
 	attachConsole()
 	switch os.Args[1] {
 	case "enrol", "enroll":
@@ -74,7 +70,6 @@ func usage() {
   gnext-agent enrol --code XXXX-XXXX [--server https://app.example.ir]
   gnext-agent run
   gnext-agent [open]      the settings window
-  gnext-agent till        Gnext POS, the branch register, in a window of its own
   gnext-agent tray
   gnext-agent service install|uninstall|start|stop
   gnext-agent version
@@ -83,9 +78,6 @@ Data folder:   %s
 Settings page: http://%s
 `, version, store.Home(), uiAddr())
 }
-
-// tillPath is the offline till on the settings server (§13.13).
-const tillPath = "/till/"
 
 // uiAddr is where the settings page listens; GNEXT_AGENT_UI_ADDR overrides it for development.
 func uiAddr() string {
@@ -162,6 +154,12 @@ func run(ctx context.Context, console io.Writer) int {
 	}
 	defer release()
 
+	// The offline till of agents 1.x is gone (§19.2); its files are of no use to anything now.
+	removeLegacyData(log)
+	if isService() {
+		go removeLegacyFirewallRule(log)
+	}
+
 	h, err := newHost(log)
 	if err != nil {
 		log.Error("start", "err", err)
@@ -169,15 +167,14 @@ func run(ctx context.Context, console io.Writer) int {
 	}
 	defer h.close()
 
-	ui := &localui.Server{Host: h, Version: version, LogFile: logFile(), Log: log, Addr: uiAddr(), LANAddr: os.Getenv("GNEXT_AGENT_LAN_ADDR")}
-	h.lanURLs = ui.LANURLs
+	ui := &localui.Server{Host: h, Version: version, LogFile: logFile(), Log: log, Addr: uiAddr()}
 	go func() {
 		if err := ui.ListenAndServe(ctx); err != nil {
 			log.Error("settings page could not start", "addr", uiAddr(), "err", err)
 		}
 	}()
 
-	go launchTrays(ctx, log, h.tillOpensAtSignIn)
+	go launchTrays(ctx, log)
 
 	code := h.supervise(ctx)
 	if code == exitRestart {
@@ -214,3 +211,15 @@ func newLogger(console io.Writer) *slog.Logger {
 }
 
 var errNotEnrolled = errors.New("not enrolled")
+
+// removeLegacyData deletes, once, the files agents 1.x kept for the offline till, and says in
+// the log what it removed (§19.2). A file that cannot be removed is logged and left.
+func removeLegacyData(log *slog.Logger) {
+	removed, failed := store.RemoveLegacyOfflineData()
+	if len(removed) > 0 {
+		log.Info("removed the files of the offline till, which this agent no longer has", "files", removed)
+	}
+	for name, err := range failed {
+		log.Warn("could not remove a file of the offline till", "file", name, "err", err)
+	}
+}

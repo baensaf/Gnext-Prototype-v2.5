@@ -71,7 +71,6 @@ func (handler) Execute(_ []string, req <-chan svc.ChangeRequest, status chan<- s
 
 func runService() {
 	repairBinaryPermissions()
-	ensureLANFirewallRule()
 	_ = svc.Run(serviceName, handler{})
 }
 
@@ -89,22 +88,25 @@ func repairBinaryPermissions() {
 	_ = cmd.Run()
 }
 
-// lanFirewallRule is the inbound rule that lets paired devices reach Gnext POS (§18.3).
-const lanFirewallRule = "Gnext POS"
+// legacyFirewallRule is the inbound rule agents 1.x and the old installer added so that paired
+// devices on the LAN reached Gnext POS on TCP 47801. Agent 2.0.0 has no till and listens on no
+// such port, so it deletes the rule (§19.2). The next version brings its own rule back.
+const legacyFirewallRule = "Gnext POS"
 
-// ensureLANFirewallRule adds the rule once: TCP 47801 from the local subnet, every profile. The
+// removeLegacyFirewallRule deletes the old Gnext POS rule when it is there, at service start. The
 // service runs as SYSTEM, so an agent that updated itself needs no installer run. Any failure is
-// logged; the PC's own till does not need it.
-func ensureLANFirewallRule() {
-	show := exec.Command("netsh", "advfirewall", "firewall", "show", "rule", "name="+lanFirewallRule)
+// only logged: a rule for a port nothing listens on does no harm.
+func removeLegacyFirewallRule(log *slog.Logger) {
+	show := exec.Command("netsh", "advfirewall", "firewall", "show", "rule", "name="+legacyFirewallRule)
 	show.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	if show.Run() == nil {
+	if show.Run() != nil {
+		return // no such rule (netsh exits non-zero then)
+	}
+	del := exec.Command("netsh", "advfirewall", "firewall", "delete", "rule", "name="+legacyFirewallRule)
+	del.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	if out, err := del.CombinedOutput(); err != nil {
+		log.Warn("the old Gnext POS firewall rule was not removed", "err", err, "out", string(out))
 		return
 	}
-	add := exec.Command("netsh", "advfirewall", "firewall", "add", "rule", "name="+lanFirewallRule,
-		"dir=in", "action=allow", "protocol=TCP", "localport=47801", "remoteip=localsubnet", "profile=any")
-	add.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	if out, err := add.CombinedOutput(); err != nil {
-		slog.Warn("the firewall rule for Gnext POS on the LAN was not added", "err", err, "out", string(out))
-	}
+	log.Info("removed the old Gnext POS firewall rule (agent 2.0.0 has no till)")
 }

@@ -24,30 +24,16 @@ func Home() string {
 	return filepath.Join(pd, "Gnext", "Agent")
 }
 
-func ConfigPath() string    { return filepath.Join(Home(), "config.json") }
-func IdentityPath() string  { return filepath.Join(Home(), "identity.json") }
-func JournalPath() string   { return filepath.Join(Home(), "journal.db") }
-func UpdatesDir() string    { return filepath.Join(Home(), "updates") }
-func LogsDir() string       { return filepath.Join(Home(), "logs") }
-func BrowserDir() string    { return filepath.Join(Home(), "browser-profile") }
-func BranchDataDir() string { return filepath.Join(Home(), "branch-data") }
-func OfflinePath() string   { return filepath.Join(Home(), "offline-orders.db") }
+func ConfigPath() string   { return filepath.Join(Home(), "config.json") }
+func IdentityPath() string { return filepath.Join(Home(), "identity.json") }
+func JournalPath() string  { return filepath.Join(Home(), "journal.db") }
+func UpdatesDir() string   { return filepath.Join(Home(), "updates") }
+func LogsDir() string      { return filepath.Join(Home(), "logs") }
+func BrowserDir() string   { return filepath.Join(Home(), "browser-profile") }
 
-// DevicesPath keeps the last config the cloud sent (§6.1, §13.2): the branch's printers and
-// terminal, for an agent restarted while offline.
+// DevicesPath keeps the last config the cloud sent (§6.1): the branch's printers and terminals,
+// for an agent restarted while offline.
 func DevicesPath() string { return filepath.Join(Home(), "devices.json") }
-
-// CallNumbersPath keeps the last POS call count a heartbeat.ack carried (§13.9).
-func CallNumbersPath() string { return filepath.Join(Home(), "call-numbers.json") }
-
-// TillPath keeps which of the branch's tills the offline till sells as (§13.4).
-func TillPath() string { return filepath.Join(Home(), "till.json") }
-
-// TillPairingsPath keeps the devices paired on the LAN (§18.5).
-func TillPairingsPath() string { return filepath.Join(Home(), "till-devices.json") }
-
-// TillOrdersPath keeps the offline till's orders and call counts (§13.6, §13.9).
-func TillOrdersPath() string { return filepath.Join(Home(), "till-orders.db") }
 
 // LoadJSON and SaveJSON read and write one of the agent's files; SaveJSON replaces it whole.
 func LoadJSON(path string, v any) error { return readJSON(path, v) }

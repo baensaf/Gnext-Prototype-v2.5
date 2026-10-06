@@ -54,9 +54,12 @@ Type: filesandordirs; Name: "{app}\saman"
 #endif
 
 [InstallDelete]
-; The till's shortcuts were called Gnext Offline Till before it became the branch register.
+; The offline till is gone (agent 2.0.0, agent-protocol §19.2). Its shortcuts, Gnext POS, and the
+; ones it had before that, Gnext Offline Till, are removed from machines that still have them.
 Type: files; Name: "{autoprograms}\Gnext Offline Till.lnk"
 Type: files; Name: "{autodesktop}\Gnext Offline Till.lnk"
+Type: files; Name: "{autoprograms}\Gnext POS.lnk"
+Type: files; Name: "{autodesktop}\Gnext POS.lnk"
 
 [UninstallDelete]
 ; Agent updates write the bridge folder themselves, so the uninstaller does not know its files.
@@ -70,15 +73,14 @@ Name: "desktopicon"; Description: "Create a desktop shortcut to Gnext Agent"
 [Icons]
 Name: "{autoprograms}\Gnext Agent"; Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Comment: "Gnext branch agent settings"
 Name: "{autodesktop}\Gnext Agent"; Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Comment: "Gnext branch agent settings"; Tasks: desktopicon
-Name: "{autoprograms}\Gnext POS"; Filename: "{app}\gnext-agent.exe"; Parameters: "till"; Comment: "The branch register, online and offline"
-Name: "{autodesktop}\Gnext POS"; Filename: "{app}\gnext-agent.exe"; Parameters: "till"; Comment: "The branch register, online and offline"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Description: "Open Gnext Agent"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [UninstallRun]
 Filename: "{app}\gnext-agent.exe"; Parameters: "service uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveService"
-; The rule the service added so devices on the LAN reach Gnext POS (agent-protocol §18.3).
+; The rule agents 1.x added so devices on the LAN reached Gnext POS (agent 2.0.0 deletes it itself at
+; service start; this covers an uninstall before that).
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Gnext POS"""; Flags: runhidden waituntilterminated; RunOnceId: "RemoveFirewallRule"
 ; The tray icons run from the same exe in users' sessions; end them so it can be deleted.
 Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM gnext-agent.exe /FI ""SESSION ne 0"""; Flags: runhidden waituntilterminated; RunOnceId: "EndTrays"

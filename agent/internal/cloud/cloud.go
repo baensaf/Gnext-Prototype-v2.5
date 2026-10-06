@@ -5,14 +5,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
-	"gnext/agent/internal/offline"
 	"gnext/agent/internal/protocol"
 	"gnext/agent/internal/store"
 )
@@ -137,72 +135,6 @@ func (c *Client) Download(ctx context.Context, url string, w io.Writer) error {
 	return err
 }
 
-// ErrNotModified is the answer of Snapshot and Staff when the agent already holds the current
-// version.
-var ErrNotModified = errors.New("not modified")
-
-// Snapshot fetches the branch snapshot (§12.2). held is the version the agent has, or "". The
-// transport asks for gzip and unpacks it. Returns ErrNotModified on a 304.
-func (c *Client) Snapshot(ctx context.Context, held string) (body []byte, version string, err error) {
-	return c.versioned(ctx, "/api/v1/agent/data/snapshot", "data_version", held)
-}
-
-// Staff fetches who may sign in at the offline till (§13.3), in the same way as Snapshot.
-func (c *Client) Staff(ctx context.Context, held string) (body []byte, version string, err error) {
-	return c.versioned(ctx, "/api/v1/agent/data/staff", "staff_version", held)
-}
-
-// versioned fetches a document whose version is its ETag and its field `field`.
-func (c *Client) versioned(ctx context.Context, path, field, held string) (body []byte, version string, err error) {
-	req, err := c.request(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, "", err
-	}
-	if held != "" {
-		req.Header.Set("If-None-Match", `"`+held+`"`)
-	}
-	resp, err := c.http().Do(req)
-	if err != nil {
-		return nil, "", err
-	}
-	defer resp.Body.Close()
-	switch {
-	case resp.StatusCode == http.StatusNotModified:
-		return nil, held, ErrNotModified
-	case resp.StatusCode != http.StatusOK:
-		return nil, "", problem(resp)
-	}
-	body, err = io.ReadAll(io.LimitReader(resp.Body, 64<<20))
-	if err != nil {
-		return nil, "", err
-	}
-	var head map[string]json.RawMessage
-	if err := json.Unmarshal(body, &head); err == nil {
-		if err := json.Unmarshal(head[field], &version); err == nil && version != "" {
-			return body, version, nil
-		}
-	}
-	return nil, "", fmt.Errorf("%s without a %s", path, field)
-}
-
-// UploadOrders sends offline orders (§12.5). A 400 for the whole batch comes back as a
-// *Problem with Status 400; see IsRefused.
-func (c *Client) UploadOrders(ctx context.Context, orders []json.RawMessage) ([]offline.Result, error) {
-	var out struct {
-		Results []offline.Result `json:"results"`
-	}
-	if err := c.do(ctx, http.MethodPost, "/api/v1/agent/sync/orders", map[string]any{"orders": orders}, &out); err != nil {
-		return nil, err
-	}
-	return out.Results, nil
-}
-
-// IsRefused reports whether the cloud refused a request as malformed (HTTP 400).
-func (c *Client) IsRefused(err error) bool {
-	var p *Problem
-	return errors.As(err, &p) && p.Status == http.StatusBadRequest
-}
-
 // LocalUser is who signed in to the agent's local settings page.
 type LocalUser struct {
 	ID          string `json:"id"`
@@ -223,38 +155,6 @@ func (c *Client) LocalLogin(ctx context.Context, username, password string) (str
 	}
 	err := c.do(ctx, http.MethodPost, "/api/v1/agent/local/login", map[string]string{"username": username, "password": password}, &out)
 	return out.SessionToken, out.User, err
-}
-
-// TillSession is a cloud session for the cashier signed in at the till (§16.3). The page is
-// given User and Tenant; the token and CSRF token stay in the agent.
-type TillSession struct {
-	Token  string          `json:"session_token"`
-	CSRF   string          `json:"csrf_token"`
-	User   json.RawMessage `json:"user"`
-	Tenant json.RawMessage `json:"tenant"`
-}
-
-// TillLogin asks the cloud for a session for the till's cashier, with the PIN they typed.
-func (c *Client) TillLogin(ctx context.Context, userID, pin string) (TillSession, error) {
-	var out TillSession
-	err := c.do(ctx, http.MethodPost, "/api/v1/agent/local/pin-login", map[string]string{"user_id": userID, "pin": pin}, &out)
-	return out, err
-}
-
-// TillLogout ends a till cashier's cloud session.
-func (c *Client) TillLogout(ctx context.Context, session string) error {
-	return c.Local(ctx, http.MethodPost, "/logout", session, nil, nil)
-}
-
-// Forward sends one request of the till's proxy (§16.4) to the cloud as it is: the caller builds
-// it with the cashier's session and without the device key. Redirects are not followed, and the
-// caller's context bounds it.
-func (c *Client) Forward(req *http.Request) (*http.Response, error) {
-	rt := http.DefaultTransport
-	if c.HTTP != nil && c.HTTP.Transport != nil {
-		rt = c.HTTP.Transport
-	}
-	return rt.RoundTrip(req)
 }
 
 // Local calls a device-management route under /api/v1/agent/local as the signed-in user.

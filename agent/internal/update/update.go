@@ -152,7 +152,7 @@ func OldPath(exe, version string) string {
 }
 
 // setAside moves the running binary out of the way of the new one. A binary set aside earlier
-// can still be in use: a settings or till window opened before that update runs from it until
+// can still be in use: a settings window opened before that update runs from it until
 // it closes, and Windows neither deletes nor replaces a file a process runs from. Such a file
 // gets a numbered neighbour instead of blocking every update after it.
 func setAside(exe, version string) (string, error) {
