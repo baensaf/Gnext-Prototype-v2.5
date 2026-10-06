@@ -27,6 +27,11 @@ branch's jobs wait for it (§10). v2 (§12) adds a copy of the branch's menu and
 agent, and the upload of orders the branch took while offline; §13 adds the till the branch
 takes those orders on.
 
+**Since 2026-10-06 the agent does something else (§19, v3).** The offline selling of v2 is
+removed. Instead the agent serves the cashier's pages of the web app on the branch PC and LAN,
+cached from the cloud's own build, and passes every API call to the cloud. §12, §13, §16, §17
+and §18 are kept for history only.
+
 ```
  Branch LAN                                      VPS
 ┌──────────────────────────────┐              ┌─────────────────────────────┐
@@ -920,6 +925,8 @@ Not part of the wire contract, but it explains the behaviour the agent will see.
 
 ## 12. Branch data and offline sync (v2)
 
+*Removed 2026-10-06 (§19). Kept for history; nothing here is built any more.*
+
 Status: **draft for review** (HANDOFF tasks 10–13). Protocol version stays **1**: everything
 here is new endpoints, a new command and new optional fields, switched on by capabilities.
 
@@ -1271,6 +1278,8 @@ v3: replay protection, batch signing, key rotation, back-pressure, resumable upl
 large backlogs.
 
 ## 13. Offline POS (v2, second step)
+
+*Removed 2026-10-06 (§19). Kept for history; nothing here is built any more.*
 
 Status: **draft for review** (P0 of `HANDOFF-offline-pos.md`). Protocol version stays **1**:
 one new endpoint, new optional fields, and a local page, switched on by a capability.
@@ -1770,6 +1779,8 @@ Still open:
 
 ## 16. The till online (local-first, v2 third step)
 
+*Removed 2026-10-06 (§19). Kept for history; nothing here is built any more.*
+
 Status: **agreed** (product owner, 2026-09-25). Protocol version stays **1**: one new cloud
 route, a local proxy, new optional fields, switched on by a capability.
 
@@ -2012,6 +2023,8 @@ as no, so a failed check never stops a sale. This replaces §13.4's "binding doe
 till's web POS".
 
 ## 17. Snappfood orders while the cloud is away (v2, fourth step)
+
+*Removed 2026-10-06 (§19). Kept for history; nothing here is built any more.*
 
 Status: **agreed** (product owner, 2026-09-26). Protocol version stays **1**: new optional
 snapshot and upload fields, one new capability, and cloud-side matching.
@@ -2260,6 +2273,8 @@ cash on the till.
 
 ## 18. Every register on the agent (v2, fifth step)
 
+*Removed 2026-10-06 (§19). Kept for history; nothing here is built any more.*
+
 Status: **agreed** (product owner, 2026-10-04). Protocol version stays **1**: a second local
 listener, new optional heartbeat fields, and a cloud field, switched on by a capability.
 
@@ -2399,3 +2414,398 @@ HTTPS on the LAN (and so what a browser keeps for secure pages: install as an ap
 finding the PC by name or QR code (the settings page shows the address; it is typed once and
 bookmarked);
 another PC taking over when the branch PC dies; KDS screens on the agent.
+
+## 19. The agent serves the cashier (v3)
+
+Status: **agreed** (product owner, 2026-10-06). Protocol version stays **1**: one new
+capability, new optional heartbeat fields, and local HTTP routes on the agent. The plan this
+section is the contract for is `PLAN-agent-serves-cashier.md`; its slices S1 to S7 build what
+is written here, and each subsection says which slice builds it.
+
+§16 and §18 made the till a screen of its own that switched between the cloud and the agent,
+beside the cloud's web app. A short interruption moved the cart, dropped delivery, customers
+and discounts, and asked for the PIN again. The cashier still went to gnext.top for orders,
+delivery, incoming orders and shift close: two screens.
+
+Here **the agent always serves the cashier**. Every register opens one address on the agent and
+uses the cashier pages of the web app from there, online or not. Nothing switches. For now the
+agent only **passes every API call to the cloud**; offline features come back later, one at a
+time, inside this same app (§19.14).
+
+```
+register browser ── http://127.0.0.1:47800/        (branch PC)
+                 └─ http://<branch-pc-ip>:47801/   (any other register on the LAN)
+                          │
+                    gnext-agent
+                    ├─ /             cached cloud frontend build (SPA fallback to index.html,
+                    │                with <meta name="gnext-agent" …> injected)
+                    ├─ /api/*        proxied to the cloud, headers passed through
+                    ├─ /uploads/*    proxied to the cloud
+                    ├─ /agent/       the agent's own settings page (loopback listener only)
+                    └─ /agent/api/*  the settings page's API, and /agent/api/status for the app
+                          │
+                    https://gnext.top  (frontend origin = API origin in production)
+```
+
+Printing and card terminals do not change: the cloud still drives them over the agent's
+WebSocket (§4, §7).
+
+### 19.1 Decisions
+
+Decided by the product owner on 2026-10-06. They replace §13, §16, §17 and §18 (§19.2).
+
+1. **The agent always serves the cashier.** Every register opens one address on the agent
+   (§19.4) and uses the cashier pages from there, online or not. Nothing switches.
+2. **First versions only proxy.** The agent passes every API call to the cloud (§19.6).
+3. **Cashier pages only.** POS, orders, delivery, incoming orders, shift and cash. Manager and
+   head-office pages stay on gnext.top; the agent-served app links out to them (§19.9).
+4. **The page is the cloud's own build, cached.** The agent downloads the cloud's current
+   frontend build after each deploy, serves it from disk, and keeps the previous one. It is the
+   same version as the cloud's, and it still opens after a reboot with no internet (§19.7).
+5. **Normal sign-in, passed through.** The same username and password screen as gnext.top. The
+   agent has no PIN sign-in for now.
+6. **Interruptions: hold and retry.** The screen stays as it is, with a *Reconnecting* bar. The
+   agent retries reads; it retries writes only when they carry an idempotency key. Card
+   charges are never retried (§19.10, §19.11).
+7. **The offline selling built so far is removed**, all of it (§19.2). Offline will be rebuilt
+   later on this base.
+
+How the page authenticates does not change, so the proxy holds no session. The bearer token is
+in `sessionStorage`, the CSRF token in memory and `X-Terminal-Id` in `localStorage`, all in the
+page. The login also sets the cookie `gnext_session` (host-only, `HttpOnly`, `SameSite=Lax`),
+which the live-update `EventSource` needs, since it cannot send a header. The proxy passes
+`Cookie` and `Set-Cookie` through like any other header and rewrites nothing. A production
+build of the page uses `VITE_SERVER_URL=""` (same origin), so a cached build already calls
+`/api/...` on whatever served it: the agent.
+
+### 19.2 What is removed
+
+Built by S1 (the agent) and S2 (the cloud and the web app). §12, §13, §16, §17 and §18 stay in
+this file for history, each marked removed at its top. Nothing in them is built any more.
+
+| Part | What goes |
+|---|---|
+| Agent: till | The till, its PIN staff list, pairing of LAN devices, the automatic switch between cloud and agent, the branch snapshot and its `data.changed` handling, the offline order book, the upload and its conflict rules, offline Snappfood matching, call numbers kept by the agent. |
+| Agent: protocol | Capabilities `data.pull`, `sync.orders`, `pos.offline`, `pos.till` and `pos.lan`; the `till`, snapshot and backlog fields of the heartbeat; `data.changed`. `print.html`, `payment.charge` and `payment.query` stay. |
+| Agent: files | `branch-data\`, `offline-orders.db`, `till.json`, `till-orders.db`, `till-devices.json` and `call-numbers.json` are deleted once, at service start, and the log says what was removed. `devices.json` stays. |
+| Agent: shell | The `till` command, the tray's till item, open-at-sign-in of the till, the *Gnext POS* shortcuts and the firewall rule handling for 47801 (S3 and S7 bring new ones). |
+| Cloud | The branch snapshot, offline upload and sync admin routes; `POST /api/v1/agent/local/pin-login` and the staff list; `GET /api/v1/terminals/{id}/agent-till`; `offline_ready` in `GET /api/v1/agents`; Snappfood offline matching and the *missed while offline* list; `AgentSyncOrder`; the code that creates orders with source `AGENT_OFFLINE`; and, in one migration, the tables, triggers and columns made only for them. |
+| Web app | The till build (`src/till/`, `till.html`), the POS's switch between cloud and till (`pos-source`, `PosFeatureGate`, the cart carry), the offline banner, and the offline cards of Branch Agents. The POS calls the cloud API directly, as the web POS did before. |
+
+What stays: enrolment, the WebSocket session, the journal, printing, card payments (`sep`,
+`fake`), updates and the Saman bridge update, the tray, the settings page with its manager
+sign-in, the LAN scan, and `devices.json` (the last printer and terminal config, used when the
+agent restarts with no cloud). On the cloud, `agent-local`'s `login`, `logout`, printers and
+terminals stay for the settings page.
+
+The error code `AGENT_OFFLINE` of the agent payments (an agent that is not connected, §8) has
+nothing to do with the removed order source of the same name, and stays.
+
+### 19.3 Capability
+
+| Capability | Means |
+|---|---|
+| `app.serve` | The agent serves the cloud's cached frontend build and proxies the API (§19). |
+
+An agent advertises `app.serve` in `hello` (§4.2) from version 2.1.0 on. It needs no other
+capability. The cloud changes no behaviour for it; the Branch Agents page shows it (§19.12). A
+cloud that does not know the word ignores it (§2.1).
+
+### 19.4 Listeners
+
+| | Loopback | LAN |
+|---|---|---|
+| Address | `127.0.0.1:47800` | `0.0.0.0:47801` |
+| Serves | The app and the settings page | The app only |
+| `Host` | A foreign `Host` is refused (the DNS-rebinding guard stays) | Any `Host` |
+| `/agent/` | The settings page and `/agent/api/*` | Only `GET /agent/api/status`; everything else under `/agent/` is `404` |
+| Default | On | On |
+| For | The register on the branch PC | Every other register: a PC, tablet or phone on the branch network |
+
+- The LAN listener is on by default. The service adds the Windows Firewall rule *Gnext* (inbound,
+  TCP 47801, private and domain profiles) when it starts, and the installer removes it on
+  uninstall.
+- The page is plain HTTP on the shop's network, so it is not a secure context on the LAN (no
+  `crypto.randomUUID`, no install-as-app). §19.11 says what the page does about it.
+- A browser keeps `sessionStorage` and `localStorage` per origin. `127.0.0.1:47800` and
+  `192.168.1.10:47801` are two origins: a register that uses both signs in and picks its till
+  twice.
+
+### 19.5 Routes
+
+| Path | Method | Does | Loopback | LAN |
+|---|---|---|---|---|
+| `/` and any path not listed below | `GET`, `HEAD` | A file of the current build, else `index.html` (the SPA fallback) (§19.7) | yes | yes |
+| `/api/*` | every method | Proxied to the cloud (§19.6) | yes | yes |
+| `/uploads/*` | every method | Proxied to the cloud (§19.6) | yes | yes |
+| `/agent/` | `GET` | The agent's settings page | yes | no |
+| `/agent/api/*` | as before | The settings page's API: what `/api/*` was on the settings server before v3 | yes | no |
+| `/agent/api/status` | `GET` | §19.8 | yes | yes |
+| `/agent/api/app/refresh` | `GET` | Checks the cloud for a newer build now (§19.7); needs the settings page's manager session | yes | no |
+
+- The settings page moves from `/` to `/agent/` and its API from `/api/*` to `/agent/api/*`.
+  The settings page's script, the WebView window, `gnext-agent open` and the tray links follow.
+  Its local-only rules (§13.13: `X-Gnext-Local: 1` and a local `Origin` on a request that
+  changes something) belong to `/agent/api/*`. The proxied `/api/*` is the cloud's, and the
+  page does not send them.
+- Any other method on an app path (not `/api/`, `/uploads/` or `/agent/`) is `405`.
+
+### 19.6 The proxy (S3)
+
+`/api/*` and `/uploads/*`, every method, go to the cloud's same path and query. The cloud is
+the agent's `server` (§3.1).
+
+**Request.** Every header the page sent is passed on, except the hop-by-hop ones (`Connection`,
+`Keep-Alive`, `Proxy-Authenticate`, `Proxy-Authorization`, `TE`, `Trailer`,
+`Transfer-Encoding`, `Upgrade`) and `Host`. The agent also:
+
+| Header | Value |
+|---|---|
+| `X-Forwarded-For` | The register's address, added to any value the page sent |
+| `X-Forwarded-Proto` | `http` |
+| `User-Agent` | The page's own, then ` gnext-agent/<version>` |
+
+The body is passed on, at most **16 MB** (photo uploads). Redirects are not followed; the page
+gets the cloud's `3xx` as it is.
+
+**Response.** The cloud's status, headers (less the hop-by-hop ones) and body, **streamed**.
+`Set-Cookie` is passed on.
+
+**Time.** A request that takes over 30 s is cut off. `GET /api/v1/live/stream` (Server-Sent
+Events) has no time limit and is flushed event by event as it arrives.
+
+**Cloud not answering.** If the agent gets no answer (connection refused, DNS, TLS, timeout), or
+the cloud's gateway answers `502`, `503` or `504`, the agent answers **`502`** with the web
+app's problem body and `code: "CLOUD_UNREACHABLE"`:
+
+```json
+{ "type": "…", "title": "Cloud unreachable", "status": 502, "code": "CLOUD_UNREACHABLE",
+  "detail": "…", "instance": "/api/v1/orders", "correlationId": "…" }
+```
+
+`correlationId` is the page's `X-Correlation-Id`. §19.10 refines this for retries, and for a
+write that was sent and never answered.
+
+**Not proxied.** `/api/v1/agent/*` (the agent's own routes) and `/api/v1/agent-releases/*` are
+refused with `403`, on both listeners. A page of the agent's origin must not reach them.
+
+### 19.7 The frontend cache (S3)
+
+The agent serves the cloud's own frontend build from disk. It downloads the build, so the page
+is the same version as the cloud's, and it opens with no internet.
+
+**Origin.** The frontend's origin is the agent's `server`: in production the frontend and the API
+come from one host. An optional `app_url` in the agent's config (`config.json`, §3.1) overrides
+it, for local development where the frontend is `vite preview` on another port.
+
+**`build-manifest.json`.** `npm run build` in `starter-vite-ts` writes `dist/build-manifest.json`,
+and the frontend serves it at `/build-manifest.json`:
+
+```json
+{ "build_id": "9f2c41d7ab03e5c8",
+  "built_at": "2026-10-06T09:30:00.000Z",
+  "files": [ { "path": "index.html", "sha256": "…", "size": 1234 } ] }
+```
+
+| Field | Means |
+|---|---|
+| `build_id` | The first 16 hex characters of the SHA-256 of the sorted file list with their hashes. The agent compares it for equality and never recomputes it. |
+| `built_at` | When the build was made (§2.1 timestamp). |
+| `files[]` | Every file in `dist` except the manifest itself. `path` is relative to `dist`, with `/`. `sha256` is lower-case hex. `size` is bytes. |
+
+The frontend's `nginx.conf` serves `/build-manifest.json` and `/index.html` with
+`Cache-Control: no-cache`. The hashed files under `assets/` keep their long cache.
+
+**When the agent checks.** Every 5 minutes, after each WebSocket connect (§4.2), and on
+`GET /agent/api/app/refresh`. Each check fetches `<origin>/build-manifest.json`.
+
+**What it does.** If `build_id` is the one it already serves, nothing. Otherwise:
+
+1. Take every file of the manifest. A file the agent already holds (the current or previous
+   build has a file with the same `sha256`) is copied or hard-linked. Each other file is
+   downloaded from `<origin>/<path>`, so a deploy that changes three chunks downloads three
+   chunks.
+2. Check each downloaded file against its `sha256` (and `size`). A mismatch rejects the whole
+   build. A manifest `path` that leaves the build's folder (`..`, an absolute path) rejects it
+   too.
+3. Write the new build to `<data>\app\<build_id>\` and switch to it **atomically**: the
+   folder is complete before `<data>\app\current.json` names it, and the file is replaced in one
+   step. A request never sees a half-written build.
+4. Keep the current and the previous build. Delete older ones.
+5. Log the switch: the old id, the new id, files fetched and bytes.
+
+A failed check or download keeps the current build and tries again with backoff. A build the
+agent serves is never changed while it serves it.
+
+**Serving.** A path that is a file of the current build is that file. Any other path (not
+`/api/`, `/uploads/` or `/agent/`) is `index.html`, so the app's own routes work on reload.
+
+- `index.html` is sent with `Cache-Control: no-cache`, and right after `<head>` the agent
+  injects, once:
+
+  ```html
+  <meta name="gnext-agent" content='{"version":"2.1.0","cloud":"https://gnext.top","lan":false}'>
+  ```
+
+  The content is JSON, HTML-escaped. `version` is the running agent's version. `cloud` is the
+  frontend's origin (the *Origin* paragraph above). `lan` is `true` on the LAN listener. The cached file on
+  disk is the cloud's own, without the tag.
+- Files under `assets/` are sent with `Cache-Control: public, max-age=31536000, immutable`.
+  Any other file carries no cache header of its own.
+
+**No build yet.** On a fresh install that has never been online, the app routes answer a small
+Persian page: *Gnext has not been downloaded to this PC yet; connect it to the internet once.*
+The settings page and `/agent/api/status` still work.
+
+### 19.8 `GET /agent/api/status`
+
+On both listeners, no authentication. For the app, which polls it (§19.10).
+
+```json
+{ "version": "2.1.0",
+  "cloud": { "connected": true, "since": "2026-10-06T08:15:30.123Z" },
+  "app": { "build_id": "9f2c41d7ab03e5c8", "built_at": "2026-10-06T09:30:00.000Z" } }
+```
+
+| Field | Means |
+|---|---|
+| `version` | The agent's version. |
+| `cloud.connected` | The state of the agent's WebSocket session (§4). |
+| `cloud.since` | When `connected` last changed. |
+| `app` | The build being served; `null` while there is none. |
+
+### 19.9 Agent mode in the app (S4)
+
+The page knows it is served by an agent from the meta tag of §19.7. `src/utils/agent-mode.ts`
+reads it once and exports `agentMode`: `null` outside the agent, else `{ version, cloud, lan }`.
+Outside agent mode nothing changes.
+
+In agent mode:
+
+- **Routes.** Only the cashier's: POS (`/app/pos`), the orders directory and order detail, the
+  delivery hub, incoming orders, the shift and cash pages the cashier role already sees, the
+  profile and sign-out drawer, and the login page. They are listed in one array in the code,
+  with a comment. Any other route shows a small page, *This page opens on gnext.top*, with a
+  button to `<cloud><same path>` in a new tab.
+- **Navigation.** Only the allowed items, and one *Open Gnext* link to `cloud`.
+- **After sign-in** the app lands on the POS.
+- **A chip** in the header: *Branch PC*, or *Register on the branch network* when `lan` is true.
+  Its tooltip carries the agent version.
+
+### 19.10 Interruptions: reconnecting and retries (S5)
+
+**Agent: reads.** For `GET` and `HEAD`, except the live stream, when the cloud does not answer
+the agent retries every 2 s, for up to 20 s in total, and only then answers `502
+CLOUD_UNREACHABLE`. If the client goes away, the agent stops.
+
+**Agent: writes.** Other methods are not retried (until §19.11). If the request could not be
+sent, the agent answers `502 CLOUD_UNREACHABLE` at once. If it was sent and the answer never
+came, the agent answers **`504`** with `code: "CLOUD_NO_ANSWER"`: the write may have happened.
+
+**The app, in agent mode.**
+
+- **Reachability** is the status route's `cloud.connected` (§19.8), polled every 3 s, combined
+  with the requests that got no answer (`cloud-reachability.ts`). Outside agent mode today's
+  behaviour stays.
+- Unreachable for more than 2 s: a thin amber bar at the top, *Reconnecting to Gnext… your
+  screen and cart are kept*. After 2 minutes: *No internet. Orders can't be sent until it is
+  back.* While the bar shows, the `NETWORK_ERROR` and `CLOUD_UNREACHABLE` toasts are
+  suppressed.
+- Back: the bar turns green for 3 s, *Connected again*, and the app refetches what is on screen.
+  It dispatches the window event `gnext:cloud-back`; the POS (menu, shift, open orders), the
+  orders directory, the delivery hub and incoming orders listen to it. The live stream
+  reconnects on its own.
+- A write that failed with `CLOUD_UNREACHABLE` shows, where the button was pressed, *Not sent.
+  Try again when connected.* One that failed with `CLOUD_NO_ANSWER` shows *We couldn't confirm
+  this was saved. Check the order before trying again.* The cart is never cleared on either.
+
+Persian text: *در حال اتصال دوباره به جی‌نکست… صفحه و سبد خرید سر جایش است*. Every new string has
+an `en` and an `fa` value.
+
+### 19.11 Idempotency (S6)
+
+A write the agent may retry must be safe to repeat. The cloud's `IdempotencyInterceptor`
+(`backend/src/common`) makes it so for the routes that use it.
+
+- **Cloud.** The interceptor is put on order submit (place), cash payment, order create (draft)
+  and, if the POS writes it on *Place*, the add-lines or quote call. The same key with the same
+  body replays the first answer. The same key with a different body is `409`. A request with no
+  key stays allowed: other clients do not send one.
+- **App.** Those calls send `Idempotency-Key`: one UUID per user action, reused when the app
+  retries that action. The page makes it without `crypto.randomUUID` when that is missing (the
+  LAN listener is plain HTTP, §19.4).
+- **Agent.** A write with `Idempotency-Key` is retried like a read (§19.10), including after a
+  request that was sent and never answered. A write without the key is unchanged.
+- **Card charges are never retried by the agent**, key or not. The agent excludes the paths that
+  start a terminal charge, by path. This section lists them when S6 is built.
+
+### 19.12 Shortcuts, window and Branch Agents (S7)
+
+- `gnext-agent app` opens `http://127.0.0.1:47800/` in the WebView2 window (the browser if there
+  is none), the way `open` opens the settings page. The installer puts a Start-menu and a
+  desktop shortcut *Gnext* on `gnext-agent.exe app`. The tray has *Open Gnext* first, then
+  *Agent settings*.
+- The app opens at Windows sign-in, on by default. `app_at_sign_in` in the agent's local config
+  turns it off, from the settings page. Not at the service's own start: an update would pull a
+  register already open to the front, mid-sale.
+- The settings page has a card *Registers on this network*: `http://<each LAN IPv4>:47801/`
+  with a copy button, the current app build id and when it was downloaded, and *Download now*
+  (`/agent/api/app/refresh`).
+- **Heartbeat.** An agent with `app.serve` adds to every `heartbeat` (§4.3):
+
+  ```json
+  { "app_build_id": "9f2c41d7ab03e5c8",
+    "lan_urls": ["http://192.168.1.10:47801/"] }
+  ```
+
+  | Field | Means |
+  |---|---|
+  | `app_build_id` | The build being served, or `null` while there is none. |
+  | `lan_urls` | The PC's IPv4 addresses on private networks, as LAN URLs; an empty list if there are none. |
+
+- **Operations → Branch Agents** shows, per agent: its version, whether it has `app.serve`, the
+  build it serves against the cloud's current one (*up to date* or *behind*), and its LAN
+  address.
+
+### 19.13 Files and config
+
+| Where | What |
+|---|---|
+| `%ProgramData%\Gnext\Agent\config.json` | The install config (§3.1), with an optional `app_url` (§19.7). |
+| The agent's local config | `app_at_sign_in` (§19.12). |
+| `<data>\app\<build_id>\` | A downloaded build. The current and the previous one are kept. |
+| `<data>\app\current.json` | Names the build being served. |
+| `devices.json` | Kept: the last printer and terminal config (§19.2). |
+
+`<data>` is the agent's data folder, `%ProgramData%\Gnext\Agent`.
+
+### 19.14 Not in v3, and what comes later
+
+Not in v3: any offline selling, sign-in by PIN, a snapshot or order book on the agent, HTTPS on
+the LAN, finding the PC by name or QR code, another PC taking over when the branch PC dies.
+
+Offline features come back later, one at a time, and only when the product owner asks. The
+order is: queue *Place* and print the kitchen ticket locally; the menu from the agent; cash
+offline; sign-in offline; card offline.
+
+### 19.15 Conformance checklist for the agent
+
+For an agent that advertises `app.serve`:
+
+- [ ] `GET /` on the loopback listener serves the current build's `index.html` with the
+      `gnext-agent` meta injected once; an unknown path serves it too; `/api/` and `/uploads/`
+      never fall back to it.
+- [ ] `/api/*` passes headers and body both ways, drops the hop-by-hop headers, adds
+      `X-Forwarded-For`, `X-Forwarded-Proto` and the `User-Agent` suffix, and answers `502
+      CLOUD_UNREACHABLE` for a dead upstream.
+- [ ] `GET /api/v1/live/stream` is flushed event by event with no time limit.
+- [ ] `/api/v1/agent/*` and `/api/v1/agent-releases/*` answer `403` on both listeners.
+- [ ] The LAN listener answers `404` for `/agent/` except `GET /agent/api/status`, and accepts any
+      `Host`; the loopback listener refuses a foreign one.
+- [ ] A new `build_id` downloads only the files whose hash is not held, rejects a file with a bad
+      hash, switches atomically, and keeps two builds.
+- [ ] A restart with no internet still serves the last build; a fresh install with no build
+      answers the *not downloaded yet* page.
+- [ ] A read is retried every 2 s for 20 s and stops when the client goes away; a write is not
+      retried without `Idempotency-Key`; a card charge is never retried.
+- [ ] `GET /agent/api/status` reports the WebSocket state and the served build.
