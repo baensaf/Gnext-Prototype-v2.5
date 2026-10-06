@@ -636,8 +636,6 @@ export class ImportExportService {
       'table_session',
       'operational_alert',
       'integration_log',
-      'agent_sync_order',
-      'agent_data_snapshot',
       'import_row',
       'import_job',
     ];

@@ -3,7 +3,7 @@ import { useState, useEffect, useSyncExternalStore } from 'react';
 // ----------------------------------------------------------------------
 
 /**
- * Whether the cloud answers, as the app's own requests find it (agent-protocol.md §13.14). The
+ * Whether the cloud answers, as the app's own requests find it (agent-protocol.md §19). The
  * HTTP client reports each request: an answer from the server clears the failure; no answer at
  * all, or the gateway saying the server is not there, starts it. Nothing here probes anything.
  */

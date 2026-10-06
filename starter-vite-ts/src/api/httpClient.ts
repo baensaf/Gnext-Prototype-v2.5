@@ -83,8 +83,9 @@ httpClient.interceptors.response.use(
   (error: AxiosError<ProblemDetails>) => {
     const isNetworkError = !error.response;
     const isServerError = !!(error.response && error.response.status >= 500);
-    // For the web POS's offline-till banner: no answer at all, or a gateway with no server
-    // behind it, is the cloud out of reach; any other answer is the cloud answering.
+    // Whether the cloud answers (src/utils/cloud-reachability.ts): no answer at all, or a
+    // gateway with no server behind it, is the cloud out of reach; any other answer is the
+    // cloud answering.
     if (isNetworkError || isGatewayFailure(error.response?.status)) reportCloudUnreachable();
     else reportCloudAnswered();
     const skipToast = error.config?.headers?.['X-Skip-Toast'] === 'true' || (error.config as any)?.skipToast;

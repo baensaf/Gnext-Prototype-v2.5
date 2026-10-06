@@ -237,7 +237,7 @@ describe('agent connection (protocol §4)', () => {
 
     it('refuses a type nobody handles, but never acks an ack', async () => {
       const conn = await open();
-      await conn.onFrame(frame('sync.orders', {}, 'u-1'));
+      await conn.onFrame(frame('no.such.type', {}, 'u-1'));
       expect(socket.last()).toMatchObject({ type: 'ack', ref: 'u-1', payload: { ok: false, error: { code: 'UNKNOWN_TYPE' } } });
 
       const count = socket.sent.length;

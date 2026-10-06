@@ -9,28 +9,6 @@ import { Terminal } from '../../entities/Terminal.entity';
 import { stationIdFor } from '../kds/prep-station';
 import { TicketTemplate } from './print-render.service';
 
-/** A route as the offline till applies it: the station, and its copies. */
-export interface OfflineRoute {
-  group_id: string;
-  copies: number;
-}
-
-/**
- * The snapshot's `printing` block without its heading (protocol §13.11). The field names are
- * the ones agents already in branches read: a "group" is a prep station.
- */
-export interface OfflineRouting {
-  groups: Array<{
-    id: string;
-    name: string;
-    ticket_template: TicketTemplate | null;
-    printers: Array<{ printer_id: string; copies: number }>;
-  }>;
-  kitchen_routes: Record<string, OfflineRoute>;
-  documents: { CUSTOMER_RECEIPT: OfflineRoute | null; GUEST_BILL: OfflineRoute | null; COURIER_SLIP: OfflineRoute | null };
-  fallback: { KITCHEN_TICKET: string | null; OTHER: string | null };
-}
-
 /** A printer a job goes to, and how many copies that printer prints. */
 export interface RoutedPrinter {
   printer: Printer;
@@ -159,47 +137,5 @@ export class PrintRoutingService {
     }
     const fallback = branchFallback(await this.branchPrinters(tenantId, branchId), false);
     return { printers: fallback ? [{ printer: fallback, copies }] : [], template };
-  }
-
-  /**
-   * The branch's routing worked out in advance, for the agent's offline till to apply itself
-   * (protocol §13.11): each product's station, the stations with their printers, and the printer
-   * each kind of document falls back to. Receipts, bills and courier slips print at the till's
-   * own printer, which the snapshot's `tills` carry, so `documents` is empty.
-   */
-  async offlineRouting(tenantId: string, branchId: string, productIds: string[]): Promise<OfflineRouting> {
-    const [byProduct, stations, inBranch] = await Promise.all([
-      this.stationsFor(tenantId, branchId, productIds),
-      this.stationRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, is_active: true }, order: { code: 'ASC', id: 'ASC' } }),
-      this.branchPrinters(tenantId, branchId),
-    ]);
-    const stationPrinterIds = [...new Set(stations.flatMap((s) => s.printer_ids || []))];
-    const active = new Set(
-      stationPrinterIds.length
-        ? (await this.printerRepo.find({ where: { id: In(stationPrinterIds), tenant_id: tenantId, is_active: true } })).map((p) => p.id)
-        : [],
-    );
-
-    const kitchen_routes: OfflineRouting['kitchen_routes'] = {};
-    for (const productId of [...byProduct.keys()].sort()) {
-      const station = byProduct.get(productId)!;
-      kitchen_routes[productId] = { group_id: station.id, copies: station.copies || 1 };
-    }
-
-    return {
-      groups: stations.map((s) => ({
-        id: s.id,
-        name: s.name,
-        ticket_template: s.ticket_template ?? null,
-        printers: (s.printer_ids || []).filter((id) => active.has(id)).map((id) => ({ printer_id: id, copies: 1 })),
-      })),
-      kitchen_routes,
-      // Kept for agents before 1.11.3, which print these on fallback.OTHER when null.
-      documents: { CUSTOMER_RECEIPT: null, GUEST_BILL: null, COURIER_SLIP: null },
-      fallback: {
-        KITCHEN_TICKET: branchFallback(inBranch, true)?.id ?? null,
-        OTHER: branchFallback(inBranch, false)?.id ?? null,
-      },
-    };
   }
 }

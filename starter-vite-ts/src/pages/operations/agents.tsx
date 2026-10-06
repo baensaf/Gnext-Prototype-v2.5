@@ -47,12 +47,10 @@ import { tenantApi } from 'src/api/tenantApi';
 import { agentsApi } from 'src/api/agentsApi';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 
-import { VersionTag } from 'src/components/version-tag';
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 import { AgentHealthDrawer } from './agent-health-drawer';
-import { AgentSyncOrdersCard } from './agent-sync-orders-card';
 import { AgentReleasesCard, compareAgentVersions } from './agent-releases-card';
 
 const CODE_STATE_COLOR: Record<EnrolmentCodeState, 'info' | 'success' | 'default' | 'warning'> = {
@@ -319,31 +317,7 @@ export function AgentsPage() {
                     <TableCell>
                       {a.status === 'ACTIVE' ? (
                         a.connected ? (
-                          <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
-                            <Chip size="small" color="success" label={t('operations.agents.statusOnline', 'Online')} />
-                            {a.offline_ready && (
-                              // §16.8: could this branch sell offline if the internet went now?
-                              <Tooltip
-                                title={a.offline_ready.problems
-                                  .map((p) => t(`operations.agents.offlineReady.problems.${p}`, p))
-                                  .join(' · ')}
-                              >
-                                <Chip
-                                  size="small"
-                                  variant="outlined"
-                                  color={a.offline_ready.ready ? 'success' : 'warning'}
-                                  label={
-                                    a.offline_ready.ready
-                                      ? t('operations.agents.offlineReady.ready', 'Ready to sell offline')
-                                      : t('operations.agents.offlineReady.notReady', 'Not ready offline: {{count}}', {
-                                          count: a.offline_ready.problems.length,
-                                        })
-                                  }
-                                />
-                              </Tooltip>
-                            )}
-                            {a.offline_ready && <VersionTag feature="agents.offlineReady" />}
-                          </Stack>
+                          <Chip size="small" color="success" label={t('operations.agents.statusOnline', 'Online')} />
                         ) : (
                           <Chip size="small" color="warning" label={t('operations.agents.statusOffline', 'Offline')} />
                         )
@@ -549,8 +523,6 @@ export function AgentsPage() {
         confirmLabel={t('operations.agents.revoke', 'Revoke')}
         confirmColor="error"
       />
-
-      <AgentSyncOrdersCard branchId={branchId || undefined} />
 
       <AgentReleasesCard onLatestPublished={setLatestPublished} />
 

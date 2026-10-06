@@ -83,8 +83,7 @@ export class AuthService {
 
   /**
    * Signs in a user whose credentials the caller has already checked: a new session, the
-   * login stamp and audit, and the answer `login` gives. The offline till's PIN sign-in
-   * (agent-protocol.md §16.3) comes here too, so both hand out the same kind of session.
+   * login stamp and audit, and the answer `login` gives.
    */
   async openSession(
     user: AdminUser,

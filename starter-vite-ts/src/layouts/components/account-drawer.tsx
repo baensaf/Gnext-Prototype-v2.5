@@ -97,7 +97,6 @@ export function AccountDrawer({ data = [], sx, ...other }: AccountDrawerProps) {
           fullWidth
           color="error"
           variant="outlined"
-          disabled={!shift.canClose}
           startIcon={<Iconify icon="solar:lock-password-outline" />}
           onClick={() => {
             onClose();

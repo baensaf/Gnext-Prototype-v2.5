@@ -15,7 +15,7 @@ import {
   DialogActions,
 } from '@mui/material';
 
-import { usePosSource } from 'src/contexts/pos-source';
+import { approvalApi } from 'src/api/approvalApi';
 
 import { toast, showErrorToast } from 'src/components/snackbar';
 
@@ -41,7 +41,6 @@ export function ApprovalModal({
   createRequest = false,
 }: ApprovalModalProps) {
   const { t } = useTranslation();
-  const pos = usePosSource();
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,18 +53,18 @@ export function ApprovalModal({
     try {
       if (createRequest) {
         // Create pending request and approve it with PIN
-        const req = await pos.approvals.createRequest({
+        const req = await approvalApi.createRequest({
           action: actionName,
           entity_type: entityType,
           entity_id: entityId,
           reason: detailsText || `Manager authorization for ${actionName}`,
           details: { actionName, detailsText },
         });
-        const approved = await pos.approvals.approveRequest(req.id, pin, 'Manager PIN Authorization');
+        const approved = await approvalApi.approveRequest(req.id, pin, 'Manager PIN Authorization');
         toast.success(t('approval.authorized', 'Manager authorization granted'));
         onSuccess(pin, approved.id);
       } else {
-        await pos.approvals.verifyPin(pin, undefined, actionName);
+        await approvalApi.verifyPin(pin, undefined, actionName);
         toast.success(t('approval.authorized', 'Manager authorization granted'));
         onSuccess(pin);
       }

@@ -1,12 +1,10 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AdminUser } from '../../entities/AdminUser.entity';
 import { Agent } from '../../entities/Agent.entity';
 import { AgentEnrolmentCode } from '../../entities/AgentEnrolmentCode.entity';
 import { AgentRelease } from '../../entities/AgentRelease.entity';
 import { AgentCommand } from '../../entities/AgentCommand.entity';
 import { Branch } from '../../entities/Branch.entity';
-import { CashierShift } from '../../entities/CashierShift.entity';
 import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { Printer } from '../../entities/Printer.entity';
@@ -15,7 +13,7 @@ import { AgentAuthGuard } from './agent-auth.guard';
 import { AgentAuthService } from './agent-auth.service';
 import { AgentController } from './agent.controller';
 import { AgentEnrolmentService } from './agent-enrolment.service';
-import { AgentRegistryController, TerminalAgentTillController } from './agent-registry.controller';
+import { AgentRegistryController } from './agent-registry.controller';
 import { AgentRegistryService } from './agent-registry.service';
 import { AgentSessionsService } from './agent-sessions.service';
 import { AgentConfigService } from './agent-config.service';
@@ -28,8 +26,8 @@ import { AgentReleasesCiController, AgentReleasesController } from './agent-rele
 
 /** The cloud side of the branch agent (docs/agent-gateway/agent-protocol.md). */
 @Module({
-  imports: [TypeOrmModule.forFeature([Agent, AgentEnrolmentCode, AgentCommand, AgentRelease, Branch, Printer, PaymentDevice, OperationalAlert, CashierShift, AdminUser]), AuditModule],
-  controllers: [AgentRegistryController, TerminalAgentTillController, AgentController, AgentReleasesCiController, AgentReleasesController],
+  imports: [TypeOrmModule.forFeature([Agent, AgentEnrolmentCode, AgentCommand, AgentRelease, Branch, Printer, PaymentDevice, OperationalAlert]), AuditModule],
+  controllers: [AgentRegistryController, AgentController, AgentReleasesCiController, AgentReleasesController],
   providers: [
     AgentRegistryService,
     AgentSessionsService,

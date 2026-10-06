@@ -7,9 +7,6 @@ import { Tenant } from '../src/entities/Tenant.entity';
 import { Branch } from '../src/entities/Branch.entity';
 import { Agent } from '../src/entities/Agent.entity';
 import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
-import { AdminUser } from '../src/entities/AdminUser.entity';
-import { CashierShift } from '../src/entities/CashierShift.entity';
-import { Terminal } from '../src/entities/Terminal.entity';
 import { AgentEnrolmentService } from '../src/modules/agent-gateway/agent-enrolment.service';
 import { AgentRegistryService } from '../src/modules/agent-gateway/agent-registry.service';
 import { AgentCommandsService } from '../src/modules/agent-gateway/agent-commands.service';
@@ -121,62 +118,22 @@ describe('agent health (PostgreSQL)', () => {
     expect(view.recent_commands[0]).not.toHaveProperty('payload');
   });
 
-  it("shows the agent's menu copy and offline backlog from its heartbeats, with what looks wrong", async () => {
+  // Agents 1.x still send `sync` and `till` in their heartbeats; the cloud no longer keeps them (§19.2).
+  it('answers a heartbeat with only the time, and ignores the offline fields an old agent still sends', async () => {
     const agent = await connect();
-    const long = new Date(Date.now() - 45 * 60_000).toISOString();
     const hb = agent.send('heartbeat', {
       in_flight: 0,
       unacked_results: 0,
-      sync: { data_version: 'abc', data_pulled_at: long, pending_orders: 3, oldest_pending_at: long, last_upload_at: null, last_upload_error: 'HTTP 502', extra: 'x'.repeat(10) },
+      sync: { data_version: 'abc', pending_orders: 3 },
+      till: { terminal_id: '00000000-0000-0000-0000-000000000001', mode: 'OFFLINE' },
     });
-    await agent.next((m) => m.type === 'heartbeat.ack' && m.ref === hb);
+    const ack = await agent.next((m) => m.type === 'heartbeat.ack' && m.ref === hb);
+    expect(Object.keys(ack.payload)).toEqual(['server_time']);
 
     const view = await health.health(tenantId, agentId);
-    expect(view.connection.sync).toMatchObject({ data_version: 'abc', data_pulled_at: long, pending_orders: 3, last_upload_error: 'HTTP 502' });
-    expect(view.connection.sync).not.toHaveProperty('extra');
-    expect(view.sync_warnings).toEqual(['SNAPSHOT_STALE', 'BACKLOG_STUCK', 'UPLOAD_FAILING']);
-
-    const fresh = new Date().toISOString();
-    const hb2 = agent.send('heartbeat', { sync: { data_version: 'abc', data_pulled_at: fresh, pending_orders: 0, oldest_pending_at: null, last_upload_at: fresh, last_upload_error: null } });
-    await agent.next((m) => m.type === 'heartbeat.ack' && m.ref === hb2);
-    expect((await health.health(tenantId, agentId)).sync_warnings).toEqual([]);
-  });
-
-  // §16.8: whether the branch could sell offline if the internet went now, and what is missing.
-  it('says whether the branch is ready to sell offline, and what is missing', async () => {
-    const readiness = async () => (await health.offlineReadiness(tenantId, await registry.listAgents(tenantId))).get(agentId);
-
-    // Not connected: nothing to say.
-    expect(await readiness()).toBeNull();
-
-    // An agent before 1.11 with nothing set up.
-    let agent = await connect();
-    expect((await readiness())!.problems).toEqual(['AGENT_TOO_OLD', 'NO_TILL', 'NO_STAFF', 'SNAPSHOT_STALE']);
-    agent.ws.terminate();
-    await agent.closed;
-    await until(() => !moduleRef.get(AgentSessionsService).get(agentId));
-
-    // A till bound, but no shift on it; offline orders still waiting.
-    const save = <T>(entity: any, data: Partial<T>) =>
-      dataSource.getRepository<T>(entity).save(dataSource.getRepository<T>(entity).create(data as any) as any) as Promise<any>;
-    const till = await save(Terminal, { tenant_id: tenantId, branch_id: branchId, code: 'T1', name: 'Till 1' });
-    agent = await connect(['print.html', 'pos.offline', 'pos.till']);
-    const now = new Date().toISOString();
-    const beat = (pending: number) =>
-      agent.send('heartbeat', {
-        sync: { data_version: 'v', data_pulled_at: now, pending_orders: pending, oldest_pending_at: null, last_upload_at: null, last_upload_error: null },
-        till: { terminal_id: till.id, mode: 'ONLINE', open_orders: 0 },
-      });
-    let hb = beat(2);
-    await agent.next((m) => m.type === 'heartbeat.ack' && m.ref === hb);
-    expect((await readiness())!.problems).toEqual(['NO_SHIFT', 'NO_STAFF', 'UPLOADS_WAITING']);
-
-    // An open shift, a cashier with a PIN, the backlog sent: ready.
-    await save(CashierShift, { tenant_id: tenantId, branch_id: branchId, terminal_id: till.id, shift_number: 'S1', business_date: '2026-09-26', state: 'OPEN' });
-    await save(AdminUser, { tenant_id: tenantId, branch_id: branchId, username: `ahl-cashier-${Date.now()}`, display_name: 'Cashier', role: 'CASHIER', password_hash: 'x', pin_hash: '$argon2id$x', is_active: true });
-    hb = beat(0);
-    await agent.next((m) => m.type === 'heartbeat.ack' && m.ref === hb);
-    expect(await readiness()).toEqual({ ready: true, problems: [] });
+    expect(view.connection).not.toHaveProperty('sync');
+    expect(view.connection).not.toHaveProperty('till');
+    expect(view).not.toHaveProperty('sync_warnings');
   });
 
   it('raises one critical alert when the agent stays away, and closes it when it is back', async () => {

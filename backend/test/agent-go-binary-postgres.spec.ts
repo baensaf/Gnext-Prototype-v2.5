@@ -97,8 +97,6 @@ const bin = process.env.GNEXT_AGENT_BIN;
         display_name: 'Go Agent Cashier',
         role: 'CASHIER',
         password_hash: 'x',
-        // A PIN, so the offline till's staff list has someone on it (§13.3).
-        pin_hash: '$argon2id$v=19$m=65536,t=3,p=4$Z29hLWZpeHR1cmU$Z29hLWhhc2g',
         is_active: true,
         branch_id: branchId,
       })
@@ -163,41 +161,14 @@ const bin = process.env.GNEXT_AGENT_BIN;
     await until(async () => (await registry.listAgents(tenantId, { branchId }))[0]?.connected === true);
   }, 60000);
 
-  it('keeps the branch snapshot, and fetches it again when head office changes the menu', async () => {
-    const file = join(home, 'branch-data', 'snapshot.json');
-    const held = () => (existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null);
-    await until(() => !!held()?.data_version).catch((e) => {
-      throw new Error(`${e.message}
---- agent log ---
-${agentLog}`);
-    });
-    const first = held();
-    expect(first.products.map((p: any) => p.id)).toContain(productId);
-
-    await dataSource.getRepository(Product).update({ id: productId }, { name: 'Renamed for the snapshot test' });
-    await until(() => held()?.products?.some((p: any) => p.name === 'Renamed for the snapshot test'), 40000).catch((e) => {
-      throw new Error(`${e.message}
---- agent log ---
-${agentLog}`);
-    });
-    expect(held().data_version).not.toBe(first.data_version);
-  }, 60000);
-
-  it('keeps what the offline till needs: the staff list sealed, the devices and the call count (§13)', async () => {
-    const staff = join(home, 'branch-data', 'staff.dat');
+  it('keeps the last device configuration in devices.json, for a restart with no cloud', async () => {
     const devices = join(home, 'devices.json');
-    const calls = join(home, 'call-numbers.json');
-    await until(() => existsSync(staff) && existsSync(devices) && existsSync(calls), 40000).catch((e) => {
+    await until(() => existsSync(devices), 40000).catch((e) => {
       throw new Error(`${e.message}
 --- agent log ---
 ${agentLog}`);
     });
-    // Sealed with DPAPI: neither the hash nor the cashier's id is readable in the file.
-    const sealed = readFileSync(staff);
-    expect(sealed.includes('argon2id')).toBe(false);
-    expect(sealed.includes(cashierId)).toBe(false);
     expect(JSON.parse(readFileSync(devices, 'utf8')).printers.map((p: any) => p.code)).toEqual(['GOA-PRN']);
-    expect(JSON.parse(readFileSync(calls, 'utf8'))).toEqual({ business_date: expect.any(String), POS: 0 });
   }, 60000);
 
   let orderId: string;

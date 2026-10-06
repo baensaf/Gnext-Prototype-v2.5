@@ -207,14 +207,6 @@
       "resumedToast": "Held order #{{number}} is back in the cart",
       "heldButton": "Held"
     },
-    "offline": {
-      "unavailable": "Not available offline",
-      "notOnMenu": "This item is not on the branch menu.",
-      "tableFromList": "Offline, choose the table from the list.",
-      "cardUnknown": "The card terminal gave no clear answer. This amount counts as paid and will not be charged again; keep the terminal slip if there is one.",
-      "cardFailed": "The card payment did not go through. Try again or take cash.",
-      "cardStillRunning": "The card terminal is still working on this payment. Check it under Open orders."
-    },
     "options": {
       "title": "Configure {{name}}",
       "variant": "Choose a size",
@@ -352,26 +344,6 @@
     "callNumber": "Number",
     "orderSubmitted": "Order {{number}} sent to the kitchen",
     "orderSubmittedPaid": "Order {{number}} paid and sent to the kitchen",
-    "carry": {
-      "toAgent": "The cart moved to this PC. Check it before sending.",
-      "toCloud": "The cart moved online. Check it before sending.",
-      "deliveryToTakeaway": "Delivery is not sold offline: the order is now takeaway.",
-      "refused": "Some items cannot be sold offline. Remove them before sending.",
-      "removeButton": "Remove",
-      "removeRefused": "Remove the items marked unavailable before sending the order.",
-      "uncertain": "The last send got no answer from the server: this order may already be in the kitchen. Check with the kitchen before sending it again.",
-      "uncertainTitle": "Send this order again?",
-      "uncertainBody": "The server did not answer when this order was sent, so it may already be in the kitchen. Send it again only if the kitchen does not have it.",
-      "uncertainConfirm": "The kitchen does not have it: send",
-      "reached": "Order {{number}} had reached the kitchen before the internet went. The cart was cleared."
-    },
-    "offlineTill": {
-      "title": "The internet is down",
-      "body": "Gnext cannot be reached. On the branch PC, Gnext POS keeps selling; its orders come here when the internet is back.",
-      "open": "Open Gnext POS",
-      "servedTitle": "This register sells on Gnext POS",
-      "servedBody": "Open Gnext POS from the branch agent: it keeps selling when the internet is down. To sell on this device with the web POS, set it up as another register."
-    },
     "customerSearch": {
       "placeholder": "Walk-in, or search mobile / name",
       "typeMore": "Type at least {{count}} characters of the mobile or name",
@@ -386,76 +358,6 @@
       "subtitle": "Resume, change or discard an order put on hold",
       "discarded": "Held order discarded",
       "resumeFailed": "Could not bring the held order back"
-    }
-  },
-  "till": {
-    "title": "Gnext POS",
-    "signIn": {
-      "who": "Who is selling?",
-      "pin": "PIN",
-      "submit": "Sign in"
-    },
-    "signOut": "Sign out",
-    "mode": {
-      "OFFLINE": "Offline",
-      "HANDOVER": "Internet back",
-      "ONLINE": "Online"
-    },
-    "offline": "No internet: selling on this PC. Delivery, customers, discounts and parked orders are paused.",
-    "handover": "The internet is back and new orders go online. Finish the orders taken offline under Open orders, or hand them over.",
-    "cloudPin": {
-      "title": "The internet is back",
-      "body": "Type your PIN to go on selling online.",
-      "submit": "Continue online"
-    },
-    "wentOffline": "The internet is down. The till goes on selling on this PC.",
-    "backOnline": "The internet is back. New orders go online.",
-    "sending": "{{count}} orders taken offline are being sent to the server.",
-    "handoverButton": "Hand over",
-    "handedOver": "{{handed}} orders handed over; {{dropped}} unsent carts dropped.",
-    "problems": {
-      "NO_SNAPSHOT": "The branch menu has not come from the server yet.",
-      "NO_STAFF": "The staff list has not come from the server yet, so nobody can sign in.",
-      "NO_TILL": "No till has been chosen for selling offline. A manager chooses it on the Gnext Agent settings page.",
-      "NO_SHIFT": "This till has no open shift. Without one it cannot sell offline.",
-      "NOT_PAIRED": "This device is not connected to a register yet."
-    },
-    "orders": {
-      "title": "Open orders",
-      "help": "Pay, finish or cancel the orders taken on this till",
-      "empty": "No open orders.",
-      "pay": "Pay",
-      "finish": "Finish",
-      "cancel": "Cancel order",
-      "keep": "Keep order",
-      "paid": "Paid",
-      "charging": "At the card terminal",
-      "due": "Due {{amount}} {{currency}}",
-      "finished": "Order {{number}} finished.",
-      "cancelled": "Order {{number}} cancelled.",
-      "dropped": "Cart dropped.",
-      "cancelTitle": "Cancel order {{number}}",
-      "cancelNote": "Reason",
-      "approver": "Approved by"
-    },
-    "print": {
-      "kitchen": "Kitchen chit",
-      "receipt": "Receipt",
-      "bill": "Guest bill",
-      "billButton": "Guest bill",
-      "reprint": "Reprint",
-      "failed": "Did not print",
-      "reprintTitle": "Reprint: {{ticket}}",
-      "printer": "Printer",
-      "sent": "Sent to the printer.",
-      "problems": "Tickets that did not print"
-    },
-    "pair": {
-      "title": "Connect this device",
-      "body": "A manager makes a code for this register on the branch PC (Gnext Agent → Devices on the LAN). Type it here; this device then sells as that register.",
-      "code": "Six-digit code",
-      "deviceName": "Name of this device",
-      "submit": "Connect"
     }
   },
   "kiosk": {
@@ -3864,18 +3766,6 @@
       "noAgents": "No agent has enrolled for this selection yet.",
       "statusActive": "Active",
       "statusRevoked": "Revoked",
-      "offlineReady": {
-        "ready": "Ready to sell offline",
-        "notReady": "Not ready offline: {{count}}",
-        "problems": {
-          "AGENT_TOO_OLD": "The agent is older than 1.11: publish the newest build",
-          "NO_TILL": "No till is chosen on the agent",
-          "NO_SHIFT": "The agent's till has no open shift",
-          "NO_STAFF": "Nobody at this branch has a PIN",
-          "SNAPSHOT_STALE": "The menu copy on the PC is over 30 minutes old",
-          "UPLOADS_WAITING": "Orders taken offline are still being sent"
-        }
-      },
       "behindLatest": "Newest published: {{v}}",
       "neverSeen": "Never",
       "revoke": "Revoke",
@@ -3912,28 +3802,6 @@
         "kind": {
           "printer": "Printer",
           "terminal": "Card terminal"
-        },
-        "sync": {
-          "title": "Offline selling",
-          "snapshot": "Menu copy",
-          "checkedAt": "Checked {{time}}",
-          "noSnapshot": "Not fetched yet",
-          "pending": "Waiting to upload",
-          "pendingSince": "{{count}} orders, oldest {{time}}",
-          "nonePending": "None",
-          "lastUpload": "Last upload",
-          "warning": {
-            "SNAPSHOT_STALE": "The agent has not confirmed its menu copy for over 30 minutes.",
-            "BACKLOG_STUCK": "Offline orders have been waiting over 10 minutes while the agent is online.",
-            "UPLOAD_FAILING": "The last upload of offline orders failed."
-          }
-        },
-        "till": {
-          "bound": "Gnext POS",
-          "none": "Not chosen yet",
-          "openOrders": "{{count}} offline orders are still open on the till",
-          "device": "Device on the LAN",
-          "lanUrl": "Address on the LAN"
         }
       },
       "releases": {
@@ -3957,54 +3825,6 @@
         "minVersion": "Oldest agent still allowed to connect (optional)",
         "notes": "Notes",
         "chooseFile": "Choose gnext-agent.exe"
-      },
-      "syncOrders": {
-        "title": "Offline orders",
-        "subtitle": "Orders a branch took while offline, uploaded by its agent. They are booked at the price charged; differences are flagged here.",
-        "loadError": "Could not load offline orders",
-        "viewAttention": "Needs a look",
-        "viewAll": "All",
-        "colReceived": "Received",
-        "colOrder": "Order",
-        "colTotal": "Total",
-        "colResult": "Result",
-        "nothingToLookAt": "Nothing needs a look.",
-        "none": "No offline orders yet.",
-        "placedAt": "Taken {{time}}",
-        "held": "Held",
-        "accepted": "Booked",
-        "reviewed": "Looked at",
-        "retry": "Retry",
-        "markReviewed": "Mark reviewed",
-        "stillHeld": "Still held: {{reason}}",
-        "booked": "Booked as {{number}}",
-        "retryError": "Could not retry the order",
-        "reviewError": "Could not mark the order",
-        "state": {
-          "COMPLETED": "Completed",
-          "CANCELLED": "Cancelled",
-          "OPEN": "Still open"
-        },
-        "flag": {
-          "TOTAL_MISMATCH": "Totals do not add up",
-          "PRICE_MISMATCH": "Price not from its menu copy",
-          "ID_REUSED": "Same id, different order",
-          "SHIFT_UNKNOWN": "Unknown shift",
-          "INVALID_ORDER": "Malformed order",
-          "PROCESSING_FAILED": "Could not be booked",
-          "PRICE_CHANGED": "Price changed since",
-          "SNAPSHOT_UNKNOWN": "Menu copy unknown",
-          "ITEM_REMOVED": "Item removed since",
-          "SHIFT_CLOSED": "Shift already closed",
-          "DAY_CLOSED": "Day already closed",
-          "STOCK_NEGATIVE": "Stock below zero",
-          "BUSINESS_DATE_DIFFERS": "Dated differently from the cutoff",
-          "TABLE_UNKNOWN": "Table not in this branch",
-          "SNAPPFOOD_DIFFERS": "Snappfood's lines differ from the till's",
-          "SNAPPFOOD_ACCEPTED_TWICE": "Snappfood order also accepted online",
-          "SNAPPFOOD_CANCELLED": "Cancelled on one side only",
-          "COURIER_UNKNOWN": "Courier not in this branch"
-        }
       }
     }
   },

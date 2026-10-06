@@ -8,8 +8,6 @@ export type AccountShift = {
   openedAt: string;
   /** Left open from an earlier day. */
   openedEarlier: boolean;
-  /** False where this till can't close a shift (the offline till). */
-  canClose: boolean;
   close: () => void;
 };
 

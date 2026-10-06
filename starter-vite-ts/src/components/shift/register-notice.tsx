@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import { Card, Stack, Button, Typography } from '@mui/material';
 
-import { PosFeatureGate } from 'src/contexts/pos-source';
 import { useBranchContext } from 'src/contexts/branch-context';
 
 // ----------------------------------------------------------------------
@@ -16,8 +15,6 @@ type Props = {
   terminalBranchName?: string;
   branchName?: string;
   onSetup: () => void;
-  /** False on the offline till, which is bound to its register on the agent's settings page. */
-  canSetup?: boolean;
 };
 
 /**
@@ -25,7 +22,7 @@ type Props = {
  * register yet, or it is set up as a register in a different branch from the one on screen.
  * Returns nothing when the device is ready.
  */
-export function RegisterNotice({ terminal, mismatch, terminalBranchName, branchName, onSetup, canSetup = true }: Props) {
+export function RegisterNotice({ terminal, mismatch, terminalBranchName, branchName, onSetup }: Props) {
   const { t } = useTranslation();
   const { canChangeScope, setSelectedBranchId } = useBranchContext();
 
@@ -43,11 +40,9 @@ export function RegisterNotice({ terminal, mismatch, terminalBranchName, branchN
                 branch: branchName || '',
               })}
             </Typography>
-            <PosFeatureGate off={!canSetup}>
-              <Button variant="contained" onClick={onSetup} disabled={!canSetup}>
-                {t('shift.device.title', 'Set up this register')}
-              </Button>
-            </PosFeatureGate>
+            <Button variant="contained" onClick={onSetup}>
+              {t('shift.device.title', 'Set up this register')}
+            </Button>
           </>
         ) : (
           <>

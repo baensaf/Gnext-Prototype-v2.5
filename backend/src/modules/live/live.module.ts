@@ -8,7 +8,6 @@ import { LiveController } from './live.controller';
 @Module({
   imports: [ConfigModule, AuthModule],
   providers: [LiveChangesService],
-  exports: [LiveChangesService],
   controllers: [LiveController],
 })
 export class LiveModule {}
