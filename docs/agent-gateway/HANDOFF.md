@@ -217,6 +217,22 @@ Left for the offline POS step; the task list, decisions to ask and traps are in
   order, and option group names on the lines.
 - Real-binary check of the upload path: nothing produces offline orders until the till exists.
 
+## v3 direction (2026-10-06)
+
+The product owner dropped the offline till. The agent now **always serves the cashier**: every
+register opens the agent's address, and the agent serves the cloud's own frontend build from a
+disk cache and passes every API call to the cloud. Offline selling is removed (§12, §13, §16,
+§17, §18 of the protocol are history) and comes back later, one feature at a time, inside the
+same app. This is the "v3" of the headings in the protocol; it is not the "v3 hardens v2 offline"
+row of the task list above.
+
+- Contract: [`agent-protocol.md` §19](agent-protocol.md#19-the-agent-serves-the-cashier-v3).
+- Plan, slice by slice (S0 contract, S1 agent removal, S2 cloud and web removal, S3 serve and
+  proxy, S4 agent mode in the app, S5 reconnecting and read retries, S6 idempotent writes,
+  S7 shortcuts and Branch Agents): [`PLAN-agent-serves-cashier.md`](PLAN-agent-serves-cashier.md).
+- [`HANDOFF-offline-pos.md`](HANDOFF-offline-pos.md) describes the till that this replaces; read
+  it for history only.
+
 ## How to start
 
 1. Read `CLAUDE.md` (worktree per task, PRs only, what CI runs).
