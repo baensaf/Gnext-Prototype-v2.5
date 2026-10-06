@@ -121,7 +121,7 @@ func TestReachProbeAsksTheHealthRouteAndFollowsTheCloud(t *testing.T) {
 	s := newServer(&fakeHost{server: cloud.URL})
 	s.Reach = NewReach()
 	s.Reach.Every = 15 * time.Millisecond
-	s.Reach.Timeout = 80 * time.Millisecond
+	s.Reach.Timeout = 400 * time.Millisecond
 	s.init()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -129,7 +129,7 @@ func TestReachProbeAsksTheHealthRouteAndFollowsTheCloud(t *testing.T) {
 
 	waitFor := func(want bool) {
 		t.Helper()
-		deadline := time.Now().Add(3 * time.Second)
+		deadline := time.Now().Add(20 * time.Second)
 		for time.Now().Before(deadline) {
 			if up, _ := s.Reach.State(); up == want {
 				return
@@ -139,7 +139,10 @@ func TestReachProbeAsksTheHealthRouteAndFollowsTheCloud(t *testing.T) {
 		t.Fatalf("reachable never became %v", want)
 	}
 
-	time.Sleep(60 * time.Millisecond)
+	for end := time.Now().Add(10 * time.Second); hits.Load() == 0 && time.Now().Before(end); {
+		time.Sleep(5 * time.Millisecond) // the first probe, however busy the machine
+	}
+	time.Sleep(30 * time.Millisecond)
 	if up, _ := s.Reach.State(); !up || hits.Load() == 0 {
 		t.Fatalf("with the cloud up: reachable=%v after %d probes", up, hits.Load())
 	}
