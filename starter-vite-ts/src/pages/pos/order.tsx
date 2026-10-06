@@ -88,22 +88,28 @@ import { MoneyUtil } from 'src/utils/money.util';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 import { addonMin, isPickOne, addonRuleLabel } from 'src/utils/addon-rule';
 
+import { orderApi } from 'src/api/orderApi';
+import { dineInApi } from 'src/api/dineInApi';
+import { paymentApi } from 'src/api/paymentApi';
+import { catalogApi } from 'src/api/catalogApi';
+import { settingsApi } from 'src/api/settingsApi';
+import { customerApi } from 'src/api/customerApi';
+import { deliveryApi } from 'src/api/deliveryApi';
+import { discountsApi } from 'src/api/discountsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
-import { usePosSource, PosFeatureGate } from 'src/contexts/pos-source';
 
 import { VersionTag } from 'src/components/version-tag';
 import { CheckoutModal } from 'src/components/CheckoutModal';
-import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { toast, showErrorToast } from 'src/components/snackbar';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 import { CustomerRegisterDialog } from 'src/components/customer-register';
+import { useRegisterShift } from 'src/components/shift/use-register-shift';
 import { PosShiftBar, PosShiftGate, PosShiftAccountLink } from 'src/components/shift/pos-shift';
 
 import { PosStopDialog } from './pos-stop-dialog';
 import { useFillViewport } from './use-fill-viewport';
 import { PosCustomerPicker } from './pos-customer-picker';
 import { ClosedBranchBanner } from './closed-branch-banner';
-import { AgentTillNotice, OfflineTillBanner, useServedByAgentTill } from './offline-till-banner';
 
 export interface CartItem {
   product: Product;
@@ -111,33 +117,9 @@ export interface CartItem {
   quantity: number;
   selectedOptions: OptionItem[];
   lineSubtotal: string;
-  /** Why this line cannot be sold where the register sells now, after the till switched (§16.6). */
-  refused?: string;
   /** The product has sizes or add-on groups, so the line offers to change them. */
   hasChoices?: boolean;
 }
-
-/**
- * A cart the till carries from one side to the other when it switches between the cloud and
- * the agent (agent-protocol.md §16.6): the register's screen is a new one on the other side,
- * and starts from this.
- */
-export type CarriedCart = {
-  cart: CartItem[];
-  orderType: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
-  tableId: string;
-  tableNumber: string;
-  notes: string;
-  /** A place whose answer never came: the cloud's draft, which may already be in the kitchen. */
-  uncertainDraftId: string | null;
-};
-
-type PosOrderPageProps = {
-  /** The till's cart from the other side, to start from. */
-  carried?: CarriedCart | null;
-  /** Told the cart as it changes, so the till can carry it if it switches. */
-  onCartChange?: (cart: CarriedCart) => void;
-};
 
 /** The address list's last entry: opens the add-address dialog. */
 const ADD_ADDRESS = '__add__';
@@ -170,20 +152,14 @@ function formatRejectionReason(reason?: string, fallback: string = 'Discount was
   }
 }
 
-export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) {
+export function PosOrderPage() {
   const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
   const currency = useCurrencyLabel();
 
   const { selectedBranchId, setSelectedBranchId } = useBranchContext();
-  // The cloud for the web POS; the branch agent for the offline till.
-  const pos = usePosSource();
-  // This register is the branch PC's Gnext POS (§16.10): one drawer, one screen.
-  const servedByAgentTill = useServedByAgentTill(pos.kind === 'cloud');
-  const { features } = pos;
-
   // The register this device is and the shift open on it; the till stays shut without one.
-  const register = pos.useRegisterShift();
+  const register = useRegisterShift();
   // A shift whose business day has ended sells nothing more: it is counted and closed first.
   const shiftBlocked = !register.shift || register.dayEnded;
   const [categories, setCategories] = useState<Category[]>([]);
@@ -221,15 +197,15 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
   const [addAddressOpen, setAddAddressOpen] = useState(false);
   const [addingAddress, setAddingAddress] = useState(false);
   const [newAddress, setNewAddress] = useState({ title: '', address_text: '', postal_code: '', is_default: false });
-  const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>(carried?.orderType ?? 'DINE_IN');
-  const [tableNumber, setTableNumber] = useState(carried?.tableNumber || 'T-01');
-  const [selectedTableId, setSelectedTableId] = useState<string>(carried?.tableId ?? '');
+  const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>('DINE_IN');
+  const [tableNumber, setTableNumber] = useState('T-01');
+  const [selectedTableId, setSelectedTableId] = useState<string>('');
   const [diningTables, setDiningTables] = useState<DiningTable[]>([]);
   const [tableMenuAnchorEl, setTableMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [customTableInput, setCustomTableInput] = useState('');
 
   // Order Notes Dialog state
-  const [orderNotes, setOrderNotes] = useState<string>(carried?.notes ?? '');
+  const [orderNotes, setOrderNotes] = useState<string>('');
   const [notesModalOpen, setNotesModalOpen] = useState(false);
   const [tempNotesInput, setTempNotesInput] = useState<string>('');
   // The chain's own phrases, managed in Settings. These used to be a hardcoded English
@@ -271,43 +247,8 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
   const [editingLine, setEditingLine] = useState<number | null>(null);
 
   // Cart state
-  const [cart, setCart] = useState<CartItem[]>(carried?.cart ?? []);
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [activeDraftOrderId, setActiveDraftOrderId] = useState<string | null>(null);
-  // A place the cloud never answered (§16.6): the order may be in its kitchen already.
-  const [uncertainDraftId, setUncertainDraftId] = useState<string | null>(carried?.uncertainDraftId ?? null);
-  // Which place waits for the cashier to say the cart goes again, offline.
-  const [uncertainAction, setUncertainAction] = useState<'place' | 'terminal' | null>(null);
-  const uncertainConfirmed = React.useRef(false);
-
-  // The till carries the cart if it switches between the cloud and the agent.
-  useEffect(() => {
-    onCartChange?.({ cart, orderType, tableId: selectedTableId, tableNumber, notes: orderNotes, uncertainDraftId });
-  }, [onCartChange, cart, orderType, selectedTableId, tableNumber, orderNotes, uncertainDraftId]);
-
-  // Back on the cloud with a place it never answered: if the order reached the kitchen, the cart
-  // was sold; if it is still a draft, the next place sends that draft.
-  useEffect(() => {
-    if (!uncertainDraftId || pos.kind === 'agent') return undefined;
-    let live = true;
-    pos.orders
-      .getOrderById(uncertainDraftId)
-      .then((order) => {
-        if (!live) return;
-        if (order.state && order.state !== 'DRAFT') {
-          setCart([]);
-          toast.info(t('pos.carry.reached', { number: order.call_number || order.order_number || '' }));
-        } else {
-          setActiveDraftOrderId(uncertainDraftId);
-        }
-        setUncertainDraftId(null);
-      })
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-    // Once, when this screen starts on the cloud.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Cart lines follow this branch's prices as they refresh: a list price changed mid-order
   // shows on the lines already in the cart, as the server prices them when the order is saved.
@@ -319,8 +260,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         const unitPrice = MoneyUtil.add(priceOf(ci.product, ci.selectedVariant), optionsSum, 2);
         const lineSubtotal = MoneyUtil.multiply(unitPrice, ci.quantity.toString(), 2);
         if (MoneyUtil.equals(lineSubtotal, ci.lineSubtotal)) return ci;
-        // A product this side does not sell has no price here; its line keeps the old one.
-        if (ci.refused) return ci;
         changed = true;
         return { ...ci, lineSubtotal };
       });
@@ -361,13 +300,12 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > Number(discountLimits.own.maxFixed));
 
   useEffect(() => {
-    if (!features.discounts) return;
-    pos.discounts
+    discountsApi
       .getManualDiscountLimits()
       .then(setDiscountLimits)
       // The server still decides; the defaults only mean the pin may be asked for late.
       .catch(() => undefined);
-  }, [features.discounts, pos]);
+  }, []);
 
   const [manualReasonCode, setManualReasonCode] = useState<string>('CUSTOMER_SATISFACTION');
   const [manualApprovalRequestId, setManualApprovalRequestId] = useState<string | undefined>(undefined);
@@ -403,23 +341,23 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     try {
       setLoadingHeldOrders(true);
       const bId = branchId || selectedBranchId;
-      const orders = await pos.orders.getOrders({ branchId: bId || undefined, state: 'DRAFT' });
+      const orders = await orderApi.getOrders({ branchId: bId || undefined, state: 'DRAFT' });
       setHeldOrders(orders);
     } catch {
       // ignore
     } finally {
       setLoadingHeldOrders(false);
     }
-  }, [selectedBranchId, pos]);
+  }, [selectedBranchId]);
 
   const loadInitialData = async () => {
     try {
       setLoadingInitialData(true);
       // Today's stops load with the stock counts below, for the selected branch.
       const [cList, pList, tList] = await Promise.all([
-        pos.catalog.getCategories(),
-        pos.catalog.getProducts(),
-        pos.tables.getTables(undefined, selectedBranchId).catch(() => [] as DiningTable[]),
+        catalogApi.getCategories(),
+        catalogApi.getProducts(),
+        dineInApi.getTables(undefined, selectedBranchId).catch(() => [] as DiningTable[]),
       ]);
       // Categories taken off the menu hold no sellable products; showing them (and opening on
       // one) left the cashier looking at an empty grid.
@@ -451,32 +389,32 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
   // time the dialog opens. An empty list is a legitimate answer: the dialog simply shows no
   // chips, and the cashier types.
   useEffect(() => {
-    pos.catalog
+    catalogApi
       .getNoteTemplates('ORDER')
       .then(setNoteTemplates)
       .catch(() => setNoteTemplates([]));
-  }, [pos]);
+  }, []);
 
   // Selling windows open and close, and items get 86'd from other screens, while the register
   // sits open, so the grid checks each minute. Stops are this branch's plus chain-wide ones.
   useEffect(() => {
     const refresh = () => {
-      pos.catalog
+      catalogApi
         .getOffScheduleProducts(selectedBranchId || undefined)
         .then((list) => setOffSchedule(new Map(list.map((o) => [o.product_id, o.windows]))))
         .catch(() => setOffSchedule(new Map()));
-      pos.catalog
+      catalogApi
         .getAvailabilities(selectedBranchId || undefined)
         // A stop on one channel (Snappfood only) leaves the item on sale at the counter.
         .then((list) => setAvailabilities(list.filter((a) => !a.channel)))
         .catch(() => undefined);
-      pos.catalog
+      catalogApi
         .getBranchPrices(selectedBranchId || undefined)
         .then((sheet) => setBranchPrices(new Map(sheet.items.map((i) => [`${i.product_id}:${i.variant_id || ''}`, i.price]))))
         .catch(() => undefined);
     };
     const refreshStock = () =>
-      pos.catalog
+      catalogApi
         .getDailyStock(selectedBranchId || undefined)
         .then(setDailyStock)
         .catch(() => setDailyStock([]));
@@ -488,7 +426,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       window.clearInterval(timer);
       window.clearInterval(stockTimer);
     };
-  }, [selectedBranchId, pos]);
+  }, [selectedBranchId]);
 
   useEffect(() => {
     if (selectedBranchId) {
@@ -509,7 +447,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       ? deliveryRestoreRef.current.addressId
       : undefined;
     if (!restoreAddressId) setSelectedDeliveryAddressId('');
-    pos.customers.getAddresses(selectedCustomerId)
+    customerApi.getAddresses(selectedCustomerId)
       .then((addresses) => {
         if (cancelled) return;
         setCustomerAddresses(addresses);
@@ -522,7 +460,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       .catch(() => !cancelled && setDeliveryOptionsError('Unable to load this customer’s delivery addresses.'))
       .finally(() => !cancelled && setDeliveryOptionsLoading(false));
     return () => { cancelled = true; };
-  }, [orderType, selectedCustomerId, pos]);
+  }, [orderType, selectedCustomerId]);
 
   useEffect(() => {
     if (orderType !== 'DELIVERY' || !selectedBranchId) {
@@ -535,7 +473,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     setDeliveryOptionsError(null);
     const restoreZoneId = deliveryRestoreRef.current.zoneId;
     if (!restoreZoneId) setSelectedDeliveryZoneId('');
-    pos.delivery.getZones(selectedBranchId)
+    deliveryApi.getZones(selectedBranchId)
       .then((zones) => {
         if (cancelled) return;
         const activeZones = zones.filter((zone) => zone.is_active && zone.branch_id === selectedBranchId);
@@ -545,7 +483,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       .catch(() => !cancelled && setDeliveryOptionsError('Unable to load delivery zones for this branch.'))
       .finally(() => !cancelled && setDeliveryOptionsLoading(false));
     return () => { cancelled = true; };
-  }, [orderType, selectedBranchId, pos]);
+  }, [orderType, selectedBranchId]);
 
   useEffect(() => {
     if (orderType !== 'DELIVERY' || !selectedDeliveryAddressId || deliveryZones.length === 0 || selectedDeliveryZoneId) return;
@@ -582,9 +520,9 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     let groups: OptionGroup[];
     try {
       [vList, groups] = await Promise.all([
-        pos.catalog.getProductVariants(p.id),
+        catalogApi.getProductVariants(p.id),
         // A product offers only the add-on groups attached to it; the register refuses any other choice.
-        pos.catalog.getProductById(p.id).then((full) => (full.optionGroups || []) as OptionGroup[]),
+        catalogApi.getProductById(p.id).then((full) => (full.optionGroups || []) as OptionGroup[]),
       ]);
     } catch {
       setSelectedProduct(null);
@@ -838,13 +776,13 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     }
     try {
       setAddingAddress(true);
-      const created = await pos.customers.createAddress(selectedCustomerId, {
+      const created = await customerApi.createAddress(selectedCustomerId, {
         title: newAddress.title.trim(),
         address_text: newAddress.address_text.trim(),
         postal_code: newAddress.postal_code.trim() || undefined,
         is_default: newAddress.is_default,
       });
-      const addresses = await pos.customers.getAddresses(selectedCustomerId);
+      const addresses = await customerApi.getAddresses(selectedCustomerId);
       setCustomerAddresses(addresses);
       setSelectedDeliveryAddressId(created.id);
       setSelectedDeliveryZoneId('');
@@ -895,9 +833,9 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
       let draft: OrderHeader;
       if (activeDraftOrderId) {
-        draft = await pos.orders.updateDraft(activeDraftOrderId, orderPayload);
+        draft = await orderApi.updateDraft(activeDraftOrderId, orderPayload);
       } else {
-        draft = await pos.orders.createOrder(orderPayload);
+        draft = await orderApi.createOrder(orderPayload);
       }
 
       toast.success(t('pos.cartBar.heldToast', { number: draft.order_number }));
@@ -917,7 +855,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
   const handleResumeOrder = async (order: OrderHeader) => {
     try {
       setResumingOrderId(order.id);
-      const fullOrder = await pos.orders.getOrderById(order.id);
+      const fullOrder = await orderApi.getOrderById(order.id);
       deliveryRestoreRef.current = {
         customerId: fullOrder.customer_id,
         addressId: fullOrder.customer_address_id,
@@ -933,7 +871,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       setSelectedCustomer(null);
       if (fullOrder.customer_id) {
         const customerId = fullOrder.customer_id;
-        pos.customers
+        customerApi
           .getCustomer(customerId)
           .then(setSelectedCustomer)
           .catch(() =>
@@ -964,7 +902,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         if ((item as any).variant_id) {
           const variants = prod.variants?.length
             ? prod.variants
-            : await pos.catalog.getProductVariants(item.product_id).catch(() => [] as ProductVariant[]);
+            : await catalogApi.getProductVariants(item.product_id).catch(() => [] as ProductVariant[]);
           selectedVariant = variants.find((variant) => variant.id === (item as any).variant_id);
           if (!selectedVariant) {
             selectedVariant = {
@@ -1041,7 +979,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     setDiscardReasonCodeId('');
     if (discardReasonCodes.length === 0) {
       try {
-        const codes = await pos.settings.getReasonCodes();
+        const codes = await settingsApi.getReasonCodes();
         setDiscardReasonCodes(codes.filter((c) => c.is_active));
       } catch (err: any) {
         showErrorToast(err, 'Failed to load reason codes');
@@ -1060,7 +998,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
   const discardHeldOrder = async (orderId: string, reasonCodeId?: string): Promise<boolean> => {
     try {
-      await pos.orders.cancelOrder(orderId, reasonCodeId, 'Discarded from held drafts');
+      await orderApi.cancelOrder(orderId, reasonCodeId, 'Discarded from held drafts');
       if (activeDraftOrderId === orderId) {
         handleClearCart();
       } else if (selectedBranchId) {
@@ -1138,7 +1076,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         };
       }
 
-      const quoteRes = await pos.discounts.quoteDiscounts(payload);
+      const quoteRes = await discountsApi.quoteDiscounts(payload);
 
       const discAmount = MoneyUtil.format(quoteRes.discountTotal || '0', 2);
       setAppliedDiscountAmount(discAmount);
@@ -1184,7 +1122,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         setAppliedCouponCode('');
       }
     }
-  }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType, deliveryFeeCharged, priceOf, pos, currency]);
+  }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType, deliveryFeeCharged, priceOf, currency]);
 
   useEffect(() => {
     evaluateQuote();
@@ -1311,34 +1249,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     };
   }, [appliedManualDiscount, manualApprovalRequestId]);
 
-  // §16.6, a cart the till carried across a switch: lines the other side refused come off
-  // before anything is placed, and a place the cloud never answered goes again offline only
-  // once the cashier says so.
-  const carryReady = useCallback(
-    (action: 'place' | 'terminal') => {
-      if (cart.some((ci) => ci.refused)) {
-        setError(t('pos.carry.removeRefused'));
-        return false;
-      }
-      if (uncertainDraftId && pos.kind === 'agent' && !uncertainConfirmed.current) {
-        setUncertainAction(action);
-        return false;
-      }
-      return true;
-    },
-    [cart, uncertainDraftId, pos.kind, t]
-  );
-  const placedCart = useCallback(() => {
-    uncertainConfirmed.current = false;
-    setUncertainDraftId(null);
-  }, []);
-  const placeUnanswered = useCallback(
-    (err: any, submitSent: boolean, draftId: string) => {
-      if (pos.kind === 'till' && submitSent && draftId && err?.code === 'CLOUD_UNREACHABLE') setUncertainDraftId(draftId);
-    },
-    [pos.kind]
-  );
-
   // 1-Click Direct Terminal POS Checkout (90% Iranian Standard)
   const [terminalPayLoading, setTerminalPayLoading] = useState(false);
 
@@ -1358,11 +1268,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       return;
     }
 
-    if (!carryReady('terminal')) return;
-
     setTerminalPayLoading(true);
-    let draftId = '';
-    let submitSent = false;
     let submitted: OrderHeader | null = null;
     try {
       const orderPayload: any = {
@@ -1386,21 +1292,20 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         })),
       };
 
+      let draftId: string;
       if (activeDraftOrderId) {
-        const updated = await pos.orders.updateDraft(activeDraftOrderId, orderPayload);
+        const updated = await orderApi.updateDraft(activeDraftOrderId, orderPayload);
         draftId = updated.id;
       } else {
-        const draft = await pos.orders.createOrder(orderPayload);
+        const draft = await orderApi.createOrder(orderPayload);
         draftId = draft.id;
       }
 
       const submitPayload = buildSubmitPayload();
-      submitSent = true;
-      submitted = await pos.orders.submitOrder(draftId, submitPayload);
-      placedCart();
+      submitted = await orderApi.submitOrder(draftId, submitPayload);
 
       // Instantly query active payment methods to find POS / CARD
-      const pms = await pos.settings.getPaymentMethods();
+      const pms = await settingsApi.getPaymentMethods();
       const activeMethods = pms.filter((m) => m.is_active);
       const preferredPos =
         activeMethods.find(
@@ -1413,7 +1318,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         ) || activeMethods[0];
 
       if (preferredPos) {
-        const payRes = await pos.payments.postPayment({
+        const payRes = await paymentApi.postPayment({
           order_id: submitted.id,
           payment_method_id: preferredPos.id,
           amount: submitted.due_amount || submitted.total_amount || '0',
@@ -1438,8 +1343,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         setCheckoutModalOpen(true);
         handleClearCart();
         fetchHeldOrders(selectedBranchId);
-      } else {
-        placeUnanswered(err, submitSent, draftId);
       }
       setError(msg);
       showErrorToast(err, msg);
@@ -1447,10 +1350,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       setTerminalPayLoading(false);
     }
   }, [
-    carryReady,
-    placedCart,
-    placeUnanswered,
-    pos,
     cart,
     selectedBranchId,
     approvalRequired,
@@ -1487,10 +1386,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       setApprovalModalOpen(true);
       return;
     }
-    if (!carryReady('place')) return;
 
-    let draftId = '';
-    let submitSent = false;
     try {
       const orderPayload: any = {
         branch_id: selectedBranchId,
@@ -1513,18 +1409,17 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         })),
       };
 
+      let draftId: string;
       if (activeDraftOrderId) {
-        const updated = await pos.orders.updateDraft(activeDraftOrderId, orderPayload);
+        const updated = await orderApi.updateDraft(activeDraftOrderId, orderPayload);
         draftId = updated.id;
       } else {
-        const draft = await pos.orders.createOrder(orderPayload);
+        const draft = await orderApi.createOrder(orderPayload);
         draftId = draft.id;
       }
 
       const submitPayload = buildSubmitPayload();
-      submitSent = true;
-      const submitted = await pos.orders.submitOrder(draftId, submitPayload);
-      placedCart();
+      const submitted = await orderApi.submitOrder(draftId, submitPayload);
 
       setPlacedOrder(submitted);
       setCheckoutModalOpen(true);
@@ -1533,16 +1428,11 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       fetchHeldOrders(selectedBranchId);
       setError(null);
     } catch (err: any) {
-      placeUnanswered(err, submitSent, draftId);
       const msg = err.detail || err.message || 'Failed to place order';
       setError(msg);
       showErrorToast(err, msg);
     }
   }, [
-    carryReady,
-    placedCart,
-    placeUnanswered,
-    pos,
     cart,
     selectedBranchId,
     approvalRequired,
@@ -1592,14 +1482,13 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
       // F4: Toggle Held Orders Drawer
       if (e.key === 'F4') {
         e.preventDefault();
-        if (features.park) setHeldOrdersDrawerOpen((prev) => !prev);
+        setHeldOrdersDrawerOpen((prev) => !prev);
         return;
       }
 
       // F6: Open Manual Discount Modal
       if (e.key === 'F6') {
         e.preventDefault();
-        if (!features.discounts) return;
         if (cart.length > 0) {
           setManualDiscountModalOpen(true);
         } else {
@@ -1653,7 +1542,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     addAddressOpen,
     searchQuery,
     shiftBlocked,
-    features,
   ]);
 
   // Product Filtering (Search + Category)
@@ -1682,12 +1570,8 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
     dailyStock.filter((s) => !s.variant_id && s.remaining <= 0).map((s) => s.product_id)
   );
 
-  if (servedByAgentTill.served) return <AgentTillNotice url={servedByAgentTill.url} />;
-
   return (
     <Box aria-busy={loadingInitialData || holdingOrder || Boolean(resumingOrderId)}>
-      {/* The internet is down: the way to the offline till on the branch PC (the till itself runs this page without it). */}
-      {pos.kind === 'cloud' && <OfflineTillBanner />}
       <ClosedBranchBanner />
       {loadingInitialData && <LinearProgress sx={{ mb: 2 }} />}
       {error && (
@@ -1866,11 +1750,10 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                           aria-disabled={isSuspended}
                           onContextMenu={(e) => {
                             e.preventDefault();
-                            if (features.stop) setStopProduct(p);
+                            setStopProduct(p);
                           }}
                           onPointerDown={() => {
                             longPress.current.fired = false;
-                            if (!features.stop) return;
                             longPress.current.timer = window.setTimeout(() => {
                               longPress.current.fired = true;
                               setStopProduct(p);
@@ -1920,12 +1803,9 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                             handleOpenProductOptions(p);
                           }}
                         >
-                          {/* Offline there is no stop to take: the button shows, disabled, where it always is. */}
                           <IconButton
                             size="small"
                             aria-label={t('pos.stop.open', { name: p.name })}
-                            disabled={!features.stop}
-                            title={features.stop ? undefined : t('pos.offline.unavailable')}
                             onPointerDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -2010,12 +1890,11 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                 </Stack>
                 <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexShrink: 0 }}>
                   {heldOrders.length > 0 && (
-                  <PosFeatureGate off={!features.park} title="View and resume held draft orders">
+                  <Tooltip title="View and resume held draft orders">
                     <Button
                       size="small"
                       color="warning"
                       variant="outlined"
-                      disabled={!features.park}
                       startIcon={
                         <Badge
                           badgeContent={heldOrders.length}
@@ -2034,7 +1913,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                     >
                       {t('pos.cartBar.heldButton')}
                     </Button>
-                  </PosFeatureGate>
+                  </Tooltip>
                   )}
                   {cart.length > 0 && (
                     <Button
@@ -2101,22 +1980,18 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                     <TakeoutDiningIcon sx={{ fontSize: 18 }} />
                     {t('pos.takeaway')}
                   </ToggleButton>
-                  <PosFeatureGate off={!features.delivery} grow>
-                    <ToggleButton value="DELIVERY" disabled={!features.delivery}>
-                      <DeliveryDiningIcon sx={{ fontSize: 18 }} />
-                      {t('pos.delivery')}
-                    </ToggleButton>
-                  </PosFeatureGate>
+                  <ToggleButton value="DELIVERY">
+                    <DeliveryDiningIcon sx={{ fontSize: 18 }} />
+                    {t('pos.delivery')}
+                  </ToggleButton>
                 </ToggleButtonGroup>
 
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  <PosFeatureGate off={!features.customers} grow>
                   <PosCustomerPicker
                     inputRef={customerSelectRef}
-                    disabled={!features.customers}
                     value={selectedCustomer}
                     onChange={pickCustomer}
-                    search={(q) => pos.customers.searchCustomers(q, 20)}
+                    search={(q) => customerApi.searchCustomers(q, 20)}
                     // Registering lives at the bottom of the picker's list (no separate button):
                     // whatever was typed carries over as the mobile or the name.
                     onRegister={(prefill) => {
@@ -2125,7 +2000,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                     }}
                     placeholder={orderType === 'DELIVERY' ? t('pos.deliveryContext.customerRequired') : t('pos.customerSearch.placeholder')}
                   />
-                  </PosFeatureGate>
 
                   <Tooltip title={orderNotes ? "Edit Order / Kitchen Note" : "Add Order / Kitchen Note"}>
                     <IconButton
@@ -2502,19 +2376,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                   )
                 ) : (
                   <Stack spacing={1}>
-                    {uncertainDraftId && <Alert severity="warning">{t('pos.carry.uncertain')}</Alert>}
-                    {cart.some((ci) => ci.refused) && (
-                      <Alert
-                        severity="error"
-                        action={
-                          <Button color="inherit" size="small" onClick={() => setCart((prev) => prev.filter((ci) => !ci.refused))}>
-                            {t('pos.carry.removeButton')}
-                          </Button>
-                        }
-                      >
-                        {t('pos.carry.refused')}
-                      </Alert>
-                    )}
                     {cart.map((item, idx) => (
                       <Paper key={idx} variant="outlined" sx={{ p: 1.25, borderRadius: 2, bgcolor: 'background.paper' }}>
                         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2558,11 +2419,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                                 </IconButton>
                               )}
                             </Stack>
-                            {item.refused && (
-                              <Typography variant="caption" color="error" sx={{ display: 'block', fontWeight: 600 }}>
-                                {item.refused}
-                              </Typography>
-                            )}
                           </Box>
 
                           <Stack direction="row" sx={{ alignItems: 'center', gap: 0.25, flexShrink: 0 }}>
@@ -2636,11 +2492,10 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                     With none applied it names the action; applied, it names the discount, so the
                     cashier sees which one is on without opening it. */}
                 <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1, minWidth: 0 }}>
-                  <PosFeatureGate off={!features.discounts} title={t('pos.cartBar.discount')}>
+                  <Tooltip title={t('pos.cartBar.discount')}>
                     <Button
                       size="small"
                       color={discountOn ? 'error' : 'primary'}
-                      disabled={!features.discounts}
                       startIcon={<LocalOfferIcon sx={{ fontSize: 16 }} />}
                       onClick={() => setManualDiscountModalOpen(true)}
                       aria-keyshortcuts="F6"
@@ -2652,7 +2507,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
                         {appliedDiscountName ? ` ${appliedDiscountName}` : ''}
                       </Box>
                     </Button>
-                  </PosFeatureGate>
+                  </Tooltip>
                   {MoneyUtil.greaterThan(appliedDiscountAmount, '0') ? (
                     <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold', flexShrink: 0 }}>
                       -{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(appliedDiscountAmount) })}
@@ -2679,31 +2534,29 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
 
               {/* Hold, place and pay in one row: stacked, they took two rows from the cart's lines. */}
               <Stack direction="row" spacing={1} sx={{ alignItems: 'stretch', flexShrink: 0 }}>
-                <PosFeatureGate off={!features.park}>
-                  <Button
-                    variant="outlined"
-                    color="warning"
-                    disabled={!features.park || cart.length === 0 || holdingOrder}
-                    onClick={handleHoldOrder}
-                    startIcon={holdingOrder ? <CircularProgress size={18} color="inherit" /> : <PauseIcon />}
-                    aria-label={t('pos.cartBar.hold')}
-                    title={t('pos.cartBar.hold')}
-                    // On a till-sized screen the row has no room for the word beside Place and PC-POS,
-                    // so Hold is its icon there and spells itself out on wider screens.
-                    sx={{
-                      fontWeight: 'bold',
-                      flexShrink: 0,
-                      px: 1.5,
-                      minWidth: 0,
-                      whiteSpace: 'nowrap',
-                      '& .MuiButton-startIcon': { marginInline: { xs: 0, xl: '-4px 8px' } },
-                    }}
-                  >
-                    <Box component="span" sx={{ display: { xs: 'none', xl: 'inline' } }}>
-                      {holdingOrder ? t('pos.cartBar.holding') : t('pos.cartBar.hold')}
-                    </Box>
-                  </Button>
-                </PosFeatureGate>
+                <Button
+                  variant="outlined"
+                  color="warning"
+                  disabled={cart.length === 0 || holdingOrder}
+                  onClick={handleHoldOrder}
+                  startIcon={holdingOrder ? <CircularProgress size={18} color="inherit" /> : <PauseIcon />}
+                  aria-label={t('pos.cartBar.hold')}
+                  title={t('pos.cartBar.hold')}
+                  // On a till-sized screen the row has no room for the word beside Place and PC-POS,
+                  // so Hold is its icon there and spells itself out on wider screens.
+                  sx={{
+                    fontWeight: 'bold',
+                    flexShrink: 0,
+                    px: 1.5,
+                    minWidth: 0,
+                    whiteSpace: 'nowrap',
+                    '& .MuiButton-startIcon': { marginInline: { xs: 0, xl: '-4px 8px' } },
+                  }}
+                >
+                  <Box component="span" sx={{ display: { xs: 'none', xl: 'inline' } }}>
+                    {holdingOrder ? t('pos.cartBar.holding') : t('pos.cartBar.hold')}
+                  </Box>
+                </Button>
                 <Button
                   variant="outlined"
                   color="inherit"
@@ -3232,7 +3085,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         open={quickAddCustomerOpen}
         onClose={() => setQuickAddCustomerOpen(false)}
         onCreated={handleCustomerRegistered}
-        createCustomer={pos.customers.createCustomer}
+        createCustomer={customerApi.createCustomer}
         startWithAddress={orderType === 'DELIVERY'}
         initialMobile={registerPrefill.mobile}
         initialName={registerPrefill.name}
@@ -3324,22 +3177,6 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         </DialogActions>
       </Dialog>
 
-      <ConfirmDialog
-        open={!!uncertainAction}
-        onClose={() => setUncertainAction(null)}
-        title={t('pos.carry.uncertainTitle')}
-        content={t('pos.carry.uncertainBody')}
-        confirmLabel={t('pos.carry.uncertainConfirm')}
-        confirmColor="warning"
-        onConfirm={() => {
-          const action = uncertainAction;
-          uncertainConfirmed.current = true;
-          setUncertainAction(null);
-          if (action === 'terminal') handleDirectTerminalPay();
-          else handlePlaceOrder();
-        }}
-      />
-
       <PosStopDialog
         product={stopProduct}
         branchId={selectedBranchId || null}
@@ -3348,7 +3185,7 @@ export function PosOrderPage({ carried, onCartChange }: PosOrderPageProps = {}) 
         onDone={(message) => {
           setStopProduct(null);
           toast.success(message);
-          pos.catalog
+          catalogApi
             .getAvailabilities(selectedBranchId || undefined)
             .then((list) => setAvailabilities(list.filter((a) => !a.channel)))
             .catch(() => undefined);

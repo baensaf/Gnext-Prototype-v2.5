@@ -14,7 +14,8 @@ process.on('uncaughtException', (err) => {
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  // A branch agent uploads offline orders in batches of up to 1 MiB (protocol §12.5).
+  // Raised from the 100 kb default for the offline order batches of agents 1.x (removed, protocol
+  // §19.2). Kept at 2 MB: lower it only after checking nothing else sends a larger JSON body.
   app.useBodyParser('json', { limit: '2mb' });
 
   const allowedOrigins = [

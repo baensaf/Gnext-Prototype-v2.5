@@ -88,7 +88,6 @@ export const FEATURE_LABELS = {
   'pos.customerCredit': 'V3',
   // The pay panel saying a delivery order's remainder goes with the courier
   'pos.pay.courierCollects': 'V3',
-  'pos.offlineTill': 'F',
   // Orders list and the order drawer
   'orders.snappfood': 'V3',
   'orders.table': 'V2',
@@ -154,7 +153,6 @@ export const FEATURE_LABELS = {
   'printers.label': 'F',
   'printers.fallback': 'F',
   'printQueue.simulate': 'F',
-  'agents.offlineReady': 'F',
   // Reports
   'reports.savedViews': 'V4',
   // Settings. Money is shown in Toman in V1; the Omani rial and the US dollar come in V7.

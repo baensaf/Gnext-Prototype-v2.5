@@ -18,8 +18,6 @@ import {
 
 import { fTime, fDateTime } from 'src/utils/format-time';
 
-import { usePosSource, PosFeatureGate } from 'src/contexts/pos-source';
-
 import { RegisterNotice } from './register-notice';
 import { OpenShiftDialog } from './open-shift-dialog';
 import { useAccountShift } from './account-shift-store';
@@ -37,8 +35,6 @@ import { BusinessDayEndedAlert } from './business-day-ended-alert';
  */
 export function PosShiftBar({ register }: { register: RegisterShiftState }) {
   const { t } = useTranslation();
-  // The offline till sells on the shift the cloud opened; it neither opens nor closes one.
-  const { features } = usePosSource();
   const [closeOpen, setCloseOpen] = useState(false);
   const { terminal, shift } = register;
 
@@ -76,19 +72,16 @@ export function PosShiftBar({ register }: { register: RegisterShiftState }) {
             time: openedEarlier ? fDateTime(shift.opened_at) : fTime(shift.opened_at),
           })}
         </Typography>
-        <PosFeatureGate off={!features.shiftActions}>
-          <Button
-            size="small"
-            color="error"
-            variant="outlined"
-            startIcon={<LockIcon />}
-            onClick={() => setCloseOpen(true)}
-            disabled={!features.shiftActions}
-            sx={{ ml: 'auto' }}
-          >
-            {t('shift.close.title', 'Close shift')}
-          </Button>
-        </PosFeatureGate>
+        <Button
+          size="small"
+          color="error"
+          variant="outlined"
+          startIcon={<LockIcon />}
+          onClick={() => setCloseOpen(true)}
+          sx={{ ml: 'auto' }}
+        >
+          {t('shift.close.title', 'Close shift')}
+        </Button>
       </Paper>
 
       <BusinessDayEndedAlert register={register} />
@@ -110,7 +103,6 @@ export function PosShiftBar({ register }: { register: RegisterShiftState }) {
  * cart's header all day.
  */
 export function PosShiftAccountLink({ register }: { register: RegisterShiftState }) {
-  const { features } = usePosSource();
   const publish = useAccountShift((state) => state.set);
   const [closeOpen, setCloseOpen] = useState(false);
   const { terminal, shift } = register;
@@ -118,8 +110,6 @@ export function PosShiftAccountLink({ register }: { register: RegisterShiftState
   const registerName = terminal ? `${terminal.name} (${terminal.code})` : '';
   const shiftNumber = shift?.shift_number || '';
   const openedAt = shift?.opened_at ? String(shift.opened_at) : '';
-  const canClose = features.shiftActions;
-
   useEffect(() => {
     if (!registerName || !shiftNumber) return undefined;
     publish({
@@ -127,11 +117,10 @@ export function PosShiftAccountLink({ register }: { register: RegisterShiftState
       shiftNumber,
       openedAt,
       openedEarlier: !!openedAt && new Date(openedAt).toDateString() !== new Date().toDateString(),
-      canClose,
       close: () => setCloseOpen(true),
     });
     return () => publish(null);
-  }, [publish, registerName, shiftNumber, openedAt, canClose]);
+  }, [publish, registerName, shiftNumber, openedAt]);
 
   if (!terminal || !shift) return null;
 
@@ -154,7 +143,6 @@ export function PosShiftAccountLink({ register }: { register: RegisterShiftState
  */
 export function PosShiftGate({ register }: { register: RegisterShiftState }) {
   const { t } = useTranslation();
-  const { features } = usePosSource();
   const [setupOpen, setSetupOpen] = useState(false);
   const [openOpen, setOpenOpen] = useState(false);
   const { terminal, mismatch, ready } = register;
@@ -180,7 +168,6 @@ export function PosShiftGate({ register }: { register: RegisterShiftState }) {
           terminalBranchName={register.terminalBranchName}
           branchName={register.branchName}
           onSetup={() => setSetupOpen(true)}
-          canSetup={features.shiftActions}
         />
       ) : (
         <Card sx={{ borderRadius: 3, p: 5, textAlign: 'center' }}>
@@ -192,18 +179,9 @@ export function PosShiftGate({ register }: { register: RegisterShiftState }) {
                 register: terminal ? `${terminal.name} (${terminal.code})` : '',
               })}
             </Typography>
-            <PosFeatureGate off={!features.shiftActions}>
-              <Button
-                size="large"
-                variant="contained"
-                color="success"
-                startIcon={<LockOpenIcon />}
-                onClick={() => setOpenOpen(true)}
-                disabled={!features.shiftActions}
-              >
-                {t('shift.open.title', 'Open shift')}
-              </Button>
-            </PosFeatureGate>
+            <Button size="large" variant="contained" color="success" startIcon={<LockOpenIcon />} onClick={() => setOpenOpen(true)}>
+              {t('shift.open.title', 'Open shift')}
+            </Button>
           </Stack>
         </Card>
       )}

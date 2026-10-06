@@ -26,7 +26,6 @@ import { fDateTime } from 'src/utils/format-time';
 
 import { kdsApi } from 'src/api/kdsApi';
 import { agentsApi } from 'src/api/agentsApi';
-import { tenantApi } from 'src/api/tenantApi';
 import { paymentApi } from 'src/api/paymentApi';
 
 // ----------------------------------------------------------------------
@@ -88,23 +87,18 @@ export function AgentHealthDrawer({ agentId, branchId, onClose }: Props) {
   // The agent reports devices by id; show the names head office gave them.
   useEffect(() => {
     if (!branchId) return;
-    Promise.all([
-      kdsApi.getPrinters(branchId).catch(() => []),
-      paymentApi.getDevices(branchId).catch(() => []),
-      tenantApi.getTerminals(branchId).catch(() => []),
-    ]).then(([printers, terminals, tills]) => {
-      const names: Record<string, string> = {};
-      printers.forEach((p) => {
-        names[`printer:${p.id}`] = `${p.name} (${p.code})`;
-      });
-      terminals.forEach((d) => {
-        names[`terminal:${d.id}`] = `${d.name} (${d.code})`;
-      });
-      tills.forEach((till) => {
-        names[`till:${till.id}`] = `${till.name} (${till.code})`;
-      });
-      setDeviceNames(names);
-    });
+    Promise.all([kdsApi.getPrinters(branchId).catch(() => []), paymentApi.getDevices(branchId).catch(() => [])]).then(
+      ([printers, terminals]) => {
+        const names: Record<string, string> = {};
+        printers.forEach((p) => {
+          names[`printer:${p.id}`] = `${p.name} (${p.code})`;
+        });
+        terminals.forEach((d) => {
+          names[`terminal:${d.id}`] = `${d.name} (${d.code})`;
+        });
+        setDeviceNames(names);
+      }
+    );
   }, [branchId]);
 
   const agent = health?.agent;
@@ -207,83 +201,6 @@ export function AgentHealthDrawer({ agentId, branchId, onClose }: Props) {
                 </Table>
               )}
             </Box>
-
-            {connection.sync && (
-              <>
-                <Divider />
-                <Stack spacing={0.75}>
-                  <Typography variant="subtitle2">{t('operations.agents.health.sync.title', 'Offline selling')}</Typography>
-                  {(health.sync_warnings || []).map((w) => (
-                    <Alert key={w} severity="warning" sx={{ py: 0 }}>
-                      {t(`operations.agents.health.sync.warning.${w}`, w)}
-                    </Alert>
-                  ))}
-                  <Row
-                    label={t('operations.agents.health.sync.snapshot', 'Menu copy')}
-                    value={
-                      connection.sync.data_pulled_at
-                        ? t('operations.agents.health.sync.checkedAt', 'Checked {{time}}', { time: fDateTime(connection.sync.data_pulled_at) })
-                        : t('operations.agents.health.sync.noSnapshot', 'Not fetched yet')
-                    }
-                  />
-                  <Row
-                    label={t('operations.agents.health.sync.pending', 'Waiting to upload')}
-                    value={
-                      connection.sync.pending_orders > 0 && connection.sync.oldest_pending_at
-                        ? t('operations.agents.health.sync.pendingSince', '{{count}} orders, oldest {{time}}', {
-                            count: connection.sync.pending_orders,
-                            time: fDateTime(connection.sync.oldest_pending_at),
-                          })
-                        : t('operations.agents.health.sync.nonePending', 'None')
-                    }
-                  />
-                  <Row
-                    label={t('operations.agents.health.sync.lastUpload', 'Last upload')}
-                    value={connection.sync.last_upload_at ? fDateTime(connection.sync.last_upload_at) : '—'}
-                  />
-                  {connection.sync.last_upload_error && (
-                    <Typography variant="caption" color="error" dir="ltr">
-                      {connection.sync.last_upload_error}
-                    </Typography>
-                  )}
-                  {connection.till && (
-                    <>
-                      <Row
-                        label={t('operations.agents.health.till.bound', 'Offline till')}
-                        value={
-                          connection.till.terminal_id
-                            ? deviceNames[`till:${connection.till.terminal_id}`] || connection.till.terminal_id
-                            : t('operations.agents.health.till.none', 'Not chosen yet')
-                        }
-                      />
-                      {/* §18.7: the devices on the branch LAN that sell through this agent. */}
-                      {(connection.till.registers ?? [])
-                        .filter((r) => r.kind === 'DEVICE')
-                        .map((r) => (
-                          <Row
-                            key={r.terminal_id}
-                            label={r.device_name || t('operations.agents.health.till.device', 'Device on the LAN')}
-                            value={deviceNames[`till:${r.terminal_id}`] || r.terminal_id}
-                          />
-                        ))}
-                      {connection.till.lan_url && (
-                        <Row
-                          label={t('operations.agents.health.till.lanUrl', 'Address on the LAN')}
-                          value={connection.till.lan_url}
-                        />
-                      )}
-                      {connection.till.open_orders > 0 && (
-                        <Alert severity="warning" sx={{ py: 0 }}>
-                          {t('operations.agents.health.till.openOrders', '{{count}} offline orders are still open on the till', {
-                            count: connection.till.open_orders,
-                          })}
-                        </Alert>
-                      )}
-                    </>
-                  )}
-                </Stack>
-              </>
-            )}
 
             <Divider />
 

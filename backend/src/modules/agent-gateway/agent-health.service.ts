@@ -1,48 +1,20 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, Not, Repository } from 'typeorm';
-import { AdminUser } from '../../entities/AdminUser.entity';
+import { Repository } from 'typeorm';
 import { Agent } from '../../entities/Agent.entity';
-import { CashierShift } from '../../entities/CashierShift.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { AgentCommandsService } from './agent-commands.service';
-import { AgentRegistryService, AgentView } from './agent-registry.service';
+import { AgentRegistryService } from './agent-registry.service';
 import { AgentSessionsService } from './agent-sessions.service';
-import { AgentSyncReport, LiveAgentConnectionHandle } from './agent-connection';
+import { LiveAgentConnectionHandle } from './agent-connection';
 
 /** How long an agent may be away before head office is told. A reconnect blip is not news. */
 export const OFFLINE_ALERT_AFTER_MS = 90_000;
 
-/** A connected agent whose snapshot has not been confirmed for this long is falling behind (§12.7). */
-export const SNAPSHOT_STALE_AFTER_MS = 30 * 60_000;
-/** Offline orders waiting this long while the agent is online are stuck. */
-export const BACKLOG_STUCK_AFTER_MS = 10 * 60_000;
-
-/** What head office should look at in an agent's sync report. */
-export function syncWarnings(sync: AgentSyncReport, now = new Date()): string[] {
-  const out: string[] = [];
-  const age = (at: string | null) => (at ? now.getTime() - new Date(at).getTime() : Infinity);
-  if (age(sync.data_pulled_at) > SNAPSHOT_STALE_AFTER_MS) out.push('SNAPSHOT_STALE');
-  if (sync.pending_orders > 0 && age(sync.oldest_pending_at) > BACKLOG_STUCK_AFTER_MS) out.push('BACKLOG_STUCK');
-  if (sync.last_upload_error) out.push('UPLOAD_FAILING');
-  return out;
-}
 const SWEEP_INTERVAL_MS = 30_000;
 
-/** The roles the offline till's staff list carries (§13.3); kept in step with agent-data. */
-const TILL_ROLES = ['CASHIER', 'SUPERVISOR', 'MANAGER', 'ADMIN', 'OWNER'];
-
-/**
- * Whether a branch could sell offline if the internet went now (agent-protocol.md §16.8), and
- * what is missing. Said while the agent is online, so it is fixed before it matters.
- */
-export type OfflineReadiness = { ready: boolean; problems: OfflineProblem[] };
-export type OfflineProblem = 'AGENT_TOO_OLD' | 'NO_TILL' | 'NO_SHIFT' | 'NO_STAFF' | 'SNAPSHOT_STALE' | 'UPLOADS_WAITING';
 export const AGENT_OFFLINE_ALERT = 'AGENT_OFFLINE';
-
-/** Where the branch PC opens its own Gnext POS (§13.13). */
-export const PC_TILL_URL = 'http://127.0.0.1:47800/till/';
 
 /**
  * Whether each branch agent is there, and what it last said about its devices (task 7).
@@ -62,8 +34,6 @@ export class AgentHealthService implements OnApplicationBootstrap, OnApplication
     @InjectRepository(Agent) private readonly agentRepo: Repository<Agent>,
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
     @InjectRepository(OperationalAlert) private readonly alertRepo: Repository<OperationalAlert>,
-    @InjectRepository(CashierShift) private readonly shiftRepo: Repository<CashierShift>,
-    @InjectRepository(AdminUser) private readonly userRepo: Repository<AdminUser>,
     private readonly sessions: AgentSessionsService,
     private readonly commands: AgentCommandsService,
     private readonly registry: AgentRegistryService,
@@ -131,54 +101,6 @@ export class AgentHealthService implements OnApplicationBootstrap, OnApplication
     }
   }
 
-  /**
-   * Offline readiness for each connected, active agent; an agent not connected gets null: what
-   * it last said may be stale, and its being away is shown already.
-   */
-  async offlineReadiness(tenantId: string, agents: AgentView[], now = new Date()): Promise<Map<string, OfflineReadiness | null>> {
-    const out = new Map<string, OfflineReadiness | null>();
-    for (const agent of agents) {
-      const live = this.sessions.get(agent.id) as LiveAgentConnectionHandle | undefined;
-      if (agent.status !== 'ACTIVE' || !live) {
-        out.set(agent.id, null);
-        continue;
-      }
-      const problems: OfflineProblem[] = [];
-      if (!live.capabilities.includes('pos.till')) problems.push('AGENT_TOO_OLD');
-      const terminalId = live.till?.terminal_id ?? null;
-      if (!terminalId) problems.push('NO_TILL');
-      else if ((await this.shiftRepo.count({ where: { tenant_id: tenantId, terminal_id: terminalId, state: 'OPEN' as any } })) === 0) {
-        problems.push('NO_SHIFT');
-      }
-      const staff = await this.userRepo.count({
-        where: { tenant_id: tenantId, branch_id: agent.branch_id, branch_removed_at: IsNull(), is_active: true, pin_hash: Not(IsNull()), role: In(TILL_ROLES) },
-      });
-      if (staff === 0) problems.push('NO_STAFF');
-      const pulled = live.sync?.data_pulled_at ? new Date(live.sync.data_pulled_at).getTime() : 0;
-      if (now.getTime() - pulled > SNAPSHOT_STALE_AFTER_MS) problems.push('SNAPSHOT_STALE');
-      if ((live.sync?.pending_orders ?? 0) > 0) problems.push('UPLOADS_WAITING');
-      out.set(agent.id, { ready: problems.length === 0, problems });
-    }
-    return out;
-  }
-
-  /**
-   * Whether a register is served by the branch agent's Gnext POS (agent-protocol.md §16.10,
-   * §18.7): the PC's own till, or a device paired on the LAN. The web POS then sends that
-   * register's cashier to Gnext POS instead of selling beside it, so one drawer has one screen.
-   * `url` is where that register opens Gnext POS.
-   */
-  tillServedByAgent(tenantId: string, terminalId: string): { agent_id: string; url: string | null } | null {
-    for (const handle of this.sessions.all()) {
-      const live = handle as LiveAgentConnectionHandle;
-      if (live.tenantId !== tenantId || !live.capabilities.includes('pos.till') || !live.till) continue;
-      if (live.till.terminal_id === terminalId) return { agent_id: live.agentId, url: PC_TILL_URL };
-      const device = (live.till.registers ?? []).find((r) => r.kind === 'DEVICE' && r.terminal_id === terminalId);
-      if (device) return { agent_id: live.agentId, url: live.till.lan_url ?? null };
-    }
-    return null;
-  }
-
   /** Everything the health screen shows for one agent. */
   async health(tenantId: string, agentId: string) {
     const agent = await this.registry.getAgent(tenantId, agentId);
@@ -195,11 +117,8 @@ export class AgentHealthService implements OnApplicationBootstrap, OnApplication
             agent_version: live.agentVersion,
             capabilities: live.capabilities,
             devices: live.devices ? [...live.devices.values()] : [],
-            sync: live.sync ?? null,
-            till: live.till ?? null,
           }
         : { connected: false, devices: [] },
-      sync_warnings: live?.sync ? syncWarnings(live.sync) : [],
       recent_commands: commands.map((c) => ({
         id: c.id,
         type: c.type,

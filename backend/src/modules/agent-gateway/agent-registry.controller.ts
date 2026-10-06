@@ -36,14 +36,10 @@ export class AgentRegistryController {
     @Query('branchId') branchId?: string,
     @Query('includeRevoked') includeRevoked?: string,
   ) {
-    const tenantId = (req as any).tenantId;
-    const agents = await this.registry.listAgents(tenantId, {
+    return await this.registry.listAgents((req as any).tenantId, {
       branchId: branchId || undefined,
       includeRevoked: includeRevoked === 'true',
     });
-    // §16.8: whether each branch could sell offline if the internet went now.
-    const readiness = await this.health.offlineReadiness(tenantId, agents);
-    return agents.map((a) => ({ ...a, offline_ready: readiness.get(a.id) ?? null }));
   }
 
   @Get('enrolment-codes')
@@ -75,21 +71,6 @@ export class AgentRegistryController {
   @Post(':id/revoke')
   async revoke(@Param('id', ParseUUIDPipe) id: string, @Body() body: RevokeAgentDto, @Req() req: Request) {
     return await this.registry.revokeAgent((req as any).tenantId, id, body?.reason, actorOf(req));
-  }
-}
-
-/**
- * Whether a register is served by its branch agent's Gnext POS (agent-protocol.md §16.10, §18.7),
- * and where it opens it. Asked by the web POS of any signed-in user, so it says no more.
- */
-@Controller('api/v1/terminals')
-export class TerminalAgentTillController {
-  constructor(private readonly health: AgentHealthService) {}
-
-  @Get(':id/agent-till')
-  agentTill(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    const served = this.health.tillServedByAgent((req as any).tenantId, id);
-    return { served_by_agent: served !== null, url: served?.url ?? null };
   }
 }
 

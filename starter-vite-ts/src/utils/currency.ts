@@ -35,8 +35,8 @@ export function fromToman(toman: string | number | null | undefined): string {
 
 /**
  * The currency amounts are stored in: the chain's base currency, set under Financial
- * settings. The offline till has no head-office session and sells in rials. This is a code
- * for the server; to show a unit next to an amount, use `useCurrencyLabel`.
+ * settings. This is a code for the server; to show a unit next to an amount, use
+ * `useCurrencyLabel`.
  */
 export function useCurrencyCode(): string {
   return useAuthStore((state) => state.tenant?.baseCurrency) || 'IRR';

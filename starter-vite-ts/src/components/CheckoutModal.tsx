@@ -36,7 +36,11 @@ import {
 import { MoneyUtil } from 'src/utils/money.util';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
-import { usePosSource, PosFeatureGate } from 'src/contexts/pos-source';
+import { kdsApi } from 'src/api/kdsApi';
+import { orderApi } from 'src/api/orderApi';
+import { paymentApi } from 'src/api/paymentApi';
+import { settingsApi } from 'src/api/settingsApi';
+import { customerApi } from 'src/api/customerApi';
 
 import { VersionTag } from 'src/components/version-tag';
 import { toast, showErrorToast } from 'src/components/snackbar';
@@ -76,8 +80,6 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const { t } = useTranslation();
   const currency = useCurrencyLabel();
   const navigate = useNavigate();
-  const pos = usePosSource();
-
   const [order, setOrder] = useState<OrderHeader | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -100,28 +102,23 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const offerRemainder = (o: OrderHeader | null) =>
     setEntry({ value: toToman(wholeRials(o?.due_amount || o?.outstanding_total)), fresh: true });
 
-  const loadClubCredit = useCallback(
-    async (customerId?: string) => {
-      // The agent selling offline knows no customers.
-      const customer =
-        customerId && pos.features.customers ? await pos.customers.getCustomer(customerId).catch(() => null) : null;
-      setClubCredit(wholeRials(customer?.wallet_balance));
-    },
-    [pos]
-  );
+  const loadClubCredit = useCallback(async (customerId?: string) => {
+    const customer = customerId ? await customerApi.getCustomer(customerId).catch(() => null) : null;
+    setClubCredit(wholeRials(customer?.wallet_balance));
+  }, []);
 
   const loadData = useCallback(async () => {
     if (!orderId) return;
     setLoading(true);
     try {
-      const o = await pos.orders.getOrderById(orderId);
+      const o = await orderApi.getOrderById(orderId);
       setOrder(o);
       offerRemainder(o);
 
-      const pms = await pos.settings.getPaymentMethods();
+      const pms = await settingsApi.getPaymentMethods();
       setPaymentMethods(pms.filter((m) => m.is_active));
 
-      setPayments(await pos.payments.getOrderPayments(orderId));
+      setPayments(await paymentApi.getOrderPayments(orderId));
       await loadClubCredit(o.customer_id);
       setError(null);
     } catch (err: any) {
@@ -129,7 +126,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     } finally {
       setLoading(false);
     }
-  }, [orderId, pos, t, loadClubCredit]);
+  }, [orderId, t, loadClubCredit]);
 
   useEffect(() => {
     if (open && orderId) {
@@ -148,12 +145,11 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const hasClubCredit = MoneyUtil.greaterThan(clubCredit, '0');
   // Shown for any order with a customer, greyed out when there is nothing to spend, so the
   // cashier sees the customer has no credit rather than wondering where the button went.
-  const showClubCredit = !!creditMethod && !!order?.customer_id && pos.features.customers;
+  const showClubCredit = !!creditMethod && !!order?.customer_id;
   const otherMethods = paymentMethods.filter(
     (m) => m.id !== cashMethod?.id && m.id !== cardMethod?.id && !COURIER_KINDS.includes(m.kind)
   );
-  // The agent selling offline drives one terminal and records nothing taken elsewhere.
-  const canUseOtherReader = !!cardMethod && pos.kind !== 'agent';
+  const canUseOtherReader = !!cardMethod;
 
   const due = order?.due_amount || '0';
   const isFullyPaid = order ? MoneyUtil.isZero(order.due_amount) : false;
@@ -186,9 +182,9 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     setError(null);
     try {
       // A failed charge is cleared before it is taken again, so the list shows one row for it.
-      if (opts.replaces) await pos.payments.voidPayment(opts.replaces).catch(() => undefined);
+      if (opts.replaces) await paymentApi.voidPayment(opts.replaces).catch(() => undefined);
 
-      const res = await pos.payments.postPayment({
+      const res = await paymentApi.postPayment({
         order_id: orderId,
         payment_method_id: method.id,
         amount: over ? due : amount,
@@ -206,7 +202,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
           duration: 15000,
         });
       }
-      setPayments(await pos.payments.getOrderPayments(orderId));
+      setPayments(await paymentApi.getOrderPayments(orderId));
       if (method.kind === 'CUSTOMER_CREDIT') await loadClubCredit(order.customer_id);
 
       if (res.order && MoneyUtil.isZero(res.order.due_amount) && onPaymentComplete) {
@@ -217,7 +213,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       setError(errorMsg);
       showErrorToast(err, errorMsg);
       // The charge that failed is in the list, with what to do about it.
-      pos.payments
+      paymentApi
         .getOrderPayments(orderId)
         .then(setPayments)
         .catch(() => undefined);
@@ -260,8 +256,8 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     if (!orderId) return;
     try {
       setLoading(true);
-      await pos.payments.voidPayment(paymentId);
-      setPayments(await pos.payments.getOrderPayments(orderId));
+      await paymentApi.voidPayment(paymentId);
+      setPayments(await paymentApi.getOrderPayments(orderId));
       setError(null);
       toast.success(t('pos.paymentVoided', 'Payment attempt voided'));
     } catch (err: any) {
@@ -320,7 +316,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const handlePrintReceipt = async () => {
     if (!orderId) return;
     try {
-      const jobs = await pos.printing.reprintOrder(orderId, 'CUSTOMER_RECEIPT', t('pos.printReceipt', 'Print Receipt'));
+      const jobs = await kdsApi.reprintOrder(orderId, 'CUSTOMER_RECEIPT', t('pos.printReceipt', 'Print Receipt'));
       if (!Array.isArray(jobs) || jobs.length === 0 || jobs.every((j) => j.status === 'FAILED')) {
         throw new Error(t('pos.receiptFailed', 'The receipt could not be sent to a printer'));
       }
@@ -592,18 +588,15 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
 
       <DialogActions sx={{ px: 3, pb: 2 }}>
         {isFullyPaid && (
-          <PosFeatureGate off={!pos.features.receipt}>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<PrintIcon />}
-              onClick={handlePrintReceipt}
-              disabled={!pos.features.receipt}
-              sx={{ fontWeight: 'bold' }}
-            >
-              {t('pos.printReceipt', 'Print Receipt')}
-            </Button>
-          </PosFeatureGate>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<PrintIcon />}
+            onClick={handlePrintReceipt}
+            sx={{ fontWeight: 'bold' }}
+          >
+            {t('pos.printReceipt', 'Print Receipt')}
+          </Button>
         )}
         <Button onClick={onClose}>{t('common.close', 'Close')}</Button>
       </DialogActions>

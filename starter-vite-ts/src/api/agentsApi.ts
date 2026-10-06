@@ -22,11 +22,6 @@ export interface BranchAgent {
   revoke_reason?: string | null;
   /** Whether the agent holds a live connection to the cloud right now. */
   connected?: boolean;
-  /** Whether its branch could sell offline if the internet went now (§16.8); null when away. */
-  offline_ready?: {
-    ready: boolean;
-    problems: ('AGENT_TOO_OLD' | 'NO_TILL' | 'NO_SHIFT' | 'NO_STAFF' | 'SNAPSHOT_STALE' | 'UPLOADS_WAITING')[];
-  } | null;
 }
 
 export interface AgentDeviceStatus {
@@ -49,30 +44,6 @@ export interface AgentCommandSummary {
   error_message?: string | null;
 }
 
-/** The branch snapshot and offline-order backlog, as the agent's last heartbeat reported them. */
-export interface AgentSyncReport {
-  data_version: string | null;
-  data_pulled_at: string | null;
-  pending_orders: number;
-  oldest_pending_at: string | null;
-  last_upload_at: string | null;
-  last_upload_error: string | null;
-  reported_at: string;
-}
-
-export type AgentSyncWarning = 'SNAPSHOT_STALE' | 'BACKLOG_STUCK' | 'UPLOAD_FAILING';
-
-/** Which till the agent's offline till sells as, and what it still holds. */
-export interface AgentTillReport {
-  terminal_id: string | null;
-  mode: 'ONLINE' | 'OFFLINE' | 'HANDOVER';
-  open_orders: number;
-  /** The registers the agent serves (§18.7): the PC's own till and the devices paired on the LAN. */
-  registers?: { terminal_id: string; kind: 'PC' | 'DEVICE'; device_name: string | null }[];
-  lan_url?: string | null;
-  reported_at: string;
-}
-
 export interface AgentHealth {
   agent: BranchAgent;
   connection: {
@@ -83,37 +54,8 @@ export interface AgentHealth {
     agent_version?: string | null;
     capabilities?: string[];
     devices: AgentDeviceStatus[];
-    sync?: AgentSyncReport | null;
-    till?: AgentTillReport | null;
   };
-  sync_warnings?: AgentSyncWarning[];
   recent_commands: AgentCommandSummary[];
-}
-
-/** An order a branch took offline, as its agent uploaded it. */
-export interface SyncOrderRow {
-  id: string;
-  branch_id: string;
-  branch_name: string | null;
-  status: 'ACCEPTED' | 'HELD';
-  flags: string[];
-  error: string | null;
-  order_number: string | null;
-  order_state: 'COMPLETED' | 'CANCELLED' | 'OPEN' | null;
-  call_number: number | null;
-  placed_at: string | null;
-  grand_total: string | null;
-  received_at: string;
-  booked_at: string | null;
-  reviewed_at: string | null;
-  reviewed_by: string | null;
-}
-
-export interface SyncResult {
-  id: string;
-  result: 'ACCEPTED' | 'DUPLICATE' | 'HELD';
-  order_number: string | null;
-  flags: string[];
 }
 
 export interface AgentReleaseRow {
@@ -219,17 +161,6 @@ export const agentsApi = {
   unpublishRelease: async (id: string): Promise<AgentReleaseRow> => {
     const res = await httpClient.post(`/api/v1/agent-releases/${id}/unpublish`, {});
     return res.data;
-  },
-  listSyncOrders: async (params: { view?: 'attention' | 'all'; branchId?: string } = {}): Promise<SyncOrderRow[]> => {
-    const res = await httpClient.get('/api/v1/agent-sync/orders', { params: { view: params.view, branchId: params.branchId || undefined } });
-    return res.data;
-  },
-  retrySyncOrder: async (id: string): Promise<SyncResult> => {
-    const res = await httpClient.post(`/api/v1/agent-sync/orders/${id}/retry`, {});
-    return res.data;
-  },
-  reviewSyncOrder: async (id: string): Promise<void> => {
-    await httpClient.post(`/api/v1/agent-sync/orders/${id}/review`, {});
   },
   cancelCode: async (id: string): Promise<void> => {
     await httpClient.delete(`/api/v1/agents/enrolment-codes/${id}`);

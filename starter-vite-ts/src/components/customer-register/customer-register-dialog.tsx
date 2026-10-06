@@ -47,7 +47,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onCreated: (customer: Customer) => void;
-  /** The POS passes its own source (the agent till has no customers yet). */
+  /** The call that saves the customer; the POS and the directory both pass `customerApi.createCustomer`. */
   createCustomer: (data: CustomerRegistration) => Promise<Customer>;
   /** Credit is granted by head office only (V3); branches never see the field. */
   showCredit?: boolean;
