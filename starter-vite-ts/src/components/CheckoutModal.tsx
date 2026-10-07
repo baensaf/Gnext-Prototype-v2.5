@@ -8,13 +8,11 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 
 import {
   Box,
-  Menu,
   Stack,
   Alert,
   Dialog,
   Button,
   Divider,
-  MenuItem,
   TextField,
   Typography,
   DialogTitle,
@@ -42,8 +40,6 @@ const wholeRials = (amount?: string | null) => String(amount || '0').replace(/\.
 
 /** The counter's card terminal. Falling back to any other method recorded card sales wrongly. */
 const CARD_KINDS = ['CARD_POS', 'CARD', 'POS', 'NETWORK_POS'];
-/** A courier's reader is settled with the courier, never taken at the counter. */
-const COURIER_KINDS = ['MOBILE_POS', 'MOBILE'];
 
 /** How long the settled order stays on screen before the panel closes itself. */
 const CLOSE_AFTER_MS = 2500;
@@ -66,17 +62,6 @@ type Fields = { cash: string; credit: string; card: string; cardTyped: boolean }
 
 const EMPTY: Fields = { cash: '', credit: '', card: '', cardTyped: false };
 
-/** A payment that needs a reference, or one taken on another reader, before it is recorded. */
-type ReferencePrompt = {
-  method: PaymentMethod;
-  offTerminal: boolean;
-  /** Rials. */
-  amount: string;
-  /** The failed charge this one replaces. */
-  replaces?: string;
-};
-
-type PayOptions = { offTerminal?: boolean; reference?: string; replaces?: string };
 
 interface CheckoutModalProps {
   open: boolean;
@@ -103,9 +88,6 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const [loading, setLoading] = useState(false);
   // What is being taken right now; the card terminal can hold this for minutes.
   const [paying, setPaying] = useState<'card' | 'other' | null>(null);
-  const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
-  const [prompt, setPrompt] = useState<ReferencePrompt | null>(null);
-  const [reference, setReference] = useState('');
   // Cash handed over beyond what is due: the drawer keeps only the due amount, and the
   // cashier gives this back.
   const [changeDue, setChangeDue] = useState<string | null>(null);
@@ -116,10 +98,6 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const cashMethod = paymentMethods.find((m) => m.kind === 'CASH');
   const cardMethod = paymentMethods.find((m) => CARD_KINDS.includes(m.kind));
   const creditMethod = paymentMethods.find((m) => m.kind === 'CUSTOMER_CREDIT');
-  // Customer credit is here too: taken from More it may go below zero, which is the customer's debt.
-  const otherMethods = paymentMethods.filter(
-    (m) => m.id !== cashMethod?.id && m.id !== cardMethod?.id && !COURIER_KINDS.includes(m.kind)
-  );
 
   const due = wholeRials(order?.due_amount);
   const isFullyPaid = order ? MoneyUtil.isZero(order.due_amount) : false;
@@ -191,10 +169,18 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   // Below zero is cash handed over beyond the bill.
   const remaining = MoneyUtil.subtract(due, MoneyUtil.add(MoneyUtil.add(cash, credit), card));
 
-  /** Typing in Cash or Club credit leaves Card with the rest, until the cashier types in Card. */
+  /**
+   * Typing in Cash or Club credit leaves Card with the rest, until the cashier types in Card.
+   * Club credit stops at what the customer holds: it never goes below zero.
+   */
   const setField = (name: 'cash' | 'credit' | 'card', text: string) =>
     setFields((prev) => {
-      const next = { ...prev, [name]: digitsOnly(text) };
+      let value = digitsOnly(text);
+      if (name === 'credit') {
+        const cap = minOf(positive(clubCredit), due);
+        if (MoneyUtil.greaterThan(rialsOf(value), cap)) value = toToman(cap);
+      }
+      const next = { ...prev, [name]: value };
       if (name === 'card') return { ...next, cardTyped: true };
       if (prev.cardTyped) return next;
       const rest = positive(MoneyUtil.subtract(MoneyUtil.subtract(due, rialsOf(next.cash)), rialsOf(next.credit)));
@@ -206,7 +192,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     method: PaymentMethod | undefined,
     amount: string,
     current: OrderHeader,
-    opts: PayOptions = {}
+    opts: { replaces?: string } = {}
   ): Promise<OrderHeader | null> => {
     if (!orderId) return null;
     if (!method) {
@@ -223,8 +209,6 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         order_id: orderId,
         payment_method_id: method.id,
         amount: over ? left : amount,
-        reference_number: opts.reference || undefined,
-        off_terminal: opts.offTerminal || undefined,
         // One key for this payment: the branch agent may repeat the call that makes its intent after a
         // lost answer, and the cloud answers the intent the first call made (agent-protocol §19.11).
         idempotency_key: newIdempotencyKey(),
@@ -302,21 +286,13 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     }
   };
 
-  /** One payment from the list's buttons or the More menu, outside the three fields. */
-  const payOne = async (method: PaymentMethod | undefined, amount: string, opts: PayOptions = {}) => {
+  /** Retry on a failed card row: the same charge again, in its place. */
+  const retryCard = async (amount: string, replaces: string) => {
     if (!order || busy) return;
-    if (!MoneyUtil.greaterThan(amount, '0')) {
-      setError(t('pos.pay.enterAmount'));
-      return;
-    }
-    if (MoneyUtil.greaterThan(amount, due)) {
-      setError(t('pos.pay.overDue'));
-      return;
-    }
     setError(null);
-    setPaying(opts.offTerminal || method?.id !== cardMethod?.id ? 'other' : 'card');
+    setPaying('card');
     try {
-      await settle(await pay(method, amount, order, opts));
+      await settle(await pay(cardMethod, amount, order, { replaces }));
     } finally {
       setPaying(null);
     }
@@ -333,7 +309,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   payRestRef.current = payRest;
 
   useEffect(() => {
-    if (!open || isFullyPaid || prompt) return undefined;
+    if (!open || isFullyPaid) return undefined;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F8' || e.key === 'F9') {
         e.preventDefault();
@@ -342,7 +318,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, isFullyPaid, prompt]);
+  }, [open, isFullyPaid]);
 
   // A settled order with no change to hand back needs nothing more from the cashier.
   useEffect(() => {
@@ -351,18 +327,6 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, isFullyPaid, changeDue]);
-
-  /** A method that may need a reference first: a bank transfer, or another reader. */
-  const start = (method: PaymentMethod | undefined, offTerminal = false, amount = card, replaces?: string) => {
-    setMoreAnchor(null);
-    if (!method) return;
-    if (offTerminal || method.requires_reference) {
-      setReference('');
-      setPrompt({ method, offTerminal, amount, replaces });
-    } else {
-      payOne(method, amount, { replaces });
-    }
-  };
 
   const handleVoidPayment = async (paymentId: string) => {
     try {
@@ -584,13 +548,8 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                       {isVoidable && !isFullyPaid && (
                         <Stack direction="row" spacing={0.5} sx={{ mt: 0.25, flexWrap: 'wrap' }}>
                           {failed && isCard && (
-                            <Button size="small" disabled={busy} onClick={() => payOne(cardMethod, again, { replaces: p.id })}>
+                            <Button size="small" disabled={busy} onClick={() => retryCard(again, p.id)}>
                               {t('common.retry', 'Retry')}
-                            </Button>
-                          )}
-                          {failed && isCard && cardMethod && (
-                            <Button size="small" disabled={busy} onClick={() => start(cardMethod, true, again, p.id)}>
-                              {t('pos.pay.otherReader')}
                             </Button>
                           )}
                           <Button size="small" color="error" disabled={busy} onClick={() => handleVoidPayment(p.id)}>
@@ -608,11 +567,6 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       </DialogContent>
 
       <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-        {!isFullyPaid && (otherMethods.length > 0 || cardMethod) && (
-          <Button color="inherit" disabled={busy} onClick={(e) => setMoreAnchor(e.currentTarget)} sx={{ mr: 'auto' }}>
-            {t('pos.pay.more')}
-          </Button>
-        )}
         {isFullyPaid && (
           <Button color="inherit" onClick={handlePrintReceipt} sx={{ mr: 'auto' }}>
             {t('pos.printReceipt', 'Print Receipt')}
@@ -636,57 +590,6 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
           </Button>
         )}
       </DialogActions>
-
-      <Menu anchorEl={moreAnchor} open={Boolean(moreAnchor)} onClose={() => setMoreAnchor(null)}>
-        {cardMethod && <MenuItem onClick={() => start(cardMethod, true)}>{t('pos.pay.otherReader')}</MenuItem>}
-        {otherMethods.map((m) => (
-          <MenuItem key={m.id} onClick={() => start(m)}>
-            {m.name}
-          </MenuItem>
-        ))}
-      </Menu>
-
-      {/* The reference for a transfer, or for a card charged by hand on another reader. */}
-      <Dialog open={Boolean(prompt)} onClose={() => setPrompt(null)} maxWidth="xs" fullWidth>
-        {prompt && (
-          <Box
-            component="form"
-            onSubmit={(e: React.FormEvent) => {
-              e.preventDefault();
-              const { method, amount, offTerminal, replaces } = prompt;
-              setPrompt(null);
-              payOne(method, amount, { offTerminal, replaces, reference: reference.trim() });
-            }}
-          >
-            <DialogTitle sx={{ fontWeight: 'bold' }}>
-              {prompt.offTerminal ? t('pos.pay.otherReader') : prompt.method.name} — {money(prompt.amount)}
-            </DialogTitle>
-            <DialogContent>
-              {prompt.offTerminal && (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  {t('pos.pay.otherReaderHint')}
-                </Typography>
-              )}
-              <TextField
-                autoFocus
-                fullWidth
-                size="small"
-                sx={{ mt: 1 }}
-                label={prompt.offTerminal ? t('pos.pay.referenceOptional') : t('pos.pay.reference')}
-                required={!prompt.offTerminal}
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-              />
-            </DialogContent>
-            <DialogActions sx={{ px: 3, pb: 2 }}>
-              <Button onClick={() => setPrompt(null)}>{t('common.cancel', 'Cancel')}</Button>
-              <Button type="submit" variant="contained">
-                {t('pos.pay.record')}
-              </Button>
-            </DialogActions>
-          </Box>
-        )}
-      </Dialog>
     </Dialog>
   );
 }

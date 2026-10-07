@@ -256,11 +256,6 @@
       "clubCredit": "اعتبار باشگاه",
       "clubCreditShort": "مشتری فقط {{amount}} {{currency}} اعتبار باشگاه دارد.",
       "courierCollects": "باقی‌مانده را پیک دریافت می‌کند",
-      "otherReader": "با کارتخوان دیگر پرداخت شد",
-      "otherReaderHint": "این مبلغ را روی کارتخوان دیگر بکشید و سپس اینجا ثبت کنید. چیزی به کارتخوان اصلی فرستاده نمی‌شود.",
-      "reference": "شماره پیگیری",
-      "referenceOptional": "شماره پیگیری (اختیاری)",
-      "record": "ثبت پرداخت",
       "statusFailed": "ناموفق",
       "statusWaiting": "در انتظار",
       "waitingForTerminal": "در انتظار کارتخوان…",
@@ -271,8 +266,7 @@
       "balance": "موجودی {{amount}}",
       "noCustomer": "بدون مشتری",
       "settled": "کامل پرداخت شد",
-      "pay": "پرداخت",
-      "more": "بیشتر"
+      "pay": "پرداخت"
     },
     "directTerminalPay": "پرداخت سریع کارتخوان (PC-POS)",
     "itemSuspended": "توقف فروش",
