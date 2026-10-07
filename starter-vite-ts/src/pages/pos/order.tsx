@@ -127,32 +127,20 @@ export interface CartItem {
 /** The address list's last entry: opens the add-address dialog. */
 const ADD_ADDRESS = '__add__';
 
-const DISCOUNT_REASONS = [
-  { code: 'CUSTOMER_SATISFACTION', label: 'Customer Satisfaction / Courtesy' },
-  { code: 'STAFF_DISCOUNT', label: 'Staff / Employee Privilege' },
-  { code: 'DAMAGED_ITEM', label: 'Minor Defect / Packaging Issue' },
-  { code: 'VIP_COURTESY', label: 'VIP Club Member Courtesy' },
-];
+/** The order type of a held order, as the cart's own type tabs name it. */
+const HELD_TYPE_KEYS: Record<string, string> = {
+  DINE_IN: 'orders.types.dineIn',
+  TAKEAWAY: 'orders.types.takeaway',
+  DELIVERY: 'orders.types.delivery',
+  PICKUP: 'orders.types.pickup',
+};
 
-function formatRejectionReason(reason?: string, fallback: string = 'Discount was not applied') {
-  switch (reason) {
-    case 'INVALID_OR_INACTIVE_COUPON':
-      return 'Coupon code is invalid or inactive';
-    case 'COUPON_NOT_YET_ACTIVE':
-      return 'Coupon code is not active yet';
-    case 'COUPON_EXPIRED':
-      return 'Coupon code has expired';
-    case 'COUPON_MAX_USES_REACHED':
-      return 'Coupon has reached its maximum usage limit';
-    case 'COUPON_ALREADY_REDEEMED_BY_CUSTOMER':
-      return 'Coupon has already been used by this customer';
-    case 'COUPON_MINIMUM_NOT_MET':
-      return 'Order subtotal does not meet the minimum required for this coupon';
-    case 'NEVER_DISCOUNT':
-      return 'Selected items in cart are excluded from discounts';
-    default:
-      return reason || fallback;
-  }
+/** The reasons a cashier gives for a discount; the label is `pos.discount.reason.<code>`. */
+const DISCOUNT_REASONS = ['CUSTOMER_SATISFACTION', 'STAFF_DISCOUNT', 'DAMAGED_ITEM', 'VIP_COURTESY'];
+
+/** Why the server turned a discount down, as the cashier reads it. */
+function formatRejectionReason(t: (key: string, fallback?: any) => string, reason?: string) {
+  return t(`pos.discount.rejected.${reason || 'OTHER'}`, t('pos.discount.rejected.OTHER'));
 }
 
 const CATALOG_LOAD_FAILED = 'Failed to load POS catalog data';
@@ -275,6 +263,8 @@ export function PosOrderPage() {
   // Held Orders Drawer state
   const [heldOrdersDrawerOpen, setHeldOrdersDrawerOpen] = useState(false);
   const [heldOrders, setHeldOrders] = useState<OrderHeader[]>([]);
+  // What each held order will cost with tax, by id (rials).
+  const [heldTotals, setHeldTotals] = useState<Record<string, string>>({});
   const [loadingHeldOrders, setLoadingHeldOrders] = useState(false);
   const [loadingInitialData, setLoadingInitialData] = useState(true);
   const [holdingOrder, setHoldingOrder] = useState(false);
@@ -351,6 +341,31 @@ export function PosOrderPage() {
       const bId = branchId || selectedBranchId;
       const orders = await orderApi.getOrders({ branchId: bId || undefined, state: 'DRAFT' });
       setHeldOrders(orders);
+      // A held order is priced only when it is placed, so its tax is quoted here for the drawer:
+      // the amount shown is what the customer will pay.
+      const totals = await Promise.all(
+        orders.map(async (ho) => {
+          if (!ho.items?.length) return [ho.id, '0'] as const;
+          const quote = await discountsApi
+            .quoteDiscounts({
+              orderDraft: {
+                branchId: ho.branch_id,
+                customerId: ho.customer_id || undefined,
+                orderType: ho.order_type,
+                deliveryFee: ho.delivery_fee || '0',
+                items: ho.items.map((item) => ({
+                  productId: item.product_id,
+                  variantId: item.variant_id || undefined,
+                  unitPrice: item.unit_price || '0',
+                  quantity: String(item.quantity || '1'),
+                })),
+              },
+            })
+            .catch(() => null);
+          return [ho.id, quote?.grandTotal || ''] as const;
+        })
+      );
+      setHeldTotals(Object.fromEntries(totals.filter(([, total]) => total)));
     } catch {
       // ignore
     } finally {
@@ -541,7 +556,7 @@ export function PosOrderPage() {
    * or an optional group set to ask at the POS (Toast's "force show"). The line always opens
    * the dialog, with the line's choices ticked.
    */
-  const handleOpenProductOptions = async (p: Product, lineIndex: number | null = null) => {
+  const openProductOptions = async (p: Product, lineIndex: number | null): Promise<boolean> => {
     // A new tap is a new attempt: the last one's "could not load" does not stay up.
     setError(null);
     setSelectedProduct(p);
@@ -560,7 +575,7 @@ export function PosOrderPage() {
     } catch {
       setSelectedProduct(null);
       setError(t('pos.productLoadFailed', { name: p.name }));
-      return;
+      return false;
     }
     // A variant or add-on taken off sale today is not offered; nor is an add-on this
     // product leaves out of its group.
@@ -575,7 +590,7 @@ export function PosOrderPage() {
     const onSale = (vList || []).filter((v) => !stoppedVariants.has(v.id) && !soldOutVariants.has(v.id));
     if ((vList || []).length > 0 && onSale.length === 0) {
       setError(t('pos.itemSuspendedNotice', { name: p.name }));
-      return;
+      return false;
     }
     const offered = (groups || []).map((g) => ({
       ...g,
@@ -591,7 +606,7 @@ export function PosOrderPage() {
     if (unfillable) {
       setSelectedProduct(null);
       setError(t('pos.groupUnfillable', { name: p.name, group: unfillable.name }));
-      return;
+      return false;
     }
 
     // Required groups first, so what must be picked is at the top of the dialog.
@@ -622,6 +637,26 @@ export function PosOrderPage() {
       // Rung straight through with the default add-ons; the line's Add-ons button changes them.
       addToCart(p, defaultVariant, defaults, onSale.length > 1 || ordered.length > 0);
       setSelectedProduct(null);
+      return true;
+    }
+    return false;
+  };
+
+  // A tile tap reads the product before the line lands in the cart. F8 or F9 pressed in that
+  // moment waits for the line rather than finding an empty cart, or the last order.
+  const addsInFlight = React.useRef(0);
+  const queuedKey = React.useRef<'F8' | 'F9' | null>(null);
+  const [addLanded, setAddLanded] = useState(0);
+
+  const handleOpenProductOptions = async (p: Product, lineIndex: number | null = null) => {
+    addsInFlight.current += 1;
+    let added = false;
+    try {
+      added = await openProductOptions(p, lineIndex);
+    } finally {
+      addsInFlight.current -= 1;
+      if (!added) queuedKey.current = null;
+      else if (queuedKey.current) setAddLanded((n) => n + 1);
     }
   };
 
@@ -832,7 +867,7 @@ export function PosOrderPage() {
   // Hold / Park Cart Order
   const handleHoldOrder = async () => {
     if (cart.length === 0) {
-      setError('Cart is empty, cannot hold order');
+      setError(t('pos.cartEmpty'));
       return;
     }
     if (!selectedBranchId) {
@@ -1063,9 +1098,11 @@ export function PosOrderPage() {
   const typedDeliveryFee = manualDeliveryFee !== null && manualDeliveryFee !== '' ? manualDeliveryFee : null;
   const deliveryFeeCharged = orderType === 'DELIVERY' ? (typedDeliveryFee ?? zoneDeliveryFee) : '0';
 
-  // A typed price belongs to the delivery it was typed for.
+  // A typed price belongs to the delivery it was typed for. What a delivery was missing
+  // (customer, address, zone) no longer applies to another order type either.
   useEffect(() => {
     if (orderType !== 'DELIVERY') setManualDeliveryFee(null);
+    setError(null);
   }, [orderType]);
 
   // Live Auto-Quote
@@ -1128,12 +1165,15 @@ export function PosOrderPage() {
       const rejected = quoteRes.consideredDiscounts?.find((d) => d.status === 'REJECTED');
 
       if (applied) {
-        const approvedBadge = appliedManualDiscount?.approvalRequestId ? ' [Manager Approved]' : '';
-        const msg = `Applied ${applied.name}${approvedBadge}: -${MoneyUtil.formatCurrency(discAmount)} ${currency}`;
+        // The server names a coupon "Coupon (CODE)".
+        const couponCode = /^Coupon \((.+)\)$/.exec(applied.name || '')?.[1];
+        const appliedName = couponCode ? t('pos.discount.couponName', { code: couponCode }) : applied.name;
+        const approvedBadge = appliedManualDiscount?.approvalRequestId ? ` (${t('pos.discount.managerApproved')})` : '';
+        const msg = `${t('pos.discount.applied', { name: appliedName })}${approvedBadge}: -${MoneyUtil.formatCurrency(discAmount)} ${currency}`;
         // The cashier's own discount shows as its rate; its name is the same on every order.
         setAppliedDiscountName(
           applied.source !== 'MANUAL'
-            ? applied.name
+            ? appliedName
             : appliedManualDiscount?.calculation_type === 'PERCENTAGE'
               ? `${Number(appliedManualDiscount.value)}%`
               : null
@@ -1144,7 +1184,7 @@ export function PosOrderPage() {
         }
       } else if (rejected) {
         setAppliedDiscountName(null);
-        const reasonMsg = formatRejectionReason(rejected.rejectionReason);
+        const reasonMsg = formatRejectionReason(t, rejected.rejectionReason);
         if (appliedCouponCode) {
           toast.error(reasonMsg);
           setAppliedCouponCode('');
@@ -1154,11 +1194,11 @@ export function PosOrderPage() {
       }
     } catch (err: any) {
       if (appliedCouponCode) {
-        showErrorToast(err, 'Failed to evaluate coupon discount');
+        showErrorToast(err, t('pos.discount.rejected.OTHER'));
         setAppliedCouponCode('');
       }
     }
-  }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType, deliveryFeeCharged, priceOf, currency]);
+  }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType, deliveryFeeCharged, priceOf, currency, t]);
 
   useEffect(() => {
     evaluateQuote();
@@ -1176,7 +1216,7 @@ export function PosOrderPage() {
       return;
     }
     if (cart.length === 0) {
-      toast.error('Cart is empty. Add items to order before applying a coupon.');
+      toast.error(t('pos.cartEmpty'));
       return;
     }
     setAppliedManualDiscount(null);
@@ -1413,7 +1453,7 @@ export function PosOrderPage() {
   // Order Placement (Pay Later / Open Checkout)
   const handlePlaceOrder = useCallback(async () => {
     if (cart.length === 0) {
-      setError('Cart is empty');
+      setError(t('pos.cartEmpty'));
       return;
     }
     if (!selectedBranchId) {
@@ -1540,6 +1580,12 @@ export function PosOrderPage() {
       }
 
       // F8: Fast Place Order / Cash Tender
+      if ((e.key === 'F8' || e.key === 'F9') && addsInFlight.current > 0) {
+        e.preventDefault();
+        queuedKey.current = e.key;
+        return;
+      }
+
       if (e.key === 'F8') {
         e.preventDefault();
         if (placedOrder) {
@@ -1585,6 +1631,15 @@ export function PosOrderPage() {
     searchQuery,
     shiftBlocked,
   ]);
+
+  // The F8 / F9 held while a tapped product was read, once its line is in the cart.
+  useEffect(() => {
+    const key = queuedKey.current;
+    if (!key || cart.length === 0 || addsInFlight.current > 0) return;
+    queuedKey.current = null;
+    if (key === 'F8') handlePlaceOrder();
+    else handleDirectTerminalPay();
+  }, [cart, addLanded, handlePlaceOrder, handleDirectTerminalPay]);
 
   // Product Filtering (Search + Category)
   const filteredProducts = products.filter((p) => {
@@ -1686,7 +1741,7 @@ export function PosOrderPage() {
                 }}
               />
               <Chip
-                label={`${filteredProducts.length} items`}
+                label={t('pos.itemsCount', { count: filteredProducts.length })}
                 size="small"
                 variant="outlined"
                 color="primary"
@@ -1965,7 +2020,7 @@ export function PosOrderPage() {
                       onClick={handleClearCart}
                       sx={{ textTransform: 'none', py: 0.25, px: 1 }}
                     >
-                      Clear
+                      {t('pos.clearCart')}
                     </Button>
                   )}
                 </Stack>
@@ -2043,7 +2098,7 @@ export function PosOrderPage() {
                     placeholder={orderType === 'DELIVERY' ? t('pos.deliveryContext.customerRequired') : t('pos.customerSearch.placeholder')}
                   />
 
-                  <Tooltip title={orderNotes ? "Edit Order / Kitchen Note" : "Add Order / Kitchen Note"}>
+                  <Tooltip title={t('pos.notes.title')}>
                     <IconButton
                       color={orderNotes ? "info" : "default"}
                       onClick={() => {
@@ -2074,7 +2129,7 @@ export function PosOrderPage() {
 
                   {orderType === 'DINE_IN' && (
                     <>
-                      <Tooltip title={tableNumber ? `Dining Table: ${tableNumber}` : 'Select Dining Table'}>
+                      <Tooltip title={tableNumber ? t('pos.table', { table: tableNumber }) : t('pos.selectTable')}>
                         <IconButton
                           color="warning"
                           onClick={(e) => {
@@ -2412,7 +2467,7 @@ export function PosOrderPage() {
                   ) : (
                   <Box sx={{ py: 6, textAlign: 'center' }}>
                     <Typography variant="body2" color="text.secondary">
-                      Cart is empty. Tap products to add items.
+                      {t('pos.cartEmptyHint')}
                     </Typography>
                   </Box>
                   )
@@ -2607,7 +2662,7 @@ export function PosOrderPage() {
                   aria-keyshortcuts="F8"
                   sx={{ fontWeight: 'bold', flexShrink: 0, px: 1.25, whiteSpace: 'nowrap' }}
                 >
-                  {activeDraftOrderId ? 'Update & Place' : 'Place Order'}
+                  {activeDraftOrderId ? t('pos.updateAndPlace') : t('pos.placeOrder')}
                 </Button>
                 {/* 1-Click Direct Terminal Pay (90% Standard in Iran) */}
                 <Button
@@ -2647,7 +2702,7 @@ export function PosOrderPage() {
       >
         <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
           <LocalOfferIcon color="primary" />
-          Discount & Coupon
+          {t('pos.discount.title')}
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           {error && (
@@ -2661,7 +2716,7 @@ export function PosOrderPage() {
               <VersionTag feature="pos.coupon" />
               <TextField
                 size="small"
-                placeholder="Coupon Code"
+                placeholder={t('pos.discount.couponCode')}
                 value={couponInput}
                 onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
                 onKeyDown={(e) => {
@@ -2712,17 +2767,17 @@ export function PosOrderPage() {
                 sx={{ flexShrink: 0 }}
               >
                 <ToggleButton value="PERCENTAGE" sx={{ fontWeight: 600, px: 1.5 }}>
-                  % Percent
+                  {t('pos.discount.percent')}
                 </ToggleButton>
                 <ToggleButton value="FIXED_AMOUNT" sx={{ fontWeight: 600, px: 1.5 }}>
-                  {currency} Fixed
+                  {t('pos.discount.fixed', { currency })}
                 </ToggleButton>
               </ToggleButtonGroup>
 
               <TextField
                 size="small"
                 type="number"
-                placeholder={manualCalcType === 'PERCENTAGE' ? 'e.g. 10 (%)' : `e.g. 50000 (${currency})`}
+                placeholder={manualCalcType === 'PERCENTAGE' ? '10 %' : `50,000 ${currency}`}
                 // An amount is typed in tomans and kept in rials; a percentage as it is.
                 value={manualCalcType === 'FIXED_AMOUNT' ? toToman(manualValue) : manualValue}
                 onChange={(e) => {
@@ -2736,7 +2791,7 @@ export function PosOrderPage() {
             {/* Quick Preset Chips */}
             <Box>
               <Typography variant="caption" color="text.secondary" sx={{ mb: 0.75, display: 'block', fontWeight: 600 }}>
-                Quick Presets:
+                {t('pos.discount.presets')}
               </Typography>
               <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', gap: 0.75 }}>
                 {manualCalcType === 'PERCENTAGE'
@@ -2783,23 +2838,23 @@ export function PosOrderPage() {
                   }}
                 >
                   {overOwnLimit
-                    ? '🔒 Requires Manager PIN authorization on Apply'
-                    : '✓ Within your authorization limit'}
+                    ? t('pos.discount.needsPin')
+                    : t('pos.discount.withinLimit')}
                 </Typography>
               )}
             </Box>
 
             {/* Reason Selector */}
             <FormControl fullWidth size="small">
-              <InputLabel>Discount Justification Reason</InputLabel>
+              <InputLabel>{t('pos.discount.reason.label')}</InputLabel>
               <Select
                 value={manualReasonCode}
-                label="Discount Justification Reason"
+                label={t('pos.discount.reason.label')}
                 onChange={(e) => setManualReasonCode(e.target.value)}
               >
-                {DISCOUNT_REASONS.map((r) => (
-                  <MenuItem key={r.code} value={r.code}>
-                    {r.label}
+                {DISCOUNT_REASONS.map((code) => (
+                  <MenuItem key={code} value={code}>
+                    {t(`pos.discount.reason.${code}`)}
                   </MenuItem>
                 ))}
               </Select>
@@ -2809,10 +2864,10 @@ export function PosOrderPage() {
         <DialogActions sx={{ p: 2.5, pt: 1 }}>
           {appliedManualDiscount && (
             <Button color="error" onClick={handleClearManualDiscount} sx={{ mr: 'auto' }}>
-              Remove Discount
+              {t('pos.discount.remove')}
             </Button>
           )}
-          <Button onClick={() => setManualDiscountModalOpen(false)}>Cancel</Button>
+          <Button onClick={() => setManualDiscountModalOpen(false)}>{t('common.cancel')}</Button>
           <Button
             variant="contained"
             color={overOwnLimit ? 'warning' : 'primary'}
@@ -2821,9 +2876,7 @@ export function PosOrderPage() {
             disabled={!manualValue || Number(manualValue) <= 0}
             sx={{ fontWeight: 'bold' }}
           >
-            {overOwnLimit
-              ? 'Authorize & Apply (PIN)'
-              : 'Apply to Cart'}
+            {overOwnLimit ? t('pos.discount.applyWithPin') : t('pos.discount.apply')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2885,15 +2938,16 @@ export function PosOrderPage() {
                       {ho.order_number}
                     </Typography>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.5 }}>
-                      <Chip label={ho.order_type} size="small" variant="outlined" sx={{ fontWeight: 600, height: 20, fontSize: '0.7rem' }} />
+                      <Chip label={HELD_TYPE_KEYS[ho.order_type] ? t(HELD_TYPE_KEYS[ho.order_type]) : ho.order_type} size="small" variant="outlined" sx={{ fontWeight: 600, height: 20, fontSize: '0.7rem' }} />
                       {ho.table_number && (
-                        <Chip label={`Table: ${ho.table_number}`} size="small" color="primary" variant="outlined" sx={{ height: 20, fontSize: '0.7rem' }} />
+                        <Chip label={t('pos.table', { table: ho.table_number })} size="small" color="primary" variant="outlined" sx={{ height: 20, fontSize: '0.7rem' }} />
                       )}
                     </Stack>
                   </Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                     {MoneyUtil.formatCurrency(
-                      MoneyUtil.greaterThan(ho.total_amount || ho.grand_total || '0', '0')
+                      heldTotals[ho.id] ||
+                      (MoneyUtil.greaterThan(ho.total_amount || ho.grand_total || '0', '0')
                         ? (ho.total_amount || ho.grand_total || '0')
                         : (ho.items || []).reduce(
                             (sum, item) => MoneyUtil.add(
@@ -2901,7 +2955,7 @@ export function PosOrderPage() {
                               item.line_total || item.subtotal || MoneyUtil.multiply(item.unit_price || '0', item.quantity || '0'),
                             ),
                             '0',
-                          )
+                          ))
                     )} {currency}
                   </Typography>
                 </Stack>
@@ -2909,7 +2963,7 @@ export function PosOrderPage() {
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5 }}>
                   <AccessTimeIcon sx={{ fontSize: 14 }} />
                   {fTime(ho.placed_at || (ho as any).created_at)}
-                  {ho.items?.length ? ` • ${ho.items.length} items` : ''}
+                  {ho.items?.length ? ` • ${t('pos.itemsCount', { count: ho.items.length })}` : ''}
                 </Typography>
 
                 <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', mt: 1 }}>
@@ -2921,7 +2975,7 @@ export function PosOrderPage() {
                     onClick={() => handleDiscardHeldOrder(ho)}
                     sx={{ textTransform: 'none' }}
                   >
-                    Discard
+                    {t('pos.held.discard')}
                   </Button>
                   <Button
                     size="small"
@@ -2931,7 +2985,7 @@ export function PosOrderPage() {
                     onClick={() => handleResumeOrder(ho)}
                     sx={{ textTransform: 'none', fontWeight: 'bold' }}
                   >
-                    {resumingOrderId === ho.id ? 'Resuming…' : 'Resume Order'}
+                    {resumingOrderId === ho.id ? t('pos.held.resuming') : t('pos.held.resume')}
                   </Button>
                 </Stack>
               </Paper>
@@ -3143,11 +3197,11 @@ export function PosOrderPage() {
       >
         <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
           <EditNoteIcon color="primary" />
-          Order & Kitchen Instructions
+          {t('pos.notes.title')}
         </DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            Add special instructions for kitchen preparation, courier delivery, or customer preferences.
+            {t('pos.notes.help')}
           </Typography>
           <TextField
             multiline
@@ -3155,8 +3209,8 @@ export function PosOrderPage() {
             fullWidth
             size="small"
             autoFocus
-            label="Special Instructions / Notes"
-            placeholder="e.g. Extra napkins, no onions, allergies, gate code 1234..."
+            label={t('pos.notes.label')}
+            placeholder={t('pos.notes.placeholder')}
             value={tempNotesInput}
             onChange={(e) => setTempNotesInput(e.target.value)}
             sx={{ mb: 2 }}
@@ -3202,10 +3256,10 @@ export function PosOrderPage() {
               }}
               sx={{ mr: 'auto' }}
             >
-              Clear Note
+              {t('pos.notes.clear')}
             </Button>
           )}
-          <Button onClick={() => setNotesModalOpen(false)}>Cancel</Button>
+          <Button onClick={() => setNotesModalOpen(false)}>{t('common.cancel')}</Button>
           <Button
             variant="contained"
             onClick={() => {
@@ -3214,7 +3268,7 @@ export function PosOrderPage() {
             }}
             sx={{ fontWeight: 'bold' }}
           >
-            Save Note
+            {t('pos.notes.save')}
           </Button>
         </DialogActions>
       </Dialog>

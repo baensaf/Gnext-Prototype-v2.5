@@ -1943,7 +1943,8 @@ export function OrdersWorkflowPage() {
                               sx={item.state === 'VOID' ? { opacity: 0.5, '& td': { textDecoration: 'line-through' } } : undefined}
                             >
                               <TableCell>
-                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                {/* A div: the chip is one, and a div may not sit inside a p. */}
+                                <Typography component="div" variant="body2" sx={{ fontWeight: 600 }}>
                                   {item.product_name}
                                   {item.state === 'VOID' && (
                                     <Chip label={t('orders.drawer.voided', 'Voided')} size="small" color="error" variant="outlined" sx={{ ml: 1, height: 18, fontSize: '0.65rem' }} />

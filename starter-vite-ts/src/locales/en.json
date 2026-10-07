@@ -224,7 +224,7 @@
     },
     "title": "POS Register",
     "activeCart": "Active Cart",
-    "itemsCount": "items",
+    "itemsCount": "{{count}} items",
     "addToCart": "Add to Cart",
     "placeOrder": "Place Order",
     "checkout": "Order Settlement & Checkout",
@@ -363,6 +363,56 @@
       "subtitle": "Resume, change or discard an order put on hold",
       "discarded": "Held order discarded",
       "resumeFailed": "Could not bring the held order back"
+    },
+    "table": "Table {{table}}",
+    "selectTable": "Choose a table",
+    "updateAndPlace": "Update & place",
+    "clearCart": "Clear",
+    "cartEmptyHint": "The cart is empty. Tap a product to add it.",
+    "discount": {
+      "title": "Discount & coupon",
+      "couponCode": "Coupon code",
+      "couponName": "Coupon {{code}}",
+      "applied": "{{name}} applied",
+      "managerApproved": "approved by a manager",
+      "percent": "% Percent",
+      "fixed": "{{currency}} Amount",
+      "presets": "Quick presets:",
+      "needsPin": "Needs a manager PIN when applied",
+      "withinLimit": "Within your limit",
+      "reason": {
+        "label": "Reason for the discount",
+        "CUSTOMER_SATISFACTION": "Customer satisfaction / courtesy",
+        "STAFF_DISCOUNT": "Staff discount",
+        "DAMAGED_ITEM": "Minor defect / packaging issue",
+        "VIP_COURTESY": "VIP club member"
+      },
+      "remove": "Remove discount",
+      "apply": "Apply",
+      "applyWithPin": "Apply with manager PIN",
+      "rejected": {
+        "INVALID_OR_INACTIVE_COUPON": "The coupon code is invalid or inactive.",
+        "COUPON_NOT_YET_ACTIVE": "The coupon is not active yet.",
+        "COUPON_EXPIRED": "The coupon has expired.",
+        "COUPON_MAX_USES_REACHED": "The coupon has been used as many times as it allows.",
+        "COUPON_ALREADY_REDEEMED_BY_CUSTOMER": "This customer has already used the coupon.",
+        "COUPON_MINIMUM_NOT_MET": "The order is below the coupon's minimum amount.",
+        "NEVER_DISCOUNT": "The items in the cart are excluded from discounts.",
+        "OTHER": "The discount was not applied."
+      }
+    },
+    "held": {
+      "discard": "Discard",
+      "resume": "Resume",
+      "resuming": "Resuming…"
+    },
+    "notes": {
+      "title": "Order & kitchen note",
+      "help": "Instructions for the kitchen, the courier, or what the customer asked for.",
+      "label": "Note",
+      "placeholder": "e.g. no onions, extra napkins, doorbell code…",
+      "clear": "Clear note",
+      "save": "Save note"
     }
   },
   "kiosk": {
@@ -1127,7 +1177,11 @@
     "phone": "Phone",
     "vehicle": "Vehicle",
     "addCourier": "Add Courier",
-    "initiateSettlement": "Initiate Settlement"
+    "initiateSettlement": "Initiate Settlement",
+    "settlement": {
+      "courierShort": "Courier {{courier}} short on {{settlement}}",
+      "courierOver": "Courier {{courier}} over on {{settlement}}"
+    }
   },
   "settlements": {
     "title": "Courier Settlements",
@@ -1404,7 +1458,8 @@
       "dayHelp": "Every drawer at the branch is counted. Closing the day fixes its sales for",
       "skipDay": "Not now",
       "dayClosedDone": "Business day closed.",
-      "dayFailed": "Could not close the business day"
+      "dayFailed": "Could not close the business day",
+      "recountNeedsPin": "This drawer was already counted at {{amount}} {{currency}}. A recount needs a manager PIN."
     },
     "summary": {
       "open": "Shift summary",
@@ -1594,7 +1649,34 @@
     "pinNotice": "Money going back out needs a manager PIN. You will be asked for one before the refund is created.",
     "approvalDetails": "Refund against a paid order",
     "noPaidOrders": "No paid order matches",
-    "orderSearch": "Order no., customer or phone"
+    "orderSearch": "Order no., customer or phone",
+    "createFailed": "Could not create the refund.",
+    "loadFailed": "Could not load the refunds.",
+    "detailFailed": "Could not open the refund.",
+    "col": {
+      "code": "Refund no.",
+      "type": "Type",
+      "status": "Status",
+      "time": "Time"
+    },
+    "empty": "No refunds yet.",
+    "type": {
+      "FULL": "Full",
+      "PARTIAL": "Partial"
+    },
+    "status": {
+      "APPROVED": "Approved",
+      "PENDING": "Pending",
+      "REJECTED": "Rejected",
+      "COMPLETED": "Completed",
+      "SUCCEEDED": "Paid back",
+      "PROCESSING": "In progress",
+      "FAILED": "Failed"
+    },
+    "detailTitle": "Refund {{code}}",
+    "allocations": "Paid back to",
+    "notCompleted": "Order {{number}} is still open. Complete it in the orders list first: only a completed order can be refunded.",
+    "paidCancellation": "Paid order cancelled"
   },
   "customers": {
     "title": "Customer Directory",
@@ -3408,10 +3490,12 @@
     "title": "Manager PIN Authorization",
     "warningText": "This action exceeds cashier operational limits and requires supervisor approval.",
     "pinLabel": "Manager PIN",
-    "pinPlaceholder": "Enter 4-digit PIN (e.g. 1234)",
+    "pinPlaceholder": "Manager PIN",
     "authorize": "Authorize",
     "verifying": "Verifying...",
-    "reasonPlaceholder": "Reason for supervisor authorization"
+    "reasonPlaceholder": "Reason for supervisor authorization",
+    "authorized": "Manager authorization granted",
+    "invalidPin": "Wrong manager PIN. {{count}} tries left."
   },
   "rollup": {
     "branch": "Branch",

@@ -15,9 +15,11 @@ import {
   DialogActions,
 } from '@mui/material';
 
+import { serverText } from 'src/utils/server-text';
+
 import { approvalApi } from 'src/api/approvalApi';
 
-import { toast, showErrorToast } from 'src/components/snackbar';
+import { toast } from 'src/components/snackbar';
 
 interface ApprovalModalProps {
   open: boolean;
@@ -71,9 +73,12 @@ export function ApprovalModal({
       setPin('');
       onClose();
     } catch (err: any) {
-      const errorMsg = err.response?.data?.message || err.detail || err.message || t('auth.invalidCredentials', 'Invalid Manager PIN');
+      const errorMsg = serverText(
+        err.response?.data?.message || err.detail || err.message || t('auth.invalidCredentials', 'Invalid Manager PIN'),
+        t
+      );
       setError(errorMsg);
-      showErrorToast(err, errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }

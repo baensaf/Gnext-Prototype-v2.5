@@ -32,10 +32,12 @@ import {
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
+import { serverText } from 'src/utils/server-text';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { orderApi } from 'src/api/orderApi';
 import { refundApi } from 'src/api/refundApi';
+import { settingsApi } from 'src/api/settingsApi';
 import { useAuthStore } from 'src/store/useAuthStore';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 
@@ -62,12 +64,17 @@ export function RefundsPage() {
   const [pinOpen, setPinOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ orderId: '', amount: '', reason: '' });
+  // The server refunds a completed order only; saying so before the PIN saves the manager a trip.
+  const pickedOrder = orderOptions.find((order) => order.id === form.orderId);
+  const pickedStillOpen = !!pickedOrder && pickedOrder.state !== 'COMPLETED';
 
   const [refunds, setRefunds] = useState<RefundRequest[]>([]);
   const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [selectedRefund, setSelectedRefund] = useState<any | null>(null);
+  // Names for the methods a refund went back to; the refund itself carries only their ids.
+  const [methodNames, setMethodNames] = useState<Record<string, string>>({});
   const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   const loadData = async () => {
@@ -82,7 +89,7 @@ export function RefundsPage() {
       setOrders(orderList);
       setError(null);
     } catch (err: any) {
-      setError(err.detail || 'Failed to load refunds');
+      setError(err.detail || t('refunds.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -100,7 +107,15 @@ export function RefundsPage() {
       setSearchingOrders(true);
       try {
         const res = await orderApi.listOrders({ branchId: branchId || undefined, q: orderQuery, paid: true, limit: 20 });
-        setOrderOptions(res.data);
+        // A cancelled order, or one already refunded in full, has nothing left to give back.
+        setOrderOptions(
+          res.data.filter(
+            (order) =>
+              order.state !== 'CANCELLED' &&
+              order.state !== 'REJECTED' &&
+              MoneyUtil.greaterThan(order.paid_total || order.paid_amount || '0', order.refunded_total || '0')
+          )
+        );
       } catch {
         setOrderOptions([]);
       } finally {
@@ -126,7 +141,7 @@ export function RefundsPage() {
       await loadData();
     } catch (err: any) {
       setError(
-        err?.response?.data?.detail || err.detail || err.message || 'Failed to create the refund'
+        err?.response?.data?.detail || err.detail || err.message || t('refunds.createFailed')
       );
     } finally {
       setSubmitting(false);
@@ -143,13 +158,23 @@ export function RefundsPage() {
     }
   };
 
+  // The API does not say whether a refund took back the whole order: it did when it matches the total.
+  const typeOf = (r: { order_id: string; total_refund_amount?: string }) => {
+    const order = orders.find((o) => o.id === r.order_id);
+    return order && MoneyUtil.equals(r.total_refund_amount || '0', order.total_amount || '0') ? 'FULL' : 'PARTIAL';
+  };
+
   const handleViewDetail = async (id: string) => {
     try {
       const data = await refundApi.getRefundById(id);
       setSelectedRefund(data);
+      if (Object.keys(methodNames).length === 0) {
+        const methods = await settingsApi.getPaymentMethods().catch(() => []);
+        setMethodNames(Object.fromEntries(methods.map((m) => [m.id, m.name])));
+      }
       setDetailModalOpen(true);
     } catch {
-      setError('Failed to view refund details');
+      setError(t('refunds.detailFailed'));
     }
   };
 
@@ -158,7 +183,7 @@ export function RefundsPage() {
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Refunds & Paid Order Cancellations
+            {t('refunds.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {t('refunds.subtitle', 'Full and partial refunds of paid orders, released by a manager PIN.')}
@@ -166,7 +191,7 @@ export function RefundsPage() {
         </Box>
         <Stack direction="row" spacing={1}>
           <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
-            Refresh
+            {t('common.refresh', 'Refresh')}
           </Button>
           <Button
             variant="contained"
@@ -188,14 +213,14 @@ export function RefundsPage() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Refund Code</TableCell>
-              <TableCell>Order Reference</TableCell>
-              <TableCell>Refund Type</TableCell>
-              <TableCell>Refund Amount</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Reason / Note</TableCell>
-              <TableCell>Timestamp</TableCell>
-              <TableCell align="right">Actions</TableCell>
+              <TableCell>{t('refunds.col.code')}</TableCell>
+              <TableCell>{t('refunds.order')}</TableCell>
+              <TableCell>{t('refunds.col.type')}</TableCell>
+              <TableCell>{t('refunds.amount')}</TableCell>
+              <TableCell>{t('refunds.col.status')}</TableCell>
+              <TableCell>{t('refunds.reason')}</TableCell>
+              <TableCell>{t('refunds.col.time')}</TableCell>
+              <TableCell align="right" />
             </TableRow>
           </TableHead>
           <TableBody>
@@ -203,7 +228,7 @@ export function RefundsPage() {
               <TableRow>
                 <TableCell colSpan={8} align="center">
                   <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
-                    No refund requests or paid cancellations recorded yet.
+                    {t('refunds.empty')}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -221,8 +246,8 @@ export function RefundsPage() {
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={r.refund_type}
-                      color={r.refund_type === 'FULL' ? 'error' : r.refund_type === 'ITEM_LEVEL' ? 'info' : 'warning'}
+                      label={t(`refunds.type.${typeOf(r)}`)}
+                      color={typeOf(r) === 'FULL' ? 'error' : 'warning'}
                       size="small"
                     />
                   </TableCell>
@@ -230,9 +255,9 @@ export function RefundsPage() {
                     -{MoneyUtil.formatCurrency(r.total_refund_amount)} {currency}
                   </TableCell>
                   <TableCell>
-                    <Chip label={r.status} color={r.status === 'APPROVED' ? 'success' : 'default'} size="small" />
+                    <Chip label={t(`refunds.status.${r.status}`, r.status)} color={r.status === 'APPROVED' ? 'success' : 'default'} size="small" />
                   </TableCell>
-                  <TableCell>{r.note || '-'}</TableCell>
+                  <TableCell>{serverText(r.note, t) || '-'}</TableCell>
                   <TableCell>{fDateTime(r.created_at)}</TableCell>
                   <TableCell align="right">
                     <IconButton color="primary" onClick={() => handleViewDetail(r.id)}>
@@ -248,30 +273,30 @@ export function RefundsPage() {
 
       {/* Detail Modal */}
       <Dialog open={detailModalOpen} onClose={() => setDetailModalOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>Refund Request Details ({selectedRefund?.code})</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>{t('refunds.detailTitle', { code: selectedRefund?.code })}</DialogTitle>
         <DialogContent>
           {selectedRefund && (
             <Stack spacing={2} sx={{ pt: 1 }}>
               <Typography variant="body2">
-                <strong>Refund Type:</strong> {selectedRefund.refund_type}
+                <strong>{t('refunds.col.type')}:</strong> {t(`refunds.type.${typeOf(selectedRefund)}`)}
               </Typography>
               <Typography variant="body2">
-                <strong>Total Amount Refunded:</strong> {MoneyUtil.formatCurrency(selectedRefund.total_refund_amount)} {currency}
+                <strong>{t('refunds.amount')}:</strong> {MoneyUtil.formatCurrency(selectedRefund.total_refund_amount)} {currency}
               </Typography>
               <Typography variant="body2">
-                <strong>Note / Reason:</strong> {selectedRefund.note || 'None'}
+                <strong>{t('refunds.reason')}:</strong> {serverText(selectedRefund.note, t) || '-'}
               </Typography>
 
               <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mt: 2 }}>
-                Payment Method Allocations Reversed:
+                {t('refunds.allocations')}
               </Typography>
               {selectedRefund.allocations?.map((a: any) => (
                 <Paper key={a.id} variant="outlined" sx={{ p: 1.5 }}>
                   <Typography variant="body2">
-                    Method ID: <code>{a.payment_method_id}</code>
+                    {methodNames[a.payment_method_id] || a.payment_method_id}
                   </Typography>
                   <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold' }}>
-                    Amount Reversed: -{MoneyUtil.formatCurrency(a.amount_refunded)} {currency}
+                    -{MoneyUtil.formatCurrency(a.amount_refunded)} {currency}
                   </Typography>
                 </Paper>
               ))}
@@ -279,7 +304,7 @@ export function RefundsPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDetailModalOpen(false)}>Close</Button>
+          <Button onClick={() => setDetailModalOpen(false)}>{t('common.close', 'Close')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -310,6 +335,12 @@ export function RefundsPage() {
               )}
             />
 
+            {pickedStillOpen && (
+              <Alert severity="warning">
+                {t('refunds.notCompleted', { number: pickedOrder?.call_number || pickedOrder?.order_number })}
+              </Alert>
+            )}
+
             <TextField
               label={t('refunds.amount', 'Amount')}
               value={toToman(form.amount)}
@@ -339,12 +370,12 @@ export function RefundsPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setNewOpen(false)} disabled={submitting}>
-            Cancel
+            {t('common.cancel', 'Cancel')}
           </Button>
           <Button
             variant="contained"
             onClick={handleSubmitClick}
-            disabled={submitting || !form.orderId || !form.reason.trim()}
+            disabled={submitting || !form.orderId || !form.reason.trim() || pickedStillOpen}
           >
             {canApprove ? t('common.save', 'Save') : t('refunds.continue', 'Continue')}
           </Button>

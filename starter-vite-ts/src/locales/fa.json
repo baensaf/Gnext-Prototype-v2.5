@@ -224,7 +224,7 @@
     },
     "title": "صندوق فروش POS",
     "activeCart": "سبد خرید فعال",
-    "itemsCount": "قلم",
+    "itemsCount": "{{count}} قلم",
     "addToCart": "افزودن به سبد",
     "placeOrder": "ثبت سفارش",
     "checkout": "تسویه و پرداخت سفارش",
@@ -363,6 +363,56 @@
       "subtitle": "ادامه، ویرایش یا حذف سفارش‌های نگه‌داشته",
       "discarded": "سفارش نگه‌داشته حذف شد",
       "resumeFailed": "سفارش نگه‌داشته باز نشد"
+    },
+    "table": "میز {{table}}",
+    "selectTable": "انتخاب میز",
+    "updateAndPlace": "به‌روزرسانی و ثبت",
+    "clearCart": "پاک کردن",
+    "cartEmptyHint": "سبد خالی است. برای افزودن، روی یک کالا بزنید.",
+    "discount": {
+      "title": "تخفیف و کوپن",
+      "couponCode": "کد کوپن",
+      "couponName": "کوپن {{code}}",
+      "applied": "{{name}} اعمال شد",
+      "managerApproved": "با تایید مدیر",
+      "percent": "٪ درصدی",
+      "fixed": "مبلغ ({{currency}})",
+      "presets": "مقادیر آماده:",
+      "needsPin": "هنگام اعمال، رمز مدیر لازم است",
+      "withinLimit": "در محدوده مجاز شما",
+      "reason": {
+        "label": "دلیل تخفیف",
+        "CUSTOMER_SATISFACTION": "رضایت مشتری / مهمان‌نوازی",
+        "STAFF_DISCOUNT": "تخفیف کارکنان",
+        "DAMAGED_ITEM": "ایراد جزئی / مشکل بسته‌بندی",
+        "VIP_COURTESY": "عضو ویژه باشگاه"
+      },
+      "remove": "حذف تخفیف",
+      "apply": "اعمال",
+      "applyWithPin": "اعمال با رمز مدیر",
+      "rejected": {
+        "INVALID_OR_INACTIVE_COUPON": "کد کوپن نامعتبر یا غیرفعال است.",
+        "COUPON_NOT_YET_ACTIVE": "کوپن هنوز فعال نشده است.",
+        "COUPON_EXPIRED": "کوپن منقضی شده است.",
+        "COUPON_MAX_USES_REACHED": "سقف استفاده از این کوپن پر شده است.",
+        "COUPON_ALREADY_REDEEMED_BY_CUSTOMER": "این مشتری قبلاً از این کوپن استفاده کرده است.",
+        "COUPON_MINIMUM_NOT_MET": "مبلغ سفارش کمتر از حداقل لازم برای این کوپن است.",
+        "NEVER_DISCOUNT": "اقلام سبد مشمول تخفیف نیستند.",
+        "OTHER": "تخفیف اعمال نشد."
+      }
+    },
+    "held": {
+      "discard": "حذف",
+      "resume": "ادامه سفارش",
+      "resuming": "در حال بازکردن…"
+    },
+    "notes": {
+      "title": "یادداشت سفارش و آشپزخانه",
+      "help": "توضیح برای آشپزخانه، پیک یا درخواست مشتری.",
+      "label": "یادداشت",
+      "placeholder": "مثلاً بدون پیاز، دستمال بیشتر، کد زنگ…",
+      "clear": "پاک کردن یادداشت",
+      "save": "ذخیره یادداشت"
     }
   },
   "kiosk": {
@@ -1127,7 +1177,11 @@
     "phone": "تلفن",
     "vehicle": "وسیله نقلیه",
     "addCourier": "سفیر جدید",
-    "initiateSettlement": "ایجاد تسویه‌حساب"
+    "initiateSettlement": "ایجاد تسویه‌حساب",
+    "settlement": {
+      "courierShort": "کسری پیک {{courier}} در تسویه {{settlement}}",
+      "courierOver": "اضافه پیک {{courier}} در تسویه {{settlement}}"
+    }
   },
   "settlements": {
     "title": "تسویه‌حساب سفیران",
@@ -1404,7 +1458,8 @@
       "dayHelp": "همه کشوهای شعبه شمرده شده‌اند. بستن روز، فروش شعبه را قطعی می‌کند برای",
       "skipDay": "فعلاً نه",
       "dayClosedDone": "روز کاری بسته شد.",
-      "dayFailed": "بستن روز کاری ممکن نشد"
+      "dayFailed": "بستن روز کاری ممکن نشد",
+      "recountNeedsPin": "این صندوق قبلاً {{amount}} {{currency}} شمرده شده است. شمارش دوباره به رمز مدیر نیاز دارد."
     },
     "summary": {
       "open": "خلاصه شیفت",
@@ -1594,7 +1649,34 @@
     "pinNotice": "خروج پول از صندوق به پین مدیر نیاز دارد. پیش از ساخت بازپرداخت از شما پرسیده می‌شود.",
     "approvalDetails": "بازپرداخت روی سفارش پرداخت‌شده",
     "noPaidOrders": "سفارش پرداخت‌شده‌ای با این مشخصات نیست",
-    "orderSearch": "شماره سفارش، مشتری یا تلفن"
+    "orderSearch": "شماره سفارش، مشتری یا تلفن",
+    "createFailed": "بازپرداخت ثبت نشد.",
+    "loadFailed": "بارگیری مرجوعی‌ها انجام نشد.",
+    "detailFailed": "جزئیات بازپرداخت باز نشد.",
+    "col": {
+      "code": "شماره بازپرداخت",
+      "type": "نوع",
+      "status": "وضعیت",
+      "time": "زمان"
+    },
+    "empty": "هنوز بازپرداختی ثبت نشده است.",
+    "type": {
+      "FULL": "کامل",
+      "PARTIAL": "بخشی"
+    },
+    "status": {
+      "APPROVED": "تایید شده",
+      "PENDING": "در انتظار",
+      "REJECTED": "رد شده",
+      "COMPLETED": "انجام شده",
+      "SUCCEEDED": "پرداخت شد",
+      "PROCESSING": "در حال انجام",
+      "FAILED": "ناموفق"
+    },
+    "detailTitle": "بازپرداخت {{code}}",
+    "allocations": "بازگشت به",
+    "notCompleted": "سفارش {{number}} هنوز باز است. ابتدا آن را در فهرست سفارش‌ها تکمیل کنید؛ فقط سفارش تکمیل‌شده بازپرداخت می‌شود.",
+    "paidCancellation": "لغو سفارش پرداخت‌شده"
   },
   "customers": {
     "title": "دفترچه مشتریان",
@@ -3408,10 +3490,12 @@
     "title": "تاییدیه و رمز سرپرست",
     "warningText": "این عملیات فراتر از سقف اختیارات صندوق‌دار بوده و نیازمند تایید سرپرست است.",
     "pinLabel": "رمز عبور مدیر",
-    "pinPlaceholder": "رمز ۴ رقمی را وارد کنید (مانند ۱۲۳۴)",
+    "pinPlaceholder": "رمز مدیر",
     "authorize": "تایید و صدور مجوز",
     "verifying": "در حال اعتبارسنجی...",
-    "reasonPlaceholder": "علت صدور مجوز سرپرست"
+    "reasonPlaceholder": "علت صدور مجوز سرپرست",
+    "authorized": "تایید مدیر انجام شد",
+    "invalidPin": "رمز مدیر اشتباه است. {{count}} بار دیگر می‌توانید امتحان کنید."
   },
   "rollup": {
     "branch": "شعبه",
