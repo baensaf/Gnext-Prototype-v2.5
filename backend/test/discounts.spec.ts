@@ -412,5 +412,23 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
         expect.objectContaining({ coupon_id: 'cp-1', customer_id: 'cust-1', order_id: 'ord-1', amount: '10000.0000' }),
       );
     });
+
+    it('gives a cancelled order its coupon use back, once', async () => {
+      const row = { id: 'cp-1', code: 'ONCE', max_uses: 1, uses_count: 1 };
+      const usage: any = { id: 'u-1', coupon_id: 'cp-1', order_id: 'ord-1', reversed_at: null };
+      const { em } = emFor(row);
+      em.find = jest.fn().mockResolvedValue([usage]);
+      usageRepo.manager = { transaction: (work: any) => work(em) };
+
+      await evaluationService.releaseUsage('t-1', 'ord-1');
+
+      expect(row.uses_count).toBe(0);
+      expect(usage.reversed_at).toBeInstanceOf(Date);
+      // Only uses not yet given back are read, so a second cancel finds nothing to release.
+      expect(em.find).toHaveBeenCalledWith(
+        DiscountUsage,
+        expect.objectContaining({ where: expect.objectContaining({ order_id: 'ord-1', reversed_at: expect.anything() }) }),
+      );
+    });
   });
 });

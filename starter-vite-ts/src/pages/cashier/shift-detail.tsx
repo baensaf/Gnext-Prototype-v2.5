@@ -34,6 +34,7 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
+import { serverText } from 'src/utils/server-text';
 import { useCurrencyLabel } from 'src/utils/currency';
 import { fDate , fTime, fDateTime } from 'src/utils/format-time';
 
@@ -265,7 +266,7 @@ export function ShiftDetailPage() {
                       >
                         {MoneyUtil.formatCurrency(m.amount)}
                       </TableCell>
-                      <TableCell>{m.reason_text || m.reference || '—'}</TableCell>
+                      <TableCell>{serverText(m.reason_text, t) || m.reference || '—'}</TableCell>
                     </TableRow>
                   ))}
                   {statement.movements.length === 0 && (

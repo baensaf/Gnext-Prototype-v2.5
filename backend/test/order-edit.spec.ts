@@ -194,7 +194,7 @@ describe('Order edit command (spec 7.9)', () => {
         { provide: getRepositoryToken(ProductVariant), useValue: { findOne: jest.fn(), count: jest.fn().mockResolvedValue(0) } },
         { provide: getRepositoryToken(OptionItem), useValue: { findOne: jest.fn() } },
         basePriceLists(),
-        { provide: DiscountEvaluationService, useValue: {} },
+        { provide: DiscountEvaluationService, useValue: { releaseUsage: jest.fn() } },
         { provide: AuditWriter, useValue: { write: jest.fn(), writeInTransaction: jest.fn() } },
         { provide: OutboxWriter, useValue: { enqueueInTransaction: jest.fn() } },
         { provide: ApprovalService, useValue: approvalService },

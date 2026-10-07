@@ -94,6 +94,9 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   // What the order's customer holds as club credit, in rials. Below zero is money owed, not credit.
   const [clubCredit, setClubCredit] = useState('0');
   const cashInput = useRef<HTMLInputElement>(null);
+  // Cash was handed over beyond the bill on this order, and the screen waits for the cashier.
+  const changeGiven = useRef(false);
+  const finishLater = useRef(false);
 
   const cashMethod = paymentMethods.find((m) => m.kind === 'CASH');
   const cardMethod = paymentMethods.find((m) => CARD_KINDS.includes(m.kind));
@@ -153,6 +156,8 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   useEffect(() => {
     setChangeDue(null);
     setFields(EMPTY);
+    changeGiven.current = false;
+    finishLater.current = false;
   }, [orderId]);
 
   // The cashier always starts typing in Cash, and comes back to it after each payment.
@@ -173,7 +178,9 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
    * Typing in Cash or Club credit leaves Card with the rest, until the cashier types in Card.
    * Club credit stops at what the customer holds: it never goes below zero.
    */
-  const setField = (name: 'cash' | 'credit' | 'card', text: string) =>
+  const setField = (name: 'cash' | 'credit' | 'card', text: string) => {
+    // What was wrong with the last amounts is about those amounts.
+    setError(null);
     setFields((prev) => {
       let value = digitsOnly(text);
       if (name === 'credit') {
@@ -186,6 +193,12 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       const rest = positive(MoneyUtil.subtract(MoneyUtil.subtract(due, rialsOf(next.cash)), rialsOf(next.credit)));
       return { ...next, card: MoneyUtil.isZero(rest) ? '' : toToman(rest) };
     });
+  };
+
+  // Only cash can be handed over beyond the bill; credit or card past it is a typing slip.
+  const overByNonCash =
+    MoneyUtil.greaterThan(MoneyUtil.add(credit, card), due) ||
+    (MoneyUtil.greaterThan(card, '0') && MoneyUtil.greaterThan('0', remaining));
 
   /** Takes one part. Returns the order as it stands after it, or null when it did not go through. */
   const pay = async (
@@ -216,6 +229,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       if (over) {
         const change = MoneyUtil.subtract(amount, left);
         setChangeDue(change);
+        changeGiven.current = true;
         // Screens that close this dialog once the order is settled would hide the alert.
         toast.warning(`${t('pos.changeDue', 'Change to give back')}: ${MoneyUtil.formatCurrency(change)} ${currency}`, {
           duration: 15000,
@@ -243,7 +257,18 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     setPayments(paid);
     setClubCredit(balance);
     setFields(fieldsFor(latest, creditMethod ? balance : '0', paid));
-    if (MoneyUtil.isZero(latest.due_amount) && onPaymentComplete) onPaymentComplete();
+    if (!MoneyUtil.isZero(latest.due_amount) || !onPaymentComplete) return;
+    // A screen that closes the form once the order is paid would hide the change to hand back;
+    // it closes when the cashier does.
+    if (changeGiven.current) finishLater.current = true;
+    else onPaymentComplete();
+  };
+
+  const close = () => {
+    if (finishLater.current && onPaymentComplete) {
+      finishLater.current = false;
+      onPaymentComplete();
+    } else onClose();
   };
 
   /** Enter: club credit and cash first, as they are instant, then the card on the terminal. */
@@ -386,7 +411,9 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       <TextField
         fullWidth
         size="small"
-        disabled={locked || opts.disabled}
+        // Greyed out but still in the Tab order, so Tab lands in the same place on every order.
+        disabled={locked}
+        sx={opts.disabled ? { '& .MuiInputBase-root': { bgcolor: 'action.disabledBackground' } } : undefined}
         inputRef={opts.inputRef}
         value={fields[name] ? MoneyUtil.formatCurrency(fromToman(fields[name])) : ''}
         placeholder="0"
@@ -395,6 +422,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         slotProps={{
           htmlInput: {
             inputMode: 'numeric',
+            readOnly: !!opts.disabled,
             dir: 'ltr',
             'data-testid': `pay-${name}`,
             style: { textAlign: 'right', fontSize: '1.15rem', fontWeight: 600 },
@@ -405,7 +433,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   );
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+    <Dialog open={open} onClose={close} maxWidth="xs" fullWidth>
       <DialogTitle sx={{ pb: 1 }}>
         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', gap: 2 }}>
           <Typography component="span" variant="subtitle1" sx={{ fontWeight: 700 }}>
@@ -435,7 +463,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
               // Enter in any field pays what is typed; on a settled order it closes the form.
               if (e.key !== 'Enter' || (e.target as HTMLElement).tagName !== 'INPUT') return;
               e.preventDefault();
-              if (isFullyPaid) onClose();
+              if (isFullyPaid) close();
               else submit();
             }}
           >
@@ -457,6 +485,10 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
               {isFullyPaid ? (
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'success.main' }}>
                   {t('pos.pay.settled')}
+                </Typography>
+              ) : overByNonCash ? (
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'error.main' }}>
+                  {t('pos.pay.overDue')}
                 </Typography>
               ) : MoneyUtil.greaterThan('0', remaining) ? (
                 <>
@@ -572,7 +604,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
             {t('pos.printReceipt', 'Print Receipt')}
           </Button>
         )}
-        <Button color="inherit" onClick={onClose}>
+        <Button color="inherit" onClick={close}>
           {t('common.close', 'Close')}
         </Button>
         {!isFullyPaid && (

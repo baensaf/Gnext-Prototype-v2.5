@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, ForbiddenException, ConflictException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, EntityManager, In } from 'typeorm';
+import { Repository, EntityManager, In, IsNull } from 'typeorm';
 import { Coupon } from '../../entities/Coupon.entity';
 import { DiscountUsage } from '../../entities/DiscountUsage.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
@@ -381,7 +381,7 @@ export class DiscountEvaluationService {
       } else if (
         orderDraft.customerId &&
         (await this.usageRepo.count({
-          where: { tenant_id: tenantId, coupon_id: coupon.id, customer_id: orderDraft.customerId },
+          where: { tenant_id: tenantId, coupon_id: coupon.id, customer_id: orderDraft.customerId, reversed_at: IsNull() },
         })) >= 1
       ) {
         reject('COUPON_ALREADY_REDEEMED_BY_CUSTOMER', `Coupon ${normalizedCode} already used by this customer`);
@@ -599,5 +599,30 @@ export class DiscountEvaluationService {
       used_at: new Date(),
     });
     await entityManager.save(usage);
+  }
+
+  /**
+   * Gives back the coupon uses a cancelled order took. A code limited to one use per customer
+   * would otherwise stay spent on a sale that never happened.
+   */
+  async releaseUsage(tenantId: string, orderId: string): Promise<void> {
+    await this.usageRepo.manager.transaction(async (em) => {
+      const usages = await em.find(DiscountUsage, {
+        where: { tenant_id: tenantId, order_id: orderId, reversed_at: IsNull() },
+      });
+      for (const usage of usages) {
+        const coupon = await em
+          .createQueryBuilder(Coupon, 'cp')
+          .setLock('pessimistic_write')
+          .where('cp.id = :couponId AND cp.tenant_id = :tenantId', { couponId: usage.coupon_id, tenantId })
+          .getOne();
+        if (coupon && coupon.uses_count > 0) {
+          coupon.uses_count -= 1;
+          await em.save(coupon);
+        }
+        usage.reversed_at = new Date();
+        await em.save(usage);
+      }
+    });
   }
 }

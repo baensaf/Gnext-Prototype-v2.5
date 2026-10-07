@@ -2385,6 +2385,9 @@ export class OrderService {
           correlationId,
         );
 
+    // The sale did not happen, so any coupon it used can be used again.
+    await this.discountEngine.releaseUsage(tenantId, id);
+
     await this.stopKitchenAfterCancel(
       tenantId,
       id,

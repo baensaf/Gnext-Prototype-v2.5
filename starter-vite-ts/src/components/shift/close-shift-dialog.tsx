@@ -23,6 +23,7 @@ import {
 
 import { fDate } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
+import { serverText } from 'src/utils/server-text';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { shiftApi } from 'src/api/shiftApi';
@@ -88,6 +89,8 @@ export function CloseShiftDialog({ open, onClose, shiftId, shiftNumber, onClosed
   const [reason, setReason] = useState('');
   const [pin, setPin] = useState('');
   const [openOrdersPin, setOpenOrdersPin] = useState('');
+  // A blind count already on record: counting again needs a manager's PIN (rials).
+  const [recordedCount, setRecordedCount] = useState<string | null>(null);
   const [signoff, setSignoff] = useState<ShiftCountSignoff | null>(null);
   const [result, setResult] = useState<ShiftStatement | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -117,6 +120,7 @@ export function CloseShiftDialog({ open, onClose, shiftId, shiftNumber, onClosed
     setReason('');
     setPin('');
     setOpenOrdersPin('');
+    setRecordedCount(null);
     setSignoff(null);
     setResult(null);
     setError(null);
@@ -172,8 +176,11 @@ export function CloseShiftDialog({ open, onClose, shiftId, shiftNumber, onClosed
       if (err.code === 'SHIFT_COUNT_NEEDS_SIGNOFF' && err.context) {
         setSignoff(err.context as ShiftCountSignoff);
         setStep('signoff');
+      } else if (err.code === 'BLIND_COUNT_RECORDED') {
+        // The count step asks for the PIN beside the new count, and says why.
+        setRecordedCount(String(err.context?.recordedCount ?? '0'));
       } else {
-        setError(errorText(err, t('shift.close.error', 'Could not close the shift')));
+        setError(serverText(errorText(err, t('shift.close.error', 'Could not close the shift')), t));
         // An order may have been rung up, or a payment begun, since the list was read.
         if (err.code === 'SHIFT_HAS_OPEN_ORDERS' || err.code === 'SHIFT_HAS_PENDING_CASH') loadCheck();
         if (step === 'count') setOpenOrdersPin('');
@@ -243,7 +250,7 @@ export function CloseShiftDialog({ open, onClose, shiftId, shiftNumber, onClosed
     !!check && pendingCash.length === 0 && (openOrders.length === 0 || approver || !!openOrdersPin);
   const canSubmit =
     step === 'count'
-      ? actualCash !== '' && leftBehindSettled
+      ? actualCash !== '' && leftBehindSettled && (recordedCount === null || !!pin)
       : !!signoff && (!signoff.needsReason || !!reason.trim()) && (!signoff.needsApproval || !!pin);
 
   const dayDate = afterClose ? <span dir="ltr">{fDate(afterClose.businessDate)}</span> : null;
@@ -533,6 +540,26 @@ export function CloseShiftDialog({ open, onClose, shiftId, shiftNumber, onClosed
                     onChange={(e) => setReason(e.target.value)}
                     slotProps={{ input: { endAdornment: <VersionTag feature="shift.differenceSignoff" /> } }}
                   />
+                )}
+
+                {step === 'count' && recordedCount !== null && (
+                  <>
+                    <Alert severity="warning">
+                      {t('shift.close.recountNeedsPin', {
+                        amount: MoneyUtil.formatCurrency(recordedCount),
+                        currency: currencyLabel,
+                      })}
+                    </Alert>
+                    <TextField
+                      label={t('approval.pinLabel', 'Manager PIN')}
+                      type="password"
+                      required
+                      fullWidth
+                      value={pin}
+                      onChange={(e) => setPin(e.target.value)}
+                      slotProps={{ htmlInput: { maxLength: 8, style: { textAlign: 'center', letterSpacing: 6 } } }}
+                    />
+                  </>
                 )}
 
                 {step === 'signoff' && signoff?.needsApproval && (
