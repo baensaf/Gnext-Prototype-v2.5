@@ -26,6 +26,7 @@ import { paths } from 'src/routes/paths';
 import { useParams } from 'src/routes/hooks';
 
 import { fDate } from 'src/utils/format-time';
+import { localMobile } from 'src/utils/phone';
 import { MoneyUtil } from 'src/utils/money.util';
 
 import { profilesApi } from 'src/api/profilesApi';
@@ -96,7 +97,7 @@ export function CustomerProfilePage() {
         title={fullName}
         subtitle={
           <span dir="ltr">
-            {customer.code} · {customer.mobile}
+            {customer.code} · {localMobile(customer.mobile)}
           </span>
         }
         backTo={paths.app.customers.root}
@@ -163,7 +164,7 @@ export function CustomerProfilePage() {
               icon={<PersonIcon color="primary" />}
               rows={[
                 { label: t('profile.customer.code'), value: <span dir="ltr">{customer.code}</span> },
-                { label: t('profile.customer.mobile'), value: <span dir="ltr">{customer.mobile}</span> },
+                { label: t('profile.customer.mobile'), value: <span dir="ltr">{localMobile(customer.mobile)}</span> },
                 { label: t('profile.customer.email'), value: customer.email || '—' },
                 { label: t('profile.customer.nationalId'), value: customer.national_id || '—' },
                 { label: t('profile.createdAt'), value: <span dir="ltr">{formatDateTime(customer.created_at)}</span> },

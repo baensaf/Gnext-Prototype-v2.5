@@ -29,6 +29,7 @@ import {
   Typography,
   FormControl,
   DialogTitle,
+  Autocomplete,
   DialogContent,
   DialogActions,
   FormControlLabel,
@@ -307,20 +308,18 @@ export function OrderEditDialog({ open, onClose, order, reasonCodes, onSaved }: 
             <Divider />
 
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-              <FormControl size="small" sx={{ flex: 1 }}>
-                <InputLabel>{t('orders.edit.addItem', 'Add an item')}</InputLabel>
-                <Select
-                  label={t('orders.edit.addItem', 'Add an item')}
-                  value={pickerProductId}
-                  onChange={(e) => setPickerProductId(e.target.value)}
-                >
-                  {products.map((p) => (
-                    <MenuItem key={p.id} value={p.id}>
-                      {p.name} — {MoneyUtil.formatCurrency(p.base_price || '0', 0)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              {/* Typing finds the dish: the menu is too long to scroll for one. */}
+              <Autocomplete
+                size="small"
+                sx={{ flex: 1 }}
+                autoHighlight
+                options={products}
+                value={products.find((p) => p.id === pickerProductId) ?? null}
+                onChange={(_e, p) => setPickerProductId(p?.id || '')}
+                getOptionLabel={(p) => `${p.name} — ${MoneyUtil.formatCurrency(p.base_price || '0', 0)}`}
+                isOptionEqualToValue={(a, b) => a.id === b.id}
+                renderInput={(params) => <TextField {...params} label={t('orders.edit.addItem', 'Add an item')} />}
+              />
               <TextField
                 size="small"
                 type="number"

@@ -140,8 +140,15 @@ const ALLOWED_TRANSITIONS: Record<OrderState, OrderState[]> = {
 /** Actions that answer an order waiting in PENDING_ACCEPTANCE, and only such an order. */
 const INCOMING_DECISIONS = ['ACCEPT', 'REJECT'];
 
-/** Open states a takeaway order leaves by itself once it is paid in full. */
+/** Open states a counter order leaves by itself once it is paid in full. */
 const PAID_TAKEAWAY_COMPLETES_FROM: OrderState[] = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY'];
+
+/**
+ * Order types that are done once paid. No Iranian restaurant tracks the kitchen on a screen
+ * (tickets are printed), so nothing else would ever mark them done. A delivery waits for its
+ * courier to come back.
+ */
+const COMPLETES_WHEN_PAID = ['TAKEAWAY', 'DINE_IN', 'PICKUP'];
 
 /** States in which the kitchen has the order and has not yet handed it over. */
 const KITCHEN_HOLDS_ORDER_STATES: OrderState[] = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY'];
@@ -1283,10 +1290,10 @@ export class OrderService {
   }
 
   /**
-   * A takeaway order is done once it is paid for: nobody taps "handed over" at a busy
-   * counter, and an order left open never pays out its loyalty cashback. Dine-in waits for
-   * the table to close and delivery for the courier, so both are left alone. Returns the
-   * order when this completed it, otherwise null.
+   * A counter order is done once it is paid for: nobody taps "handed over" at a busy counter,
+   * and an order left open never pays out its loyalty cashback. Dine-in closes the same way,
+   * as a paid check does; tables are not run as sessions. Delivery waits for the courier.
+   * Returns the order when this completed it, otherwise null.
    */
   async completeWhenPaidInFull(
     tenantId: string,
@@ -1295,7 +1302,7 @@ export class OrderService {
     correlationId?: string,
   ): Promise<OrderHeader | null> {
     const order = await this.orderRepo.findOne({ where: { id: orderId, tenant_id: tenantId } });
-    if (!order || order.order_type !== 'TAKEAWAY') return null;
+    if (!order || !COMPLETES_WHEN_PAID.includes(order.order_type)) return null;
     if (!PAID_TAKEAWAY_COMPLETES_FROM.includes(order.state)) return null;
     if (MoneyUtil.greaterThan(order.outstanding_total || '0.0000', '0.0000')) return null;
 

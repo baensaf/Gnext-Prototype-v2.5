@@ -32,6 +32,7 @@ import {
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
 import { useShowsOrderCode } from 'src/utils/order-ref';
+import { amountText, amountFromText } from 'src/utils/amount-input';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { httpClient as axios } from 'src/api/httpClient';
@@ -557,10 +558,12 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                           {r.delivered ? (
                             <TextField
                               size="small"
-                              value={toToman(r.card)}
-                              onChange={(e) => setCardBy((prev) => ({ ...prev, [r.assignment_id]: fromToman(e.target.value) || '0' }))}
+                              value={amountText(r.card)}
+                              placeholder="0"
+                              onChange={(e) => setCardBy((prev) => ({ ...prev, [r.assignment_id]: amountFromText(e.target.value) || '0' }))}
+                              onFocus={(e) => e.target.select()}
                               error={MoneyUtil.greaterThan(r.card, r.owed)}
-                              slotProps={{ htmlInput: { inputMode: 'numeric', style: { textAlign: 'right', padding: '4px 8px' } } }}
+                              slotProps={{ htmlInput: { inputMode: 'numeric', dir: 'ltr', style: { textAlign: 'right', padding: '4px 8px' } } }}
                             />
                           ) : null}
                         </TableCell>
@@ -583,10 +586,12 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                   </Typography>
                 </Box>
                 <TextField
-                  label={t('settlements.settleModal.cashHandedOver')}
-                  value={toToman(settleCash)}
-                  onChange={(e) => setCashCounted(fromToman(e.target.value) || '0')}
-                  slotProps={{ htmlInput: { inputMode: 'numeric', style: { textAlign: 'right' } } }}
+                  label={`${t('settlements.settleModal.cashHandedOver')} (${currency})`}
+                  value={amountText(settleCash)}
+                  placeholder="0"
+                  onChange={(e) => setCashCounted(amountFromText(e.target.value) || '0')}
+                  onFocus={(e) => e.target.select()}
+                  slotProps={{ htmlInput: { inputMode: 'numeric', dir: 'ltr', style: { textAlign: 'right' } } }}
                   sx={{ width: { sm: 240 } }}
                 />
               </Stack>

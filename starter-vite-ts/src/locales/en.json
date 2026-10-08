@@ -413,7 +413,9 @@
       "placeholder": "e.g. no onions, extra napkins, doorbell code…",
       "clear": "Clear note",
       "save": "Save note"
-    }
+    },
+    "searchPlaceholder": "Search by name or code, Enter adds the first",
+    "noProducts": "No product matches the search or category."
   },
   "kiosk": {
     "title": "SELF-SERVICE KIOSK",
@@ -519,7 +521,8 @@
       "completed": "COMPLETED",
       "cancelled": "CANCELLED",
       "rejected": "REJECTED",
-      "refunded": "REFUNDED"
+      "refunded": "REFUNDED",
+      "partlyRefunded": "Partly refunded"
     },
     "progress": {
       "sentToKitchen": "Sent to kitchen",
@@ -1459,7 +1462,8 @@
       "skipDay": "Not now",
       "dayClosedDone": "Business day closed.",
       "dayFailed": "Could not close the business day",
-      "recountNeedsPin": "This drawer was already counted at {{amount}} {{currency}}. A recount needs a manager PIN."
+      "recountNeedsPin": "This drawer was already counted at {{amount}} {{currency}}. A recount needs a manager PIN.",
+      "carriedOrders": "{{count}} order(s) were left open by an earlier shift with a manager PIN. They stay open; the day close settles them."
     },
     "summary": {
       "open": "Shift summary",
@@ -1674,9 +1678,15 @@
       "FAILED": "Failed"
     },
     "detailTitle": "Refund {{code}}",
-    "allocations": "Paid back to",
     "notCompleted": "Order {{number}} is still open. Complete it in the orders list first: only a completed order can be refunded.",
-    "paidCancellation": "Paid order cancelled"
+    "paidCancellation": "Paid order cancelled",
+    "payBack": {
+      "label": "Paid back by",
+      "cash": "Cash from the drawer",
+      "transfer": "Card-to-card",
+      "reference": "Transfer tracking number"
+    },
+    "wholeOrder": "Whole order"
   },
   "customers": {
     "title": "Customer Directory",

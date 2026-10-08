@@ -109,6 +109,11 @@ export interface ShiftCloseCheck {
   currencyCode: string;
   /** This till's open orders; leaving them open takes a manager's PIN. */
   openOrders: DayCloseOpenOrder[];
+  /**
+   * Open orders an earlier shift on this register already left open, on a manager's PIN when
+   * it closed. Shown, but not asked about again: the day close answers for them.
+   */
+  carriedOrders: DayCloseOpenOrder[];
   /** Cash payments on this drawer that must be finished or cancelled before it closes. */
   pendingCash: PendingCashPayment[];
   /** Other drawers still open at the branch on this business day. */
@@ -939,9 +944,12 @@ export class ShiftService {
       .orderBy('o.placed_at', 'ASC')
       .getMany();
     const openOrders: DayCloseOpenOrder[] = [];
+    const carriedOrders: DayCloseOpenOrder[] = [];
     for (const order of orders) {
       const issue = openOrderIssue(order);
-      if (issue && TILL_OPEN_ORDER_ISSUES.includes(issue)) openOrders.push(openOrderView(order, issue));
+      if (!issue || !TILL_OPEN_ORDER_ISSUES.includes(issue)) continue;
+      const carried = !!order.shift_id && order.shift_id !== shift.id;
+      (carried ? carriedOrders : openOrders).push(openOrderView(order, issue));
     }
 
     const pendingCash: PendingCashPayment[] = await em.query(
@@ -976,6 +984,7 @@ export class ShiftService {
       businessDate: shift.business_date,
       currencyCode: shift.currency_code,
       openOrders,
+      carriedOrders,
       pendingCash,
       otherOpenTills: activeTills - (shift.state === 'CLOSED' ? 0 : 1),
       dayClosed: dayClosed.length > 0,

@@ -50,6 +50,7 @@ import {
 
 import { paths } from 'src/routes/paths';
 
+import { localMobile } from 'src/utils/phone';
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
 import { useLiveRefresh } from 'src/utils/use-live-refresh';
@@ -159,7 +160,7 @@ function DeliveryCard({
             {delivery.customer_phone && (
               <>
                 {' · '}
-                <bdi dir="ltr">{delivery.customer_phone}</bdi>
+                <bdi dir="ltr">{localMobile(delivery.customer_phone)}</bdi>
               </>
             )}
           </Typography>

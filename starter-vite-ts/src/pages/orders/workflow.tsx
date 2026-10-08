@@ -68,6 +68,7 @@ import {
 
 import { paths } from 'src/routes/paths';
 
+import { localMobile } from 'src/utils/phone';
 import { MoneyUtil } from 'src/utils/money.util';
 import { useCurrencyLabel } from 'src/utils/currency';
 import { fTime, fDateTime } from 'src/utils/format-time';
@@ -427,7 +428,8 @@ export function OrdersWorkflowPage() {
     }
   };
 
-  const getOrderStatusLabel = (status: string, refundedTotal?: string | null) => {
+  // Some money back is not all of it: a partly refunded order says so, as Toast's checks do.
+  const getOrderStatusLabel = (status: string, refundedTotal?: string | null, orderTotal?: string | null) => {
     switch (status) {
       case 'DRAFT':
         return t('orders.statuses.draft');
@@ -442,7 +444,9 @@ export function OrdersWorkflowPage() {
       case 'OPEN':
         return t('orders.statuses.open');
       case 'REFUNDED':
-        return t('orders.statuses.refunded');
+        return orderTotal && status === 'COMPLETED' && MoneyUtil.lessThan(refundedTotal || '0', orderTotal)
+          ? t('orders.statuses.partlyRefunded')
+          : t('orders.statuses.refunded');
       case 'COMPLETED':
         return t('orders.statuses.completed');
       case 'CANCELLED':
@@ -1136,7 +1140,7 @@ export function OrdersWorkflowPage() {
           </Typography>
           {row.customer_mobile && (
             <Typography color="text.secondary" variant="caption" sx={{ display: 'block' }} dir="ltr">
-              {row.customer_mobile}
+              {localMobile(row.customer_mobile)}
             </Typography>
           )}
         </Box>
@@ -1235,7 +1239,7 @@ export function OrdersWorkflowPage() {
         <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
           <Chip
             color={getStatusChipColor(row) as any}
-            label={getOrderStatusLabel(row.status, row.refunded_total)}
+            label={getOrderStatusLabel(row.status, row.refunded_total, row.total_amount)}
             size="small"
             sx={{ fontWeight: 700 }}
           />
@@ -1805,7 +1809,7 @@ export function OrdersWorkflowPage() {
                 </Box>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1, flexGrow: 1, pt: 0.5 }}>
                   <Chip
-                    label={getOrderStatusLabel(selectedDrawerOrder.status, selectedDrawerOrder.refunded_total)}
+                    label={getOrderStatusLabel(selectedDrawerOrder.status, selectedDrawerOrder.refunded_total, selectedDrawerOrder.total_amount)}
                     color={getStatusChipColor(selectedDrawerOrder) as any}
                     size="small"
                     sx={{ fontWeight: 700 }}
@@ -1888,7 +1892,7 @@ export function OrdersWorkflowPage() {
                         [t('orders.drawer.customerName'), selectedDrawerOrder.people?.customer
                           ? `${selectedDrawerOrder.people.customer.first_name || ''} ${selectedDrawerOrder.people.customer.last_name || ''}`.trim()
                           : selectedDrawerOrder.customer_name || t('orders.drawer.walkIn')],
-                        [t('orders.drawer.contactPhone'), selectedDrawerOrder.context?.customer_mobile || selectedDrawerOrder.customer_mobile],
+                        [t('orders.drawer.contactPhone'), localMobile(selectedDrawerOrder.context?.customer_mobile || selectedDrawerOrder.customer_mobile)],
                         [t('orders.drawer.dineInTable'), selectedDrawerOrder.table_number && t('orders.drawer.table', { number: selectedDrawerOrder.table_number })],
                         [t('orders.drawer.takenBy'), selectedDrawerOrder.people?.taken_by?.display_name || selectedDrawerOrder.people?.taken_by?.username],
                         [t('orders.drawer.terminal'), selectedDrawerOrder.context?.terminal_name],

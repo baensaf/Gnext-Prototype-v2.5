@@ -132,6 +132,8 @@ export interface ShiftCloseCheck {
   currencyCode: string;
   /** This till's held, unpaid or unaccepted orders; leaving them open takes a manager PIN. */
   openOrders: DayCloseOpenOrder[];
+  /** Open orders an earlier shift already left open on a manager's PIN; not asked about again. */
+  carriedOrders?: DayCloseOpenOrder[];
   /** Cash payments on this drawer that must be finished or cancelled first. */
   pendingCash: PendingCashPayment[];
   /** Other drawers still open at the branch on this business day. */
