@@ -56,6 +56,9 @@ export interface ShiftStatement {
   expectedCash: string | null;
   actualCash?: string;
   shortOver?: string | null;
+  /** What the close kept in the drawer for the next shift; the rest was handed over. */
+  leftInDrawer?: string | null;
+  handedOver?: string | null;
   previewVersion?: string;
   orderCount: number;
   movements: CashMovement[];
@@ -161,6 +164,8 @@ export interface ShiftSalesSummary {
   tenders: Array<{ kind: string; count: number; amount: string }>;
   refundCount: number;
   refundTotal: string | null;
+  /** Refunds by how the money went back. Cash is null under a blind count. */
+  refunds?: Array<{ kind: string; count: number; amount: string | null }>;
   cash: {
     openingFloat: string;
     cashSales: string | null;
@@ -171,6 +176,8 @@ export interface ShiftSalesSummary {
     expectedCash: string | null;
     actualCash: string | null;
     shortOver: string | null;
+    leftInDrawer?: string | null;
+    handedOver?: string | null;
   };
 }
 
@@ -245,9 +252,17 @@ export const shiftApi = {
       pin?: string;
       /** An approver's pin, when orders this till rang up are left open. */
       openOrdersPin?: string;
+      /** Of the count, what stays in the drawer for the next shift; left out, it is emptied. */
+      leftInDrawer?: string;
     },
   ): Promise<ShiftStatement> => {
     const res = await httpClient.post(`/api/v1/shifts/${shiftId}/close`, data);
+    return res.data;
+  },
+
+  /** The float a new shift on this register starts with: what the last close left in the drawer. */
+  getNextFloat: async (terminalId: string): Promise<{ amount: string; source: 'LEFT_IN_DRAWER' | 'POLICY' }> => {
+    const res = await httpClient.get('/api/v1/shifts/next-float', { params: { terminalId } });
     return res.data;
   },
 

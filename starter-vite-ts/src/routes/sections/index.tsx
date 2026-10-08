@@ -35,6 +35,7 @@ import { DineInPage } from 'src/pages/operations/dine-in';
 import { DataResetPage } from 'src/pages/tools/data-reset';
 import { DiscountsHubPage } from 'src/pages/discounts/hub';
 import { RolesMatrixPage } from 'src/pages/settings/roles';
+import { EndShiftPage } from 'src/pages/cashier/end-shift';
 import { BranchesPage } from 'src/pages/operations/branches';
 import { DeliveryPage } from 'src/pages/operations/delivery';
 import { PaymentsPage } from 'src/pages/operations/payments';
@@ -223,6 +224,7 @@ export const routesSection: RouteObject[] = [
       { path: 'delivery/rollup', element: <FleetRollupPage /> },
       { path: 'cashier/shifts', element: <RequiresBranch rollup="/app/cashier/rollup"><CashDrawerPage /></RequiresBranch> },
       { path: 'cashier/shifts/:shiftId', element: <ShiftDetailPage /> },
+      { path: 'cashier/shifts/:shiftId/end', element: <EndShiftPage /> },
       { path: 'cashier/business-days', element: <RequiresBranch><BusinessDaysPage /></RequiresBranch> },
       { path: 'cashier/rollup', element: <ShiftRollupPage /> },
       { path: 'payments', element: <RequiresBranch><PaymentsPage /></RequiresBranch> },

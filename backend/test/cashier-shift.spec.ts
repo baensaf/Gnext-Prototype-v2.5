@@ -628,6 +628,32 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       expect(shift.state).toBe('CLOSED');
     });
 
+    it('keeps what stays in the drawer for the next shift, and hands over the rest', async () => {
+      const shift: any = openShift();
+      shiftRepo.findOne.mockResolvedValue(shift);
+
+      await shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000', leftInDrawer: '20000' }, 'cashier-1', undefined, { role: 'CASHIER' });
+      expect(shift.state).toBe('CLOSED');
+      expect(shift.left_in_drawer).toBe('20000.0000');
+    });
+
+    it('empties the drawer when nothing is said, and refuses to leave more than was counted', async () => {
+      const shift: any = openShift();
+      shiftRepo.findOne.mockResolvedValue(shift);
+      await expect(
+        shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000', leftInDrawer: '60000' }, 'cashier-1', undefined, { role: 'CASHIER' }),
+      ).rejects.toMatchObject({ response: { code: 'LEFT_IN_DRAWER_OUT_OF_RANGE' } });
+      expect(shift.state).toBe('OPEN');
+
+      await shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000' }, 'cashier-1', undefined, { role: 'CASHIER' });
+      expect(shift.left_in_drawer).toBe('0.0000');
+    });
+
+    it('offers the next shift what the last close left in the drawer', async () => {
+      shiftRepo.findOne.mockResolvedValue({ id: 'shf-0', state: 'CLOSED', left_in_drawer: '0.0000' });
+      await expect(shiftService.nextOpeningFloat('t-1', 'term-1')).resolves.toEqual({ amount: '0.0000', source: 'LEFT_IN_DRAWER' });
+    });
+
     it('lets a manager leave orders open on their own authority', async () => {
       tillOrders = [order({ outstanding_total: '90000.0000' })];
       const shift = openShift();

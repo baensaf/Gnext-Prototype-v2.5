@@ -48,7 +48,6 @@ import { VersionTag } from 'src/components/version-tag';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 import { MovementDialog } from 'src/components/shift/movement-dialog';
 import { OpenShiftDialog } from 'src/components/shift/open-shift-dialog';
-import { CloseShiftDialog } from 'src/components/shift/close-shift-dialog';
 import { useRegisterShift } from 'src/components/shift/use-register-shift';
 import { DeviceTerminalDialog } from 'src/components/shift/device-terminal-dialog';
 import { BusinessDayEndedAlert } from 'src/components/shift/business-day-ended-alert';
@@ -97,7 +96,6 @@ export function CashDrawerPage() {
 
   const [setupOpen, setSetupOpen] = useState(false);
   const [openFor, setOpenFor] = useState<Terminal | null>(null);
-  const [closeFor, setCloseFor] = useState<CashierShift | null>(null);
   const [movement, setMovement] = useState<{ shiftId: string; type: MovementType } | null>(null);
 
   const load = useCallback(async () => {
@@ -217,8 +215,8 @@ export function CashDrawerPage() {
                     {t('shift.card.statement', 'Statement')}
                   </Button>
                   {mayWork && (
-                    <Button size="small" color="error" variant="outlined" startIcon={<LockIcon />} onClick={() => setCloseFor(shift)} sx={{ ml: 'auto' }}>
-                      {t('shift.close.title', 'Close shift')}
+                    <Button size="small" color="error" variant="outlined" startIcon={<LockIcon />} onClick={() => navigate(`/app/cashier/shifts/${shift.id}/end`)} sx={{ ml: 'auto' }}>
+                      {t('shift.end.open', 'Review & end shift')}
                     </Button>
                   )}
                 </Stack>
@@ -373,16 +371,6 @@ export function CashDrawerPage() {
           branchName={register.terminalBranchName}
           defaultFloat={register.defaultFloat}
           onOpened={refreshAll}
-        />
-      )}
-
-      {closeFor && (
-        <CloseShiftDialog
-          open
-          onClose={() => setCloseFor(null)}
-          shiftId={closeFor.id}
-          shiftNumber={closeFor.shift_number}
-          onClosed={refreshAll}
         />
       )}
 

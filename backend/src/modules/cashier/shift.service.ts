@@ -77,6 +77,8 @@ export interface ShiftSalesSummary {
   tenders: Array<{ kind: string; count: number; amount: string }>;
   refundCount: number;
   refundTotal: string | null;
+  /** Refunds by how the money went back: cash from this drawer, a card-to-card transfer... */
+  refunds: Array<{ kind: string; count: number; amount: string | null }>;
   cash: {
     openingFloat: string;
     cashSales: string | null;
@@ -87,6 +89,8 @@ export interface ShiftSalesSummary {
     expectedCash: string | null;
     actualCash: string | null;
     shortOver: string | null;
+    leftInDrawer: string | null;
+    handedOver: string | null;
   };
 }
 
@@ -792,6 +796,16 @@ export class ShiftService {
       const actualCash = MoneyUtil.format(dto.actualCash);
       const shortOver = MoneyUtil.subtract(actualCash, expectedCash);
 
+      // Of what was counted, what stays as the next shift's float; the rest is handed over.
+      const leftInDrawer = MoneyUtil.format(dto.leftInDrawer || '0');
+      if (MoneyUtil.lessThan(leftInDrawer, '0') || MoneyUtil.greaterThan(leftInDrawer, actualCash)) {
+        throw new BadRequestException({
+          code: 'LEFT_IN_DRAWER_OUT_OF_RANGE',
+          title: 'More Left Than Counted',
+          detail: 'What stays in the drawer cannot be more than the cash counted.',
+        });
+      }
+
       const policy = await this.policyFor(tenantId, shift.branch_id);
 
       // A blind count is the first number the register operator puts down. A refused close
@@ -877,6 +891,7 @@ export class ShiftService {
 
       shift.expected_cash = expectedCash;
       shift.actual_cash = actualCash;
+      shift.left_in_drawer = leftInDrawer;
       shift.short_over = shortOver;
       shift.over_short_amount = shortOver;
       shift.closing_note = dto.reason || null;
@@ -1053,6 +1068,9 @@ export class ShiftService {
         expectedCash,
         actualCash: shift.actual_cash || null,
         shortOver: shift.short_over || '0.0000',
+        // What the close kept for the next shift, and what it handed over (safe or central cash).
+        leftInDrawer: shift.left_in_drawer ?? null,
+        handedOver: shift.actual_cash ? MoneyUtil.subtract(shift.actual_cash, shift.left_in_drawer || '0') : null,
         previewVersion: shift.preview_version || null,
         orderCount: orders.length,
         movements,
@@ -1115,6 +1133,14 @@ export class ShiftService {
 
     const refunds = await em.find(Refund, { where: { tenant_id: tenantId, shift_id: shiftId, status: 'SUCCEEDED' } });
     const refundTotal = refunds.reduce((sum, r) => MoneyUtil.add(sum, r.amount || '0'), '0.0000');
+    const refundsBy = new Map<string, { kind: string; count: number; amount: string }>();
+    for (const r of refunds) {
+      const kind = r.method_kind || 'OTHER';
+      const bucket = refundsBy.get(kind) ?? { kind, count: 0, amount: '0.0000' };
+      bucket.count += 1;
+      bucket.amount = MoneyUtil.add(bucket.amount, r.amount || '0');
+      refundsBy.set(kind, bucket);
+    }
 
     const [terminal, cashier] = await Promise.all([
       shift.terminal_id ? this.terminalRepo.findOne({ where: { id: shift.terminal_id, tenant_id: tenantId } }) : null,
@@ -1140,6 +1166,8 @@ export class ShiftService {
       tenders: [...tenders.values()],
       refundCount: refunds.length,
       refundTotal: hidden(refundTotal),
+      // Cash refunds are part of the drawer's figure, so a blind count hides them with it.
+      refunds: [...refundsBy.values()].map((r) => ({ ...r, amount: r.kind === 'CASH' ? hidden(r.amount) : r.amount })),
       cash: {
         openingFloat: statement.openingFloat,
         cashSales: hidden(statement.cashSales),
@@ -1150,8 +1178,27 @@ export class ShiftService {
         expectedCash: hidden(statement.expectedCash),
         actualCash: closed ? statement.actualCash : null,
         shortOver: closed ? statement.shortOver : null,
+        leftInDrawer: closed ? statement.leftInDrawer : null,
+        handedOver: closed ? statement.handedOver : null,
       },
     };
+  }
+
+  /**
+   * The float a new shift on this register starts with: what the last close left in its drawer,
+   * or the branch's policy when no close on it has said.
+   */
+  async nextOpeningFloat(tenantId: string, terminalId: string): Promise<{ amount: string; source: 'LEFT_IN_DRAWER' | 'POLICY' }> {
+    const last = await this.shiftRepo.findOne({
+      where: { tenant_id: tenantId, terminal_id: terminalId, state: 'CLOSED' },
+      order: { closed_at: 'DESC' },
+    });
+    if (last && last.left_in_drawer !== null && last.left_in_drawer !== undefined) {
+      return { amount: MoneyUtil.format(last.left_in_drawer), source: 'LEFT_IN_DRAWER' };
+    }
+    const terminal = await this.terminalRepo.findOne({ where: { id: terminalId, tenant_id: tenantId } });
+    const policy = await this.policyFor(tenantId, terminal?.branch_id ?? last?.branch_id ?? null);
+    return { amount: MoneyUtil.format(policy.defaultOpeningFloat), source: 'POLICY' };
   }
 
   // --- CHAIN ROLL-UP (READ ONLY) ---

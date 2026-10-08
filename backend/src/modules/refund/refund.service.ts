@@ -319,6 +319,11 @@ export class RefundService {
         );
         refund.status = 'SUCCEEDED';
       } else {
+        // Not from the drawer, but given back at a register during its shift: the shift's report
+        // lists it with the cash refunds, so the close shows every refund the till made.
+        const drawer = await this.shiftService.resolveDrawer(tenantId, order.branch_id, order.terminal_id);
+        refund.shift_id = drawer?.id ?? null;
+
         // External simulated method adapter
         const scenario = dto.scenarioId || 'SUCCESS';
         if (scenario === 'FAIL' || scenario === 'DECLINED') {

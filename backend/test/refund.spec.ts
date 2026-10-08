@@ -37,6 +37,7 @@ describe('Refunds & Paid-Order Cancellation Suite (R16)', () => {
       getCurrentShift: jest.fn().mockResolvedValue(null),
       requireCurrentShift: jest.fn(),
       requireDrawer: jest.fn(),
+      resolveDrawer: jest.fn().mockResolvedValue({ id: 'shf-1' }),
       recordCashRefundMovement: jest.fn(),
     };
     creditService = { getAccountByCustomer: jest.fn(), postRepayment: jest.fn(), reverseLoyaltyCashback: jest.fn().mockResolvedValue(true) };
@@ -263,6 +264,37 @@ describe('Refunds & Paid-Order Cancellation Suite (R16)', () => {
         'IRR',
         expect.anything(),
       );
+    });
+
+    it('pays a card sale back card-to-card on the refund PIN, out of no drawer but on the till shift', async () => {
+      orderRepo.findOne.mockResolvedValue({
+        id: 'ord-card',
+        terminal_id: 'term-1',
+        state: 'COMPLETED',
+        refunded_total: '0.0000',
+        total_amount: '8066000.0000',
+        currency_code: 'IRR',
+      });
+      paymentRepo.find.mockResolvedValue([{ id: 'pay-1', amount: '8066000.0000', status: 'SUCCEEDED', method_id: 'pm-card' }]);
+      methodRepo.findOne.mockImplementation(async ({ where }: any) =>
+        where.id === 'pm-transfer'
+          ? { id: 'pm-transfer', kind: 'BANK_TRANSFER', is_active: true }
+          : { id: 'pm-card', kind: 'CARD_POS', is_active: true },
+      );
+      shiftService.recordCashRefundMovement = jest.fn();
+
+      const refund = await service.createRefundIntent(
+        't-1',
+        'ord-card',
+        { amount: '1000000', reason: 'Cold', targetMethodId: 'pm-transfer', reference: 'TR-1', moneyOutAuthorized: true },
+        'user-uuid',
+        'corr-1',
+      );
+      const done: any = await service.processRefund('t-1', refund.id, {}, 'user-uuid', 'corr-1');
+
+      expect(done.method_kind).toBe('BANK_TRANSFER');
+      expect(done.shift_id).toBe('shf-1');
+      expect(shiftService.recordCashRefundMovement).not.toHaveBeenCalled();
     });
   });
 });
