@@ -234,8 +234,11 @@ export class SimulationService {
       afterData: { order_id: savedHeader.id, idempotencyKey },
     });
 
+    // The annex asks the store to ack (61) every order it receives, before anyone opens it.
+    if (orderCode) await this.ackOrder(tenantId, orderCode).catch(() => undefined);
+
     // A channel the branch lets straight through is accepted here, by the same accept a
-    // cashier uses. Otherwise the order waits in the Incoming Orders queue.
+    // cashier uses. Otherwise the order waits on the till's Online panel.
     const accepted = this.incomingPolicy
       ? await this.incomingPolicy.applyOnArrival(tenantId, savedHeader.id, corrId)
       : null;
@@ -1358,6 +1361,8 @@ export class SimulationService {
   async getDeclineReasons() {
     return [
       { id: 113, title: 'رستوران پیک ندارد', level: 1 },
+      // 139 names the unavailable items (nonExistentProducts); Snappfood switches them off.
+      { id: 139, title: 'ناموجود بودن اقلام', level: 1 },
       { id: 153, title: 'تاخیر در زمان ارسال', level: 1 },
       { id: 154, title: 'تغییر هزینه پیک', level: 2 },
     ];

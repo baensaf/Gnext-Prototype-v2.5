@@ -14,6 +14,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ManualDiscountDto } from '../../discounts/dtos/discounts.dto';
+import { ONLINE_REJECT_REASONS, ONLINE_REPORT_REASONS, OnlineRejectReason, OnlineReportReason } from '../channels/channel-adapter';
 
 export class OrderItemOptionDto {
   @IsUUID()
@@ -420,10 +421,10 @@ export class OrderAcceptDto {
   prepMinutes: number;
 }
 
-/** The store turns an incoming order down, naming one of Snappfood's decline reasons. */
+/** The store turns an incoming order down, in its own words; the platform's adapter maps them. */
 export class OrderRejectDto {
-  @IsInt()
-  reasonId: number;
+  @IsIn(ONLINE_REJECT_REASONS)
+  reason: OnlineRejectReason;
 
   @IsOptional()
   @IsString()
@@ -431,12 +432,12 @@ export class OrderRejectDto {
 }
 
 /**
- * The store hands an accepted Snappfood order back to Snappfood support, naming a decline
- * reason. For a delay (153) it says how many more minutes the order needs.
+ * The store tells the platform about an order it has already accepted: it needs more time,
+ * or it cannot be made. For more time it says how many minutes.
  */
-export class OrderSnappfoodReportDto {
-  @IsInt()
-  reasonId: number;
+export class OrderOnlineReportDto {
+  @IsIn(ONLINE_REPORT_REASONS)
+  reason: OnlineReportReason;
 
   @IsOptional()
   @IsInt()

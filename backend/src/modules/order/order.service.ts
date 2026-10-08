@@ -55,14 +55,8 @@ import { MoneyUtil } from '../../common/utils/money.util';
 import { courierDeliveryFee } from '../delivery/courier-pay';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
-import {
-  SNAPPFOOD_DELAY_REASON_ID,
-  SNAPPFOOD_REPORT_WINDOW_MINUTES,
-  acceptNotice,
-  isAggregatorOrder,
-  maxPromiseMinutes,
-  reportWindowEndsAt,
-} from '../../common/utils/snappfood-order.util';
+import { isAggregatorOrder } from '../../common/utils/snappfood-order.util';
+import { ChannelAdapter, OnlinePlatform, channelFor, channelForPlatform, platformOf } from './channels';
 import { CashierShift } from '../../entities/CashierShift.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { currentTillTerminalId } from '../../common/utils/till-context';
@@ -101,7 +95,7 @@ import {
   OrderReopenDto,
   OrderAcceptDto,
   OrderRejectDto,
-  OrderSnappfoodReportDto,
+  OrderOnlineReportDto,
 } from './dtos/order.dto';
 
 /**
@@ -1317,19 +1311,58 @@ export class OrderService {
   }
 
   /**
+   * The adapter that speaks for the platform an order came from; null for an order no
+   * platform sent. Everything platform-specific about an order goes through it.
+   */
+  channelOf(order: OrderHeader): ChannelAdapter | null {
+    return channelFor(order, this.channelDeps());
+  }
+
+  /** The adapter for a platform, for calls about the store rather than one order (a pause). */
+  platformChannel(platform: OnlinePlatform): ChannelAdapter {
+    return channelForPlatform(platform, this.channelDeps());
+  }
+
+  private channelDeps() {
+    return { simulation: this.simulationService, menuIds: (tenantId: string) => this.platformMenuIds(tenantId) };
+  }
+
+  /** The categories a platform shows as menus; a pause switches them all off. */
+  private async platformMenuIds(tenantId: string): Promise<string[]> {
+    const rows: { id: string }[] = await this.dataSource.query(
+      `SELECT id FROM category WHERE tenant_id = $1 AND is_active = true`,
+      [tenantId],
+    );
+    return rows.map((row) => row.id);
+  }
+
+  /**
+   * A call to the platform after the store's own change has been made. Local first, so the
+   * branch keeps serving when the platform is slow or down; a failed notice does not undo it.
+   */
+  private async tellPlatform(order: OrderHeader, what: string, call: () => Promise<unknown>) {
+    try {
+      await call();
+    } catch (err) {
+      // Retrying a missed notice through the outbox is not built yet.
+      console.error(`Could not tell ${platformOf(order)} that order ${order.order_number} was ${what}`, err);
+    }
+  }
+
+  /**
    * The store takes an incoming order: confirm it, fire it to the kitchen and its printer,
-   * then tell the aggregator. Local first, so the branch keeps serving when Snappfood is
-   * slow or down; a failed notice does not undo the accept.
+   * then tell the platform.
    */
   async acceptIncomingOrder(tenantId: string, id: string, dto: OrderAcceptDto, userId?: string, correlationId?: string) {
-    // Snappfood refuses a promise past its limit for the order. Say so before the kitchen
+    // The platform refuses a promise past its limit for the order. Say so before the kitchen
     // has it, not after the store has already started cooking.
     const waiting = await this.orderRepo.findOne({ where: { id, tenant_id: tenantId } });
-    if (waiting && isAggregatorOrder(waiting) && dto.prepMinutes > maxPromiseMinutes(waiting)) {
-      const maxMinutes = maxPromiseMinutes(waiting);
+    const channel = waiting ? this.channelOf(waiting) : null;
+    if (waiting && channel && dto.prepMinutes > channel.maxPromiseMinutes(waiting)) {
+      const maxMinutes = channel.maxPromiseMinutes(waiting);
       throw new BadRequestException({
-        code: 'PROMISE_OVER_SNAPPFOOD_LIMIT',
-        message: `Snappfood takes at most ${maxMinutes} minutes for order ${waiting.order_number}`,
+        code: 'PROMISE_OVER_PLATFORM_LIMIT',
+        message: `${channel.platform} takes at most ${maxMinutes} minutes for order ${waiting.order_number}`,
         maxMinutes,
       });
     }
@@ -1346,16 +1379,16 @@ export class OrderService {
     await assignCallNumber(this.dataSource.manager, order);
 
     try {
-      await this.openSnappfoodDelivery(tenantId, order, userId);
+      await this.openOwnCourierDelivery(tenantId, order, userId);
     } catch (err) {
       // The accept has already been sent to the kitchen; the board can be fixed up by hand.
-      console.error(`Snappfood order ${order.order_number} could not be put on the delivery board`, err);
+      console.error(`Online order ${order.order_number} could not be put on the delivery board`, err);
     }
 
     if (this.kdsService && isAggregatorOrder(order)) {
       try {
-        // Snappfood support sent the order back changed after the kitchen had it. The lines
-        // it struck off come off the tickets before the new ones go on.
+        // The platform's support sent the order back changed after the kitchen had it. The
+        // lines it struck off come off the tickets before the new ones go on.
         const struckOff = await this.itemRepo.find({ where: { tenant_id: tenantId, order_id: id, state: 'VOID' } });
         for (const line of struckOff) {
           await this.kdsService.cancelTicketItemsForOrderItem(tenantId, line.id, userId);
@@ -1383,79 +1416,86 @@ export class OrderService {
       }
     }
 
-    const snappfoodCode = this.snappfoodOrderCode(order);
-    if (snappfoodCode && this.simulationService) {
-      try {
-        await this.simulationService.notifyAccepted(tenantId, snappfoodCode, acceptNotice(order, dto.prepMinutes));
-      } catch (e) {
-        // The accept stands. Retrying a missed notice through the outbox is not built yet.
-      }
-    }
+    const accepted = this.channelOf(order);
+    if (accepted) await this.tellPlatform(order, 'accepted', () => accepted.accepted(tenantId, order, dto.prepMinutes));
 
     return order;
   }
 
   /**
-   * A Snappfood order the store delivers with its own couriers goes on the delivery board once
+   * A platform order the store delivers with its own couriers goes on the delivery board once
    * accepted, like one rung up at the till: a courier is assigned and paid for the ride, and
    * cash the customer pays at the door comes back through the courier's settlement. Before,
    * it had no delivery at all, and a cash one could never be paid or closed.
    */
-  private async openSnappfoodDelivery(tenantId: string, order: OrderHeader, userId?: string) {
-    if (!isAggregatorOrder(order) || order.aggregator_expedition !== 'DELIVERY') return;
+  private async openOwnCourierDelivery(tenantId: string, order: OrderHeader, userId?: string) {
+    const channel = this.channelOf(order);
+    if (!channel || channel.fulfilment(order) !== 'OWN_COURIER') return;
     if (!order.customer_address_id) return;
     const address = await this.dataSource.manager.findOne(CustomerAddress, {
       where: { id: order.customer_address_id, tenant_id: tenantId },
     });
     if (!address) return;
     await this.dataSource.transaction((em) =>
-      this.openDelivery(em, tenantId, order, { address, zone: null, fee: order.delivery_fee }, userId, 'Snappfood order the store delivers itself'),
+      this.openDelivery(em, tenantId, order, { address, zone: null, fee: order.delivery_fee }, userId, `${channel.platform} order the store delivers itself`),
     );
   }
 
   /**
-   * The store turns an incoming order down. Nothing reaches the kitchen, and the reason must
-   * be one of Snappfood's decline reasons, because that is what goes back to Snappfood.
+   * The store turns an incoming order down. Nothing reaches the kitchen. A platform order
+   * needs a reason the platform has a code for, because that is what goes back to it.
    */
   async rejectIncomingOrder(tenantId: string, id: string, dto: OrderRejectDto, userId?: string, correlationId?: string) {
-    const reason = (await this.getDeclineReasons()).find((r) => r.id === dto.reasonId);
-    if (!reason) {
-      throw new BadRequestException({ code: 'UNKNOWN_DECLINE_REASON', message: `No decline reason ${dto.reasonId}` });
+    const existing = await this.orderRepo.findOne({ where: { id, tenant_id: tenantId } });
+    const channel = existing ? this.channelOf(existing) : null;
+    if (channel && !channel.rejectReasons().includes(dto.reason)) {
+      throw new BadRequestException({
+        code: 'REJECT_REASON_NOT_SUPPORTED',
+        message: `${channel.platform} has no reason ${dto.reason}`,
+      });
     }
-    const reasonText = [`${reason.id} ${reason.title}`, dto.comment].filter(Boolean).join(': ');
-    return this.rejectWith(tenantId, id, reasonText, { reasonId: dto.reasonId, comment: dto.comment }, userId, correlationId);
+    const reasonText = [dto.reason, dto.comment].filter(Boolean).join(': ');
+    return this.rejectWith(tenantId, id, reasonText, (order, platform) => platform.rejected(tenantId, order, dto.reason, dto.comment), userId, correlationId);
   }
 
   /**
    * Nobody answered within the branch's time limit, so the system turns the order down.
-   * No person acted: the state event carries no user and the audit entry reads SYSTEM.
+   * No person acted: the state event carries no user and the audit entry reads SYSTEM. The
+   * till's Online panel shows it until someone marks it seen, so a lost order is noticed.
    */
   async rejectUnanswered(tenantId: string, id: string, minutes: number, correlationId?: string) {
     const reasonText = `Not answered within ${minutes} min; rejected automatically`;
-    // Snappfood refuses a reject that names none of its decline reasons. None of them says
-    // nobody answered; 153, a delay in sending the order, is the nearest.
-    return this.rejectWith(tenantId, id, reasonText, { reasonId: 153, comment: reasonText }, undefined, correlationId);
+    const order = await this.rejectWith(
+      tenantId,
+      id,
+      reasonText,
+      (rejected, platform) => platform.rejectedUnanswered(tenantId, rejected, reasonText),
+      undefined,
+      correlationId,
+    );
+    return this.raiseOnlineAlert(order, 'TIMED_OUT');
   }
 
   private async rejectWith(
     tenantId: string,
     id: string,
     reasonText: string,
-    snappfoodNotice: Record<string, any>,
+    notify: (order: OrderHeader, platform: ChannelAdapter) => Promise<void>,
     userId?: string,
     correlationId?: string,
   ) {
     const order = await this.transitionState(tenantId, id, 'REJECT', { reasonText }, userId, correlationId);
+    const channel = this.channelOf(order);
+    if (channel) await this.tellPlatform(order, 'rejected', () => notify(order, channel));
+    return order;
+  }
 
-    const snappfoodCode = this.snappfoodOrderCode(order);
-    if (snappfoodCode && this.simulationService) {
-      try {
-        await this.simulationService.notifyRejected(tenantId, snappfoodCode, snappfoodNotice);
-      } catch (e) {
-        // The rejection stands, as with accept.
-      }
-    }
-
+  /** Puts an alert on the till's Online panel for this order, unseen until a cashier says so. */
+  async raiseOnlineAlert(order: OrderHeader, alert: 'TIMED_OUT' | 'PLATFORM_CANCELLED') {
+    order.online_alert = alert;
+    order.online_alert_at = new Date();
+    order.online_alert_seen_at = null;
+    await this.orderRepo.save(order);
     return order;
   }
 
@@ -1464,25 +1504,19 @@ export class OrderService {
   }
 
   /**
-   * After accepting a Snappfood order the store finds it needs more time, or cannot make it.
-   * The annex has no call to change the promised time: within an hour of accepting, the store
-   * rejects the order ("needs a call", 51) with a reason, 153 for a delay. The kitchen keeps
-   * the order meanwhile. Snappfood support then cancels it (54) or sends it back (56), and the
-   * store accepts it again with a new time.
+   * After accepting a platform order the store finds it needs more time, or cannot make it.
+   * The adapter says whether the platform takes such a report and for how long after the
+   * accept. Snappfood has no call to change the promised time: the store rejects the order
+   * ("needs a call") with a reason, and support cancels it or sends it back to be accepted
+   * again with a new time. The kitchen keeps the order meanwhile.
    */
-  async reportToSnappfood(
-    tenantId: string,
-    id: string,
-    dto: OrderSnappfoodReportDto,
-    userId?: string,
-    correlationId?: string,
-  ) {
+  async reportOnlineOrder(tenantId: string, id: string, dto: OrderOnlineReportDto, userId?: string, correlationId?: string) {
     const order = await this.orderRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!order) throw new NotFoundException(`Order ${id} not found`);
 
-    const snappfoodCode = this.snappfoodOrderCode(order);
-    if (!snappfoodCode) {
-      throw new BadRequestException({ code: 'NOT_A_SNAPPFOOD_ORDER', message: `Order ${order.order_number} did not come from Snappfood` });
+    const channel = this.channelOf(order);
+    if (!channel || !channel.capabilities.report) {
+      throw new BadRequestException({ code: 'REPORT_NOT_SUPPORTED', message: `Order ${order.order_number} cannot be reported to a platform` });
     }
     if (!order.accepted_at || !KITCHEN_HOLDS_ORDER_STATES.includes(order.state)) {
       throw new ConflictException({
@@ -1492,67 +1526,57 @@ export class OrderService {
     }
     if (order.aggregator_issue_at) {
       throw new ConflictException({
-        code: 'SNAPPFOOD_REPORT_OPEN',
-        message: `Order ${order.order_number} is already with Snappfood support`,
+        code: 'REPORT_ALREADY_OPEN',
+        message: `Order ${order.order_number} is already with ${channel.platform} support`,
       });
     }
-    if (Date.now() > reportWindowEndsAt(order)!.getTime()) {
+    const windowMinutes = channel.capabilities.reportWindowMinutes;
+    if (windowMinutes !== null && Date.now() > new Date(order.accepted_at).getTime() + windowMinutes * 60000) {
       throw new ConflictException({
-        code: 'SNAPPFOOD_REPORT_WINDOW_CLOSED',
-        message: `Snappfood takes a report only within ${SNAPPFOOD_REPORT_WINDOW_MINUTES} minutes of accepting; call Snappfood support about order ${order.order_number}`,
+        code: 'REPORT_WINDOW_CLOSED',
+        message: `${channel.platform} takes a report only within ${windowMinutes} minutes of accepting; call its support about order ${order.order_number}`,
+        windowMinutes,
       });
     }
-
-    const reason = (await this.getDeclineReasons()).find((r) => r.id === dto.reasonId);
-    if (!reason) {
-      throw new BadRequestException({ code: 'UNKNOWN_DECLINE_REASON', message: `No decline reason ${dto.reasonId}` });
+    if (!channel.reportReasons().includes(dto.reason)) {
+      throw new BadRequestException({ code: 'REPORT_REASON_NOT_SUPPORTED', message: `${channel.platform} has no reason ${dto.reason}` });
     }
-    if (dto.reasonId === SNAPPFOOD_DELAY_REASON_ID && !dto.extraMinutes) {
+    if (dto.reason === 'MORE_TIME' && !dto.extraMinutes) {
       throw new BadRequestException({ code: 'EXTRA_MINUTES_REQUIRED', message: 'Say how many more minutes the order needs' });
     }
 
-    const comment = [dto.extraMinutes && `Needs ${dto.extraMinutes} more minutes`, dto.comment?.trim()]
-      .filter(Boolean)
-      .join('. ');
-
-    // Nothing has changed yet, so a refusal from Snappfood reaches the cashier as it is.
-    await this.simulationService?.notifyRejected(tenantId, snappfoodCode, { reasonId: dto.reasonId, comment });
+    // Nothing has changed yet, so a refusal from the platform reaches the cashier as it is.
+    const issue = await channel.reported(tenantId, order, { reason: dto.reason, extraMinutes: dto.extraMinutes, comment: dto.comment });
 
     order.aggregator_issue_at = new Date();
-    order.aggregator_issue = [`${reason.id} ${reason.title}`, comment].filter(Boolean).join(': ').slice(0, 255);
+    order.aggregator_issue = issue;
     const saved = await this.orderRepo.save(order);
 
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
       actorId: userId,
-      action: 'SNAPPFOOD_ORDER_REPORTED',
+      action: 'ONLINE_ORDER_REPORTED',
       entityType: 'ORDER',
       entityId: order.id,
       branchId: order.branch_id,
       correlationId,
-      afterData: { reasonId: dto.reasonId, extraMinutes: dto.extraMinutes ?? null, comment },
+      afterData: { platform: channel.platform, reason: dto.reason, extraMinutes: dto.extraMinutes ?? null, comment: dto.comment ?? null },
     });
 
     return saved;
   }
 
   /**
-   * Snappfood owns the lines and the money on one of its orders: the annex gives a store no
-   * call to change, cancel or charge one, so doing it here would leave Snappfood untold.
+   * A platform owns the lines and the money on one of its orders: Snappfood's annex gives a
+   * store no call to change, cancel or charge one, so doing it here would leave it untold.
    */
   private refuseSnappfoodChange(order: OrderHeader, change: string) {
     if (!isAggregatorOrder(order)) return;
     throw new ConflictException({
       code: 'SNAPPFOOD_ORDER_LOCKED',
-      message: `Order ${order.order_number} came from Snappfood, which does not let a store ${change}. Report a problem to Snappfood instead.`,
+      message: `Order ${order.order_number} came from ${platformOf(order) ?? 'a delivery platform'}, which does not let a store ${change}. Report a problem to it instead.`,
     });
-  }
-
-  /** Snappfood's code for one of its orders: our order number without the SNP- prefix. */
-  private snappfoodOrderCode(order: OrderHeader): string | null {
-    if (order.channel !== 'AGGREGATOR' || !order.order_number?.startsWith('SNP-')) return null;
-    return order.order_number.slice('SNP-'.length);
   }
 
   /**

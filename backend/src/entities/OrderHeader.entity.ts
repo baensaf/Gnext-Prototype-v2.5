@@ -203,6 +203,25 @@ export class OrderHeader {
   @Column({ type: 'varchar', length: 255, nullable: true })
   aggregator_issue: string;
 
+  // The platform's rider for the order and how far they have got (Snappfood: ASSIGNED,
+  // AT_RESTAURANT, PICKED ...). Only sent when the platform has it switched on.
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  aggregator_rider_name: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  aggregator_rider_status: string | null;
+
+  // Something the till's Online panel must show until a cashier marks it seen:
+  // PLATFORM_CANCELLED (after the kitchen had it) or TIMED_OUT (the time limit turned it down).
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  online_alert: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  online_alert_at: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  online_alert_seen_at: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   placed_at: Date;
 

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, Req, Header } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, Req, Header, BadRequestException } from '@nestjs/common';
 import { Request } from 'express';
 import { OrderService } from './order.service';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
@@ -16,12 +16,14 @@ import {
   OrderReopenDto,
   OrderAcceptDto,
   OrderRejectDto,
-  OrderSnappfoodReportDto,
+  OrderOnlineReportDto,
 } from './dtos/order.dto';
 import { SplitOrderDto, TransferItemsDto } from '../dine-in/dtos/dine-in.dto';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { IncomingOrderPolicyService } from './incoming-order-policy.service';
+import { OnlineOrdersService } from './online-orders.service';
+import { OnlinePlatform } from './channels';
 import { RequireIdempotency } from '../../common/decorators/idempotency.decorator';
 
 // Every :id on this controller is an order id, and an order belongs to the shop that
@@ -34,6 +36,7 @@ export class OrdersController {
   constructor(
     private readonly orderService: OrderService,
     private readonly incomingPolicy: IncomingOrderPolicyService,
+    private readonly onlineOrders: OnlineOrdersService,
   ) {}
 
   @Get()
@@ -88,6 +91,30 @@ export class OrdersController {
     return await this.orderService.createDraft(tenantId, body, userId, correlationId);
   }
 
+  // The till's Online panel: the branch's platform orders in lanes, with what each platform
+  // allows. Declared before ':id' so the router does not take "online-board" for an order id.
+  @Get('online-board')
+  async getOnlineBoard(@Query() query: any, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const branchId = effectiveBranchId((req as any).userBranchId, query.branchId || query.branch_id);
+    if (!branchId) throw new BadRequestException('branchId is required');
+    return await this.onlineOrders.board(tenantId, branchId);
+  }
+
+  // Stop or restart one platform's orders at the branch: minutes, TODAY, or 0 to restart.
+  @Post('online-pause')
+  async pauseOnlinePlatform(@Body() body: { branchId?: string; platform: OnlinePlatform; minutes: number | 'TODAY' }, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    const branchId = effectiveBranchId((req as any).userBranchId, body?.branchId);
+    if (!branchId) throw new BadRequestException('branchId is required');
+    const minutes = body?.minutes === 'TODAY' ? 'TODAY' : Number(body?.minutes);
+    if (minutes !== 'TODAY' && (!Number.isInteger(minutes) || minutes < 0 || minutes > 24 * 60)) {
+      throw new BadRequestException('minutes must be 0 to 1440, or TODAY');
+    }
+    return await this.onlineOrders.pause(tenantId, branchId, body.platform, minutes, userId);
+  }
+
   // Snappfood's decline reasons; a store reject must name one. Declared before ':id' so
   // the router does not take "decline-reasons" for an order id.
   @Get('decline-reasons')
@@ -121,13 +148,25 @@ export class OrdersController {
     return await this.orderService.rejectIncomingOrder(tenantId, id, body, userId, correlationId);
   }
 
-  // An accepted Snappfood order needs more time or cannot be made: Snappfood support takes it.
-  @Post(':id/report-to-snappfood')
-  async reportToSnappfood(@Param('id') id: string, @Body() body: OrderSnappfoodReportDto, @Req() req: Request) {
+  // An accepted platform order needs more time or cannot be made: the platform takes it.
+  @Post(':id/online/report')
+  async reportOnlineOrder(@Param('id') id: string, @Body() body: OrderOnlineReportDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
-    return await this.orderService.reportToSnappfood(tenantId, id, body, userId, correlationId);
+    return await this.orderService.reportOnlineOrder(tenantId, id, body, userId, correlationId);
+  }
+
+  // A cashier opened a waiting platform order (Snappfood hears it as a pick).
+  @Post(':id/online/opened')
+  async onlineOrderOpened(@Param('id') id: string, @Req() req: Request) {
+    return await this.onlineOrders.opened((req as any).tenantId, id);
+  }
+
+  // The cashier saw an alert on the Online panel (a platform cancel, a lost order).
+  @Post(':id/online/alert-seen')
+  async seeOnlineAlert(@Param('id') id: string, @Req() req: Request) {
+    return await this.onlineOrders.seeAlert((req as any).tenantId, id);
   }
 
   @Get(':id')
