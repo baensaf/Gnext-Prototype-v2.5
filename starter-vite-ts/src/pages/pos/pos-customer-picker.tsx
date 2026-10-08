@@ -110,8 +110,11 @@ export function PosCustomerPicker({ value, onChange, search, onRegister, placeho
     <Autocomplete
       fullWidth
       size="small"
-      // The first match is ready for Enter, as is "register new" when nothing matches.
+      // The first match is ready for Enter, as is "register new" when nothing matches. While the
+      // search is out, "register new" waits, so an Enter typed ahead of the answer picks the
+      // customer once found instead of opening a form for a number already on file.
       autoHighlight
+      getOptionDisabled={(c) => isRegister(c) && (loading || (!tooShort && !searched))}
       disabled={disabled}
       value={value}
       options={[...found, REGISTER]}
