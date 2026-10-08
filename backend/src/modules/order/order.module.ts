@@ -67,6 +67,6 @@ import { OrderLifecycleModule } from '../order-lifecycle/order-lifecycle.module'
   ],
   providers: [OrderService, OrderSequenceService, IncomingOrderPolicyService, OnlineOrdersService],
   controllers: [OrdersController],
-  exports: [OrderService, OrderSequenceService, IncomingOrderPolicyService],
+  exports: [OrderService, OrderSequenceService, IncomingOrderPolicyService, OnlineOrdersService],
 })
 export class OrderModule {}

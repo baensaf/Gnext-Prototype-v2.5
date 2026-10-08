@@ -133,7 +133,9 @@ export class OnlineOrdersService {
         order: { online_alert_at: 'ASC' },
       }),
       this.orderRepo.count({
-        where: { tenant_id: tenantId, branch_id: branchId, channel: 'AGGREGATOR', state: 'COMPLETED', business_date: today as any },
+        // Platform orders carry no business date until reports fall back to when they were
+        // placed, so "today" is counted from when they were finished.
+        where: { tenant_id: tenantId, branch_id: branchId, channel: 'AGGREGATOR', state: 'COMPLETED', completed_at: MoreThanOrEqual(dayStart) },
       }),
       this.incomingPolicy.policyFor(tenantId, branchId),
       this.isShiftOpen(tenantId, branchId, today),
@@ -295,6 +297,92 @@ export class OnlineOrdersService {
       // Only a courtesy to the platform; the order is answered either way.
     }
     return { ok: true };
+  }
+
+  /**
+   * The food is bagged. With printed tickets nothing else moves an order to Ready, and the
+   * Ready lane is how the counter sees what waits for a rider or a customer.
+   */
+  async markReady(tenantId: string, id: string, userId?: string, correlationId?: string) {
+    const { order, channel } = await this.platformOrder(tenantId, id);
+    if (order.state === 'READY') return order;
+    if (!PREPARING_STATES.includes(order.state)) {
+      throw new ConflictException({ code: 'ORDER_NOT_IN_KITCHEN', message: `Order ${order.order_number} is ${order.state}, not in the kitchen` });
+    }
+    let current = order;
+    if (current.state === 'SUBMITTED') current = await this.orderService.transitionState(tenantId, id, 'CONFIRM', {}, userId, correlationId);
+    if (current.state === 'CONFIRMED') current = await this.orderService.transitionState(tenantId, id, 'START_PREPARATION', {}, userId, correlationId);
+    current = await this.orderService.transitionState(tenantId, id, 'MARK_READY', {}, userId, correlationId);
+    if (channel.capabilities.notifiesReady) await this.tellPlatform(current, 'ready', () => channel.ready(tenantId, current));
+    return current;
+  }
+
+  /**
+   * The order left the store with the platform's rider, or the customer collected it. An order
+   * our own courier takes leaves through Dispatch instead, where the courier's cash comes back.
+   * One the customer still owes for is paid at the till first.
+   */
+  async handOver(tenantId: string, id: string, userId?: string, correlationId?: string) {
+    const { order, channel } = await this.platformOrder(tenantId, id);
+    if (order.state === 'COMPLETED') return order;
+    if (![...PREPARING_STATES, 'READY'].includes(order.state)) {
+      throw new ConflictException({ code: 'ORDER_NOT_OPEN', message: `Order ${order.order_number} is ${order.state}` });
+    }
+    const fulfilment = channel.fulfilment(order);
+    if (fulfilment === 'OWN_COURIER') {
+      throw new ConflictException({ code: 'SEND_OUT_FROM_DISPATCH', message: `Order ${order.order_number} goes out with our courier, from Dispatch` });
+    }
+    if (MoneyUtil.greaterThan(order.outstanding_total || '0', '0')) {
+      throw new ConflictException({
+        code: 'PAYMENT_DUE',
+        message: `Take ${MoneyUtil.format(order.outstanding_total, 0)} for order ${order.order_number} before handing it over`,
+        amount: order.outstanding_total,
+      });
+    }
+    const done = await this.orderService.transitionState(
+      tenantId,
+      id,
+      'COMPLETE',
+      { reasonText: fulfilment === 'PICKUP' ? 'Collected by the customer' : `Handed to the ${channel.platform} rider` },
+      userId,
+      correlationId,
+    );
+    if (channel.capabilities.notifiesHandover) await this.tellPlatform(done, 'handed over', () => channel.handedOver(tenantId, done));
+    return done;
+  }
+
+  /**
+   * The platform's rider for the order and how far they have got. Once the rider has picked
+   * the order up it has left the store, so it is done: nobody at the counter has to say so.
+   */
+  async riderUpdate(tenantId: string, order: OrderHeader, name: string | null | undefined, status: string | null | undefined) {
+    const channel = this.channelOf(order);
+    if (!channel || !channel.capabilities.riderStatus || channel.fulfilment(order) !== 'PLATFORM_RIDER') return order;
+    const nextStatus = status ? String(status).toUpperCase().slice(0, 20) : null;
+    const nextName = name ? String(name).slice(0, 100) : null;
+    if (nextStatus === order.aggregator_rider_status && nextName === (order.aggregator_rider_name ?? null)) return order;
+
+    order.aggregator_rider_status = nextStatus;
+    order.aggregator_rider_name = nextName;
+    await this.orderRepo.save(order);
+
+    if (nextStatus === 'PICKED' && [...PREPARING_STATES, 'READY'].includes(order.state) && !MoneyUtil.greaterThan(order.outstanding_total || '0', '0')) {
+      return this.orderService.transitionState(tenantId, order.id, 'COMPLETE', { reasonText: `Picked up by the ${channel.platform} rider` });
+    }
+    return order;
+  }
+
+  /** The platform cancelled the order; the order is already CANCELLED, as it was in `stateBefore`. */
+  async platformCancelled(tenantId: string, order: OrderHeader, stateBefore: string) {
+    return this.orderService.stopKitchenForPlatformCancel(tenantId, order, stateBefore as OrderHeader['state']);
+  }
+
+  private async tellPlatform(order: OrderHeader, what: string, call: () => Promise<unknown>) {
+    try {
+      await call();
+    } catch (err) {
+      console.error(`Could not tell ${platformOf(order)} that order ${order.order_number} was ${what}`, err);
+    }
   }
 
   /** The cashier has seen an alert (a platform cancel, a lost order); it leaves the panel. */

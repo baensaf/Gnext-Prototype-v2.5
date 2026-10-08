@@ -4,6 +4,7 @@ import { validate } from 'class-validator';
 import { OrdersController } from '../src/modules/order/order.controller';
 import { OrderService } from '../src/modules/order/order.service';
 import { IncomingOrderPolicyService } from '../src/modules/order/incoming-order-policy.service';
+import { OnlineOrdersService } from '../src/modules/order/online-orders.service';
 import { OrderUpdateDto } from '../src/modules/order/dtos/order.dto';
 import { CustomerController } from '../src/modules/customer/customer.controller';
 import { CreditController } from '../src/modules/customer/credit.controller';
@@ -36,6 +37,7 @@ describe('BUG-01 & BUG-02 Verification Suite', () => {
           { provide: OrderService, useValue: orderService },
           // The controller also serves the branch's incoming-order policy; unused here.
           { provide: IncomingOrderPolicyService, useValue: {} },
+          { provide: OnlineOrdersService, useValue: {} },
         ],
       }).compile();
 

@@ -169,6 +169,20 @@ export class OrdersController {
     return await this.onlineOrders.seeAlert((req as any).tenantId, id);
   }
 
+  // The bag is ready for the rider or the customer.
+  @Post(':id/online/ready')
+  async markOnlineOrderReady(@Param('id') id: string, @Req() req: Request) {
+    const userId = (req as any).user?.id || (req as any).userId;
+    return await this.onlineOrders.markReady((req as any).tenantId, id, userId, (req as any).correlationId);
+  }
+
+  // The platform's rider took it, or the customer collected it.
+  @Post(':id/online/handed-over')
+  async handOverOnlineOrder(@Param('id') id: string, @Req() req: Request) {
+    const userId = (req as any).user?.id || (req as any).userId;
+    return await this.onlineOrders.handOver((req as any).tenantId, id, userId, (req as any).correlationId);
+  }
+
   @Get(':id')
   async getOrderById(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

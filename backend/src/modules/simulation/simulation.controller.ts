@@ -92,6 +92,18 @@ export class SimulationController {
     return await this.simulationService.sendSupportDecision(tenantId, orderCode, Number(body?.statusCode), correlationId);
   }
 
+  // Snappfood's rider moving: ASSIGNED, AT_RESTAURANT, PICKED ... (bikerStatusV2).
+  @Post('snappfood/orders/:orderCode/rider')
+  async sendSnappfoodRiderStatus(
+    @Param('orderCode') orderCode: string,
+    @Body() body: { status: string; name?: string },
+    @Req() req: Request,
+  ) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.simulationService.sendRiderStatus(tenantId, orderCode, String(body?.status || ''), body?.name, correlationId);
+  }
+
   @Post('snappfood/orders/:orderId/action')
   async triggerSnappfoodOrderAction(
     @Param('orderId') orderId: string,

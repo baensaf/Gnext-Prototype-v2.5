@@ -40,6 +40,7 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
   let kdsService: any;
   let simulationService: any;
   let auditWriter: any;
+  let printQueueService: any;
 
   const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60000);
 
@@ -83,6 +84,7 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
       ]),
     };
     auditWriter = { write: jest.fn() };
+    printQueueService = { enqueueOrderPrintJobs: jest.fn().mockResolvedValue([]), enqueueKitchenChangeTicket: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -108,7 +110,7 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
         { provide: ApprovalService, useValue: {} },
         { provide: DataSource, useValue: { transaction: jest.fn(async (cb) => await cb(em)) } },
         { provide: KdsService, useValue: kdsService },
-        { provide: PrintQueueService, useValue: { enqueueOrderPrintJobs: jest.fn().mockResolvedValue([]) } },
+        { provide: PrintQueueService, useValue: printQueueService },
         { provide: SimulationService, useValue: simulationService },
         OrderTransitionRecorder,
       ],
@@ -213,6 +215,31 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
       orderRepo.findOne.mockResolvedValue(snappfoodOrder({ channel: 'POS', order_number: 'ORD-1' }));
 
       await expect(service.reportOnlineOrder('t-1', 'order-1', { reason: 'NO_COURIER' })).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  // Audit A3 (2026-10-08): Snappfood cancelling an order the kitchen had went unseen.
+  describe('Snappfood cancelling an order the kitchen already has', () => {
+    it('takes its lines off the kitchen and leaves an alert on the till until someone sees it', async () => {
+      itemRepo.find.mockResolvedValue([{ id: 'line-1' }, { id: 'line-2' }]);
+      const order: any = snappfoodOrder({ state: 'CANCELLED', status: 'CANCELLED' });
+
+      const result = await service.stopKitchenForPlatformCancel('t-1', order, 'CONFIRMED');
+
+      expect(kdsService.cancelTicketItemsForOrderItem).toHaveBeenCalledTimes(2);
+      // With printed tickets the cook learns it from a STOP chit.
+      expect(printQueueService.enqueueKitchenChangeTicket).toHaveBeenCalledWith('t-1', 'order-1', expect.objectContaining({ kind: 'CANCELLED' }), undefined);
+      expect(result.online_alert).toBe('PLATFORM_CANCELLED');
+      expect(result.online_alert_seen_at).toBeNull();
+    });
+
+    it('raises nothing for an order that was still waiting to be accepted', async () => {
+      const order: any = snappfoodOrder({ state: 'CANCELLED', status: 'CANCELLED', accepted_at: null });
+
+      const result = await service.stopKitchenForPlatformCancel('t-1', order, 'PENDING_ACCEPTANCE');
+
+      expect(kdsService.cancelTicketItemsForOrderItem).not.toHaveBeenCalled();
+      expect(result.online_alert).toBeUndefined();
     });
   });
 
