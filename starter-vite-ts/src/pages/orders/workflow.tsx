@@ -3,7 +3,7 @@ import type { RefundRecord } from 'src/api/refundApi';
 import type { ReasonCode } from 'src/api/settingsApi';
 import type { LabelColor } from 'src/components/label';
 import type { ReceiptData, PaymentRecord } from 'src/api/paymentApi';
-import type { OrderHeader, OrderListRow, DeclineReason, OrderLifecycle, OrderListQuery } from 'src/api/orderApi';
+import type { OrderHeader, OrderListRow, OrderLifecycle, OrderListQuery } from 'src/api/orderApi';
 
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -85,7 +85,6 @@ import {
   storeDeliversIt,
   isSnappfoodOrder,
   reportMinutesLeft,
-  SNAPPFOOD_DELAY_REASON_ID,
 } from 'src/utils/snappfood-order';
 
 import { kdsApi } from 'src/api/kdsApi';
@@ -97,6 +96,7 @@ import { settingsApi } from 'src/api/settingsApi';
 import { useAuthStore } from 'src/store/useAuthStore';
 import { httpClient as axios } from 'src/api/httpClient';
 import { isManagerOrAbove } from 'src/config/role-access';
+import { useIncomingOrders } from 'src/contexts/incoming-orders-context';
 import { useBranchContext, useScopedBranchId } from 'src/contexts/branch-context';
 
 import { Label } from 'src/components/label';
@@ -270,6 +270,7 @@ export function OrdersWorkflowPage() {
     searchParams.get(key) || (DEFAULTS as Record<string, string>)[key] || fallback;
   const tab = param('tab') as TabKey;
   const navigate = useNavigate();
+  const online = useIncomingOrders();
   // The grid's column filters, under `f`. A link from before them still opens its filters.
   const filterParam = searchParams.get('f');
   const legacyParams = Object.keys(LEGACY_FILTER_PARAMS)
@@ -369,14 +370,6 @@ export function OrdersWorkflowPage() {
   const [drawerMenuAnchor, setDrawerMenuAnchor] = useState<HTMLElement | null>(null);
   const drawerOpen = !!drawerOrderId;
 
-  // Report an accepted Snappfood order to Snappfood support: more time, or it cannot be made.
-  const [reportOrder, setReportOrder] = useState<OrderHeader | null>(null);
-  const [declineReasons, setDeclineReasons] = useState<DeclineReason[]>([]);
-  const [reportReasonId, setReportReasonId] = useState<number>(SNAPPFOOD_DELAY_REASON_ID);
-  const [reportExtraMinutes, setReportExtraMinutes] = useState(15);
-  const [reportComment, setReportComment] = useState('');
-  const [reportError, setReportError] = useState<string | null>(null);
-  const [reportSubmitting, setReportSubmitting] = useState(false);
 
   const getOrderTypeLabel = (orderType: string) => {
     switch (orderType) {
@@ -519,9 +512,10 @@ export function OrdersWorkflowPage() {
     order.status !== 'OUT_FOR_DELIVERY' &&
     (lifecycleOf(order) === 'OPEN' || order.status === 'DRAFT');
 
-  // Snappfood collects for its orders, so the till never takes money for one.
+  // A platform collects for its orders, so the till takes no money for one, except a cash order
+  // the customer collects: they pay at the counter.
   const canPay = (order: OrderHeader) =>
-    !readOnly && !isSnappfoodOrder(order) && order.status !== 'CANCELLED' && MoneyUtil.greaterThan(order.due_amount, '0');
+    !readOnly && (!isSnappfoodOrder(order) || order.aggregator_expedition === 'PICKUP') && order.status !== 'CANCELLED' && MoneyUtil.greaterThan(order.due_amount, '0');
 
   const canReport = (order: OrderHeader) => !readOnly && reportMinutesLeft(order, Date.now()) > 0;
 
@@ -540,39 +534,9 @@ export function OrdersWorkflowPage() {
   const canEditLines = (order: OrderHeader) =>
     !readOnly && !isSnappfoodOrder(order) && !['COMPLETED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(order.status);
 
-  const handleOpenReport = (order: OrderHeader) => {
-    setReportOrder(order);
-    setReportReasonId(SNAPPFOOD_DELAY_REASON_ID);
-    setReportExtraMinutes(15);
-    setReportComment('');
-    setReportError(null);
-    if (declineReasons.length === 0) {
-      orderApi.getDeclineReasons().then(setDeclineReasons).catch(() => setDeclineReasons([]));
-    }
-  };
-
-  const handleSendReport = async () => {
-    if (!reportOrder) return;
-    try {
-      setReportSubmitting(true);
-      setReportError(null);
-      const reported = await orderApi.reportToSnappfood(reportOrder.id, {
-        reasonId: reportReasonId,
-        extraMinutes: reportReasonId === SNAPPFOOD_DELAY_REASON_ID ? reportExtraMinutes : undefined,
-        comment: reportComment.trim(),
-      });
-      setSuccess(t('orders.snappfood.reported', { orderNumber: orderRefOf(reportOrder, showOrderCode) }));
-      setReportOrder(null);
-      loadData();
-      if (drawerOpen && selectedDrawerOrder?.id === reported.id) {
-        loadDrawerDetails(reported.id);
-      }
-    } catch (err: any) {
-      setReportError(err?.detail || err?.message || t('orders.snappfood.reportFailed'));
-    } finally {
-      setReportSubmitting(false);
-    }
-  };
+  // A platform order is reported where it is answered: its card on the Online panel, which
+  // offers only what its platform takes, for as long as it takes it.
+  const handleOpenReport = (order: OrderHeader) => navigate(online?.panelPath(order.id) ?? paths.app.orders.incoming);
 
   // A filter still waiting for its value changes the model but not what the server is asked.
   const serverFilters = JSON.stringify(toServerFilters(filterModel) ?? null);
@@ -948,15 +912,6 @@ export function OrdersWorkflowPage() {
         color: 'primary' as const,
         icon: <DoneAllIcon />,
         run: () => handleUpdateStatus(order.id, 'COMPLETED'),
-      };
-    }
-    if (canReport(order)) {
-      return {
-        key: 'report',
-        label: t('orders.actions.reportToSnappfood'),
-        color: 'warning' as const,
-        icon: <ScheduleIcon />,
-        run: () => handleOpenReport(order),
       };
     }
     return null;
@@ -1408,13 +1363,13 @@ export function OrdersWorkflowPage() {
         </Alert>
       )}
 
-      {/* Orders waiting to be accepted are answered on Incoming Orders, not here. */}
+      {/* Orders waiting to be accepted are answered on the Online panel, not here. */}
       {!readOnly && (counts.WAITING ?? 0) > 0 && (
         <Alert
           severity="warning"
           sx={{ mb: 2 }}
           action={
-            <Button color="inherit" size="small" onClick={() => navigate(paths.app.orders.incoming)} sx={{ fontWeight: 700 }}>
+            <Button color="inherit" size="small" onClick={() => navigate(online?.panelPath() ?? paths.app.orders.incoming)} sx={{ fontWeight: 700 }}>
               {t('orders.waiting.answer')}
             </Button>
           }
@@ -1562,73 +1517,6 @@ export function OrdersWorkflowPage() {
           <Button onClick={() => setCancelDialogOpen(false)}>{t('orders.cancelDialog.keepOrder')}</Button>
           <Button color="error" onClick={() => handleConfirmCancel()} sx={{ fontWeight: 'bold' }} variant="contained">
             {t('orders.cancelDialog.confirm')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Report an accepted Snappfood order to Snappfood support */}
-      <Dialog fullWidth maxWidth="xs" onClose={() => !reportSubmitting && setReportOrder(null)} open={!!reportOrder}>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 'bold' }}>
-          <ScheduleIcon color="warning" />
-          {t('orders.snappfood.reportTitle', { orderNumber: orderRefOf(reportOrder, showOrderCode) })}
-          <VersionTag feature="orders.snappfood" />
-        </DialogTitle>
-        <DialogContent>
-          <Typography color="text.secondary" sx={{ mb: 2 }} variant="body2">
-            {t('orders.snappfood.reportDescription', {
-              count: reportOrder ? reportMinutesLeft(reportOrder, Date.now()) : 0,
-            })}
-          </Typography>
-
-          <Stack spacing={2}>
-            <FormControl fullWidth>
-              <InputLabel>{t('orders.snappfood.reason')}</InputLabel>
-              <Select
-                label={t('orders.snappfood.reason')}
-                onChange={(e) => setReportReasonId(Number(e.target.value))}
-                value={declineReasons.length ? reportReasonId : ''}
-              >
-                {declineReasons.map((reason) => (
-                  <MenuItem key={reason.id} value={reason.id}>
-                    {reason.title}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            {reportReasonId === SNAPPFOOD_DELAY_REASON_ID && (
-              <TextField
-                fullWidth
-                label={t('orders.snappfood.extraMinutes')}
-                onChange={(e) => setReportExtraMinutes(Math.min(120, Math.max(1, Math.round(Number(e.target.value) || 0))))}
-                slotProps={{ htmlInput: { min: 1, max: 120 } }}
-                type="number"
-                value={reportExtraMinutes}
-              />
-            )}
-
-            <TextField
-              fullWidth
-              label={t('orders.snappfood.comment')}
-              onChange={(e) => setReportComment(e.target.value)}
-              value={reportComment}
-            />
-
-            {reportError && <Alert severity="error">{reportError}</Alert>}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button disabled={reportSubmitting} onClick={() => setReportOrder(null)}>
-            {t('orders.snappfood.close')}
-          </Button>
-          <Button
-            color="warning"
-            disabled={reportSubmitting || declineReasons.length === 0}
-            onClick={handleSendReport}
-            startIcon={reportSubmitting ? <CircularProgress size={16} /> : <ScheduleIcon />}
-            variant="contained"
-          >
-            {t('orders.snappfood.send')}
           </Button>
         </DialogActions>
       </Dialog>

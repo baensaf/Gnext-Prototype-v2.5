@@ -229,25 +229,10 @@ export const orderApi = {
     return res.data;
   },
 
-  /** Aggregator and website orders waiting for this branch to accept or reject them, oldest first. */
-  getIncomingOrders: async (branchId: string): Promise<OrderHeader[]> => {
-    const res = await httpClient.get('/api/v1/orders', {
-      params: { branchId, state: 'PENDING_ACCEPTANCE', limit: 100 },
-    });
-    const list: OrderHeader[] = Array.isArray(res.data?.data) ? res.data.data : [];
-    return [...list].sort((a, b) => String(a.placed_at).localeCompare(String(b.placed_at)));
-  },
-
   /** The branch's time limit for answering, what happens after it, and the default prep time. */
   getIncomingPolicy: async (branchId: string): Promise<IncomingOrderPolicy> => {
     const res = await httpClient.get('/api/v1/orders/incoming-policy', { params: { branchId } });
     return res.data;
-  },
-
-  /** Snappfood's decline reasons. A reject must name one. */
-  getDeclineReasons: async (): Promise<DeclineReason[]> => {
-    const res = await httpClient.get('/api/v1/orders/decline-reasons');
-    return Array.isArray(res.data) ? res.data : [];
   },
 
   /**
@@ -256,27 +241,6 @@ export const orderApi = {
    */
   acceptIncomingOrder: async (id: string, prepMinutes: number): Promise<OrderHeader> => {
     const res = await httpClient.post(`/api/v1/orders/${id}/accept`, { prepMinutes });
-    return res.data;
-  },
-
-  /** Turn an incoming order down. Nothing reaches the kitchen; the aggregator is told why. */
-  rejectIncomingOrder: async (id: string, reasonId: number, comment?: string): Promise<OrderHeader> => {
-    const res = await httpClient.post(`/api/v1/orders/${id}/reject`, { reasonId, comment: comment || undefined });
-    return res.data;
-  },
-
-  /**
-   * Hand an accepted Snappfood order to Snappfood support: it needs more time (reason 153,
-   * with the extra minutes) or cannot be made. Only within an hour of accepting.
-   */
-  reportToSnappfood: async (
-    id: string,
-    report: { reasonId: number; extraMinutes?: number; comment?: string }
-  ): Promise<OrderHeader> => {
-    const res = await httpClient.post(`/api/v1/orders/${id}/report-to-snappfood`, {
-      ...report,
-      comment: report.comment || undefined,
-    });
     return res.data;
   },
 

@@ -52,7 +52,7 @@
     "orders": "Orders",
     "operations": "Operations",
     "kds": "Kitchen KDS",
-    "incomingOrders": "Incoming Orders",
+    "incomingOrders": "Online Orders",
     "delivery": "Delivery Orders",
     "deliveryHub": "Delivery hub",
     "deliveryOrders": "Dispatch Board",
@@ -2790,7 +2790,11 @@
         "actionResponse": "Action Response",
         "supportActions": "Snappfood support, after the store rejects or reports an order:",
         "supportCancel": "Cancel the order (webhook → Code 54)",
-        "supportResend": "Send the order back (webhook → Code 56)"
+        "supportResend": "Send the order back (webhook → Code 56)",
+        "riderActions": "Snappfood's rider (bikerStatusV2)",
+        "riderASSIGNED": "Rider assigned",
+        "riderAT_RESTAURANT": "Rider at the restaurant",
+        "riderPICKED": "Rider picked it up"
       },
       "vendorApi": {
         "title": "Vendor Automation API Test Console (v4.3.0)",
@@ -4551,6 +4555,157 @@
     "noBranch": {
       "title": "You have no branch to work in",
       "body": "The branch you worked at has been archived. Ask head office to give you another branch; your account and PIN stay as they are."
+    }
+  },
+  "online": {
+    "title": "Online orders",
+    "tabMenu": "Menu",
+    "tabOnline": "Online",
+    "platform": {
+      "SNAPPFOOD": "Snappfood"
+    },
+    "lane": {
+      "NEW": "New",
+      "PREPARING": "Preparing",
+      "READY": "Ready",
+      "ISSUE": "Needs attention"
+    },
+    "laneEmpty": {
+      "NEW": "No new orders",
+      "PREPARING": "Nothing in the kitchen",
+      "READY": "Nothing waiting"
+    },
+    "fulfilment": {
+      "PLATFORM_RIDER": "{{platform}} rider",
+      "OWN_COURIER": "Our courier",
+      "PICKUP": "Customer pickup"
+    },
+    "paidOnline": "Paid online",
+    "collect": "Collect {{amount}}",
+    "minutes": "{{count}} min",
+    "timer": {
+      "answerIn": "{{count}} min to answer",
+      "answerNow": "Answer now",
+      "readyBy": "Ready by {{time}}",
+      "deliverBy": "Delivered by {{time}}",
+      "late": "Late {{count}} min",
+      "lateHours": "Late {{count}} h"
+    },
+    "accept": "Accept · {{count}} min",
+    "reject": "Reject",
+    "details": "Details",
+    "ready": "Ready",
+    "handedToRider": "Handed to rider",
+    "collected": "Collected",
+    "collectAndHandOver": "Take {{amount}} and hand over",
+    "sendOut": "Send out with a courier",
+    "moreActions": "More",
+    "report": "Tell {{platform}}: more time or a problem",
+    "gotIt": "Got it",
+    "close": "Close",
+    "issue": {
+      "PLATFORM_CANCELLED": "{{platform}} cancelled this order. Stop making it.",
+      "TIMED_OUT": "Not answered in time, so it was rejected automatically.",
+      "WITH_SUPPORT": "With {{platform}} support: {{text}}"
+    },
+    "rider": {
+      "someone": "The rider",
+      "REQUESTED": "Looking for a rider",
+      "ASSIGNED": "{{name}} is on the way",
+      "ACK": "{{name}} is on the way",
+      "AT_RESTAURANT": "{{name}} is here",
+      "PICKED": "{{name}} picked it up",
+      "DELIVERED": "Delivered",
+      "CANCELED": "The rider cancelled"
+    },
+    "noShift": "No shift is open at this branch. Open one to accept online orders.",
+    "noShiftShort": "Open a shift to accept",
+    "waitingBehindShift": "{{count}} online orders need you. Open the shift to answer them.",
+    "doneToday": "{{count}} done today",
+    "empty": "No online orders right now. New ones pop up here with a sound.",
+    "noBranch": "Choose a restaurant branch to see its online orders.",
+    "status": {
+      "open": "{{platform}}: taking orders",
+      "paused": "{{platform}}: paused until {{time}}"
+    },
+    "pause": {
+      "busy": "Busy: pause {{count}} min",
+      "today": "Closed for the rest of today",
+      "resume": "Take orders again",
+      "done": "{{platform}} paused until {{time}}",
+      "resumed": "{{platform}} is taking orders again",
+      "failed": "Could not change {{platform}}"
+    },
+    "rejectDialog": {
+      "title": "Reject order {{code}}",
+      "hint": "{{platform}} is told why. Nothing reaches the kitchen.",
+      "comment": "Comment (optional)",
+      "confirm": "Reject order"
+    },
+    "rejectReason": {
+      "TOO_BUSY": "Too busy",
+      "ITEM_UNAVAILABLE": "An item is unavailable",
+      "NO_COURIER": "No courier",
+      "DELIVERY_FEE": "Delivery fee changed",
+      "CLOSED": "Closed",
+      "OTHER": "Other"
+    },
+    "reportDialog": {
+      "title": "Order {{code}}: tell {{platform}}",
+      "hint": "{{platform}} cannot change the time or the items after you accept. This hands the order to {{platform}} support, who call you and the customer, then cancel it or send it back for you to accept with a new time. The kitchen keeps cooking meanwhile.",
+      "minutesLeft": "{{count}} min left to send this.",
+      "extraMinutes": "How many more minutes",
+      "comment": "Comment (optional)",
+      "confirm": "Send to {{platform}}"
+    },
+    "reportReason": {
+      "MORE_TIME": "Needs more time",
+      "ITEM_UNAVAILABLE": "An item is unavailable",
+      "NO_COURIER": "No courier",
+      "DELIVERY_FEE": "Delivery fee changed"
+    },
+    "detailsDialog": {
+      "title": "{{platform}} order {{code}}",
+      "customer": "Customer",
+      "phone": "Phone",
+      "address": "Address",
+      "note": "Note",
+      "fulfilment": "Goes with",
+      "rider": "Rider",
+      "items": "Items",
+      "total": "Total"
+    },
+    "popup": {
+      "title": "New online order",
+      "open": "Open",
+      "later": "Later",
+      "pill": "{{count}} new online orders"
+    },
+    "toast": {
+      "newTitle": "New {{platform}} order {{code}}",
+      "newDescription": "{{total}}, waiting for you",
+      "view": "View",
+      "issue": {
+        "PLATFORM_CANCELLED": "{{platform}} cancelled order {{code}}. Stop making it.",
+        "TIMED_OUT": "Order {{code}} was not answered in time and was rejected."
+      },
+      "accepted": "Order {{code}} accepted and sent to the kitchen",
+      "rejected": "Order {{code}} rejected",
+      "readyDone": "Order {{code}} is ready",
+      "handedOver": "Order {{code}} handed over",
+      "reported": "Order {{code}} is with {{platform}} support",
+      "seen": "Order {{code}} cleared",
+      "failed": "That did not go through. Another till may have answered it first."
+    },
+    "errors": {
+      "NO_OPEN_SHIFT": "No shift is open at this branch. Open one first, or reject the order.",
+      "PROMISE_OVER_PLATFORM_LIMIT": "The platform takes at most {{maxMinutes}} min for this order.",
+      "PAYMENT_DUE": "Take the money first.",
+      "SEND_OUT_FROM_DISPATCH": "Our courier takes this one. Send it out from Dispatch.",
+      "REPORT_WINDOW_CLOSED": "Too late to send this ({{windowMinutes}} min after accepting). Call the platform’s support.",
+      "REPORT_ALREADY_OPEN": "This order is already with the platform’s support.",
+      "ORDER_NOT_IN_KITCHEN": "The kitchen no longer has this order.",
+      "ORDER_AWAITING_ACCEPTANCE": "Answer this order first."
     }
   }
 }

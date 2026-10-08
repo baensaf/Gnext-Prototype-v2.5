@@ -52,7 +52,7 @@
     "orders": "سفارش‌ها",
     "operations": "عملیات",
     "kds": "نمایشگر آشپزخانه KDS",
-    "incomingOrders": "سفارش‌های ورودی",
+    "incomingOrders": "سفارش‌های آنلاین",
     "delivery": "سفارش‌های تحویلی",
     "deliveryHub": "مرکز ارسال",
     "deliveryOrders": "تابلوی دیسپچ و ارسال",
@@ -2790,7 +2790,11 @@
         "actionResponse": "پاسخ نتیجه عملیات",
         "supportActions": "پشتیبانی اسنپ‌فود، پس از رد یا گزارش سفارش توسط فروشگاه:",
         "supportCancel": "لغو سفارش (وبهوک ← کد ۵۴)",
-        "supportResend": "ارسال دوبارهٔ سفارش (وبهوک ← کد ۵۶)"
+        "supportResend": "ارسال دوبارهٔ سفارش (وبهوک ← کد ۵۶)",
+        "riderActions": "پیک اسنپ‌فود (bikerStatusV2)",
+        "riderASSIGNED": "پیک تعیین شد",
+        "riderAT_RESTAURANT": "پیک در رستوران است",
+        "riderPICKED": "پیک سفارش را برد"
       },
       "vendorApi": {
         "title": "کنسول تست وب‌سرویس‌های اتوماسیون (v4.3.0)",
@@ -4551,6 +4555,157 @@
     "noBranch": {
       "title": "شعبه‌ای برای کار ندارید",
       "body": "شعبه‌ای که در آن کار می‌کردید بایگانی شده. از دفتر مرکزی بخواهید شعبهٔ دیگری به شما بدهد؛ حساب و رمز (PIN) شما همان می‌ماند."
+    }
+  },
+  "online": {
+    "title": "سفارش‌های آنلاین",
+    "tabMenu": "منو",
+    "tabOnline": "آنلاین",
+    "platform": {
+      "SNAPPFOOD": "اسنپ‌فود"
+    },
+    "lane": {
+      "NEW": "جدید",
+      "PREPARING": "در آشپزخانه",
+      "READY": "آماده",
+      "ISSUE": "نیاز به توجه"
+    },
+    "laneEmpty": {
+      "NEW": "سفارش جدیدی نیست",
+      "PREPARING": "چیزی در آشپزخانه نیست",
+      "READY": "چیزی منتظر نیست"
+    },
+    "fulfilment": {
+      "PLATFORM_RIDER": "پیک {{platform}}",
+      "OWN_COURIER": "پیک خودمان",
+      "PICKUP": "تحویل حضوری"
+    },
+    "paidOnline": "آنلاین پرداخت شده",
+    "collect": "دریافت {{amount}}",
+    "minutes": "{{count}} دقیقه",
+    "timer": {
+      "answerIn": "{{count}} دقیقه تا پاسخ",
+      "answerNow": "همین حالا پاسخ دهید",
+      "readyBy": "آماده تا {{time}}",
+      "deliverBy": "تحویل تا {{time}}",
+      "late": "{{count}} دقیقه تأخیر",
+      "lateHours": "{{count}} ساعت تأخیر"
+    },
+    "accept": "تأیید · {{count}} دقیقه",
+    "reject": "رد",
+    "details": "جزئیات",
+    "ready": "آماده شد",
+    "handedToRider": "به پیک تحویل شد",
+    "collected": "مشتری تحویل گرفت",
+    "collectAndHandOver": "دریافت {{amount}} و تحویل",
+    "sendOut": "ارسال با پیک",
+    "moreActions": "بیشتر",
+    "report": "گزارش به {{platform}}: زمان بیشتر یا مشکل",
+    "gotIt": "متوجه شدم",
+    "close": "بستن",
+    "issue": {
+      "PLATFORM_CANCELLED": "{{platform}} این سفارش را لغو کرد. آماده‌سازی را متوقف کنید.",
+      "TIMED_OUT": "به‌موقع پاسخ داده نشد و خودکار رد شد.",
+      "WITH_SUPPORT": "نزد پشتیبانی {{platform}}: {{text}}"
+    },
+    "rider": {
+      "someone": "پیک",
+      "REQUESTED": "در جستجوی پیک",
+      "ASSIGNED": "{{name}} در راه است",
+      "ACK": "{{name}} در راه است",
+      "AT_RESTAURANT": "{{name}} رسیده است",
+      "PICKED": "{{name}} سفارش را برد",
+      "DELIVERED": "تحویل شد",
+      "CANCELED": "پیک لغو کرد"
+    },
+    "noShift": "در این شعبه شیفتی باز نیست. برای تأیید سفارش‌های آنلاین یک شیفت باز کنید.",
+    "noShiftShort": "برای تأیید، شیفت باز کنید",
+    "waitingBehindShift": "{{count}} سفارش آنلاین منتظر شماست. برای پاسخ، شیفت را باز کنید.",
+    "doneToday": "{{count}} تکمیل‌شده امروز",
+    "empty": "فعلاً سفارش آنلاینی نیست. سفارش‌های جدید با صدا اینجا ظاهر می‌شوند.",
+    "noBranch": "برای دیدن سفارش‌های آنلاین، یک شعبه رستوران انتخاب کنید.",
+    "status": {
+      "open": "{{platform}}: در حال دریافت سفارش",
+      "paused": "{{platform}}: متوقف تا {{time}}"
+    },
+    "pause": {
+      "busy": "شلوغ: توقف {{count}} دقیقه",
+      "today": "بسته تا پایان امروز",
+      "resume": "دریافت دوباره سفارش",
+      "done": "{{platform}} تا {{time}} متوقف شد",
+      "resumed": "{{platform}} دوباره سفارش می‌گیرد",
+      "failed": "تغییر وضعیت {{platform}} ممکن نشد"
+    },
+    "rejectDialog": {
+      "title": "رد سفارش {{code}}",
+      "hint": "دلیل به {{platform}} اعلام می‌شود. چیزی به آشپزخانه نمی‌رود.",
+      "comment": "توضیحات (اختیاری)",
+      "confirm": "رد سفارش"
+    },
+    "rejectReason": {
+      "TOO_BUSY": "سرمان شلوغ است",
+      "ITEM_UNAVAILABLE": "یکی از اقلام موجود نیست",
+      "NO_COURIER": "پیک نداریم",
+      "DELIVERY_FEE": "تغییر هزینه پیک",
+      "CLOSED": "بسته هستیم",
+      "OTHER": "سایر"
+    },
+    "reportDialog": {
+      "title": "سفارش {{code}}: گزارش به {{platform}}",
+      "hint": "پس از تأیید، {{platform}} امکان تغییر زمان یا اقلام را ندارد. با این گزارش سفارش به پشتیبانی {{platform}} می‌رود؛ پشتیبانی با شما و مشتری تماس می‌گیرد و سفارش را لغو می‌کند یا برای تأیید با زمان جدید برمی‌گرداند. آشپزخانه در این مدت کارش را ادامه می‌دهد.",
+      "minutesLeft": "{{count}} دقیقه برای ارسال این گزارش باقی است.",
+      "extraMinutes": "چند دقیقه بیشتر",
+      "comment": "توضیحات (اختیاری)",
+      "confirm": "ارسال به {{platform}}"
+    },
+    "reportReason": {
+      "MORE_TIME": "زمان بیشتری لازم است",
+      "ITEM_UNAVAILABLE": "یکی از اقلام موجود نیست",
+      "NO_COURIER": "پیک نداریم",
+      "DELIVERY_FEE": "تغییر هزینه پیک"
+    },
+    "detailsDialog": {
+      "title": "سفارش {{platform}} {{code}}",
+      "customer": "مشتری",
+      "phone": "تلفن",
+      "address": "آدرس",
+      "note": "یادداشت",
+      "fulfilment": "ارسال با",
+      "rider": "پیک",
+      "items": "اقلام",
+      "total": "جمع"
+    },
+    "popup": {
+      "title": "سفارش آنلاین جدید",
+      "open": "باز کردن",
+      "later": "بعداً",
+      "pill": "{{count}} سفارش آنلاین جدید"
+    },
+    "toast": {
+      "newTitle": "سفارش جدید {{platform}} {{code}}",
+      "newDescription": "{{total}}، منتظر شماست",
+      "view": "مشاهده",
+      "issue": {
+        "PLATFORM_CANCELLED": "{{platform}} سفارش {{code}} را لغو کرد. آماده‌سازی را متوقف کنید.",
+        "TIMED_OUT": "به سفارش {{code}} به‌موقع پاسخ داده نشد و رد شد."
+      },
+      "accepted": "سفارش {{code}} تأیید و به آشپزخانه فرستاده شد",
+      "rejected": "سفارش {{code}} رد شد",
+      "readyDone": "سفارش {{code}} آماده است",
+      "handedOver": "سفارش {{code}} تحویل شد",
+      "reported": "سفارش {{code}} نزد پشتیبانی {{platform}} است",
+      "seen": "سفارش {{code}} از فهرست برداشته شد",
+      "failed": "انجام نشد. شاید صندوق دیگری زودتر پاسخ داده باشد."
+    },
+    "errors": {
+      "NO_OPEN_SHIFT": "در این شعبه شیفتی باز نیست. اول شیفت باز کنید یا سفارش را رد کنید.",
+      "PROMISE_OVER_PLATFORM_LIMIT": "پلتفرم برای این سفارش حداکثر {{maxMinutes}} دقیقه می‌پذیرد.",
+      "PAYMENT_DUE": "اول مبلغ را دریافت کنید.",
+      "SEND_OUT_FROM_DISPATCH": "این سفارش را پیک خودمان می‌برد. از مرکز ارسال بفرستید.",
+      "REPORT_WINDOW_CLOSED": "برای این گزارش دیر است ({{windowMinutes}} دقیقه پس از تأیید). با پشتیبانی پلتفرم تماس بگیرید.",
+      "REPORT_ALREADY_OPEN": "این سفارش هم‌اکنون نزد پشتیبانی پلتفرم است.",
+      "ORDER_NOT_IN_KITCHEN": "این سفارش دیگر در آشپزخانه نیست.",
+      "ORDER_AWAITING_ACCEPTANCE": "اول به این سفارش پاسخ دهید."
     }
   }
 }
