@@ -217,7 +217,7 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
       openShifts = [];
       orderRepo.findOne.mockResolvedValue(pendingOrder());
 
-      const result = await service.rejectIncomingOrder('t-1', 'order-1', { reasonId: 113 }, 'user-1');
+      const result = await service.rejectIncomingOrder('t-1', 'order-1', { reason: 'NO_COURIER' }, 'user-1');
 
       expect(result.state).toBe('REJECTED');
     });
@@ -236,22 +236,22 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
     it('records the reason, sends nothing to the kitchen or printer, and tells Snappfood', async () => {
       orderRepo.findOne.mockResolvedValue(pendingOrder());
 
-      const result = await service.rejectIncomingOrder('t-1', 'order-1', { reasonId: 113, comment: 'No rider tonight' }, 'user-1');
+      const result = await service.rejectIncomingOrder('t-1', 'order-1', { reason: 'NO_COURIER', comment: 'No rider tonight' }, 'user-1');
 
       expect(result.state).toBe('REJECTED');
       const [event] = savedStateEvents();
       expect(event).toEqual(expect.objectContaining({ from_state: 'PENDING_ACCEPTANCE', to_state: 'REJECTED', action: 'REJECT' }));
-      expect(event.reason_text).toContain('113');
+      expect(event.reason_text).toContain('NO_COURIER');
       expect(event.reason_text).toContain('No rider tonight');
       expect(kdsService.generateTicketsForOrder).not.toHaveBeenCalled();
       expect(printQueueService.enqueueOrderPrintJobs).not.toHaveBeenCalled();
       expect(simulationService.notifyRejected).toHaveBeenCalledWith('t-1', 'SF-304', { reasonId: 113, comment: 'No rider tonight' });
     });
 
-    it("needs one of Snappfood's decline reasons", async () => {
+    it('needs a reason Snappfood has a code for', async () => {
       orderRepo.findOne.mockResolvedValue(pendingOrder());
 
-      await expect(service.rejectIncomingOrder('t-1', 'order-1', { reasonId: 999 })).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.rejectIncomingOrder('t-1', 'order-1', { reason: 'CLOSED' })).rejects.toBeInstanceOf(BadRequestException);
 
       expect(em.save).not.toHaveBeenCalled();
       expect(simulationService.notifyRejected).not.toHaveBeenCalled();
@@ -260,7 +260,7 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
     it('refuses an order that was already accepted', async () => {
       orderRepo.findOne.mockResolvedValue(pendingOrder({ state: 'CONFIRMED', status: 'CONFIRMED' }));
 
-      await expect(service.rejectIncomingOrder('t-1', 'order-1', { reasonId: 113 })).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.rejectIncomingOrder('t-1', 'order-1', { reason: 'NO_COURIER' })).rejects.toBeInstanceOf(ConflictException);
 
       expect(simulationService.notifyRejected).not.toHaveBeenCalled();
     });

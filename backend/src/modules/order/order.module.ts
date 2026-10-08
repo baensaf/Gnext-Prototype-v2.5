@@ -17,6 +17,7 @@ import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { OrderService } from './order.service';
 import { OrderSequenceService } from './order-sequence.service';
 import { IncomingOrderPolicyService } from './incoming-order-policy.service';
+import { OnlineOrdersService } from './online-orders.service';
 import { OrdersController } from './order.controller';
 import { CatalogModule } from '../catalog/catalog.module';
 import { DiscountsModule } from '../discounts/discounts.module';
@@ -64,7 +65,7 @@ import { OrderLifecycleModule } from '../order-lifecycle/order-lifecycle.module'
     // order is put through the branch's acceptance policy as it lands.
     forwardRef(() => SimulationModule),
   ],
-  providers: [OrderService, OrderSequenceService, IncomingOrderPolicyService],
+  providers: [OrderService, OrderSequenceService, IncomingOrderPolicyService, OnlineOrdersService],
   controllers: [OrdersController],
   exports: [OrderService, OrderSequenceService, IncomingOrderPolicyService],
 })

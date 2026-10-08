@@ -134,7 +134,7 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
       const refused = await service.acceptIncomingOrder('t-1', 'order-1', { prepMinutes: 26 }).catch((e) => e);
 
       expect(refused).toBeInstanceOf(BadRequestException);
-      expect(refused.getResponse()).toEqual(expect.objectContaining({ code: 'PROMISE_OVER_SNAPPFOOD_LIMIT', maxMinutes: 25 }));
+      expect(refused.getResponse()).toEqual(expect.objectContaining({ code: 'PROMISE_OVER_PLATFORM_LIMIT', maxMinutes: 25 }));
       expect(em.save).not.toHaveBeenCalled();
       expect(kdsService.generateTicketsForOrder).not.toHaveBeenCalled();
       expect(simulationService.notifyAccepted).not.toHaveBeenCalled();
@@ -172,47 +172,47 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
     it('asks Snappfood for more time with decline reason 153, and the kitchen keeps the order', async () => {
       orderRepo.findOne.mockResolvedValue(snappfoodOrder());
 
-      const reported = await service.reportToSnappfood('t-1', 'order-1', { reasonId: 153, extraMinutes: 20 }, 'user-1');
+      const reported = await service.reportOnlineOrder('t-1', 'order-1', { reason: 'MORE_TIME', extraMinutes: 20 }, 'user-1');
 
       expect(simulationService.notifyRejected).toHaveBeenCalledWith('t-1', 'SF-400', { reasonId: 153, comment: 'Needs 20 more minutes' });
       expect(reported.state).toBe('CONFIRMED');
       expect(reported.aggregator_issue_at).toBeInstanceOf(Date);
       expect(reported.aggregator_issue).toContain('Needs 20 more minutes');
       expect(kdsService.cancelTicketItemsForOrderItem).not.toHaveBeenCalled();
-      expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'SNAPPFOOD_ORDER_REPORTED', entityId: 'order-1' }));
+      expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'ONLINE_ORDER_REPORTED', entityId: 'order-1' }));
     });
 
     it('needs to know how many more minutes a delay takes', async () => {
       orderRepo.findOne.mockResolvedValue(snappfoodOrder());
 
-      await expect(service.reportToSnappfood('t-1', 'order-1', { reasonId: 153 })).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.reportOnlineOrder('t-1', 'order-1', { reason: 'MORE_TIME' })).rejects.toBeInstanceOf(BadRequestException);
       expect(simulationService.notifyRejected).not.toHaveBeenCalled();
     });
 
     it('is refused once an hour has passed since accepting, as Snappfood refuses it', async () => {
       orderRepo.findOne.mockResolvedValue(snappfoodOrder({ accepted_at: minutesAgo(61) }));
 
-      await expect(service.reportToSnappfood('t-1', 'order-1', { reasonId: 153, extraMinutes: 10 })).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.reportOnlineOrder('t-1', 'order-1', { reason: 'MORE_TIME', extraMinutes: 10 })).rejects.toBeInstanceOf(ConflictException);
       expect(simulationService.notifyRejected).not.toHaveBeenCalled();
     });
 
     it('is refused while an earlier report is still with Snappfood support', async () => {
       orderRepo.findOne.mockResolvedValue(snappfoodOrder({ aggregator_issue_at: minutesAgo(2) }));
 
-      await expect(service.reportToSnappfood('t-1', 'order-1', { reasonId: 113 })).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.reportOnlineOrder('t-1', 'order-1', { reason: 'NO_COURIER' })).rejects.toBeInstanceOf(ConflictException);
       expect(simulationService.notifyRejected).not.toHaveBeenCalled();
     });
 
     it.each(['PENDING_ACCEPTANCE', 'OUT_FOR_DELIVERY', 'COMPLETED', 'CANCELLED'])('is refused for an order that is %s', async (state) => {
       orderRepo.findOne.mockResolvedValue(snappfoodOrder({ state, status: state }));
 
-      await expect(service.reportToSnappfood('t-1', 'order-1', { reasonId: 113 })).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.reportOnlineOrder('t-1', 'order-1', { reason: 'NO_COURIER' })).rejects.toBeInstanceOf(ConflictException);
     });
 
     it('is only for Snappfood orders', async () => {
       orderRepo.findOne.mockResolvedValue(snappfoodOrder({ channel: 'POS', order_number: 'ORD-1' }));
 
-      await expect(service.reportToSnappfood('t-1', 'order-1', { reasonId: 113 })).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.reportOnlineOrder('t-1', 'order-1', { reason: 'NO_COURIER' })).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 
