@@ -72,6 +72,10 @@ export class CashierShift {
   @Column({ type: 'numeric', precision: 19, scale: 4, nullable: true })
   short_over: string;
 
+  /** Of the count, what stays in the drawer for the next shift; the rest was handed over. */
+  @Column({ type: 'numeric', precision: 19, scale: 4, nullable: true })
+  left_in_drawer: string | null;
+
   @Column({ type: 'numeric', precision: 19, scale: 4, nullable: true })
   over_short_amount: string; // legacy alias
 

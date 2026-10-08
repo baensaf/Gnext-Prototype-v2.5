@@ -27,7 +27,6 @@ import { Iconify } from 'src/components/iconify';
 import { Scrollbar } from 'src/components/scrollbar';
 import { AnimateBorder } from 'src/components/animate';
 import { VersionLabelsButton } from 'src/components/version-tag';
-import { ShiftSummaryButton } from 'src/components/shift/shift-summary';
 import { useAccountShift } from 'src/components/shift/account-shift-store';
 
 import { AccountButton } from './account-button';
@@ -95,7 +94,7 @@ export function AccountDrawer({ data = [], sx, ...other }: AccountDrawerProps) {
             time: shift.openedEarlier ? fDateTime(shift.openedAt) : fTime(shift.openedAt),
           })}
         </Typography>
-        <ShiftSummaryButton fullWidth color="inherit" shiftId={shift.shiftId} sx={{ mt: 1.5 }} />
+        {/* One way in: the page is the shift's report while it runs, and where it is closed. */}
         <Button
           fullWidth
           color="error"
@@ -105,9 +104,9 @@ export function AccountDrawer({ data = [], sx, ...other }: AccountDrawerProps) {
             onClose();
             shift.close();
           }}
-          sx={{ mt: 1 }}
+          sx={{ mt: 1.5 }}
         >
-          {t('shift.close.title', 'Close shift')}
+          {t('shift.end.open', 'Review & end shift')}
         </Button>
       </Box>
     );

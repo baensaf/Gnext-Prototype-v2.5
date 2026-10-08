@@ -1,5 +1,6 @@
 import type { RegisterShiftState } from './use-register-shift';
 
+import { useNavigate } from 'react-router';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,10 +20,8 @@ import {
 import { fTime, fDateTime } from 'src/utils/format-time';
 
 import { RegisterNotice } from './register-notice';
-import { ShiftSummaryButton } from './shift-summary';
 import { OpenShiftDialog } from './open-shift-dialog';
 import { useAccountShift } from './account-shift-store';
-import { CloseShiftDialog } from './close-shift-dialog';
 import { DeviceTerminalDialog } from './device-terminal-dialog';
 import { BusinessDayEndedAlert } from './business-day-ended-alert';
 
@@ -36,7 +35,7 @@ import { BusinessDayEndedAlert } from './business-day-ended-alert';
  */
 export function PosShiftBar({ register }: { register: RegisterShiftState }) {
   const { t } = useTranslation();
-  const [closeOpen, setCloseOpen] = useState(false);
+  const navigate = useNavigate();
   const { terminal, shift } = register;
 
   if (!terminal || !shift) return null;
@@ -73,39 +72,31 @@ export function PosShiftBar({ register }: { register: RegisterShiftState }) {
             time: openedEarlier ? fDateTime(shift.opened_at) : fTime(shift.opened_at),
           })}
         </Typography>
-        <ShiftSummaryButton size="small" shiftId={shift.id} sx={{ ml: 'auto' }} />
         <Button
           size="small"
           color="error"
           variant="outlined"
           startIcon={<LockIcon />}
-          onClick={() => setCloseOpen(true)}
+          onClick={() => navigate(`/app/cashier/shifts/${shift.id}/end`)}
+          sx={{ ml: 'auto' }}
         >
-          {t('shift.close.title', 'Close shift')}
+          {t('shift.end.open', 'Review & end shift')}
         </Button>
       </Paper>
 
       <BusinessDayEndedAlert register={register} />
-
-      <CloseShiftDialog
-        open={closeOpen}
-        onClose={() => setCloseOpen(false)}
-        shiftId={shift.id}
-        shiftNumber={shift.shift_number}
-        onClosed={register.refresh}
-      />
     </>
   );
 }
 
 /**
- * Hands the open shift to the account drawer, where a cashier closes it. Nothing shows on the
- * register itself: the shift is touched once, at its end, and its name and number took the
+ * Hands the open shift to the account drawer, which opens its End shift page. Nothing shows on
+ * the register itself: the shift is touched once, at its end, and its name and number took the
  * cart's header all day.
  */
 export function PosShiftAccountLink({ register }: { register: RegisterShiftState }) {
   const publish = useAccountShift((state) => state.set);
-  const [closeOpen, setCloseOpen] = useState(false);
+  const navigate = useNavigate();
   const { terminal, shift } = register;
 
   const registerName = terminal ? `${terminal.name} (${terminal.code})` : '';
@@ -120,22 +111,12 @@ export function PosShiftAccountLink({ register }: { register: RegisterShiftState
       shiftNumber,
       openedAt,
       openedEarlier: !!openedAt && new Date(openedAt).toDateString() !== new Date().toDateString(),
-      close: () => setCloseOpen(true),
+      close: () => navigate(`/app/cashier/shifts/${shiftId}/end`),
     });
     return () => publish(null);
-  }, [publish, shiftId, registerName, shiftNumber, openedAt]);
+  }, [publish, navigate, shiftId, registerName, shiftNumber, openedAt]);
 
-  if (!terminal || !shift) return null;
-
-  return (
-    <CloseShiftDialog
-      open={closeOpen}
-      onClose={() => setCloseOpen(false)}
-      shiftId={shift.id}
-      shiftNumber={shift.shift_number}
-      onClosed={register.refresh}
-    />
-  );
+  return null;
 }
 
 /**

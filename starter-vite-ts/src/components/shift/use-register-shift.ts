@@ -32,6 +32,8 @@ export function useRegisterShift() {
   const [policy, setPolicy] = useState<ShiftPolicy | null>(null);
   // The register's branch's business day, so a shift left open past the cutoff shows as ended.
   const [businessDay, setBusinessDay] = useState<CurrentBusinessDay | null>(null);
+  // What the last close on this register left in its drawer: the next shift's float.
+  const [nextFloat, setNextFloat] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checked, setChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,14 +50,16 @@ export function useRegisterShift() {
     }
     setLoading(true);
     try {
-      const [current, rules, day] = await Promise.all([
+      const [current, rules, day, float] = await Promise.all([
         shiftApi.getCurrentShift(terminal.id, terminal.branch_id),
         shiftApi.getPolicy(terminal.branch_id).catch(() => null),
         businessDayApi.getCurrent(terminal.branch_id).catch(() => null),
+        shiftApi.getNextFloat(terminal.id).catch(() => null),
       ]);
       setShift(current);
       setPolicy(rules);
       setBusinessDay(day);
+      setNextFloat(float?.amount ?? null);
       setError(null);
     } catch (err: any) {
       setError(err.detail || err.message || 'Failed to load the shift');
@@ -100,8 +104,11 @@ export function useRegisterShift() {
     policy,
     businessDay,
     dayEnded,
-    /** What the open dialog offers; the server's default until the policy has loaded. */
-    defaultFloat: policy?.defaultOpeningFloat ?? '0',
+    /**
+     * What the open dialog offers: what the last close left in the drawer, else the policy's
+     * float. The cashier still types what they counted.
+     */
+    defaultFloat: nextFloat ?? policy?.defaultOpeningFloat ?? '0',
     loading,
     checked,
     error,

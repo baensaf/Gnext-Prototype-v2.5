@@ -1495,7 +1495,13 @@
         "BANK_TRANSFER": "کارت به کارت",
         "ONLINE": "پرداخت آنلاین"
       },
-      "amountsIn": "مبالغ به {{currency}}"
+      "amountsIn": "مبالغ به {{currency}}",
+      "refundMethods": {
+        "CASH": "نقد از صندوق",
+        "BANK_TRANSFER": "کارت به کارت",
+        "CUSTOMER_CREDIT": "به اعتبار باشگاه",
+        "OTHER": "سایر"
+      }
     },
     "bar": {
       "shift": "شیفت",
@@ -1571,6 +1577,24 @@
     "dayEnded": {
       "title": "روز کاری این شیفت به پایان رسیده است",
       "body": "شیفت {{shift}} مربوط به {{shiftDate}} است که در ساعت {{cutoff}} به پایان رسید. آن را بشمارید و ببندید، سپس برای ادامه فروش یک شیفت جدید در {{today}} باز کنید."
+    },
+    "end": {
+      "open": "بررسی و پایان شیفت",
+      "title": "پایان شیفت",
+      "reportTitle": "گزارش شیفت",
+      "stepOrders": "سفارش‌های باز",
+      "noOpenOrders": "هیچ سفارش بازی از این صندوق نمانده است.",
+      "stepCash": "پرداخت‌های نقدی ناتمام",
+      "noPendingCash": "همه پرداخت‌های نقدی تمام شده‌اند.",
+      "stepCount": "شمارش نقد صندوق",
+      "recount": "شمارش دوباره",
+      "overTolerance": "مغایرت بیش از {{tolerance}} است و مدیر باید تایید کند.",
+      "leaveInDrawer": "باقی در کشو برای شیفت بعد ({{currency}})",
+      "leftTooMuch": "بیشتر از مبلغ شمرده‌شده است.",
+      "handOver": "تحویل به صندوق مرکزی",
+      "handedOver": "تحویل‌شده به صندوق مرکزی",
+      "leftInDrawer": "باقی در کشو",
+      "backToRegister": "بازگشت به صندوق فروش"
     }
   },
   "payments": {

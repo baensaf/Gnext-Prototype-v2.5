@@ -1495,7 +1495,13 @@
         "BANK_TRANSFER": "Bank transfer",
         "ONLINE": "Online"
       },
-      "amountsIn": "Amounts in {{currency}}"
+      "amountsIn": "Amounts in {{currency}}",
+      "refundMethods": {
+        "CASH": "Cash from the drawer",
+        "BANK_TRANSFER": "Card-to-card",
+        "CUSTOMER_CREDIT": "To club credit",
+        "OTHER": "Other"
+      }
     },
     "bar": {
       "shift": "Shift",
@@ -1571,6 +1577,24 @@
     "dayEnded": {
       "title": "This shift’s business day has ended",
       "body": "Shift {{shift}} belongs to {{shiftDate}}, which ended at {{cutoff}}. Count and close it, then open a new shift on {{today}} to keep selling."
+    },
+    "end": {
+      "open": "Review & end shift",
+      "title": "End shift",
+      "reportTitle": "Shift report",
+      "stepOrders": "Open orders",
+      "noOpenOrders": "Nothing rung up at this till is left open.",
+      "stepCash": "Unfinished cash payments",
+      "noPendingCash": "Every cash payment was finished.",
+      "stepCount": "Count the cash",
+      "recount": "Count again",
+      "overTolerance": "Out by more than {{tolerance}}: a manager signs it off.",
+      "leaveInDrawer": "Leave in the drawer for the next shift ({{currency}})",
+      "leftTooMuch": "More than was counted.",
+      "handOver": "To hand over",
+      "handedOver": "Handed over",
+      "leftInDrawer": "Left in the drawer",
+      "backToRegister": "Back to the register"
     }
   },
   "payments": {

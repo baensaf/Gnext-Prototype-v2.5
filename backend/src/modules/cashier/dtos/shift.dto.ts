@@ -78,6 +78,14 @@ export class ShiftCloseDto {
   @IsNumberString()
   actualCash: string;
 
+  /**
+   * Of the counted cash, what stays in the drawer as the next shift's float. The rest is handed
+   * over. Left out, the drawer is emptied.
+   */
+  @IsOptional()
+  @IsNumberString()
+  leftInDrawer?: string;
+
   @IsOptional()
   @IsUUID()
   reasonCodeId?: string;

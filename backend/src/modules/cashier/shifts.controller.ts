@@ -87,6 +87,16 @@ export class ShiftsController {
     return await this.shiftService.getShiftRollup(tenantId, businessDate);
   }
 
+  /**
+   * The float a new shift on a register is offered: what the last close left in its drawer.
+   * Above `@Get(':id')` for the same reason as `rollup`.
+   */
+  @Get('next-float')
+  async getNextFloat(@Query('terminalId') terminalId: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    return await this.shiftService.nextOpeningFloat(tenantId, terminalId);
+  }
+
   @Get(':id')
   async getShiftById(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
