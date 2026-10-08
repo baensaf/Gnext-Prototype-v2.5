@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { Currency } from '../../entities/Currency.entity';
-import { PaymentMethod } from '../../entities/PaymentMethod.entity';
+import { PaymentMethod, CARD_PAYMENT_KINDS } from '../../entities/PaymentMethod.entity';
 import { ReasonCode } from '../../entities/ReasonCode.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
@@ -362,7 +362,9 @@ export class SettingsService {
       requires_reference: data.requires_reference ?? false,
       requires_device: data.requires_device ?? false,
       allows_refund: data.allows_refund ?? true,
-      allows_alternative_refund: data.allows_alternative_refund ?? false,
+      // A card paid on an Iranian terminal cannot be refunded on it, so a card sale goes back
+      // another way (cash, card-to-card) unless head office says otherwise.
+      allows_alternative_refund: data.allows_alternative_refund ?? CARD_PAYMENT_KINDS.includes(data.kind || 'CASH'),
       is_active: data.is_active ?? true,
       sort_order: data.sort_order ?? 0,
     });

@@ -2,13 +2,9 @@ import { Controller, Get, Post, Param, Body, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { RefundService } from './refund.service';
 import { ApprovalService } from '../approval/approval.service';
-import {
-  RefundCreateDto,
-  RefundProcessDto,
-  PaidOrderCancelDto,
-  RefundReversalDto,
-} from './dtos/refund.dto';
+import { RefundCreateDto, PaidOrderCancelDto } from './dtos/refund.dto';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
+import { effectiveBranchId } from '../../common/utils/user-scope.util';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { Refund } from '../../entities/Refund.entity';
 
@@ -23,6 +19,8 @@ export class RefundController {
    * Money going back out of the till. A manager or above carries their own authority; a
    * register operator needs an approver standing there with a pin. Called before the
    * refund service does anything, so a refused approval leaves no half-made refund.
+   * Returns who released it: the approver whose pin was given, or null for an approver
+   * acting on their own authority.
    */
   private async authorize(req: Request, action: string, pin?: string) {
     return await this.approvalService.authorizeMoneyOut(
@@ -40,12 +38,14 @@ export class RefundController {
   @Get('refunds')
   async getRefunds(@Query() query: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.refundService.getRefunds(tenantId, query);
+    // A branch account sees its own branch's refunds, whatever it asks for.
+    const branchId = effectiveBranchId((req as any).userBranchId, query.branchId || query.branch_id);
+    return await this.refundService.getRefunds(tenantId, query, branchId);
   }
 
   @BranchOwned(OrderHeader, { param: 'orderId' })
   @Post('orders/:orderId/refunds')
-  async createRefundIntent(
+  async createRefund(
     @Param('orderId') orderId: string,
     @Body() body: RefundCreateDto,
     @Req() req: Request,
@@ -53,15 +53,12 @@ export class RefundController {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
-    await this.authorize(req, 'REFUND_ORDER', body.pin);
-    const intent = await this.refundService.createRefundIntent(
-      tenantId,
-      orderId,
-      { ...body, moneyOutAuthorized: true },
+    const approver = await this.authorize(req, 'REFUND_ORDER', body.pin);
+    return await this.refundService.refundOrder(tenantId, orderId, body, {
       userId,
       correlationId,
-    );
-    return await this.refundService.processRefund(tenantId, intent.id, { scenarioId: body.scenarioId }, userId, correlationId);
+      approvedBy: approver ?? userId,
+    });
   }
 
   @BranchOwned(Refund, { through: { entity: OrderHeader, foreignKey: 'order_id' } })
@@ -69,20 +66,6 @@ export class RefundController {
   async getRefundById(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.refundService.getRefundById(tenantId, id);
-  }
-
-  @BranchOwned(Refund, { through: { entity: OrderHeader, foreignKey: 'order_id' } })
-  @Post('refunds/:id/process')
-  async processRefund(
-    @Param('id') id: string,
-    @Body() body: RefundProcessDto,
-    @Req() req: Request,
-  ) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || (req as any).userId;
-    const correlationId = (req as any).correlationId;
-    await this.authorize(req, 'REFUND_PROCESS', body.pin);
-    return await this.refundService.processRefund(tenantId, id, body, userId, correlationId);
   }
 
   @BranchOwned(OrderHeader, { param: 'orderId' })
@@ -96,20 +79,13 @@ export class RefundController {
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
     await this.authorize(req, 'CANCEL_PAID_ORDER', body.pin);
-    return await this.refundService.cancelPaidOrder(tenantId, orderId, body, userId, correlationId);
-  }
-
-  @BranchOwned(Refund, { through: { entity: OrderHeader, foreignKey: 'order_id' } })
-  @Post('refunds/:id/reverse')
-  async reverseRefund(
-    @Param('id') id: string,
-    @Body() body: RefundReversalDto,
-    @Req() req: Request,
-  ) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || (req as any).userId;
-    const correlationId = (req as any).correlationId;
-    await this.authorize(req, 'REFUND_REVERSE', body.pin);
-    return await this.refundService.reverseRefund(tenantId, id, body, userId, correlationId);
+    // The PIN released this, so an approval id the client sent proves nothing and is not kept.
+    return await this.refundService.cancelPaidOrder(
+      tenantId,
+      orderId,
+      { ...body, approvalRequestId: undefined },
+      userId,
+      correlationId,
+    );
   }
 }

@@ -361,12 +361,13 @@ export async function runSeed() {
   // 6. Idempotent Payment Methods
   const payMethods = [
     { tenant_id: tenant.id, code: 'CASH', name: 'Cash', kind: 'CASH', is_active: true },
-    { tenant_id: tenant.id, code: 'CARD_POS', name: 'Bank Card POS', kind: 'CARD_POS', is_active: true },
+    // A card sale is paid back in cash or card-to-card: the terminal cannot refund it.
+    { tenant_id: tenant.id, code: 'CARD_POS', name: 'Bank Card POS', kind: 'CARD_POS', is_active: true, allows_alternative_refund: true },
     { tenant_id: tenant.id, code: 'CREDIT_ACCOUNT', name: 'Customer Credit Account', kind: 'CUSTOMER_CREDIT', is_active: true },
     // The couriers carry company card readers, and the scope reports those separately from
     // cash and from the counter terminal; online and bank transfer are the other two tenders
     // a refund may go back through.
-    { tenant_id: tenant.id, code: 'MOBILE_POS', name: 'Courier Mobile POS', kind: 'MOBILE_POS', is_active: true },
+    { tenant_id: tenant.id, code: 'MOBILE_POS', name: 'Courier Mobile POS', kind: 'MOBILE_POS', is_active: true, allows_alternative_refund: true },
     { tenant_id: tenant.id, code: 'ONLINE', name: 'Online Payment', kind: 'ONLINE', is_active: true },
     { tenant_id: tenant.id, code: 'BANK_TRANSFER', name: 'Bank Transfer', kind: 'BANK_TRANSFER', is_active: true },
   ];

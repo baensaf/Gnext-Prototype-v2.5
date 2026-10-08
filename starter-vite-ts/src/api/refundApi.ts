@@ -4,7 +4,7 @@ export interface RefundAllocation {
   id: string;
   refund_id: string;
   payment_id: string;
-  order_item_id?: string;
+  payment_method_id?: string;
   amount: string;
   created_at: string;
 }
@@ -13,7 +13,7 @@ export interface RefundRecord {
   id: string;
   order_id: string;
   refund_number: string;
-  status: 'PENDING' | 'PROCESSING' | 'SUCCEEDED' | 'APPROVED' | 'FAILED' | 'CANCELLED' | 'REVERSED';
+  status: 'PENDING' | 'PROCESSING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'REVERSED';
   method_id: string;
   method_kind: string;
   amount: string;
@@ -21,6 +21,7 @@ export interface RefundRecord {
   reason_code_id?: string;
   reason_text?: string;
   reference?: string;
+  failure_code?: string;
   is_alternative_method: boolean;
   approval_request_id?: string;
   device_id?: string;
@@ -28,9 +29,11 @@ export interface RefundRecord {
   initiated_at: string;
   posted_at?: string;
   allocations?: RefundAllocation[];
+  /** The order's number and total, sent with the list so it needs no second request. */
+  order_number?: string | null;
+  order_total?: string | null;
   // Legacy UI aliases
   code?: string;
-  refund_type?: string;
   total_refund_amount?: string;
   note?: string;
   created_at: string;
@@ -38,113 +41,61 @@ export interface RefundRecord {
 
 export type RefundRequest = RefundRecord;
 
+const toRecord = (r: any): RefundRecord => ({
+  ...r,
+  code: r.refund_number,
+  total_refund_amount: r.amount,
+  note: r.reason_text,
+  created_at: r.initiated_at || new Date().toISOString(),
+});
+
 export const refundApi = {
-  getRefunds: async (orderId?: string): Promise<RefundRecord[]> => {
-    const res = await httpClient.get('/api/v1/refunds', { params: { orderId } });
+  /** A branch account gets its own branch's refunds whatever it asks for; head office picks one. */
+  getRefunds: async (params: { orderId?: string; branchId?: string } = {}): Promise<RefundRecord[]> => {
+    const res = await httpClient.get('/api/v1/refunds', {
+      params: { orderId: params.orderId, branchId: params.branchId, limit: 200 },
+    });
     const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
-    return list.map((r: any) => ({
-      ...r,
-      code: r.refund_number,
-      refund_type: r.amount === r.order_grand_total ? 'FULL' : 'PARTIAL',
-      total_refund_amount: r.amount,
-      note: r.reason_text,
-      created_at: r.initiated_at || new Date().toISOString(),
-    }));
+    return list.map(toRecord);
   },
 
   getRefundById: async (id: string): Promise<RefundRecord> => {
     const res = await httpClient.get(`/api/v1/refunds/${id}`);
-    const r = res.data;
-    return {
-      ...r,
-      code: r.refund_number,
-      refund_type: 'PARTIAL',
-      total_refund_amount: r.amount,
-      note: r.reason_text,
-      created_at: r.initiated_at || new Date().toISOString(),
-    };
+    return toRecord(res.data);
   },
 
+  /** Made and settled in one call: it either pays back in full or leaves nothing behind. */
   createRefund: async (data: {
     order_id: string;
-    refund_type?: 'FULL' | 'PARTIAL' | 'ITEM_LEVEL';
-    items?: Array<{ order_item_id: string; quantity: number }>;
-    custom_amount?: string;
     amount?: string;
     full?: boolean;
     reason_code_id?: string;
     reason?: string;
-    note?: string;
     pin?: string;
-    alternative_payment_method_id?: string;
     targetMethodId?: string;
-    approvalRequestId?: string;
     reference?: string;
   }): Promise<RefundRecord> => {
     const payload = {
-      amount: data.amount || data.custom_amount,
-      full: data.full || data.refund_type === 'FULL',
-      items: data.items?.map((it) => ({ orderItemId: it.order_item_id, quantity: it.quantity })),
-      targetMethodId: data.targetMethodId || data.alternative_payment_method_id,
+      amount: data.amount,
+      full: data.full,
+      targetMethodId: data.targetMethodId,
       reference: data.reference,
       reasonCodeId: data.reason_code_id,
-      reason: data.reason || data.note || 'Customer return',
-      approvalRequestId: data.approvalRequestId,
+      reason: data.reason || 'Customer return',
       // The server asks for this whenever the account issuing the refund is not one that
-      // can approve on its own. It was collected here and then dropped on the floor.
+      // can approve on its own.
       pin: data.pin,
     };
     const res = await httpClient.post(`/api/v1/orders/${data.order_id}/refunds`, payload);
-    const r = res.data;
-    return {
-      ...r,
-      code: r.refund_number,
-      refund_type: 'PARTIAL',
-      total_refund_amount: r.amount,
-      note: r.reason_text,
-      created_at: r.initiated_at || new Date().toISOString(),
-    };
+    return toRecord(res.data);
   },
 
-  processRefund: async (id: string, data?: { scenarioId?: string; externalReference?: string; pin?: string }): Promise<RefundRecord> => {
-    const res = await httpClient.post(`/api/v1/refunds/${id}/process`, data || {});
-    const r = res.data;
-    return {
-      ...r,
-      code: r.refund_number,
-      refund_type: 'PARTIAL',
-      total_refund_amount: r.amount,
-      note: r.reason_text,
-      created_at: r.initiated_at || new Date().toISOString(),
-    };
-  },
-
-  cancelPaidOrder: async (
-    orderId: string,
-    reason?: string,
-    approvalRequestId?: string,
-    targetMethodId?: string,
-    pin?: string,
-  ): Promise<any> => {
+  cancelPaidOrder: async (orderId: string, reason?: string, targetMethodId?: string, pin?: string): Promise<any> => {
     const res = await httpClient.post(`/api/v1/orders/${orderId}/cancel-paid`, {
       reason: reason || 'Paid order cancellation',
-      approvalRequestId,
       targetMethodId,
       pin,
     });
     return res.data;
-  },
-
-  reverseRefund: async (id: string, reason: string, approvalRequestId: string, pin?: string): Promise<RefundRecord> => {
-    const res = await httpClient.post(`/api/v1/refunds/${id}/reverse`, { reason, approvalRequestId, pin });
-    const r = res.data;
-    return {
-      ...r,
-      code: r.refund_number,
-      refund_type: 'PARTIAL',
-      total_refund_amount: r.amount,
-      note: r.reason_text,
-      created_at: r.initiated_at || new Date().toISOString(),
-    };
   },
 };

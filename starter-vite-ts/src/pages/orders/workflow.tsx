@@ -599,7 +599,7 @@ export function OrdersWorkflowPage() {
             .then((res) => res.data)
             .catch(() => []),
           paymentApi.getOrderPayments(orderId).catch(() => [] as PaymentRecord[]),
-          refundApi.getRefunds(orderId).catch(() => [] as RefundRecord[]),
+          refundApi.getRefunds({ orderId }).catch(() => [] as RefundRecord[]),
         ]);
         setSelectedDrawerOrder(detail);
         setSelectedOrder(detail);

@@ -458,7 +458,7 @@ export class CreditService {
 
       // Over-repayment check: if customer was in debt (< 0) and repayment results in positive balance, check approval
       if (MoneyUtil.greaterThan(newBalance, '0.0000') && MoneyUtil.lessThan(acc.current_balance, '0.0000')) {
-        if (!dto.approvalRequestId) {
+        if (!dto.approvalRequestId && !dto.preApproved) {
           throw new ForbiddenException('Over-repayment resulting in a positive balance requires approval');
         }
       }

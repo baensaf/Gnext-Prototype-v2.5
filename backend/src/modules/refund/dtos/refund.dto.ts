@@ -1,26 +1,4 @@
-import {
-  IsString,
-  IsNotEmpty,
-  IsOptional,
-  IsUUID,
-  IsInt,
-  Min,
-  IsNumberString,
-  IsBoolean,
-  IsArray,
-  ValidateNested,
-} from 'class-validator';
-import { Type } from 'class-transformer';
-
-export class RefundItemDto {
-  @IsUUID()
-  orderItemId: string;
-
-  @IsNotEmpty()
-  @IsInt()
-  @Min(1)
-  quantity: number;
-}
+import { IsString, IsOptional, IsUUID, IsNumberString, IsBoolean } from 'class-validator';
 
 export class RefundCreateDto {
   @IsOptional()
@@ -30,12 +8,6 @@ export class RefundCreateDto {
   @IsOptional()
   @IsBoolean()
   full?: boolean;
-
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => RefundItemDto)
-  items?: RefundItemDto[];
 
   @IsOptional()
   @IsUUID()
@@ -77,19 +49,12 @@ export class RefundCreateDto {
   pin?: string;
 }
 
-export class RefundProcessDto {
-  @IsOptional()
-  @IsString()
+/** How a refund is settled. Internal: the register creates and settles a refund in one call. */
+export interface RefundProcessOptions {
   scenarioId?: string;
-
-  @IsOptional()
-  @IsString()
   externalReference?: string;
-
-  /** A manager pin, when the account asking is not itself allowed to approve. */
-  @IsOptional()
-  @IsString()
-  pin?: string;
+  /** Who released the money, recorded on the refund's audit event. */
+  approvedBy?: string | null;
 }
 
 export class PaidOrderCancelDto {
@@ -111,23 +76,6 @@ export class PaidOrderCancelDto {
   @IsOptional()
   @IsString()
   reference?: string;
-
-  /** A manager pin, when the account asking is not itself allowed to approve. */
-  @IsOptional()
-  @IsString()
-  pin?: string;
-}
-
-export class RefundReversalDto {
-  @IsString()
-  reason: string;
-
-  @IsOptional()
-  @IsUUID()
-  reasonCodeId?: string;
-
-  @IsUUID()
-  approvalRequestId: string;
 
   /** A manager pin, when the account asking is not itself allowed to approve. */
   @IsOptional()
