@@ -18,6 +18,7 @@ import { MoneyUtil } from '../../common/utils/money.util';
 import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import { isAggregatorOrder } from '../../common/utils/snappfood-order.util';
+import { channelFor } from '../order/channels';
 import { ShiftService } from '../cashier/shift.service';
 import { CreditService } from '../customer/credit.service';
 import { AuditWriter } from '../audit/audit-writer.service';
@@ -129,8 +130,10 @@ export class PaymentService {
       });
       if (!order) throw new NotFoundException(`Order ${dto.orderId} not found`);
 
-      // Snappfood collects for its orders, so the till takes no money for one.
-      if (isAggregatorOrder(order)) {
+      // A platform collects for its orders, so the till takes no money for one. The exception
+      // is a cash order the customer collects: they pay at the counter (audit A4).
+      const channel = channelFor(order, {});
+      if (isAggregatorOrder(order) && channel?.fulfilment(order) !== 'PICKUP') {
         throw new ConflictException({
           code: 'SNAPPFOOD_ORDER_LOCKED',
           message: `Order ${order.order_number} is paid through Snappfood; the till takes no payment for it`,

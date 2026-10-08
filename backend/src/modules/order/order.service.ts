@@ -2140,6 +2140,18 @@ export class OrderService {
   }
 
   /**
+   * A platform cancelled an order (the customer, or its support). If the kitchen had it, the
+   * kitchen stops as for a cancel at the till, and the till's Online panel says so until a
+   * cashier marks it seen: with printed tickets, nothing else would tell the cook.
+   */
+  async stopKitchenForPlatformCancel(tenantId: string, order: OrderHeader, stateBefore: OrderState) {
+    if (!order.accepted_at || !KITCHEN_HOLDS_ORDER_STATES.includes(stateBefore)) return order;
+    const items = await this.itemRepo.find({ where: { tenant_id: tenantId, order_id: order.id, state: ACTIVE_LINE_STATE } });
+    await this.stopKitchenAfterCancel(tenantId, order.id, stateBefore, items.map((i) => i.id), `Cancelled by ${platformOf(order) ?? 'the platform'}`);
+    return this.raiseOnlineAlert(order, 'PLATFORM_CANCELLED');
+  }
+
+  /**
    * Stop the kitchen on an order that was cancelled after it was sent there: every
    * line still on it comes off the station screens, and the printer gets a STOP chit.
    * A draft never reached the kitchen, and an order out for delivery has already left

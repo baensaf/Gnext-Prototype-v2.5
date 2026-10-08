@@ -9,6 +9,9 @@ import { Product } from '../../entities/Product.entity';
 import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
 import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { IncomingOrderPolicyService } from '../order/incoming-order-policy.service';
+import { CHANNEL_PAUSE_KEY, OnlineOrdersService } from '../order/online-orders.service';
+import { TenantSetting } from '../../entities/TenantSetting.entity';
+import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
@@ -71,6 +74,10 @@ export class SimulationService {
     @Optional()
     @Inject(forwardRef(() => IncomingOrderPolicyService))
     private readonly incomingPolicy?: IncomingOrderPolicyService,
+    // The till's Online panel hears of rider moves and of cancels the kitchen must stop for.
+    @Optional()
+    @Inject(forwardRef(() => OnlineOrdersService))
+    private readonly onlineOrders?: OnlineOrdersService,
   ) {}
 
   verifyHmacSignature(rawBody: string, signature: string, secret: string = 'snappfood-secret-key-123', timestamp?: string): boolean {
@@ -313,9 +320,15 @@ export class SimulationService {
       await this.resendSnappfoodOrder(tenantId, order, payload);
     } else if (statusCode === 54 && !['CANCELLED', 'COMPLETED'].includes(order.state)) {
       // A rejected order that Snappfood then cancels is refunded too, so its payment goes.
+      const stateBefore = order.state;
       if (order.state !== 'REJECTED') this.markCancelled(order);
       await this.reverseSnappfoodPayments(tenantId, order);
       await this.orderRepo.save(order);
+      // The kitchen may be cooking it from a printed ticket: stop it, and tell the till.
+      if (stateBefore !== 'REJECTED') await this.onlineOrders?.platformCancelled(tenantId, order, stateBefore);
+    } else if (payload.bikerStatusV2 !== undefined && !['CANCELLED', 'COMPLETED', 'REJECTED'].includes(order.state)) {
+      // Snappfood re-sends the order as its rider moves (bikerName, bikerStatusV2).
+      await this.onlineOrders?.riderUpdate(tenantId, order, payload.bikerName, payload.bikerStatusV2);
     }
 
     const log = await this.logRepo.save(
@@ -411,6 +424,36 @@ export class SimulationService {
 
     const payload: any = { ...last.request_payload, statusCode };
     // Snappfood's status messages carry no event id, and the original's would read as a replay.
+    delete payload.event_id;
+    return this.handleSnappfoodWebhook(tenantId, JSON.stringify(payload), payload, undefined, undefined, undefined, correlationId);
+  }
+
+  /**
+   * The simulator plays Snappfood's rider moving: the order is re-sent as accepted (42) with
+   * bikerName and bikerStatusV2, as Snappfood does once rider status is switched on for a vendor.
+   */
+  async sendRiderStatus(tenantId: string, orderCode: string, status: string, name?: string, correlationId?: string) {
+    const allowed = ['REQUESTED', 'ASSIGNED', 'ACK', 'AT_RESTAURANT', 'PICKED', 'DELIVERED', 'CANCELED'];
+    if (!allowed.includes(status)) {
+      throw new BadRequestException(`bikerStatusV2 is one of ${allowed.join(', ')}`);
+    }
+    const last = await this.logRepo
+      .createQueryBuilder('log')
+      .where('log.tenant_id = :tenantId', { tenantId })
+      .andWhere('log.provider = :provider', { provider: 'SNAPPFOOD' })
+      .andWhere('log.event_type IN (:...types)', { types: ['ORDER_CREATED', 'STATUS_56'] })
+      .andWhere(`log.request_payload ->> 'code' = :orderCode`, { orderCode })
+      .orderBy('log.created_at', 'DESC')
+      .getOne();
+    if (!last?.request_payload) {
+      throw new NotFoundException(`No Snappfood order ${orderCode}`);
+    }
+    const payload: any = {
+      ...last.request_payload,
+      statusCode: 42,
+      bikerStatusV2: status,
+      bikerName: name || last.request_payload.bikerName || 'علی تهرانی',
+    };
     delete payload.event_id;
     return this.handleSnappfoodWebhook(tenantId, JSON.stringify(payload), payload, undefined, undefined, undefined, correlationId);
   }
@@ -702,7 +745,23 @@ export class SimulationService {
     return restaurant.id;
   }
 
+  /** When the addressed branch's Snappfood pause ends, or null while it takes orders. */
+  private async snappfoodPausedUntil(tenantId: string, data: any): Promise<string | null> {
+    const manager = this.branchRepo.manager;
+    if (!manager?.find) return null;
+    const branchId = await this.resolveWebhookBranch(tenantId, { branch_id: data?.branch_id, branch_code: data?.branch_code });
+    const pauses = await manager.find(TenantSetting, { where: { tenant_id: tenantId, key: CHANNEL_PAUSE_KEY } });
+    return pickSettingValue(pauses, branchId)?.SNAPPFOOD?.until ?? null;
+  }
+
   async generateSnappfoodOrder(tenantId: string, data: any, correlationId?: string) {
+    // A branch that paused Snappfood from its till has its menus switched off there, so
+    // Snappfood sends it nothing; the simulator plays along.
+    const pausedUntil = await this.snappfoodPausedUntil(tenantId, data);
+    if (pausedUntil && new Date(pausedUntil) > new Date()) {
+      throw new BadRequestException(`This branch paused Snappfood until ${new Date(pausedUntil).toISOString()}; Snappfood sends it no orders`);
+    }
+
     const seed = data?.seed || Math.floor(1000 + Math.random() * 9000).toString();
 
     // With no basket given, order what the restaurant actually sells, at its prices. The fixed
