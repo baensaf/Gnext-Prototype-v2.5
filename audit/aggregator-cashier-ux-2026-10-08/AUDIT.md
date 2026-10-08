@@ -110,6 +110,32 @@ closed, other; each adapter maps them to its codes and leaves out the ones it ca
 | S3 | **Lifecycle**: Ready, Handed over, Collected (with payment for cash pickup), Send out, rider status from the webhook (PICKED closes the order), platform cancel pulls kitchen tickets and raises an Issue, time-limit rejection raises an Issue, late flag. Orders grid primary action fixed. Simulator buttons for rider status. | A3, A4, A5, A6, A9, A14, A15 |
 | S4 | **Pause a platform** from the panel: busy 15/30/60 min, closed for today, resume; Snappfood adapter toggles its menus. Items off on this platform from the panel. | A10 |
 
+### Status (2026-10-08)
+
+All four slices are built on `feat/aggregator-cashier-ux` and were clicked through on the local
+app as a Valiasr cashier: pop-up accept, Online tab, Ready, rider at the restaurant, rider PICKED
+closing the order, Snappfood cancelling an accepted order (Issue card, toast, kitchen STOP chit),
+cash pickup paid at the till and handed over, reject with a reason, pause and resume.
+
+| Finding | Where it was fixed |
+| --- | --- |
+| A1, A7, A8, A13 | POS Online tab + pop-up (`components/online-orders/`), Incoming page shows the same board |
+| A2 | shift gate on the board, pop-up and POS gate; `NO_OPEN_SHIFT` in plain words |
+| A3 | `stopKitchenForPlatformCancel` + `PLATFORM_CANCELLED` alert |
+| A4 | till takes payment for a platform pickup order; Collected opens the pay form first |
+| A5 | Orders grid: report is never the main button; it opens the order's card |
+| A6 | `POST /orders/:id/online/ready` |
+| A9 | rider name/status from the webhook; PICKED completes the order |
+| A10 | `POST /orders/online-pause`; Snappfood adapter switches its menus off; simulator refuses orders while paused |
+| A11 | store-worded reasons, mapped by the adapter |
+| A12 | ack on receipt, pick when a cashier opens the order |
+| A14 | Late chip on the card |
+| A15 | `TIMED_OUT` alert on the board |
+
+Adding Talabat: write `channels/talabat.adapter.ts` (capabilities: adjustTime, notifiesReady,
+notifiesHandover), return it from `channelFor`, add `TALABAT` to `ONLINE_PLATFORMS` and its name
+under `online.platform` in both locale files. The panel needs no change.
+
 ## 5. Open questions for Iran Burger / Snappfood
 
 - Does Snappfood let a vendor close temporarily through the API, or only by menu toggles?

@@ -279,6 +279,21 @@ export function SimulationSnappfoodPage() {
     }
   };
 
+  // Handler: Snappfood's rider moving (bikerStatusV2). PICKED closes the order at the store.
+  const handleRiderStatus = async (status: 'ASSIGNED' | 'AT_RESTAURANT' | 'PICKED') => {
+    setLoading(true);
+    try {
+      const res = await axios.post(`/api/v1/simulation/snappfood/orders/${orderCode}/rider`, { status });
+      setActionResponse(res.data);
+      fetchLogs();
+    } catch (err: any) {
+      setActionResponse(err.response?.data || { error: err.message });
+      alert('Action error: ' + (err.response?.data?.detail || err.response?.data?.message || err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Handler: Test Vendor Automation Endpoints (v4.3.0)
   const handleRunVendorApi = async () => {
     setLoading(true);
@@ -677,6 +692,19 @@ export function SimulationSnappfoodPage() {
                         {t('simulation.snappfood.stepper.supportResend')}
                       </Button>
                     </Grid>
+                  </Grid>
+
+                  <Typography variant="subtitle2" sx={{ mt: 3, mb: 1, fontWeight: 'bold' }}>
+                    {t('simulation.snappfood.stepper.riderActions')}
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {(['ASSIGNED', 'AT_RESTAURANT', 'PICKED'] as const).map((status) => (
+                      <Grid key={status} size={{ xs: 12, sm: 4 }}>
+                        <Button fullWidth variant="outlined" onClick={() => handleRiderStatus(status)} disabled={loading}>
+                          {t(`simulation.snappfood.stepper.rider${status}`)}
+                        </Button>
+                      </Grid>
+                    ))}
                   </Grid>
 
                   {/* Accept / Reject Detail Options */}

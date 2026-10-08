@@ -1,18 +1,18 @@
-import type { OrderHeader, IncomingOrderPolicy } from 'src/api/orderApi';
+import type { OnlineCard, OnlineBoard } from 'src/api/onlineOrdersApi';
 
 import { useTranslation } from 'react-i18next';
 import { useRef, useMemo, useState, useEffect, useContext, useCallback, createContext } from 'react';
 
 import { paths } from 'src/routes/paths';
-import { useRouter } from 'src/routes/hooks';
+import { useRouter, usePathname } from 'src/routes/hooks';
 
 import { moneyUnit } from 'src/utils/currency';
 import { MoneyUtil } from 'src/utils/money.util';
 import { useCloudBack } from 'src/utils/cloud-back';
 
 import i18n from 'src/locales/i18n';
-import { orderApi } from 'src/api/orderApi';
 import { canReachPath } from 'src/config/role-access';
+import { onlineOrdersApi } from 'src/api/onlineOrdersApi';
 import { useBranchContextOptional } from 'src/contexts/branch-context';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
@@ -20,36 +20,39 @@ import { toast } from 'src/components/snackbar';
 
 // ----------------------------------------------------------------------
 
-/** How often the queue is re-read. The prototype polls rather than holding a socket open. */
+/** How often the board is re-read. The prototype polls rather than holding a socket open. */
 const POLL_MS = 5000;
 
 /**
- * The chime repeats while anything is waiting, rather than sounding once per order, so a
- * single beep missed during a rush does not lose an order. Snappfood penalises a store that
- * leaves an order unanswered.
+ * The chime repeats while anything needs an answer, rather than sounding once per order, so a
+ * single beep missed during a rush does not lose an order. Platforms penalise a store that
+ * leaves an order unanswered, and a cancel the kitchen has not heard of wastes food.
  */
 const CHIME_REPEAT_MS = 10000;
 
-type IncomingOrdersValue = {
+type OnlineOrdersValue = {
   /** False at head office and in sites that take no orders: there is no counter to answer at. */
   enabled: boolean;
-  /** Orders waiting for this branch to accept or reject them, oldest first. */
-  orders: OrderHeader[];
-  /** The branch's time limit and default prep time; null until it has loaded. */
-  policy: IncomingOrderPolicy | null;
+  /** The branch's Online board; null until the first read. */
+  board: OnlineBoard | null;
+  /** Orders waiting for an answer, oldest first. */
+  waiting: OnlineCard[];
+  /** Cards in the Issues lane. */
+  issues: OnlineCard[];
+  /** Where the cashier answers online orders: the POS panel, or the full page without POS. */
+  panelPath: (orderId?: string) => string;
   refresh: () => Promise<void>;
 };
 
-const IncomingOrdersContext = createContext<IncomingOrdersValue | undefined>(undefined);
+const OnlineOrdersContext = createContext<OnlineOrdersValue | undefined>(undefined);
 
-/** Undefined outside the provider, like the branch scope; callers treat that as "no queue". */
-export function useIncomingOrders(): IncomingOrdersValue | undefined {
-  return useContext(IncomingOrdersContext);
+/** Undefined outside the provider, like the branch scope; callers treat that as "no board". */
+export function useIncomingOrders(): OnlineOrdersValue | undefined {
+  return useContext(OnlineOrdersContext);
 }
 
-export function formatOrderTotal(order: OrderHeader): string {
-  const amount = MoneyUtil.formatCurrency(order.grand_total || order.total_amount || 0);
-  return `${amount} ${moneyUnit(order.currency_code, i18n.language)}`;
+export function formatCardTotal(card: Pick<OnlineCard, 'total' | 'currency'>, amount?: string): string {
+  return `${MoneyUtil.formatCurrency(amount ?? card.total)} ${moneyUnit(card.currency, i18n.language)}`;
 }
 
 /** Two short tones, built in the browser so there is no sound file to ship. */
@@ -79,12 +82,13 @@ function playChime() {
 }
 
 /**
- * One watcher for the whole app, so the header badge, the chime, the toast and the
- * Incoming Orders page all read the same list and the queue is polled once, not per screen.
+ * One watcher for the whole app, so the header badge, the chime, the toasts, the POS panel
+ * and the full-page board all read the same board and it is polled once, not per screen.
  */
 export function IncomingOrdersProvider({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
   const router = useRouter();
+  const pathname = usePathname();
   const role = useAuthStore((state) => state.user?.role);
   const isHeadOfficeAccount = useIsHeadOffice();
   const branchScope = useBranchContextOptional();
@@ -96,54 +100,67 @@ export function IncomingOrdersProvider({ children }: { children: React.ReactNode
     branchScope?.selectedBranchType === 'RESTAURANT' &&
     canReachPath(role, paths.app.orders.incoming, isHeadOfficeAccount);
 
-  const [orders, setOrders] = useState<OrderHeader[]>([]);
-  const [policy, setPolicy] = useState<IncomingOrderPolicy | null>(null);
+  // A cashier answers at the till, beside the cart; anyone without a till uses the full page.
+  const atTill = canReachPath(role, paths.app.pos, isHeadOfficeAccount);
+  const panelPath = useCallback(
+    (orderId?: string) => {
+      const query = new URLSearchParams();
+      if (atTill) query.set('panel', 'online');
+      if (orderId) query.set('order', orderId);
+      return `${atTill ? paths.app.pos : paths.app.orders.incoming}?${query.toString()}`;
+    },
+    [atTill]
+  );
 
-  useEffect(() => {
-    setPolicy(null);
-    if (enabled) {
-      orderApi
-        .getIncomingPolicy(branchId)
-        .then(setPolicy)
-        .catch(() => setPolicy(null));
-    }
-  }, [enabled, branchId]);
+  const [board, setBoard] = useState<OnlineBoard | null>(null);
 
   // Ids already announced. Null until the first read of a branch, so the orders already
-  // waiting when the app opens fill the queue without a burst of toasts.
+  // on the board when the app opens do not arrive as a burst of toasts.
   const announced = useRef<Set<string> | null>(null);
+  const onPosRef = useRef(false);
+  onPosRef.current = pathname === paths.app.pos;
 
   useEffect(() => {
     announced.current = null;
-    setOrders([]);
+    setBoard(null);
   }, [branchId, enabled]);
 
   const refresh = useCallback(async () => {
     if (!enabled) return;
     try {
-      const list = await orderApi.getIncomingOrders(branchId);
-      setOrders(list);
+      const next = await onlineOrdersApi.board(branchId);
+      setBoard(next);
 
+      // New orders and new alerts are announced once each. The POS shows its own pop-up for a
+      // new order, so the toast there is only for alerts.
+      const keyOf = (card: OnlineCard) => `${card.id}:${card.lane === 'ISSUE' ? card.issue : card.lane}`;
+      const loud = next.cards.filter((card) => card.lane === 'NEW' || (card.lane === 'ISSUE' && card.issue !== 'WITH_SUPPORT'));
       const previous = announced.current;
       if (previous) {
-        const arrivals = list.filter((order) => !previous.has(order.id));
-        arrivals.forEach((order) => {
-          toast.info(t('orders.incoming.toastTitle', { number: order.order_number }), {
-            description: t('orders.incoming.toastDescription', { total: formatOrderTotal(order) }),
-            duration: 15000,
-            action: {
-              label: t('orders.incoming.view'),
-              onClick: () => router.push(`${paths.app.orders.incoming}?order=${order.id}`),
-            },
-          });
+        const arrivals = loud.filter((card) => !previous.has(keyOf(card)));
+        arrivals.forEach((card) => {
+          const platform = t(`online.platform.${card.platform}`);
+          if (card.lane === 'NEW') {
+            if (onPosRef.current) return;
+            toast.info(t('online.toast.newTitle', { code: card.displayCode, platform }), {
+              description: t('online.toast.newDescription', { total: formatCardTotal(card) }),
+              duration: 15000,
+              action: { label: t('online.toast.view'), onClick: () => router.push(panelPath(card.id)) },
+            });
+          } else {
+            toast.warning(t(`online.toast.issue.${card.issue}`, { code: card.displayCode, platform }), {
+              duration: 30000,
+              action: { label: t('online.toast.view'), onClick: () => router.push(panelPath(card.id)) },
+            });
+          }
         });
         if (arrivals.length) playChime();
       }
-      announced.current = new Set(list.map((order) => order.id));
+      announced.current = new Set(loud.map(keyOf));
     } catch {
-      // Keep the last list; the next poll tries again.
+      // Keep the last board; the next poll tries again.
     }
-  }, [enabled, branchId, router, t]);
+  }, [enabled, branchId, router, t, panelPath]);
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -161,28 +178,26 @@ export function IncomingOrdersProvider({ children }: { children: React.ReactNode
     return () => clearInterval(timer);
   }, [enabled, refresh]);
 
-  // The cloud is back after the Reconnecting bar (agent mode): the queue and its policy now.
+  // The cloud is back after the Reconnecting bar (agent mode): the board now.
   useCloudBack(() => {
-    if (!enabled) return;
-    refresh();
-    orderApi
-      .getIncomingPolicy(branchId)
-      .then(setPolicy)
-      .catch(() => undefined);
+    if (enabled) refresh();
   });
 
-  const waiting = enabled && orders.length > 0;
+  const cards = useMemo(() => (enabled && board ? board.cards : []), [enabled, board]);
+  const waiting = useMemo(() => cards.filter((card) => card.lane === 'NEW'), [cards]);
+  const issues = useMemo(() => cards.filter((card) => card.lane === 'ISSUE'), [cards]);
+  const needsAttention = waiting.length > 0 || issues.some((card) => card.issue === 'PLATFORM_CANCELLED');
 
   useEffect(() => {
-    if (!waiting) return undefined;
+    if (!needsAttention) return undefined;
     const timer = setInterval(playChime, CHIME_REPEAT_MS);
     return () => clearInterval(timer);
-  }, [waiting]);
+  }, [needsAttention]);
 
   const value = useMemo(
-    () => ({ enabled, orders: enabled ? orders : [], policy: enabled ? policy : null, refresh }),
-    [enabled, orders, policy, refresh]
+    () => ({ enabled, board: enabled ? board : null, waiting, issues, panelPath, refresh }),
+    [enabled, board, waiting, issues, panelPath, refresh]
   );
 
-  return <IncomingOrdersContext.Provider value={value}>{children}</IncomingOrdersContext.Provider>;
+  return <OnlineOrdersContext.Provider value={value}>{children}</OnlineOrdersContext.Provider>;
 }

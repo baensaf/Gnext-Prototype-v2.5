@@ -100,12 +100,14 @@ import { customerApi } from 'src/api/customerApi';
 import { deliveryApi } from 'src/api/deliveryApi';
 import { discountsApi } from 'src/api/discountsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
+import { useIncomingOrders } from 'src/contexts/incoming-orders-context';
 
 import { VersionTag } from 'src/components/version-tag';
 import { CheckoutModal } from 'src/components/CheckoutModal';
 import { toast, showErrorToast } from 'src/components/snackbar';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 import { CustomerRegisterDialog } from 'src/components/customer-register';
+import { OnlineBoard, NewOrderPopup } from 'src/components/online-orders';
 import { useRegisterShift } from 'src/components/shift/use-register-shift';
 import { PosShiftBar, PosShiftGate, PosShiftAccountLink } from 'src/components/shift/pos-shift';
 
@@ -1024,6 +1026,29 @@ export function PosOrderPage() {
   // sends the cashier here. It waits for the menu so the lines find their products.
   const [searchParams, setSearchParams] = useSearchParams();
   const resumeId = searchParams.get('resume');
+
+  // The Online tab: platform orders answered beside the cart. A toast or the header badge
+  // sends the cashier here with ?panel=online&order=<id>.
+  const online = useIncomingOrders();
+  const [catalogView, setCatalogView] = useState<'menu' | 'online'>('menu');
+  const [onlineHighlight, setOnlineHighlight] = useState<string | null>(null);
+  const onlineAttention = (online?.waiting.length ?? 0) + (online?.issues.filter((c) => c.issue !== 'WITH_SUPPORT').length ?? 0);
+  const panelParam = searchParams.get('panel');
+  const panelOrder = searchParams.get('order');
+  useEffect(() => {
+    if (panelParam !== 'online') return;
+    setCatalogView('online');
+    setOnlineHighlight(panelOrder);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('panel');
+        next.delete('order');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [panelParam, panelOrder, setSearchParams]);
   useEffect(() => {
     if (!resumeId || products.length === 0) return;
     setSearchParams(
@@ -1694,6 +1719,12 @@ export function PosOrderPage() {
 
       {/* Selling, the register and its shift are a chip in the cart's header; the bar is kept
           for a shift whose business day has ended, which has to be closed from here. */}
+      {/* With the till shut the Online tab is out of sight, so say what is waiting on it. */}
+      {shiftBlocked && onlineAttention > 0 && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {t('online.waitingBehindShift', { count: onlineAttention })}
+        </Alert>
+      )}
       {shiftBlocked && !register.dayEnded && <PosShiftGate register={register} />}
       {register.dayEnded && <PosShiftBar register={register} />}
 
@@ -1716,6 +1747,7 @@ export function PosOrderPage() {
               minHeight: { xs: 700, md: 0 },
               height: { md: '100%' },
               overflow: 'hidden',
+              position: 'relative',
             }}
           >
             {/* Catalog Search Header */}
@@ -1730,6 +1762,27 @@ export function PosOrderPage() {
                 gap: 2,
               }}
             >
+              {/* Online orders are answered here, beside the cart, not on another page. */}
+              {online?.enabled && (
+                <ToggleButtonGroup
+                  exclusive
+                  size="small"
+                  value={catalogView}
+                  onChange={(_e, value) => value && setCatalogView(value)}
+                  sx={{ flexShrink: 0 }}
+                >
+                  <ToggleButton value="menu" sx={{ px: 1.5 }}>
+                    {t('online.tabMenu')}
+                  </ToggleButton>
+                  <ToggleButton value="online" sx={{ px: 1.5, gap: 1 }}>
+                    {t('online.tabOnline')}
+                    {onlineAttention > 0 && (
+                      <Chip size="small" color="error" label={onlineAttention} sx={{ height: 20, fontWeight: 700 }} />
+                    )}
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              )}
+              <Box sx={{ display: catalogView === 'menu' ? 'flex' : 'none', alignItems: 'center', gap: 2, flexGrow: 1, minWidth: 0 }}>
               <TextField
                 inputRef={searchInputRef}
                 fullWidth
@@ -1771,10 +1824,26 @@ export function PosOrderPage() {
                 color="primary"
                 sx={{ fontWeight: 'bold', flexShrink: 0 }}
               />
+              </Box>
             </Box>
 
-            {/* Catalog Body: Category Rail + Product Cards Grid */}
-            <Box sx={{ display: 'flex', flexGrow: 1, minHeight: 0, flexDirection: { xs: 'column', sm: 'row' } }}>
+            {catalogView === 'online' && (
+              <Box sx={{ flexGrow: 1, minHeight: 0, overflowY: { xs: 'visible', md: 'auto' } }}>
+                <OnlineBoard variant="panel" highlightId={onlineHighlight} />
+              </Box>
+            )}
+            {catalogView === 'menu' && (
+              <NewOrderPopup
+                onOpen={(orderId) => {
+                  setOnlineHighlight(orderId);
+                  setCatalogView('online');
+                }}
+              />
+            )}
+
+            {/* Catalog Body: Category Rail + Product Cards Grid. Hidden, not unmounted, on the
+                Online tab, so the category and scroll survive a trip to answer an order. */}
+            <Box sx={{ display: catalogView === 'menu' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, flexDirection: { xs: 'column', sm: 'row' } }}>
               {/* Vertical Category Rail */}
               <Box
                 sx={{
