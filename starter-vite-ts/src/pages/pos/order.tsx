@@ -1179,6 +1179,7 @@ export function PosOrderPage() {
               : null
         );
         setError(null);
+        discountBeforeCoupon.current = null;
         if (appliedCouponCode) {
           toast.success(msg);
         }
@@ -1187,7 +1188,11 @@ export function PosOrderPage() {
         const reasonMsg = formatRejectionReason(t, rejected.rejectionReason);
         if (appliedCouponCode) {
           toast.error(reasonMsg);
-          setAppliedCouponCode('');
+          // A code that is refused leaves the cart with the discount it had before it was typed.
+          const before = discountBeforeCoupon.current;
+          discountBeforeCoupon.current = null;
+          setAppliedCouponCode(before?.coupon || '');
+          if (before?.manual) setAppliedManualDiscount(before.manual);
         }
       } else {
         setAppliedDiscountName(null);
@@ -1209,16 +1214,20 @@ export function PosOrderPage() {
   const discountOn = hasDiscount || MoneyUtil.greaterThan(appliedDiscountAmount, '0');
 
   // Coupon Actions
+  // The discount a new coupon replaces, put back if the server refuses the code.
+  const discountBeforeCoupon = React.useRef<{ coupon: string; manual: typeof appliedManualDiscount } | null>(null);
+
   const handleApplyCoupon = () => {
     const trimmed = couponInput.trim().toUpperCase();
     if (!trimmed) {
-      toast.error('Please enter a coupon code');
+      toast.error(t('pos.discount.couponCode'));
       return;
     }
     if (cart.length === 0) {
       toast.error(t('pos.cartEmpty'));
       return;
     }
+    discountBeforeCoupon.current = { coupon: appliedCouponCode, manual: appliedManualDiscount };
     setAppliedManualDiscount(null);
     setAppliedCouponCode(trimmed);
     setManualDiscountModalOpen(false);
@@ -1396,6 +1405,7 @@ export function PosOrderPage() {
             m.name?.toLowerCase().includes('card')
         ) || activeMethods[0];
 
+      let paidOrder: OrderHeader | null = null;
       if (preferredPos) {
         const payRes = await paymentApi.postPayment({
           order_id: submitted.id,
@@ -1404,12 +1414,17 @@ export function PosOrderPage() {
           reference_number: undefined,
           idempotency_key: idempotencyKey,
         });
-        setPlacedOrder(payRes.order || submitted);
-      } else {
-        setPlacedOrder(submitted);
+        paidOrder = payRes.order || null;
       }
 
-      setCheckoutModalOpen(true);
+      // Paid in full: the receipt has printed, and the register is ready for the next customer.
+      // Anything less stays on screen in the pay form.
+      if (paidOrder && MoneyUtil.isZero(paidOrder.due_amount || '0')) {
+        setPlacedOrder(null);
+      } else {
+        setPlacedOrder(paidOrder || submitted);
+        setCheckoutModalOpen(true);
+      }
       toast.success(t('pos.orderSubmittedPaid', { number: submitted.call_number || submitted.order_number || '' }));
       handleClearCart();
       fetchHeldOrders(selectedBranchId);
@@ -1719,9 +1734,18 @@ export function PosOrderPage() {
                 inputRef={searchInputRef}
                 fullWidth
                 size="small"
-                placeholder="Search products by English/Persian name or code (e.g. Cheese, همبرگر, PROD-01)..."
+                placeholder={t('pos.searchPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  // Enter rings up the first match, as tapping it would, sold-out checks and all.
+                  if (e.key !== 'Enter' || !searchQuery.trim()) return;
+                  e.preventDefault();
+                  const first = document.querySelector<HTMLElement>('[data-product-tile]');
+                  if (!first) return;
+                  first.click();
+                  setSearchQuery('');
+                }}
                 slotProps={{
                   htmlInput: { 'aria-keyshortcuts': 'F2 Control+F Meta+F Control+K Meta+K' },
                   input: {
@@ -1831,7 +1855,7 @@ export function PosOrderPage() {
                 {filteredProducts.length === 0 ? (
                   <Box sx={{ py: 8, textAlign: 'center' }}>
                     <Typography variant="body1" color="text.secondary">
-                      No products found matching your search or category.
+                      {t('pos.noProducts')}
                     </Typography>
                   </Box>
                 ) : (
@@ -1858,6 +1882,7 @@ export function PosOrderPage() {
                           }}
                           onPointerUp={() => window.clearTimeout(longPress.current.timer)}
                           onPointerLeave={() => window.clearTimeout(longPress.current.timer)}
+                          data-product-tile
                           sx={{
                             position: 'relative',
                             p: 1.5,
@@ -2719,6 +2744,8 @@ export function PosOrderPage() {
                 placeholder={t('pos.discount.couponCode')}
                 value={couponInput}
                 onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                // A new code replaces the last one rather than being typed onto its end.
+                onFocus={(e) => e.target.select()}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
@@ -3293,6 +3320,13 @@ export function PosOrderPage() {
         open={checkoutModalOpen}
         orderId={placedOrder?.id || null}
         onClose={() => setCheckoutModalOpen(false)}
+        // A paid order leaves the register at once (after the change is handed back): the receipt
+        // has printed, and the next customer is waiting.
+        onPaymentComplete={() => {
+          setCheckoutModalOpen(false);
+          setPlacedOrder(null);
+          toast.success(t('pos.orderSettled'));
+        }}
       />
     </Box>
   );

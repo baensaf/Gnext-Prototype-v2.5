@@ -15,7 +15,8 @@ export interface ShiftPolicy {
 }
 
 export const SHIFT_POLICY_DEFAULTS: ShiftPolicy = {
-  defaultOpeningFloat: '5000000',
+  // HAMI branches start every drawer at zero and empty it at each close.
+  defaultOpeningFloat: '0',
   varianceTolerance: '100000',
   blindClose: true,
 };

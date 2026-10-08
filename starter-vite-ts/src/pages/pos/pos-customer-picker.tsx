@@ -8,6 +8,8 @@ import SearchIcon from '@mui/icons-material/Search';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import { Box, Chip, Stack, TextField, Typography, Autocomplete, InputAdornment, CircularProgress } from '@mui/material';
 
+import { localMobile } from 'src/utils/phone';
+
 const MIN_CHARS = 3;
 const DEBOUNCE_MS = 300;
 
@@ -16,7 +18,7 @@ const REGISTER_ID = '__register__';
 const REGISTER = { id: REGISTER_ID } as Customer;
 const isRegister = (c: Customer | null | undefined) => c?.id === REGISTER_ID;
 
-const label = (c: Customer) => `${`${c.first_name || ''} ${c.last_name || ''}`.trim()} (${c.mobile})`;
+const label = (c: Customer) => `${`${c.first_name || ''} ${c.last_name || ''}`.trim()} (${localMobile(c.mobile)})`;
 
 /** What the cashier typed, as the register form's mobile (digits) or name (letters). */
 const prefillFrom = (typed: string): { mobile?: string; name?: string } => {
@@ -108,6 +110,8 @@ export function PosCustomerPicker({ value, onChange, search, onRegister, placeho
     <Autocomplete
       fullWidth
       size="small"
+      // The first match is ready for Enter, as is "register new" when nothing matches.
+      autoHighlight
       disabled={disabled}
       value={value}
       options={[...found, REGISTER]}
@@ -154,7 +158,7 @@ export function PosCustomerPicker({ value, onChange, search, onRegister, placeho
                   {`${c.first_name || ''} ${c.last_name || ''}`.trim() || '—'}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" dir="ltr">
-                  {c.mobile}
+                  {localMobile(c.mobile)}
                 </Typography>
               </Box>
               {c.is_blocked && <Chip size="small" color="error" icon={<BlockIcon />} label={t('customers.directory.blocked')} />}

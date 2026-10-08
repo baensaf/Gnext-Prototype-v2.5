@@ -101,7 +101,7 @@ export function useRegisterShift() {
     businessDay,
     dayEnded,
     /** What the open dialog offers; the server's default until the policy has loaded. */
-    defaultFloat: policy?.defaultOpeningFloat ?? '5000000',
+    defaultFloat: policy?.defaultOpeningFloat ?? '0',
     loading,
     checked,
     error,

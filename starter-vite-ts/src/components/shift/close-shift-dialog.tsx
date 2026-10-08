@@ -140,6 +140,7 @@ export function CloseShiftDialog({ open, onClose, shiftId, shiftNumber, onClosed
 
   const pendingCash = check?.pendingCash ?? [];
   const openOrders = check?.openOrders ?? [];
+  const carriedOrders = check?.carriedOrders ?? [];
 
   const settlePayment = async (paymentId: string, action: 'take' | 'cancel') => {
     setPaymentBusy(paymentId);
@@ -470,6 +471,19 @@ export function CloseShiftDialog({ open, onClose, shiftId, shiftNumber, onClosed
                         slotProps={{ htmlInput: { maxLength: 8, style: { textAlign: 'center', letterSpacing: 6 } } }}
                       />
                     )}
+                  </Box>
+                )}
+
+                {step === 'count' && carriedOrders.length > 0 && (
+                  <Box>
+                    <Alert severity="info" sx={{ mb: 1 }}>
+                      {t('shift.close.carriedOrders', { count: carriedOrders.length })}
+                    </Alert>
+                    <Box sx={{ maxHeight: 160, overflowY: 'auto' }}>
+                      {carriedOrders.map((order) => (
+                        <OpenOrderLine key={order.id} order={order} />
+                      ))}
+                    </Box>
                   </Box>
                 )}
 

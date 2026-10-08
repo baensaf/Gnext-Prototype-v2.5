@@ -1,5 +1,6 @@
 import type { OrderListRow } from 'src/api/orderApi';
 import type { RefundRequest } from 'src/api/refundApi';
+import type { PaymentMethod } from 'src/api/settingsApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
@@ -25,15 +26,18 @@ import {
   IconButton,
   DialogTitle,
   Autocomplete,
+  ToggleButton,
   DialogContent,
   DialogActions,
   TableContainer,
+  ToggleButtonGroup,
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
 import { serverText } from 'src/utils/server-text';
-import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
+import { useCurrencyLabel } from 'src/utils/currency';
+import { amountText, amountFromText } from 'src/utils/amount-input';
 
 import { orderApi } from 'src/api/orderApi';
 import { refundApi } from 'src/api/refundApi';
@@ -63,7 +67,10 @@ export function RefundsPage() {
   const [newOpen, setNewOpen] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ orderId: '', amount: '', reason: '' });
+  // A card paid in Iran cannot be refunded on the terminal, so money goes back in cash from the
+  // drawer or by a card-to-card transfer, whose tracking number is kept with the refund.
+  const EMPTY_FORM = { orderId: '', amount: '', reason: '', payBack: 'CASH' as 'CASH' | 'TRANSFER', reference: '' };
+  const [form, setForm] = useState(EMPTY_FORM);
   // The server refunds a completed order only; saying so before the PIN saves the manager a trip.
   const pickedOrder = orderOptions.find((order) => order.id === form.orderId);
   const pickedStillOpen = !!pickedOrder && pickedOrder.state !== 'COMPLETED';
@@ -74,7 +81,17 @@ export function RefundsPage() {
 
   const [selectedRefund, setSelectedRefund] = useState<any | null>(null);
   // Names for the methods a refund went back to; the refund itself carries only their ids.
-  const [methodNames, setMethodNames] = useState<Record<string, string>>({});
+  const [methods, setMethods] = useState<PaymentMethod[]>([]);
+  const methodNames: Record<string, string> = Object.fromEntries(methods.map((m) => [m.id, m.name]));
+  // How a refund went back, named the way the dialog offers it.
+  const payBackLabel = (r: { method_id?: string; method_kind?: string }) =>
+    r.method_kind === 'CASH'
+      ? t('refunds.payBack.cash')
+      : r.method_kind === 'BANK_TRANSFER'
+        ? t('refunds.payBack.transfer')
+        : (r.method_id && methodNames[r.method_id]) || r.method_kind || '-';
+  const cashMethod = methods.find((m) => m.is_active && m.kind === 'CASH');
+  const transferMethod = methods.find((m) => m.is_active && m.kind === 'BANK_TRANSFER');
   const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   const loadData = async () => {
@@ -94,6 +111,10 @@ export function RefundsPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    settingsApi.getPaymentMethods().then(setMethods).catch(() => setMethods([]));
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -134,10 +155,12 @@ export function RefundsPage() {
         amount: form.amount || undefined,
         full: !form.amount,
         reason: form.reason,
+        targetMethodId: (form.payBack === 'TRANSFER' ? transferMethod : cashMethod)?.id,
+        reference: form.payBack === 'TRANSFER' ? form.reference.trim() : undefined,
         pin,
       });
       setNewOpen(false);
-      setForm({ orderId: '', amount: '', reason: '' });
+      setForm(EMPTY_FORM);
       await loadData();
     } catch (err: any) {
       setError(
@@ -168,10 +191,6 @@ export function RefundsPage() {
     try {
       const data = await refundApi.getRefundById(id);
       setSelectedRefund(data);
-      if (Object.keys(methodNames).length === 0) {
-        const methods = await settingsApi.getPaymentMethods().catch(() => []);
-        setMethodNames(Object.fromEntries(methods.map((m) => [m.id, m.name])));
-      }
       setDetailModalOpen(true);
     } catch {
       setError(t('refunds.detailFailed'));
@@ -216,6 +235,7 @@ export function RefundsPage() {
               <TableCell>{t('refunds.col.code')}</TableCell>
               <TableCell>{t('refunds.order')}</TableCell>
               <TableCell>{t('refunds.col.type')}</TableCell>
+              <TableCell>{t('refunds.payBack.label')}</TableCell>
               <TableCell>{t('refunds.amount')}</TableCell>
               <TableCell>{t('refunds.col.status')}</TableCell>
               <TableCell>{t('refunds.reason')}</TableCell>
@@ -226,7 +246,7 @@ export function RefundsPage() {
           <TableBody>
             {refunds.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} align="center">
+                <TableCell colSpan={9} align="center">
                   <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
                     {t('refunds.empty')}
                   </Typography>
@@ -251,6 +271,7 @@ export function RefundsPage() {
                       size="small"
                     />
                   </TableCell>
+                  <TableCell>{payBackLabel(r)}</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', color: 'error.main' }}>
                     -{MoneyUtil.formatCurrency(r.total_refund_amount)} {currency}
                   </TableCell>
@@ -287,19 +308,11 @@ export function RefundsPage() {
                 <strong>{t('refunds.reason')}:</strong> {serverText(selectedRefund.note, t) || '-'}
               </Typography>
 
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mt: 2 }}>
-                {t('refunds.allocations')}
+              <Typography variant="body2">
+                <strong>{t('refunds.payBack.label')}:</strong>{' '}
+                {payBackLabel(selectedRefund)}
+                {selectedRefund.reference && ` · ${selectedRefund.reference}`}
               </Typography>
-              {selectedRefund.allocations?.map((a: any) => (
-                <Paper key={a.id} variant="outlined" sx={{ p: 1.5 }}>
-                  <Typography variant="body2">
-                    {methodNames[a.payment_method_id] || a.payment_method_id}
-                  </Typography>
-                  <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold' }}>
-                    -{MoneyUtil.formatCurrency(a.amount_refunded)} {currency}
-                  </Typography>
-                </Paper>
-              ))}
             </Stack>
           )}
         </DialogContent>
@@ -342,12 +355,45 @@ export function RefundsPage() {
             )}
 
             <TextField
-              label={t('refunds.amount', 'Amount')}
-              value={toToman(form.amount)}
-              onChange={(e) => setForm({ ...form, amount: fromToman(e.target.value) })}
+              label={`${t('refunds.amount', 'Amount')} (${currency})`}
+              placeholder={t('refunds.wholeOrder')}
+              value={amountText(form.amount)}
+              onChange={(e) => setForm({ ...form, amount: amountFromText(e.target.value) })}
               helperText={t('refunds.amountHelp', 'Leave empty to refund the whole order.')}
+              slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
               fullWidth
             />
+
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                {t('refunds.payBack.label')}
+              </Typography>
+              <ToggleButtonGroup
+                exclusive
+                fullWidth
+                size="small"
+                value={form.payBack}
+                onChange={(_, value) => value && setForm({ ...form, payBack: value })}
+              >
+                <ToggleButton value="CASH" disabled={!cashMethod}>
+                  {t('refunds.payBack.cash')}
+                </ToggleButton>
+                <ToggleButton value="TRANSFER" disabled={!transferMethod}>
+                  {t('refunds.payBack.transfer')}
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+
+            {form.payBack === 'TRANSFER' && (
+              <TextField
+                required
+                label={t('refunds.payBack.reference')}
+                value={form.reference}
+                onChange={(e) => setForm({ ...form, reference: e.target.value })}
+                slotProps={{ htmlInput: { dir: 'ltr' } }}
+                fullWidth
+              />
+            )}
 
             <TextField
               label={t('refunds.reason', 'Reason')}
@@ -375,7 +421,13 @@ export function RefundsPage() {
           <Button
             variant="contained"
             onClick={handleSubmitClick}
-            disabled={submitting || !form.orderId || !form.reason.trim() || pickedStillOpen}
+            disabled={
+              submitting ||
+              !form.orderId ||
+              !form.reason.trim() ||
+              pickedStillOpen ||
+              (form.payBack === 'TRANSFER' && !form.reference.trim())
+            }
           >
             {canApprove ? t('common.save', 'Save') : t('refunds.continue', 'Continue')}
           </Button>

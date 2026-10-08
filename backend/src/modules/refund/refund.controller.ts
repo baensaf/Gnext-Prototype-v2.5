@@ -54,7 +54,13 @@ export class RefundController {
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
     await this.authorize(req, 'REFUND_ORDER', body.pin);
-    const intent = await this.refundService.createRefundIntent(tenantId, orderId, body, userId, correlationId);
+    const intent = await this.refundService.createRefundIntent(
+      tenantId,
+      orderId,
+      { ...body, moneyOutAuthorized: true },
+      userId,
+      correlationId,
+    );
     return await this.refundService.processRefund(tenantId, intent.id, { scenarioId: body.scenarioId }, userId, correlationId);
   }
 

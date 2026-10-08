@@ -41,6 +41,13 @@ export class RefundCreateDto {
   @IsUUID()
   targetMethodId?: string;
 
+  /**
+   * Set by the controller, never by the client (the validation pipe refuses unknown fields):
+   * the money going out was already released by a manager or a manager's PIN, which covers
+   * paying it back by another method than the customer paid with.
+   */
+  moneyOutAuthorized?: boolean;
+
   @IsOptional()
   @IsUUID()
   deviceId?: string;

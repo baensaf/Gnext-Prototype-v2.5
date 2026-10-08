@@ -196,8 +196,8 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       expect(order.state).toBe('COMPLETED');
     });
 
-    it('completes a takeaway order once it is paid in full', async () => {
-      const order = openOrder({ order_type: 'TAKEAWAY', state: 'CONFIRMED', outstanding_total: '0.0000' });
+    it.each(['TAKEAWAY', 'DINE_IN'])('completes a %s order once it is paid in full', async (orderType) => {
+      const order = openOrder({ order_type: orderType, state: 'CONFIRMED', outstanding_total: '0.0000' });
       orderRepo.findOne.mockResolvedValue(order);
 
       const result = await service.completeWhenPaidInFull('t-1', 'ord-1');
@@ -205,7 +205,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
     });
 
     it.each([
-      ['a dine-in check, which closes with its table', { order_type: 'DINE_IN', state: 'CONFIRMED', outstanding_total: '0.0000' }],
+      ['a dine-in check with money still owing', { order_type: 'DINE_IN', state: 'CONFIRMED', outstanding_total: '10000.0000' }],
       ['a delivery, which the courier completes', { order_type: 'DELIVERY', state: 'CONFIRMED', outstanding_total: '0.0000' }],
       ['a takeaway order with money still owing', { order_type: 'TAKEAWAY', state: 'CONFIRMED', outstanding_total: '10000.0000' }],
       ['a takeaway order that was cancelled', { order_type: 'TAKEAWAY', state: 'CANCELLED', outstanding_total: '0.0000' }],

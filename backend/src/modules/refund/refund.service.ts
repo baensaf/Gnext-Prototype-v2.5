@@ -179,7 +179,9 @@ export class RefundService {
 
       const isAlternative = targetMethod.id !== primaryPayment.method_id;
       if (isAlternative) {
-        if (!dto.approvalRequestId) {
+        // A card paid in Iran cannot be refunded on the terminal: it goes back in cash or by a
+        // card-to-card transfer, released by the same PIN as the refund itself.
+        if (!dto.approvalRequestId && !dto.moneyOutAuthorized) {
           throw new ForbiddenException('Alternative tender refund requires an approved approvalRequestId');
         }
         if (targetMethod.kind === 'BANK_TRANSFER' && !dto.reference) {

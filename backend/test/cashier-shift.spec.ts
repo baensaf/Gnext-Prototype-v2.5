@@ -614,6 +614,20 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       expect(approvalService.verifyApproverPin).not.toHaveBeenCalled();
     });
 
+    it('does not ask again about orders an earlier shift already left open', async () => {
+      tillOrders = [order({ id: 'yesterday', shift_id: 'shf-0', outstanding_total: '90000.0000' })];
+      const shift = openShift();
+      shiftRepo.findOne.mockResolvedValue(shift);
+
+      await expect(shiftService.getCloseCheck('t-1', 'shf-1')).resolves.toMatchObject({
+        openOrders: [],
+        carriedOrders: [{ id: 'yesterday', issue: 'UNPAID' }],
+      });
+      await shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000' }, 'cashier-1', undefined, { role: 'CASHIER' });
+      expect(approvalService.verifyApproverPin).not.toHaveBeenCalled();
+      expect(shift.state).toBe('CLOSED');
+    });
+
     it('lets a manager leave orders open on their own authority', async () => {
       tillOrders = [order({ outstanding_total: '90000.0000' })];
       const shift = openShift();

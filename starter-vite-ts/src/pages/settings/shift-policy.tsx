@@ -31,7 +31,8 @@ import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 /** The server's defaults, used until head office writes a SHIFT_POLICY row. */
 const SHIFT_POLICY_DEFAULTS: ShiftPolicy = {
-  defaultOpeningFloat: '5000000',
+  // HAMI branches start every drawer at zero and empty it at each close.
+  defaultOpeningFloat: '0',
   varianceTolerance: '100000',
   blindClose: true,
 };
