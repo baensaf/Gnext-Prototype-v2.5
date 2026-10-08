@@ -25,7 +25,6 @@ import {
   TableRow,
   MenuItem,
   useTheme,
-  Snackbar,
   TableBody,
   TableCell,
   TableHead,
@@ -49,6 +48,7 @@ import { canReachPath } from 'src/config/role-access';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
+import { toast } from 'src/components/snackbar';
 import { VersionTag } from 'src/components/version-tag';
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
@@ -70,7 +70,6 @@ export function PrintersPage() {
   const [selectedBranchId] = useScopedBranchId();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [testSuccessMsg, setTestSuccessMsg] = useState<string | null>(null);
   // The printer whose test page is out, so its button cannot send a second one meanwhile.
   const [testingId, setTestingId] = useState<string | null>(null);
 
@@ -201,7 +200,7 @@ export function PrintersPage() {
   const handleTestPrintSlip = async (printer: PrinterDevice) => {
     const name = printer.name;
     setTestingId(printer.id);
-    setTestSuccessMsg(t('operations.printers.testPrintSending', 'Sending a test page to {{name}}…', { name }));
+    const toastId = toast.loading(t('operations.printers.testPrintSending', 'Sending a test page to {{name}}…', { name }));
     try {
       const sent = await kdsApi.testPrint(printer.id);
       const deadline = Date.now() + 75_000;
@@ -209,12 +208,12 @@ export function PrintersPage() {
         await new Promise((resolve) => setTimeout(resolve, 2000));
         const job = await kdsApi.getPrintJobById(sent.id);
         if (job.status === 'SUCCESS') {
-          setTestSuccessMsg(t('operations.printers.testPrintSuccess', '{{name}} printed the test page.', { name }));
+          toast.success(t('operations.printers.testPrintSuccess', '{{name}} printed the test page.', { name }), { id: toastId });
           return;
         }
         if (job.status === 'FAILED') {
           const last = (job as any).attempts?.at(-1);
-          setTestSuccessMsg(null);
+          toast.dismiss(toastId);
           setError(
             t('operations.printers.testPrintFailed', '{{name}} did not print the test page: {{reason}}', {
               name,
@@ -224,11 +223,12 @@ export function PrintersPage() {
           return;
         }
       }
-      setTestSuccessMsg(
-        t('operations.printers.testPrintNoAnswer', 'No answer from {{name}} yet. The print queue will show the result.', { name })
+      toast.info(
+        t('operations.printers.testPrintNoAnswer', 'No answer from {{name}} yet. The print queue will show the result.', { name }),
+        { id: toastId }
       );
     } catch (err: any) {
-      setTestSuccessMsg(null);
+      toast.dismiss(toastId);
       setError(err.detail || err.message || t('operations.printers.testPrintError', 'Could not send the test page.'));
     } finally {
       setTestingId(null);
@@ -633,14 +633,6 @@ export function PrintersPage() {
         content={t('operations.printers.deletePrinterContent', { name: deleteConfirm.name })}
         confirmLabel={t('common.delete', 'Delete')}
         confirmColor="error"
-      />
-
-      {/* Test Print Toast */}
-      <Snackbar
-        open={Boolean(testSuccessMsg)}
-        autoHideDuration={4000}
-        onClose={() => setTestSuccessMsg(null)}
-        message={testSuccessMsg}
       />
     </Box>
   );

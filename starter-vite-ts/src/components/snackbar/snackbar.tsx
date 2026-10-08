@@ -1,56 +1,62 @@
-import type { ToasterProps } from 'sonner';
+import Portal from '@mui/material/Portal';
 
-import { Toaster as SonnerToaster } from 'sonner';
-
-import { useTheme } from '@mui/material/styles';
-import GlobalStyles from '@mui/material/GlobalStyles';
-
-import { useSettingsContext } from 'src/components/settings';
-
+import { Iconify } from '../iconify';
+import { SnackbarRoot } from './styles';
 import { snackbarClasses } from './classes';
+import { useSettingsContext } from '../settings';
 
 // ----------------------------------------------------------------------
 
-export type SnackbarProps = ToasterProps;
-
-export function Snackbar({ ...other }: SnackbarProps) {
-  const theme = useTheme();
+export function Snackbar() {
   const settings = useSettingsContext();
 
+  // Minimals pins the stack top-right; in Farsi it mirrors to top-left. The RTL style plugin
+  // already moves the close button to the other corner.
   const isRtl = settings.state.direction === 'rtl';
-  const mode = theme.palette.mode === 'dark' ? 'dark' : 'light';
 
   return (
-    <>
-      <GlobalStyles
-        styles={{
-          '.toaster': {
-            fontFamily: theme.typography.fontFamily,
-          },
-          [`.${snackbarClasses.toast}`]: {
-            fontFamily: `${theme.typography.fontFamily} !important`,
-            borderRadius: '12px !important',
-            boxShadow: theme.shadows[8],
-          },
-        }}
-      />
-      <SonnerToaster
-        dir={isRtl ? 'rtl' : 'ltr'}
-        theme={mode}
-        position={isRtl ? 'top-left' : 'top-right'}
-        richColors
+    <Portal>
+      <SnackbarRoot
+        expand
         closeButton
-        expand={false}
-        duration={4000}
+        gap={12}
+        offset={16}
+        visibleToasts={4}
+        dir={isRtl ? 'rtl' : 'ltr'}
+        position={isRtl ? 'top-left' : 'top-right'}
         className={snackbarClasses.root}
         toastOptions={{
-          className: snackbarClasses.toast,
-          style: {
-            fontFamily: theme.typography.fontFamily,
+          unstyled: true,
+          classNames: {
+            toast: snackbarClasses.toast,
+            icon: snackbarClasses.icon,
+            loader: snackbarClasses.loader,
+            loading: snackbarClasses.loading,
+            /********/
+            content: snackbarClasses.content,
+            title: snackbarClasses.title,
+            description: snackbarClasses.description,
+            /********/
+            closeButton: snackbarClasses.closeButton,
+            actionButton: snackbarClasses.actionButton,
+            cancelButton: snackbarClasses.cancelButton,
+            /********/
+            info: snackbarClasses.info,
+            error: snackbarClasses.error,
+            success: snackbarClasses.success,
+            warning: snackbarClasses.warning,
           },
         }}
-        {...other}
+        icons={{
+          loading: <span className={snackbarClasses.loadingIcon} />,
+          info: <Iconify className={snackbarClasses.iconSvg} icon="solar:info-circle-bold" />,
+          success: <Iconify className={snackbarClasses.iconSvg} icon="solar:check-circle-bold" />,
+          warning: (
+            <Iconify className={snackbarClasses.iconSvg} icon="solar:danger-triangle-bold" />
+          ),
+          error: <Iconify className={snackbarClasses.iconSvg} icon="solar:danger-bold" />,
+        }}
       />
-    </>
+    </Portal>
   );
 }
