@@ -1708,9 +1708,12 @@
       "label": "Paid back by",
       "cash": "Cash from the drawer",
       "transfer": "Card-to-card",
-      "reference": "Transfer tracking number"
+      "reference": "Transfer tracking number",
+      "credit": "To club credit",
+      "creditNeedsCustomer": "This order has no customer, so there is no club credit to pay back to."
     },
-    "wholeOrder": "Whole order"
+    "wholeOrder": "Whole order",
+    "refundable": "Left to refund: {{amount}}. Leave empty to refund all of it."
   },
   "customers": {
     "title": "Customer Directory",

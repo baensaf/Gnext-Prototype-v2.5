@@ -4,29 +4,34 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import { Repository, DataSource, EntityManager, In } from 'typeorm';
-import { Refund, RefundStatus } from '../../entities/Refund.entity';
+import { Refund } from '../../entities/Refund.entity';
 import { RefundAllocation } from '../../entities/RefundAllocation.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
 import { Payment } from '../../entities/Payment.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
+import { CustomerCreditAccount } from '../../entities/CustomerCreditAccount.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { isAggregatorOrder } from '../../common/utils/snappfood-order.util';
 import { ShiftService } from '../cashier/shift.service';
 import { CreditService } from '../customer/credit.service';
 import { AuditWriter } from '../audit/audit-writer.service';
-import {
-  RefundCreateDto,
-  RefundProcessDto,
-  PaidOrderCancelDto,
-  RefundReversalDto,
-} from './dtos/refund.dto';
+import { ApprovalService } from '../approval/approval.service';
+import { RefundCreateDto, RefundProcessOptions, PaidOrderCancelDto } from './dtos/refund.dto';
+
+/** What is left to give back of one payment, and the method it was taken by. */
+interface PaymentShare {
+  payment: Payment;
+  method: PaymentMethod | null;
+  remaining: string;
+}
 
 @Injectable()
 export class RefundService {
@@ -41,6 +46,7 @@ export class RefundService {
     private readonly creditService: CreditService,
     private readonly auditWriter: AuditWriter,
     private readonly dataSource: DataSource,
+    @Optional() private readonly approvalService?: ApprovalService,
   ) {}
 
   private async generateRefundNumber(tenantId: string, em: EntityManager): Promise<string> {
@@ -82,17 +88,84 @@ export class RefundService {
     return MoneyUtil.greaterThan(refundable, '0.0000') ? refundable : '0.0000';
   }
 
-  async getRefunds(tenantId: string, query: any) {
+  /**
+   * Each payment on the order with what earlier refunds have not yet given back of it. A second
+   * partial refund has to start where the first stopped, or it is checked against the policy of a
+   * payment that is already paid back in full.
+   */
+  private async paymentShares(tenantId: string, orderId: string, em: EntityManager): Promise<PaymentShare[]> {
+    const payments = (
+      await em.find(Payment, {
+        where: [
+          { tenant_id: tenantId, order_id: orderId, status: 'SUCCEEDED' },
+          { tenant_id: tenantId, order_id: orderId, status: 'COMPLETED' as any },
+        ],
+        order: { initiated_at: 'ASC' },
+      })
+    ).filter((p) => p.status === 'SUCCEEDED' || (p.status as any) === 'COMPLETED');
+
+    const done = await em.find(Refund, { where: { tenant_id: tenantId, order_id: orderId, status: 'SUCCEEDED' } });
+    const given = new Map<string, string>();
+    if (done.length) {
+      const allocations = await em.find(RefundAllocation, {
+        where: { tenant_id: tenantId, refund_id: In(done.map((r) => r.id)) },
+      });
+      for (const a of allocations) {
+        const key = a.payment_id || a.original_payment_id;
+        if (key) given.set(key, MoneyUtil.add(given.get(key) || '0.0000', a.amount || a.amount_refunded || '0'));
+      }
+    }
+
+    const methods = new Map<string, PaymentMethod | null>();
+    const shares: PaymentShare[] = [];
+    for (const payment of payments) {
+      if (!methods.has(payment.method_id)) {
+        methods.set(
+          payment.method_id,
+          await em.findOne(PaymentMethod, { where: { id: payment.method_id, tenant_id: tenantId } }),
+        );
+      }
+      const left = MoneyUtil.subtract(payment.amount, given.get(payment.id) || '0.0000');
+      shares.push({
+        payment,
+        method: methods.get(payment.method_id) ?? null,
+        remaining: MoneyUtil.greaterThan(left, '0.0000') ? left : '0.0000',
+      });
+    }
+    return shares;
+  }
+
+  async getRefunds(tenantId: string, query: any, branchId?: string) {
     const qb = this.refundRepo.createQueryBuilder('r').where('r.tenant_id = :tenantId', { tenantId });
+    // A refund has no branch of its own: it belongs to the branch of the order it pays back.
+    if (branchId) {
+      qb.innerJoin(OrderHeader, 'o', 'o.id = r.order_id AND o.branch_id = :branchId', { branchId });
+    }
     if (query.orderId) qb.andWhere('r.order_id = :orderId', { orderId: query.orderId });
     if (query.status) qb.andWhere('r.status = :status', { status: query.status });
 
     qb.orderBy('r.initiated_at', 'DESC');
-    const page = parseInt(query.page || '1', 10);
-    const limit = parseInt(query.limit || '50', 10);
+    const page = Math.max(parseInt(query.page || '1', 10) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(query.limit || '50', 10) || 50, 1), 200);
     qb.skip((page - 1) * limit).take(limit);
 
-    const [data, total] = await qb.getManyAndCount();
+    const [rows, total] = await qb.getManyAndCount();
+
+    // The order number is what the receipt in the customer's hand shows, and its total says
+    // whether a refund gave all of it back.
+    const orderIds = [...new Set(rows.map((r) => r.order_id))];
+    const orders = orderIds.length
+      ? await this.orderRepo.find({
+          where: { id: In(orderIds), tenant_id: tenantId },
+          select: ['id', 'order_number', 'total_amount'],
+        })
+      : [];
+    const byId = new Map(orders.map((o) => [o.id, o]));
+    const data = rows.map((r) => ({
+      ...r,
+      order_number: byId.get(r.order_id)?.order_number ?? null,
+      order_total: byId.get(r.order_id)?.total_amount ?? null,
+    }));
     return { data, total, page, limit };
   }
 
@@ -103,6 +176,45 @@ export class RefundService {
     });
     if (!refund) throw new NotFoundException(`Refund ${id} not found`);
     return refund;
+  }
+
+  /**
+   * A refund from the register: created and settled in one transaction holding the order, so a
+   * refusal anywhere (a closed drawer, a declined transfer) leaves nothing behind, and a second
+   * refund of the same order waits for the first and then sees what it gave back.
+   */
+  async refundOrder(
+    tenantId: string,
+    orderId: string,
+    dto: RefundCreateDto,
+    ctx: { userId?: string; correlationId?: string; approvedBy?: string | null } = {},
+  ) {
+    return await this.dataSource.transaction(async (em) => {
+      const intent = await this.createRefundIntent(
+        tenantId,
+        orderId,
+        { ...dto, moneyOutAuthorized: true },
+        ctx.userId,
+        ctx.correlationId,
+        false,
+        em,
+      );
+      const done = await this.processRefund(
+        tenantId,
+        intent.id,
+        { scenarioId: dto.scenarioId, approvedBy: ctx.approvedBy ?? ctx.userId ?? null },
+        ctx.userId,
+        ctx.correlationId,
+        em,
+      );
+      if (done.status !== 'SUCCEEDED') {
+        throw new ConflictException({
+          code: 'REFUND_DECLINED',
+          message: `Refund ${done.refund_number} was declined (${done.failure_code || done.status}); nothing was paid back`,
+        });
+      }
+      return done;
+    });
   }
 
   async createRefundIntent(
@@ -145,7 +257,7 @@ export class RefundService {
         throw new BadRequestException(`Order ${orderId} has no refundable balance available`);
       }
 
-      let requestedAmount = dto.full ? refundableBalance : MoneyUtil.format(dto.amount || '0.0000');
+      const requestedAmount = dto.full ? refundableBalance : MoneyUtil.format(dto.amount || '0.0000');
       if (MoneyUtil.lessThanOrEqual(requestedAmount, '0.0000')) {
         throw new BadRequestException('Refund amount must be greater than zero');
       }
@@ -156,42 +268,87 @@ export class RefundService {
         );
       }
 
-      // Succeeded payments allocation
-      const payments = await em.find(Payment, {
-        where: [
-          { tenant_id: tenantId, order_id: orderId, status: 'SUCCEEDED' },
-          { tenant_id: tenantId, order_id: orderId, status: 'COMPLETED' as any },
-        ],
-        order: { initiated_at: 'ASC' },
-      });
-      if (!payments || payments.length === 0) {
+      const shares = await this.paymentShares(tenantId, orderId, em);
+      if (shares.length === 0) {
         throw new BadRequestException(`No succeeded payments found on order ${orderId} to refund`);
       }
 
-      const primaryPayment = payments[0];
-      let targetMethodId = dto.targetMethodId || primaryPayment.method_id;
-      let targetMethod = await em.findOne(PaymentMethod, {
+      const targetMethodId = dto.targetMethodId || shares[0].payment.method_id;
+      const targetMethod = await em.findOne(PaymentMethod, {
         where: { id: targetMethodId, tenant_id: tenantId },
       });
       if (!targetMethod || !targetMethod.is_active) {
         throw new BadRequestException(`Target payment method ${targetMethodId} is invalid or disabled`);
       }
 
-      const isAlternative = targetMethod.id !== primaryPayment.method_id;
-      if (isAlternative) {
+      // Which payments the refund comes out of: those taken by the method it goes back through
+      // first, then those whose method may be paid back another way, oldest first within each.
+      const rank = (s: PaymentShare) =>
+        s.payment.method_id === targetMethod.id ? 0 : s.method?.allows_alternative_refund === true ? 1 : 2;
+      const ordered = shares
+        .map((s, i) => ({ s, i }))
+        .sort((a, b) => rank(a.s) - rank(b.s) || a.i - b.i)
+        .map(({ s }) => s);
+
+      const legs: { share: PaymentShare; amount: string }[] = [];
+      let toAllocate = requestedAmount;
+      for (const share of ordered) {
+        if (MoneyUtil.lessThanOrEqual(toAllocate, '0.0000')) break;
+        if (MoneyUtil.lessThanOrEqual(share.remaining, '0.0000')) continue;
+        const amount = MoneyUtil.greaterThan(toAllocate, share.remaining) ? share.remaining : toAllocate;
+        legs.push({ share, amount });
+        toAllocate = MoneyUtil.subtract(toAllocate, amount);
+      }
+
+      const isAlternative = legs.some((l) => l.share.payment.method_id !== targetMethod.id);
+      if (isAlternative && !dto.moneyOutAuthorized) {
         // A card paid in Iran cannot be refunded on the terminal: it goes back in cash or by a
-        // card-to-card transfer, released by the same PIN as the refund itself.
-        if (!dto.approvalRequestId && !dto.moneyOutAuthorized) {
+        // card-to-card transfer, released by the same PIN as the refund itself. Without that PIN,
+        // only an approval given for this very order will do.
+        if (!dto.approvalRequestId) {
           throw new ForbiddenException('Alternative tender refund requires an approved approvalRequestId');
         }
-        if (targetMethod.kind === 'BANK_TRANSFER' && !dto.reference) {
-          throw new BadRequestException('Bank transfer refund requires a reference number');
+        if (!this.approvalService) {
+          throw new ForbiddenException('Alternative tender refund cannot check its approval');
         }
-        if (targetMethod.kind === 'CASH') {
-          // Checked before the refund row exists, so the till is known to be open by the
-          // time there is anything to settle.
-          await this.shiftService.requireDrawer(tenantId, order.branch_id, order.terminal_id);
+        await this.approvalService.validateApprovedRequest(
+          tenantId,
+          dto.approvalRequestId,
+          'REFUND_ALTERNATIVE_METHOD',
+          undefined,
+          order.id,
+        );
+      }
+
+      // Head office's payment settings say which money may go back at all, and which may go
+      // back another way than it came.
+      for (const { share } of legs) {
+        const name = share.method?.name || share.method?.kind || share.payment.method_id;
+        if (share.payment.method_id === targetMethod.id) {
+          if (share.method?.allows_refund === false) {
+            throw new BadRequestException({
+              code: 'REFUND_METHOD_NOT_ALLOWED',
+              message: `${name} payments cannot be refunded. Settings › Payments & Refund Methods`,
+            });
+          }
+        } else if (share.method?.allows_alternative_refund !== true) {
+          throw new BadRequestException({
+            code: 'REFUND_METHOD_NOT_ALLOWED',
+            message: `${name} payments cannot be paid back as ${targetMethod.name || targetMethod.kind}. Settings › Payments & Refund Methods`,
+          });
         }
+      }
+
+      if (targetMethod.kind === 'BANK_TRANSFER' && isAlternative && !dto.reference) {
+        throw new BadRequestException('Bank transfer refund requires a reference number');
+      }
+      if (targetMethod.kind === 'CASH') {
+        // Checked before the refund row exists, so the till is known to be open by the
+        // time there is anything to settle.
+        await this.shiftService.requireDrawer(tenantId, order.branch_id, order.terminal_id);
+      }
+      if (targetMethod.kind === 'CUSTOMER_CREDIT' && !order.customer_id) {
+        throw new BadRequestException('Customer credit refund requires an assigned customer on the order');
       }
 
       const refundNumber = await this.generateRefundNumber(tenantId, em);
@@ -218,24 +375,18 @@ export class RefundService {
 
       const savedRefund = await em.save(Refund, refund);
 
-      // Create allocations across payments FIFO
-      let remainingToAllocate = requestedAmount;
-      for (const p of payments) {
-        if (MoneyUtil.lessThanOrEqual(remainingToAllocate, '0.0000')) break;
-
-        const allocAmount = MoneyUtil.greaterThan(remainingToAllocate, p.amount) ? p.amount : remainingToAllocate;
+      for (const { share, amount } of legs) {
         const alloc = em.create(RefundAllocation, {
           tenant_id: tenantId,
           refund_id: savedRefund.id,
           refund_request_id: savedRefund.id,
-          payment_id: p.id,
-          payment_method_id: p.method_id,
-          original_payment_id: p.id,
-          amount: allocAmount,
-          amount_refunded: allocAmount,
+          payment_id: share.payment.id,
+          payment_method_id: share.payment.method_id,
+          original_payment_id: share.payment.id,
+          amount,
+          amount_refunded: amount,
         });
         await em.save(RefundAllocation, alloc);
-        remainingToAllocate = MoneyUtil.subtract(remainingToAllocate, allocAmount);
       }
 
       await this.auditWriter.write({
@@ -261,17 +412,28 @@ export class RefundService {
   async processRefund(
     tenantId: string,
     id: string,
-    dto: RefundProcessDto = {},
+    options: RefundProcessOptions = {},
     userId?: string,
     correlationId?: string,
     externalEm?: EntityManager,
   ) {
     const runInEm = async (em: EntityManager) => {
-      const refund = await em.findOne(Refund, {
-        where: { id, tenant_id: tenantId },
+      const found = await em.findOne(Refund, { where: { id, tenant_id: tenantId } });
+      if (!found) throw new NotFoundException(`Refund ${id} not found`);
+
+      // The order is locked before the refund, the same order creating a refund takes them in,
+      // so two refunds of one order settle one after the other.
+      const order = await em.findOne(OrderHeader, {
+        where: { id: found.order_id, tenant_id: tenantId },
         lock: { mode: 'pessimistic_write' },
       });
-      if (!refund) throw new NotFoundException(`Refund ${id} not found`);
+      if (!order) throw new NotFoundException(`Order ${found.order_id} not found`);
+
+      const refund =
+        (await em.findOne(Refund, {
+          where: { id, tenant_id: tenantId },
+          lock: { mode: 'pessimistic_write' },
+        })) || found;
 
       const allocations = await em.find(RefundAllocation, {
         where: { refund_id: id, tenant_id: tenantId },
@@ -280,18 +442,22 @@ export class RefundService {
 
       if (refund.status === 'SUCCEEDED') return refund; // Idempotent success
 
-      if (refund.status !== 'PENDING' && refund.status !== 'PROCESSING' && refund.status !== 'FAILED') {
+      if (refund.status !== 'PENDING' && refund.status !== 'PROCESSING') {
         throw new BadRequestException(`Refund ${id} is in status ${refund.status} and cannot be processed`);
+      }
+
+      // What other refunds gave back since this one was made counts against it: a refund
+      // made against the whole order is not paid out again once another has paid it.
+      const refundable = await this.calculateRefundableBalance(tenantId, order.id, em);
+      if (MoneyUtil.greaterThan(refund.amount, refundable)) {
+        throw new ConflictException({
+          code: 'REFUND_EXCEEDS_BALANCE',
+          message: `Refund ${refund.refund_number} (${refund.amount}) exceeds what is left to give back on the order (${refundable})`,
+        });
       }
 
       refund.status = 'PROCESSING';
       await em.save(Refund, refund);
-
-      const order = await em.findOne(OrderHeader, {
-        where: { id: refund.order_id, tenant_id: tenantId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!order) throw new NotFoundException(`Order ${refund.order_id} not found`);
 
       const methodKind = refund.method_kind;
 
@@ -305,18 +471,35 @@ export class RefundService {
         if (!order.customer_id) {
           throw new BadRequestException('Customer credit refund requires an assigned customer on the order');
         }
-        const acc = await this.creditService.getAccountByCustomer(tenantId, order.customer_id, refund.currency_code, em);
-        if (!acc) throw new NotFoundException(`No credit account found for customer ${order.customer_id}`);
+        const acc =
+          (await this.creditService.getAccountByCustomer(tenantId, order.customer_id, refund.currency_code, em)) ||
+          // A customer with no account yet gets one to hold the refund, with no credit to buy on.
+          (await em.save(
+            CustomerCreditAccount,
+            em.create(CustomerCreditAccount, {
+              tenant_id: tenantId,
+              customer_id: order.customer_id,
+              currency_code: refund.currency_code,
+              mode: 'FINITE',
+              credit_limit: '0.0000',
+              current_balance: '0.0000',
+              status: 'ACTIVE',
+            }),
+          ));
 
-        // Post positive refund entry to customer credit subledger within active transaction
+        // Post positive refund entry to customer credit subledger within active transaction.
+        // The refund's own release covers a balance that ends up in the customer's favour.
         await this.creditService.postRepayment(
           tenantId,
           acc.id,
-          { amount: refund.amount, reason: `Refund #${refund.refund_number}` },
+          { amount: refund.amount, reason: `Refund #${refund.refund_number}`, preApproved: true },
           userId,
           correlationId,
           em,
         );
+        // Not from the drawer, but given at a register during its shift, so its report lists it.
+        const drawer = await this.shiftService.resolveDrawer(tenantId, order.branch_id, order.terminal_id);
+        refund.shift_id = drawer?.id ?? null;
         refund.status = 'SUCCEEDED';
       } else {
         // Not from the drawer, but given back at a register during its shift: the shift's report
@@ -325,7 +508,7 @@ export class RefundService {
         refund.shift_id = drawer?.id ?? null;
 
         // External simulated method adapter
-        const scenario = dto.scenarioId || 'SUCCESS';
+        const scenario = options.scenarioId || 'SUCCESS';
         if (scenario === 'FAIL' || scenario === 'DECLINED') {
           refund.status = 'FAILED';
           refund.failure_code = scenario;
@@ -346,45 +529,43 @@ export class RefundService {
           return savedFailed;
         }
 
-        if (dto.externalReference) refund.reference = dto.externalReference;
+        if (options.externalReference) refund.reference = options.externalReference;
         refund.status = 'SUCCEEDED';
       }
 
-      if (refund.status === 'SUCCEEDED') {
-        // The cashback comes back in proportion to what is refunded of the order. The call
-        // used to pass the user id and correlation id where the order total and currency go,
-        // so refunding any order that had earned cashback failed with a DecimalError.
-        await this.creditService.reverseLoyaltyCashback(
-          tenantId,
-          order.id,
-          refund.amount,
-          order.total_amount,
-          order.currency_code || 'IRR',
-          em,
-        );
+      // The cashback comes back in proportion to what is refunded of the order. The call
+      // used to pass the user id and correlation id where the order total and currency go,
+      // so refunding any order that had earned cashback failed with a DecimalError.
+      await this.creditService.reverseLoyaltyCashback(
+        tenantId,
+        order.id,
+        refund.amount,
+        order.total_amount,
+        order.currency_code || 'IRR',
+        em,
+      );
 
-        // Update Order refunded_total
-        order.refunded_total = MoneyUtil.add(order.refunded_total, refund.amount);
-        await em.save(OrderHeader, order);
+      // Update Order refunded_total
+      order.refunded_total = MoneyUtil.add(order.refunded_total, refund.amount);
+      await em.save(OrderHeader, order);
 
-        refund.posted_at = new Date();
-        const savedRefund = await em.save(Refund, refund);
+      refund.posted_at = new Date();
+      const savedRefund = await em.save(Refund, refund);
 
-        await this.auditWriter.write({
-          tenantId,
-          actorType: userId ? 'ADMIN' : 'SYSTEM',
-          actorId: userId,
-          action: 'REFUND_SUCCEEDED',
-          entityType: 'Refund',
-          entityId: savedRefund.id,
-          correlationId: correlationId || 'system',
-          afterData: savedRefund,
-        });
+      await this.auditWriter.write({
+        tenantId,
+        actorType: userId ? 'ADMIN' : 'SYSTEM',
+        actorId: userId,
+        action: 'REFUND_SUCCEEDED',
+        entityType: 'Refund',
+        entityId: savedRefund.id,
+        correlationId: correlationId || 'system',
+        afterData: savedRefund,
+        // Who released the money: the manager whose PIN was given, or the manager doing it.
+        details: options.approvedBy ? { approvedBy: options.approvedBy } : undefined,
+      });
 
-        return savedRefund;
-      }
-
-      return await em.save(Refund, refund);
+      return savedRefund;
     };
 
     if (externalEm) {
@@ -393,6 +574,11 @@ export class RefundService {
     return await this.dataSource.transaction(runInEm);
   }
 
+  /**
+   * Both ways in are gated before they get here: the order screen's cancel validates its
+   * approval for this order, and the refunds route takes a manager or a manager's PIN. So the
+   * refund this runs is released, whatever tender it goes back through.
+   */
   async cancelPaidOrder(tenantId: string, orderId: string, dto: PaidOrderCancelDto, userId?: string, correlationId?: string) {
     return await this.dataSource.transaction(async (em) => {
       const order = await em.findOne(OrderHeader, {
@@ -419,6 +605,7 @@ export class RefundService {
             targetMethodId: dto.targetMethodId,
             approvalRequestId: dto.approvalRequestId,
             reference: dto.reference,
+            moneyOutAuthorized: true,
           },
           userId,
           correlationId,
@@ -476,50 +663,6 @@ export class RefundService {
       });
 
       return savedOrder;
-    });
-  }
-
-  async reverseRefund(tenantId: string, id: string, dto: RefundReversalDto, userId?: string, correlationId?: string) {
-    return await this.dataSource.transaction(async (em) => {
-      const refund = await em.findOne(Refund, {
-        where: { id, tenant_id: tenantId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!refund) throw new NotFoundException(`Refund ${id} not found`);
-
-      if (refund.status !== 'SUCCEEDED') {
-        throw new BadRequestException(`Only SUCCEEDED refunds can be reversed. Current status: ${refund.status}`);
-      }
-
-      if (!dto.approvalRequestId) {
-        throw new ForbiddenException('Refund reversal requires an approved approvalRequestId');
-      }
-
-      refund.status = 'REVERSED';
-      await em.save(Refund, refund);
-
-      const order = await em.findOne(OrderHeader, {
-        where: { id: refund.order_id, tenant_id: tenantId },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      if (order) {
-        order.refunded_total = MoneyUtil.subtract(order.refunded_total, refund.amount);
-        if (MoneyUtil.lessThan(order.refunded_total, '0.0000')) order.refunded_total = '0.0000';
-        await em.save(OrderHeader, order);
-      }
-
-      await this.auditWriter.write({
-        tenantId,
-        actorType: userId ? 'ADMIN' : 'SYSTEM',
-        actorId: userId,
-        action: 'REFUND_REVERSED',
-        entityType: 'Refund',
-        entityId: id,
-        correlationId: correlationId || 'system',
-      });
-
-      return refund;
     });
   }
 }

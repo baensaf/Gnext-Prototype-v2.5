@@ -57,8 +57,6 @@ export function RefundsPage() {
   const role = useAuthStore((state) => state.user?.role);
   const canApprove = APPROVER_ROLES.includes((role || '').toUpperCase());
 
-  // The orders the listed refunds belong to, for their numbers.
-  const [orders, setOrders] = useState<OrderListRow[]>([]);
   // Orders that took money, found by the search in the new-refund dialog. Searching the
   // server reaches any order; the old list only ever held the newest 50.
   const [orderQuery, setOrderQuery] = useState('');
@@ -68,12 +66,19 @@ export function RefundsPage() {
   const [pinOpen, setPinOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   // A card paid in Iran cannot be refunded on the terminal, so money goes back in cash from the
-  // drawer or by a card-to-card transfer, whose tracking number is kept with the refund.
-  const EMPTY_FORM = { orderId: '', amount: '', reason: '', payBack: 'CASH' as 'CASH' | 'TRANSFER', reference: '' };
+  // drawer, by a card-to-card transfer (whose tracking number is kept with the refund), or onto
+  // the customer's club credit.
+  const EMPTY_FORM = { orderId: '', amount: '', reason: '', payBack: 'CASH' as 'CASH' | 'TRANSFER' | 'CREDIT', reference: '' };
   const [form, setForm] = useState(EMPTY_FORM);
   // The server refunds a completed order only; saying so before the PIN saves the manager a trip.
   const pickedOrder = orderOptions.find((order) => order.id === form.orderId);
   const pickedStillOpen = !!pickedOrder && pickedOrder.state !== 'COMPLETED';
+  // What is left to give back of the picked order: what it took less what was already refunded.
+  const pickedRefundable = pickedOrder
+    ? MoneyUtil.subtract(pickedOrder.paid_total || pickedOrder.paid_amount || '0', pickedOrder.refunded_total || '0')
+    : null;
+  // Club credit is the customer's own account, so it needs a customer on the order.
+  const creditNeedsCustomer = form.payBack === 'CREDIT' && !!pickedOrder && !pickedOrder.customer_id;
 
   const [refunds, setRefunds] = useState<RefundRequest[]>([]);
   const [_loading, setLoading] = useState(true);
@@ -89,21 +94,21 @@ export function RefundsPage() {
       ? t('refunds.payBack.cash')
       : r.method_kind === 'BANK_TRANSFER'
         ? t('refunds.payBack.transfer')
-        : (r.method_id && methodNames[r.method_id]) || r.method_kind || '-';
+        : r.method_kind === 'CUSTOMER_CREDIT'
+          ? t('refunds.payBack.credit')
+          : (r.method_id && methodNames[r.method_id]) || r.method_kind || '-';
   const cashMethod = methods.find((m) => m.is_active && m.kind === 'CASH');
   const transferMethod = methods.find((m) => m.is_active && m.kind === 'BANK_TRANSFER');
+  const creditMethod = methods.find((m) => m.is_active && m.kind === 'CUSTOMER_CREDIT');
+  const targetOf = { CASH: cashMethod, TRANSFER: transferMethod, CREDIT: creditMethod };
   const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const list = await refundApi.getRefunds();
-      const orderIds = [...new Set(list.map((r) => r.order_id))];
-      const orderList = orderIds.length
-        ? (await orderApi.listOrders({ ids: orderIds, limit: Math.min(200, orderIds.length) })).data
-        : [];
+      // The list comes with each order's number and total, for the branch in view.
+      const list = await refundApi.getRefunds({ branchId: branchId || undefined });
       setRefunds(list);
-      setOrders(orderList);
       setError(null);
     } catch (err: any) {
       setError(err.detail || t('refunds.loadFailed'));
@@ -155,7 +160,7 @@ export function RefundsPage() {
         amount: form.amount || undefined,
         full: !form.amount,
         reason: form.reason,
-        targetMethodId: (form.payBack === 'TRANSFER' ? transferMethod : cashMethod)?.id,
+        targetMethodId: targetOf[form.payBack]?.id,
         reference: form.payBack === 'TRANSFER' ? form.reference.trim() : undefined,
         pin,
       });
@@ -181,11 +186,18 @@ export function RefundsPage() {
     }
   };
 
-  // The API does not say whether a refund took back the whole order: it did when it matches the total.
-  const typeOf = (r: { order_id: string; total_refund_amount?: string }) => {
-    const order = orders.find((o) => o.id === r.order_id);
-    return order && MoneyUtil.equals(r.total_refund_amount || '0', order.total_amount || '0') ? 'FULL' : 'PARTIAL';
-  };
+  // A refund took back the whole order when it matches the order's total.
+  const typeOf = (r: { order_total?: string | null; total_refund_amount?: string }) =>
+    r.order_total && MoneyUtil.equals(r.total_refund_amount || '0', r.order_total) ? 'FULL' : 'PARTIAL';
+
+  const statusColor = (status: string) =>
+    status === 'SUCCEEDED'
+      ? 'success'
+      : status === 'FAILED'
+        ? 'error'
+        : status === 'PENDING' || status === 'PROCESSING'
+          ? 'warning'
+          : 'default';
 
   const handleViewDetail = async (id: string) => {
     try {
@@ -262,7 +274,7 @@ export function RefundsPage() {
                   </TableCell>
                   <TableCell>
                     {/* The order number is what the receipt in the customer's hand shows. */}
-                    <code>{orders.find((o) => o.id === r.order_id)?.order_number || `${r.order_id.slice(0, 8)}...`}</code>
+                    <code>{r.order_number || `${r.order_id.slice(0, 8)}...`}</code>
                   </TableCell>
                   <TableCell>
                     <Chip
@@ -276,7 +288,7 @@ export function RefundsPage() {
                     -{MoneyUtil.formatCurrency(r.total_refund_amount)} {currency}
                   </TableCell>
                   <TableCell>
-                    <Chip label={t(`refunds.status.${r.status}`, r.status)} color={r.status === 'APPROVED' ? 'success' : 'default'} size="small" />
+                    <Chip label={t(`refunds.status.${r.status}`, r.status)} color={statusColor(r.status)} size="small" />
                   </TableCell>
                   <TableCell>{serverText(r.note, t) || '-'}</TableCell>
                   <TableCell>{fDateTime(r.created_at)}</TableCell>
@@ -359,7 +371,11 @@ export function RefundsPage() {
               placeholder={t('refunds.wholeOrder')}
               value={amountText(form.amount)}
               onChange={(e) => setForm({ ...form, amount: amountFromText(e.target.value) })}
-              helperText={t('refunds.amountHelp', 'Leave empty to refund the whole order.')}
+              helperText={
+                pickedRefundable
+                  ? t('refunds.refundable', { amount: `${MoneyUtil.formatCurrency(pickedRefundable)} ${currency}` })
+                  : t('refunds.amountHelp', 'Leave empty to refund the whole order.')
+              }
               slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
               fullWidth
             />
@@ -381,8 +397,13 @@ export function RefundsPage() {
                 <ToggleButton value="TRANSFER" disabled={!transferMethod}>
                   {t('refunds.payBack.transfer')}
                 </ToggleButton>
+                <ToggleButton value="CREDIT" disabled={!creditMethod}>
+                  {t('refunds.payBack.credit')}
+                </ToggleButton>
               </ToggleButtonGroup>
             </Box>
+
+            {creditNeedsCustomer && <Alert severity="warning">{t('refunds.payBack.creditNeedsCustomer')}</Alert>}
 
             {form.payBack === 'TRANSFER' && (
               <TextField
@@ -426,6 +447,7 @@ export function RefundsPage() {
               !form.orderId ||
               !form.reason.trim() ||
               pickedStillOpen ||
+              creditNeedsCustomer ||
               (form.payBack === 'TRANSFER' && !form.reference.trim())
             }
           >

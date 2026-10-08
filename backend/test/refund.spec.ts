@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { RefundService } from '../src/modules/refund/refund.service';
 import { Refund } from '../src/entities/Refund.entity';
@@ -25,6 +25,7 @@ describe('Refunds & Paid-Order Cancellation Suite (R16)', () => {
   let creditService: any;
   let auditWriter: any;
   let dataSource: any;
+  let em: any;
 
   beforeEach(async () => {
     refundRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), find: jest.fn().mockResolvedValue([]), createQueryBuilder: jest.fn() };
@@ -81,6 +82,7 @@ describe('Refunds & Paid-Order Cancellation Suite (R16)', () => {
       createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
     };
 
+    em = mockEntityManager;
     dataSource = {
       transaction: jest.fn(async (cb) => await cb(mockEntityManager)),
     };
@@ -279,7 +281,7 @@ describe('Refunds & Paid-Order Cancellation Suite (R16)', () => {
       methodRepo.findOne.mockImplementation(async ({ where }: any) =>
         where.id === 'pm-transfer'
           ? { id: 'pm-transfer', kind: 'BANK_TRANSFER', is_active: true }
-          : { id: 'pm-card', kind: 'CARD_POS', is_active: true },
+          : { id: 'pm-card', kind: 'CARD_POS', is_active: true, allows_alternative_refund: true },
       );
       shiftService.recordCashRefundMovement = jest.fn();
 
@@ -295,6 +297,171 @@ describe('Refunds & Paid-Order Cancellation Suite (R16)', () => {
       expect(done.method_kind).toBe('BANK_TRANSFER');
       expect(done.shift_id).toBe('shf-1');
       expect(shiftService.recordCashRefundMovement).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Refund audit fixes (2026-10-08)', () => {
+    const cardMethod = { id: 'pm-card', name: 'Card', kind: 'CARD_POS', is_active: true, allows_alternative_refund: true };
+    const cashMethod = { id: 'pm-cash', name: 'Cash', kind: 'CASH', is_active: true };
+    const creditMethod = { id: 'pm-credit', name: 'Store credit', kind: 'CUSTOMER_CREDIT', is_active: true };
+    const methods: Record<string, any> = { 'pm-card': cardMethod, 'pm-cash': cashMethod, 'pm-credit': creditMethod };
+
+    beforeEach(() => {
+      methodRepo.findOne.mockImplementation(async ({ where }: any) => methods[where.id] ?? null);
+    });
+
+    it('does not pay out a refund once another has given the order back', async () => {
+      orderRepo.findOne.mockResolvedValue({ id: 'ord-1', state: 'COMPLETED', refunded_total: '0.0000', currency_code: 'IRR' });
+      paymentRepo.find.mockResolvedValue([{ id: 'pay-1', amount: '272500.0000', status: 'SUCCEEDED', method_id: 'pm-card' }]);
+
+      const first = await service.createRefundIntent('t-1', 'ord-1', { full: true, reason: 'A' });
+      // Another refund of the whole order settles in between.
+      refundRepo.find.mockImplementation(async ({ where }: any) =>
+        where.status === 'SUCCEEDED' ? [{ id: 'other', amount: '272500.0000', status: 'SUCCEEDED' }] : [],
+      );
+
+      await expect(service.processRefund('t-1', first.id, {})).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'REFUND_EXCEEDS_BALANCE' }),
+      });
+      expect(orderRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('checks the drawer before a cash refund exists, so a closed till leaves nothing behind', async () => {
+      orderRepo.findOne.mockResolvedValue({ id: 'ord-1', state: 'COMPLETED', refunded_total: '0.0000', terminal_id: 't' });
+      paymentRepo.find.mockResolvedValue([{ id: 'pay-1', amount: '50000.0000', status: 'SUCCEEDED', method_id: 'pm-cash' }]);
+      shiftService.requireDrawer.mockRejectedValue(new ConflictException({ code: 'NO_OPEN_SHIFT' }));
+
+      await expect(service.refundOrder('t-1', 'ord-1', { full: true, reason: 'Cold' })).rejects.toBeInstanceOf(ConflictException);
+      expect(auditWriter.write).not.toHaveBeenCalled();
+    });
+
+    it('takes a cash refund of a split order out of the cash payment first', async () => {
+      orderRepo.findOne.mockResolvedValue({ id: 'ord-split', state: 'COMPLETED', refunded_total: '0.0000', terminal_id: 't' });
+      paymentRepo.find.mockResolvedValue([
+        { id: 'pay-card', amount: '5246000.0000', status: 'SUCCEEDED', method_id: 'pm-card' },
+        { id: 'pay-cash', amount: '5000000.0000', status: 'SUCCEEDED', method_id: 'pm-cash' },
+      ]);
+      shiftService.requireDrawer.mockResolvedValue({ id: 'shf-1' });
+
+      const refund: any = await service.createRefundIntent('t-1', 'ord-split', {
+        amount: '6000000',
+        reason: 'Wrong order',
+        targetMethodId: 'pm-cash',
+        moneyOutAuthorized: true,
+      });
+
+      // 5,000,000 from the cash payment, only the remaining 1,000,000 from the card one.
+      expect(refund.is_alternative_method).toBe(true);
+      const allocs = em.create.mock.calls.filter(([cls]: any[]) => cls === RefundAllocation).map(([, data]: any[]) => data);
+      expect(allocs.map((a: any) => [a.payment_id, a.amount])).toEqual([
+        ['pay-cash', '5000000.0000'],
+        ['pay-card', '1000000.0000'],
+      ]);
+    });
+
+    it('refuses paying a sale back another way when its method does not allow it', async () => {
+      methods['pm-card'] = { ...cardMethod, allows_alternative_refund: false };
+      orderRepo.findOne.mockResolvedValue({ id: 'ord-1', state: 'COMPLETED', refunded_total: '0.0000', terminal_id: 't' });
+      paymentRepo.find.mockResolvedValue([{ id: 'pay-1', amount: '50000.0000', status: 'SUCCEEDED', method_id: 'pm-card' }]);
+      shiftService.requireDrawer.mockResolvedValue({ id: 'shf-1' });
+
+      const refused = await service
+        .createRefundIntent('t-1', 'ord-1', { full: true, reason: 'Cold', targetMethodId: 'pm-cash', moneyOutAuthorized: true })
+        .catch((e) => e);
+      expect(refused).toBeInstanceOf(BadRequestException);
+      expect(refused.getResponse()).toEqual(expect.objectContaining({ code: 'REFUND_METHOD_NOT_ALLOWED' }));
+      methods['pm-card'] = cardMethod;
+    });
+
+    it('refuses a sale whose method allows no refund at all', async () => {
+      methods['pm-cash'] = { ...cashMethod, allows_refund: false };
+      orderRepo.findOne.mockResolvedValue({ id: 'ord-1', state: 'COMPLETED', refunded_total: '0.0000', terminal_id: 't' });
+      paymentRepo.find.mockResolvedValue([{ id: 'pay-1', amount: '50000.0000', status: 'SUCCEEDED', method_id: 'pm-cash' }]);
+
+      const refused = await service.createRefundIntent('t-1', 'ord-1', { full: true, reason: 'Cold' }).catch((e) => e);
+      expect(refused.getResponse()).toEqual(expect.objectContaining({ code: 'REFUND_METHOD_NOT_ALLOWED' }));
+      methods['pm-cash'] = cashMethod;
+    });
+
+    it('checks an approval id against this order rather than trusting it', async () => {
+      const approvalService = { validateApprovedRequest: jest.fn().mockRejectedValue(new ForbiddenException('other order')) };
+      (service as any).approvalService = approvalService;
+      orderRepo.findOne.mockResolvedValue({ id: 'ord-1', state: 'COMPLETED', refunded_total: '0.0000', terminal_id: 't' });
+      paymentRepo.find.mockResolvedValue([{ id: 'pay-1', amount: '50000.0000', status: 'SUCCEEDED', method_id: 'pm-card' }]);
+
+      await expect(
+        service.createRefundIntent('t-1', 'ord-1', {
+          full: true,
+          reason: 'Cold',
+          targetMethodId: 'pm-cash',
+          approvalRequestId: '00000000-0000-4000-8000-000000000000',
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(approvalService.validateApprovedRequest).toHaveBeenCalledWith(
+        't-1',
+        '00000000-0000-4000-8000-000000000000',
+        'REFUND_ALTERNATIVE_METHOD',
+        undefined,
+        'ord-1',
+      );
+    });
+
+    it('pays a card sale back to store credit, opening an account with no credit to buy on', async () => {
+      orderRepo.findOne.mockResolvedValue({
+        id: 'ord-1',
+        customer_id: 'cust-1',
+        state: 'COMPLETED',
+        refunded_total: '0.0000',
+        total_amount: '50000.0000',
+        currency_code: 'IRR',
+        terminal_id: 't',
+      });
+      paymentRepo.find.mockResolvedValue([{ id: 'pay-1', amount: '50000.0000', status: 'SUCCEEDED', method_id: 'pm-card' }]);
+      creditService.getAccountByCustomer.mockResolvedValue(null);
+      creditService.postRepayment.mockResolvedValue({});
+
+      const done: any = await service.refundOrder(
+        't-1',
+        'ord-1',
+        { full: true, reason: 'Cold', targetMethodId: 'pm-credit' },
+        { userId: 'cashier', approvedBy: 'manager' },
+      );
+
+      expect(done.status).toBe('SUCCEEDED');
+      expect(done.method_kind).toBe('CUSTOMER_CREDIT');
+      expect(creditService.postRepayment).toHaveBeenCalledWith(
+        't-1',
+        expect.anything(),
+        expect.objectContaining({ amount: '50000.0000', preApproved: true }),
+        'cashier',
+        undefined,
+        expect.anything(),
+      );
+      expect(auditWriter.write).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'REFUND_SUCCEEDED', details: { approvedBy: 'manager' } }),
+      );
+    });
+
+    it('lists only the refunds of the branch asked about', async () => {
+      const qb: any = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        innerJoin: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getManyAndCount: jest.fn().mockResolvedValue([[{ id: 'r-1', order_id: 'o-1' }], 1]),
+      };
+      refundRepo.createQueryBuilder.mockReturnValue(qb);
+      orderRepo.find = jest.fn().mockResolvedValue([{ id: 'o-1', order_number: 'ORD-1', total_amount: '100.0000' }]);
+
+      const res = await service.getRefunds('t-1', { limit: '100000' }, 'branch-1');
+
+      expect(qb.innerJoin).toHaveBeenCalledWith(expect.anything(), 'o', expect.stringContaining('o.branch_id = :branchId'), {
+        branchId: 'branch-1',
+      });
+      expect(qb.take).toHaveBeenCalledWith(200);
+      expect(res.data[0]).toEqual(expect.objectContaining({ order_number: 'ORD-1', order_total: '100.0000' }));
     });
   });
 });

@@ -280,6 +280,8 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
         name: 'Mobile / Network POS Terminal',
         kind: 'NETWORK_POS',
         is_active: true,
+        // A card sale may be paid back in cash: the step-6 refund relies on it.
+        allows_alternative_refund: true,
       }),
     );
     posPaymentMethodId = posPm.id;
