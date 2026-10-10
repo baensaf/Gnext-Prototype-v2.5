@@ -156,7 +156,6 @@ describe('R24 Reports, Alerts, Exports & Audit Verification Suite', () => {
         currency_code: 'IRR',
         credit_limit: '500000.0000',
         current_balance: '100000.0000',
-        status: 'ACTIVE',
       }),
     );
 

@@ -1,21 +1,14 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In, Like, SelectQueryBuilder } from 'typeorm';
+import { Repository, In, Like, SelectQueryBuilder } from 'typeorm';
 import { Customer } from '../../entities/Customer.entity';
 import { CustomerPhone } from '../../entities/CustomerPhone.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { CustomerCreditAccount } from '../../entities/CustomerCreditAccount.entity';
-import { CustomerTag } from '../../entities/CustomerTag.entity';
-import { CustomerTagLink } from '../../entities/CustomerTagLink.entity';
-import { CustomerConsent } from '../../entities/CustomerConsent.entity';
-import { CustomerMerge } from '../../entities/CustomerMerge.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
-import { CreditEntry } from '../../entities/CreditEntry.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
-import { TransactionUtil } from '../../common/utils/transaction.util';
-import { AppDataSource } from '../../data-source';
 
 /** Persian (۰-۹) and Arabic (٠-٩) digits as 0-9. */
 export function toWesternDigits(text: string): string {
@@ -117,13 +110,8 @@ export class CustomerService {
     @InjectRepository(CustomerPhone) private readonly phoneRepo: Repository<CustomerPhone>,
     @InjectRepository(CustomerAddress) private readonly addressRepo: Repository<CustomerAddress>,
     @InjectRepository(CustomerCreditAccount) private readonly accountRepo: Repository<CustomerCreditAccount>,
-    @InjectRepository(CustomerTag) private readonly tagRepo: Repository<CustomerTag>,
-    @InjectRepository(CustomerTagLink) private readonly tagLinkRepo: Repository<CustomerTagLink>,
-    @InjectRepository(CustomerConsent) private readonly consentRepo: Repository<CustomerConsent>,
-    @InjectRepository(CustomerMerge) private readonly mergeRepo: Repository<CustomerMerge>,
     @InjectRepository(OrderHeader) private readonly orderRepo: Repository<OrderHeader>,
     private readonly auditWriter: AuditWriter,
-    private readonly dataSource: DataSource,
   ) {}
 
   private async enrichCustomersWithCredit(tenantId: string, customers: Customer[]): Promise<any[]> {
@@ -147,9 +135,9 @@ export class CustomerService {
   // Customers
   async getCustomers(
     tenantId: string,
-    query?: PaginationQueryDto & { search?: string; status?: string; tagId?: string },
+    query?: PaginationQueryDto & { search?: string; status?: string },
   ): Promise<PagedResponse<any> | any[]> {
-    if (!query || (!query.page && !query.limit && !query.search && !query.status && !query.tagId)) {
+    if (!query || (!query.page && !query.limit && !query.search && !query.status)) {
       const qb = this.customerRepo.createQueryBuilder('c')
         .where('c.tenant_id = :tenantId', { tenantId })
         .orderBy('c.code', 'ASC');
@@ -229,15 +217,11 @@ export class CustomerService {
     if (!customer) throw new NotFoundException('Customer not found');
     const phones = await this.phoneRepo.find({ where: { tenant_id: tenantId, customer_id: id } });
     const addresses = await this.addressRepo.find({ where: { tenant_id: tenantId, customer_id: id } });
-    const tagLinks = await this.tagLinkRepo.find({ where: { tenant_id: tenantId, customer_id: id } });
-    const consents = await this.consentRepo.find({ where: { tenant_id: tenantId, customer_id: id } });
     const creditAccount = await this.accountRepo.findOne({ where: { tenant_id: tenantId, customer_id: id } });
     return {
       ...customer,
       phones,
       addresses,
-      tags: tagLinks,
-      consents,
       credit_account: creditAccount || null,
       wallet_balance: creditAccount?.current_balance || '0.0000',
       credit_limit: creditAccount?.credit_limit || '0.0000',
@@ -332,7 +316,6 @@ export class CustomerService {
       customer_id: saved.id,
       currency_code: 'IRR',
       mode: 'FINITE',
-      status: 'ACTIVE',
       credit_limit: MoneyUtil.format(data.credit_limit || '0'),
       current_balance: '0.0000',
     });
@@ -359,7 +342,7 @@ export class CustomerService {
   }
 
   /**
-   * Edit the record's own fields. Phones, addresses, tags and credit each have their own
+   * Edit the record's own fields. Phones, addresses and credit each have their own
    * endpoint and are not reachable from here.
    */
   async updateCustomer(
@@ -410,128 +393,7 @@ export class CustomerService {
     return saved;
   }
 
-  // Deduplication & Candidates
-  async getDuplicateCandidates(tenantId: string) {
-    const customers = await this.customerRepo.find({ where: { tenant_id: tenantId, is_active: true } });
-    const candidates = [];
-
-    const phoneMap = new Map<string, Customer[]>();
-    for (const c of customers) {
-      const norm = normalizePhone(c.mobile);
-      if (!norm) continue;
-      if (!phoneMap.has(norm)) phoneMap.set(norm, []);
-      phoneMap.get(norm)!.push(c);
-    }
-
-    for (const [phone, group] of phoneMap.entries()) {
-      if (group.length > 1) {
-        // Keep the record the customer has had longest — it carries the history, the credit
-        // account and the loyalty balance — and fold the newer copies into it.
-        group.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-        for (let i = 0; i < group.length - 1; i++) {
-          for (let j = i + 1; j < group.length; j++) {
-            candidates.push({
-              target_customer_id: group[i].id,
-              target_customer_name: `${group[i].first_name} ${group[i].last_name}`,
-              source_customer_id: group[j].id,
-              source_customer_name: `${group[j].first_name} ${group[j].last_name}`,
-              match_score: 100,
-              match_reason: `Exact normalized mobile match (${phone})`,
-            });
-          }
-        }
-      }
-    }
-
-    return candidates;
-  }
-
-  // Transactional Merge
-  async mergeCustomers(
-    tenantId: string,
-    params: { target_customer_id: string; source_customer_id: string; field_resolutions?: Record<string, string> },
-    correlationId: string,
-  ) {
-    const ds = AppDataSource.isInitialized ? AppDataSource : this.dataSource;
-
-    const result = await TransactionUtil.runInTransaction(ds, async (manager) => {
-      const custRepoTx = manager.getRepository(Customer);
-      const phoneRepoTx = manager.getRepository(CustomerPhone);
-      const addrRepoTx = manager.getRepository(CustomerAddress);
-      const accRepoTx = manager.getRepository(CustomerCreditAccount);
-      const tagLinkRepoTx = manager.getRepository(CustomerTagLink);
-      const consentRepoTx = manager.getRepository(CustomerConsent);
-      const orderRepoTx = manager.getRepository(OrderHeader);
-      const mergeRepoTx = manager.getRepository(CustomerMerge);
-
-      const target = await custRepoTx.findOne({ where: { id: params.target_customer_id, tenant_id: tenantId } });
-      const source = await custRepoTx.findOne({ where: { id: params.source_customer_id, tenant_id: tenantId } });
-
-      if (!target || !source) {
-        throw new NotFoundException('Target or Source customer not found for merge');
-      }
-
-      // Relink orders
-      await orderRepoTx.update({ tenant_id: tenantId, customer_id: source.id }, { customer_id: target.id });
-
-      // Fold the credit accounts together. A customer holds one account per currency, and
-      // every customer is given one on sign-up, so relinking the source's account onto the
-      // target broke that rule and the whole merge failed. Its ledger moves across instead,
-      // with its balance, and the emptied account is closed.
-      const sourceAccounts = await accRepoTx.find({ where: { tenant_id: tenantId, customer_id: source.id } });
-      for (const sourceAccount of sourceAccounts) {
-        const targetAccount = await accRepoTx.findOne({
-          where: { tenant_id: tenantId, customer_id: target.id, currency_code: sourceAccount.currency_code },
-        });
-        if (!targetAccount) {
-          await accRepoTx.update({ id: sourceAccount.id }, { customer_id: target.id });
-          continue;
-        }
-        await manager.getRepository(CreditEntry).update({ account_id: sourceAccount.id }, { account_id: targetAccount.id });
-        targetAccount.current_balance = MoneyUtil.add(targetAccount.current_balance, sourceAccount.current_balance);
-        if (MoneyUtil.greaterThan(sourceAccount.credit_limit, targetAccount.credit_limit)) {
-          targetAccount.credit_limit = sourceAccount.credit_limit;
-        }
-        await accRepoTx.save(targetAccount);
-        sourceAccount.current_balance = MoneyUtil.format('0');
-        sourceAccount.status = 'CLOSED';
-        await accRepoTx.save(sourceAccount);
-      }
-
-      // Relink addresses & phones
-      await addrRepoTx.update({ tenant_id: tenantId, customer_id: source.id }, { customer_id: target.id });
-      await phoneRepoTx.update({ tenant_id: tenantId, customer_id: source.id }, { customer_id: target.id });
-      await tagLinkRepoTx.update({ tenant_id: tenantId, customer_id: source.id }, { customer_id: target.id });
-      await consentRepoTx.update({ tenant_id: tenantId, customer_id: source.id }, { customer_id: target.id });
-
-      // Soft remove source customer
-      source.is_active = false;
-      await custRepoTx.softRemove(source);
-
-      // Create merge audit record
-      const mergeRecord = mergeRepoTx.create({
-        tenant_id: tenantId,
-        target_customer_id: target.id,
-        source_customer_id: source.id,
-        field_resolutions_json: params.field_resolutions || {},
-        merged_by: null,
-      });
-
-      return await mergeRepoTx.save(mergeRecord);
-    });
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'CUSTOMER_MERGED',
-      correlationId,
-      details: { targetCustomerId: params.target_customer_id, sourceCustomerId: params.source_customer_id, mergeId: result.id },
-    });
-
-    return { success: true, merge_id: result.id };
-  }
-
-  // Phones, Tags, Consents
+  // Phones
   async addPhone(tenantId: string, customerId: string, phoneNumber: string, label: string = 'MOBILE', isPrimary: boolean = false, actorId?: string) {
     const norm = normalizePhone(phoneNumber);
     if (isPrimary) {
@@ -554,26 +416,6 @@ export class CustomerService {
       actorType: 'ADMIN',
       actorId,
       action: 'CUSTOMER_PHONE_ADDED',
-      entityType: 'Customer',
-      entityId: customerId,
-      afterData: saved,
-    });
-    return saved;
-  }
-
-  async addConsent(tenantId: string, customerId: string, consentType: string, granted: boolean = true, actorId?: string) {
-    const consent = this.consentRepo.create({
-      tenant_id: tenantId,
-      customer_id: customerId,
-      consent_type: consentType,
-      granted,
-    });
-    const saved = await this.consentRepo.save(consent);
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      actorId,
-      action: 'CUSTOMER_CONSENT_RECORDED',
       entityType: 'Customer',
       entityId: customerId,
       afterData: saved,

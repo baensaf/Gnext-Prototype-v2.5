@@ -7,8 +7,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityManager, In } from 'typeorm';
-import { CustomerCreditAccount, CreditMode, CreditAccountStatus } from '../../entities/CustomerCreditAccount.entity';
-import { CreditEntry, CreditEntryType } from '../../entities/CreditEntry.entity';
+import { CustomerCreditAccount } from '../../entities/CustomerCreditAccount.entity';
+import { CreditEntry } from '../../entities/CreditEntry.entity';
 import { Customer } from '../../entities/Customer.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
@@ -16,9 +16,7 @@ import { loadBusinessClock } from '../../common/utils/business-clock';
 import {
   CreditAccountCreateDto,
   CreditAccountUpdateDto,
-  CreditAccountStatusDto,
   CreditRepaymentDto,
-  CreditAdjustmentDto,
   CreditPurchaseDto,
 } from './dtos/credit.dto';
 
@@ -27,8 +25,6 @@ export class CreditService {
   constructor(
     @InjectRepository(CustomerCreditAccount)
     private readonly accountRepo: Repository<CustomerCreditAccount>,
-    @InjectRepository(CreditEntry)
-    private readonly entryRepo: Repository<CreditEntry>,
     @InjectRepository(Customer)
     private readonly customerRepo: Repository<Customer>,
     private readonly auditWriter: AuditWriter,
@@ -50,7 +46,6 @@ export class CreditService {
       .where('a.tenant_id = :tenantId', { tenantId });
 
     if (query.customer) qb.andWhere('a.customer_id = :customer', { customer: query.customer });
-    if (query.status && query.status !== 'ALL') qb.andWhere('a.status = :status', { status: query.status });
     if (query.currency && query.currency !== 'ALL') qb.andWhere('a.currency_code = :currency', { currency: query.currency });
     if (query.mode && query.mode !== 'ALL') qb.andWhere('a.mode = :mode', { mode: query.mode });
 
@@ -89,12 +84,16 @@ export class CreditService {
     return { data, total, page, limit };
   }
 
+  // The account with its transactions, newest first: the one list a credit screen reads.
   async getAccountById(tenantId: string, id: string) {
     const acc = await this.accountRepo.findOne({
       where: { id, tenant_id: tenantId },
       relations: ['entries'],
     });
     if (!acc) throw new NotFoundException(`Credit account ${id} not found`);
+    acc.entries = [...(acc.entries || [])].sort(
+      (a, b) => new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime(),
+    );
 
     const customer = await this.customerRepo.findOne({
       where: { id: acc.customer_id, tenant_id: tenantId },
@@ -121,7 +120,6 @@ export class CreditService {
     const repo = entityManager ? entityManager.getRepository(CustomerCreditAccount) : this.accountRepo;
     const acc = await repo.findOne({
       where: { tenant_id: tenantId, customer_id: customerId, currency_code: currencyCode },
-      relations: ['entries'],
     });
     if (!acc) return null;
     return {
@@ -158,7 +156,6 @@ export class CreditService {
         mode,
         credit_limit: limit,
         current_balance: '0.0000',
-        status: 'ACTIVE',
         policy_note: dto.policyNote || null,
         created_by: userId || null,
       });
@@ -183,6 +180,8 @@ export class CreditService {
     });
   }
 
+  // The limit, and the mode it works in. Lowering a limit below what is already owed is fine:
+  // it only stops the next sale on credit.
   async updateAccount(tenantId: string, id: string, dto: CreditAccountUpdateDto, userId?: string, correlationId?: string) {
     return await this.dataSource.transaction(async (em) => {
       const acc = await em.findOne(CustomerCreditAccount, { where: { id, tenant_id: tenantId } });
@@ -190,17 +189,8 @@ export class CreditService {
 
       if (dto.mode !== undefined) acc.mode = dto.mode;
       if (dto.policyNote !== undefined) acc.policy_note = dto.policyNote;
-
       if (dto.creditLimit !== undefined && acc.mode !== 'UNLIMITED') {
-        const newLimit = MoneyUtil.format(dto.creditLimit);
-        // If reducing limit below current exposure (balance is negative), check approval
-        const currentExposure = MoneyUtil.abs(acc.current_balance);
-        if (MoneyUtil.lessThan(acc.current_balance, '0.0000') && MoneyUtil.lessThan(newLimit, currentExposure)) {
-          if (!dto.approvalRequestId) {
-            throw new ForbiddenException('Reducing credit limit below active balance exposure requires approval');
-          }
-        }
-        acc.credit_limit = newLimit;
+        acc.credit_limit = MoneyUtil.format(dto.creditLimit);
       }
 
       acc.updated_by = userId || null;
@@ -224,46 +214,11 @@ export class CreditService {
     });
   }
 
-  async updateStatus(tenantId: string, id: string, status: CreditAccountStatus, dto: CreditAccountStatusDto, userId?: string, correlationId?: string) {
-    return await this.dataSource.transaction(async (em) => {
-      const acc = await em.findOne(CustomerCreditAccount, { where: { id, tenant_id: tenantId } });
-      if (!acc) throw new NotFoundException(`Credit account ${id} not found`);
-
-      if (status === 'CLOSED' && MoneyUtil.notEqual(acc.current_balance, '0.0000')) {
-        throw new BadRequestException('Cannot close a credit account with a non-zero balance');
-      }
-
-      acc.status = status;
-      acc.is_blocked = status === 'SUSPENDED' || status === 'CLOSED';
-      acc.updated_by = userId || null;
-
-      const savedAcc = await em.save(CustomerCreditAccount, acc);
-
-      await this.auditWriter.write({
-        tenantId,
-        actorType: userId ? 'ADMIN' : 'SYSTEM',
-        actorId: userId,
-        action: `CREDIT_ACCOUNT_${status}`,
-        entityType: 'CustomerCreditAccount',
-        entityId: id,
-        correlationId: correlationId || 'system',
-      });
-
-      return {
-        ...savedAcc,
-        availableCredit: this.calculateAvailableCredit(savedAcc),
-      };
-    });
-  }
-
-  // The rules a purchase has to satisfy, on an account the caller already loaded.
-  // Throws rather than returning a verdict so both callers fail the same way; it reads
-  // no state of its own, which is what lets the payment layer run it as a precheck.
-  assertPurchaseAllowed(acc: CustomerCreditAccount, amount: string, approvalRequestId?: string) {
-    if (acc.status !== 'ACTIVE' || acc.is_blocked) {
-      throw new ForbiddenException(`Credit account ${acc.id} is ${acc.status} and cannot process purchases`);
-    }
-
+  // The rule a purchase has to satisfy, on an account the caller already loaded: a positive
+  // amount that fits inside the available credit. Throws rather than returning a verdict so
+  // both callers fail the same way; it reads no state of its own, which is what lets the
+  // payment layer run it as a precheck.
+  assertPurchaseAllowed(acc: CustomerCreditAccount, amount: string) {
     const purchaseAmount = MoneyUtil.format(amount);
     if (MoneyUtil.lessThanOrEqual(purchaseAmount, '0.0000')) {
       throw new BadRequestException('Purchase amount must be greater than zero');
@@ -271,25 +226,22 @@ export class CreditService {
 
     const available = this.calculateAvailableCredit(acc);
     if (acc.mode !== 'UNLIMITED' && MoneyUtil.greaterThan(purchaseAmount, available)) {
-      if (!approvalRequestId) {
-        throw new ForbiddenException({
-          statusCode: 403,
-          error: 'CREDIT_LIMIT_EXCEEDED',
-          message: `Purchase amount (${purchaseAmount}) exceeds available credit (${available}) and no approval override provided`,
-        });
-      }
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'CREDIT_LIMIT_EXCEEDED',
+        message: `Purchase amount (${purchaseAmount}) exceeds available credit (${available})`,
+      });
     }
   }
 
-  // Same guards, resolved from the customer instead of a known account id. Used to vet a
+  // Same guard, resolved from the customer instead of a known account id. Used to vet a
   // credit tender before anything is written; deliberately skips the entries relation and
-  // the row lock that getAccountByCustomer/postPurchase take, since nothing is mutated.
+  // the row lock that postPurchase takes, since nothing is mutated.
   async assertCustomerPurchaseAllowed(
     tenantId: string,
     customerId: string,
     currencyCode: string,
     amount: string,
-    approvalRequestId?: string,
     entityManager?: EntityManager,
   ) {
     const repo = entityManager
@@ -300,7 +252,7 @@ export class CreditService {
     });
     if (!acc) throw new NotFoundException(`No credit account found for customer ${customerId}`);
 
-    this.assertPurchaseAllowed(acc, amount, approvalRequestId);
+    this.assertPurchaseAllowed(acc, amount);
     return acc;
   }
 
@@ -314,7 +266,7 @@ export class CreditService {
 
       // Re-checked under the row lock: the precheck at intent time is advisory, and the
       // balance can move between the two.
-      this.assertPurchaseAllowed(acc, dto.amount, dto.approvalRequestId);
+      this.assertPurchaseAllowed(acc, dto.amount);
       const purchaseAmount = MoneyUtil.format(dto.amount);
 
       const signedAmount = `-${purchaseAmount}`;
@@ -359,7 +311,7 @@ export class CreditService {
 
   // Unwinds the PURCHASE entry a CUSTOMER_CREDIT payment posted, so reversing the payment
   // also gives the customer their credit back. Distinct from postRepayment: the customer
-  // paid nothing here, so this must not show up in the statement as a settlement.
+  // paid nothing here, so this must not show up in the transactions as a settlement.
   async reversePurchase(
     tenantId: string,
     paymentId: string,
@@ -429,6 +381,9 @@ export class CreditService {
     return await this.dataSource.transaction(execute);
   }
 
+  // A repayment brings the balance back toward zero; it never takes it past zero, so an
+  // account does not turn into a prepaid wallet by being over-paid. Only a refund the manager
+  // already released (preApproved) may leave the balance above what was owed.
   async postRepayment(
     tenantId: string,
     accountId: string,
@@ -444,10 +399,6 @@ export class CreditService {
       });
       if (!acc) throw new NotFoundException(`Credit account ${accountId} not found`);
 
-      if (acc.status === 'CLOSED') {
-        throw new BadRequestException('Cannot post repayment to a CLOSED credit account');
-      }
-
       const repaymentAmount = MoneyUtil.format(dto.amount);
       if (MoneyUtil.lessThanOrEqual(repaymentAmount, '0.0000')) {
         throw new BadRequestException('Repayment amount must be greater than zero');
@@ -456,11 +407,12 @@ export class CreditService {
       const signedAmount = repaymentAmount;
       const newBalance = MoneyUtil.add(acc.current_balance, signedAmount);
 
-      // Over-repayment check: if customer was in debt (< 0) and repayment results in positive balance, check approval
-      if (MoneyUtil.greaterThan(newBalance, '0.0000') && MoneyUtil.lessThan(acc.current_balance, '0.0000')) {
-        if (!dto.approvalRequestId && !dto.preApproved) {
-          throw new ForbiddenException('Over-repayment resulting in a positive balance requires approval');
-        }
+      if (MoneyUtil.greaterThan(newBalance, '0.0000') && !dto.preApproved) {
+        throw new BadRequestException({
+          statusCode: 400,
+          error: 'REPAYMENT_EXCEEDS_BALANCE_OWED',
+          message: 'A repayment cannot be more than the customer owes',
+        });
       }
 
       const dateStr = (await loadBusinessClock(em, tenantId)).today();
@@ -504,372 +456,6 @@ export class CreditService {
     return await this.dataSource.transaction(execute);
   }
 
-  async postAdjustment(tenantId: string, accountId: string, dto: CreditAdjustmentDto, userId?: string, correlationId?: string) {
-    return await this.dataSource.transaction(async (em) => {
-      const acc = await em.findOne(CustomerCreditAccount, {
-        where: { id: accountId, tenant_id: tenantId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!acc) throw new NotFoundException(`Credit account ${accountId} not found`);
-
-      if (!dto.approvalRequestId) {
-        throw new BadRequestException('Manual credit adjustment requires an approvalRequestId');
-      }
-
-      const signedAmount = MoneyUtil.format(dto.amountSigned);
-      if (MoneyUtil.isZero(signedAmount)) {
-        throw new BadRequestException('Adjustment amount cannot be zero');
-      }
-
-      const newBalance = MoneyUtil.add(acc.current_balance, signedAmount);
-      const dateStr = (await loadBusinessClock(em, tenantId)).today();
-
-      const entry = em.create(CreditEntry, {
-        tenant_id: tenantId,
-        account_id: acc.id,
-        entry_type: 'ADJUSTMENT',
-        amount: signedAmount,
-        currency_code: acc.currency_code,
-        reason_code_id: dto.reasonCodeId || null,
-        reason_text: dto.reason,
-        reference: dto.reference || null,
-        business_date: dateStr,
-        posted_by: userId || null,
-        balance_after: newBalance,
-      });
-      const savedEntry = await em.save(CreditEntry, entry);
-
-      acc.current_balance = newBalance;
-      await em.save(CustomerCreditAccount, acc);
-
-      await this.auditWriter.write({
-        tenantId,
-        actorType: userId ? 'ADMIN' : 'SYSTEM',
-        actorId: userId,
-        action: 'CREDIT_ADJUSTMENT_POSTED',
-        entityType: 'CreditEntry',
-        entityId: savedEntry.id,
-        correlationId: correlationId || 'system',
-        afterData: savedEntry,
-      });
-
-      return {
-        entry: savedEntry,
-        newBalance: acc.current_balance,
-        availableCredit: this.calculateAvailableCredit(acc),
-      };
-    });
-  }
-
-  async postCreditTransaction(
-    tenantId: string,
-    customerIdOrAccountId: string,
-    body: {
-      transaction_type?: string;
-      type?: string;
-      amount?: string | number;
-      amountSigned?: string | number;
-      note?: string;
-      reason?: string;
-      reason_text?: string;
-      reference?: string;
-      reference_id?: string;
-      approvalRequestId?: string;
-    },
-    userId?: string,
-    correlationId?: string,
-  ) {
-    return await this.dataSource.transaction(async (em) => {
-      let acc = await em.findOne(CustomerCreditAccount, {
-        where: { id: customerIdOrAccountId, tenant_id: tenantId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!acc) {
-        acc = await em.findOne(CustomerCreditAccount, {
-          where: { customer_id: customerIdOrAccountId, tenant_id: tenantId },
-          lock: { mode: 'pessimistic_write' },
-        });
-      }
-      if (!acc) {
-        // If customer exists, auto-create account
-        const customer = await em.findOne(Customer, {
-          where: { id: customerIdOrAccountId, tenant_id: tenantId },
-        });
-        if (!customer) {
-          throw new NotFoundException(`Customer or credit account not found for ${customerIdOrAccountId}`);
-        }
-        const newAcc = em.create(CustomerCreditAccount, {
-          tenant_id: tenantId,
-          customer_id: customer.id,
-          currency_code: 'IRR',
-          mode: 'FINITE',
-          credit_limit: (customer as any).credit_limit || '0.0000',
-          current_balance: '0.0000',
-          status: 'ACTIVE',
-          is_blocked: false,
-          created_by: userId || null,
-        });
-        acc = await em.save(CustomerCreditAccount, newAcc);
-      }
-
-      if (acc.status === 'CLOSED') {
-        throw new BadRequestException('Cannot post transaction to a CLOSED credit account');
-      }
-
-      const txType = (body.transaction_type || body.type || 'CHARGE').toUpperCase();
-      const rawAmount = String(body.amountSigned !== undefined ? body.amountSigned : (body.amount || '0'));
-      const absAmount = MoneyUtil.abs(rawAmount);
-
-      let signedAmount = absAmount;
-      let entryType: CreditEntryType = 'ADJUSTMENT';
-
-      if (txType === 'DEBIT' || txType === 'PURCHASE' || txType === 'DEDUCT') {
-        signedAmount = `-${absAmount}`;
-        entryType = 'ADJUSTMENT';
-      } else if (txType === 'SETTLEMENT' || txType === 'REPAYMENT') {
-        signedAmount = absAmount;
-        entryType = 'REPAYMENT';
-      } else if (txType === 'CHARGE' || txType === 'TOPUP' || txType === 'DEPOSIT') {
-        signedAmount = absAmount;
-        entryType = 'ADJUSTMENT';
-      } else if (txType === 'ADJUSTMENT') {
-        signedAmount = MoneyUtil.format(rawAmount);
-        entryType = 'ADJUSTMENT';
-      }
-
-      if (MoneyUtil.isZero(signedAmount)) {
-        throw new BadRequestException('Transaction amount cannot be zero');
-      }
-
-      const newBalance = MoneyUtil.add(acc.current_balance, signedAmount);
-      const dateStr = (await loadBusinessClock(em, tenantId)).today();
-
-      const entry = em.create(CreditEntry, {
-        tenant_id: tenantId,
-        account_id: acc.id,
-        entry_type: entryType,
-        amount: signedAmount,
-        currency_code: acc.currency_code || 'IRR',
-        reason_text: body.note || body.reason || body.reason_text || `${txType} transaction via ledger`,
-        reference: body.reference || body.reference_id || null,
-        business_date: dateStr,
-        posted_by: userId || null,
-        balance_after: newBalance,
-      });
-      const savedEntry = await em.save(CreditEntry, entry);
-
-      acc.current_balance = newBalance;
-      const savedAcc = await em.save(CustomerCreditAccount, acc);
-
-      await this.auditWriter.write({
-        tenantId,
-        actorType: userId ? 'ADMIN' : 'SYSTEM',
-        actorId: userId,
-        action: `CREDIT_TRANSACTION_${txType}`,
-        entityType: 'CreditEntry',
-        entityId: savedEntry.id,
-        correlationId: correlationId || 'system',
-        afterData: savedEntry,
-      });
-
-      const mappedEntry = {
-        ...savedEntry,
-        transaction_type: txType,
-        recorded_at: savedEntry.posted_at,
-        note: savedEntry.reason_text || savedEntry.reference,
-      };
-
-      return {
-        account: savedAcc,
-        transaction: mappedEntry,
-        entry: mappedEntry,
-        newBalance: savedAcc.current_balance,
-        availableCredit: this.calculateAvailableCredit(savedAcc),
-      };
-    });
-  }
-
-  async getAccountStatement(tenantId: string, accountId: string, query: any = {}) {
-    const acc = await this.accountRepo.findOne({ where: { id: accountId, tenant_id: tenantId } });
-    if (!acc) throw new NotFoundException(`Credit account ${accountId} not found`);
-
-    const qb = this.entryRepo
-      .createQueryBuilder('e')
-      .where('e.account_id = :accountId', { accountId });
-
-    if (query?.dateFrom) qb.andWhere('e.business_date >= :dateFrom', { dateFrom: query.dateFrom });
-    if (query?.dateTo) qb.andWhere('e.business_date <= :dateTo', { dateTo: query.dateTo });
-
-    qb.orderBy('e.posted_at', 'ASC');
-    const entries = await qb.getMany();
-
-    // Opening balance calculation
-    let openingBalance = '0.0000';
-    if (query.dateFrom) {
-      const priorEntries = await this.entryRepo
-        .createQueryBuilder('e')
-        .where('e.account_id = :accountId', { accountId })
-        .andWhere('e.business_date < :dateFrom', { dateFrom: query.dateFrom })
-        .getMany();
-
-      for (const p of priorEntries) {
-        openingBalance = MoneyUtil.add(openingBalance, p.amount);
-      }
-    }
-
-    let closingBalance = openingBalance;
-    for (const e of entries) {
-      closingBalance = MoneyUtil.add(closingBalance, e.amount);
-    }
-
-    const customer = await this.customerRepo.findOne({
-      where: { id: acc.customer_id, tenant_id: tenantId },
-    });
-
-    return {
-      accountId: acc.id,
-      account_id: acc.id,
-      credit_account: {
-        ...acc,
-        available_credit: this.calculateAvailableCredit(acc),
-        availableCredit: this.calculateAvailableCredit(acc),
-      },
-      account: {
-        ...acc,
-        available_credit: this.calculateAvailableCredit(acc),
-        availableCredit: this.calculateAvailableCredit(acc),
-      },
-      customer: customer
-        ? {
-            id: customer.id,
-            code: customer.code,
-            first_name: customer.first_name,
-            last_name: customer.last_name,
-            name: `${customer.first_name} ${customer.last_name}`.trim(),
-            mobile: customer.mobile,
-            email: customer.email,
-          }
-        : null,
-      customerId: acc.customer_id,
-      customer_id: acc.customer_id,
-      currencyCode: acc.currency_code,
-      currency_code: acc.currency_code,
-      openingBalance,
-      closingBalance,
-      entries,
-      transactions: entries,
-    };
-  }
-
-  async getCreditAging(tenantId: string, query: any) {
-    const accounts = await this.accountRepo.find({
-      where: { tenant_id: tenantId, status: 'ACTIVE' },
-    });
-
-    const asOfDate = query.asOf ? new Date(query.asOf) : new Date();
-
-    let totalOutstanding = '0.0000';
-    let currentBucket = '0.0000'; // 0-30 days
-    let bucket31_60 = '0.0000';   // 31-60 days
-    let bucket61_90 = '0.0000';   // 61-90 days
-    let bucket90Plus = '0.0000';  // 90+ days
-
-    const customerAgingList: any[] = [];
-
-    for (const acc of accounts) {
-      if (MoneyUtil.lessThan(acc.current_balance, '0.0000')) {
-        const exposure = MoneyUtil.abs(acc.current_balance);
-        totalOutstanding = MoneyUtil.add(totalOutstanding, exposure);
-
-        // Repayments settle the oldest purchases first, so what is still owed is the newest
-        // purchases up to the balance. Ageing every purchase ever made put paid-off charges
-        // in the buckets, and the buckets no longer added up to the outstanding total.
-        const entries = await this.entryRepo.find({
-          where: { account_id: acc.id, entry_type: 'PURCHASE' },
-          order: { posted_at: 'DESC' },
-        });
-
-        let accCurrent = '0.0000';
-        let acc31_60 = '0.0000';
-        let acc61_90 = '0.0000';
-        let acc90Plus = '0.0000';
-        let unallocated = exposure;
-
-        for (const e of entries) {
-          if (!MoneyUtil.greaterThan(unallocated, '0')) break;
-          const ageDays = Math.floor((asOfDate.getTime() - new Date(e.posted_at).getTime()) / (1000 * 3600 * 24));
-          const purchased = MoneyUtil.abs(e.amount);
-          const entryAmt = MoneyUtil.lessThan(purchased, unallocated) ? purchased : unallocated;
-          unallocated = MoneyUtil.subtract(unallocated, entryAmt);
-
-          if (ageDays <= 30) {
-            accCurrent = MoneyUtil.add(accCurrent, entryAmt);
-            currentBucket = MoneyUtil.add(currentBucket, entryAmt);
-          } else if (ageDays <= 60) {
-            acc31_60 = MoneyUtil.add(acc31_60, entryAmt);
-            bucket31_60 = MoneyUtil.add(bucket31_60, entryAmt);
-          } else if (ageDays <= 90) {
-            acc61_90 = MoneyUtil.add(acc61_90, entryAmt);
-            bucket61_90 = MoneyUtil.add(bucket61_90, entryAmt);
-          } else {
-            acc90Plus = MoneyUtil.add(acc90Plus, entryAmt);
-            bucket90Plus = MoneyUtil.add(bucket90Plus, entryAmt);
-          }
-        }
-        // Owed through an adjustment rather than a purchase has no age to read; count it current.
-        if (MoneyUtil.greaterThan(unallocated, '0')) {
-          accCurrent = MoneyUtil.add(accCurrent, unallocated);
-          currentBucket = MoneyUtil.add(currentBucket, unallocated);
-        }
-
-        customerAgingList.push({
-          accountId: acc.id,
-          customerId: acc.customer_id,
-          totalExposure: exposure,
-          current: accCurrent,
-          days31_60: acc31_60,
-          days61_90: acc61_90,
-          days90Plus: acc90Plus,
-        });
-      }
-    }
-
-    const agingCustIds = customerAgingList.map((a) => a.customerId).filter(Boolean);
-    const agingCustomers = agingCustIds.length > 0 && typeof this.customerRepo?.find === 'function'
-      ? await this.customerRepo.find({ where: { tenant_id: tenantId, id: In(agingCustIds) } })
-      : [];
-    const agingCustMap = new Map(agingCustomers.map((c) => [c.id, c]));
-
-    const enrichedCustomers = customerAgingList.map((item) => {
-      const cust = agingCustMap.get(item.customerId);
-      return {
-        ...item,
-        customer: cust
-          ? {
-              id: cust.id,
-              code: cust.code,
-              first_name: cust.first_name,
-              last_name: cust.last_name,
-              name: `${cust.first_name} ${cust.last_name}`.trim(),
-              mobile: cust.mobile,
-            }
-          : null,
-      };
-    });
-
-    return {
-      asOf: asOfDate.toISOString().slice(0, 10),
-      totals: {
-        totalOutstanding,
-        current: currentBucket,
-        days31_60: bucket31_60,
-        days61_90: bucket61_90,
-        days90Plus: bucket90Plus,
-      },
-      customers: enrichedCustomers,
-    };
-  }
-
   // Workflow 2: Purchase-based cashback & loyalty wallet
   async awardLoyaltyCashback(
     tenantId: string,
@@ -904,7 +490,6 @@ export class CreditService {
           mode: 'FINITE',
           credit_limit: '10000000.0000',
           current_balance: '0.0000',
-          status: 'ACTIVE',
         });
         acc = await em.save(CustomerCreditAccount, acc);
       }

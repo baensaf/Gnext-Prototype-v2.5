@@ -12,7 +12,6 @@ import { CustomerCreditAccount } from './CustomerCreditAccount.entity';
 export type CreditEntryType =
   | 'PURCHASE'
   | 'REPAYMENT'
-  | 'ADJUSTMENT'
   | 'REFUND'
   | 'REVERSAL'
   | 'LOYALTY_CASHBACK'
@@ -34,7 +33,7 @@ export class CreditEntry {
   entry_type: CreditEntryType;
 
   @Column({ type: 'numeric', precision: 19, scale: 4 })
-  amount: string; // signed: negative for PURCHASE, positive for REPAYMENT/REFUND/ADJUSTMENT
+  amount: string; // signed: negative for PURCHASE, positive for REPAYMENT/REFUND
 
   @Column({ type: 'varchar', length: 3, default: 'IRR' })
   currency_code: string;
@@ -47,9 +46,6 @@ export class CreditEntry {
 
   @Column({ type: 'uuid', nullable: true })
   related_entry_id: string;
-
-  @Column({ type: 'uuid', nullable: true })
-  reason_code_id: string;
 
   @Column({ type: 'text', nullable: true })
   reason_text: string;

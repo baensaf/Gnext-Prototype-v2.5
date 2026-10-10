@@ -505,7 +505,6 @@ export async function runSeed() {
         mode: 'FINITE',
         credit_limit: demo.credit_limit,
         current_balance: demo.current_balance,
-        status: 'ACTIVE',
       }));
     } else if (demo.legacyLimit && account.credit_limit === demo.legacyLimit) {
       // Only the limit is raised on an existing account; its balance is backed by ledger entries.

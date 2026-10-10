@@ -8,14 +8,8 @@ import { CustomerAddress } from '../src/entities/CustomerAddress.entity';
 import { CustomerCreditAccount } from '../src/entities/CustomerCreditAccount.entity';
 import { CustomFieldDefinition } from '../src/entities/CustomFieldDefinition.entity';
 import { CustomerCustomValue } from '../src/entities/CustomerCustomValue.entity';
-import { CustomerTag } from '../src/entities/CustomerTag.entity';
-import { CustomerTagLink } from '../src/entities/CustomerTagLink.entity';
-import { CustomerSegment } from '../src/entities/CustomerSegment.entity';
-import { CustomerConsent } from '../src/entities/CustomerConsent.entity';
-import { CustomerMerge } from '../src/entities/CustomerMerge.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
-import { DataSource } from 'typeorm';
 import { BadRequestException } from '@nestjs/common';
 
 describe('CustomerService (Unit)', () => {
@@ -40,14 +34,8 @@ describe('CustomerService (Unit)', () => {
         { provide: getRepositoryToken(CustomerCreditAccount), useValue: accountRepo },
         { provide: getRepositoryToken(CustomFieldDefinition), useValue: {} },
         { provide: getRepositoryToken(CustomerCustomValue), useValue: {} },
-        { provide: getRepositoryToken(CustomerTag), useValue: {} },
-        { provide: getRepositoryToken(CustomerTagLink), useValue: {} },
-        { provide: getRepositoryToken(CustomerSegment), useValue: {} },
-        { provide: getRepositoryToken(CustomerConsent), useValue: {} },
-        { provide: getRepositoryToken(CustomerMerge), useValue: {} },
         { provide: getRepositoryToken(OrderHeader), useValue: {} },
         { provide: AuditWriter, useValue: auditWriter },
-        { provide: DataSource, useValue: {} },
       ],
     }).compile();
 
@@ -58,19 +46,6 @@ describe('CustomerService (Unit)', () => {
     expect(normalizePhone('09121234567')).toBe('+989121234567');
     expect(normalizePhone('989121234567')).toBe('+989121234567');
     expect(normalizePhone('+989121234567')).toBe('+989121234567');
-  });
-
-  it('should detect candidate duplicates by exact normalized phone match', async () => {
-    customerRepo.find.mockResolvedValue([
-      { id: 'c-1', first_name: 'Ali', last_name: 'Reza', mobile: '09121111111', is_active: true },
-      { id: 'c-2', first_name: 'Ali', last_name: 'Rezai', mobile: '+989121111111', is_active: true },
-    ]);
-
-    const candidates = await service.getDuplicateCandidates('t-1');
-    expect(candidates.length).toBe(1);
-    expect(candidates[0].match_score).toBe(100);
-    expect(candidates[0].target_customer_id).toBe('c-1');
-    expect(candidates[0].source_customer_id).toBe('c-2');
   });
 
   it('should create customer with customer code set to normalized phone number when code is omitted', async () => {

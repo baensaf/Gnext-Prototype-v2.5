@@ -253,7 +253,7 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
     expect(salesReport.rows.length).toBeGreaterThan(0);
   });
 
-  it('Journey 2: Customer Credit, Partial Credit/Terminal Payment, Repayment, Aging/Statement, Refund & Manager Approval', async () => {
+  it('Journey 2: Customer Credit, Partial Credit/Terminal Payment, Repayment, Transactions, Refund & Manager Approval', async () => {
     const orderRepo = dataSource.getRepository(OrderHeader);
     const paymentRepo = dataSource.getRepository(Payment);
 
@@ -272,21 +272,10 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
       `corr-customer-${tag}`,
     );
 
-    // 2. Post Repayment / Top-Up via CreditService
     const creditAccount = await dataSource.getRepository(CustomerCreditAccount).findOne({ where: { tenant_id: testTenantId, customer_id: customer.id } });
     expect(creditAccount).toBeDefined();
 
-    const repayRes = await creditService.postRepayment(
-      testTenantId,
-      creditAccount!.id,
-      { amount: '100000.0000', reason: 'Initial Credit Repayment / Top-Up' },
-      testAdminUserId,
-      `corr-repay-${tag}`,
-    );
-    expect(repayRes.entry).toBeDefined();
-    expect(Number(repayRes.entry.balance_after)).toBeGreaterThanOrEqual(100000);
-
-    // 3. Partial Credit + Terminal Payment Order Split
+    // 2. Partial Credit + Terminal Payment Order Split
     const order = await orderRepo.save(
       orderRepo.create({
         tenant_id: testTenantId,
@@ -340,13 +329,23 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
       }),
     );
 
-    // 4. Assert Statement and Credit Aging Subledger
-    const statement = await creditService.getAccountStatement(testTenantId, creditAccount!.id, {});
-    expect(statement.customerId).toBe(customer.id);
-    expect(statement.entries.length).toBeGreaterThanOrEqual(2);
+    // 3. A repayment settles what is owed; more than that is refused
+    const repayRes = await creditService.postRepayment(
+      testTenantId,
+      creditAccount!.id,
+      { amount: '100000.0000', reason: 'Credit repayment' },
+      testAdminUserId,
+      `corr-repay-${tag}`,
+    );
+    expect(Number(repayRes.newBalance)).toBe(-100000);
+    await expect(
+      creditService.postRepayment(testTenantId, creditAccount!.id, { amount: '150000.0000' }, testAdminUserId),
+    ).rejects.toThrow();
 
-    const agingReport = await creditService.getCreditAging(testTenantId, {});
-    expect(agingReport.customers.find((c: any) => c.customerId === customer.id)).toBeDefined();
+    // 4. The account lists its transactions
+    const account = await creditService.getAccountById(testTenantId, creditAccount!.id);
+    expect(account.customer_id).toBe(customer.id);
+    expect(account.entries.length).toBeGreaterThanOrEqual(2);
 
     // 5. Manager Approval Check for Alternative Method
     const pinVerification = await approvalService.verifyManagerPin(

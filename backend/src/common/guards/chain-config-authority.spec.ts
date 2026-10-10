@@ -109,14 +109,9 @@ describe.each(OPEN_BY_DESIGN)('%s: what the chain decides once', (label, control
 
 describe('money on a customer account', () => {
   // Reach, not seniority: one limit and one ledger per customer, usable at every branch,
-  // so no branch — not even its manager — sets a limit, takes a repayment or adjusts one.
-  it('keeps credit limits, repayments and adjustments with head office', () => {
-    const creditPaths = (path: string | string[]) =>
-      ([] as string[]).concat(path).some((p) => p.includes('credit'));
-    const routes = [
-      ...writeRoutes(CreditController),
-      ...writeRoutes(CustomerController).filter((route) => creditPaths(route.path)),
-    ];
+  // so no branch — not even its manager — sets a limit or takes a repayment.
+  it('keeps credit limits and repayments with head office', () => {
+    const routes = writeRoutes(CreditController);
     expect(routes.length).toBeGreaterThan(0);
     for (const route of routes) {
       expect(route.headOfficeOnly).toBe(true);
@@ -129,7 +124,7 @@ describe('signing a customer up at the counter', () => {
   // sign-up — so without this a cashier granted credit to whoever they signed on.
   async function limitPassedOn(user: { userRole: string; userBranchId: string | null }) {
     const service = { createCustomer: jest.fn().mockResolvedValue({}) };
-    const controller = new CustomerController(service as any, {} as any);
+    const controller = new CustomerController(service as any);
     const body = { first_name: 'Sara', mobile: '09120000000', credit_limit: '10000000' };
     await controller.createCustomer(body, { tenantId: 'tenant', ...user } as any);
     return service.createCustomer.mock.calls[0][1].credit_limit;

@@ -196,7 +196,6 @@ export class PaymentService {
           order.customer_id,
           order.currency_code || 'IRR',
           amountFormatted,
-          undefined,
           em,
         );
       }
