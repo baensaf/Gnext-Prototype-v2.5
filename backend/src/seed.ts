@@ -114,7 +114,7 @@ export async function runSeed() {
         tenant_id: tenant.id,
         code: b.code,
         name: b.name,
-        branch_type: b.branchType || 'RESTAURANT',
+        branch_type: 'RESTAURANT',
         phone: b.phone,
         address: b.address,
         time_zone: 'Asia/Tehran',
@@ -169,9 +169,7 @@ export async function runSeed() {
     console.log(`Seeded opening hours: ${code}`);
   }
 
-  const sellingBranches = IRANBURGER_BRANCHES
-    .filter((b) => (b.branchType || 'RESTAURANT') === 'RESTAURANT')
-    .map((b) => branchByCode.get(b.code));
+  const sellingBranches = IRANBURGER_BRANCHES.map((b) => branchByCode.get(b.code));
   // The three sites the demo accounts, floors and couriers hang off.
   const branchTeh = branchByCode.get('TEH-CENTRAL');
   const branchExpress = branchByCode.get('TEH-DOWNTOWN');

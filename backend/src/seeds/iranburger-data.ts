@@ -20,7 +20,6 @@ export interface IranBurgerBranch {
   name: string;
   address: string;
   phone: string | null;
-  branchType?: 'RESTAURANT' | 'COMMISSARY';
   /** The name this row carried before the rebrand, so an existing database is renamed in place. */
   legacyName?: string;
   /** [latitude, longitude] of the branch's Balad listing (2026-10-01). */
@@ -53,9 +52,6 @@ export const IRANBURGER_BRANCHES: IranBurgerBranch[] = [
   { code: 'SHZ-AFIFABAD', name: 'ایران برگر (عفیف آباد)', address: 'شیراز، عفیف آباد، خ عفیف آباد بیستم', phone: '07136269000', pin: [29.625177, 52.501626] },
   { code: 'SHZ-KIANSHAHR', name: 'ایران برگر (کیان شهر)', address: 'شیراز، کیان شهر، خ پست', phone: null, pin: [29.591312, 52.572944] },
   { code: 'SHZ-MODARES', name: 'ایران برگر (بلوار مدرس)', address: 'شیراز، بریجستون، کنارگذر مدرس', phone: '07137200029', pin: [29.561367, 52.593144] },
-  // Not a public listing: the demo's production kitchen, kept so the chain still shows a
-  // location that prepares food without selling it.
-  { code: 'TEH-COMMISSARY', name: 'آشپزخانه مرکزی', address: 'تهران، منطقه صنعتی', phone: null, branchType: 'COMMISSARY', legacyName: 'Central Production Kitchen' },
 ];
 
 /**
@@ -76,7 +72,7 @@ export const IRANBURGER_CHAIN_HOURS: IranBurgerHours = { daily: ['11:00', '04:00
 
 /** Opening hours by branch code. The commissary does not sell, so it has none. */
 export const IRANBURGER_HOURS: Record<string, IranBurgerHours> = Object.fromEntries(
-  IRANBURGER_BRANCHES.filter((b) => (b.branchType || 'RESTAURANT') === 'RESTAURANT').map((b) => [b.code, IRANBURGER_CHAIN_HOURS]),
+  IRANBURGER_BRANCHES.map((b) => [b.code, IRANBURGER_CHAIN_HOURS]),
 );
 
 export interface IranBurgerCategory {

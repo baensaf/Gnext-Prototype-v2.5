@@ -3,9 +3,8 @@ import type { BranchType } from 'src/api/tenantApi';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Stack, MenuItem, TextField, Autocomplete } from '@mui/material';
+import { Stack, TextField, Autocomplete } from '@mui/material';
 
-import { VersionTag } from 'src/components/version-tag';
 
 export type BranchDetails = {
   name: string;
@@ -102,27 +101,6 @@ export function BranchDetailsFields({ value, onChange, showErrors, nameError, di
           )}
         />
       </Stack>
-      <TextField
-        select
-        fullWidth
-        disabled={disabled}
-        label={
-          <Stack direction="row" spacing={0.75} component="span" sx={{ alignItems: 'center' }}>
-            <span>{t('operations.branches.type', 'Type')}</span>
-            <VersionTag feature="branches.nonSellingTypes" />
-          </Stack>
-        }
-        value={value.branch_type}
-        onChange={(e) => set({ branch_type: e.target.value as BranchType })}
-        helperText={t(
-          'operations.branches.typeHint',
-          'Only a restaurant takes customer orders. Production kitchens and offices get no POS, kiosk or kitchen display, and are left out of sales comparisons.'
-        )}
-      >
-        <MenuItem value="RESTAURANT">{t('operations.branches.types.restaurant', 'Restaurant')}</MenuItem>
-        <MenuItem value="COMMISSARY">{t('operations.branches.types.commissary', 'Production Kitchen')}</MenuItem>
-        <MenuItem value="OFFICE">{t('operations.branches.types.office', 'Office')}</MenuItem>
-      </TextField>
     </Stack>
   );
 }
