@@ -121,8 +121,6 @@ export const FEATURE_LABELS = {
   'terminals.kiosk': 'V3',
   'printers.simulated': 'F',
   'printQueue.simulate': 'F',
-  // Reports
-  'reports.savedViews': 'V4',
   // Settings. Money is shown in Toman in V1; the Omani rial and the US dollar come in V7.
   'settings.reopenOrders': 'V2',
   'settings.incomingOrders': 'V3',
@@ -141,12 +139,6 @@ export const REPORT_LABELS: Record<string, PhaseLabel> = {
   'aggregator-orders': 'V3',
   'snappfood-reconciliation': 'V3',
   'customer-credit': 'V3',
-  'credit-eod-usage': 'V3',
-  'customer-activity': 'V4',
-  'credit-aging': 'V4',
-  'branch-comparison': 'V4',
-  'print-operations': 'F',
-  'integration-operations': 'F',
 };
 
 /** Whether `pathname` is `prefix` or under it; a `*` in the prefix stands for one path segment. */

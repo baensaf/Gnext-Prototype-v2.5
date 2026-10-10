@@ -174,12 +174,6 @@ const GROUPS: { titleKey: string; title: string; rows: Capability[] }[] = [
         write: { CASHIER: 'NONE', MANAGER: 'NONE', HEAD_OFFICE: 'FULL' },
       },
       {
-        path: '/app/reports/branch-comparison',
-        labelKey: 'rolesPage.caps.compare',
-        label: 'Compare one branch against another',
-        write: { CASHIER: 'NONE', MANAGER: 'NONE', HEAD_OFFICE: 'READ' },
-      },
-      {
         path: '/app/delivery/rollup',
         labelKey: 'rolesPage.caps.fleetRollup',
         label: 'See every branch’s couriers on one screen',

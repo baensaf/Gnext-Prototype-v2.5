@@ -44,11 +44,9 @@ const CATEGORY_ORDER = [
   'PROMOTION',
   'CASH',
   'CREDIT',
-  'CUSTOMER',
   'DELIVERY',
   'TAX',
   'INTEGRATION',
-  'SIMULATION',
 ];
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -58,18 +56,16 @@ const CATEGORY_LABELS: Record<string, string> = {
   PROMOTION: 'Discounts & Coupons',
   CASH: 'Cash & Shifts',
   CREDIT: 'Customer Credit',
-  CUSTOMER: 'Customers',
   DELIVERY: 'Delivery & Couriers',
   TAX: 'Tax & Compliance',
   INTEGRATION: 'Integrations',
-  SIMULATION: 'Simulation & Hardware',
 };
 
 /**
  * Every report the signed-in account may run, on one page, grouped the way the catalogue
  * already groups them. The picker inside the viewer could always reach all of these, but
- * only from a page you had to be standing on first — so twenty-three of the twenty-five
- * were invisible unless you knew they existed.
+ * only from a page you had to be standing on first — so most of them were invisible unless
+ * you knew they existed.
  *
  * The list is whatever `/reports/catalog` returns, which is filtered by role on the server:
  * a branch manager is never shown a report the run would then refuse.
@@ -134,7 +130,7 @@ export function ReportsIndexPage() {
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3, maxWidth: 640 }}>
         {t(
           'reports.index.subtitle',
-          'Every report available to your account. Open one to set its date range, save a view, or export it.'
+          'Every report available to your account. Open one to set its date range or export it.'
         )}
       </Typography>
 
