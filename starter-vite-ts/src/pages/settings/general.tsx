@@ -1,4 +1,3 @@
-import type { Currency } from 'src/api/settingsApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
@@ -8,37 +7,26 @@ import {
   Box,
   Card,
   Grid,
-  Chip,
   Stack,
-  Table,
-  Paper,
   Alert,
   Button,
-  Switch,
   MenuItem,
-  TableRow,
-  TableBody,
-  TableCell,
-  TableHead,
   TextField,
   Typography,
   CardContent,
-  TableContainer,
 } from '@mui/material';
 
 import { tenantApi } from 'src/api/tenantApi';
-import { settingsApi } from 'src/api/settingsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
-import { VersionTag } from 'src/components/version-tag';
 import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function GeneralSettingsPage() {
   const { t } = useTranslation();
   const { tenant, fetchMe } = useAuthStore();
-  // The tenant profile and the currency list have no branch dimension: one set for the
+  // The tenant profile has no branch dimension: one set for the
   // chain, and only an account with chain reach may write them.
   const isHeadOffice = useIsHeadOffice();
   const { selectedBranch } = useBranchContext();
@@ -47,17 +35,12 @@ export function GeneralSettingsPage() {
   const [defaultLocale, setDefaultLocale] = useState(tenant?.defaultLocale || 'fa');
   const [timeZone, setTimeZone] = useState(tenant?.timeZone || 'Asia/Tehran');
 
-  const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
-      const [cList, profile] = await Promise.all([
-        settingsApi.getCurrencies(),
-        tenantApi.getTenantProfile(),
-      ]);
-      setCurrencies(cList);
+      const profile = await tenantApi.getTenantProfile();
       if (profile) {
         if (profile.name) setTenantName(profile.name);
         if (profile.default_locale || profile.defaultLocale) setDefaultLocale(profile.default_locale || profile.defaultLocale);
@@ -90,19 +73,10 @@ export function GeneralSettingsPage() {
     }
   };
 
-  const handleToggleCurrency = async (currency: Currency, enabled: boolean) => {
-    try {
-      await settingsApi.updateCurrency(currency.id, { is_enabled: enabled });
-      loadData();
-    } catch (err: any) {
-      setError(err?.response?.data?.message || err.detail || t('settings.generalPage.currencyStatusError', 'Failed to update currency status'));
-    }
-  };
-
   return (
     <Box sx={{ pb: 6 }}>
       <CustomBreadcrumbs
-        heading={t('settings.generalPage.title', 'General Settings & Currencies')}
+        heading={t('settings.generalPage.title', 'General Settings')}
         links={[
           { name: t('nav.home', 'Home'), href: '/app/dashboard' },
           { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
@@ -126,7 +100,7 @@ export function GeneralSettingsPage() {
 
       <Grid container spacing={3}>
         {/* Tenant Profile Form */}
-        <Grid size={{ xs: 12, md: 5 }}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
             <CardContent>
               <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
@@ -192,59 +166,6 @@ export function GeneralSettingsPage() {
           </Card>
         </Grid>
 
-        {/* Currencies Management */}
-        <Grid size={{ xs: 12, md: 7 }}>
-          <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
-            <CardContent>
-              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  {t('settings.generalPage.supportedCurrencies', 'Supported Currencies')}{' '}
-                  <VersionTag feature="settings.currencies" />
-                </Typography>
-                <Chip label={t('settings.generalPage.oneCurrencyNotice', 'One Currency per Order (AD-10)')} color="info" size="small" />
-              </Stack>
-
-              <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>{t('settings.generalPage.colCode', 'Code')}</TableCell>
-                      <TableCell>{t('settings.generalPage.colSymbol', 'Symbol')}</TableCell>
-                      <TableCell align="center">{t('settings.generalPage.colPrecision', 'Precision')}</TableCell>
-                      <TableCell align="center">{t('settings.generalPage.colIncrement', 'Increment')}</TableCell>
-                      <TableCell align="center">{t('settings.generalPage.colBase', 'Base')}</TableCell>
-                      <TableCell align="center">{t('settings.generalPage.colEnabled', 'Enabled')}</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {currencies.map((c) => (
-                      <TableRow key={c.id}>
-                        <TableCell><code>{c.code}</code></TableCell>
-                        <TableCell sx={{ fontWeight: 'bold' }}>{c.symbol}</TableCell>
-                        <TableCell align="center">{c.decimal_precision}</TableCell>
-                        <TableCell align="center">{c.rounding_increment}</TableCell>
-                        <TableCell align="center">
-                          {c.is_base ? (
-                            <Chip label={t('settings.generalPage.baseBadge', 'BASE')} color="primary" size="small" sx={{ fontWeight: 'bold' }} />
-                          ) : (
-                            '—'
-                          )}
-                        </TableCell>
-                        <TableCell align="center">
-                          <Switch
-                            checked={c.is_enabled}
-                            disabled={c.is_base || !isHeadOffice}
-                            onChange={(e) => handleToggleCurrency(c, e.target.checked)}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        </Grid>
       </Grid>
     </Box>
   );
