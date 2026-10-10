@@ -361,13 +361,13 @@ describe('PrintingModule (Unit & Integration)', () => {
       expect(jobs.some((j) => j.rendered_html.includes('Coke'))).toBe(false);
     });
 
-    it('prints no job and raises no alert for an order of nothing but unprinted items', async () => {
+    it('prints no job, and logs nothing unrouted, for an order of nothing but unprinted items', async () => {
       notPrintedCategory('cat-drinks');
       routeRepo.rows.splice(routeRepo.rows.findIndex((r) => r.category_id === 'cat-drinks' && r.printer_id), 1);
       order('ord-cola', [line('l-coke', 'p-coke', 'Coke')]);
 
       expect(await queueService.enqueueOrderPrintJobs(T, 'ord-cola', 'KITCHEN_TICKET')).toEqual([]);
-      expect(alertRepo.save).not.toHaveBeenCalled();
+      expect(auditWriter.write).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'PRINT_JOB_UNROUTED' }));
     });
 
     it('prints the whole order once more at the pass, unprinted items included', async () => {
