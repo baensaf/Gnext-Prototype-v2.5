@@ -46,7 +46,6 @@ export function ApprovalsSettingsPage() {
     { code: 'PRICE_OVERRIDE', label: t('settings.approvalsPage.actions.PRICE_OVERRIDE', 'Manual Price Override') },
     { code: 'REFUND', label: t('settings.approvalsPage.actions.REFUND', 'Order Refund') },
     { code: 'CANCEL', label: t('settings.approvalsPage.actions.CANCEL', 'Paid Order Cancellation') },
-    { code: 'CREDIT_OVERRIDE', label: t('settings.approvalsPage.actions.CREDIT_OVERRIDE', 'Customer Credit Limit Override') },
     { code: 'REOPEN_ORDER', label: t('settings.approvalsPage.actions.REOPEN_ORDER', 'Reopen Closed Order') },
     // Drawer differences are not here: the tolerance lives in Shift & Drawer Policy, which
     // a branch may override and the count actually enforces. A rule here was never read.

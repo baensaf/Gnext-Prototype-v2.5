@@ -196,7 +196,7 @@ export function useNavData(): NavSectionProps['data'] {
               path: '/app/customers',
             },
             {
-              title: t('nav.credit', 'Credit Accounts & Aging'),
+              title: t('nav.credit', 'Credit accounts'),
               path: '/app/credit/accounts',
             },
           ],

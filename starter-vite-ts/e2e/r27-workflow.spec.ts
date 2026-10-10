@@ -295,7 +295,7 @@ test.describe('R27 Real Browser E2E Certification Suite', () => {
     expect([400, 403]).toContain(invalidToggleRes.status());
   });
 
-  test('9. Acceptance Journey 1: Customer Credit, Repayment, Aging, Statement & Audit Links (LTR & RTL)', async ({ page }) => {
+  test('9. Acceptance Journey 1: Customer Credit, Transactions & Audit Links (LTR & RTL)', async ({ page }) => {
     await loginUser(page);
 
     // 1. Create a customer with credit limit in Customer Directory
@@ -342,46 +342,23 @@ test.describe('R27 Real Browser E2E Certification Suite', () => {
     await page.waitForLoadState('networkidle');
 
     // Assert main header and customer appears in directory table
-    await expect(page.locator('body')).toContainText(/Customer Credit Subledger & Aging|دفتر کل/i);
+    await expect(page.locator('body')).toContainText(/Customer credit|اعتبار مشتریان/i);
     await expect(page.locator('body')).toContainText('Acceptance Tester');
 
     // Find the customer row in credit table
     const customerRow = page.locator('tbody tr').filter({ hasText: 'Acceptance Tester' }).first();
     await expect(customerRow).toBeVisible({ timeout: 10000 });
 
-    // Open Repayment / Top-Up modal for the customer
-    const repayBtn = customerRow.locator('button').filter({ hasText: /Repayment \/ Top-Up|پرداخت \/ شارژ/i }).first();
-    await expect(repayBtn).toBeVisible({ timeout: 10000 });
-    await repayBtn.click();
-
-    const repayDialog = page.locator('.MuiDialog-root').filter({ hasText: /Post Credit Repayment|Repayment/i }).first();
-    await expect(repayDialog).toBeVisible({ timeout: 5000 });
-
-    const amountInput = repayDialog.locator('input[type="number"]').first();
-    await amountInput.fill('500000');
-
-    const submitRepayPromise = page.waitForResponse(resp => resp.url().includes('/credit-account/repayments') && resp.request().method() === 'POST');
-    const confirmBtn = repayDialog.locator('button').filter({ hasText: /Confirm Repayment|تایید/i }).first();
-    await confirmBtn.click();
-
-    const repayResponse = await submitRepayPromise;
-    expect(repayResponse.ok()).toBe(true);
-
-    await expect(page.locator('.MuiDialog-root').filter({ hasText: /Post Credit Repayment|Repayment/i })).not.toBeVisible({ timeout: 5000 });
-    await page.waitForTimeout(300);
-
-    // Open Statement modal for the customer
     const targetRow = page.locator('tbody tr').filter({ hasText: 'Acceptance Tester' }).first();
-    const statementBtn = targetRow.locator('button').filter({ hasText: /Statement|صورتحساب/i }).first();
-    await expect(statementBtn).toBeVisible({ timeout: 10000 });
-    await statementBtn.click();
+    const transactionsBtn = targetRow.locator('button').filter({ hasText: /Transactions|تراکنش‌ها/i }).first();
+    await expect(transactionsBtn).toBeVisible({ timeout: 10000 });
+    await transactionsBtn.click();
 
-    const stmtDialog = page.locator('.MuiDialog-root').filter({ hasText: /Customer Credit Statement|Statement|صورتحساب/i }).first();
-    await expect(stmtDialog).toBeVisible({ timeout: 10000 });
-    await expect(stmtDialog).toContainText(/Subledger Transaction History|تاریخچه|گردش حساب|ریز تراکنش/i);
-
-    const closeStmtBtn = stmtDialog.locator('button').filter({ hasText: /Close|بستن/i }).first();
-    await closeStmtBtn.click();
+    const txDialog = page.locator('.MuiDialog-root').filter({ hasText: /Credit transactions|تراکنش‌های اعتباری/i }).first();
+    await expect(txDialog).toBeVisible({ timeout: 10000 });
+    
+    const closeTxBtn = txDialog.locator('button').filter({ hasText: /Close|بستن/i }).first();
+    await closeTxBtn.click();
 
     // Verify Audit Explorer link navigation
     const auditLink = page.locator('a[href="/app/audit"]').first();
