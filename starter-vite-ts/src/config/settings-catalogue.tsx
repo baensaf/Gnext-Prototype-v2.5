@@ -130,7 +130,7 @@ export function useSettingsCatalogue(): SettingCategory[] {
       categoryTitle: t('settings.hub.domains.hardware.title', 'Hardware & Peripherals'),
       categoryDescription: t(
         'settings.hub.domains.hardware.description',
-        'POS hardware terminals, network receipt printers, kitchen routing, and bump screens.'
+        'POS terminals, card terminals, printers and print routing.'
       ),
       icon: <PointOfSaleIcon color="info" sx={{ fontSize: 28 }} />,
       items: [
@@ -162,10 +162,10 @@ export function useSettingsCatalogue(): SettingCategory[] {
         {
           id: 'printers',
           scope: 'BRANCH',
-          title: t('settings.hub.items.printers.title', 'Printers & Print Routing'),
+          title: t('settings.hub.items.printers.title', 'Printers'),
           description: t(
             'settings.hub.items.printers.description',
-            'Network receipt printers, kitchen ticket routing, print templates, and queue failover.'
+            'Receipt and kitchen printers, how the branch agent reaches them, test pages and the print queue.'
           ),
           path: '/app/operations/printers',
           icon: <PrintIcon sx={{ color: 'secondary.main' }} />,
