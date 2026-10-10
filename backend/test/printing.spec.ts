@@ -469,23 +469,6 @@ describe('PrintingModule (Unit & Integration)', () => {
 
   // --- failure --------------------------------------------------------------------------
 
-  it('should enqueue print job and execute simulation outcome with fallback printer', async () => {
-    order('ord-100', [line('l-1', 'p-pizza', 'Pizza')]);
-    printer('prn-main', { fallback_printer_id: 'prn-backup' });
-
-    const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-100');
-    expect(job.printer_id).toBe('prn-main');
-
-    const outcomeRes = await queueService.processSimulationOutcome(T, {
-      printJobId: job.id,
-      outcome: 'FAILED',
-      useFallback: true,
-    });
-
-    expect(outcomeRes.attempt.status).toBe('FAILED');
-    expect(outcomeRes.attempt.printer_id).toBe('prn-backup');
-  });
-
   // The Test button used to show "printed cleanly" without sending anything.
   describe('a test page', () => {
     it('goes to the printer through the branch agent, as a job the queue shows', async () => {
@@ -509,12 +492,11 @@ describe('PrintingModule (Unit & Integration)', () => {
   describe('a real printer behind the branch agent', () => {
     beforeEach(() => {
       order('ord-400', [line('l-1', 'p-burger', 'Burger')]);
-      printer('prn-kitchen', { printer_type: 'KITCHEN_IMPACT', agent_connection: { kind: 'tcp', host: '192.168.1.83', port: 9100 }, fallback_printer_id: 'prn-counter' });
+      printer('prn-kitchen', { printer_type: 'KITCHEN_IMPACT', agent_connection: { kind: 'tcp', host: '192.168.1.83', port: 9100 } });
       printer('prn-counter');
     });
 
-    // Retry used to go to the fallback printer every time: a kitchen chit retried after the
-    // kitchen printer was fixed came out at the counter instead.
+    // A kitchen chit retried after the kitchen printer was fixed prints in the kitchen.
     it('retries a failed job on its own printer', async () => {
       const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-400', 'KITCHEN_TICKET');
       expect(job.printer_id).toBe('prn-kitchen');

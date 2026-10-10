@@ -24,9 +24,9 @@ export class PrintersController {
     private readonly routingService: PrintRoutingService,
   ) {}
 
-  /** Printers the agent can reach over the network, through Windows, or on a serial port. */
+  /** Printers the agent can reach over the network or through Windows. */
   private printerConnection(input: unknown) {
-    return parseDeviceConnection(input, ['tcp', 'windows', 'serial']);
+    return parseDeviceConnection(input, ['tcp', 'windows']);
   }
 
   /** The branch agent keeps its own copy of the printer list; tell it about the change. */
@@ -69,8 +69,6 @@ export class PrintersController {
   async createPrinter(@Body() body: CreatePrinterDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
-    await this.assertInBranch(tenantId, Printer, body.fallback_printer_id, body.branch_id, 'Fallback printer');
-
     const printer = this.printerRepo.create({
       tenant_id: tenantId,
       branch_id: body.branch_id,
@@ -80,7 +78,6 @@ export class PrintersController {
       simulated_address: body.simulated_address || '192.168.1.100:9100',
       paper_width_mm: body.paper_width_mm || 80,
       is_active: body.is_active !== false,
-      fallback_printer_id: body.fallback_printer_id || null,
       agent_connection: this.printerConnection(body.agent_connection),
     });
     const saved = await this.printerRepo.save(printer);
@@ -104,16 +101,9 @@ export class PrintersController {
     const printer = await this.printerRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!printer) throw new NotFoundException('Printer not found');
 
-    if (body.fallback_printer_id === id) {
-      throw new BadRequestException('Printer cannot have itself as fallback printer');
-    }
-
     const previousBranchId = printer.branch_id;
     const { agent_connection, ...rest } = body;
     Object.assign(printer, rest);
-    if (body.fallback_printer_id) {
-      await this.assertInBranch(tenantId, Printer, body.fallback_printer_id, printer.branch_id, 'Fallback printer');
-    }
     if (agent_connection !== undefined) printer.agent_connection = this.printerConnection(agent_connection);
     const saved = await this.printerRepo.save(printer);
     await this.pushConfig(tenantId, previousBranchId, saved.branch_id);
@@ -246,7 +236,7 @@ export class PrintersController {
   @BranchOwned(PrintJob, { body: 'printJobId' })
   @Roles(...MANAGER_AND_ABOVE)
   @Post('simulation/printers/outcome')
-  async processOutcome(@Body() body: { printJobId: string; scenarioId?: string; outcome: 'SUCCESS' | 'FAILED'; useFallback?: boolean }, @Req() req: Request) {
+  async processOutcome(@Body() body: { printJobId: string; scenarioId?: string; outcome: 'SUCCESS' | 'FAILED' }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.queueService.processSimulationOutcome(tenantId, body);
   }

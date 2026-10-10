@@ -66,7 +66,6 @@ export function PrintQueuePage() {
 
   const [outcomeJob, setOutcomeJob] = useState<PrintJob | null>(null);
   const [outcomeVal, setOutcomeVal] = useState<'SUCCESS' | 'FAILED'>('SUCCESS');
-  const [useFallback, _setUseFallback] = useState(true);
 
   // Reprint-to-another-printer dialog
   const [redirectJob, setRedirectJob] = useState<PrintJob | null>(null);
@@ -108,7 +107,6 @@ export function PrintQueuePage() {
       await printingApi.simulatePrintOutcome({
         printJobId: outcomeJob.id,
         outcome: outcomeVal,
-        useFallback,
       });
       setOutcomeJob(null);
       loadData();
@@ -120,7 +118,7 @@ export function PrintQueuePage() {
   const handleRetryJob = async (id: string) => {
     try {
       // The same printer, now fixed. Sending it somewhere else is "reprint on another printer".
-      await printingApi.retryPrintJob(id, { useFallback: false });
+      await printingApi.retryPrintJob(id);
       loadData();
     } catch (err: any) {
       setError(err.detail || 'Failed to retry print job');
