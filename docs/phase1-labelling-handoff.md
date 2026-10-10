@@ -13,16 +13,39 @@ page, the product manager decides which version ships each feature: V1, V2, V3, 
 | Version | What it is for |
 |---|---|
 | V1 Counter | One branch sells, delivers and closes its day: POS, catalog, cash and card, shifts, business day, printing, and full delivery (addresses, zones, couriers, dispatch board, courier settlement) |
-| V2 Floor | Creating tables and assigning one when an order is submitted (nothing more of the dine-in floor), the full approval engine, the full refund and correction set |
+| V2 Floor | The full approval engine, the full refund and correction set (dine-in tables were removed on 2026-10-10) |
 | V3 Delivery and Snappfood | The real Snappfood integration, coupons, customer credit, the kiosk |
 | V4 Club, credit and head office | Discount campaigns, Tara Pay, chain-scale pricing, consolidated reports |
-| F | After Phase 1. Offline operation is F. So is Moadian: Iran Burger issues tax invoices from its own accounting software. So is the KDS and everything that depends on it |
+| F | After Phase 1. Offline operation is F. So is Moadian: Iran Burger issues tax invoices from its own accounting software. The KDS was F and was removed from the prototype on 2026-10-10 |
 
 Full delivery moved from V3 to V1 on 2026-09-28. V3 is now mostly Snappfood and customers.
 KDS moved from V2 to F on 2026-09-28: no restaurant in Iran runs a kitchen screen, so
 tickets are printed. Kitchen stations and routing rules stay V1, because the printers use them.
 
+**Simplified on 2026-10-10 (PR #231).** To keep V1–V4 small, these were removed from the
+prototype rather than labelled F:
+
+- **The KDS and prep stations.** A branch adds its printers, then on Operations → Print
+  routing sends categories or single products to them. One item can go to several printers;
+  a product with its own printers ignores its category's. Anything not routed prints on the
+  branch's default kitchen printer. Routing is per branch, not per till.
+- **Dine-in tables.** Floors, tables, seating, split and move checks, the POS table picker and
+  the "require a table" setting. The dine-in order type stays.
+- **The courier pay engine.** Pay rules, the zone courier rate and the courier-pay setting.
+  A settlement is what the courier collected, plus any adjustment.
+- **The "ready" step for platform orders.** The POS Online board has three lanes: New,
+  Accepted, Needs attention. The Online tab is V3.
+- **Built-in gender and wedding date.** Head office adds its own customer questions on
+  Settings → Customer fields (V1); existing answers became two fields.
+
+Moved to V4: failing a delivery and swapping the rider, the courier "working today" check-in,
+and a mobile card reader per courier. The kiosk stays V3.
+
 ## Where the decisions live
+
+Since 2026-10-10 the master copies are `decisions/register.md` and `decisions/feature-labels.md`
+in the private product-management repo (baensaf/gnext-product-management). The Claude Docs
+below are frozen.
 
 - **Claude Doc "Phase 1 Decision Register"**: https://claude.ai/code/artifact/1775b8f0-b936-4b43-aac1-ded088ace0e4.
   Rebuilt on 2026-09-28 under the account Claude works in, because the docs tools refuse a
@@ -48,7 +71,6 @@ tickets are printed. Kitchen stations and routing rules stay V1, because the pri
 | Feature | Label |
 |---|---|
 | Stop an item: reason picker, duration choice, manager PIN (a plain 86 from the tile, with no reason or PIN, is V1) | F |
-| Assigning a table to a dine-in order (the dine-in order type is V1) | V2 |
 | Coupon codes | V3 |
 | Customer credit as a tender | V3 |
 | "Internet is down" banner and offline till | F |
@@ -64,8 +86,6 @@ with page group 8).
 | Feature | Label |
 |---|---|
 | Snappfood "promised by" and "with support" chips, and Report to Snappfood | V3 |
-| Table number in the list, the drawer and the change-type dialog | V2 |
-| Kitchen progress chips (preparing, ready) | F |
 | The icon marking an order taken offline | F |
 | Head office's read-only view across branches (the branch column) | V4 |
 | "Inspect snapshot" JSON in the audit tab | F |
@@ -73,13 +93,8 @@ with page group 8).
 Everything else on the orders page is V1, including editing lines on a sent order, changing
 the order type, and the manager PIN for a late or paid cancellation.
 
-**KDS (`/app/kds`): F.** On the kitchen settings page, the bump-screens tab and the target
-preparation time are F. That page's other features wait for its own turn.
-
-**Page group 3, dine-in floor (`/app/dine-in/floor`): V2, but a very basic V2.** V2 is only
-creating sections and tables; the POS assigns a table when the order is submitted. Running
-service from the floor is F: occupancy, table states, seating, move, merge, split, the guest
-bill, paying from the table and releasing it.
+**KDS (`/app/kds`) and page group 3, dine-in floor (`/app/dine-in/floor`):** removed on
+2026-10-10 (they were F and a very basic V2).
 
 **Page group 5, shifts and business days (`/app/cashier/…`): V1. The chain shift roll-up
 (`/app/cashier/rollup`): V4.** A V1 shift close only asks for the counted cash, and the
@@ -110,15 +125,14 @@ type is V4.
   added by the branch manager on Delivery → Couriers, which opens the account too (username:
   the mobile in its +98 form). A courier cannot sign in in V1: the account is there for the
   Android tracking app that comes later. The manager marks who is "working today", which
-  resets at the day's cutoff. *Built in PR #168.*
+  resets at the day's cutoff. *Built in PR #168; moved to V4 on 2026-10-10.*
 - **Zones are V1, drawn on a map** (OpenStreetMap; Neshan or Map.ir later need only a tile
   URL and a key). The till still picks the zone by postal code. *Built in PR #169.*
-- **V1 pays a courier the zone's delivery fee, nothing else.** The flat and zone-rate pay
-  rules are V4.
+- **Couriers are salaried; Gnext does not work out courier pay.** The pay rules were removed
+  on 2026-10-10.
 
 | Feature | Label |
 |---|---|
-| Other courier pay rules (flat, zone rate) | V4 |
 | Courier availability (available, busy, offline) | V4 |
 | Moving a courier to another branch | V4 |
 | The courier detail page | V4 |
@@ -126,6 +140,9 @@ type is V4.
 | Reversing a closed settlement | V2 |
 | Snappfood orders the store delivers, on the board | V3 |
 | The delivery audit tab | F |
+| Failing a delivery, swapping the rider | V4 |
+| The courier "working today" check-in | V4 |
+| A mobile card reader per courier | V4 |
 | Head office's fleet roll-up (`/app/delivery/rollup`) | V4 |
 
 **Page group 8, catalog (`/app/catalog/…`): V1.** Decided 2026-09-29, extended 2026-10-04 so
@@ -175,8 +192,9 @@ Coupons (`/app/discounts/coupons`) are V3; customer-specific rates and the walle
 cashback (`/app/discounts/…`) are V4, with the customer club.
 
 The V1 register form (2026-10-03, the same dialog on the customers page and the POS): the
-name in one box; the mobile, which is also the customer code; optional gender, birthday and
-wedding date (recorded in V1, used by the customer club later); and delivery addresses typed
+name in one box; the mobile, which is also the customer code; optional birthday; the questions
+head office adds on Settings → Customer fields (gender and wedding date became such fields on
+2026-10-10); and delivery addresses typed
 in the same step, each with an optional pin on the map. The credit limit field opens at 0, is
 shown to head office only, and carries the V3 chip.
 
@@ -212,14 +230,13 @@ includes it. Not a discount campaign (no targeting, no conditions); campaigns st
 | Sending item discounts to Moadian | F |
 
 **Page group 11, operations (`/app/operations/…`): V1.** Decided 2026-09-29: branches, tills,
-kitchen stations and routing, printers, the print queue and branch agents. Monitoring
+printers and print routing, the print queue and branch agents. Monitoring
 (`/app/operations/monitoring`) is V4. The kiosk moved from V4 to V3 (`/app/kiosk` is V3).
 
 | Feature | Label |
 |---|---|
 | Branch types "production kitchen" and "office" | F |
 | The kiosk as a device type | V3 |
-| The KDS as a device type | F |
 | Serial-port printers, label printers, a fallback printer | F |
 | Simulated printers, the hardware simulator and "simulate outcome" | F |
 | "Ready to sell offline" on a branch agent | F |
@@ -240,13 +257,12 @@ explorer (`/app/audit`) and Moadian are F. Reports that ship later than the page
 in Toman** everywhere (screens, receipts, exports) and stored in Rial, as banks and card
 terminals expect. More than one currency is F: the Omani rial and the US dollar come in V7.
 Approval policies (`/app/settings/approvals`) are V2; V1 keeps the fixed manager-PIN checks.
-Courier pay and branch overrides are V4. The localization demo and data reset pages are F.
+Branch overrides are V4; courier pay was removed on 2026-10-10. The localization demo and data reset pages are F.
 
 | Feature | Label |
 |---|---|
 | More than one currency | F (V7) |
 | Reopening closed orders | V2 |
-| Requiring a table for dine-in | V2 |
 | Incoming orders (accepting automatically) | V3 |
 | Refund methods | V2 |
 | Difference tolerance, blind count | V4 |
@@ -260,11 +276,11 @@ Sizes and add-ons on the kiosk ship with the kiosk (V1 in the catalog since 2026
 shifts. Branch health and the list of branches with their agents are V4 (head office). The
 simulators (`/app/simulation/…`) and the offline till (`/till`) are F.
 
-**V1 print routing (decided 2026-09-30).** A branch has a few kitchen stations with one
-printer each; each category goes to one station, and an item whose category has no rule goes
-to the branch's default kitchen printer. One chit layout, one copy; a chit prints when the order
-is sent and a change chit when lines are added or voided. F: a product overriding its
-category, several printers per station, and copies or paper templates per printer.
+**V1 print routing (decided 2026-09-30, simplified 2026-10-10).** No stations: a branch's
+categories and products are routed straight to its printers, any number each, and a product's
+own printers replace its category's. An item with no route goes to the branch's default kitchen
+printer. One chit layout, one copy; a chit prints when the order is sent and a change chit when
+lines are added or voided. F: copies or paper templates per printer.
 
 The V1 product scope: https://claude.ai/code/artifact/e999955c-f8c1-48f7-8278-88a7daf5e125
 
