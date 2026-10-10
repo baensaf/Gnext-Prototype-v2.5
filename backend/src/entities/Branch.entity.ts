@@ -1,11 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, VersionColumn, DeleteDateColumn } from 'typeorm';
 
-/**
- * What kind of site this is. Only a RESTAURANT sells to customers; a COMMISSARY
- * produces for other sites and an OFFICE is administrative, so neither should be
- * offered a POS, a kiosk or a kitchen display, nor appear in a sales comparison.
- */
-export type BranchType = 'COMMISSARY' | 'OFFICE' | 'RESTAURANT';
+/** What kind of site this is. Every branch is a RESTAURANT; the column stays for a later type. */
+export type BranchType = 'RESTAURANT';
 
 /** Sites that take customer orders. Everything else is a supporting location. */
 export const SELLING_BRANCH_TYPES: BranchType[] = ['RESTAURANT'];

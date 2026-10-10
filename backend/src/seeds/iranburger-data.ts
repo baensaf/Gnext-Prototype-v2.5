@@ -70,7 +70,7 @@ export interface IranBurgerHours {
  */
 export const IRANBURGER_CHAIN_HOURS: IranBurgerHours = { daily: ['11:00', '04:00'] };
 
-/** Opening hours by branch code. The commissary does not sell, so it has none. */
+/** Opening hours by branch code. */
 export const IRANBURGER_HOURS: Record<string, IranBurgerHours> = Object.fromEntries(
   IRANBURGER_BRANCHES.map((b) => [b.code, IRANBURGER_CHAIN_HOURS]),
 );

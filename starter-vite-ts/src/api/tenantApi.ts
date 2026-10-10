@@ -1,7 +1,7 @@
 import { httpClient } from './httpClient';
 
 /** Mirrors the backend BranchType: only a RESTAURANT sells to customers. */
-export type BranchType = 'COMMISSARY' | 'OFFICE' | 'RESTAURANT';
+export type BranchType = 'RESTAURANT';
 
 export interface Branch {
   id: string;
