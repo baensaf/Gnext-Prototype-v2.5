@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, Not, MoreThanOrEqual } from 'typeorm';
+import { Repository, In, MoreThanOrEqual } from 'typeorm';
 import { Courier } from '../../entities/Courier.entity';
 import { AdminUser } from '../../entities/AdminUser.entity';
 import { COURIER_ROLE, courierUsername } from '../../common/utils/user-scope.util';
@@ -12,21 +12,19 @@ import { Payment } from '../../entities/Payment.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { ApprovalRequest } from '../../entities/ApprovalRequest.entity';
 import { DeliveryZone } from '../../entities/DeliveryZone.entity';
-import { CourierAttendance } from '../../entities/CourierAttendance.entity';
-import { CourierTerminalAssignment } from '../../entities/CourierTerminalAssignment.entity';
 import { Delivery, DeliveryState } from '../../entities/Delivery.entity';
 import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { Customer } from '../../entities/Customer.entity';
-import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
+import { Branch } from '../../entities/Branch.entity';
 import { PaymentAllocation } from '../../entities/PaymentAllocation.entity';
 import { CashMovement } from '../../entities/CashMovement.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { ShiftService } from '../cashier/shift.service';
 import { OrderTransitionRecorder } from '../order-lifecycle/order-transition-recorder.service';
 import { MoneyUtil } from '../../common/utils/money.util';
-import { BusinessClock, loadBusinessClock } from '../../common/utils/business-clock';
+import { loadBusinessClock } from '../../common/utils/business-clock';
 import { normalizePhone } from '../customer/customer.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
@@ -62,8 +60,6 @@ export class DeliveryService {
     @InjectRepository(PaymentMethod) private readonly paymentMethodRepo: Repository<PaymentMethod>,
     @InjectRepository(ApprovalRequest) private readonly approvalRepo: Repository<ApprovalRequest>,
     @InjectRepository(DeliveryZone) private readonly zoneRepo: Repository<DeliveryZone>,
-    @InjectRepository(CourierAttendance) private readonly attendanceRepo: Repository<CourierAttendance>,
-    @InjectRepository(CourierTerminalAssignment) private readonly terminalAssignRepo: Repository<CourierTerminalAssignment>,
     @InjectRepository(Delivery) private readonly deliveryRepo: Repository<Delivery>,
     @InjectRepository(DeliveryEvent) private readonly deliveryEventRepo: Repository<DeliveryEvent>,
     @InjectRepository(Terminal) private readonly terminalRepo: Repository<Terminal>,
@@ -161,72 +157,21 @@ export class DeliveryService {
     return MoneyUtil.format(value, 4);
   }
 
-  // --- 2. COURIERS & ATTENDANCE ---
+  // --- 2. COURIERS ---
   async getCouriers(tenantId: string, branchId?: string) {
     const where: any = { tenant_id: tenantId, is_active: true };
     if (branchId) where.branch_id = branchId;
     const couriers = await this.courierRepo.find({ where, order: { name: 'ASC' } });
 
     const enriched = [];
-
     for (const c of couriers) {
-      const todayStr = await this.businessToday(tenantId, c.branch_id);
-      const attendance = await this.attendanceRepo.findOne({
-        where: { tenant_id: tenantId, courier_id: c.id, date: todayStr },
-        order: { created_at: 'DESC' },
-      });
-      const terminalAssign = await this.terminalAssignRepo.findOne({
-        where: { tenant_id: tenantId, courier_id: c.id, is_active: true },
-      });
       const activeDeliveryCount = await this.deliveryRepo.count({
-        where: { tenant_id: tenantId, courier_id: c.id, state: In(['ASSIGNED', 'PICKED_UP', 'EN_ROUTE']) },
+        where: { tenant_id: tenantId, courier_id: c.id, state: In(ACTIVE_DELIVERY_STATES) },
       });
-
-      let terminalName = null;
-      if (terminalAssign) {
-        const term = await this.terminalRepo.findOne({ where: { id: terminalAssign.terminal_id } });
-        if (term) terminalName = term.name || term.code;
-      }
-
-      enriched.push({
-        ...c,
-        attendance: attendance || { status: 'CHECKED_OUT', availability_status: 'OFF_LINE' },
-        active_terminal: terminalAssign ? { ...terminalAssign, terminal_name: terminalName } : null,
-        active_delivery_count: activeDeliveryCount,
-      });
+      enriched.push({ ...c, active_delivery_count: activeDeliveryCount });
     }
 
     return enriched;
-  }
-
-  async getCourierById(tenantId: string, id: string) {
-    const c = await this.courierRepo.findOne({ where: { tenant_id: tenantId, id } });
-    if (!c) throw new NotFoundException(`Courier ${id} not found`);
-
-    const todayStr = await this.businessToday(tenantId, c.branch_id);
-    const attendance = await this.attendanceRepo.findOne({
-      where: { tenant_id: tenantId, courier_id: c.id, date: todayStr },
-      order: { created_at: 'DESC' },
-    });
-    const terminalAssign = await this.terminalAssignRepo.findOne({
-      where: { tenant_id: tenantId, courier_id: c.id, is_active: true },
-    });
-    const activeDeliveryCount = await this.deliveryRepo.count({
-      where: { tenant_id: tenantId, courier_id: c.id, state: In(['ASSIGNED', 'PICKED_UP', 'EN_ROUTE']) },
-    });
-
-    let terminalName = null;
-    if (terminalAssign) {
-      const term = await this.terminalRepo.findOne({ where: { id: terminalAssign.terminal_id } });
-      if (term) terminalName = term.name || term.code;
-    }
-
-    return {
-      ...c,
-      attendance: attendance || { status: 'CHECKED_OUT', availability_status: 'OFF_LINE' },
-      active_terminal: terminalAssign ? { ...terminalAssign, terminal_name: terminalName } : null,
-      active_delivery_count: activeDeliveryCount,
-    };
   }
 
   async createCourier(
@@ -242,18 +187,7 @@ export class DeliveryService {
       throw new ConflictException({
         code: 'COURIER_EXISTS',
         title: 'Courier Already On File',
-        detail: `${onFile.name} is already on file${branch ? ` at ${branch.name}` : ''}. Move them to this branch instead of adding them twice.`,
-        context: {
-          courier: {
-            id: onFile.id,
-            code: onFile.code,
-            name: onFile.name,
-            phone: onFile.phone,
-            branch_id: onFile.branch_id,
-            branch_name: branch?.name ?? null,
-            is_active: onFile.is_active,
-          },
-        },
+        detail: `${onFile.name} is already on file${branch ? ` at ${branch.name}` : ''}.`,
       });
     }
 
@@ -318,7 +252,7 @@ export class DeliveryService {
   }
 
   /**
-   * A courier is one person to the chain, however many shops they ride for over time. The
+   * A courier is one person to the chain, and is never added twice. The
    * code or the mobile number finds them — the number normalised, since the same phone gets
    * typed as 0912…, 912… and +98912… by different counters.
    */
@@ -330,78 +264,6 @@ export class DeliveryService {
       (phoneKey ? couriers.find((c) => c.phone && normalizePhone(c.phone) === phoneKey) : undefined) ||
       null
     );
-  }
-
-  /**
-   * Moves a courier's record to another branch, so a rider who changes shops keeps one
-   * profile and one history instead of turning up twice.
-   *
-   * What they did before stays where it happened: a delivery belongs to the branch of its
-   * order, attendance and settlements carry their own branch. So cash still owed from the
-   * old shop is settled there, and nothing is copied or re-pointed. A courier is only moved
-   * between shifts — not while carrying orders, checked in, or holding the old shop's
-   * mobile POS, each of which the old branch has to close out first.
-   */
-  async moveCourier(tenantId: string, courierId: string, targetBranchId: string | undefined, actorId?: string) {
-    if (!targetBranchId) throw new BadRequestException('Name the branch the courier is moving to');
-
-    const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
-    if (!courier) throw new NotFoundException('Courier not found');
-
-    const target = await this.branchRepo.findOne({ where: { id: targetBranchId, tenant_id: tenantId } });
-    if (!target) throw new NotFoundException('Branch not found');
-
-    // Same branch and still active: nothing to move. An archived courier on this branch's
-    // own books is brought back the same way.
-    if (courier.branch_id !== targetBranchId || !courier.is_active) {
-      const refuse = (code: string, detail: string) => new ConflictException({ code, title: 'Courier Cannot Move Yet', detail });
-
-      const activeCount = await this.deliveryRepo.count({
-        where: { tenant_id: tenantId, courier_id: courierId, state: In(ACTIVE_DELIVERY_STATES) },
-      });
-      if (activeCount > 0) {
-        throw refuse('COURIER_ON_THE_ROAD', `${courier.name} still has ${activeCount} delivery(s) under way at their current branch.`);
-      }
-
-      const attendance = await this.attendanceRepo.findOne({
-        where: { tenant_id: tenantId, courier_id: courierId, date: await this.businessToday(tenantId, courier.branch_id) },
-      });
-      if (attendance && attendance.status !== 'CHECKED_OUT') {
-        throw refuse('COURIER_ON_SHIFT', `${courier.name} is still checked in at their current branch. Check them out there first.`);
-      }
-
-      const terminal = await this.terminalAssignRepo.findOne({
-        where: { tenant_id: tenantId, courier_id: courierId, is_active: true },
-      });
-      if (terminal) {
-        throw refuse('COURIER_HOLDS_TERMINAL', `${courier.name} still holds a mobile POS from their current branch. Release it there first.`);
-      }
-
-      const fromBranchId = courier.branch_id ?? null;
-      courier.branch_id = targetBranchId;
-      courier.is_active = true;
-      await this.courierRepo.save(courier);
-      // Their account works where they do.
-      if (courier.user_id) {
-        await this.userRepo.update({ id: courier.user_id, tenant_id: tenantId }, { branch_id: targetBranchId, is_active: true });
-      }
-
-      await this.auditWriter.write({
-        tenantId,
-        actorType: 'ADMIN',
-        actorId,
-        action: 'COURIER_MOVED',
-        entityType: 'Courier',
-        entityId: courier.id,
-        branchId: targetBranchId,
-        correlationId: 'corr-courier-move',
-        beforeData: { branch_id: fromBranchId },
-        afterData: { branch_id: targetBranchId },
-        details: { courierId: courier.id, fromBranchId, toBranchId: targetBranchId },
-      });
-    }
-
-    return await this.getCourierById(tenantId, courierId);
   }
 
   async updateCourierStatus(tenantId: string, courierId: string, status: 'AVAILABLE' | 'ON_DELIVERY' | 'INACTIVE', correlationId?: string, actorId?: string) {
@@ -426,197 +288,7 @@ export class DeliveryService {
     return saved;
   }
 
-  async recordAttendance(
-    tenantId: string,
-    data: { courier_id: string; branch_id: string; status: 'CHECKED_IN' | 'CHECKED_OUT' | 'PAUSED'; availability_status?: 'AVAILABLE' | 'BUSY' | 'OFF_LINE' },
-    actorId?: string,
-    userBranchId?: string | null,
-  ) {
-    const courier = await this.courierRepo.findOne({ where: { id: data.courier_id, tenant_id: tenantId } });
-    if (!courier) throw new NotFoundException('Courier not found');
-
-    // The courier is named in the body, which the ownership guard cannot see.
-    if (userBranchId && courier.branch_id !== userBranchId) {
-      throw new ForbiddenException({
-        code: 'OTHER_BRANCH',
-        title: 'Belongs To Another Branch',
-        detail: 'This record belongs to a branch other than your own.',
-      });
-    }
-    // A courier signs in where they work. Riding for another shop is a move, not a check-in
-    // somewhere else, or the same person ends up on two branches' rosters at once.
-    if (courier.branch_id && data.branch_id && data.branch_id !== courier.branch_id) {
-      throw new BadRequestException({
-        code: 'COURIER_OTHER_BRANCH',
-        title: 'Courier Works At Another Branch',
-        detail: `${courier.name} works at another branch. Move them to this branch before checking them in.`,
-      });
-    }
-
-    // The courier's business day, not the calendar's: a rider checked in at 20:00 is still on
-    // tonight's roster at 01:00.
-    const todayStr = await this.businessToday(tenantId, data.branch_id || courier.branch_id);
-    let attendance = await this.attendanceRepo.findOne({
-      where: { tenant_id: tenantId, courier_id: data.courier_id, date: todayStr },
-    });
-
-    // Checked out at the old shop this morning, moved, and checking in at the new one.
-    if (attendance && courier.branch_id && attendance.branch_id !== courier.branch_id && data.status === 'CHECKED_IN') {
-      attendance.branch_id = courier.branch_id;
-      attendance.checked_in_at = new Date();
-      attendance.checked_out_at = null;
-    }
-
-    if (!attendance) {
-      let targetBranchId = courier.branch_id || data.branch_id;
-      if (!targetBranchId) {
-        const defaultTerm = await this.terminalRepo.findOne({ where: { tenant_id: tenantId } });
-        targetBranchId = defaultTerm?.branch_id || null;
-      }
-      if (!targetBranchId) {
-        throw new BadRequestException('Branch ID is required for courier attendance');
-      }
-      attendance = this.attendanceRepo.create({
-        tenant_id: tenantId,
-        courier_id: data.courier_id,
-        branch_id: targetBranchId,
-        date: todayStr,
-        status: data.status,
-        availability_status: data.availability_status || (data.status === 'CHECKED_IN' ? 'AVAILABLE' : 'OFF_LINE'),
-        checked_in_at: new Date(),
-      });
-    } else {
-      attendance.status = data.status;
-      if (data.availability_status) {
-        attendance.availability_status = data.availability_status;
-      } else if (data.status === 'CHECKED_IN') {
-        attendance.availability_status = 'AVAILABLE';
-      } else if (data.status === 'CHECKED_OUT') {
-        attendance.availability_status = 'OFF_LINE';
-        attendance.checked_out_at = new Date();
-      }
-    }
-
-    const saved = await this.attendanceRepo.save(attendance);
-
-    courier.status = data.status === 'CHECKED_IN' ? 'AVAILABLE' : 'INACTIVE';
-    await this.courierRepo.save(courier);
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      actorId,
-      action: 'COURIER_ATTENDANCE_UPDATED',
-      entityType: 'Courier',
-      entityId: courier.id,
-      branchId: saved.branch_id ?? undefined,
-      correlationId: 'corr-courier-attendance',
-      afterData: saved,
-    });
-
-    return saved;
-  }
-
-  async setCourierAvailability(tenantId: string, courierId: string, availabilityStatus: 'AVAILABLE' | 'BUSY' | 'OFF_LINE', actorId?: string) {
-    const rider = await this.courierRepo.findOne({ where: { tenant_id: tenantId, id: courierId } });
-    const todayStr = await this.businessToday(tenantId, rider?.branch_id);
-    let attendance = await this.attendanceRepo.findOne({
-      where: { tenant_id: tenantId, courier_id: courierId, date: todayStr },
-    });
-
-    if (!attendance) {
-      throw new BadRequestException('Courier is not checked in today. Please check in first.');
-    }
-
-    const previousAvailability = attendance.availability_status;
-    attendance.availability_status = availabilityStatus;
-    const saved = await this.attendanceRepo.save(attendance);
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      actorId,
-      action: 'COURIER_AVAILABILITY_UPDATED',
-      entityType: 'Courier',
-      entityId: courierId,
-      branchId: saved.branch_id ?? undefined,
-      beforeData: { availability_status: previousAvailability },
-      afterData: saved,
-    });
-    return saved;
-  }
-
-  // --- 3. MOBILE TERMINAL ASSIGNMENT ---
-  async assignMobileTerminal(tenantId: string, courierId: string, terminalId: string, actorId?: string) {
-    const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
-    if (!courier) throw new NotFoundException('Courier not found');
-
-    const terminal = await this.terminalRepo.findOne({ where: { id: terminalId, tenant_id: tenantId } });
-    if (!terminal) throw new NotFoundException('Terminal not found');
-
-    const existingTerminalAssign = await this.terminalAssignRepo.findOne({
-      where: { tenant_id: tenantId, terminal_id: terminalId, is_active: true, courier_id: Not(courierId) },
-    });
-    if (existingTerminalAssign) {
-      throw new BadRequestException(`Mobile POS terminal ${terminal.name || terminal.code} is already assigned to another active courier`);
-    }
-
-    const activeAssigns = await this.terminalAssignRepo.find({
-      where: { tenant_id: tenantId, courier_id: courierId, is_active: true },
-    });
-    for (const a of activeAssigns) {
-      a.is_active = false;
-      a.unassigned_at = new Date();
-      await this.terminalAssignRepo.save(a);
-    }
-
-    const newAssign = this.terminalAssignRepo.create({
-      tenant_id: tenantId,
-      courier_id: courierId,
-      terminal_id: terminalId,
-      assigned_at: new Date(),
-      is_active: true,
-    });
-    const saved = await this.terminalAssignRepo.save(newAssign);
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      actorId,
-      action: 'COURIER_TERMINAL_ASSIGNED',
-      entityType: 'Courier',
-      entityId: courier.id,
-      branchId: courier.branch_id ?? undefined,
-      correlationId: 'corr-terminal-assign',
-      afterData: { ...saved, terminal_name: terminal.name || terminal.code },
-    });
-
-    return saved;
-  }
-
-  async unassignMobileTerminal(tenantId: string, courierId: string, actorId?: string) {
-    const activeAssigns = await this.terminalAssignRepo.find({
-      where: { tenant_id: tenantId, courier_id: courierId, is_active: true },
-    });
-    for (const a of activeAssigns) {
-      a.is_active = false;
-      a.unassigned_at = new Date();
-      await this.terminalAssignRepo.save(a);
-    }
-    if (activeAssigns.length) {
-      await this.auditWriter.write({
-        tenantId,
-        actorType: 'ADMIN',
-        actorId,
-        action: 'COURIER_TERMINAL_UNASSIGNED',
-        entityType: 'Courier',
-        entityId: courierId,
-        beforeData: { terminal_ids: activeAssigns.map((a) => a.terminal_id) },
-      });
-    }
-    return { success: true };
-  }
-
-  // --- 4. DELIVERY EXECUTION & STATE MACHINE ---
+  // --- 3. DELIVERY EXECUTION & STATE MACHINE ---
   private async reconcileDeliveryWithOrder(tenantId: string, delivery: Delivery, order: OrderHeader): Promise<Delivery> {
     const orderState = String(order.state || order.status || '').toUpperCase();
     let expectedState: DeliveryState | null = null;
@@ -629,14 +301,12 @@ export class DeliveryService {
 
     if (!expectedState) return delivery;
 
-    // The attempt that matches the delivery as it stands. A failed earlier ride by another
-    // courier keeps its own status, or a later completion would hand them the order's cash.
+    // The attempt that matches the delivery as it stands.
     const assignment = await this.assignmentRepo.findOne({
       where: {
         tenant_id: tenantId,
         order_id: delivery.order_id,
         ...(delivery.courier_id ? { courier_id: delivery.courier_id } : {}),
-        status: Not('FAILED'),
       },
     });
     if (assignment && assignment.status !== expectedState) {
@@ -714,8 +384,9 @@ export class DeliveryService {
   }
 
   /**
-   * Working today is the whole test: no separate available/busy switch, and no cap on how many
-   * deliveries one courier carries. The dispatcher at the counter decides both.
+   * Any active courier of the order's branch can take it: no check-in, no available/busy
+   * switch, and no cap on how many deliveries one courier carries. The dispatcher at the
+   * counter decides.
    */
   private async courierWhoCanTake(tenantId: string, courierId: string, order: OrderHeader) {
     const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
@@ -728,87 +399,16 @@ export class DeliveryService {
         detail: `${courier.name} works at another branch and cannot take this branch's orders.`,
       });
     }
-
-    const todayStr = await this.businessToday(tenantId, courier.branch_id);
-    const attendance = await this.attendanceRepo.findOne({
-      where: { tenant_id: tenantId, courier_id: courierId, date: todayStr },
-    });
-    if (!attendance || attendance.status !== 'CHECKED_IN') {
-      throw new BadRequestException(`Courier ${courier.name} is not checked in today`);
-    }
     return courier;
   }
 
   /**
    * The dispatch board's one step (PM, 2026-10-05): at the counter the rider is standing there
-   * when the cashier picks them, so naming the courier sends the order out. On an order already
-   * out it changes the rider instead — a wrong pick fixed without failing the ride.
+   * when the cashier picks them, so naming the courier sends the order out.
    */
   async dispatchCourier(tenantId: string, deliveryId: string, courierId: string, userId?: string) {
-    const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId, tenant_id: tenantId } });
-    if (!delivery) throw new NotFoundException('Delivery not found');
-    if (delivery.state === 'PICKED_UP' || delivery.state === 'EN_ROUTE') {
-      return await this.changeCourierOnTheWay(tenantId, delivery, courierId, userId);
-    }
     await this.assignCourier(tenantId, deliveryId, courierId, userId);
     return await this.departDelivery(tenantId, deliveryId, userId);
-  }
-
-  /**
-   * Swaps the rider on an order that is already out. The first courier's attempt is closed as
-   * reassigned, so it expects no cash and pays nothing, and the new courier's ride starts now.
-   */
-  private async changeCourierOnTheWay(tenantId: string, delivery: Delivery, courierId: string, userId?: string) {
-    if (delivery.courier_id === courierId) return delivery;
-    const order = await this.orderRepo.findOne({ where: { id: delivery.order_id, tenant_id: tenantId } });
-    if (!order) throw new NotFoundException('Parent order not found');
-    const courier = await this.courierWhoCanTake(tenantId, courierId, order);
-
-    const previousCourierId = delivery.courier_id;
-    if (previousCourierId) {
-      const previous = await this.assignmentRepo.findOne({
-        where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: previousCourierId, status: 'OUT_FOR_DELIVERY' },
-      });
-      if (previous) {
-        previous.status = 'REASSIGNED';
-        await this.assignmentRepo.save(previous);
-      }
-    }
-
-    const now = new Date();
-    delivery.courier_id = courierId;
-    delivery.assigned_at = now;
-    delivery.picked_up_at = now;
-    const saved = await this.deliveryRepo.save(delivery);
-    await this.logDeliveryEvent(tenantId, saved.id, delivery.state, delivery.state, `Courier changed to ${courier.name}`, userId);
-
-    let assignment = await this.assignmentRepo.findOne({
-      where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: courierId, status: Not('FAILED') },
-    });
-    if (!assignment) {
-      assignment = this.assignmentRepo.create({
-        tenant_id: tenantId,
-        order_id: delivery.order_id,
-        courier_id: courierId,
-        delivery_fee: delivery.fee || '0.00',
-        tip_amount: '0.00',
-      });
-    }
-    assignment.status = 'OUT_FOR_DELIVERY';
-    assignment.assigned_at = now;
-    assignment.picked_up_at = now;
-    await this.assignmentRepo.save(assignment);
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: userId ? 'ADMIN' : 'SYSTEM',
-      actorId: userId,
-      action: 'DELIVERY_COURIER_ASSIGNED',
-      correlationId: 'corr-change-courier',
-      details: { deliveryId: delivery.id, courierId, courierName: courier.name, previousCourierId },
-    });
-
-    return saved;
   }
 
   async assignCourier(tenantId: string, deliveryId: string, courierId: string, userId?: string) {
@@ -825,13 +425,11 @@ export class DeliveryService {
     if (['DELIVERED', 'CANCELLED'].includes(delivery.state)) {
       throw new BadRequestException(`Cannot assign a courier to a ${delivery.state.toLowerCase()} delivery`);
     }
-    // Once the courier has left, the food is on their bike. Naming another rider put the board
-    // back to "assigned" while the first still carried it. The ride is failed back first, then
-    // requeued, so the first courier's attempt is closed with whatever it is owed.
+    // Once the courier has left, the food is on their bike: another rider cannot be named.
     if (delivery.state === 'PICKED_UP' || delivery.state === 'EN_ROUTE') {
       throw new ConflictException({
         code: 'DELIVERY_ALREADY_LEFT',
-        message: `Order ${order.order_number} is already on its way; mark the ride failed and requeue it to send another courier`,
+        message: `Order ${order.order_number} is already on its way with a courier`,
       });
     }
 
@@ -858,9 +456,8 @@ export class DeliveryService {
       }
     }
 
-    // A failed ride stays a record of its own, so a retry by the same courier is a new attempt.
     let assignment = await this.assignmentRepo.findOne({
-      where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: courierId, status: Not('FAILED') },
+      where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: courierId },
     });
     if (!assignment) {
       assignment = this.assignmentRepo.create({
@@ -914,7 +511,7 @@ export class DeliveryService {
 
     if (delivery.courier_id) {
       const assignment = await this.assignmentRepo.findOne({
-        where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: delivery.courier_id, status: Not('FAILED') },
+        where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: delivery.courier_id },
       });
       if (assignment) {
         assignment.status = 'OUT_FOR_DELIVERY';
@@ -964,7 +561,7 @@ export class DeliveryService {
 
     let assignment = delivery.courier_id
       ? await this.assignmentRepo.findOne({
-          where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: delivery.courier_id, status: Not('FAILED') },
+          where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: delivery.courier_id },
         })
       : null;
 
@@ -1022,81 +619,6 @@ export class DeliveryService {
       if (fromState === order.state) return;
       await this.transitionRecorder.record(em, { tenantId, order, fromState, action, userId, reasonText });
     });
-  }
-
-  async failDelivery(tenantId: string, deliveryId: string, reason: string, userId?: string) {
-    const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId, tenant_id: tenantId } });
-    if (!delivery) throw new NotFoundException('Delivery not found');
-
-    const order = await this.orderRepo.findOne({ where: { id: delivery.order_id, tenant_id: tenantId } });
-    const orderState = String(order?.state || order?.status || '').toUpperCase();
-    if (order && ['COMPLETED', 'CANCELLED'].includes(orderState)) {
-      await this.reconcileDeliveryWithOrder(tenantId, delivery, order);
-      throw new ConflictException({
-        code: 'DELIVERY_NOT_ACTIVE',
-        message: `Order ${order.order_number} is already ${orderState.toLowerCase()}; its delivery cannot fail`,
-      });
-    }
-    // Only a ride that is still out can come back. A board that had not refreshed could fail a
-    // delivery already completed, which reopened a paid order and cleared the cash its courier
-    // owed.
-    if (!ACTIVE_DELIVERY_STATES.includes(delivery.state)) {
-      throw new ConflictException({
-        code: 'DELIVERY_NOT_ACTIVE',
-        message: `This delivery is ${delivery.state.toLowerCase()}; only one that is assigned or on its way can fail`,
-      });
-    }
-
-    const fromState = delivery.state;
-    delivery.state = 'FAILED';
-    delivery.failure_reason = reason || 'Delivery attempt failed';
-
-    const saved = await this.deliveryRepo.save(delivery);
-    await this.logDeliveryEvent(tenantId, saved.id, fromState, 'FAILED', `Delivery failed: ${reason}`, userId);
-
-    // The courier's attempt is closed as failed. No cash is expected from a failed attempt.
-    if (delivery.courier_id) {
-      const assignment = await this.assignmentRepo.findOne({
-        where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: delivery.courier_id, status: Not('FAILED') },
-      });
-      if (assignment) {
-        assignment.status = 'FAILED';
-        assignment.failure_reason = delivery.failure_reason;
-        await this.assignmentRepo.save(assignment);
-      }
-    }
-
-    // The food is back at the counter. An order that never left is where the kitchen has it.
-    if (order && orderState === 'OUT_FOR_DELIVERY') {
-      order.state = 'CONFIRMED';
-      order.status = 'CONFIRMED';
-      order.fulfillment_status = 'PENDING';
-      await this.saveOrderTransition(tenantId, order, 'OUT_FOR_DELIVERY', 'DELIVERY_FAILED', userId, delivery.failure_reason);
-    }
-
-    return saved;
-  }
-
-  async requeueDelivery(tenantId: string, deliveryId: string, userId?: string) {
-    const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId, tenant_id: tenantId } });
-    if (!delivery) throw new NotFoundException('Delivery not found');
-    // Requeue is the step after a failed ride. On any other delivery it took the courier off an
-    // order still on their bike, or put a finished one back on the board.
-    if (delivery.state !== 'FAILED') {
-      throw new ConflictException({
-        code: 'DELIVERY_NOT_FAILED',
-        message: `This delivery is ${delivery.state.toLowerCase()}; only a failed delivery can be requeued`,
-      });
-    }
-
-    const fromState = delivery.state;
-    delivery.state = 'UNASSIGNED';
-    delivery.courier_id = null;
-    delivery.failure_reason = null;
-
-    const saved = await this.deliveryRepo.save(delivery);
-    await this.logDeliveryEvent(tenantId, saved.id, fromState, 'UNASSIGNED', 'Delivery requeued for dispatch', userId);
-    return saved;
   }
 
   /**
@@ -1201,18 +723,15 @@ export class DeliveryService {
     return await this.getDeliveries(tenantId, branchId, statusFilter);
   }
 
-  async updateAssignmentStatus(tenantId: string, assignmentId: string, status: string, failureReason?: string, correlationId?: string) {
+  async updateAssignmentStatus(tenantId: string, assignmentId: string, status: string) {
     if (status === 'EN_ROUTE' || status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY') {
       return await this.departDelivery(tenantId, assignmentId);
     }
     if (status === 'DELIVERED') {
       return await this.completeDelivery(tenantId, assignmentId);
     }
-    if (status === 'FAILED') {
-      return await this.failDelivery(tenantId, assignmentId, failureReason || 'Failed');
-    }
     // Any other status used to be written straight onto the delivery, past every rule above.
-    throw new BadRequestException(`Status ${status} is not a delivery step; use assign, depart, complete, fail or requeue`);
+    throw new BadRequestException(`Status ${status} is not a delivery step; use assign, depart or complete`);
   }
 
   private async activeMethod(tenantId: string, kinds: string[]): Promise<PaymentMethod> {
@@ -1246,7 +765,7 @@ export class DeliveryService {
    * still settled here. The figures are the settlement preview's own, so the card and the
    * batch it starts cannot disagree.
    */
-  /** The money a courier's attempt should bring back: the unpaid balance if delivered, nothing if it failed. */
+  /** The money a courier's attempt should bring back: the unpaid balance if delivered, nothing otherwise. */
   private async expectedFromAttempt(assignment: DeliveryAssignment, order?: OrderHeader | null) {
     if (assignment.status !== 'DELIVERED' || !order) {
       return { expCashStr: '0.00', expPosStr: '0.00', primaryMethod: 'CASH', expCash: '0.00', expPos: '0.00' };
@@ -1261,7 +780,7 @@ export class DeliveryService {
 
   async getUnsettledSummary(tenantId: string, branchId?: string) {
     const pending = await this.assignmentRepo.find({
-      where: { tenant_id: tenantId, is_settled: false, status: In(['DELIVERED', 'FAILED', 'RETURNED']) },
+      where: { tenant_id: tenantId, is_settled: false, status: In(['DELIVERED', 'RETURNED']) },
     });
     const courierIds = Array.from(new Set(pending.map((a) => a.courier_id)));
     const summary = [];
@@ -1297,7 +816,7 @@ export class DeliveryService {
 
     // Find active or closed non-reversed settlements to exclude already reserved lines
     const existingSettlements = (await this.settlementRepo.find({
-      where: { tenant_id: tenantId, status: In(['DRAFT', 'UNDER_REVIEW', 'CLOSED']) },
+      where: { tenant_id: tenantId, status: In(['DRAFT', 'CLOSED']) },
     })) || [];
     const reservedLineAssignmentIds = new Set<string>();
     if (existingSettlements && existingSettlements.length > 0) {
@@ -1318,7 +837,7 @@ export class DeliveryService {
     const where: any = {
       tenant_id: tenantId,
       courier_id: courierId,
-      status: In(['DELIVERED', 'FAILED', 'RETURNED']),
+      status: In(['DELIVERED', 'RETURNED']),
     };
     if (named) {
       where.id = In(assignmentIds);
@@ -1642,52 +1161,6 @@ export class DeliveryService {
     return allLines ? { ...saved, lines: allLines } : saved;
   }
 
-  async reviewSettlement(tenantId: string, id: string, userId: string, correlationId?: string) {
-    const settlement = await this.settlementRepo.findOne({ where: { id, tenant_id: tenantId } });
-    if (!settlement) throw new NotFoundException('Settlement not found');
-
-    if (settlement.status !== 'DRAFT') {
-      throw new BadRequestException(`Only DRAFT settlements can be moved to UNDER_REVIEW (current status: ${settlement.status})`);
-    }
-
-    settlement.status = 'UNDER_REVIEW';
-    settlement.reviewed_by_user_id = userId;
-    const saved = await this.settlementRepo.save(settlement);
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'COURIER_SETTLEMENT_REVIEWED',
-      correlationId: correlationId || 'corr-settle-review',
-      afterData: saved,
-    });
-
-    return saved;
-  }
-
-  async returnSettlement(tenantId: string, id: string, userId: string, reason?: string, correlationId?: string) {
-    const settlement = await this.settlementRepo.findOne({ where: { id, tenant_id: tenantId } });
-    if (!settlement) throw new NotFoundException('Settlement not found');
-
-    if (settlement.status !== 'UNDER_REVIEW') {
-      throw new BadRequestException(`Only UNDER_REVIEW settlements can be returned to DRAFT (current status: ${settlement.status})`);
-    }
-
-    settlement.status = 'DRAFT';
-    settlement.notes = reason ? `[Returned]: ${reason} | ${settlement.notes || ''}` : settlement.notes;
-    const saved = await this.settlementRepo.save(settlement);
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'COURIER_SETTLEMENT_RETURNED',
-      correlationId: correlationId || 'corr-settle-return',
-      afterData: saved,
-    });
-
-    return saved;
-  }
-
   async closeSettlement(tenantId: string, id: string, userId: string, approvalRequestId?: string, correlationId?: string) {
     const settlement = await this.settlementRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!settlement) throw new NotFoundException('Settlement not found');
@@ -1943,184 +1416,5 @@ export class DeliveryService {
       lines: detail.lines,
       generated_at: new Date().toISOString(),
     };
-  }
-
-  // --- 8. CHAIN ROLL-UP (READ ONLY) ---
-
-  /**
-   * A delivery is late once it has been with a courier this long without arriving. There is
-   * no promised-time column on a delivery, so elapsed time since assignment is the only
-   * honest signal available; the number is a demo threshold, not a contractual SLA.
-   */
-  private static readonly LATE_AFTER_MINUTES = 25;
-
-
-  /**
-   * What head office can see of the fleet without standing in any one shop: one row per
-   * branch, and nothing to click.
-   *
-   * Deliberately read-only, and deliberately not calling reconcileDeliveryWithOrder — that
-   * method writes, and a chain-wide overview that quietly rewrote every branch's delivery
-   * states as a side effect of being looked at would be a much worse thing than a row that
-   * is a few seconds stale. The order state is folded in below the same way reconcile folds
-   * it, so the numbers agree with the branch screen without persisting anything.
-   */
-  async getFleetRollup(tenantId: string) {
-    const branches = await this.branchRepo.find({ where: { tenant_id: tenantId } });
-    const sellingBranches = branches
-      .filter((b) => SELLING_BRANCH_TYPES.includes(b.branch_type))
-      .filter((b) => b.is_active);
-
-    // "Today" is each branch's own business day: its cutoff, on its own clock.
-    const clocks = new Map<string, BusinessClock>();
-    for (const b of branches) clocks.set(b.id, await loadBusinessClock(this.orderRepo.manager, tenantId, b.id));
-    const chainClock = await loadBusinessClock(this.orderRepo.manager, tenantId);
-    const clockOf = (branchId: string) => clocks.get(branchId) ?? chainClock;
-    const today = chainClock.today();
-    const lateBefore = new Date(Date.now() - DeliveryService.LATE_AFTER_MINUTES * 60_000);
-
-    // One join instead of a query per delivery: getDeliveries() reads the order row by row
-    // because it returns a board, and a chain of a dozen branches would make that hundreds
-    // of round trips for a page that only ever shows counts.
-    const rows: Array<{
-      branch_id: string;
-      state: DeliveryState;
-      order_state: string;
-      order_status: string;
-      cash_expected: string;
-      assigned_at: Date | null;
-      delivered_at: Date | null;
-    }> = await this.deliveryRepo
-      .createQueryBuilder('d')
-      .innerJoin(OrderHeader, 'o', 'o.id = d.order_id AND o.tenant_id = d.tenant_id')
-      .where('d.tenant_id = :tenantId', { tenantId })
-      .select([
-        'o.branch_id AS branch_id',
-        'd.state AS state',
-        'o.state AS order_state',
-        'o.status AS order_status',
-        'd.cash_expected AS cash_expected',
-        'd.assigned_at AS assigned_at',
-        'd.delivered_at AS delivered_at',
-      ])
-      .getRawMany();
-
-    const couriers = await this.courierRepo.find({ where: { tenant_id: tenantId, is_active: true } });
-    const todays = [...new Set([today, ...[...clocks.values()].map((c) => c.today())])];
-    const attendance = (
-      await this.attendanceRepo.find({ where: { tenant_id: tenantId, date: In(todays), status: 'CHECKED_IN' } })
-    ).filter((a) => a.date === clockOf(a.branch_id).today());
-
-    type Bucket = {
-      in_flight: number;
-      unassigned: number;
-      late: number;
-      delivered_today: number;
-      failed_today: number;
-      couriers_active: number;
-      couriers_on_shift: number;
-      cash_with_couriers: string;
-    };
-    const emptyBucket = (): Bucket => ({
-      in_flight: 0,
-      unassigned: 0,
-      late: 0,
-      delivered_today: 0,
-      failed_today: 0,
-      couriers_active: 0,
-      couriers_on_shift: 0,
-      cash_with_couriers: '0.00',
-    });
-
-    // Seeded from the branch list, so a branch running no deliveries tonight still appears
-    // as a row of zeroes rather than vanishing. An absent branch reads as "nothing to see";
-    // a zero reads as "nothing is moving", and those are different things at head office.
-    const buckets = new Map<string, Bucket>();
-    for (const b of sellingBranches) buckets.set(b.id, emptyBucket());
-
-    for (const row of rows) {
-      if (!buckets.has(row.branch_id)) buckets.set(row.branch_id, emptyBucket());
-      const bucket = buckets.get(row.branch_id)!;
-      const state = DeliveryService.effectiveDeliveryState(row.state, row.order_state, row.order_status);
-
-      if (state === 'DELIVERED') {
-        const clock = clockOf(row.branch_id);
-        if (clock.dateOf(row.delivered_at) === clock.today()) bucket.delivered_today += 1;
-        continue;
-      }
-      if (state === 'FAILED') {
-        bucket.failed_today += 1;
-        continue;
-      }
-      if (state === 'CANCELLED') continue;
-
-      bucket.in_flight += 1;
-      if (state === 'UNASSIGNED') bucket.unassigned += 1;
-      if (row.assigned_at && new Date(row.assigned_at) < lateBefore) bucket.late += 1;
-      bucket.cash_with_couriers = MoneyUtil.add(
-        bucket.cash_with_couriers,
-        MoneyUtil.format(row.cash_expected || '0', 2),
-        2,
-      );
-    }
-
-    for (const c of couriers) {
-      if (!c.branch_id || !buckets.has(c.branch_id)) continue;
-      buckets.get(c.branch_id)!.couriers_active += 1;
-    }
-    for (const a of attendance) {
-      if (!buckets.has(a.branch_id)) continue;
-      buckets.get(a.branch_id)!.couriers_on_shift += 1;
-    }
-
-    const byId = new Map(branches.map((b) => [b.id, b]));
-    const branchRows = Array.from(buckets.entries())
-      .map(([id, b]) => {
-        const branch = byId.get(id);
-        return {
-          branch_id: id,
-          branch: branch ? branch.name : id,
-          branch_code: branch ? branch.code : '—',
-          ...b,
-        };
-      })
-      // Worst first: a chain operator opens this to find where to phone, not to read an
-      // alphabetical list. Late orders outrank everything, then sheer volume in flight.
-      .sort((a, z) => z.late - a.late || z.in_flight - a.in_flight || a.branch.localeCompare(z.branch));
-
-    return {
-      business_date: today,
-      late_after_minutes: DeliveryService.LATE_AFTER_MINUTES,
-      generated_at: new Date().toISOString(),
-      rows: branchRows,
-      totals: {
-        branch_count: branchRows.length,
-        branches_with_late: branchRows.filter((r) => r.late > 0).length,
-        in_flight: branchRows.reduce((sum, r) => sum + r.in_flight, 0),
-        unassigned: branchRows.reduce((sum, r) => sum + r.unassigned, 0),
-        late: branchRows.reduce((sum, r) => sum + r.late, 0),
-        delivered_today: branchRows.reduce((sum, r) => sum + r.delivered_today, 0),
-        failed_today: branchRows.reduce((sum, r) => sum + r.failed_today, 0),
-        couriers_active: branchRows.reduce((sum, r) => sum + r.couriers_active, 0),
-        couriers_on_shift: branchRows.reduce((sum, r) => sum + r.couriers_on_shift, 0),
-        cash_with_couriers: MoneyUtil.sum(branchRows.map((r) => r.cash_with_couriers), 2),
-      },
-    };
-  }
-
-  /**
-   * The state reconcileDeliveryWithOrder would settle on, worked out without writing it.
-   * Kept beside the rollup so the two readings of "what state is this in" cannot drift.
-   */
-  private static effectiveDeliveryState(
-    state: DeliveryState,
-    orderState: string,
-    orderStatus: string,
-  ): DeliveryState {
-    const order = String(orderState || orderStatus || '').toUpperCase();
-    if (order === 'COMPLETED') return 'DELIVERED';
-    if (order === 'CANCELLED') return 'CANCELLED';
-    if (order === 'OUT_FOR_DELIVERY' && !['DELIVERED', 'CANCELLED'].includes(state)) return 'EN_ROUTE';
-    return state;
   }
 }

@@ -2,7 +2,6 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { CustomerService } from '../customer/customer.service';
-import { DeliveryService } from '../delivery/delivery.service';
 
 /** A profile is a summary, not a report: it carries the recent end of each history. */
 const ORDER_LIMIT = 100;
@@ -24,19 +23,18 @@ export function maskAuditPayload(value: any): any {
 }
 
 /**
- * One page per customer, courier or account: who they are, the orders they touched, the
+ * One page per customer or account: who they are, the orders they touched, the
  * money that moved, and the audit trail about them and by them.
  *
  * Everything is read with plain SQL against tables other modules own. A profile never
- * writes, so it borrows their data rather than their services, except for the two
- * lookups that already enrich a record the way the rest of the app shows it.
+ * writes, so it borrows their data rather than their services, except for the
+ * lookup that already enriches a record the way the rest of the app shows it.
  */
 @Injectable()
 export class ProfilesService {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly customerService: CustomerService,
-    private readonly deliveryService: DeliveryService,
   ) {}
 
   async customerProfile(tenantId: string, id: string) {
@@ -91,90 +89,6 @@ export class ProfilesService {
       stats: summary.stats,
       orders: summary.orders,
       credit: account ? { account, entries } : null,
-      audit,
-    };
-  }
-
-  async courierProfile(tenantId: string, id: string) {
-    const courier: any = await this.deliveryService.getCourierById(tenantId, id);
-
-    // A courier's orders are the ones handed to them, through either delivery record.
-    const handedTo = `o.id IN (
-      SELECT d.order_id FROM delivery d WHERE d.tenant_id = $1 AND d.courier_id = $2
-      UNION
-      SELECT da.order_id FROM delivery_assignment da WHERE da.tenant_id = $1 AND da.courier_id = $2
-    )`;
-
-    const [branch, summary, deliveryStats, unsettled, settlements, attendance, terminals, audit] =
-      await Promise.all([
-        courier.branch_id
-          ? this.dataSource.query(`SELECT name FROM branch WHERE id = $1`, [courier.branch_id])
-          : [],
-        this.orderSummary(tenantId, handedTo, [id]),
-        this.dataSource.query(
-          `SELECT COUNT(*)::int AS delivery_count,
-                  COUNT(*) FILTER (WHERE state = 'DELIVERED')::int AS delivered_count,
-                  COUNT(*) FILTER (WHERE state = 'FAILED')::int AS failed_count,
-                  COUNT(*) FILTER (WHERE state IN ('ASSIGNED', 'PICKED_UP', 'EN_ROUTE'))::int AS active_count,
-                  MAX(delivered_at) AS last_delivered_at
-             FROM delivery
-            WHERE tenant_id = $1 AND courier_id = $2`,
-          [tenantId, id],
-        ),
-        this.dataSource.query(
-          `SELECT COUNT(*)::int AS unsettled_count,
-                  COALESCE(SUM(delivery_fee), 0)::text AS unsettled_fees
-             FROM delivery_assignment
-            WHERE tenant_id = $1 AND courier_id = $2 AND is_settled = false`,
-          [tenantId, id],
-        ),
-        this.dataSource.query(
-          `SELECT id, settlement_number, status, settlement_date, expected_cash_amount, actual_cash_amount,
-                  cash_discrepancy_amount, net_settlement_amount, closed_at
-             FROM courier_settlement
-            WHERE tenant_id = $1 AND courier_id = $2
-            ORDER BY settlement_date DESC, created_at DESC
-            LIMIT ${HISTORY_LIMIT}`,
-          [tenantId, id],
-        ),
-        this.dataSource.query(
-          `SELECT ca.id, ca.date, ca.status, ca.availability_status, ca.checked_in_at, ca.checked_out_at, b.name AS branch_name
-             FROM courier_attendance ca
-             LEFT JOIN branch b ON b.id = ca.branch_id
-            WHERE ca.tenant_id = $1 AND ca.courier_id = $2
-            ORDER BY ca.date DESC, ca.created_at DESC
-            LIMIT ${HISTORY_LIMIT}`,
-          [tenantId, id],
-        ),
-        this.dataSource.query(
-          `SELECT cta.id, cta.terminal_id, t.name AS terminal_name, t.code AS terminal_code,
-                  cta.assigned_at, cta.unassigned_at, cta.is_active
-             FROM courier_terminal_assignment cta
-             LEFT JOIN terminal t ON t.id = cta.terminal_id
-            WHERE cta.tenant_id = $1 AND cta.courier_id = $2
-            ORDER BY cta.assigned_at DESC
-            LIMIT ${HISTORY_LIMIT}`,
-          [tenantId, id],
-        ),
-        this.auditTrail(
-          tenantId,
-          `a.entity_id::text = $2
-           OR a.after_data->>'courier_id' = $2
-           OR a.details->>'courierId' = $2
-           -- Courier events written before they named their courier carried it only as the record itself.
-           OR (a.action LIKE 'COURIER%' AND a.after_data->>'id' = $2)
-           OR a.entity_id IN (SELECT cs.id FROM courier_settlement cs WHERE cs.courier_id::text = $2)`,
-          [id],
-        ),
-      ]);
-
-    return {
-      courier: { ...courier, branch_name: branch[0]?.name ?? null },
-      stats: { ...summary.stats, ...deliveryStats[0], ...unsettled[0] },
-      orders: summary.orders,
-      settlements,
-      attendance,
-      terminals,
       audit,
     };
   }

@@ -6,7 +6,6 @@ import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { OrderItem } from '../src/entities/OrderItem.entity';
 import { Product } from '../src/entities/Product.entity';
 import { Branch } from '../src/entities/Branch.entity';
-import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { IncomingOrderPolicyService } from '../src/modules/order/incoming-order-policy.service';
 import { snappfoodIntakeMocks } from './utils/snappfood-intake-mocks';
@@ -16,7 +15,6 @@ import { snappfoodIntakeMocks } from './utils/snappfood-intake-mocks';
 describe('an incoming Snappfood order carries what the store needs to answer it', () => {
   let service: SimulationService;
   let orderItemRepo: any;
-  let alertRepo: any;
   let incomingPolicy: any;
 
   // The simulator's order form, as simulation-snappfood.tsx posts it.
@@ -46,7 +44,6 @@ describe('an incoming Snappfood order carries what the store needs to answer it'
       save: jest.fn((dto: any) => Promise.resolve({ id: 'ord-1', ...dto })),
     };
     orderItemRepo = { create: jest.fn((dto: any) => dto), save: jest.fn((dto: any) => Promise.resolve(dto)) };
-    alertRepo = { create: jest.fn((dto: any) => dto), save: jest.fn((dto: any) => Promise.resolve({ id: 'alert-1', ...dto })) };
     const branchRepo = {
       find: jest.fn().mockResolvedValue([
         { id: 'br-vanak', code: 'VANAK', branch_type: 'RESTAURANT' },
@@ -62,7 +59,6 @@ describe('an incoming Snappfood order carries what the store needs to answer it'
         { provide: getRepositoryToken(OrderItem), useValue: orderItemRepo },
         { provide: getRepositoryToken(Product), useValue: { find: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
-        { provide: getRepositoryToken(OperationalAlert), useValue: alertRepo },
         { provide: IncomingOrderPolicyService, useValue: incomingPolicy },
         { provide: AuditWriter, useValue: { write: jest.fn() } },
         ...snappfoodIntakeMocks().providers,
@@ -96,14 +92,6 @@ describe('an incoming Snappfood order carries what the store needs to answer it'
     expect(result.order.branch_id).toBe('br-tajrish');
   });
 
-  // The chime, the toast and the header's Incoming Orders count announce an arrival; the
-  // Notification Center is kept for things that went wrong.
-  it('does not post its arrival to the Notification Center', async () => {
-    await service.generateSnappfoodOrder('t-1', { ...simulatorOrder, branch_id: 'br-tajrish' });
-
-    expect(alertRepo.save).not.toHaveBeenCalled();
-  });
-
   // Slice 4: the branch's acceptance policy decides, as the order lands, whether it waits.
   it('puts the order through the branch acceptance policy as it lands', async () => {
     const result: any = await service.generateSnappfoodOrder('t-1', simulatorOrder);
@@ -126,7 +114,6 @@ describe('an incoming Snappfood order carries what the store needs to answer it'
 describe("a Snappfood order keeps Snappfood's money, in Rial", () => {
   let service: SimulationService;
   let orderItemRepo: any;
-  let alertRepo: any;
   let intake: ReturnType<typeof snappfoodIntakeMocks>;
 
   // The simulator's default order: two dishes (500 + 600 Toman), 110 VAT, 500 delivery,
@@ -141,7 +128,6 @@ describe("a Snappfood order keeps Snappfood's money, in Rial", () => {
   beforeEach(async () => {
     intake = snappfoodIntakeMocks();
     orderItemRepo = { create: jest.fn((dto: any) => dto), save: jest.fn((dto: any) => Promise.resolve(dto)) };
-    alertRepo = { create: jest.fn((dto: any) => dto), save: jest.fn((dto: any) => Promise.resolve(dto)) };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SimulationService,
@@ -156,7 +142,6 @@ describe("a Snappfood order keeps Snappfood's money, in Rial", () => {
         { provide: getRepositoryToken(OrderItem), useValue: orderItemRepo },
         { provide: getRepositoryToken(Product), useValue: { find: jest.fn().mockResolvedValue([]) } },
         { provide: getRepositoryToken(Branch), useValue: { find: jest.fn().mockResolvedValue([{ id: 'br-1', code: 'VANAK', branch_type: 'RESTAURANT' }]) } },
-        { provide: getRepositoryToken(OperationalAlert), useValue: alertRepo },
         { provide: IncomingOrderPolicyService, useValue: { applyOnArrival: jest.fn().mockResolvedValue(null) } },
         { provide: AuditWriter, useValue: { write: jest.fn() } },
         ...intake.providers,
@@ -209,14 +194,13 @@ describe("a Snappfood order keeps Snappfood's money, in Rial", () => {
     expect(order).toEqual(expect.objectContaining({ paid_total: '0.0000', outstanding_total: '19100.0000' }));
   });
 
-  it('leaves the order owing and warns the branch when no ONLINE method is active', async () => {
+  it('leaves the order owing when no ONLINE method is active', async () => {
     intake.paymentMethodRepo.findOne.mockResolvedValue(null);
 
     const { order }: any = await service.generateSnappfoodOrder('t-1', snappfoodOrder);
 
     expect(intake.payments).toEqual([]);
     expect(order.outstanding_total).toBe('19100.0000');
-    expect(alertRepo.save).toHaveBeenCalledWith(expect.objectContaining({ severity: 'WARNING', branch_id: 'br-1' }));
   });
 
   it('registers a new customer by phone and links the order to them and their address', async () => {

@@ -11,7 +11,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
-import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import {
   IncomingOrderPolicy,
@@ -48,7 +47,6 @@ export class IncomingOrderPolicyService implements OnApplicationBootstrap, OnMod
   constructor(
     @InjectRepository(OrderHeader) private readonly orderRepo: Repository<OrderHeader>,
     @InjectRepository(TenantSetting) private readonly settingRepo: Repository<TenantSetting>,
-    @InjectRepository(OperationalAlert) private readonly alertRepo: Repository<OperationalAlert>,
     @Inject(forwardRef(() => OrderService)) private readonly orderService: OrderService,
   ) {}
 
@@ -125,20 +123,6 @@ export class IncomingOrderPolicyService implements OnApplicationBootstrap, OnMod
       }
 
       answered += 1;
-      const fromSnappfood = order.order_number?.startsWith('SNP-');
-      await this.alertRepo.save(
-        this.alertRepo.create({
-          tenant_id: order.tenant_id,
-          branch_id: order.branch_id,
-          type: 'INCOMING_ORDER_EXPIRED',
-          severity: 'WARNING',
-          title: `Order ${order.order_number} was not answered within ${policy.timeoutMinutes} min`,
-          message: accepted
-            ? 'Accepted automatically and sent to the kitchen.'
-            : `${policy.timeoutAction === 'ACCEPT' ? 'No shift was open, so it was rejected' : 'Rejected automatically'}${fromSnappfood ? '; Snappfood was told' : ''}.`,
-          acknowledged: false,
-        }),
-      );
     }
 
     return answered;

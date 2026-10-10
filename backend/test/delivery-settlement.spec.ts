@@ -16,8 +16,6 @@ import { CashMovement } from '../src/entities/CashMovement.entity';
 import { ConflictException, BadRequestException } from '@nestjs/common';
 
 import { DeliveryZone } from '../src/entities/DeliveryZone.entity';
-import { CourierAttendance } from '../src/entities/CourierAttendance.entity';
-import { CourierTerminalAssignment } from '../src/entities/CourierTerminalAssignment.entity';
 import { Delivery } from '../src/entities/Delivery.entity';
 import { DeliveryEvent } from '../src/entities/DeliveryEvent.entity';
 import { Terminal } from '../src/entities/Terminal.entity';
@@ -38,8 +36,6 @@ describe('DeliveryService (Courier Settlement)', () => {
   let paymentMethodRepo: any;
   let approvalRepo: any;
   let zoneRepo: any;
-  let attendanceRepo: any;
-  let terminalAssignRepo: any;
   let deliveryRepo: any;
   let deliveryEventRepo: any;
   let terminalRepo: any;
@@ -73,8 +69,6 @@ describe('DeliveryService (Courier Settlement)', () => {
     };
     approvalRepo = { findOne: jest.fn() };
     zoneRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
-    attendanceRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
-    terminalAssignRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
     deliveryRepo = { findOne: jest.fn(), find: jest.fn(), count: jest.fn().mockResolvedValue(0), create: jest.fn(), save: jest.fn() };
     deliveryEventRepo = { create: jest.fn(), save: jest.fn() };
     terminalRepo = { findOne: jest.fn() };
@@ -92,8 +86,6 @@ describe('DeliveryService (Courier Settlement)', () => {
         { provide: getRepositoryToken(PaymentMethod), useValue: paymentMethodRepo },
         { provide: getRepositoryToken(ApprovalRequest), useValue: approvalRepo },
         { provide: getRepositoryToken(DeliveryZone), useValue: zoneRepo },
-        { provide: getRepositoryToken(CourierAttendance), useValue: attendanceRepo },
-        { provide: getRepositoryToken(CourierTerminalAssignment), useValue: terminalAssignRepo },
         { provide: getRepositoryToken(Delivery), useValue: deliveryRepo },
         { provide: getRepositoryToken(DeliveryEvent), useValue: deliveryEventRepo },
         { provide: getRepositoryToken(Terminal), useValue: terminalRepo },
@@ -156,11 +148,11 @@ describe('DeliveryService (Courier Settlement)', () => {
     await expect(service.previewSettlement('t-1', 'c-1', ['asgn-settled'])).rejects.toThrow(ConflictException);
   });
 
-  it('expects back what the courier collected, and no cash from a failed ride', async () => {
+  it('expects back what the courier collected, and no cash from a ride that did not deliver', async () => {
     courierRepo.findOne.mockResolvedValue({ id: 'c-1', name: 'Courier 1', code: 'C01' });
     assignmentRepo.find.mockResolvedValue([
       { id: 'asgn-done', order_id: 'ord-1', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '10.00', is_settled: false },
-      { id: 'asgn-failed', order_id: 'ord-2', courier_id: 'c-1', status: 'FAILED', delivery_fee: '10.00', is_settled: false },
+      { id: 'asgn-returned', order_id: 'ord-2', courier_id: 'c-1', status: 'RETURNED', delivery_fee: '10.00', is_settled: false },
     ]);
     orderRepo.findOne.mockImplementation(({ where }: any) => Promise.resolve({ id: where.id, total_amount: '100.00', outstanding_total: '100.00' }));
     paymentRepo.find.mockResolvedValue([{ payment_method_code: 'CASH', amount: '100.00' }]);
@@ -171,7 +163,7 @@ describe('DeliveryService (Courier Settlement)', () => {
     assignmentRepo.findOne.mockImplementation(({ where }: any) =>
       Promise.resolve(where.id === 'asgn-done'
         ? { id: 'asgn-done', order_id: 'ord-1', status: 'DELIVERED', delivery_fee: '10.00' }
-        : { id: 'asgn-failed', order_id: 'ord-2', status: 'FAILED', delivery_fee: '10.00' }),
+        : { id: 'asgn-returned', order_id: 'ord-2', status: 'RETURNED', delivery_fee: '10.00' }),
     );
 
     const preview = await service.previewSettlement('t-1', 'c-1');
@@ -180,7 +172,7 @@ describe('DeliveryService (Courier Settlement)', () => {
 
     const batch = await service.createSettlement('t-1', 'user-1', { courier_id: 'c-1', branch_id: 'b-1' });
     expect(batch.net_settlement_amount).toBe('100.00');
-    expect(batch.lines.find((l: any) => l.delivery_assignment_id === 'asgn-failed').expected_cash).toBe('0.00');
+    expect(batch.lines.find((l: any) => l.delivery_assignment_id === 'asgn-returned').expected_cash).toBe('0.00');
   });
 
   it('leaves settled deliveries out of a preview that names none, so a courier can be settled again', async () => {
@@ -308,7 +300,7 @@ describe('DeliveryService (Courier Settlement)', () => {
     const settlement = {
       id: 'settle-1',
       tenant_id: 't-1',
-      status: 'UNDER_REVIEW',
+      status: 'DRAFT',
       cash_discrepancy_amount: '-10.00',
       pos_discrepancy_amount: '0.00',
     };
@@ -322,7 +314,7 @@ describe('DeliveryService (Courier Settlement)', () => {
     const settlement = {
       id: 'settle-1',
       tenant_id: 't-1',
-      status: 'UNDER_REVIEW',
+      status: 'DRAFT',
       cash_discrepancy_amount: '0.00',
       pos_discrepancy_amount: '0.00',
     };
@@ -371,7 +363,7 @@ describe('DeliveryService (Courier Settlement)', () => {
     it('pays the order in full, puts the cash in the drawer, and completes the order', async () => {
       settlementRepo.findOne.mockResolvedValue({
         id: 'settle-1', tenant_id: 't-1', branch_id: 'b-1', courier_id: 'c-1', settlement_number: 'SET-1',
-        status: 'UNDER_REVIEW', actual_cash_amount: '565000.00', cash_discrepancy_amount: '0.00', pos_discrepancy_amount: '0.00',
+        status: 'DRAFT', actual_cash_amount: '565000.00', cash_discrepancy_amount: '0.00', pos_discrepancy_amount: '0.00',
       });
 
       await service.closeSettlement('t-1', 'settle-1', 'user-1');
@@ -387,7 +379,7 @@ describe('DeliveryService (Courier Settlement)', () => {
     it("records a shortage against the courier's handover, not as money the customer still owes", async () => {
       settlementRepo.findOne.mockResolvedValue({
         id: 'settle-1', tenant_id: 't-1', branch_id: 'b-1', courier_id: 'c-1', settlement_number: 'SET-1',
-        status: 'UNDER_REVIEW', actual_cash_amount: '500000.00', cash_discrepancy_amount: '-65000.00', pos_discrepancy_amount: '0.00',
+        status: 'DRAFT', actual_cash_amount: '500000.00', cash_discrepancy_amount: '-65000.00', pos_discrepancy_amount: '0.00',
       });
       approvalRepo.findOne.mockResolvedValue({ id: 'apr-1', status: 'APPROVED' });
 
@@ -406,7 +398,7 @@ describe('DeliveryService (Courier Settlement)', () => {
       ]);
       settlementRepo.findOne.mockResolvedValue({
         id: 'settle-1', tenant_id: 't-1', branch_id: 'b-1', courier_id: 'c-1', settlement_number: 'SET-1',
-        status: 'UNDER_REVIEW', actual_cash_amount: '65000.00', cash_discrepancy_amount: '0.00', pos_discrepancy_amount: '0.00',
+        status: 'DRAFT', actual_cash_amount: '65000.00', cash_discrepancy_amount: '0.00', pos_discrepancy_amount: '0.00',
       });
 
       await service.closeSettlement('t-1', 'settle-1', 'user-1');
@@ -419,7 +411,7 @@ describe('DeliveryService (Courier Settlement)', () => {
     it('refuses to close without an open drawer to take the cash', async () => {
       settlementRepo.findOne.mockResolvedValue({
         id: 'settle-1', tenant_id: 't-1', branch_id: 'b-1', courier_id: 'c-1', settlement_number: 'SET-1',
-        status: 'UNDER_REVIEW', actual_cash_amount: '565000.00', cash_discrepancy_amount: '0.00', pos_discrepancy_amount: '0.00',
+        status: 'DRAFT', actual_cash_amount: '565000.00', cash_discrepancy_amount: '0.00', pos_discrepancy_amount: '0.00',
       });
       shiftService.requireDrawer.mockRejectedValue(new ConflictException({ code: 'NO_OPEN_SHIFT' }));
 
@@ -454,21 +446,6 @@ describe('DeliveryService (Courier Settlement)', () => {
 
     expect(reversed.status).toBe('REVERSED');
     expect(assignmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ is_settled: false, settlement_id: null }));
-  });
-
-  it('should handle review and return state transitions (DRAFT <-> UNDER_REVIEW)', async () => {
-    const draftSettlement = { id: 'settle-1', tenant_id: 't-1', status: 'DRAFT' };
-    settlementRepo.findOne.mockResolvedValue(draftSettlement);
-    settlementRepo.save.mockImplementation((s: any) => Promise.resolve(s));
-
-    const reviewed = await service.reviewSettlement('t-1', 'settle-1', 'user-1');
-    expect(reviewed.status).toBe('UNDER_REVIEW');
-
-    const underReviewSettlement = { id: 'settle-1', tenant_id: 't-1', status: 'UNDER_REVIEW' };
-    settlementRepo.findOne.mockResolvedValue(underReviewSettlement);
-
-    const returned = await service.returnSettlement('t-1', 'settle-1', 'user-1', 'Needs verification');
-    expect(returned.status).toBe('DRAFT');
   });
 
   it('should enforce immutability on CLOSED settlements when updating', async () => {
@@ -513,14 +490,14 @@ describe('DeliveryService (Courier Settlement)', () => {
       assignment_ids: ['a1', 'a2'],
       lines: [
         { assignment_id: 'a1', delivery_status: 'DELIVERED', expected_cash: '1000.00', expected_pos: '0.00' },
-        { assignment_id: 'a2', delivery_status: 'FAILED', expected_cash: '0.00', expected_pos: '0.00' },
+        { assignment_id: 'a2', delivery_status: 'RETURNED', expected_cash: '0.00', expected_pos: '0.00' },
       ],
     };
     const created = {
       id: 'set-1',
       lines: [
         { id: 'l1', delivery_assignment_id: 'a1', delivery_status: 'DELIVERED', expected_cash: '1000.00', expected_pos: '0.00' },
-        { id: 'l2', delivery_assignment_id: 'a2', delivery_status: 'FAILED', expected_cash: '0.00', expected_pos: '0.00' },
+        { id: 'l2', delivery_assignment_id: 'a2', delivery_status: 'RETURNED', expected_cash: '0.00', expected_pos: '0.00' },
       ],
     };
 

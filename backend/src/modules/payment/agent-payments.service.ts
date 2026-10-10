@@ -12,7 +12,6 @@ import { Payment } from '../../entities/Payment.entity';
 import { PaymentAttempt } from '../../entities/PaymentAttempt.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
-import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { AgentCommand } from '../../entities/AgentCommand.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { AgentCommandsService, ResultOutcome } from '../agent-gateway/agent-commands.service';
@@ -261,7 +260,6 @@ export class AgentPaymentsService implements OnApplicationBootstrap, OnApplicati
         correlationId: actor.correlationId ?? undefined,
         details: { outcome: input.outcome, rrn: input.rrn ?? null, reason },
       });
-      await this.closeAlerts(em, payment);
       return payment;
     });
 
@@ -316,7 +314,6 @@ export class AgentPaymentsService implements OnApplicationBootstrap, OnApplicati
         await this.flagUnresolved(
           em,
           payment,
-          order,
           !rrn
             ? 'The terminal approved the charge but sent no reference number.'
             : `The terminal charged ${reported} rials; the payment was for ${expected}.`,
@@ -329,7 +326,7 @@ export class AgentPaymentsService implements OnApplicationBootstrap, OnApplicati
 
       if (payment.status === 'SUCCEEDED') {
         if (!isLatest || payment.reference !== rrn) {
-          await this.raiseAlert(em, payment, order, 'CRITICAL', `Check card charges on ${payment.payment_number}`,
+          this.logTerminalProblem(`Check card charges on ${payment.payment_number}`,
             `The terminal reported an approved charge (RRN ${rrn}) that does not match the one recorded (RRN ${payment.reference || 'none'}). The card may have been charged twice; check the terminal and refund if so.`);
         }
         return { status: 'DONE' };
@@ -337,14 +334,14 @@ export class AgentPaymentsService implements OnApplicationBootstrap, OnApplicati
       if (!isLatest || !['PROCESSING', 'FAILED', 'PENDING'].includes(payment.status) || !order) {
         payment.needs_terminal_check = true;
         await em.save(Payment, payment);
-        await this.raiseAlert(em, payment, order, 'CRITICAL', `Card charged on closed payment ${payment.payment_number}`,
+        this.logTerminalProblem(`Card charged on closed payment ${payment.payment_number}`,
           `The terminal approved ${expected} rials (RRN ${rrn}) for a payment that is ${payment.status}. Check the order and refund on the terminal if needed.`);
         return { status: 'DONE' };
       }
       if (MoneyUtil.greaterThan(payment.amount, order.outstanding_total)) {
         payment.needs_terminal_check = true;
         await em.save(Payment, payment);
-        await this.raiseAlert(em, payment, order, 'CRITICAL', `Card charged on settled order ${order.order_number}`,
+        this.logTerminalProblem(`Card charged on settled order ${order.order_number}`,
           `The terminal approved ${expected} rials (RRN ${rrn}) after the order was paid some other way. Refund the card on the terminal.`);
         return { status: 'DONE' };
       }
@@ -352,7 +349,6 @@ export class AgentPaymentsService implements OnApplicationBootstrap, OnApplicati
       if (typeof p.stan === 'string' && p.stan) payment.receipt_number = p.stan.slice(0, 80);
       payment.needs_terminal_check = false;
       await bookSucceededPayment(em, this.auditWriter, payment, order, { actorType: 'SYSTEM', correlationId: command.id });
-      await this.closeAlerts(em, payment);
       return { status: 'DONE' };
     }
 
@@ -363,7 +359,7 @@ export class AgentPaymentsService implements OnApplicationBootstrap, OnApplicati
         attempt.error_code = errorCode;
         await em.save(PaymentAttempt, attempt);
         if (isLatest && payment.status === 'PROCESSING') {
-          await this.flagUnresolved(em, payment, order, errorMessage || describeUnknown(errorCode));
+          await this.flagUnresolved(em, payment, errorMessage || describeUnknown(errorCode));
           if (!isQuery) this.scheduleQuery(payment.tenant_id, payment.id);
         }
       }
@@ -391,7 +387,6 @@ export class AgentPaymentsService implements OnApplicationBootstrap, OnApplicati
         correlationId: command.id,
         details: { terminalStatus: status, errorCode, bankResponseCode: p.bank_response_code ?? null },
       });
-      await this.closeAlerts(em, payment);
     }
     return { status: 'FAILED', errorCode: payment.failure_code || errorCode };
   }
@@ -446,7 +441,7 @@ export class AgentPaymentsService implements OnApplicationBootstrap, OnApplicati
       attempt.error_code = 'NO_ANSWER';
       await em.save(PaymentAttempt, attempt);
       if (payment.status !== 'PROCESSING') return null;
-      await this.flagUnresolved(em, payment, order, 'The charge was sent to the branch agent, which never confirmed it.');
+      await this.flagUnresolved(em, payment, 'The charge was sent to the branch agent, which never confirmed it.');
       return payment;
     });
     if (unresolved) this.scheduleQuery(unresolved.tenant_id, unresolved.id);
@@ -490,55 +485,19 @@ export class AgentPaymentsService implements OnApplicationBootstrap, OnApplicati
     }
   }
 
-  private async flagUnresolved(em: EntityManager, payment: Payment, order: OrderHeader | null, why: string) {
+  private async flagUnresolved(em: EntityManager, payment: Payment, why: string) {
     payment.needs_terminal_check = true;
     if (payment.status !== 'SUCCEEDED') payment.status = 'PROCESSING';
     await em.save(Payment, payment);
-    await this.raiseAlert(
-      em,
-      payment,
-      order,
-      'CRITICAL',
+    this.logTerminalProblem(
       `Check card terminal: ${payment.payment_number}`,
       `${why} The customer may have been charged. Check the terminal, then use "Check with terminal" or resolve the payment by hand. Do not charge again until then.`,
     );
   }
 
-  private async raiseAlert(
-    em: EntityManager,
-    payment: Payment,
-    order: OrderHeader | null,
-    severity: 'WARNING' | 'CRITICAL',
-    title: string,
-    message: string,
-  ) {
-    const trimmed = title.slice(0, 150);
-    const open = await em.findOne(OperationalAlert, {
-      where: { tenant_id: payment.tenant_id, type: 'PAYMENT_TERMINAL', title: trimmed, acknowledged: false },
-    });
-    if (open) return;
-    await em.save(
-      OperationalAlert,
-      em.create(OperationalAlert, {
-        tenant_id: payment.tenant_id,
-        branch_id: order?.branch_id ?? null,
-        type: 'PAYMENT_TERMINAL',
-        severity,
-        title: trimmed,
-        message,
-        acknowledged: false,
-      }),
-    );
+  /** A charge that needs a person's eyes goes to the log; the payment itself carries the "check terminal" flag where it can. */
+  private logTerminalProblem(title: string, message: string) {
     this.logger.warn(`${title}: ${message}`);
-  }
-
-  /** The "check terminal" alert for a payment is closed once the payment is settled either way. */
-  private async closeAlerts(em: EntityManager, payment: Payment) {
-    await em.update(
-      OperationalAlert,
-      { tenant_id: payment.tenant_id, type: 'PAYMENT_TERMINAL', title: `Check card terminal: ${payment.payment_number}`.slice(0, 150), acknowledged: false },
-      { acknowledged: true, acknowledged_at: new Date(), acknowledged_by: 'SYSTEM' } as any,
-    );
   }
 
   private async completeOrder(payment: Payment, actor: PaymentActor) {

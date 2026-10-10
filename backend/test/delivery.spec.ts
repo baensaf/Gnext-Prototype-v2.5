@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DeliveryService } from '../src/modules/delivery/delivery.service';
 import { Courier } from '../src/entities/Courier.entity';
 import { DeliveryAssignment } from '../src/entities/DeliveryAssignment.entity';
@@ -11,8 +11,6 @@ import { Payment } from '../src/entities/Payment.entity';
 import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
 import { ApprovalRequest } from '../src/entities/ApprovalRequest.entity';
 import { DeliveryZone } from '../src/entities/DeliveryZone.entity';
-import { CourierAttendance } from '../src/entities/CourierAttendance.entity';
-import { CourierTerminalAssignment } from '../src/entities/CourierTerminalAssignment.entity';
 import { Delivery } from '../src/entities/Delivery.entity';
 import { DeliveryEvent } from '../src/entities/DeliveryEvent.entity';
 import { Terminal } from '../src/entities/Terminal.entity';
@@ -37,8 +35,6 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
   let paymentMethodRepo: any;
   let approvalRepo: any;
   let zoneRepo: any;
-  let attendanceRepo: any;
-  let terminalAssignRepo: any;
   let deliveryRepo: any;
   let deliveryEventRepo: any;
   let terminalRepo: any;
@@ -76,8 +72,6 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
     paymentMethodRepo = { findOne: jest.fn() };
     approvalRepo = { findOne: jest.fn() };
     zoneRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn().mockImplementation((z) => z), save: jest.fn().mockImplementation((z) => Promise.resolve(z)), softDelete: jest.fn() };
-    attendanceRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn().mockImplementation((a) => a), save: jest.fn().mockImplementation((a) => Promise.resolve(a)) };
-    terminalAssignRepo = { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]), create: jest.fn().mockImplementation((t) => t), save: jest.fn().mockImplementation((t) => Promise.resolve(t)) };
     deliveryRepo = { findOne: jest.fn(), find: jest.fn(), count: jest.fn().mockResolvedValue(0), create: jest.fn().mockImplementation((d) => d), save: jest.fn().mockImplementation((d) => Promise.resolve(d)) };
     deliveryEventRepo = { create: jest.fn().mockImplementation((e) => e), save: jest.fn().mockImplementation((e) => Promise.resolve(e)), find: jest.fn() };
     terminalRepo = { findOne: jest.fn() };
@@ -97,8 +91,6 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
         { provide: getRepositoryToken(PaymentMethod), useValue: paymentMethodRepo },
         { provide: getRepositoryToken(ApprovalRequest), useValue: approvalRepo },
         { provide: getRepositoryToken(DeliveryZone), useValue: zoneRepo },
-        { provide: getRepositoryToken(CourierAttendance), useValue: attendanceRepo },
-        { provide: getRepositoryToken(CourierTerminalAssignment), useValue: terminalAssignRepo },
         { provide: getRepositoryToken(Delivery), useValue: deliveryRepo },
         { provide: getRepositoryToken(DeliveryEvent), useValue: deliveryEventRepo },
         { provide: getRepositoryToken(Terminal), useValue: terminalRepo },
@@ -116,38 +108,22 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
     service = module.get<DeliveryService>(DeliveryService);
   });
 
-  it('assigns a delivery only to a courier who is working today', async () => {
+  it('assigns a delivery to any active courier of the branch, however many deliveries they already carry', async () => {
     deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', state: 'UNASSIGNED' });
     orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', state: 'CONFIRMED' });
+
+    // An archived courier cannot be given an order.
+    courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', name: 'Ali', is_active: false });
+    await expect(service.assignCourier('t-1', 'del-1', 'cour-1')).rejects.toThrow(BadRequestException);
+
+    // An active one can, with no check-in and whatever else they are carrying.
     courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', name: 'Ali', is_active: true });
-
-    // Scenario 1: Not checked in today
-    attendanceRepo.findOne.mockResolvedValue(null);
-    await expect(service.assignCourier('t-1', 'del-1', 'cour-1')).rejects.toThrow(BadRequestException);
-
-    // Scenario 2: Checked out again
-    attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_OUT', availability_status: 'OFF_LINE' });
-    await expect(service.assignCourier('t-1', 'del-1', 'cour-1')).rejects.toThrow(BadRequestException);
-
-    // Scenario 3: Working today -> succeeds, whatever the old available/busy flag says and
-    // however many deliveries the courier already carries.
-    attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_IN', availability_status: 'BUSY' });
     deliveryRepo.count.mockResolvedValue(9);
     const assigned = await service.assignCourier('t-1', 'del-1', 'cour-1');
 
     expect(assigned.state).toBe('ASSIGNED');
     expect(assigned.courier_id).toBe('cour-1');
     expect(deliveryEventRepo.save).toHaveBeenCalledWith(expect.objectContaining({ to_state: 'ASSIGNED' }));
-  });
-
-  it('should enforce mobile POS terminal exclusivity assignment', async () => {
-    courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', name: 'Ali' });
-    terminalRepo.findOne.mockResolvedValue({ id: 'term-1', tenant_id: 't-1', name: 'Mobile POS 1' });
-
-    // Scenario: Terminal already assigned to another active courier
-    terminalAssignRepo.findOne.mockResolvedValue({ id: 'ass-other', courier_id: 'cour-2', is_active: true });
-
-    await expect(service.assignMobileTerminal('t-1', 'cour-1', 'term-1')).rejects.toThrow(BadRequestException);
   });
 
   it('should transition delivery states and align parent order header', async () => {
@@ -268,59 +244,16 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
     deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', state: 'UNASSIGNED' });
     orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', branch_id: 'downtown', state: 'CONFIRMED' });
     courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', branch_id: 'central', name: 'Ali', is_active: true });
-    attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_IN', availability_status: 'AVAILABLE' });
 
     await expect(service.assignCourier('t-1', 'del-1', 'cour-1')).rejects.toThrow(BadRequestException);
     expect(deliveryRepo.save).not.toHaveBeenCalled();
   });
 
-  // Audit OD4-OD6: fail, requeue and reassign took any delivery, so a board that had not
-  // refreshed could reopen a paid order or pull a courier off a ride they were on.
+  // Audit OD4-OD6: a board that had not refreshed could pull a courier off a ride they were on.
   describe('state guards on the dispatch steps', () => {
-    it('will not fail a delivery that was already delivered, nor one whose order is finished', async () => {
-      deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', courier_id: 'cour-1', state: 'DELIVERED' });
-      orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', order_number: 'ORD-1', state: 'OUT_FOR_DELIVERY', outstanding_total: '500000.0000' });
-      await expect(service.failDelivery('t-1', 'del-1', 'late click')).rejects.toThrow(ConflictException);
-
-      deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', courier_id: 'cour-1', state: 'EN_ROUTE' });
-      orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', order_number: 'ORD-1', state: 'COMPLETED' });
-      await expect(service.failDelivery('t-1', 'del-1', 'late click')).rejects.toThrow(ConflictException);
-
-      expect(assignmentRepo.save).not.toHaveBeenCalled();
-      expect(orderRepo.save).not.toHaveBeenCalledWith(expect.objectContaining({ state: 'CONFIRMED' }));
-    });
-
-    it('brings a failed ride back to CONFIRMED with a history row, and leaves an order that never left alone', async () => {
-      deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', courier_id: 'cour-1', state: 'EN_ROUTE' });
-      orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', order_number: 'ORD-1', state: 'OUT_FOR_DELIVERY' });
-      await service.failDelivery('t-1', 'del-1', 'Nobody home');
-      expect(orderRepo.save).toHaveBeenCalledWith(expect.objectContaining({ state: 'CONFIRMED' }));
-      expect(transitionRecorder.record).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ fromState: 'OUT_FOR_DELIVERY', action: 'DELIVERY_FAILED' }),
-      );
-
-      orderRepo.save.mockClear();
-      deliveryRepo.findOne.mockResolvedValue({ id: 'del-2', tenant_id: 't-1', order_id: 'ord-2', courier_id: 'cour-1', state: 'ASSIGNED' });
-      orderRepo.findOne.mockResolvedValue({ id: 'ord-2', tenant_id: 't-1', order_number: 'ORD-2', state: 'CONFIRMED' });
-      await service.failDelivery('t-1', 'del-2', 'Courier went home');
-      expect(orderRepo.save).not.toHaveBeenCalled();
-    });
-
-    it('requeues only a failed delivery', async () => {
-      deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', courier_id: 'cour-1', state: 'EN_ROUTE' });
-      await expect(service.requeueDelivery('t-1', 'del-1')).rejects.toThrow(ConflictException);
-      expect(deliveryRepo.save).not.toHaveBeenCalled();
-
-      deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', courier_id: 'cour-1', state: 'FAILED' });
-      const requeued = await service.requeueDelivery('t-1', 'del-1');
-      expect(requeued).toEqual(expect.objectContaining({ state: 'UNASSIGNED', courier_id: null }));
-    });
-
-    it('closes the first courier’s attempt on a reassign, and refuses one once the courier has left', async () => {
+    it('closes the first courier’s attempt on a reassign before leaving, and refuses one once the courier has left', async () => {
       orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', order_number: 'ORD-1', state: 'CONFIRMED' });
       courierRepo.findOne.mockResolvedValue({ id: 'cour-2', tenant_id: 't-1', name: 'Mahdi', is_active: true });
-      attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_IN', availability_status: 'AVAILABLE' });
 
       deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', courier_id: 'cour-1', state: 'EN_ROUTE' });
       await expect(service.assignCourier('t-1', 'del-1', 'cour-2')).rejects.toThrow(ConflictException);
@@ -332,6 +265,22 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
       await service.assignCourier('t-1', 'del-1', 'cour-2');
       expect(assignmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ id: 'asgn-1', status: 'REASSIGNED' }));
       expect(assignmentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ courier_id: 'cour-2', status: 'ASSIGNED' }));
+    });
+
+    it('names the courier and sends the order out in one step, and cannot swap the rider once it is out', async () => {
+      orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', order_number: 'ORD-1', state: 'CONFIRMED' });
+      courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', name: 'Ali', is_active: true });
+      const waiting: any = { id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', state: 'UNASSIGNED' };
+      deliveryRepo.findOne.mockImplementation(() => Promise.resolve(waiting));
+
+      const out = await service.dispatchCourier('t-1', 'del-1', 'cour-1');
+      expect(out).toEqual(expect.objectContaining({ state: 'EN_ROUTE', courier_id: 'cour-1' }));
+      expect(orderRepo.save).toHaveBeenCalledWith(expect.objectContaining({ state: 'OUT_FOR_DELIVERY' }));
+
+      deliveryRepo.save.mockClear();
+      courierRepo.findOne.mockResolvedValue({ id: 'cour-2', tenant_id: 't-1', name: 'Mahdi', is_active: true });
+      await expect(service.dispatchCourier('t-1', 'del-1', 'cour-2')).rejects.toThrow(ConflictException);
+      expect(deliveryRepo.save).not.toHaveBeenCalled();
     });
 
     it('will not write an arbitrary status onto a delivery through the old route', async () => {
@@ -367,17 +316,6 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
       await expect(service.createCourier('t-1', { branch_id: 'downtown', code: 'CR-13', name: 'Reza', phone: '09125551234' })).rejects.toThrow(ConflictException);
       expect(courierRepo.save).not.toHaveBeenCalled();
     });
-
-    it("moves the courier's account with them", async () => {
-      courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', branch_id: 'central', user_id: 'user-1', name: 'Ali', is_active: true });
-      branchRepo.findOne.mockResolvedValue({ id: 'downtown', tenant_id: 't-1', name: 'Downtown Express' });
-      attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_OUT' });
-      terminalAssignRepo.findOne.mockResolvedValue(null);
-
-      await service.moveCourier('t-1', 'cour-1', 'downtown', 'user-1');
-
-      expect(userRepo.update).toHaveBeenCalledWith({ id: 'user-1', tenant_id: 't-1' }, { branch_id: 'downtown', is_active: true });
-    });
   });
 
   describe('one courier record across branches', () => {
@@ -392,48 +330,9 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
       await expect(attempt).rejects.toThrow(ConflictException);
       await attempt.catch((err: any) => {
         expect(err.getResponse().code).toBe('COURIER_EXISTS');
-        expect(err.getResponse().context.courier).toEqual(expect.objectContaining({ id: 'cour-1', branch_name: 'Central Plaza' }));
+        expect(err.getResponse().detail).toContain('Central Plaza');
       });
       expect(courierRepo.save).not.toHaveBeenCalled();
-    });
-
-    it('moves a courier who is between shifts, and records where from', async () => {
-      courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', branch_id: 'central', name: 'Ali', is_active: true });
-      branchRepo.findOne.mockResolvedValue({ id: 'downtown', tenant_id: 't-1', name: 'Downtown Express' });
-      attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_OUT' });
-      terminalAssignRepo.findOne.mockResolvedValue(null);
-
-      await service.moveCourier('t-1', 'cour-1', 'downtown', 'user-1');
-
-      expect(courierRepo.save).toHaveBeenCalledWith(expect.objectContaining({ id: 'cour-1', branch_id: 'downtown' }));
-      expect(auditWriter.write).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'COURIER_MOVED', beforeData: { branch_id: 'central' }, afterData: { branch_id: 'downtown' } }),
-      );
-    });
-
-    it.each([
-      ['still carrying orders', () => deliveryRepo.count.mockResolvedValue(2)],
-      ['still checked in at the old shop', () => attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_IN' })],
-      ["still holding the old shop's mobile POS", () => terminalAssignRepo.findOne.mockResolvedValue({ id: 'cta-1', is_active: true })],
-    ])('will not move a courier %s', async (_label, arrange) => {
-      courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', branch_id: 'central', name: 'Ali', is_active: true });
-      branchRepo.findOne.mockResolvedValue({ id: 'downtown', tenant_id: 't-1', name: 'Downtown Express' });
-      arrange();
-
-      await expect(service.moveCourier('t-1', 'cour-1', 'downtown')).rejects.toThrow(ConflictException);
-      expect(courierRepo.save).not.toHaveBeenCalled();
-    });
-
-    it('will not check a courier in at a branch they do not work for', async () => {
-      courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', branch_id: 'central', name: 'Ali' });
-
-      await expect(
-        service.recordAttendance('t-1', { courier_id: 'cour-1', branch_id: 'downtown', status: 'CHECKED_IN' }),
-      ).rejects.toThrow(BadRequestException);
-      await expect(
-        service.recordAttendance('t-1', { courier_id: 'cour-1', branch_id: 'central', status: 'CHECKED_IN' }, 'user-1', 'downtown'),
-      ).rejects.toThrow(ForbiddenException);
-      expect(attendanceRepo.save).not.toHaveBeenCalled();
     });
   });
 });

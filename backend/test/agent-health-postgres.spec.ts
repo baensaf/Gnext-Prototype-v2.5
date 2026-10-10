@@ -6,12 +6,11 @@ import { AppModule } from '../src/app.module';
 import { Tenant } from '../src/entities/Tenant.entity';
 import { Branch } from '../src/entities/Branch.entity';
 import { Agent } from '../src/entities/Agent.entity';
-import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
 import { AgentEnrolmentService } from '../src/modules/agent-gateway/agent-enrolment.service';
 import { AgentRegistryService } from '../src/modules/agent-gateway/agent-registry.service';
 import { AgentCommandsService } from '../src/modules/agent-gateway/agent-commands.service';
 import { AgentSessionsService } from '../src/modules/agent-gateway/agent-sessions.service';
-import { AgentHealthService, OFFLINE_ALERT_AFTER_MS } from '../src/modules/agent-gateway/agent-health.service';
+import { AgentHealthService } from '../src/modules/agent-gateway/agent-health.service';
 import { AgentRegistryController } from '../src/modules/agent-gateway/agent-registry.controller';
 import { HEAD_OFFICE_ONLY_KEY } from '../src/common/decorators/roles.decorator';
 import { deleteTenantData } from './utils/tenant-teardown';
@@ -25,7 +24,7 @@ const until = async (check: () => Promise<boolean> | boolean, timeoutMs = 5000) 
   }
 };
 
-// What head office sees about each branch agent, and when it is told one has gone.
+// What head office sees about each branch agent.
 describe('agent health (PostgreSQL)', () => {
   let moduleRef: TestingModule;
   let app: INestApplication;
@@ -39,8 +38,6 @@ describe('agent health (PostgreSQL)', () => {
   let deviceKey: string;
   const open: TestAgent[] = [];
 
-  const offlineAlerts = () =>
-    dataSource.getRepository(OperationalAlert).find({ where: { tenant_id: tenantId, branch_id: branchId, type: 'AGENT_OFFLINE' } });
   const connect = async (capabilities = ['print.html', 'payment.charge']) => {
     const agent = new TestAgent(wsUrl, deviceKey);
     open.push(agent);
@@ -173,43 +170,15 @@ describe('agent health (PostgreSQL)', () => {
     expect(await list()).toMatchObject({ connected: false, capabilities: ['print.html', 'payment.charge', 'app.serve'] });
   });
 
-  it('raises one critical alert when the agent stays away, and closes it when it is back', async () => {
+  it('stamps the moment an agent left, so last seen is the disconnect', async () => {
     await until(() => !moduleRef.get(AgentSessionsService).isConnected(agentId));
     const agent = await connect();
-    await health.sweep(new Date(Date.now() + OFFLINE_ALERT_AFTER_MS * 2), tenantId);
-    expect(await offlineAlerts()).toHaveLength(0);
 
     agent.ws.terminate();
     await agent.closed;
-    // The disconnect is stamped, so the grace period starts now.
     await until(async () => {
       const row = await dataSource.getRepository(Agent).findOneByOrFail({ id: agentId });
       return Date.now() - new Date(row.last_seen_at!).getTime() < 2000;
     });
-    await health.sweep(new Date(Date.now() + 30_000), tenantId);
-    expect(await offlineAlerts()).toHaveLength(0);
-
-    await health.sweep(new Date(Date.now() + OFFLINE_ALERT_AFTER_MS + 1000), tenantId);
-    await health.sweep(new Date(Date.now() + OFFLINE_ALERT_AFTER_MS + 5000), tenantId);
-    const raised = await offlineAlerts();
-    expect(raised).toHaveLength(1);
-    expect(raised[0]).toMatchObject({ severity: 'CRITICAL', acknowledged: false, title: 'Branch agent offline: Health branch' });
-    expect(raised[0].message).toContain('AHL-PC');
-
-    await connect();
-    await health.sweep(new Date(), tenantId);
-    expect((await offlineAlerts()).every((a) => a.acknowledged)).toBe(true);
-  });
-
-  it('closes the alert of an agent head office revoked', async () => {
-    // The last test's agent is closed on our side; wait until the server has let go of it too,
-    // or the sweep still sees it connected and raises nothing.
-    await until(() => !moduleRef.get(AgentSessionsService).isConnected(agentId));
-    await health.sweep(new Date(Date.now() + OFFLINE_ALERT_AFTER_MS * 3), tenantId);
-    expect((await offlineAlerts()).some((a) => !a.acknowledged)).toBe(true);
-
-    await registry.revokeAgent(tenantId, agentId, 'retired', {});
-    await health.sweep(new Date(Date.now() + OFFLINE_ALERT_AFTER_MS * 3), tenantId);
-    expect((await offlineAlerts()).every((a) => a.acknowledged)).toBe(true);
   });
 });

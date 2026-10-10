@@ -116,15 +116,12 @@ import { DeliveryAssignment } from './entities/DeliveryAssignment.entity';
 import { CourierSettlement } from './entities/CourierSettlement.entity';
 import { CourierSettlementLine } from './entities/CourierSettlementLine.entity';
 import { DeliveryZone } from './entities/DeliveryZone.entity';
-import { CourierAttendance } from './entities/CourierAttendance.entity';
-import { CourierTerminalAssignment } from './entities/CourierTerminalAssignment.entity';
 import { Delivery } from './entities/Delivery.entity';
 import { DeliveryEvent } from './entities/DeliveryEvent.entity';
 import { CashierShift } from './entities/CashierShift.entity';
 import { CashMovement } from './entities/CashMovement.entity';
 import { BusinessDayClose } from './entities/BusinessDayClose.entity';
 import { IntegrationLog } from './entities/IntegrationLog.entity';
-import { OperationalAlert } from './entities/OperationalAlert.entity';
 
 
 @Module({
@@ -162,11 +159,10 @@ import { OperationalAlert } from './entities/OperationalAlert.entity';
           PrintRoute,
           Printer, PrintJob, PrintAttempt,
           Courier, DeliveryAssignment, CourierSettlement, CourierSettlementLine,
-          DeliveryZone, CourierAttendance, CourierTerminalAssignment, Delivery, DeliveryEvent,
+          DeliveryZone, Delivery, DeliveryEvent,
           CashierShift, CashMovement, BusinessDayClose,
           IntegrationLog,
           ImportJob, ImportRow,
-          OperationalAlert,
           Agent, AgentEnrolmentCode, AgentCommand, AgentRelease,
           NoteTemplate,
         ],

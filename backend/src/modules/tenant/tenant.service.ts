@@ -346,15 +346,15 @@ export class TenantService {
          UNION ALL
          SELECT 'DELIVERY', o.order_number, 4 FROM delivery d
            JOIN order_header o ON o.id = d.order_id AND o.tenant_id = d.tenant_id
-          WHERE d.tenant_id = $1 AND o.branch_id = $2 AND d.state NOT IN ('DELIVERED', 'FAILED', 'CANCELLED')
+          WHERE d.tenant_id = $1 AND o.branch_id = $2 AND d.state NOT IN ('DELIVERED', 'CANCELLED')
          UNION ALL
          SELECT 'COURIER_CASH', o.order_number, 5 FROM delivery_assignment a
            JOIN order_header o ON o.id = a.order_id AND o.tenant_id = a.tenant_id
           WHERE a.tenant_id = $1 AND o.branch_id = $2 AND a.is_settled = false
-            AND a.status IN ('DELIVERED', 'FAILED', 'RETURNED')
+            AND a.status IN ('DELIVERED', 'RETURNED')
          UNION ALL
          SELECT 'SETTLEMENT', cs.settlement_number, 5 FROM courier_settlement cs
-          WHERE cs.tenant_id = $1 AND cs.branch_id = $2 AND cs.status IN ('DRAFT', 'UNDER_REVIEW')
+          WHERE cs.tenant_id = $1 AND cs.branch_id = $2 AND cs.status = 'DRAFT'
          UNION ALL
          SELECT 'HELD_ORDER', o.order_number, 6 FROM order_header o
           WHERE o.tenant_id = $1 AND o.branch_id = $2 AND o.status = 'DRAFT'

@@ -12,7 +12,6 @@ import { Product } from '../src/entities/Product.entity';
 import { PrintRoute } from '../src/entities/PrintRoute.entity';
 import { Terminal } from '../src/entities/Terminal.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
-import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
 import { AgentPrintingService } from '../src/modules/printing/agent-printing.service';
 
 /**
@@ -65,7 +64,6 @@ describe('PrintingModule (Unit & Integration)', () => {
   let orderRepo: ReturnType<typeof fakeRepo>;
   let productRepo: ReturnType<typeof fakeRepo>;
   let routeRepo: ReturnType<typeof fakeRepo>;
-  let alertRepo: ReturnType<typeof fakeRepo>;
   let auditWriter: { write: jest.Mock };
   let agentPrinting: { send: jest.Mock; pendingAttempt: jest.Mock; withdraw: jest.Mock };
 
@@ -82,7 +80,6 @@ describe('PrintingModule (Unit & Integration)', () => {
     orderRepo = fakeRepo();
     productRepo = fakeRepo();
     routeRepo = fakeRepo();
-    alertRepo = fakeRepo();
     auditWriter = { write: jest.fn() };
     agentPrinting = {
       send: jest.fn(async (_t: string, job: any, printer: any, attemptNo: number) => {
@@ -106,7 +103,6 @@ describe('PrintingModule (Unit & Integration)', () => {
         { provide: getRepositoryToken(Product), useValue: productRepo },
         { provide: getRepositoryToken(PrintRoute), useValue: routeRepo },
         { provide: AuditWriter, useValue: auditWriter },
-        { provide: getRepositoryToken(OperationalAlert), useValue: alertRepo },
         { provide: AgentPrintingService, useValue: agentPrinting },
       ],
     }).compile();
@@ -524,32 +520,13 @@ describe('PrintingModule (Unit & Integration)', () => {
       order('ord-300', [line('l-1', 'p-burger', 'Burger')]);
     });
 
-    it('fails the job, records why, and raises a critical alert for a kitchen ticket', async () => {
+    it('fails the job and records why', async () => {
       const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-300', 'KITCHEN_TICKET');
 
       expect(job.status).toBe('FAILED');
       expect(attemptRepo.save).not.toHaveBeenCalled();
-      expect(alertRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ branch_id: BR, type: 'PRINT_UNROUTED', severity: 'CRITICAL', acknowledged: false }),
-      );
       expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'PRINT_JOB_UNROUTED' }));
       expect(auditWriter.write).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'PRINT_JOB_ENQUEUED' }));
-    });
-
-    it('raises one open alert per branch and document, not one per order', async () => {
-      alertRepo.rows.push({
-        id: 'alert-open',
-        tenant_id: T,
-        branch_id: BR,
-        type: 'PRINT_UNROUTED',
-        title: 'No printer for CUSTOMER_RECEIPT',
-        acknowledged: false,
-      });
-
-      const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-300', 'CUSTOMER_RECEIPT');
-
-      expect(job.status).toBe('FAILED');
-      expect(alertRepo.save).not.toHaveBeenCalled();
     });
 
     it('says what is missing when retried before a printer exists', async () => {

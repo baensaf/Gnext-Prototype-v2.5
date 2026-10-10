@@ -5,7 +5,6 @@ import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { Product } from '../../entities/Product.entity';
 import { Branch } from '../../entities/Branch.entity';
-import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { Payment } from '../../entities/Payment.entity';
 import { PaymentAllocation } from '../../entities/PaymentAllocation.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
@@ -26,7 +25,6 @@ import { CustomerModule } from '../customer/customer.module';
       OrderItem,
       Product,
       Branch,
-      OperationalAlert,
       Payment,
       PaymentAllocation,
       PaymentMethod,

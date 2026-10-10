@@ -705,7 +705,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
   // =========================================================================
   // WORKFLOW 3: DELIVERY COMPLETE LIFECYCLE (§16.3.3)
   // =========================================================================
-  it('Workflow 3: Delivery - Order, Courier Check-in, Mobile POS Device, Cash & Mobile Receipt, Discrepancy Approval & Separate Totals', async () => {
+  it('Workflow 3: Delivery - Order, Courier, Cash & Mobile Receipt, Discrepancy Approval & Separate Totals', async () => {
     const correlationId = `corr-del-${Date.now()}`;
     const tag = Date.now().toString();
 
@@ -768,7 +768,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     const codCash = MoneyUtil.subtract(codTotal, '180000.0000');
     const codCashShort = MoneyUtil.subtract(codCash, '10000.0000');
 
-    // Step 2: Register Courier & Record Attendance Check-In
+    // Step 2: Register Courier
     const courier = await deliveryService.createCourier(
       tenantId,
       {
@@ -782,25 +782,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     );
     expect(courier.id).toBeDefined();
 
-    const attendance = await deliveryService.recordAttendance(
-      tenantId,
-      {
-        courier_id: courier.id,
-        branch_id: branchId,
-        status: 'CHECKED_IN',
-      },
-    );
-    expect(attendance.status).toBe('CHECKED_IN');
-
-    // Step 3: Assign Company Mobile POS Terminal Device to Courier
-    const terminalAssign = await deliveryService.assignMobileTerminal(
-      tenantId,
-      courier.id,
-      terminalId,
-    );
-    expect(terminalAssign.id).toBeDefined();
-
-    // Step 4: Dispatch Delivery to Courier
+    // Step 3: Dispatch Delivery to Courier
     const deliveryRecord = await deliveryService.createDeliveryForOrder(tenantId, submittedDelOrder.id, deliveryZoneId);
     expect(deliveryRecord.id).toBeDefined();
 
@@ -810,7 +792,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     const departedDelivery = await deliveryService.departDelivery(tenantId, deliveryRecord.id, cashierUserId);
     expect(departedDelivery.state).toBe('EN_ROUTE');
 
-    // Step 5: Deliver, collecting 180,000 IRR on the mobile POS and the rest in cash
+    // Step 4: Deliver, collecting 180,000 IRR on the mobile POS and the rest in cash
     const completedDelivery = await deliveryService.completeDelivery(
       tenantId,
       deliveryRecord.id,
@@ -825,7 +807,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     expect(deliveredOrder.state).not.toBe('COMPLETED');
     expect(MoneyUtil.format(deliveredOrder.outstanding_total)).toBe(codTotal);
 
-    // Step 6: Courier Settlement Preview with Separate Expected Instrument Totals
+    // Step 5: Courier Settlement Preview with Separate Expected Instrument Totals
     const previewSettlement = await deliveryService.previewSettlement(tenantId, courier.id);
     expect(MoneyUtil.format(previewSettlement.expected_cash_amount, 2)).toBe(MoneyUtil.format(codCash, 2));
     expect(MoneyUtil.format(previewSettlement.expected_pos_amount, 2)).toBe('180000.00');
@@ -857,7 +839,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     );
     expect(MoneyUtil.format(updatedSettlement.cash_discrepancy_amount, 2)).not.toBe('0.00');
 
-    // Step 7: Settlement Close - Discrepancy Requires Approval
+    // Step 6: Settlement Close - Discrepancy Requires Approval
     await expect(
       deliveryService.closeSettlement(tenantId, settlement.id, cashierUserId, undefined, correlationId),
     ).rejects.toThrow('requires explicit approval');
@@ -895,7 +877,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     expect(closedSettlement.status).toBe('CLOSED');
     expect(closedSettlement.approval_request_id).toBe(settleApprovalReq.id);
 
-    // Step 8: Assert Separate Instrument Totals & Courier Report
+    // Step 7: Assert Separate Instrument Totals & Courier Report
     expect(MoneyUtil.format(closedSettlement.expected_cash_amount, 2)).toBe(MoneyUtil.format(codCash, 2));
     expect(MoneyUtil.format(closedSettlement.actual_cash_amount, 2)).toBe(MoneyUtil.format(codCashShort, 2));
     expect(MoneyUtil.format(closedSettlement.expected_pos_amount, 2)).toBe('180000.00');
