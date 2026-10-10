@@ -336,7 +336,6 @@ export class CustomerService {
       status: 'ACTIVE',
       credit_limit: MoneyUtil.format(data.credit_limit || '0'),
       current_balance: '0.0000',
-      is_blocked: false,
     });
     await this.accountRepo.save(account);
 
@@ -363,10 +362,6 @@ export class CustomerService {
   /**
    * Edit the record's own fields. Phones, addresses, tags and credit each have their own
    * endpoint and are not reachable from here.
-   *
-   * `is_blocked` is not settable here either: refusing to serve somebody needs a reason and
-   * ought to read as one deliberate act in the audit log, not as an edit that happened to
-   * flip a flag. See `setBlocked`.
    */
   async updateCustomer(
     tenantId: string,
@@ -411,56 +406,6 @@ export class CustomerService {
       correlationId,
       beforeData: before,
       afterData: saved,
-    });
-
-    return saved;
-  }
-
-  /**
-   * Refuse, or resume, serving somebody.
-   *
-   * Kept apart from `updateCustomer` because this is the one customer field with an
-   * operational consequence — a blocked customer cannot be put on a new order by any
-   * channel — and because a block is only worth anything if the reason travels with it.
-   * Who did it and why are on the row, not only in the audit log, so the cashier who is
-   * turning an order away can be told what to say.
-   */
-  async setBlocked(
-    tenantId: string,
-    id: string,
-    blocked: boolean,
-    reason?: string,
-    correlationId?: string,
-    actorId?: string,
-  ) {
-    const customer = await this.customerRepo.findOne({ where: { id, tenant_id: tenantId } });
-    if (!customer) throw new NotFoundException('Customer not found');
-
-    const trimmedReason = (reason || '').trim();
-    if (blocked && !trimmedReason) {
-      throw new BadRequestException('A reason is required to block a customer');
-    }
-
-    const before = { ...customer };
-    customer.is_blocked = blocked;
-    customer.blocked_reason = blocked ? trimmedReason : null;
-    customer.blocked_at = blocked ? new Date() : null;
-    customer.blocked_by = blocked ? actorId || null : null;
-    customer.updated_by = actorId || null;
-
-    const saved = await this.customerRepo.save(customer);
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      actorId,
-      action: blocked ? 'CUSTOMER_BLOCKED' : 'CUSTOMER_UNBLOCKED',
-      entityType: 'Customer',
-      entityId: saved.id,
-      correlationId,
-      beforeData: before,
-      afterData: saved,
-      details: { reason: trimmedReason || null },
     });
 
     return saved;

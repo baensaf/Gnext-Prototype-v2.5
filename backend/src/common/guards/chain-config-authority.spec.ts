@@ -62,18 +62,15 @@ function writeRoutes(controller: any): Route[] {
 const OPEN_BY_DESIGN: Array<[string, any, string[]]> = [
   // The shelf, not the menu: taking an item off sale today is the branch's call — but a
   // manager's, so availability carries @Roles and is not open in the sense meant here.
-  // The register's own 86 is the exception (decided 2026-09-18): any register user may take
-  // an item off until the next shift with a reason, and the route itself asks for an
-  // approver's pin for anything longer or for putting an item back.
+  // The register's own 86 is the exception: any register user may take an item off, or put
+  // it back, with no reason and no pin (2026-10-10).
   ['catalog', CatalogController, ['availability/pos-stop', 'availability/pos-resume']],
   // Reads in all but HTTP verb — the register calls both in the middle of an order.
   ['discounts', DiscountsController, ['coupons/validate', 'discount-quotes']],
   ['localization', LocalizationController, []],
   // Everything a counter does with a customer: sign one up, correct what it got wrong, add
   // a phone, an address, a consent. The record itself is the chain's, so merging two and the
-  // group taxonomy are not — nor is refusing to serve somebody, since a block taken at one
-  // site has to hold at the next, which is why block/unblock carry @HeadOfficeOnly and are
-  // deliberately absent from this list.
+  // group taxonomy are not.
   [
     'customer',
     CustomerController,

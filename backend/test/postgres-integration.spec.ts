@@ -156,7 +156,6 @@ describe('Real PostgreSQL Integration Suite (Port 5433)', () => {
       currency_code: 'IRR',
       credit_limit: '1000000.0000',
       current_balance: '500000.0000',
-      is_blocked: false,
     });
     const savedAccount = await creditRepo.save(account);
 

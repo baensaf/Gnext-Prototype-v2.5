@@ -13,11 +13,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import HomeIcon from '@mui/icons-material/Home';
-import BlockIcon from '@mui/icons-material/Block';
 import PlaceIcon from '@mui/icons-material/Place';
 import SearchIcon from '@mui/icons-material/Search';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import {
   Box,
@@ -76,9 +74,6 @@ export function CustomersPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [registerOpen, setRegisterOpen] = useState(false);
-  const [blockOpen, setBlockOpen] = useState(false);
-  const [blockTarget, setBlockTarget] = useState<Customer | null>(null);
-  const [blockReason, setBlockReason] = useState('');
 
   // Credit ledger dialog (V3)
   const [creditDialogOpen, setCreditDialogOpen] = useState(false);
@@ -194,34 +189,6 @@ export function CustomersPage() {
     }
   };
 
-  const handleOpenBlock = (c: Customer) => {
-    setBlockTarget(c);
-    setBlockReason('');
-    setBlockOpen(true);
-  };
-
-  const handleConfirmBlock = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!blockTarget || !blockReason.trim()) return;
-    try {
-      await customerApi.blockCustomer(blockTarget.id, blockReason.trim());
-      setBlockOpen(false);
-      setBlockTarget(null);
-      loadData();
-    } catch (err: any) {
-      setError(err.detail || t('customers.directory.errors.blockFailed'));
-    }
-  };
-
-  const handleUnblock = async (c: Customer) => {
-    try {
-      await customerApi.unblockCustomer(c.id);
-      loadData();
-    } catch (err: any) {
-      setError(err.detail || t('customers.directory.errors.blockFailed'));
-    }
-  };
-
   const txLabel = (type: string) => t(`customers.directory.credit.types.${type}`, type);
 
   return (
@@ -325,36 +292,13 @@ export function CustomersPage() {
             field: 'is_active',
             headerName: t('common.status'),
             width: 140,
-            // The "Blocked" badge; blocking a customer is F.
-            renderHeader: () => (
-              <>
-                {t('common.status')} <VersionTag feature="customers.block" sx={{ ml: 1 }} />
-              </>
-            ),
-            renderCell: (params) => {
-              const c = params.row as Customer;
-              // Blocked outranks disabled on the badge: it is the one that stops an order
-              // at the till, so it is what a cashier needs to see first.
-              if (c.is_blocked) {
-                return (
-                  <Chip
-                    icon={<BlockIcon sx={{ '&&': { fontSize: 16 } }} />}
-                    label={t('customers.directory.blocked')}
-                    color="error"
-                    size="small"
-                    title={c.blocked_reason || t('customers.directory.blockedHint')}
-                    sx={{ fontWeight: 600 }}
-                  />
-                );
-              }
-              return (
+            renderCell: (params) => (
                 <Chip
                   label={params.value ? t('customers.directory.active') : t('customers.directory.disabled')}
                   color={params.value ? 'success' : 'default'}
                   size="small"
                 />
-              );
-            },
+              ),
           },
           {
             field: 'actions',
@@ -376,16 +320,6 @@ export function CustomersPage() {
                   <IconButton size="small" title={t('customers.directory.addresses')} color="info" onClick={() => handleOpenAddresses(c)}>
                     <HomeIcon fontSize="small" />
                   </IconButton>
-                  {isHeadOffice && (
-                    <IconButton
-                      size="small"
-                      title={c.is_blocked ? t('customers.directory.unblock') : t('customers.directory.block')}
-                      color={c.is_blocked ? 'success' : 'error'}
-                      onClick={() => (c.is_blocked ? handleUnblock(c) : handleOpenBlock(c))}
-                    >
-                      {c.is_blocked ? <CheckCircleIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
-                    </IconButton>
-                  )}
                 </Stack>
               );
             },
@@ -589,37 +523,6 @@ export function CustomersPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Block (F) */}
-      <Dialog open={blockOpen} onClose={() => setBlockOpen(false)} maxWidth="xs" fullWidth>
-        <form onSubmit={handleConfirmBlock}>
-          <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
-            <BlockIcon color="error" />
-            {t('customers.directory.blockTitle')} <VersionTag feature="customers.block" />
-          </DialogTitle>
-          <DialogContent>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {t('customers.directory.blockBody', { name: fullName(blockTarget) })}
-            </Typography>
-            <TextField
-              label={t('customers.directory.blockReason')}
-              required
-              autoFocus
-              fullWidth
-              multiline
-              rows={2}
-              helperText={t('customers.directory.blockReasonHelper')}
-              value={blockReason}
-              onChange={(e) => setBlockReason(e.target.value)}
-            />
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2.5 }}>
-            <Button onClick={() => setBlockOpen(false)}>{t('common.cancel')}</Button>
-            <Button type="submit" variant="contained" color="error" disabled={!blockReason.trim()}>
-              {t('customers.directory.block')}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
     </Box>
   );
 }

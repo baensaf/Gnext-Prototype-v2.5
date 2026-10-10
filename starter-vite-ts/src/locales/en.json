@@ -1552,8 +1552,6 @@
       "mobileCode": "Mobile (code)",
       "creditColumn": "Wallet / credit",
       "limit": "Limit: {{amount}}",
-      "blocked": "Blocked",
-      "blockedHint": "This customer cannot be served",
       "active": "Active",
       "disabled": "Disabled",
       "actions": "Actions",
@@ -1561,19 +1559,12 @@
       "addresses": "Delivery addresses",
       "savedAddresses": "Saved addresses",
       "default": "Default",
-      "block": "Block customer",
-      "unblock": "Lift the block",
-      "blockTitle": "Refuse to serve this customer",
-      "blockBody": "{{name}} will not be accepted on any new order, on any channel, until the block is lifted. Orders already placed are untouched.",
-      "blockReason": "Reason",
-      "blockReasonHelper": "Shown to the cashier who has to turn the order away.",
       "emptyTitle": "No customers yet",
       "emptyDescription": "Use “Register customer” to add one.",
       "errors": {
         "loadFailed": "Could not load customers",
         "creditFailed": "Could not load or change the credit account",
-        "addressesFailed": "Could not load or save the address",
-        "blockFailed": "Could not change the block"
+        "addressesFailed": "Could not load or save the address"
       },
       "credit": {
         "title": "Wallet & credit ledger",
