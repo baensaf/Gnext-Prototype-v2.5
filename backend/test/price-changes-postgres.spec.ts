@@ -5,26 +5,23 @@ import { AppModule } from '../src/app.module';
 import { OrderService } from '../src/modules/order/order.service';
 import { CatalogService } from '../src/modules/catalog/catalog.service';
 import { PriceChangeService } from '../src/modules/catalog/price-changes.service';
-import { PriceListService } from '../src/modules/catalog/price-lists.service';
 import { Tenant } from '../src/entities/Tenant.entity';
 import { Branch } from '../src/entities/Branch.entity';
 import { Category } from '../src/entities/Category.entity';
 import { Product } from '../src/entities/Product.entity';
 import { ProductVariant } from '../src/entities/ProductVariant.entity';
 import { PriceEntry } from '../src/entities/PriceEntry.entity';
-import { BusinessDateUtil } from '../src/common/utils/business-date.util';
 import { deleteTenantData } from './utils/tenant-teardown';
 
-// Dated price changes against the real database: "+10% from tomorrow", previewed, charged
-// from its date, cancellable until then, and kept in the product's price history.
-describe('Dated price changes (PostgreSQL)', () => {
+// Price changes against the real database: "+10% on drinks", previewed, charged at once, and
+// kept in the product's price history.
+describe('Price changes (PostgreSQL)', () => {
   let moduleRef: TestingModule;
   let app: INestApplication;
   let dataSource: DataSource;
   let orders: OrderService;
   let catalog: CatalogService;
   let changes: PriceChangeService;
-  let priceLists: PriceListService;
   let tenantId: string;
   let branchId: string;
   let drinks: string;
@@ -34,8 +31,6 @@ describe('Dated price changes (PostgreSQL)', () => {
   let pizza: string;
   let large: string;
 
-  const tomorrow = () => BusinessDateUtil.today(new Date(Date.now() + 24 * 3600 * 1000));
-
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -44,7 +39,6 @@ describe('Dated price changes (PostgreSQL)', () => {
     orders = moduleRef.get(OrderService);
     catalog = moduleRef.get(CatalogService);
     changes = moduleRef.get(PriceChangeService);
-    priceLists = moduleRef.get(PriceListService);
 
     const save = <T>(entity: any, data: Partial<T>) =>
       dataSource.getRepository<T>(entity).save(dataSource.getRepository<T>(entity).create(data as any) as any) as Promise<any>;
@@ -89,50 +83,21 @@ describe('Dated price changes (PostgreSQL)', () => {
 
   it('raises prices from now, and copies them into the products', async () => {
     const job = await changes.commit(tenantId, { category_id: drinks, adjustment: 'PERCENT', value: '10', round_to: 1000 }, null, 'test');
-    expect(job).toMatchObject({ status: 'APPLIED', items: 2, can_cancel: false });
+    expect(job).toMatchObject({ status: 'APPLIED', items: 2 });
     expect(await price(tea)).toBe('55000.0000');
     expect(await baseOf(coffee)).toBe('80000.0000');
     // Another category is untouched.
     expect(await price(pizza, large)).toBe('400000.0000');
   });
 
-  it('schedules a change for tomorrow, and can call it off before then', async () => {
-    const job = await changes.commit(tenantId, { category_id: mains, adjustment: 'AMOUNT', value: '20000', effective_date: tomorrow() }, null, 'test');
-    expect(job).toMatchObject({ status: 'SCHEDULED', can_cancel: true });
-    expect(await price(pizza, large)).toBe('400000.0000');
-
-    const start = BusinessDateUtil.startOfDay(tomorrow());
-    const then = await priceLists.resolveInStorePrice(
-      tenantId,
-      branchId,
-      await dataSource.getRepository(Product).findOneByOrFail({ id: pizza }),
-      await dataSource.getRepository(ProductVariant).findOneByOrFail({ id: large }),
-      new Date(start.getTime() + 60_000),
-    );
-    expect(then).toBe('420000.0000');
-
-    await changes.cancel(tenantId, job.id, null, 'test');
-    expect(await dataSource.getRepository(PriceEntry).count({ where: { bulk_job_id: job.id } })).toBe(0);
-    expect((await changes.list(tenantId)).find((j) => j.id === job.id)).toMatchObject({ status: 'CANCELLED', can_cancel: false });
-  });
-
-  it("applies a scheduled change once its day comes, and restores the price it ended if cancelled", async () => {
-    // Tea's current price is a dated row from the change above; a change for tomorrow ends it then.
-    const job = await changes.commit(tenantId, { category_id: drinks, adjustment: 'AMOUNT', value: '5000', effective_date: tomorrow() }, null, 'test');
-    const current = await dataSource.getRepository(PriceEntry).findOneByOrFail({ product_id: tea, amount: '55000.0000' });
-    expect(current.effective_to).not.toBeNull();
-
-    // Walk the clock forward by moving the change's start into the past.
-    const past = new Date(Date.now() - 60_000);
-    await dataSource.getRepository(PriceEntry).update({ bulk_job_id: job.id }, { effective_from: past });
-    await dataSource.getRepository(PriceEntry).update({ id: current.id }, { effective_to: past });
-    await dataSource.query(`UPDATE price_bulk_job SET effective_from = $1 WHERE id = $2`, [past, job.id]);
-    await changes.applyDueBaseChanges(tenantId);
-
+  it('applies a second change on top of the first, ending the price it replaces', async () => {
+    const job = await changes.commit(tenantId, { category_id: drinks, adjustment: 'AMOUNT', value: '5000' }, null, 'test');
+    expect(job).toMatchObject({ status: 'APPLIED', items: 2 });
     expect(await price(tea)).toBe('60000.0000');
     expect(await baseOf(tea)).toBe('60000.0000');
-    expect((await changes.list(tenantId)).find((j) => j.id === job.id)).toMatchObject({ status: 'APPLIED', can_cancel: false });
-    await expect(changes.cancel(tenantId, job.id, null, 'test')).rejects.toThrow('has started');
+    // The first change's price ended where the second began.
+    const first = await dataSource.getRepository(PriceEntry).findOneByOrFail({ product_id: tea, amount: '55000.0000' });
+    expect(first.effective_to).not.toBeNull();
   });
 
   it('lets a price typed on the product page win over a dated one', async () => {

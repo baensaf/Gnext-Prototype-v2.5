@@ -8,11 +8,10 @@ import { Tenant } from '../src/entities/Tenant.entity';
 import { OptionGroup } from '../src/entities/OptionGroup.entity';
 import { OptionItem } from '../src/entities/OptionItem.entity';
 import { PriceEntry } from '../src/entities/PriceEntry.entity';
-import { BusinessDateUtil } from '../src/common/utils/business-date.util';
 import { deleteTenantData } from './utils/tenant-teardown';
 
-// Price changes on add-ons: "+10% on extras from tomorrow", chain-wide, dated, cancellable,
-// and applied to the add-on's price once they start. Free add-ons stay free.
+// Price changes on add-ons: "+10% on extras", chain-wide, applied to the add-on's price at
+// once. Free add-ons stay free.
 describe('Add-on price changes (PostgreSQL)', () => {
   let moduleRef: TestingModule;
   let app: INestApplication;
@@ -27,7 +26,6 @@ describe('Add-on price changes (PostgreSQL)', () => {
   let noOnion: string;
   let mayo: string;
 
-  const tomorrow = () => BusinessDateUtil.today(new Date(Date.now() + 24 * 3600 * 1000));
   const priceOf = async (id: string) => (await dataSource.getRepository(OptionItem).findOneByOrFail({ id })).price_delta;
 
   beforeAll(async () => {
@@ -75,20 +73,6 @@ describe('Add-on price changes (PostgreSQL)', () => {
     await expect(changes.preview(tenantId, { ...tenPercent, price_list_id: '00000000-0000-0000-0000-000000000001' })).rejects.toMatchObject({
       response: expect.objectContaining({ code: 'ADDON_PRICES_CHAIN_WIDE' }),
     });
-  });
-
-  it('keeps the old price until the start date, and a change called off leaves nothing behind', async () => {
-    const job = await changes.commit(tenantId, { ...tenPercent, option_group_id: extras, effective_date: tomorrow() }, null, 'corr');
-    expect(job).toMatchObject({ status: 'SCHEDULED', items: 2, target: 'ADDONS', option_group_id: extras });
-    await changes.applyDueBaseChanges(tenantId);
-    expect(await priceOf(cheese)).toBe('20000.0000');
-
-    // A later change previews from the price the first one sets on that day.
-    const next = await changes.preview(tenantId, { target: 'ADDONS', option_group_id: extras, adjustment: 'AMOUNT', value: 1000, effective_date: tomorrow() });
-    expect(next.items.find((i) => i.option_item_id === cheese)).toMatchObject({ current: '22000.0000', new: '23000.0000' });
-
-    await changes.cancel(tenantId, job.id, null, 'corr');
-    expect(await dataSource.getRepository(PriceEntry).count({ where: { tenant_id: tenantId, bulk_job_id: job.id } })).toBe(0);
   });
 
   it('charges a change from today at once, and a price typed on the add-on afterwards wins', async () => {

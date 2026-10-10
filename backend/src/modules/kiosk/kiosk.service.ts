@@ -22,7 +22,7 @@ import { loadBusinessClock } from '../../common/utils/business-clock';
 import { normalizePhone } from '../customer/customer.service';
 import { PrintQueueService } from '../printing/print-queue.service';
 import { ProductVariant } from '../../entities/ProductVariant.entity';
-import { CatalogService, REFUSED_SALE_CODES } from '../catalog/catalog.service';
+import { CatalogService } from '../catalog/catalog.service';
 import { PriceListService } from '../catalog/price-lists.service';
 import { inStorePrice } from '../../common/utils/price-list.util';
 import { checkOptionChoices } from '../catalog/option-choices.util';
@@ -110,7 +110,7 @@ export class KioskService {
     const customerIdentityPolicy =
       identityPolicyValue !== undefined ? String(identityPolicyValue) : 'OPTIONAL';
 
-    // What is off at this branch right now: 86'd, outside its selling window or sold out.
+    // What is off at this branch right now: 86'd.
     const off = await this.catalogService.getUnavailableNow(tenantId, branch?.id);
     const variants = await this.variantRepo.find({
       where: { tenant_id: tenantId, is_active: true },
@@ -177,8 +177,8 @@ export class KioskService {
   /**
    * The basket, checked and priced from the catalog. A client-sent price is ignored: the line
    * costs its size's price (else the product's) plus each add-on's. Refuses anything the
-   * register would refuse — an item off sale or sold out, a missing size, an add-on that is
-   * not offered or a required choice left empty. The selling rules (stops, windows, stock)
+   * register would refuse — an item off sale, a missing size, an add-on that is
+   * not offered or a required choice left empty. The selling rules (stops, per-order caps)
    * run in `createKioskOrder`, inside the transaction that saves the order.
    */
   private async priceKioskLines(
@@ -303,26 +303,14 @@ export class KioskService {
     // reach the kitchen from the kiosk either.
     const lines = await this.priceKioskLines(tenantId, data.branch_id, data.items);
 
-    // Checked again, and saved, in one transaction: the day's stock counts stay locked until
-    // the order is in, so two kiosks (or a kiosk and a register) cannot both sell the last unit.
+    // Checked again, and saved, in one transaction.
     const { finalOrder, orderItems } = await this.orderRepo.manager.transaction(async (em) => {
-      await this.catalogService
-        .assertBasketSellable(
-          tenantId,
-          data.branch_id,
-          lines.map((l) => ({ product: l.product, variantId: l.variant?.id || null, quantity: l.count, optionItems: l.optionItems })),
-          new Date(),
-          em,
-        )
-        .catch(async (err) => {
-          // The item was off: a lost sale, for the stop report.
-          const refused = err?.response;
-          if (REFUSED_SALE_CODES.includes(refused?.code) && refused.productId) {
-            const quantity = lines.filter((l) => l.product.id === refused.productId).reduce((sum, l) => sum + l.count, 0);
-            await this.catalogService.recordRefusedSale(tenantId, { branchId: data.branch_id, productId: refused.productId, quantity, code: refused.code, channel: 'KIOSK' });
-          }
-          throw err;
-        });
+      await this.catalogService.assertBasketSellable(
+        tenantId,
+        data.branch_id,
+        lines.map((l) => ({ product: l.product, variantId: l.variant?.id || null, quantity: l.count, optionItems: l.optionItems })),
+        new Date(),
+      );
       const orderRepo = em.getRepository(OrderHeader);
       const orderItemRepo = em.getRepository(OrderItem);
       const orderItemOptionRepo = em.getRepository(OrderItemOption);

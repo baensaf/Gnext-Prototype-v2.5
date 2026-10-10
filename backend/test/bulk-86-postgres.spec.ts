@@ -5,24 +5,21 @@ import * as argon2 from 'argon2';
 import { AppModule } from '../src/app.module';
 import { CatalogController } from '../src/modules/catalog/catalog.controller';
 import { CatalogService } from '../src/modules/catalog/catalog.service';
-import { KioskService } from '../src/modules/kiosk/kiosk.service';
 import { Tenant } from '../src/entities/Tenant.entity';
 import { Branch } from '../src/entities/Branch.entity';
 import { Category } from '../src/entities/Category.entity';
 import { Product } from '../src/entities/Product.entity';
 import { AdminUser } from '../src/entities/AdminUser.entity';
-import { AuditEvent } from '../src/entities/AuditEvent.entity';
 import { deleteTenantData } from './utils/tenant-teardown';
 
 // "The grill is down": a whole category off at once. Head office stops an item at several
-// branches at once. The 86 report shows who stopped what, for how long, and what went unsold.
-describe('Bulk 86 and the stop report (PostgreSQL)', () => {
+// branches at once.
+describe('Bulk 86 (PostgreSQL)', () => {
   let moduleRef: TestingModule;
   let app: INestApplication;
   let dataSource: DataSource;
   let controller: CatalogController;
   let catalog: CatalogService;
-  let kiosk: KioskService;
   let tenantId: string;
   let branchA: string;
   let branchB: string;
@@ -40,7 +37,6 @@ describe('Bulk 86 and the stop report (PostgreSQL)', () => {
     dataSource = moduleRef.get(DataSource);
     controller = moduleRef.get(CatalogController);
     catalog = moduleRef.get(CatalogService);
-    kiosk = moduleRef.get(KioskService);
 
     const save = <T>(entity: any, data: Partial<T>) =>
       dataSource.getRepository<T>(entity).save(dataSource.getRepository<T>(entity).create(data as any) as any) as Promise<any>;
@@ -87,46 +83,12 @@ describe('Bulk 86 and the stop report (PostgreSQL)', () => {
     await expect(controller.bulkStop({ productIds: [soda], branchIds: ['00000000-0000-0000-0000-00000000dead'] }, hq())).rejects.toThrow('Branch not found');
   });
 
-  it('logs a sale refused because the item was off', async () => {
-    await expect(
-      kiosk.createKioskOrder(tenantId, { branch_id: branchA, order_type: 'TAKEAWAY', items: [{ product_id: burger, quantity: 2 }] }),
-    ).rejects.toMatchObject({ response: expect.objectContaining({ code: 'PRODUCT_SUSPENDED' }) });
-    const refused = await dataSource.getRepository(AuditEvent).find({ where: { tenant_id: tenantId, action: 'SALE_REFUSED' } });
-    expect(refused).toHaveLength(1);
-    expect(refused[0]).toMatchObject({ branch_id: branchA, entity_id: burger });
-    expect(refused[0].details).toMatchObject({ quantity: 2, code: 'PRODUCT_SUSPENDED', channel: 'KIOSK' });
-  });
-
   it("puts a category back, but a branch can't lift head office's chain-wide stop", async () => {
     await controller.bulkStop({ productIds: [burger] }, hq());
     const back = await controller.bulkResume({ categoryId: grill }, manager());
     expect(back).toEqual({ resumed: 1, chain_wide: 1 });
     expect(await off(kebab, branchA)).toBe(false);
     expect(await off(burger, branchA)).toBe(true);
-    // The report orders stops and resumes by their time; keep the two apart, as a real day would.
-    await new Promise((resolve) => setTimeout(resolve, 20));
     await controller.bulkResume({ productIds: [burger] }, hq());
-  });
-
-  it('reports who stopped what, for how long, and the sales lost', async () => {
-    const report = await controller.stopReport(undefined as any, undefined as any, undefined as any, manager());
-    expect(report.branch_id).toBe(branchA);
-
-    const burgerRow = report.items.find((i: any) => i.name === 'BURGER');
-    // Its own grill stop, and head office's chain-wide recall.
-    expect(burgerRow).toMatchObject({ kind: 'PRODUCT', stops: 2, refused: 1, refused_quantity: 2, estimated_lost: '400000.0000' });
-    expect(report.totals.refused).toBe(1);
-
-    const grillStop = report.stops.find((s: any) => s.item === 'KEBAB');
-    expect(grillStop).toMatchObject({ branch: 'Alpha', source: 'BULK', by: 'Mina Manager', ended: 'RESUMED', resumed_by: 'Mina Manager' });
-    const recall = report.stops.find((s: any) => s.item === 'BURGER' && s.chain_wide);
-    expect(recall).toMatchObject({ by: 'Hadi HQ', ended: 'RESUMED', resumed_by: 'Hadi HQ' });
-
-    // Head office sees Beta's soda stop too; Alpha's manager doesn't see Beta's.
-    const everywhere = await controller.stopReport(undefined as any, undefined as any, undefined as any, hq());
-    expect(everywhere.stops.filter((s: any) => s.item === 'SODA').map((s: any) => s.branch).sort()).toEqual(['Alpha', 'Beta']);
-    expect(report.stops.filter((s: any) => s.item === 'SODA').map((s: any) => s.branch)).toEqual(['Alpha']);
-
-    await expect(controller.stopReport('2026-09-20', '2026-09-01', undefined as any, hq())).rejects.toThrow('date range');
   });
 });

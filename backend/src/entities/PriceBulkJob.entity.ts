@@ -21,12 +21,9 @@ export class PriceBulkJob {
   @Column({ type: 'uuid', nullable: true })
   price_group_id: string | null;
 
-  /** When the new prices start. */
+  /** When the new prices took effect. */
   @Column({ type: 'timestamptz', nullable: true })
   effective_from: Date | null;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  cancelled_at: Date | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;

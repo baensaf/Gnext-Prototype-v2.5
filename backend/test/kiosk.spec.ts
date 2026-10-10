@@ -75,7 +75,6 @@ describe('KioskService (Unit)', () => {
       getUnavailableNow: jest.fn().mockResolvedValue({ products: new Set(), variants: new Set(), optionItems: new Set() }),
       assertBasketSellable: jest.fn().mockResolvedValue(undefined),
       isCategoryOff: jest.fn().mockResolvedValue(false),
-      recordRefusedSale: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -406,7 +405,6 @@ describe('KioskService selling rules', () => {
       getUnavailableNow: jest.fn().mockResolvedValue(overrides.unavailable || { products: new Set(), variants: new Set(), optionItems: new Set() }),
       assertBasketSellable: overrides.basket || jest.fn().mockResolvedValue(undefined),
       isCategoryOff: jest.fn().mockResolvedValue(false),
-      recordRefusedSale: jest.fn(),
     };
     const passthrough: any = { create: jest.fn((dto: any) => dto), save: jest.fn((dto: any) => Promise.resolve({ ...dto, id: 'x' })), findOne: jest.fn(), find: jest.fn().mockResolvedValue([]) };
     passthrough.manager = { transaction: async (fn: any) => fn({ getRepository: () => passthrough }) };
@@ -461,7 +459,7 @@ describe('KioskService selling rules', () => {
     const basket = jest.fn().mockRejectedValue(new BadRequestException({ code: 'PRODUCT_SUSPENDED' }));
     const { service } = await build({ product: burger, basket });
     await expect(service.createKioskOrder('t-1', order({ product_id: 'p-1', quantity: 1 }))).rejects.toMatchObject({ response: expect.objectContaining({ code: 'PRODUCT_SUSPENDED' }) });
-    expect(basket).toHaveBeenCalledWith('t-1', 'br-1', [expect.objectContaining({ variantId: null, quantity: 1 })], expect.any(Date), expect.anything());
+    expect(basket).toHaveBeenCalledWith('t-1', 'br-1', [expect.objectContaining({ variantId: null, quantity: 1 })], expect.any(Date));
   });
 
   it('shows an 86d item on the menu as unavailable', async () => {

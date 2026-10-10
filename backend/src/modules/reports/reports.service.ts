@@ -114,7 +114,7 @@ export class ReportsService {
       { code: 'courier-attendance', name: 'Courier Attendance & Roster', category: 'DELIVERY' },
       { code: 'courier-settlements', name: 'Courier Cash & POS Settlements', category: 'DELIVERY' },
       { code: 'courier-reconciliation', name: 'Courier Cash vs POS Reconciliation', category: 'DELIVERY' },
-      { code: 'tax-packaging', name: 'Tax & Packaging Compliance', category: 'TAX' },
+      { code: 'tax', name: 'Tax', category: 'TAX' },
       { code: 'print-operations', name: 'Print Operations & Job Queue Log', category: 'SIMULATION' },
       { code: 'integration-operations', name: 'Integration & Webhook Operations', category: 'SIMULATION' },
     ];
@@ -1211,22 +1211,19 @@ export class ReportsService {
         };
       }
 
-      case 'tax-packaging': {
+      case 'tax': {
         const orders = await this.orderRepo.find({
           where: { tenant_id: tenantId, ...this.branchWhere(branchId) },
         });
         let totalTaxable = '0.00';
         let totalTax = '0.00';
-        let totalPackaging = '0.00';
 
         const rows = orders.map((o) => {
           const subStr = MoneyUtil.format(o.subtotal_amount || '0', 2);
           const taxStr = MoneyUtil.format(o.tax_amount || '0', 2);
-          const packStr = MoneyUtil.format(o.packaging_total || '0', 2);
 
           totalTaxable = MoneyUtil.add(totalTaxable, subStr, 2);
           totalTax = MoneyUtil.add(totalTax, taxStr, 2);
-          totalPackaging = MoneyUtil.add(totalPackaging, packStr, 2);
 
           return {
             order_number: o.order_number,
@@ -1234,7 +1231,6 @@ export class ReportsService {
             taxable_amount: subStr,
             tax_rate: '9.0%',
             tax_amount: taxStr,
-            packaging_fee: packStr,
           };
         });
 
@@ -1245,7 +1241,6 @@ export class ReportsService {
             order_count: orders.length,
             taxable_amount: totalTaxable,
             tax_amount: totalTax,
-            packaging_fee: totalPackaging,
           },
         };
       }

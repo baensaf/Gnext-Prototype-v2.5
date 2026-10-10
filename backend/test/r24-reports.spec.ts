@@ -219,7 +219,7 @@ describe('R24 Reports, Alerts, Exports & Audit Verification Suite', () => {
       'courier-attendance',
       'courier-settlements',
       'courier-reconciliation',
-      'tax-packaging',
+      'tax',
       'print-operations',
       'integration-operations',
     ];

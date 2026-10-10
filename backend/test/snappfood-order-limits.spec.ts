@@ -83,7 +83,7 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
         OrderService,
         OrderSequenceService,
         { provide: RefundService, useValue: { cancelPaidOrder: jest.fn() } },
-        { provide: CatalogService, useValue: { isCategoryOff: jest.fn().mockResolvedValue(false), getSuspension: jest.fn(), assertLineSellable: jest.fn(), lockStockCounts: jest.fn().mockResolvedValue([]), recordRefusedSale: jest.fn() } },
+        { provide: CatalogService, useValue: { isCategoryOff: jest.fn().mockResolvedValue(false), getSuspension: jest.fn(), assertLineSellable: jest.fn() } },
         { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
         { provide: getRepositoryToken(OrderItem), useValue: itemRepo },
         { provide: getRepositoryToken(OrderItemOption), useValue: {} },
