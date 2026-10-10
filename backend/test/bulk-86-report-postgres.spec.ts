@@ -103,6 +103,8 @@ describe('Bulk 86 and the stop report (PostgreSQL)', () => {
     expect(back).toEqual({ resumed: 1, chain_wide: 1 });
     expect(await off(kebab, branchA)).toBe(false);
     expect(await off(burger, branchA)).toBe(true);
+    // The report orders stops and resumes by their time; keep the two apart, as a real day would.
+    await new Promise((resolve) => setTimeout(resolve, 20));
     await controller.bulkResume({ productIds: [burger] }, hq());
   });
 
