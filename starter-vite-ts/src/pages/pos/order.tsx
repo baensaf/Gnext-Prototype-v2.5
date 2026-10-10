@@ -10,7 +10,6 @@ import type {
   OptionItem,
   OptionGroup,
   NoteTemplate,
-  DailyStockLine,
   ProductVariant,
   ProductAvailability,
 } from 'src/api/catalogApi';
@@ -160,10 +159,6 @@ export function PosOrderPage() {
   // 86 from the tile: long-press, right-click or the tile's stop button opens it.
   const [stopProduct, setStopProduct] = useState<Product | null>(null);
   const longPress = React.useRef<{ timer?: number; fired: boolean }>({ fired: false });
-  // Items outside their selling window right now (breakfast after 11:00), with the window.
-  const [offSchedule, setOffSchedule] = useState<Map<string, string>>(new Map());
-  // Today's stock counts at this branch; a product at zero is sold out until tomorrow's count.
-  const [dailyStock, setDailyStock] = useState<DailyStockLine[]>([]);
   // This branch's in-store prices (its price list's, else base), keyed `product:variant`. The
   // server charges these, so the grid and cart show them too.
   const [branchPrices, setBranchPrices] = useState<Map<string, string>>(new Map());
@@ -325,7 +320,7 @@ export function PosOrderPage() {
   const customerSelectRef = React.useRef<HTMLInputElement | null>(null);
   const deliveryRestoreRef = React.useRef<{ customerId?: string; addressId?: string; zoneId?: string }>({});
 
-  // Re-reads the stops, prices and stock of the minute-by-minute check below, on demand.
+  // Re-reads the stops and prices of the minute-by-minute check below, on demand.
   const sellingRefreshRef = React.useRef<(() => void) | null>(null);
 
   const fetchHeldOrders = useCallback(async (branchId?: string) => {
@@ -371,7 +366,7 @@ export function PosOrderPage() {
   const loadInitialData = async (quiet = false) => {
     try {
       if (!quiet) setLoadingInitialData(true);
-      // Today's stops load with the stock counts below, for the selected branch.
+      // Today's stops load below, for the selected branch.
       const [cList, pList] = await Promise.all([catalogApi.getCategories(), catalogApi.getProducts()]);
       // Categories taken off the menu hold no sellable products; showing them (and opening on
       // one) left the cashier looking at an empty grid.
@@ -421,42 +416,27 @@ export function PosOrderPage() {
       .catch(() => setNoteTemplates([]));
   }, []);
 
-  // Selling windows open and close, and items get 86'd from other screens, while the register
-  // sits open, so the grid checks each minute. Stops are this branch's plus chain-wide ones.
+  // Items get 86'd from other screens while the register sits open, so the grid checks each
+  // minute. Stops are this branch's plus chain-wide ones.
   useEffect(() => {
     const refresh = () => {
-      catalogApi
-        .getOffScheduleProducts(selectedBranchId || undefined)
-        .then((list) => setOffSchedule(new Map(list.map((o) => [o.product_id, o.windows]))))
-        // A read that fails (the cloud is away) leaves what the screen knows as it is.
-        .catch(() => undefined);
       catalogApi
         .getAvailabilities(selectedBranchId || undefined)
         // A stop on one channel (Snappfood only) leaves the item on sale at the counter.
         .then((list) => setAvailabilities(list.filter((a) => !a.channel)))
+        // A read that fails (the cloud is away) leaves what the screen knows as it is.
         .catch(() => undefined);
       catalogApi
         .getBranchPrices(selectedBranchId || undefined)
         .then((sheet) => setBranchPrices(new Map(sheet.items.map((i) => [`${i.product_id}:${i.variant_id || ''}`, i.price]))))
         .catch(() => undefined);
     };
-    const refreshStock = () =>
-      catalogApi
-        .getDailyStock(selectedBranchId || undefined)
-        .then(setDailyStock)
-        .catch(() => undefined);
     refresh();
-    refreshStock();
-    // The cloud came back: read the stops and stock again now, not at the next minute.
-    sellingRefreshRef.current = () => {
-      refresh();
-      refreshStock();
-    };
-    const stockTimer = window.setInterval(refreshStock, 60_000);
+    // The cloud came back: read the stops again now, not at the next minute.
+    sellingRefreshRef.current = refresh;
     const timer = window.setInterval(refresh, 60_000);
     return () => {
       window.clearInterval(timer);
-      window.clearInterval(stockTimer);
     };
   }, [selectedBranchId]);
 
@@ -568,10 +548,7 @@ export function PosOrderPage() {
     );
     const stoppedVariants = new Set(live.filter((a) => a.product_id === p.id && a.variant_id).map((a) => a.variant_id));
     const stoppedAddons = new Set(live.filter((a) => a.option_item_id).map((a) => a.option_item_id));
-    const soldOutVariants = new Set(
-      dailyStock.filter((s) => s.product_id === p.id && s.variant_id && s.remaining <= 0).map((s) => s.variant_id)
-    );
-    const onSale = (vList || []).filter((v) => !stoppedVariants.has(v.id) && !soldOutVariants.has(v.id));
+    const onSale = (vList || []).filter((v) => !stoppedVariants.has(v.id));
     if ((vList || []).length > 0 && onSale.length === 0) {
       setError(t('pos.itemSuspendedNotice', { name: p.name }));
       return false;
@@ -1673,9 +1650,6 @@ export function PosOrderPage() {
       .filter((a) => a.is_suspended && (!a.suspended_until || new Date(a.suspended_until) > new Date()))
       .map((a) => a.product_id as string),
   );
-  const soldOutProductIds = new Set(
-    dailyStock.filter((s) => !s.variant_id && s.remaining <= 0).map((s) => s.product_id)
-  );
 
   return (
     <Box aria-busy={loadingInitialData || holdingOrder || Boolean(resumingOrderId)}>
@@ -1762,7 +1736,7 @@ export function PosOrderPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
-                  // Enter rings up the first match, as tapping it would, sold-out checks and all.
+                  // Enter rings up the first match, as tapping it would.
                   if (e.key !== 'Enter' || !searchQuery.trim()) return;
                   e.preventDefault();
                   const first = document.querySelector<HTMLElement>('[data-product-tile]');
@@ -1901,9 +1875,7 @@ export function PosOrderPage() {
                 ) : (
                   <Grid container spacing={1.5}>
                     {filteredProducts.map((p) => {
-                      const offWindow = offSchedule.get(p.id);
-                      const soldOut = soldOutProductIds.has(p.id);
-                      const isSuspended = suspendedProductIds.has(p.id) || offWindow !== undefined || soldOut;
+                      const isSuspended = suspendedProductIds.has(p.id);
                       return (
                       <Grid size={{ xs: 6, sm: 6, md: 4, lg: 3 }} key={p.id}>
                         <Paper
@@ -1950,14 +1922,6 @@ export function PosOrderPage() {
                               longPress.current.fired = false;
                               return;
                             }
-                            if (soldOut && !suspendedProductIds.has(p.id)) {
-                              setError(t('pos.itemSoldOutNotice', { defaultValue: '{{name}} is sold out today.', name: p.name }));
-                              return;
-                            }
-                            if (offWindow !== undefined && !suspendedProductIds.has(p.id)) {
-                              setError(t('pos.itemOffScheduleNotice', { name: p.name, windows: offWindow }));
-                              return;
-                            }
                             if (isSuspended) {
                               setError(t('pos.itemSuspendedNotice', { name: p.name }));
                               return;
@@ -1981,14 +1945,8 @@ export function PosOrderPage() {
                             {/* Room for the stop button, so the chips never sit under it. */}
                             <Box sx={{ paddingInlineEnd: '24px' }}>
                             {isSuspended && (
-                              <Chip
-                                label={
-                                  suspendedProductIds.has(p.id)
-                                    ? t('pos.itemSuspended')
-                                    : soldOut
-                                      ? t('pos.itemSoldOut', 'Sold out')
-                                      : t('pos.itemOffSchedule', { windows: offWindow })
-                                }
+              <Chip
+                                label={t('pos.itemSuspended')}
                                 size="small"
                                 color="error"
                                 sx={{ fontSize: '0.625rem', height: 18, mb: 0.75, fontWeight: 700 }}

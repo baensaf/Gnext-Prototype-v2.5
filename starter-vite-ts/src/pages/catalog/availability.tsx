@@ -2,19 +2,16 @@ import type {
   Product,
   Category,
   OptionGroup,
-  DailyStockLine,
   ProductVariant,
   ProductAvailability,
 } from 'src/api/catalogApi';
 
-import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 
 import SearchIcon from '@mui/icons-material/Search';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import StorefrontIcon from '@mui/icons-material/Storefront';
-import AssessmentIcon from '@mui/icons-material/Assessment';
 import PlaylistRemoveIcon from '@mui/icons-material/PlaylistRemove';
 import {
   Box,
@@ -45,8 +42,6 @@ import {
   ToggleButtonGroup,
 } from '@mui/material';
 
-import { paths } from 'src/routes/paths';
-
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
 import { useCurrencyLabel } from 'src/utils/currency';
@@ -57,7 +52,6 @@ import { useBranchContext } from 'src/contexts/branch-context';
 import { VersionTag } from 'src/components/version-tag';
 
 import { BulkStopDialog } from './bulk-stop-dialog';
-import { AvailabilitySchedulesSection } from './availability-schedules';
 
 /** One thing that can be taken off sale: a product, one of its variants, or an add-on. */
 type StopTarget =
@@ -87,11 +81,9 @@ export function AvailabilityPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [optionGroups, setOptionGroups] = useState<OptionGroup[]>([]);
   const [availabilities, setAvailabilities] = useState<ProductAvailability[]>([]);
-  const [stock, setStock] = useState<DailyStockLine[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
-  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [categoryTab, setCategoryTab] = useState('ALL');
 
@@ -110,18 +102,16 @@ export function AvailabilityPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [pList, aList, cList, gList, sList] = await Promise.all([
+      const [pList, aList, cList, gList] = await Promise.all([
         catalogApi.getProducts(),
         catalogApi.getAvailabilities(branchParam),
         catalogApi.getCategories().catch(() => [] as Category[]),
         catalogApi.getOptionGroups().catch(() => [] as OptionGroup[]),
-        catalogApi.getDailyStock(branchParam).catch(() => [] as DailyStockLine[]),
       ]);
       setProducts(pList);
       setCategories(cList);
       setAvailabilities(aList);
       setOptionGroups(gList);
-      setStock(sList);
       setError(null);
     } catch (err: any) {
       setError(err.detail || t('catalog.availabilityPage.errors.loadFailed'));
@@ -140,33 +130,6 @@ export function AvailabilityPage() {
       if (a.option_item_id || a.product_id !== tg.product.id) return false;
       return tg.kind === 'variant' ? a.variant_id === tg.variant.id : !a.variant_id;
     });
-
-  const soldOut = (productId: string, variantId?: string) =>
-    stock.some(
-      (s) => s.product_id === productId && (!s.variant_id || s.variant_id === variantId) && s.remaining <= 0
-    );
-
-  /** A product sold in sizes is off when every size is sold out, as the register and kiosk treat it. */
-  const everySizeSoldOut = (p: Product) =>
-    (p.variants || []).length > 0 && (p.variants || []).every((v) => soldOut(p.id, v.id));
-
-  /** How many are left of today's count on this row (the product's own, or the size's), or null with no count. */
-  const leftToday = (productId: string, variantId?: string) => {
-    const counts = stock.filter(
-      (s) => s.product_id === productId && (variantId ? !s.variant_id || s.variant_id === variantId : !s.variant_id)
-    );
-    return counts.length ? Math.min(...counts.map((s) => s.remaining)) : null;
-  };
-
-  const leftChip = (left: number | null) =>
-    left !== null && left > 0 ? (
-      <Chip
-        size="small"
-        variant="outlined"
-        color={left <= 3 ? 'warning' : 'default'}
-        label={t('catalog.availabilityPage.leftToday', { count: left })}
-      />
-    ) : null;
 
   const visibleProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -215,7 +178,7 @@ export function AvailabilityPage() {
     }
   };
 
-  const statusChip = (stop: ProductAvailability | undefined, isSoldOut = false) => {
+  const statusChip = (stop: ProductAvailability | undefined) => {
     if (stop) {
       return (
         <Chip
@@ -231,9 +194,6 @@ export function AvailabilityPage() {
           }
         />
       );
-    }
-    if (isSoldOut) {
-      return <Chip size="small" color="error" label={t('catalog.availabilityPage.statusSoldOut', 'Sold out today')} />;
     }
     return <Chip size="small" color="success" label={t('catalog.availabilityPage.statusAvailable')} />;
   };
@@ -282,9 +242,6 @@ export function AvailabilityPage() {
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <Button variant="contained" color="error" startIcon={<PlaylistRemoveIcon />} onClick={() => setBulkOpen(true)}>
             {t('catalog.bulkStop.open')}
-          </Button>
-          <Button variant="outlined" startIcon={<AssessmentIcon />} onClick={() => navigate(paths.app.catalog.stopReport)}>
-            {t('catalog.stopReport.title')}
           </Button>
           <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
             {t('catalog.availabilityPage.refresh')}
@@ -381,8 +338,7 @@ export function AvailabilityPage() {
                     </TableCell>
                     <TableCell>
                       <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
-                        {statusChip(productStop, soldOut(p.id) || everySizeSoldOut(p))}
-                        {!productStop && leftChip(leftToday(p.id))}
+                        {statusChip(productStop)}
                         {snappfoodChip({ kind: 'product', product: p })}
                       </Stack>
                     </TableCell>
@@ -403,8 +359,7 @@ export function AvailabilityPage() {
                         {/* A stop on the whole product covers its variants; they have no state of their own then. */}
                         <TableCell>
                           <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
-                            {productStop ? '—' : statusChip(variantStop, soldOut(p.id, v.id))}
-                            {!productStop && !variantStop && leftChip(leftToday(p.id, v.id))}
+                            {productStop ? '—' : statusChip(variantStop)}
                             {snappfoodChip({ kind: 'variant', product: p, variant: v })}
                           </Stack>
                         </TableCell>
@@ -460,8 +415,6 @@ export function AvailabilityPage() {
           </TableContainer>
         </Box>
       )}
-
-      <AvailabilitySchedulesSection products={products} categories={categories} scopeName={scopeName} />
 
       <Dialog open={!!target} onClose={() => setTarget(null)} maxWidth="sm" fullWidth>
         <DialogTitle>

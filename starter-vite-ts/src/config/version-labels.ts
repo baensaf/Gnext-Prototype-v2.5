@@ -50,10 +50,9 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   // Full delivery is V1; head office's fleet roll-up is not.
   '/app/delivery': 'V1',
   '/app/delivery/rollup': 'V4',
-  // Categories, products with sizes, add-on groups and combos, availability, today's stock
+  // Categories, products with sizes, add-on groups and combos, availability (the 86 stop)
   // and the product and category import
   '/app/catalog': 'V1',
-  '/app/catalog/availability/report': 'V4',
   // A V1 branch sells at base prices; price lists are chain-scale pricing.
   '/app/pricing/price-lists': 'V4',
   // Raising or lowering base prices now, by percent or amount
@@ -104,16 +103,14 @@ export const FEATURE_LABELS = {
   'delivery.mobilePos': 'V4',
   'delivery.settlementReview': 'V4',
   'delivery.settlementReverse': 'V2',
-  // Catalog. Sizes, add-on groups, combos and the packaging price are V1 (2026-10-04).
+  // Catalog. Sizes, add-on groups and combos are V1 (2026-10-04).
   'catalog.maxPerOrder': 'V4',
   'catalog.priceHistory': 'V4',
   // Availability: a V1 item is available, or off until someone puts it back.
   'catalog.snappfoodStop': 'V3',
   // V1 stops are "until further notice" only: off until the next shift and off for set hours are F.
   'catalog.stopBranches': 'V4',
-  'catalog.sellingWindows': 'V2',
   // Price changes: V1 changes base prices now.
-  'pricing.scheduled': 'V4',
   'pricing.listPrices': 'V4',
   'pricing.addonPrices': 'V4',
   // Customers and credit

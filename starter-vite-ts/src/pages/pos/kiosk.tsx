@@ -65,7 +65,7 @@ interface KioskProduct {
   price?: string;
   tax_rate?: string;
   image_url?: string;
-  // Off today at this branch (86'd, out of its hours or sold out): shown, not sold.
+  // Off today at this branch (86'd): shown, not sold.
   is_available?: boolean;
   // The sizes on sale today; a product with any is sold as one of them.
   variants?: Array<{ id: string; name: string; base_price: string; price?: string; is_default?: boolean }>;

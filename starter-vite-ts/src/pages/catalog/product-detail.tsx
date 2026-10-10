@@ -4,7 +4,6 @@ import type {
   OptionGroup,
   ProductVariant,
   ProductAvailability,
-  AvailabilitySchedule,
 } from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
@@ -102,14 +101,12 @@ export function ProductDetailPage() {
   const [barcode, setBarcode] = useState('');
   const [description, setDescription] = useState('');
   const [photoIds, setPhotoIds] = useState<string[]>([]);
-  const [containerPrice, setContainerPrice] = useState('0');
   const [maxPerOrder, setMaxPerOrder] = useState('');
   const [savingGeneral, setSavingGeneral] = useState(false);
 
   // What the branch side says about this item right now, shown beside what head office set.
   const { selectedBranchId } = useBranchContext();
   const [stops, setStops] = useState<ProductAvailability[]>([]);
-  const [windows, setWindows] = useState<AvailabilitySchedule[]>([]);
 
   // Variant Modal State
   const [variantDialogOpen, setVariantDialogOpen] = useState(false);
@@ -151,22 +148,12 @@ export function ProductDetailPage() {
       setBarcode(prod.barcode || '');
       setDescription(prod.description || '');
       setPhotoIds([prod.image_asset_id, ...(prod.gallery_asset_ids || [])].filter(Boolean) as string[]);
-      setContainerPrice(String(Number(prod.container_price || 0)));
       setMaxPerOrder(prod.max_per_order ? String(prod.max_per_order) : '');
       setError(null);
 
-      const [aList, sList] = await Promise.all([
-        catalogApi.getAvailabilities(selectedBranchId || undefined).catch(() => [] as ProductAvailability[]),
-        catalogApi.getSchedules(selectedBranchId || undefined).catch(() => [] as AvailabilitySchedule[]),
-      ]);
+      const aList = await catalogApi.getAvailabilities(selectedBranchId || undefined).catch(() => [] as ProductAvailability[]);
       // The item's own stops here; a Snappfood-only stop does not take it off at the counter.
       setStops(aList.filter((a) => a.product_id === prod.id && !a.variant_id && !a.channel));
-      const own = sList.filter((s) => s.is_active && s.product_id === prod.id);
-      setWindows(
-        own.length
-          ? own
-          : sList.filter((s) => s.is_active && !!prod.category_id && s.category_id === prod.category_id)
-      );
     } catch (err: any) {
       setError(err.detail || err.message || t('catalog.productDetailPage.errors.loadFailed'));
     } finally {
@@ -250,7 +237,6 @@ export function ProductDetailPage() {
         description: description || undefined,
         image_asset_id: photoIds[0] || null,
         gallery_asset_ids: photoIds.slice(1),
-        container_price: containerPrice || '0',
         max_per_order: maxPerOrder ? parseInt(maxPerOrder, 10) : null,
       });
       setProduct(updated);
@@ -476,28 +462,6 @@ export function ProductDetailPage() {
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
-                      label={t('catalog.productDetailPage.general.containerPrice', 'Packaging price')}
-                      type="number"
-                      value={toToman(containerPrice)}
-                      onChange={(e) => setContainerPrice(fromToman(e.target.value))}
-                      slotProps={{
-                        htmlInput: { min: 0, step: 1 },
-                        input: { endAdornment: <InputAdornment position="end">{currency}</InputAdornment> },
-                      }}
-                      helperText={
-                        <>
-                          {t(
-                            'catalog.productDetailPage.general.containerPriceHelp',
-                            'Per unit, for delivery apps. Recorded for the Snappfood menu; not charged on orders here yet.'
-                          )}
-                        </>
-                      }
-                      fullWidth
-                    />
-                    <AmountInWords amount={containerPrice} />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <TextField
                       label={t('catalog.productDetailPage.general.maxPerOrder', 'Most per order')}
                       type="number"
                       value={maxPerOrder}
@@ -612,17 +576,6 @@ export function ProductDetailPage() {
                         <Chip size="small" color="success" label={t('catalog.availabilityPage.statusAvailable')} />
                       )}
                     </Box>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('catalog.productDetailPage.onSale.menuTime', 'Menu time')}{' '}
-                      <VersionTag feature="catalog.sellingWindows" />
-                    </Typography>
-                    <Typography variant="body2">
-                      {windows.length
-                        ? windows.map((w) => `${w.label ? `${w.label} ` : ''}${w.start_time}–${w.end_time}`).join('، ')
-                        : t('catalog.productDetailPage.onSale.allDay', 'All day')}
-                    </Typography>
                   </Box>
                   <Button size="small" variant="outlined" onClick={() => navigate('/app/catalog/availability')}>
                     {t('catalog.productsPage.manageAvailability', 'Manage availability')}
