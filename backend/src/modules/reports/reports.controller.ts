@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, Req, Res } from '@nestjs/common';
-import { Request, Response } from 'express';
+import { Controller, Get, Post, Body, Param, Query, Req } from '@nestjs/common';
+import { Request } from 'express';
 import { ReportsService } from './reports.service';
 import { UserScope, effectiveBranchId } from '../../common/utils/user-scope.util';
 
@@ -45,62 +45,6 @@ export class ReportsController {
   ) {
     const tenantId = (req as any).tenantId;
     return await this.reportsService.exportReport(tenantId, reportCode, filters, format || 'CSV', actorScope(req));
-  }
-
-  @Get('saved-views')
-  async getSavedViews(@Query('reportCode') reportCode: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.reportsService.getSavedViews(tenantId, reportCode);
-  }
-
-  @Post('saved-views')
-  async createSavedView(@Body() dto: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).userId;
-    return await this.reportsService.createSavedView(tenantId, userId, dto);
-  }
-
-  @Delete('saved-views/:id')
-  async deleteSavedView(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.reportsService.deleteSavedView(tenantId, id);
-  }
-
-  @Get('audit')
-  async getAuditLogs(@Query() query: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.reportsService.getAuditLogs(tenantId, query, (req as any).userBranchId ?? undefined);
-  }
-
-  @Get('alerts')
-  async getAlerts(@Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.reportsService.getAlerts(tenantId, (req as any).userBranchId ?? undefined);
-  }
-
-  @Post('alerts/:id/acknowledge')
-  async acknowledgeAlert(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).userId;
-    return await this.reportsService.acknowledgeAlert(tenantId, id, userId, (req as any).userBranchId ?? undefined);
-  }
-
-  @Get('report-exports/:id')
-  async getExportJob(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.reportsService.getExportJob(tenantId, id);
-  }
-
-  @Post(':reportCode/exports')
-  async exportReportPath(
-    @Param('reportCode') reportCode: string,
-    @Body() body: any,
-    @Req() req: Request,
-  ) {
-    const tenantId = (req as any).tenantId;
-    const format = body.format || 'CSV';
-    const filters = body.filters || {};
-    return await this.reportsService.exportReport(tenantId, reportCode, filters, format, actorScope(req));
   }
 
   // Dynamic parameterized routes MUST be at the bottom

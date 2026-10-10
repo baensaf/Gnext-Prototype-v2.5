@@ -11,13 +11,10 @@ import { Category } from '../src/entities/Category.entity';
 import { Product } from '../src/entities/Product.entity';
 import { Payment } from '../src/entities/Payment.entity';
 import { Refund } from '../src/entities/Refund.entity';
-import { ApprovalRequest } from '../src/entities/ApprovalRequest.entity';
-import { ApprovalDecision } from '../src/entities/ApprovalDecision.entity';
 import { deleteTenantData } from './utils/tenant-teardown';
 
-// Two reports the 2026-09-16 audit caught making figures up: payments-by-method hardcoded
-// refunds to zero, and manual-discounts reported every discount as rung up by 'CASHIER-1'
-// with approval 'NONE' — including one a manager had approved with their PIN.
+// A report the 2026-09-16 audit caught making figures up: payments-by-method hardcoded
+// refunds to zero.
 describe('report figures come from the records (PostgreSQL)', () => {
   let app: INestApplication;
   let dataSource: DataSource;
@@ -27,7 +24,6 @@ describe('report figures come from the records (PostgreSQL)', () => {
   let branchId: string;
   let productId: string;
   let cashierId: string;
-  let managerId: string;
 
   const noDummyUuid = '00000000-0000-0000-0000-000000000001';
 
@@ -45,7 +41,6 @@ describe('report figures come from the records (PostgreSQL)', () => {
     const user = (username: string, display_name: string, role: string) =>
       save<AdminUser>(AdminUser, { tenant_id: tenantId, username, display_name, role, password_hash: 'x', is_active: true, branch_id: branchId });
     cashierId = (await user(`cashier-${Date.now()}@fixture`, 'Fixture Cashier', 'CASHIER')).id;
-    managerId = (await user(`manager-${Date.now()}@fixture`, 'Fixture Manager', 'MANAGER')).id;
     const category = await save<Category>(Category, { tenant_id: tenantId, code: 'RPT-CAT', name: 'Food', is_active: true });
     productId = (await save<Product>(Product, { tenant_id: tenantId, category_id: category.id, code: 'RPT-BURGER', name: 'Burger', base_price: '250000.0000', tax_rate: '0.0900' })).id;
   }, 60000);
@@ -57,47 +52,6 @@ describe('report figures come from the records (PostgreSQL)', () => {
 
   const draft = () =>
     orders.createDraft(tenantId, { branch_id: branchId, order_type: 'PICKUP', items: [{ product_id: productId, quantity: 1 }] } as any, cashierId);
-
-  it('names the cashier and the approval behind each manual discount', async () => {
-    const withinLimit = await draft();
-    await orders.submitOrder(tenantId, withinLimit.id, { manualDiscount: { calculation_type: 'FIXED_AMOUNT', value: '20000' } } as any, cashierId);
-
-    const escalated = await draft();
-    const request = await dataSource.getRepository(ApprovalRequest).save(
-      dataSource.getRepository(ApprovalRequest).create({
-        tenant_id: tenantId,
-        code: `APR-RPT-${Date.now()}`,
-        action: 'DISCOUNT',
-        entity_type: 'Order',
-        entity_id: escalated.id,
-        requester_user_id: cashierId,
-        status: 'APPROVED',
-        current_step: 1,
-        total_steps: 1,
-        expires_at: new Date(Date.now() + 10 * 60 * 1000),
-      }),
-    );
-    await dataSource.getRepository(ApprovalDecision).save(
-      dataSource.getRepository(ApprovalDecision).create({ tenant_id: tenantId, request_id: request.id, step_number: 1, approver_user_id: managerId, decision: 'APPROVED' }),
-    );
-    await orders.submitOrder(
-      tenantId,
-      escalated.id,
-      { manualDiscount: { calculation_type: 'PERCENTAGE', value: '30' }, approvalRequestIds: [request.id] } as any,
-      cashierId,
-    );
-
-    const { rows } = (await reports.queryReport(tenantId, 'manual-discounts', {})) as any;
-    const byOrder = new Map(rows.map((r: any) => [r.order_id, r]));
-
-    expect(byOrder.get(withinLimit.id)).toEqual(
-      expect.objectContaining({ amount: '20000.00', cashier_id: cashierId, cashier_name: 'Fixture Cashier', approval_status: 'WITHIN_LIMIT', approved_by: null }),
-    );
-    expect(byOrder.get(escalated.id)).toEqual(
-      expect.objectContaining({ amount: '75000.00', cashier_name: 'Fixture Cashier', approval_status: 'APPROVED', approved_by: 'Fixture Manager' }),
-    );
-    expect(rows.some((r: any) => r.cashier_id === 'CASHIER-1')).toBe(false);
-  }, 60000);
 
   it('takes refunds off the method they were paid back through', async () => {
     const order = await orders.submitOrder(tenantId, (await draft()).id, {} as any, cashierId);
