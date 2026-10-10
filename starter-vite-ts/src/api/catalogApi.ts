@@ -51,8 +51,6 @@ export interface Product {
   image_asset_id?: string | null;
   is_active: boolean;
   base_price: string;
-  /** Packaging per unit, as Snappfood's containerPrice. Stored for the channel, not billed here. */
-  container_price?: string;
   /** Most units one order may hold; null for no cap. */
   max_per_order?: number | null;
   /** Photos after the main one, in order. */
@@ -138,7 +136,7 @@ export interface BranchPrices {
   items: Array<{ product_id: string; variant_id: string | null; price: string }>;
 }
 
-/** A dated price change: base prices or one list, by a percentage or an amount, from a day. */
+/** A price change: base prices, one list or add-ons, by a percentage or an amount. It applies at once. */
 export interface PriceChangeInput {
   /** Menu items (default) or add-ons; add-on prices are chain-wide, so no list or category. */
   target?: 'ITEMS' | 'ADDONS';
@@ -149,12 +147,9 @@ export interface PriceChangeInput {
   adjustment: 'PERCENT' | 'AMOUNT';
   value: string;
   round_to?: number | null;
-  /** YYYY-MM-DD business day; empty for now. */
-  effective_date?: string | null;
 }
 
 export interface PriceChangePreview {
-  effective_from: string;
   price_list: { id: string; name: string } | null;
   items: Array<{ product_id: string | null; variant_id: string | null; option_item_id: string | null; name: string; current: string; new: string }>;
   changed: number;
@@ -162,7 +157,7 @@ export interface PriceChangePreview {
 
 export interface PriceChange {
   id: string;
-  status: 'SCHEDULED' | 'APPLIED' | 'CANCELLED';
+  status: 'APPLIED';
   price_list: { id: string; name: string | null } | null;
   effective_from: string;
   items: number;
@@ -173,14 +168,12 @@ export interface PriceChange {
   target: 'ITEMS' | 'ADDONS';
   option_group_id: string | null;
   created_at: string;
-  cancelled_at: string | null;
-  can_cancel: boolean;
 }
 
 export interface PriceHistoryRow {
   at: string;
   until: string | null;
-  /** CHANGE: a dated price change; LIST_PRICE: set on a price list; EDIT: typed on the product page. */
+  /** CHANGE: a price change; LIST_PRICE: set on a price list; EDIT: typed on the product page. */
   kind: 'CHANGE' | 'LIST_PRICE' | 'BASE' | 'EDIT';
   price_list: string | null;
   size: string | null;
@@ -195,38 +188,6 @@ export interface BulkStopRequest {
   productIds?: string[];
   branchIds?: string[];
   channel?: string;
-}
-
-export interface StopReport {
-  from: string;
-  to: string;
-  branch_id: string | null;
-  items: Array<{
-    name: string;
-    kind: 'PRODUCT' | 'SIZE' | 'ADDON';
-    stops: number;
-    hours: number;
-    refused: number;
-    refused_quantity: number;
-    estimated_lost: string;
-  }>;
-  totals: { stops: number; hours: number; refused: number; estimated_lost: string };
-  stops: Array<{
-    item: string;
-    branch: string | null;
-    chain_wide: boolean;
-    channel: string | null;
-    reason: string | null;
-    source: string;
-    by: string | null;
-    approver: string | null;
-    from: string;
-    to: string | null;
-    planned_until: string | null;
-    ended: 'RESUMED' | 'EXPIRED' | 'CHANGED' | 'ONGOING';
-    resumed_by: string | null;
-    hours: number;
-  }>;
 }
 
 export interface ProductAvailability {
@@ -244,30 +205,6 @@ export interface ProductAvailability {
   reason?: string;
 }
 
-/** A weekly selling window for a product or a category. Days: 0 = Sunday … 6 = Saturday. */
-export interface AvailabilitySchedule {
-  id: string;
-  product_id: string | null;
-  category_id: string | null;
-  branch_id: string | null;
-  days_of_week: string;
-  start_time: string;
-  end_time: string;
-  label: string | null;
-  is_active: boolean;
-}
-
-/** Today's count for an item at a branch, with what live orders already hold. */
-export interface DailyStockLine {
-  id: string;
-  product_id: string;
-  variant_id: string | null;
-  business_date: string;
-  quantity: number;
-  sold: number;
-  remaining: number;
-}
-
 /** What a stop is on and how long it lasts. */
 export interface StopRequest {
   productId?: string;
@@ -276,11 +213,6 @@ export interface StopRequest {
   branchId?: string;
   /** Off on this channel only (SNAPPFOOD); empty for everywhere. */
   channel?: string;
-}
-
-export interface OffScheduleProduct {
-  product_id: string;
-  windows: string;
 }
 
 export interface ChannelPriceSheet {
@@ -461,7 +393,7 @@ export const catalogApi = {
     await httpClient.put('/api/v1/catalog/branch-price-list', { branchId, priceListId });
   },
 
-  // Dated price changes
+  // Price changes
   previewPriceChange: async (input: PriceChangeInput): Promise<PriceChangePreview> => {
     const res = await httpClient.post('/api/v1/catalog/price-changes/preview', input);
     return res.data;
@@ -469,13 +401,6 @@ export const catalogApi = {
   commitPriceChange: async (input: PriceChangeInput): Promise<PriceChange> => {
     const res = await httpClient.post('/api/v1/catalog/price-changes', input);
     return res.data;
-  },
-  getPriceChanges: async (): Promise<PriceChange[]> => {
-    const res = await httpClient.get('/api/v1/catalog/price-changes');
-    return res.data;
-  },
-  cancelPriceChange: async (id: string): Promise<void> => {
-    await httpClient.delete(`/api/v1/catalog/price-changes/${id}`);
   },
   getPriceHistory: async (productId: string): Promise<PriceHistoryRow[]> => {
     const res = await httpClient.get(`/api/v1/products/${productId}/price-history`);
@@ -527,11 +452,6 @@ export const catalogApi = {
     const res = await httpClient.post('/api/v1/availability/bulk-resume', body);
     return res.data;
   },
-  /** Who took what off sale, for how long, and the sales refused meanwhile. Dates are YYYY-MM-DD. */
-  getStopReport: async (params: { from?: string; to?: string; branchId?: string }): Promise<StopReport> => {
-    const res = await httpClient.get('/api/v1/availability/report', { params });
-    return res.data;
-  },
   /** Take a product, one variant or an add-on off sale, Snappfood-style. */
   stopItem: async (target: StopRequest): Promise<ProductAvailability> => {
     const res = await httpClient.post('/api/v1/availability/suspend', target);
@@ -546,40 +466,6 @@ export const catalogApi = {
   }): Promise<any> => {
     const res = await httpClient.post('/api/v1/availability/resume', target);
     return res.data;
-  },
-  getDailyStock: async (branchId?: string): Promise<DailyStockLine[]> => {
-    const res = await httpClient.get('/api/v1/availability/daily-stock', { params: { branchId } });
-    return res.data;
-  },
-  setDailyStock: async (
-    entries: Array<{ productId: string; variantId?: string | null; quantity: number | null }>,
-    branchId?: string
-  ): Promise<DailyStockLine[]> => {
-    const res = await httpClient.put('/api/v1/availability/daily-stock', { branchId, entries });
-    return res.data;
-  },
-  getSchedules: async (branchId?: string): Promise<AvailabilitySchedule[]> => {
-    const res = await httpClient.get('/api/v1/availability/schedules', { params: { branchId } });
-    return res.data;
-  },
-  getOffScheduleProducts: async (branchId?: string): Promise<OffScheduleProduct[]> => {
-    const res = await httpClient.get('/api/v1/availability/off-schedule', { params: { branchId } });
-    return res.data;
-  },
-  createSchedule: async (data: {
-    productId?: string;
-    categoryId?: string;
-    branchId?: string;
-    daysOfWeek: number[];
-    startTime: string;
-    endTime: string;
-    label?: string;
-  }): Promise<AvailabilitySchedule> => {
-    const res = await httpClient.post('/api/v1/availability/schedules', data);
-    return res.data;
-  },
-  deleteSchedule: async (id: string): Promise<void> => {
-    await httpClient.delete(`/api/v1/availability/schedules/${id}`);
   },
 
   getNoteTemplates: async (

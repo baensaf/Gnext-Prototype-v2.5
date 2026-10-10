@@ -1,4 +1,4 @@
-import type { Category, PriceList, OptionGroup, PriceChange, PriceChangeInput, PriceChangePreview } from 'src/api/catalogApi';
+import type { Category, PriceList, OptionGroup, PriceChangeInput, PriceChangePreview } from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -6,7 +6,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Card,
-  Chip,
   Stack,
   Alert,
   Table,
@@ -30,23 +29,17 @@ import {
 
 import { fromToman } from 'src/utils/currency';
 import { MoneyUtil } from 'src/utils/money.util';
-import { fDate, fDateTime } from 'src/utils/format-time';
 
 import { catalogApi } from 'src/api/catalogApi';
 
 import { VersionTag } from 'src/components/version-tag';
-import { ConfirmDialog } from 'src/components/confirm-dialog';
-import { CalendarDateField } from 'src/components/calendar-date-field';
 
 const BASE = '';
 const ALL = '';
 
-const STATUS_COLOR = { SCHEDULED: 'info', APPLIED: 'success', CANCELLED: 'default' } as const;
-
 /**
- * Dated price changes: raise or lower base prices, or one list's prices, by a percentage or an
- * amount, from today or a later day. The change is previewed item by item before it is saved,
- * and one that has not started can be called off.
+ * Price changes: raise or lower base prices, one list's prices or add-on prices by a
+ * percentage or an amount. The change is previewed item by item and applies at once.
  */
 export function PriceChangesPage() {
   const { t } = useTranslation();
@@ -56,29 +49,17 @@ export function PriceChangesPage() {
   // Menu items (base or one list's prices) or add-ons (chain-wide).
   const [target, setTarget] = useState<'ITEMS' | 'ADDONS'>('ITEMS');
   const [groupId, setGroupId] = useState(ALL);
-  const [changes, setChanges] = useState<PriceChange[]>([]);
   const [listId, setListId] = useState(BASE);
   const [categoryId, setCategoryId] = useState(ALL);
   const [adjustment, setAdjustment] = useState<'PERCENT' | 'AMOUNT'>('PERCENT');
   const [value, setValue] = useState('');
   const [roundTo, setRoundTo] = useState('0');
-  const [date, setDate] = useState('');
   const [preview, setPreview] = useState<PriceChangePreview | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [cancelling, setCancelling] = useState<PriceChange | null>(null);
 
   const fail = useCallback((err: any, fallback: string) => setError(err?.detail || err?.message || fallback), []);
-
-  const loadChanges = useCallback(
-    () =>
-      catalogApi
-        .getPriceChanges()
-        .then(setChanges)
-        .catch((err) => fail(err, t('pricing.changes.loadFailed'))),
-    [fail, t]
-  );
 
   useEffect(() => {
     Promise.all([catalogApi.getPriceLists(), catalogApi.getCategories(), catalogApi.getOptionGroups()])
@@ -88,11 +69,10 @@ export function PriceChangesPage() {
         setAddonGroups(gs);
       })
       .catch((err) => fail(err, t('pricing.changes.loadFailed')));
-    loadChanges();
-  }, [fail, loadChanges, t]);
+  }, [fail, t]);
 
   // Any edit to the form makes the preview stale.
-  useEffect(() => setPreview(null), [target, groupId, listId, categoryId, adjustment, value, roundTo, date]);
+  useEffect(() => setPreview(null), [target, groupId, listId, categoryId, adjustment, value, roundTo]);
 
   const addons = target === 'ADDONS';
   const input = (): PriceChangeInput => ({
@@ -104,7 +84,6 @@ export function PriceChangesPage() {
     // Amounts are typed in tomans and sent in rials; a percentage goes as it is.
     value: adjustment === 'AMOUNT' ? fromToman(value.trim()) : value.trim(),
     round_to: Number(fromToman(roundTo)) || 0,
-    effective_date: date || null,
   });
 
   const runPreview = async () => {
@@ -122,41 +101,14 @@ export function PriceChangesPage() {
     setBusy(true);
     try {
       const saved = await catalogApi.commitPriceChange(input());
-      setNotice(
-        saved.status === 'SCHEDULED'
-          ? t('pricing.changes.scheduled', { count: saved.items, date: fDate(saved.effective_from) })
-          : t('pricing.changes.applied', { count: saved.items })
-      );
+      setNotice(t('pricing.changes.applied', { count: saved.items }));
       setPreview(null);
       setValue('');
-      await loadChanges();
     } catch (err: any) {
       fail(err, t('pricing.changes.saveFailed'));
     } finally {
       setBusy(false);
     }
-  };
-
-  const cancel = async () => {
-    if (!cancelling) return;
-    try {
-      await catalogApi.cancelPriceChange(cancelling.id);
-      setNotice(t('pricing.changes.cancelled'));
-      setCancelling(null);
-      await loadChanges();
-    } catch (err: any) {
-      fail(err, t('pricing.changes.saveFailed'));
-    }
-  };
-
-  const describe = (c: PriceChange) => {
-    const amount = c.adjustment === 'PERCENT' ? `${Number(c.value) > 0 ? '+' : ''}${Number(c.value)}%` : `${Number(c.value) > 0 ? '+' : ''}${MoneyUtil.formatCurrency(c.value)}`;
-    if (c.target === 'ADDONS') {
-      const group = c.option_group_id ? addonGroups.find((g) => g.id === c.option_group_id)?.name : null;
-      return [amount, group || t('pricing.changes.allAddonGroups')].join(' · ');
-    }
-    const category = c.category_id ? categories.find((x) => x.id === c.category_id)?.name : null;
-    return [amount, category || t('pricing.changes.allCategories')].join(' · ');
   };
 
   const valid = value.trim() !== '' && Number.isFinite(Number(value));
@@ -238,17 +190,6 @@ export function PriceChangesPage() {
             </FormControl>
             </>
             )}
-            <CalendarDateField
-              size="small"
-              label={t('pricing.changes.from')}
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              helperText={
-                <>
-                  {t('pricing.changes.fromHelp')} <VersionTag feature="pricing.scheduled" />
-                </>
-              }
-            />
           </Stack>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { md: 'flex-start' } }}>
             <ToggleButtonGroup size="small" exclusive value={adjustment} onChange={(_, next) => next && setAdjustment(next)}>
@@ -284,10 +225,10 @@ export function PriceChangesPage() {
           <CardContent>
             <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ mb: 2, justifyContent: 'space-between', alignItems: { sm: 'center' }, gap: 1 }}>
               <Typography variant="subtitle1">
-                {t('pricing.changes.previewSummary', { count: changedRows.length, date: fDateTime(preview.effective_from) })}
+                {t('pricing.changes.previewSummary', { count: changedRows.length })}
               </Typography>
               <Button variant="contained" disabled={busy || changedRows.length === 0} onClick={commit}>
-                {date ? t('pricing.changes.schedule') : t('pricing.changes.applyNow')}
+                {t('pricing.changes.applyNow')}
               </Button>
             </Stack>
             {preview.items.length === 0 ? (
@@ -321,65 +262,6 @@ export function PriceChangesPage() {
           </CardContent>
         </Card>
       )}
-
-      <Typography variant="h6" sx={{ mb: 1 }}>
-        {t('pricing.changes.history')}
-      </Typography>
-      {changes.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">
-          {t('pricing.changes.none')}
-        </Typography>
-      ) : (
-        <TableContainer component={Card}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>{t('pricing.changes.from')}</TableCell>
-                <TableCell>{t('pricing.changes.prices')}</TableCell>
-                <TableCell>{t('pricing.changes.change')}</TableCell>
-                <TableCell align="right">{t('pricing.changes.items')}</TableCell>
-                <TableCell>{t('pricing.changes.status')}</TableCell>
-                <TableCell />
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {changes.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell>{fDateTime(c.effective_from)}</TableCell>
-                  <TableCell>
-                    {c.target === 'ADDONS'
-                      ? t('pricing.changes.addonPrices')
-                      : c.price_list
-                        ? t('pricing.changes.listPrices', { name: c.price_list.name || '—' })
-                        : t('pricing.changes.basePrices')}
-                  </TableCell>
-                  <TableCell>{describe(c)}</TableCell>
-                  <TableCell align="right">{c.items}</TableCell>
-                  <TableCell>
-                    <Chip size="small" color={STATUS_COLOR[c.status]} label={t(`pricing.changes.statuses.${c.status}`)} />
-                  </TableCell>
-                  <TableCell align="right">
-                    {c.can_cancel && (
-                      <Button size="small" color="error" onClick={() => setCancelling(c)}>
-                        {t('pricing.changes.cancel')}
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-
-      <ConfirmDialog
-        open={!!cancelling}
-        onClose={() => setCancelling(null)}
-        onConfirm={cancel}
-        title={t('pricing.changes.cancelTitle')}
-        content={t('pricing.changes.cancelBody')}
-        confirmLabel={t('pricing.changes.cancel')}
-      />
     </Box>
   );
 }

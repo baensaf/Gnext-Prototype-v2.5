@@ -27,7 +27,6 @@ import { RefundsPage } from 'src/pages/orders/refunds';
 import { OptionsPage } from 'src/pages/catalog/options';
 import { SettingsHubPage } from 'src/pages/settings/hub';
 import { AgentsPage } from 'src/pages/operations/agents';
-import { DailyStockPage } from 'src/pages/catalog/stock';
 import { homePathForRole } from 'src/config/role-access';
 import { ProductsPage } from 'src/pages/catalog/products';
 import { DataResetPage } from 'src/pages/tools/data-reset';
@@ -41,7 +40,6 @@ import { ReasonCodesPage } from 'src/pages/settings/reasons';
 import { PrintersPage } from 'src/pages/operations/printers';
 import { CategoriesPage } from 'src/pages/catalog/categories';
 import { CustomersPage } from 'src/pages/customers/directory';
-import { StopReportPage } from 'src/pages/catalog/stop-report';
 import { PriceListsPage } from 'src/pages/catalog/price-lists';
 import { TerminalsPage } from 'src/pages/operations/terminals';
 import { OrdersWorkflowPage } from 'src/pages/orders/workflow';
@@ -234,8 +232,6 @@ export const routesSection: RouteObject[] = [
       { path: 'catalog/products/:id', element: <ProductDetailPage /> },
       { path: 'catalog/modifiers', element: <OptionsPage /> },
       { path: 'catalog/availability', element: <AvailabilityPage /> },
-      { path: 'catalog/stock', element: <DailyStockPage /> },
-      { path: 'catalog/availability/report', element: <StopReportPage /> },
       { path: 'catalog/import-export', element: <ImportWizardPage /> },
       { path: 'pricing/price-lists', element: <PriceListsPage /> },
       { path: 'pricing/changes', element: <PriceChangesPage /> },
