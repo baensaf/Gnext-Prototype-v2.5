@@ -7,7 +7,7 @@ import { SetMetadata } from '@nestjs/common';
  * query string or the body becomes the caller's own. It cannot confine what a request
  * *names*: `PATCH /terminals/<id>` carries no branch at all, only an id, and every service
  * behind those routes looked the record up by tenant and id alone. An audit found the
- * Downtown manager renaming Central Plaza's terminal and its kitchen station that way.
+ * Downtown manager renaming Central Plaza's terminal and its kitchen printer that way.
  *
  * Ids are not secret and are not a permission. This marks the route with the entity its id
  * refers to; `BranchOwnershipGuard` does the looking up, once, in one place.

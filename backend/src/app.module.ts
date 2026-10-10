@@ -26,7 +26,6 @@ import { PaymentModule } from './modules/payment/payment.module';
 import { ApprovalModule } from './modules/approval/approval.module';
 import { RefundModule } from './modules/refund/refund.module';
 import { DineInModule } from './modules/dine-in/dine-in.module';
-import { KdsModule } from './modules/kds/kds.module';
 import { PrintingModule } from './modules/printing/printing.module';
 import { DeliveryModule } from './modules/delivery/delivery.module';
 import { CashierModule } from './modules/cashier/cashier.module';
@@ -58,13 +57,8 @@ import { DiningArea } from './entities/DiningArea.entity';
 import { DiningTable } from './entities/DiningTable.entity';
 import { TableSession } from './entities/TableSession.entity';
 import { TableOccupancyEvent } from './entities/TableOccupancyEvent.entity';
-import { KitchenStation } from './entities/KitchenStation.entity';
-import { KdsScreen } from './entities/KdsScreen.entity';
-import { KdsRoutingRule } from './entities/KdsRoutingRule.entity';
-import { KitchenTicket } from './entities/KitchenTicket.entity';
-import { KitchenTicketItem } from './entities/KitchenTicketItem.entity';
-import { KdsEvent } from './entities/KdsEvent.entity';
 import { Printer } from './entities/Printer.entity';
+import { PrintRoute } from './entities/PrintRoute.entity';
 import { PrintJob } from './entities/PrintJob.entity';
 import { PrintAttempt } from './entities/PrintAttempt.entity';
 
@@ -184,7 +178,7 @@ import { ReportExportJob } from './entities/ReportExportJob.entity';
           Payment, SettlementAccount, PaymentDevice, PaymentAllocation, PaymentAttempt,
           RefundRequest, RefundItem, RefundAllocation, Refund,
           DiningArea, DiningTable, TableSession, TableOccupancyEvent,
-          KitchenStation, KdsScreen, KdsRoutingRule, KitchenTicket, KitchenTicketItem, KdsEvent,
+          PrintRoute,
           Printer, PrintJob, PrintAttempt,
           Courier, DeliveryAssignment, CourierSettlement, CourierSettlementLine,
           DeliveryZone, CourierAttendance, CourierTerminalAssignment, Delivery, DeliveryEvent,
@@ -216,7 +210,6 @@ import { ReportExportJob } from './entities/ReportExportJob.entity';
     ApprovalModule,
     RefundModule,
     DineInModule,
-    KdsModule,
     PrintingModule,
     DeliveryModule,
     KioskModule,

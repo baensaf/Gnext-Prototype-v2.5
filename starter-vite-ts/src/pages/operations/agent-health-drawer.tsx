@@ -24,9 +24,9 @@ import {
 
 import { fDateTime } from 'src/utils/format-time';
 
-import { kdsApi } from 'src/api/kdsApi';
 import { agentsApi } from 'src/api/agentsApi';
 import { paymentApi } from 'src/api/paymentApi';
+import { printingApi } from 'src/api/printingApi';
 
 // ----------------------------------------------------------------------
 
@@ -87,7 +87,7 @@ export function AgentHealthDrawer({ agentId, branchId, onClose }: Props) {
   // The agent reports devices by id; show the names head office gave them.
   useEffect(() => {
     if (!branchId) return;
-    Promise.all([kdsApi.getPrinters(branchId).catch(() => []), paymentApi.getDevices(branchId).catch(() => [])]).then(
+    Promise.all([printingApi.getPrinters(branchId).catch(() => []), paymentApi.getDevices(branchId).catch(() => [])]).then(
       ([printers, terminals]) => {
         const names: Record<string, string> = {};
         printers.forEach((p) => {

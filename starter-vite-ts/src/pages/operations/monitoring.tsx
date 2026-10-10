@@ -227,7 +227,7 @@ export function MonitoringPage() {
                 {terminals.filter((term) => term.is_active).length} / {terminals.length}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                {t('monitoring.stationsType', 'POS, kiosk and KDS terminals')}
+                {t('monitoring.stationsType', 'POS and kiosk terminals')}
               </Typography>
             </CardContent>
           </Card>

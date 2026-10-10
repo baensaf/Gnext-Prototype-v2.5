@@ -1,5 +1,5 @@
 import type { Branch } from 'src/api/tenantApi';
-import type { PrinterDevice, PrinterConnection } from 'src/api/kdsApi';
+import type { PrinterDevice, PrinterConnection } from 'src/api/printingApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -42,8 +42,8 @@ import {
 
 import { RouterLink } from 'src/routes/components';
 
-import { kdsApi } from 'src/api/kdsApi';
 import { tenantApi } from 'src/api/tenantApi';
+import { printingApi } from 'src/api/printingApi';
 import { canReachPath } from 'src/config/role-access';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
@@ -110,7 +110,7 @@ export function PrintersPage() {
     setLoading(true);
     try {
       const [prList, bList] = await Promise.all([
-        kdsApi.getPrinters(selectedBranchId || undefined),
+        printingApi.getPrinters(selectedBranchId || undefined),
         tenantApi.getBranches().catch(() => []),
       ]);
       setPrinters(prList || []);
@@ -180,9 +180,9 @@ export function PrintersPage() {
     const agent_connection = fromConnectionForm(connForm);
     try {
       if (editingPrinterId) {
-        await kdsApi.updatePrinter(editingPrinterId, { ...printerForm, agent_connection } as any);
+        await printingApi.updatePrinter(editingPrinterId, { ...printerForm, agent_connection } as any);
       } else {
-        await kdsApi.createPrinter({
+        await printingApi.createPrinter({
           ...printerForm,
           agent_connection,
           branch_id: printerForm.branch_id || getActiveBranchId(),
@@ -202,11 +202,11 @@ export function PrintersPage() {
     setTestingId(printer.id);
     const toastId = toast.loading(t('operations.printers.testPrintSending', 'Sending a test page to {{name}}…', { name }));
     try {
-      const sent = await kdsApi.testPrint(printer.id);
+      const sent = await printingApi.testPrint(printer.id);
       const deadline = Date.now() + 75_000;
       while (Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
-        const job = await kdsApi.getPrintJobById(sent.id);
+        const job = await printingApi.getPrintJobById(sent.id);
         if (job.status === 'SUCCESS') {
           toast.success(t('operations.printers.testPrintSuccess', '{{name}} printed the test page.', { name }), { id: toastId });
           return;
@@ -238,7 +238,7 @@ export function PrintersPage() {
   // DELETE HANDLER
   const handleConfirmDelete = async () => {
     try {
-      await kdsApi.deletePrinter(deleteConfirm.id);
+      await printingApi.deletePrinter(deleteConfirm.id);
       setDeleteConfirm({ open: false, id: '', name: '', type: 'PRINTER' });
       loadData();
     } catch (err: any) {
@@ -303,15 +303,15 @@ export function PrintersPage() {
         </Alert>
       )}
 
-      {/* Where each document prints is set where it belongs: kitchen chits on the prep stations,
+      {/* Where each document prints is set where it belongs: kitchen chits on Print routing,
           receipts and bills on the tills. */}
       <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
         <Typography variant="body2" sx={{ mb: 1 }}>
           {t('operations.printers.routingHint')}
         </Typography>
         <Stack direction="row" spacing={1}>
-          <Button component={RouterLink} href="/app/operations/kds-configuration" size="small" variant="outlined">
-            {t('operations.printers.stationsLink')}
+          <Button component={RouterLink} href="/app/operations/print-routing" size="small" variant="outlined">
+            {t('operations.printers.routingLink')}
           </Button>
           <Button component={RouterLink} href="/app/operations/terminals" size="small" variant="outlined">
             {t('operations.printers.tillsLink')}

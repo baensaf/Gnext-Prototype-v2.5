@@ -10,8 +10,7 @@ import { AdminUser } from '../src/entities/AdminUser.entity';
 import { Category } from '../src/entities/Category.entity';
 import { Product } from '../src/entities/Product.entity';
 import { Printer } from '../src/entities/Printer.entity';
-import { KitchenStation } from '../src/entities/KitchenStation.entity';
-import { KdsRoutingRule } from '../src/entities/KdsRoutingRule.entity';
+import { PrintRoute } from '../src/entities/PrintRoute.entity';
 import { PrintJob } from '../src/entities/PrintJob.entity';
 import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
 import { PaymentDevice } from '../src/entities/PaymentDevice.entity';
@@ -99,9 +98,8 @@ describe('branch agent journey (PostgreSQL)', () => {
         agent_connection: { kind: 'tcp', host: '192.168.1.50', port: 9100 },
       })
     ).id;
-    // Receipts find it as the branch's receipt printer; the food's station prints its chits on it too.
-    const station = await save(KitchenStation, { tenant_id: tenantId, branch_id: branchId, code: 'JRN-ST', name: 'Counter', printer_ids: [printerId] });
-    await save(KdsRoutingRule, { tenant_id: tenantId, branch_id: branchId, category_id: category.id, station_id: station.id });
+    // Receipts find it as the branch's receipt printer; the food's category prints its chits on it too.
+    await save(PrintRoute, { tenant_id: tenantId, branch_id: branchId, category_id: category.id, printer_id: printerId });
 
     // One Saman terminal, driven by the agent.
     cardMethodId = (await save(PaymentMethod, { tenant_id: tenantId, code: 'CARD_POS', name: 'Bank card', kind: 'CARD_POS', is_active: true })).id;

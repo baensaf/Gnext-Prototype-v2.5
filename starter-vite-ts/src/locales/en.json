@@ -51,7 +51,6 @@
     "dineIn": "Dine-In Floor",
     "orders": "Orders",
     "operations": "Operations",
-    "kds": "Kitchen KDS",
     "incomingOrders": "Online Orders",
     "delivery": "Delivery Orders",
     "deliveryHub": "Delivery hub",
@@ -62,7 +61,6 @@
     "businessDays": "Business Days",
     "payments": "Payments",
     "refunds": "Refunds",
-    "kdsConfig": "KDS Configuration",
     "printers": "Printers & Routes",
     "printQueue": "Print Queue",
     "monitoring": "Operational Monitoring",
@@ -107,7 +105,7 @@
     "dataReset": "Data Reset",
     "v5GroupHeader": "Future — V5 Preview",
     "v5Preview": "Inventory Stock & Movement",
-    "printersV5": "Printers & Station Routing",
+    "printersV5": "Printers",
     "approvalsV5": "Multi-Step Approvals & Policy",
     "outboxV5": "Outbox & Event Queue Monitor",
     "printQueueV5": "Thermal Print Queue Engine",
@@ -613,8 +611,8 @@
       "failed": "Failed to queue the reprint",
       "guestBill": "Guest bill",
       "courierSlip": "Courier slip",
-      "station": "Station",
-      "allStations": "Every station"
+      "printer": "Printer",
+      "allPrinters": "Every printer"
     },
     "receiptModal": {
       "title": "Receipt #{{orderNumber}}",
@@ -862,71 +860,6 @@
     "saveTable": "Save Table",
     "totalTables": "Total Tables",
     "activeGuests": "Active Guests"
-  },
-  "kds": {
-    "title": "Kitchen Display Board",
-    "subtitle": "Live order ticket routing by product & category rules with automated readiness roll-up.",
-    "version": "V4",
-    "refresh": "Refresh",
-    "recallHistory": "Recall / History",
-    "allStations": "All Stations",
-    "minutesShort": "m",
-    "columns": {
-      "new": "New",
-      "queued": "Queued",
-      "noNewTickets": "No new tickets.",
-      "inPrep": "In Preparation",
-      "cooking": "Cooking",
-      "noPrepTickets": "No tickets in preparation.",
-      "ready": "Ready / Bumped",
-      "passTable": "Pass Table",
-      "noBumpedTickets": "No bumped tickets."
-    },
-    "orderTypes": {
-      "dineIn": "Dine-in",
-      "takeaway": "Takeaway",
-      "delivery": "Delivery",
-      "aggregators": "Online"
-    },
-    "table": "Table",
-    "priority": "Priority",
-    "priorityScore": "P",
-    "snappfood": "SNAPPFOOD",
-    "itemStatus": {
-      "new": "New",
-      "inProgress": "In Progress",
-      "ready": "Ready",
-      "done": "Done",
-      "bumped": "Bumped"
-    },
-    "actions": {
-      "start": "Start",
-      "bump": "Bump",
-      "recall": "Recall",
-      "changePriority": "Change Priority"
-    },
-    "priorityDialog": {
-      "title": "Set Ticket Priority",
-      "description": "Adjust priority score (0 = Normal, 9 = Rush / High Priority) for Ticket #{{ticketNumber}}",
-      "cancel": "Cancel",
-      "save": "Save Priority"
-    },
-    "recallDrawer": {
-      "title": "Completed & Bumped Tickets ({{count}})",
-      "close": "Close",
-      "noHistory": "No completed tickets in history."
-    },
-    "errors": {
-      "loadFailed": "Failed to load KDS tickets",
-      "startFailed": "Failed to start ticket",
-      "bumpFailed": "Failed to bump ticket",
-      "recallFailed": "Failed to recall ticket",
-      "priorityFailed": "Failed to set priority",
-      "itemStateFailed": "Failed to update item state"
-    },
-    "bump": "Bump / Mark Ready",
-    "prepTime": "Prep Time",
-    "orderNumber": "Order #"
   },
   "delivery": {
     "title": "Delivery hub",
@@ -2971,7 +2904,7 @@
       "allowReopenLabel": "Allow Reopening Closed Orders",
       "allowReopenHelp": "When enabled, authorized supervisors can reopen previously settled orders for adjustments.",
       "automationTitle": "Lifecycle & Kitchen Routing",
-      "automationDesc": "Configure how incoming orders flow into kitchen stations and external channels.",
+      "automationDesc": "Configure how incoming orders flow into the kitchen and external channels.",
       "incoming": {
         "title": "Incoming Orders",
         "help": "Choose which orders wait in Incoming Orders for staff to accept, and what happens to one nobody answers in time.",
@@ -3190,7 +3123,7 @@
       "subtitle": "Protected Server-Side Operational Data Reset & Baseline Profile Applicator",
       "protectedBadge": "Protected PIN Auth",
       "resetCardTitle": "Transactional System Data Reset",
-      "resetCardDesc": "Purges operational transactional data including Order Headers, Payments, Refunds, Cash Drawer Shifts, KDS Tickets, and Audit Events while retaining core tenant and branch setup.",
+      "resetCardDesc": "Purges operational transactional data including Order Headers, Payments, Refunds, Cash Drawer Shifts, and Audit Events while retaining core tenant and branch setup.",
       "resetCardWarning": "Caution: This operation is permanent and immutable. Requires server-side Security Manager PIN verification.",
       "executeReset": "Execute System Data Reset",
       "seedCardTitle": "Database Seed Profiles",
@@ -3209,13 +3142,13 @@
       "seedSuccess": "Database seed profile \"{{profile}}\" applied successfully!",
       "executeError": "Server PIN verification or data reset failed.",
       "demoCardTitle": "Prepare a Clean Demo",
-      "demoCardDesc": "Clears orders, payments, KDS tickets, deliveries, shifts, and other operational queues, then re-applies the demo catalog baseline in one repeatable action.",
+      "demoCardDesc": "Clears orders, payments, deliveries, shifts, and other operational queues, then re-applies the demo catalog baseline in one repeatable action.",
       "demoCardAction": "Prepare Clean Demo",
       "dialogDemoTitle": "Prepare a Clean Demo?",
       "dialogDemoWarning": "All current operational activity will be permanently cleared. Master configuration is retained and the demo catalog baseline is re-applied.",
       "demoPreparing": "Preparing…",
       "confirmDemoReset": "Reset & Prepare",
-      "demoResetSuccess": "Clean demo is ready. Orders, KDS tickets, deliveries, and active shifts are reset to zero; {{profile}} master data is available.",
+      "demoResetSuccess": "Clean demo is ready. Orders, deliveries, and active shifts are reset to zero; {{profile}} master data is available.",
       "demoResetError": "Failed to prepare a clean demo."
     },
     "payments": {
@@ -3240,7 +3173,7 @@
         },
         "orderPos": {
           "title": "Order & POS Workflows",
-          "description": "Order workflows, payment methods, tax profiles, kitchen KDS, and printers."
+          "description": "Order workflows, payment methods, tax profiles, printers and print routing."
         },
         "commercial": {
           "title": "Commercial & Catalog"
@@ -3296,15 +3229,10 @@
           "description": "Payment and refund methods, and the bank accounts the card terminals settle into.",
           "badge": "Gateways Ready"
         },
-        "kds": {
-          "title": "KDS Configuration",
-          "description": "Kitchen display screens, preparation timers, item routing, and order bumping rules.",
-          "badge": "KDS Active"
-        },
         "printers": {
           "title": "Printers & Print Routing",
           "description": "Network receipt printers, kitchen ticket routing, print templates, and queue failover.",
-          "badge": "Station Routing"
+          "badge": "Printers"
         },
         "pricing": {
           "title": "Price Book & Groups",
@@ -3389,6 +3317,10 @@
         "businessDay": {
           "title": "Business Day",
           "description": "When the business day turns over (04:00 by default), the shop’s hours, and closing the day automatically."
+        },
+        "printRouting": {
+          "title": "Print routing",
+          "description": "Which kitchen printer prints which categories and products."
         }
       },
       "scopeLegend": "Organization settings are defined once at head office and apply to every branch. Per-branch settings are configured separately at each location.",
@@ -3576,7 +3508,6 @@
     }
   },
   "printQueue": {
-    "station": "Station",
     "title": "Print Queue & Spooler",
     "columnJobId": "Job ID",
     "columnType": "Document Type",
@@ -3618,7 +3549,8 @@
     "original": "Original",
     "retryJob": "Retry on the same printer",
     "previewJob": "Preview",
-    "lastError": "Last error"
+    "lastError": "Last error",
+    "chit": "Chit"
   },
   "monitoring": {
     "title": "Operational Monitoring & Health",
@@ -3639,7 +3571,7 @@
     "onlineHealthy": "Online & healthy",
     "latencyStatus": "Latency under 15 ms | database online",
     "requiresAction": "Needs a manager now",
-    "stationsType": "POS, kiosk and KDS terminals",
+    "stationsType": "POS and kiosk terminals",
     "chainWide": "Chain-wide"
   },
   "bilingual": {
@@ -3723,7 +3655,7 @@
     },
     "terminals": {
       "title": "Terminal Registry",
-      "subtitle": "Manage operational POS, Kiosk, and Kitchen KDS terminal hardware registers",
+      "subtitle": "Manage the POS and kiosk terminals",
       "addTerminal": "Add Terminal",
       "newTerminal": "New Terminal Device",
       "colCode": "Terminal Code",
@@ -3747,7 +3679,6 @@
       "types": {
         "POS": "POS Counter Register",
         "KIOSK": "Self-Service Kiosk",
-        "KDS": "Kitchen Display Station",
         "MOBILE": "Mobile Handheld POS"
       },
       "loadError": "Could not load the terminals.",
@@ -3767,7 +3698,7 @@
     },
     "printers": {
       "title": "Printers & Print Routing",
-      "subtitle": "Manage the branch printers. Kitchen chits print on the prep stations' printers, receipts on each till's.",
+      "subtitle": "Manage the branch printers. Kitchen chits follow Print routing; receipts print on each till's printer.",
       "v5PreviewBanner": "Printers with a network connection print for real through this branch's agent. Printers without one are simulated: their jobs are marked printed and nothing comes out.",
       "quickLinks": {
         "queue": "Print Queue & Jobs",
@@ -3778,7 +3709,7 @@
       },
       "addPrinter": "Add Printer",
       "editPrinter": "Edit Printer",
-      "routingHint": "Where each paper prints is set where it belongs. A kitchen chit goes to the prep station that makes its items (a product's own station, else its category's) and prints on that station's printers. Receipts, bills and courier slips print on the printer of the till the order was taken on. Anything without a printer of its own prints on the branch's kitchen or receipt printer.",
+      "routingHint": "Where each paper prints is set where it belongs. Kitchen chits print on the printers each category or product is sent to on Print routing; anything not sent anywhere prints on the branch's default kitchen printer. Receipts, bills and courier slips print on the printer of the till the order was taken on.",
       "colCode": "Code",
       "colName": "Printer Name",
       "colType": "Printer Type",
@@ -3789,7 +3720,7 @@
       "colActions": "Actions",
       "colPrintersCount": "Printers Assigned",
       "deletePrinterTitle": "Delete Printer Device",
-      "deletePrinterContent": "Are you sure you want to delete printer \"{{name}}\"? Its stations and tills stop printing on it.",
+      "deletePrinterContent": "Are you sure you want to delete printer \"{{name}}\"? What it prints moves to the default kitchen printer, and its tills stop printing on it.",
       "createPrinterModal": "Configure Thermal / Network Printer",
       "editPrinterModal": "Edit Thermal / Network Printer",
       "formCode": "Printer Code",
@@ -3838,69 +3769,8 @@
         "COMPACT": "Compact",
         "DETAILED": "Detailed"
       },
-      "stationsLink": "Prep stations",
-      "tillsLink": "Tills"
-    },
-    "kds": {
-      "title": "KDS Configuration & Station Routing",
-      "subtitle": "Manage kitchen prep stations and their printers, bump screens, prep timers, and which station makes each item",
-      "tabs": {
-        "stations": "Kitchen Preparation Stations",
-        "screens": "KDS Bump Screens",
-        "rules": "Station Routing Rules"
-      },
-      "addStation": "Add Prep Station",
-      "addScreen": "Add KDS Screen",
-      "addRule": "Add Routing Rule",
-      "colCode": "Station Code",
-      "colName": "Station Name",
-      "colTargetMinutes": "Target Prep Time",
-      "colMinutesVal": "{{minutes}} min",
-      "colStatus": "Status",
-      "colActions": "Actions",
-      "colScreenCode": "Screen Code",
-      "colScreenName": "Screen Name",
-      "colAssignedStations": "Assigned Stations",
-      "colCategory": "Menu Category",
-      "colTargetStation": "Target Prep Station",
-      "colDiningOption": "Dining Channel",
-      "allChannels": "All Dining Channels",
-      "deleteStationTitle": "Delete Kitchen Station",
-      "deleteStationContent": "Are you sure you want to delete prep station \"{{name}}\"? This will remove all items routed to this station.",
-      "deleteScreenTitle": "Delete KDS Bump Screen",
-      "deleteScreenContent": "Are you sure you want to delete KDS screen \"{{name}}\"?",
-      "deleteRuleTitle": "Delete Station Routing Rule",
-      "deleteRuleContent": "Are you sure you want to delete this kitchen station routing rule?",
-      "createStationModal": "Create Kitchen Preparation Station",
-      "createScreenModal": "Configure KDS Bump Screen",
-      "createRuleModal": "Send items to a station",
-      "formStationCode": "Station Code",
-      "formStationName": "Station Name",
-      "formTargetMinutes": "Target Preparation Time (Minutes)",
-      "formScreenCode": "Screen Code",
-      "formScreenName": "Screen Name",
-      "formAssignedStations": "Assigned Preparation Stations",
-      "formCategory": "Menu Category",
-      "formTargetStation": "Target Preparation Station",
-      "formDiningOption": "Dining Channel Scope",
-      "createStationBtn": "Create Prep Station",
-      "createScreenBtn": "Create KDS Screen",
-      "createRuleBtn": "Create Routing Rule",
-      "noBranchError": "Choose a branch before adding kitchen configuration",
-      "colPrinters": "Printers",
-      "branchKitchenPrinter": "Branch's kitchen printer",
-      "copiesVal": "× {{copies}}",
-      "editStation": "Edit prep station",
-      "formPrinters": "Printers",
-      "formPrintersHint": "Each of these prints every chit of this station. None: the branch's kitchen printer prints them.",
-      "formCopies": "Copies per printer",
-      "rulesHint": "Each product goes to its own station if it has one, else to its category's station. The kitchen screen shows it there and that station's printers print it. A product or category has one station: choosing another moves it.",
-      "ruleProduct": "Product: {{name}}",
-      "ruleCategory": "Category: {{name}}",
-      "formAppliesTo": "Applies to",
-      "appliesCategory": "A menu category",
-      "appliesProduct": "One product",
-      "formProduct": "Product"
+      "tillsLink": "Tills",
+      "routingLink": "Print routing"
     },
     "agents": {
       "title": "Branch Agents",
@@ -4004,6 +3874,27 @@
         "notes": "Notes",
         "chooseFile": "Choose gnext-agent.exe"
       }
+    },
+    "printRouting": {
+      "title": "Print routing",
+      "hint": "Send whole categories, or single products, to each kitchen printer. A product sent to a printer of its own prints only there. Anything not sent anywhere prints on the default kitchen printer.",
+      "loadError": "Could not load print routing",
+      "saveError": "Could not save print routing",
+      "saved": "{{name}} saved",
+      "printersLink": "Printers",
+      "chooseBranch": "Choose a branch to set its print routing.",
+      "noPrinters": "This branch has no printers yet. Add them first.",
+      "defaultPrinter": "Default kitchen printer",
+      "defaultHint": "Prints every item not sent to a printer below.",
+      "unrouted": "{{count}} items are not sent to any printer and print on {{name}}:",
+      "unroutedNoDefault": "{{count}} items are not sent to any printer, and there is no default kitchen printer, so they will not print:",
+      "colPrinter": "Printer",
+      "colCategories": "Categories",
+      "colProducts": "Single products",
+      "defaultChip": "Default",
+      "edit": "Edit what {{name}} prints",
+      "dialogTitle": "What {{name}} prints",
+      "productHint": "A product picked here prints only on its own printers, not where its category goes."
     }
   },
   "tools": {
@@ -4151,7 +4042,6 @@
     "caps": {
       "pos": "Take orders at the register",
       "floor": "Seat and release tables",
-      "kds": "Work the kitchen display",
       "shift": "Open, count and close a till",
       "refund": "Hand back money",
       "refundNote": "A cashier raises the refund; it only moves once an approver puts a pin in.",

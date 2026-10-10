@@ -106,3 +106,14 @@ export class UpdatePrinterDto {
   @IsBoolean()
   is_active?: boolean;
 }
+
+/** Everything one printer prints: whole categories, and single products. Replaces what it had. */
+export class SetPrinterRoutesDto {
+  @IsOptional()
+  @IsUUID('all', { each: true })
+  category_ids?: string[];
+
+  @IsOptional()
+  @IsUUID('all', { each: true })
+  product_ids?: string[];
+}

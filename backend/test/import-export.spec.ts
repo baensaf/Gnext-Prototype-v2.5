@@ -254,7 +254,7 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
       expect(resetSpy).toHaveBeenCalledWith('tenant-1', 'user-1');
       expect(seedSpy).toHaveBeenCalledWith('tenant-1', 'user-1', 'DEMO_RESTAURANT');
       expect(resetSpy.mock.invocationCallOrder[0]).toBeLessThan(seedSpy.mock.invocationCallOrder[0]);
-      expect(result.baseline).toEqual({ orders: 0, kdsTickets: 0, deliveries: 0, activeShifts: 0 });
+      expect(result.baseline).toEqual({ orders: 0, deliveries: 0, activeShifts: 0 });
     });
   });
 });

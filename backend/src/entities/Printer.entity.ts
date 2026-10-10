@@ -40,6 +40,10 @@ export class Printer {
   @Column({ type: 'uuid', nullable: true })
   fallback_printer_id?: string;
 
+  /** The branch's one printer for kitchen lines that nothing routes anywhere else. */
+  @Column({ type: 'boolean', default: false })
+  kitchen_default: boolean;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

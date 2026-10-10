@@ -11,7 +11,6 @@ import { ShiftService } from '../src/modules/cashier/shift.service';
 import { DiscountsService } from '../src/modules/discounts/discounts.service';
 import { ApprovalService } from '../src/modules/approval/approval.service';
 import { PaymentService } from '../src/modules/payment/payment.service';
-import { KdsService } from '../src/modules/kds/kds.service';
 import { PrintQueueService } from '../src/modules/printing/print-queue.service';
 import { CustomerService } from '../src/modules/customer/customer.service';
 import { CreditService } from '../src/modules/customer/credit.service';
@@ -37,7 +36,6 @@ import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { Payment } from '../src/entities/Payment.entity';
 import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
 import { ApprovalRule } from '../src/entities/ApprovalRule.entity';
-import { KitchenStation } from '../src/entities/KitchenStation.entity';
 import { Printer } from '../src/entities/Printer.entity';
 import { Customer } from '../src/entities/Customer.entity';
 import { DeliveryZone } from '../src/entities/DeliveryZone.entity';
@@ -58,7 +56,6 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
   let discountsService: DiscountsService;
   let approvalService: ApprovalService;
   let paymentService: PaymentService;
-  let kdsService: KdsService;
   let printQueueService: PrintQueueService;
   let customerService: CustomerService;
   let creditService: CreditService;
@@ -84,7 +81,6 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
   let creditPaymentMethodId: string;
   let primaryPrinterId: string;
   let backupPrinterId: string;
-  let kitchenStationId: string;
   let deliveryZoneId: string;
 
   beforeAll(async () => {
@@ -107,7 +103,6 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     discountsService = moduleRef.get<DiscountsService>(DiscountsService);
     approvalService = moduleRef.get<ApprovalService>(ApprovalService);
     paymentService = moduleRef.get<PaymentService>(PaymentService);
-    kdsService = moduleRef.get<KdsService>(KdsService);
     printQueueService = moduleRef.get<PrintQueueService>(PrintQueueService);
     customerService = moduleRef.get<CustomerService>(CustomerService);
     creditService = moduleRef.get<CreditService>(CreditService);
@@ -308,7 +303,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
       }),
     );
 
-    // 6. Printers & Kitchen Station
+    // 6. Printers
     const printerRepo = dataSource.getRepository(Printer);
     const backupPrn = await printerRepo.save(
       printerRepo.create({
@@ -334,18 +329,6 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
       }),
     );
     primaryPrinterId = primaryPrn.id;
-
-    const stationRepo = dataSource.getRepository(KitchenStation);
-    const station = await stationRepo.save(
-      stationRepo.create({
-        tenant_id: tenantId,
-        branch_id: branchId,
-        code: 'STN-GRILL',
-        name: 'Hot Kitchen Grill Station',
-        is_active: true,
-      }),
-    );
-    kitchenStationId = station.id;
 
     // 7. Delivery Zone
     const zoneRepo = dataSource.getRepository(DeliveryZone);
@@ -386,7 +369,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
   // =========================================================================
   // WORKFLOW 1: POS COMPLETE LIFECYCLE (§16.3.1)
   // =========================================================================
-  it('Workflow 1: POS - Shift, Dine-In, Modifiers, Discount Approval, Split Payment, KDS Bump, Print Retry, Shift Close & Reconcile', async () => {
+  it('Workflow 1: POS - Shift, Dine-In, Modifiers, Discount Approval, Split Payment, Print Retry, Shift Close & Reconcile', async () => {
     const correlationId = `corr-pos-${Date.now()}`;
 
     // Step 1: Open Cashier Shift with Opening Float (500,000 IRR)
@@ -491,19 +474,6 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     const refreshedOrder = await orderRepo.findOne({ where: { id: submittedOrder.id } });
     expect(MoneyUtil.format(refreshedOrder?.paid_amount || '0')).toBe(MoneyUtil.format(submittedOrder.grand_total));
     expect(MoneyUtil.format(refreshedOrder?.outstanding_total || '0')).toBe('0.0000');
-
-    // Step 5: KDS Kitchen Ticket Progression & Bump
-    const generatedTickets = await kdsService.generateTicketsForOrder(tenantId, submittedOrder.id, correlationId);
-    expect(generatedTickets.length).toBeGreaterThan(0);
-    const ticket = generatedTickets[0];
-
-    // Start Ticket (IN_PREPARATION)
-    const inPrepTicket = await kdsService.startTicket(tenantId, ticket.id, cashierUserId);
-    expect(['IN_PROGRESS', 'IN_PREPARATION']).toContain(inPrepTicket.state || (inPrepTicket as any).status);
-
-    // Bump Ticket (READY / BUMPED)
-    const bumpedTicket = await kdsService.bumpTicket(tenantId, ticket.id, correlationId, cashierUserId);
-    expect(['READY', 'BUMPED', 'COMPLETED']).toContain(bumpedTicket.state || (bumpedTicket as any).status);
 
     // Step 6: Print Failure & Fallback Printer Retry Simulation
     const [printJob] = await printQueueService.enqueueOrderPrintJobs(tenantId, submittedOrder.id);

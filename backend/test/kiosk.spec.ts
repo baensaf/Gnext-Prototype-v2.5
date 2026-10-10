@@ -16,7 +16,6 @@ import { OrderItemOption } from '../src/entities/OrderItemOption.entity';
 import { Payment } from '../src/entities/Payment.entity';
 import { Customer } from '../src/entities/Customer.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
-import { KdsService } from '../src/modules/kds/kds.service';
 import { PrintQueueService } from '../src/modules/printing/print-queue.service';
 import { ProductVariant } from '../src/entities/ProductVariant.entity';
 import { CatalogService } from '../src/modules/catalog/catalog.service';
@@ -41,9 +40,7 @@ describe('KioskService (Unit)', () => {
   let orderItemOptionRepo: any;
   let paymentRepo: any;
   let customerRepo: any;
-  let auditWriter: any;
-  let kdsService: any;
-  let printQueueService: any;
+  let auditWriter: any;  let printQueueService: any;
   let variantRepo: any;
   let catalogService: any;
   let terminalRepo: any;
@@ -72,9 +69,7 @@ describe('KioskService (Unit)', () => {
     // The order is saved in one transaction; its repositories are these same fakes.
     const txRepos = new Map<any, any>([[OrderHeader, orderRepo], [OrderItem, orderItemRepo], [OrderItemOption, orderItemOptionRepo], [Customer, customerRepo]]);
     orderRepo.manager = { transaction: async (fn: any) => fn({ getRepository: (entity: any) => txRepos.get(entity) }) };
-    auditWriter = { write: jest.fn() };
-    kdsService = { generateTicketsForOrder: jest.fn().mockResolvedValue([]) };
-    printQueueService = { enqueueOrderPrintJobs: jest.fn().mockResolvedValue([]) };
+    auditWriter = { write: jest.fn() };    printQueueService = { enqueueOrderPrintJobs: jest.fn().mockResolvedValue([]) };
     variantRepo = { find: jest.fn().mockResolvedValue([]) };
     catalogService = {
       getUnavailableNow: jest.fn().mockResolvedValue({ products: new Set(), variants: new Set(), optionItems: new Set() }),
@@ -99,9 +94,7 @@ describe('KioskService (Unit)', () => {
         { provide: getRepositoryToken(OrderItemOption), useValue: orderItemOptionRepo },
         { provide: getRepositoryToken(Payment), useValue: paymentRepo },
         { provide: getRepositoryToken(Customer), useValue: customerRepo },
-        { provide: AuditWriter, useValue: auditWriter },
-        { provide: KdsService, useValue: kdsService },
-        { provide: PrintQueueService, useValue: printQueueService },
+        { provide: AuditWriter, useValue: auditWriter },        { provide: PrintQueueService, useValue: printQueueService },
         { provide: getRepositoryToken(ProductVariant), useValue: variantRepo },
         { provide: CatalogService, useValue: catalogService },
         { provide: getRepositoryToken(Terminal), useValue: terminalRepo },

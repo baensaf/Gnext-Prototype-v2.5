@@ -1,5 +1,5 @@
 import type { Terminal } from 'src/api/tenantApi';
-import type { PrinterDevice } from 'src/api/kdsApi';
+import type { PrinterDevice } from 'src/api/printingApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
@@ -33,8 +33,8 @@ import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import { MoneyUtil } from 'src/utils/money.util';
 import { useCurrencyLabel } from 'src/utils/currency';
 
-import { kdsApi } from 'src/api/kdsApi';
 import { tenantApi } from 'src/api/tenantApi';
+import { printingApi } from 'src/api/printingApi';
 import { httpClient as axios } from 'src/api/httpClient';
 
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
@@ -78,7 +78,7 @@ export function SimulationPaymentsPrintersPage() {
     try {
       const [termList, printList] = await Promise.all([
         tenantApi.getTerminals().catch(() => []),
-        kdsApi.getPrinters().catch(() => []),
+        printingApi.getPrinters().catch(() => []),
       ]);
       setTerminals(termList || []);
       setPrinters(printList || []);

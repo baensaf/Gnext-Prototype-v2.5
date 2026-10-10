@@ -5,7 +5,6 @@ import { BRANCH_OWNED_KEY } from '../decorators/branch-owned.decorator';
 import { OrdersController } from '../../modules/order/order.controller';
 import { DeliveryController } from '../../modules/delivery/delivery.controller';
 import { DineInController } from '../../modules/dine-in/dine-in.controller';
-import { KdsController } from '../../modules/kds/kds.controller';
 import { PrintersController } from '../../modules/printing/printers.controller';
 import { TenantController } from '../../modules/tenant/tenant.controller';
 import { PaymentController } from '../../modules/payment/payment.controller';
@@ -39,8 +38,7 @@ function authorityOf(controller: any, method: string): Handler {
 const SITE_CONFIG: [any, string[]][] = [
   [DeliveryController, ['createZone', 'updateZone', 'deleteZone', 'updateCourierPay']],
   [DineInController, ['createSection', 'updateSection', 'archiveSection', 'createTable', 'updateTable', 'archiveTable']],
-  [KdsController, ['createStation', 'updateStation', 'deleteStation', 'createScreen', 'updateScreen', 'deleteScreen', 'createRoutingRule', 'deleteRoutingRule']],
-  [PrintersController, ['createPrinter', 'updatePrinter', 'deletePrinter']],
+  [PrintersController, ['createPrinter', 'updatePrinter', 'deletePrinter', 'setRoutes', 'setKitchenDefault']],
   [TenantController, ['createTerminal', 'updateTerminal', 'archiveTerminal']],
   [PaymentController, ['createDevice']],
 ];
@@ -135,8 +133,7 @@ const BY_ID: [any, string[]][] = [
     ],
   ],
   [DineInController, ['updateSection', 'archiveSection', 'updateTable', 'archiveTable', 'seatGuests', 'releaseTable']],
-  [KdsController, ['updateStation', 'deleteStation', 'updateScreen', 'deleteScreen', 'deleteRoutingRule']],
-  [PrintersController, ['updatePrinter', 'deletePrinter']],
+  [PrintersController, ['updatePrinter', 'deletePrinter', 'setRoutes', 'setKitchenDefault']],
   [TenantController, ['updateTerminal', 'archiveTerminal']],
 ];
 

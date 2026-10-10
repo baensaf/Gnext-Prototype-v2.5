@@ -23,11 +23,7 @@ export class PrintJob {
   @Column({ type: 'uuid', nullable: true })
   printer_id?: string;
 
-  /** The prep station a kitchen chit is for; empty for other documents and unrouted lines. */
-  @Column({ type: 'uuid', nullable: true })
-  station_id?: string;
-
-  /** The station a kitchen chit is for, e.g. "Grill (1/3)". Other documents leave it empty. */
+  /** The printer a kitchen chit is for, e.g. "Grill (1/3)". Other documents leave it empty. */
   @Column({ type: 'varchar', length: 160, nullable: true })
   label?: string;
 

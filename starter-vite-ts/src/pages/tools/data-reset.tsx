@@ -111,7 +111,7 @@ export function DataResetPage() {
       setResetSuccess(
         t(
           'settings.dataResetPage.demoResetSuccess',
-          'Clean demo is ready. Orders, KDS tickets, deliveries, and active shifts are reset to zero; {{profile}} master data is available.',
+          'Clean demo is ready. Orders, deliveries, and active shifts are reset to zero; {{profile}} master data is available.',
           { profile: result.seedProfile },
         ),
       );
@@ -197,7 +197,7 @@ export function DataResetPage() {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               {t(
                 'settings.dataResetPage.resetCardDesc',
-                'Purges operational transactional data including Order Headers, Payments, Refunds, Cash Drawer Shifts, KDS Tickets, and Audit Events while retaining core tenant and branch setup.'
+                'Purges operational transactional data including Order Headers, Payments, Refunds, Cash Drawer Shifts, and Audit Events while retaining core tenant and branch setup.'
               )}
             </Typography>
 

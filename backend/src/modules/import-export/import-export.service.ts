@@ -623,9 +623,6 @@ export class ImportExportService {
       'courier_settlement',
       'courier_attendance',
       'courier_terminal_assignment',
-      'kitchen_ticket_item',
-      'kitchen_ticket',
-      'kds_event',
       'print_attempt',
       'print_job',
       'approval_decision',
@@ -796,7 +793,7 @@ export class ImportExportService {
       tradingDay,
       baseline: {
         orders: tradingDay.orderCount,
-        kdsTickets: 0,
+
         deliveries: 0,
         activeShifts: 0,
       },

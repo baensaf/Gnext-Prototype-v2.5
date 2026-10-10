@@ -87,11 +87,11 @@ import {
   reportMinutesLeft,
 } from 'src/utils/snappfood-order';
 
-import { kdsApi } from 'src/api/kdsApi';
 import { CONFIG } from 'src/global-config';
 import { orderApi } from 'src/api/orderApi';
 import { refundApi } from 'src/api/refundApi';
 import { paymentApi } from 'src/api/paymentApi';
+import { printingApi } from 'src/api/printingApi';
 import { settingsApi } from 'src/api/settingsApi';
 import { useAuthStore } from 'src/store/useAuthStore';
 import { httpClient as axios } from 'src/api/httpClient';
@@ -336,9 +336,9 @@ export function OrdersWorkflowPage() {
   // Prototype reprint workflow
   const [reprintDialogOpen, setReprintDialogOpen] = useState(false);
   const [reprintDocumentType, setReprintDocumentType] = useState<ReprintDocumentType>('CUSTOMER_RECEIPT');
-  // Which station's chit to print again: '' is every station, as the order first printed.
-  const [reprintStationId, setReprintStationId] = useState('');
-  const [reprintStations, setReprintStations] = useState<Array<{ id: string; name: string }>>([]);
+  // Which printer's chit to print again: '' is every printer, as the order first printed.
+  const [reprintPrinterId, setReprintPrinterId] = useState('');
+  const [reprintPrinters, setReprintPrinters] = useState<Array<{ id: string; name: string }>>([]);
   const [reprintReason, setReprintReason] = useState('');
   const [reprintError, setReprintError] = useState<string | null>(null);
   const [reprintSubmitting, setReprintSubmitting] = useState(false);
@@ -457,13 +457,7 @@ export function OrdersWorkflowPage() {
 
   const renderProgressChip = (status: string) => {
     const key = progressKeyOf(status);
-    return key ? (
-      <>
-        <Chip label={t(`orders.progress.${key}`)} size="small" variant="outlined" />
-        {/* Only a kitchen screen moves an order to preparing or ready. */}
-        {(key === 'preparing' || key === 'ready') && <VersionTag feature="orders.kitchenProgress" />}
-      </>
-    ) : null;
+    return key ? <Chip label={t(`orders.progress.${key}`)} size="small" variant="outlined" /> : null;
   };
 
   // An open Snappfood order shows the time the store promised, or that Snappfood support has it.
@@ -764,8 +758,8 @@ export function OrdersWorkflowPage() {
   const handleOpenReprintDialog = (order: OrderHeader) => {
     setSelectedOrder(order);
     setReprintDocumentType('CUSTOMER_RECEIPT');
-    setReprintStationId('');
-    setReprintStations([]);
+    setReprintPrinterId('');
+    setReprintPrinters([]);
     setReprintReason('');
     setReprintError(null);
     setReprintDialogOpen(true);
@@ -778,30 +772,29 @@ export function OrdersWorkflowPage() {
   };
 
   /**
-   * The stations this order printed to, so one lost chit can be printed again on its own.
-   * Taken from the chits themselves, since the stations may have changed since.
+   * The printers this order's kitchen chits went to, so one lost chit can be printed again on
+   * its own. Taken from the chits themselves, since the routing may have changed since.
    */
-  const loadReprintStations = useCallback(async (orderId: string) => {
+  const loadReprintPrinters = useCallback(async (orderId: string) => {
     try {
-      const res = await kdsApi.getPrintJobs({ entityId: orderId, documentType: 'KITCHEN_TICKET', limit: 50 });
-      const byStation = new Map<string, string>();
+      const res = await printingApi.getPrintJobs({ entityId: orderId, documentType: 'KITCHEN_TICKET', limit: 50 });
+      const byPrinter = new Map<string, string>();
       for (const job of res.items) {
-        if (!job.station_id) continue;
-        // "Grill (1/3)" is the same station as "Grill (2/4)" on another print.
-        byStation.set(job.station_id, (job.label || '').replace(/\s*\([^)]*\)\s*$/, '') || job.station_id);
+        if (!job.printer_id || job.is_reprint) continue;
+        byPrinter.set(job.printer_id, job.printer_name || job.printer_id);
       }
-      setReprintStations([...byStation].map(([id, name]) => ({ id, name })));
+      setReprintPrinters([...byPrinter].map(([id, name]) => ({ id, name })));
     } catch {
-      // Without the list the dialog just offers every station, which is the old behaviour.
-      setReprintStations([]);
+      // Without the list the dialog just reprints every chit.
+      setReprintPrinters([]);
     }
   }, []);
 
   useEffect(() => {
     if (reprintDialogOpen && reprintDocumentType === 'KITCHEN_TICKET' && selectedOrder) {
-      loadReprintStations(selectedOrder.id);
+      loadReprintPrinters(selectedOrder.id);
     }
-  }, [reprintDialogOpen, reprintDocumentType, selectedOrder, loadReprintStations]);
+  }, [reprintDialogOpen, reprintDocumentType, selectedOrder, loadReprintPrinters]);
 
   const handleConfirmReprint = async () => {
     const reason = reprintReason.trim();
@@ -813,13 +806,13 @@ export function OrdersWorkflowPage() {
     try {
       setReprintSubmitting(true);
       setReprintError(null);
-      // One job per printer: a kitchen ticket comes back as a job for each station.
-      const printJobs = await kdsApi.reprintOrder(
+      // One job per printer: a kitchen ticket comes back as a job for each kitchen printer.
+      const printJobs = await printingApi.reprintOrder(
         selectedOrder.id,
         reprintDocumentType,
         reason,
         undefined,
-        reprintDocumentType === 'KITCHEN_TICKET' ? reprintStationId || undefined : undefined
+        reprintDocumentType === 'KITCHEN_TICKET' ? reprintPrinterId || undefined : undefined
       );
       if (!Array.isArray(printJobs) || printJobs.length === 0) {
         throw new Error(t('orders.reprintDialog.failed'));
@@ -1557,18 +1550,18 @@ export function OrdersWorkflowPage() {
               </Select>
             </FormControl>
 
-            {reprintDocumentType === 'KITCHEN_TICKET' && reprintStations.length > 1 && (
+            {reprintDocumentType === 'KITCHEN_TICKET' && reprintPrinters.length > 1 && (
               <FormControl fullWidth>
-                <InputLabel>{t('orders.reprintDialog.station', 'Station')}</InputLabel>
+                <InputLabel>{t('orders.reprintDialog.printer')}</InputLabel>
                 <Select
-                  label={t('orders.reprintDialog.station', 'Station')}
-                  onChange={(e) => setReprintStationId(e.target.value)}
-                  value={reprintStationId}
+                  label={t('orders.reprintDialog.printer')}
+                  onChange={(e) => setReprintPrinterId(e.target.value)}
+                  value={reprintPrinterId}
                 >
-                  <MenuItem value="">{t('orders.reprintDialog.allStations', 'Every station')}</MenuItem>
-                  {reprintStations.map((station) => (
-                    <MenuItem key={station.id} value={station.id}>
-                      {station.name}
+                  <MenuItem value="">{t('orders.reprintDialog.allPrinters')}</MenuItem>
+                  {reprintPrinters.map((printer) => (
+                    <MenuItem key={printer.id} value={printer.id}>
+                      {printer.name}
                     </MenuItem>
                   ))}
                 </Select>

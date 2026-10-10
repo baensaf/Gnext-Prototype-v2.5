@@ -18,7 +18,7 @@ export class Terminal {
   name: string;
 
   @Column({ type: 'varchar', length: 20, default: 'CASHIER' })
-  terminal_type: string; // CASHIER, KIOSK, KDS
+  terminal_type: string; // CASHIER, KIOSK
 
   /** A kiosk's card terminal: the Saman device the branch agent charges its guests on. */
   @Column({ type: 'uuid', nullable: true })

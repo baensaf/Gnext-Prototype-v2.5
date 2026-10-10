@@ -1558,7 +1558,7 @@ export class ReportsService {
         type: 'PRINTER_FAULT',
         severity: 'CRITICAL',
         title: 'Kitchen Printer Spooler Failure',
-        message: 'Kitchen Station #1 printer out of paper. Print jobs rerouted to Station #2.',
+        message: 'Grill printer out of paper. Print jobs rerouted to the counter printer.',
         acknowledged: false,
       });
 

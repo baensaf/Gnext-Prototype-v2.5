@@ -1,4 +1,4 @@
-import type { PrintJob, PrinterDevice } from 'src/api/kdsApi';
+import type { PrintJob, PrinterDevice } from 'src/api/printingApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -39,7 +39,7 @@ import {
 import { fDateTime } from 'src/utils/format-time';
 import { useLiveRefresh } from 'src/utils/use-live-refresh';
 
-import { kdsApi } from 'src/api/kdsApi';
+import { printingApi } from 'src/api/printingApi';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 
 import { VersionTag } from 'src/components/version-tag';
@@ -79,7 +79,7 @@ export function PrintQueuePage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await kdsApi.getPrintJobs({
+      const res = await printingApi.getPrintJobs({
         branchId: branchId || undefined,
         status: statusFilter || undefined,
         documentType: docTypeFilter || undefined,
@@ -105,7 +105,7 @@ export function PrintQueuePage() {
   const handleSimulateOutcome = async () => {
     if (!outcomeJob) return;
     try {
-      await kdsApi.simulatePrintOutcome({
+      await printingApi.simulatePrintOutcome({
         printJobId: outcomeJob.id,
         outcome: outcomeVal,
         useFallback,
@@ -120,7 +120,7 @@ export function PrintQueuePage() {
   const handleRetryJob = async (id: string) => {
     try {
       // The same printer, now fixed. Sending it somewhere else is "reprint on another printer".
-      await kdsApi.retryPrintJob(id, { useFallback: false });
+      await printingApi.retryPrintJob(id, { useFallback: false });
       loadData();
     } catch (err: any) {
       setError(err.detail || 'Failed to retry print job');
@@ -129,7 +129,7 @@ export function PrintQueuePage() {
 
   const handleReprintJob = async (id: string) => {
     try {
-      await kdsApi.reprintJob(id, 'Manual Reprint Request');
+      await printingApi.reprintJob(id, 'Manual Reprint Request');
       loadData();
     } catch (err: any) {
       setError(err.detail || 'Failed to enqueue reprint job');
@@ -142,7 +142,7 @@ export function PrintQueuePage() {
     setRedirectJob(job);
     setRedirectPrinterId('');
     try {
-      const list = await kdsApi.getPrinters(job.branch_id);
+      const list = await printingApi.getPrinters(job.branch_id);
       // A printer that is out of service cannot rescue a job, so it is not offered.
       setPrinters(list.filter((p) => p.is_active));
     } catch (err: any) {
@@ -153,7 +153,7 @@ export function PrintQueuePage() {
   const handleConfirmRedirect = async () => {
     if (!redirectJob || !redirectPrinterId) return;
     try {
-      await kdsApi.reprintJob(redirectJob.id, 'Redirected reprint', redirectPrinterId);
+      await printingApi.reprintJob(redirectJob.id, 'Redirected reprint', redirectPrinterId);
       setRedirectJob(null);
       loadData();
     } catch (err: any) {
@@ -243,7 +243,7 @@ export function PrintQueuePage() {
                     <strong>{docTypeLabel(job.document_type)}</strong>
                     {job.label && (
                       <Chip
-                        label={`${t('printQueue.station', 'Station')}: ${job.label}`}
+                        label={`${t('printQueue.chit')}: ${job.label}`}
                         size="small"
                         variant="outlined"
                         sx={{ ms: 1 }}
