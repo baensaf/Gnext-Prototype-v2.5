@@ -30,7 +30,6 @@ import { AgentsPage } from 'src/pages/operations/agents';
 import { DailyStockPage } from 'src/pages/catalog/stock';
 import { homePathForRole } from 'src/config/role-access';
 import { ProductsPage } from 'src/pages/catalog/products';
-import { DineInPage } from 'src/pages/operations/dine-in';
 import { DataResetPage } from 'src/pages/tools/data-reset';
 import { DiscountsHubPage } from 'src/pages/discounts/hub';
 import { RolesMatrixPage } from 'src/pages/settings/roles';
@@ -210,7 +209,6 @@ export const routesSection: RouteObject[] = [
       { path: 'orders', element: <OrdersWorkflowPage /> },
       { path: 'orders/incoming', element: <RequiresBranch><IncomingOrdersPage /></RequiresBranch> },
       { path: 'orders/:id', element: <OrderRedirect /> },
-      { path: 'dine-in/floor', element: <RequiresBranch><DineInPage /></RequiresBranch> },
       { path: 'delivery', element: <Navigate to="/app/delivery/orders" replace /> },
       { path: 'delivery/orders', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },
       { path: 'delivery/couriers', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },

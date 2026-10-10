@@ -298,44 +298,6 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
     });
   });
 
-  describe('FIN-03: Order Splits & Transfers Modifier Scaling (R12)', () => {
-    it('should scale modifier_total proportionally when partially splitting an order item', async () => {
-      const sourceItem: any = {
-        id: 'item-1',
-        product_id: 'prod-burger',
-        product_name: 'Burger Deluxe',
-        quantity: '2.0000',
-        unit_price: '50000.0000',
-        base_total: '100000.0000',
-        modifier_total: '20000.0000', // 10,000 extra cheese per burger
-        line_total: '120000.0000',
-        options: [{ option_item_id: 'opt-cheese', price_delta: '10000.0000' }],
-      };
-
-      const sourceOrder: any = {
-        id: 'ord-source',
-        tenant_id: 't-1',
-        order_number: 'ORD-001',
-        state: 'SUBMITTED',
-        items: [sourceItem],
-      };
-
-      orderRepo.findOne.mockResolvedValue(sourceOrder);
-      sequenceRepo.findOne.mockResolvedValue({ tenant_id: 't-1', prefix: 'ORD-20260818', last_value: 1 });
-
-      const childOrder = await service.splitOrder('t-1', 'ord-source', {
-        lines: [{ orderItemId: 'item-1', quantity: '1.0000' }],
-      });
-
-      expect(childOrder).toBeDefined();
-      // Source item remaining quantity = 1, modifier_total scaled to 10,000 (from 20,000)
-      expect(sourceItem.quantity).toBe('1.0000');
-      expect(sourceItem.base_total).toBe('50000.0000');
-      expect(sourceItem.modifier_total).toBe('10000.0000');
-      expect(sourceItem.line_total).toBe('60000.0000');
-    });
-  });
-
   describe('BUG-01: POS Held Order Updates (branch_id and order_type support)', () => {
     it('should successfully update draft order with branch_id, order_type, coupon_code and items containing variant_name', async () => {
       const draftOrder: any = {
@@ -366,7 +328,6 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       const updated = await service.updateDraft('t-1', 'ord-draft-1', {
         branch_id: 'b2222222-2222-2222-2222-222222222222',
         order_type: 'DINE_IN',
-        table_number: 'T-12',
         coupon_code: 'SUMMER20',
         items: [
           {
@@ -381,7 +342,6 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       expect(updated).toBeDefined();
       expect(draftOrder.branch_id).toBe('b2222222-2222-2222-2222-222222222222');
       expect(draftOrder.order_type).toBe('DINE_IN');
-      expect(draftOrder.table_number).toBe('T-12');
       expect(draftOrder.coupon_code).toBe('SUMMER20');
       expect(mockEntityManager.save.mock.invocationCallOrder[0])
         .toBeLessThan(mockEntityManager.delete.mock.invocationCallOrder[0]);

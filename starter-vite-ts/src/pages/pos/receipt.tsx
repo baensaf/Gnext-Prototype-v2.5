@@ -112,7 +112,7 @@ export function ReceiptPage() {
             Order #: <strong>{header.order_number}</strong>
           </Typography>
           <Typography variant="caption" sx={{ fontFamily: 'inherit', display: 'block' }}>
-            Type: {header.order_type} {header.table_number ? `(Table ${header.table_number})` : ''}
+            Type: {header.order_type}
           </Typography>
           <Typography variant="caption" sx={{ fontFamily: 'inherit', display: 'block' }}>
             Date: {fDateTime(header.placed_at)}

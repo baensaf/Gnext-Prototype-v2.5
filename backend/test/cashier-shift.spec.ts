@@ -20,7 +20,6 @@ import { Terminal } from '../src/entities/Terminal.entity';
 import { Payment } from '../src/entities/Payment.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { Branch } from '../src/entities/Branch.entity';
-import { TableSession } from '../src/entities/TableSession.entity';
 import { AuditEvent } from '../src/entities/AuditEvent.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { OrderTransitionRecorder } from '../src/modules/order-lifecycle/order-transition-recorder.service';
@@ -774,10 +773,9 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
   describe('Open orders at business day close', () => {
     /**
      * An EntityManager for the close: its first query finds `open`, the second the day's
-     * revenue orders, and `sessions` are the seated tables it can free. `awaitingCourier` names
-     * the orders with a delivery still open.
+     * revenue orders. `awaitingCourier` names the orders with a delivery still open.
      */
-    const dayCloseEm = (open: any[], revenue: any[] = [], sessions: any[] = [], awaitingCourier: string[] = []) => {
+    const dayCloseEm = (open: any[], revenue: any[] = [], awaitingCourier: string[] = []) => {
       const qb: any = {
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
@@ -785,7 +783,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
         getMany: jest.fn().mockResolvedValueOnce(open).mockResolvedValueOnce(revenue),
       };
       const em: any = {
-        find: jest.fn(async (entity: any) => (entity === TableSession ? sessions : [])),
+        find: jest.fn(async () => []),
         findOne: jest.fn(async () => null),
         create: jest.fn((_entity: any, data: any) => ({ ...data })),
         save: jest.fn(async (_entity: any, data: any) => data),
@@ -813,7 +811,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
 
     it('sorts the open orders into those the close completes and those it waits on', async () => {
       dayCloseEm([
-        order({ id: 'paid-dine-in', order_type: 'DINE_IN', table_id: 'tbl-1' }),
+        order({ id: 'paid-dine-in', order_type: 'DINE_IN' }),
         order({ id: 'unpaid', outstanding_total: '50000.0000' }),
         order({ id: 'draft', state: 'DRAFT', status: 'DRAFT' }),
         order({ id: 'snappfood', order_type: 'AGGREGATOR', state: 'PENDING_ACCEPTANCE', status: 'PENDING_ACCEPTANCE' }),
@@ -835,7 +833,6 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
     it('waits on a paid Snappfood order still waiting for one of our couriers', async () => {
       dayCloseEm(
         [order({ id: 'sf-own', order_type: 'AGGREGATOR', channel: 'AGGREGATOR', aggregator_expedition: 'DELIVERY' })],
-        [],
         [],
         ['sf-own'],
       );
@@ -863,15 +860,13 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       expect(em.save).not.toHaveBeenCalledWith(BusinessDayClose, expect.anything());
     });
 
-    it('completes the paid orders nobody closed off, frees their tables, and records each', async () => {
-      const paid = order({ id: 'paid', order_type: 'DINE_IN', table_id: 'tbl-1', state: 'READY', status: 'READY' });
-      const session: any = { id: 'sess-1', table_id: 'tbl-1', closed_at: null, status: 'OCCUPIED' };
-      const em = dayCloseEm([paid], [paid], [session]);
+    it('completes the paid orders nobody closed off, and records each', async () => {
+      const paid = order({ id: 'paid', order_type: 'DINE_IN', state: 'READY', status: 'READY' });
+      const em = dayCloseEm([paid], [paid]);
 
       const closed = await dayService.closeBusinessDay('t-1', { branchId: 'b-1', businessDate: '2026-09-10' }, 'manager-1');
 
       expect(paid.state).toBe('COMPLETED');
-      expect(session.closed_at).toBeInstanceOf(Date);
       expect(transitionRecorder.record).toHaveBeenCalledWith(
         em,
         expect.objectContaining({ order: paid, fromState: 'READY', action: 'COMPLETE', userId: 'manager-1' }),

@@ -23,8 +23,6 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/simulation': 'F',
   '/app/pos': 'V1',
   '/app/orders': 'V1',
-  // V2 only sets up sections and tables; the POS assigns a table to an order.
-  '/app/dine-in': 'V2',
   // Only Snappfood (and later the website) sends orders that wait to be accepted.
   '/app/orders/incoming': 'V3',
   // Shifts, their statements and business days
@@ -81,19 +79,14 @@ export const FEATURE_LABELS = {
   'pos.stop.reason': 'F',
   'pos.stop.duration': 'F',
   'pos.stop.approverPin': 'F',
-  'pos.tableAssignment': 'V2',
   'pos.coupon': 'V3',
   'pos.customerCredit': 'V3',
   // The pay panel saying a delivery order's remainder goes with the courier
   'pos.pay.courierCollects': 'V3',
   // Orders list and the order drawer
   'orders.snappfood': 'V3',
-  'orders.table': 'V2',
   'orders.takenOffline': 'F',
   'orders.headOfficeView': 'V4',
-  // Dine-in floor: running service from the floor (occupancy, seating, move, merge, split,
-  // guest bill, pay, release) comes after Phase 1.
-  'dineIn.liveFloor': 'F',
   // Shifts: in V1 the cashier enters the counted cash and closes the shift, nothing more.
   'shift.safeDrop': 'V4',
   'shift.blindCount': 'V4',
@@ -147,7 +140,6 @@ export const FEATURE_LABELS = {
   // Settings. Money is shown in Toman in V1; the Omani rial and the US dollar come in V7.
   'settings.currencies': 'F',
   'settings.reopenOrders': 'V2',
-  'settings.requireTable': 'V2',
   'settings.incomingOrders': 'V3',
   'settings.refundMethods': 'V2',
   // Kiosk (V3): sizes and add-ons ship with the kiosk.

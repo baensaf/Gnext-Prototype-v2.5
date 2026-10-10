@@ -1,6 +1,5 @@
 import type { Theme } from '@mui/material/styles';
 import type { OrderHeader } from 'src/api/orderApi';
-import type { DiningTable } from 'src/api/dineInApi';
 import type { ReasonCode } from 'src/api/settingsApi';
 import type { DeliveryZone } from 'src/api/deliveryApi';
 import type { Customer, CustomerAddress } from 'src/api/customerApi';
@@ -30,7 +29,6 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import SearchIcon from '@mui/icons-material/Search';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
-import TableBarIcon from '@mui/icons-material/TableBar';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -51,7 +49,6 @@ import {
   Chip,
   Tabs,
   Grid,
-  Menu,
   Badge,
   Stack,
   Alert,
@@ -92,7 +89,6 @@ import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 import { addonMin, isPickOne, addonRuleLabel } from 'src/utils/addon-rule';
 
 import { orderApi } from 'src/api/orderApi';
-import { dineInApi } from 'src/api/dineInApi';
 import { paymentApi } from 'src/api/paymentApi';
 import { catalogApi } from 'src/api/catalogApi';
 import { settingsApi } from 'src/api/settingsApi';
@@ -193,11 +189,6 @@ export function PosOrderPage() {
   const [addingAddress, setAddingAddress] = useState(false);
   const [newAddress, setNewAddress] = useState({ title: '', address_text: '', postal_code: '', is_default: false });
   const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>('DINE_IN');
-  const [tableNumber, setTableNumber] = useState('T-01');
-  const [selectedTableId, setSelectedTableId] = useState<string>('');
-  const [diningTables, setDiningTables] = useState<DiningTable[]>([]);
-  const [tableMenuAnchorEl, setTableMenuAnchorEl] = useState<null | HTMLElement>(null);
-  const [customTableInput, setCustomTableInput] = useState('');
 
   // Order Notes Dialog state
   const [orderNotes, setOrderNotes] = useState<string>('');
@@ -381,11 +372,7 @@ export function PosOrderPage() {
     try {
       if (!quiet) setLoadingInitialData(true);
       // Today's stops load with the stock counts below, for the selected branch.
-      const [cList, pList, tList] = await Promise.all([
-        catalogApi.getCategories(),
-        catalogApi.getProducts(),
-        dineInApi.getTables(undefined, selectedBranchId).catch(() => [] as DiningTable[]),
-      ]);
+      const [cList, pList] = await Promise.all([catalogApi.getCategories(), catalogApi.getProducts()]);
       // Categories taken off the menu hold no sellable products; showing them (and opening on
       // one) left the cashier looking at an empty grid.
       const liveCategories = cList.filter((c) => c.is_active !== false);
@@ -399,11 +386,6 @@ export function PosOrderPage() {
       // refuses it too.
       const offCategoryIds = new Set(cList.filter((c) => c.is_active === false).map((c) => c.id));
       setProducts(pList.filter((p) => p.is_active !== false && !offCategoryIds.has(p.category_id)));
-      setDiningTables(tList);
-      if (tList.length > 0 && (!tableNumber || tableNumber === 'T-01')) {
-        setTableNumber(tList[0].code || tList[0].table_number || 'T-01');
-        setSelectedTableId(tList[0].id);
-      }
       // The menu is here now: a "could not load" notice from before is out of date.
       setError((current) => (current === CATALOG_LOAD_FAILED ? null : current));
     } catch {
@@ -415,7 +397,7 @@ export function PosOrderPage() {
 
   useEffect(() => {
     loadInitialData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   // The Reconnecting bar was up and the cloud is back (agent mode): read what is on screen again,
@@ -889,8 +871,6 @@ export function PosOrderPage() {
         // Null goes back to the zone's fee on a draft that had a typed one.
         delivery_fee: orderType === 'DELIVERY' ? typedDeliveryFee : undefined,
         coupon_code: appliedCouponCode || undefined,
-        table_id: orderType === 'DINE_IN' ? selectedTableId || undefined : undefined,
-        table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
         notes: orderNotes.trim() || undefined,
         items: cart.map((ci) => ({
           product_id: ci.product.id,
@@ -937,8 +917,6 @@ export function PosOrderPage() {
       setActiveDraftOrderId(fullOrder.id);
       setSelectedBranchId(fullOrder.branch_id);
       setOrderType((fullOrder.order_type as any) || 'DINE_IN');
-      if (fullOrder.table_number) setTableNumber(fullOrder.table_number);
-      setSelectedTableId(fullOrder.table_id || '');
       setSelectedCustomerId(fullOrder.customer_id || '');
       // The picker shows the customer's name; fetch it, falling back to what the order kept.
       setSelectedCustomer(null);
@@ -1390,8 +1368,6 @@ export function PosOrderPage() {
         // Null goes back to the zone's fee on a draft that had a typed one.
         delivery_fee: orderType === 'DELIVERY' ? typedDeliveryFee : undefined,
         coupon_code: appliedCouponCode || undefined,
-        table_id: orderType === 'DINE_IN' ? selectedTableId || undefined : undefined,
-        table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
         notes: orderNotes.trim() || undefined,
         items: cart.map((ci) => ({
           product_id: ci.product.id,
@@ -1476,8 +1452,6 @@ export function PosOrderPage() {
     orderType,
     selectedCustomerId,
     appliedCouponCode,
-    tableNumber,
-    selectedTableId,
     orderNotes,
     selectedDeliveryAddressId,
     selectedDeliveryZoneId,
@@ -1517,8 +1491,6 @@ export function PosOrderPage() {
         // Null goes back to the zone's fee on a draft that had a typed one.
         delivery_fee: orderType === 'DELIVERY' ? typedDeliveryFee : undefined,
         coupon_code: appliedCouponCode || undefined,
-        table_id: orderType === 'DINE_IN' ? selectedTableId || undefined : undefined,
-        table_number: orderType === 'DINE_IN' ? tableNumber : undefined,
         notes: orderNotes.trim() || undefined,
         items: cart.map((ci) => ({
           product_id: ci.product.id,
@@ -1561,8 +1533,6 @@ export function PosOrderPage() {
     orderType,
     selectedCustomerId,
     appliedCouponCode,
-    tableNumber,
-    selectedTableId,
     orderNotes,
     selectedDeliveryAddressId,
     selectedDeliveryZoneId,
@@ -2120,7 +2090,7 @@ export function PosOrderPage() {
                 </Stack>
               </Stack>
 
-              {/* Order Parameters (Segmented Order Type Switch + Customer/Table) */}
+              {/* Order Parameters (Segmented Order Type Switch + Customer) */}
               <Stack spacing={1.25} sx={{ mb: 1.5 }}>
                 <ToggleButtonGroup
                   value={orderType}
@@ -2221,174 +2191,6 @@ export function PosOrderPage() {
                     </IconButton>
                   </Tooltip>
 
-                  {orderType === 'DINE_IN' && (
-                    <>
-                      <Tooltip title={tableNumber ? t('pos.table', { table: tableNumber }) : t('pos.selectTable')}>
-                        <IconButton
-                          color="warning"
-                          onClick={(e) => {
-                            setCustomTableInput(tableNumber || '');
-                            setTableMenuAnchorEl(e.currentTarget);
-                          }}
-                          sx={{
-                            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 171, 0, 0.16)' : 'warning.lighter',
-                            color: (theme) => theme.palette.mode === 'dark' ? 'warning.main' : 'warning.darker',
-                            borderRadius: 1.25,
-                            p: 0.85,
-                            border: '1px solid',
-                            borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 171, 0, 0.24)' : 'warning.light',
-                            '&:hover': {
-                              bgcolor: 'warning.main',
-                              color: 'warning.contrastText',
-                            },
-                            flexShrink: 0,
-                          }}
-                        >
-                          <Badge
-                            color="warning"
-                            badgeContent={tableNumber || 0}
-                            invisible={!tableNumber}
-                            sx={{
-                              '& .MuiBadge-badge': {
-                                fontSize: '0.65rem',
-                                fontWeight: 700,
-                                height: 18,
-                                minWidth: 18,
-                                borderRadius: 1,
-                                px: 0.5,
-                                bgcolor: 'warning.main',
-                                color: 'warning.contrastText',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
-                              },
-                            }}
-                          >
-                            <TableBarIcon fontSize="small" />
-                          </Badge>
-                        </IconButton>
-                      </Tooltip>
-
-                      <Menu
-                        anchorEl={tableMenuAnchorEl}
-                        open={Boolean(tableMenuAnchorEl)}
-                        onClose={() => setTableMenuAnchorEl(null)}
-                        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                        slotProps={{
-                          paper: {
-                            sx: {
-                              minWidth: 260,
-                              maxWidth: 340,
-                              p: 1,
-                              borderRadius: 1.5,
-                              boxShadow: (theme) => theme.customShadows?.dropdown || 4,
-                            },
-                          },
-                        }}
-                      >
-                        <Box sx={{ px: 1, py: 0.5, mb: 0.5 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                            Select Dining Table
-                            <VersionTag feature="pos.tableAssignment" sx={{ ml: 1 }} />
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {tableNumber ? `Current Selection: ${tableNumber}` : 'Assign a table for this dine-in order'}
-                          </Typography>
-                        </Box>
-                        <Divider sx={{ my: 0.5 }} />
-
-                        {diningTables.length > 0 ? (
-                          <Box sx={{ maxHeight: 220, overflowY: 'auto' }}>
-                            {diningTables.map((tbl) => {
-                              const val = tbl.code || tbl.table_number;
-                              const isSelected = tableNumber === val;
-                              return (
-                                <MenuItem
-                                  key={tbl.id}
-                                  selected={isSelected}
-                                  onClick={() => {
-                                    setTableNumber(val);
-                                    setSelectedTableId(tbl.id);
-                                    setTableMenuAnchorEl(null);
-                                  }}
-                                  sx={{
-                                    borderRadius: 1,
-                                    my: 0.25,
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                  }}
-                                >
-                                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                                    {isSelected ? (
-                                      <CheckIcon fontSize="small" color="warning" />
-                                    ) : (
-                                      <TableBarIcon fontSize="small" sx={{ color: 'text.secondary', opacity: 0.6 }} />
-                                    )}
-                                    <Box>
-                                      <Typography variant="body2" sx={{ fontWeight: isSelected ? 700 : 500 }}>
-                                        {tbl.code || `Table ${tbl.table_number}`}
-                                      </Typography>
-                                      <Typography variant="caption" color="text.secondary">
-                                        {tbl.seating_capacity} seats
-                                      </Typography>
-                                    </Box>
-                                  </Stack>
-                                  <Chip
-                                    label={tbl.status}
-                                    size="small"
-                                    color={tbl.status === 'AVAILABLE' ? 'success' : tbl.status === 'OCCUPIED' ? 'warning' : 'default'}
-                                    sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600 }}
-                                  />
-                                </MenuItem>
-                              );
-                            })}
-                          </Box>
-                        ) : (
-                          <Box sx={{ p: 1 }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                              No registered dining tables found. Enter table identifier:
-                            </Typography>
-                          </Box>
-                        )}
-
-                        <Divider sx={{ my: 0.75 }} />
-                        <Box sx={{ p: 1, pt: 0.5 }}>
-                          <Stack direction="row" spacing={0.75}>
-                            <TextField
-                              size="small"
-                              placeholder="Custom Table #"
-                              value={customTableInput}
-                              onChange={(e) => setCustomTableInput(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' && customTableInput.trim()) {
-                                  setTableNumber(customTableInput.trim());
-                                  setSelectedTableId('');
-                                  setTableMenuAnchorEl(null);
-                                }
-                              }}
-                              sx={{ '& .MuiInputBase-input': { py: 0.75, fontSize: '0.8125rem' } }}
-                            />
-                            <Button
-                              size="small"
-                              variant="contained"
-                              color="warning"
-                              disabled={!customTableInput.trim()}
-                              onClick={() => {
-                                if (customTableInput.trim()) {
-                                  setTableNumber(customTableInput.trim());
-                                  setSelectedTableId('');
-                                  setTableMenuAnchorEl(null);
-                                }
-                              }}
-                              sx={{ minWidth: 50, px: 1.5, fontSize: '0.75rem', fontWeight: 700 }}
-                            >
-                              Set
-                            </Button>
-                          </Stack>
-                        </Box>
-                      </Menu>
-                    </>
-                  )}
                 </Stack>
 
                 {orderType === 'DELIVERY' && (
@@ -3035,9 +2837,6 @@ export function PosOrderPage() {
                     </Typography>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.5 }}>
                       <Chip label={HELD_TYPE_KEYS[ho.order_type] ? t(HELD_TYPE_KEYS[ho.order_type]) : ho.order_type} size="small" variant="outlined" sx={{ fontWeight: 600, height: 20, fontSize: '0.7rem' }} />
-                      {ho.table_number && (
-                        <Chip label={t('pos.table', { table: ho.table_number })} size="small" color="primary" variant="outlined" sx={{ height: 20, fontSize: '0.7rem' }} />
-                      )}
                     </Stack>
                   </Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>

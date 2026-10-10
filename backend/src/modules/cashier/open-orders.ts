@@ -29,7 +29,6 @@ export interface DayCloseOpenOrder {
   state: string;
   businessDate: string | null;
   placedAt: Date;
-  tableNumber: string | null;
   grandTotal: string;
   outstandingTotal: string;
   issue?: OpenOrderIssue;
@@ -69,7 +68,6 @@ export function openOrderView(order: OrderHeader, issue?: OpenOrderIssue): DayCl
     state: order.state,
     businessDate: order.business_date || BusinessDateUtil.fromDate(order.placed_at),
     placedAt: order.placed_at,
-    tableNumber: order.table_number || null,
     grandTotal: order.grand_total,
     outstandingTotal: order.outstanding_total,
     ...(issue ? { issue } : {}),

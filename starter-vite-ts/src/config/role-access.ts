@@ -32,7 +32,6 @@ export interface RoleAccess {
  */
 const CASHIER_PATHS = [
   '/app/pos',
-  '/app/dine-in',
   '/app/orders',
   '/app/cashier/shifts',
   // A refund is handed over at the register, so this is the cashier's screen even though
@@ -147,7 +146,7 @@ const SITE_ONLY_PATHS = [
  * Tools that only make sense standing in a shop: a register, a kitchen display,
  * a dining floor. A production kitchen and an office have no customers either.
  */
-const SHOP_FLOOR_PATHS = ['/app/pos', '/app/dine-in'];
+const SHOP_FLOOR_PATHS = ['/app/pos'];
 
 /**
  * What stands behind the shop floor: the orders, the tills and shifts, the money in and

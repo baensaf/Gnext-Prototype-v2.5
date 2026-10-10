@@ -11,7 +11,6 @@ import { CashierShift } from '../../entities/CashierShift.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { Payment } from '../../entities/Payment.entity';
 import { Refund } from '../../entities/Refund.entity';
-import { TableSession } from '../../entities/TableSession.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { OrderTransitionRecorder } from '../order-lifecycle/order-transition-recorder.service';
 import { BusinessDayCloseDto, BusinessDayReopenDto } from './dtos/shift.dto';
@@ -490,18 +489,6 @@ export class BusinessDayService {
     order.status = 'COMPLETED';
     order.completed_at = new Date();
     await em.save(OrderHeader, order);
-
-    // A dine-in check left open also left its table seated.
-    if (order.table_id) {
-      const sessions = await em.find(TableSession, {
-        where: { tenant_id: tenantId, table_id: order.table_id, closed_at: IsNull() },
-      });
-      for (const session of sessions) {
-        session.closed_at = new Date();
-        session.status = 'AVAILABLE';
-        await em.save(TableSession, session);
-      }
-    }
 
     await this.transitionRecorder.record(em, {
       tenantId,

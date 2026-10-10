@@ -90,19 +90,6 @@ export class OrderCreateDto {
 
   @IsOptional()
   @IsUUID()
-  table_id?: string;
-
-  @IsOptional()
-  @IsString()
-  table_number?: string;
-
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  guest_count?: number;
-
-  @IsOptional()
-  @IsUUID()
   delivery_address_id?: string;
 
   @IsOptional()
@@ -157,19 +144,6 @@ export class OrderUpdateDto {
   @IsOptional()
   @IsUUID()
   customer_id?: string;
-
-  @IsOptional()
-  @IsUUID()
-  table_id?: string;
-
-  @IsOptional()
-  @IsString()
-  table_number?: string;
-
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  guest_count?: number;
 
   @IsOptional()
   @IsUUID()
@@ -309,11 +283,6 @@ export class OrderTypeChangeDto {
   @IsOptional()
   @IsUUID()
   deliveryZoneId?: string;
-
-  /** Where the guests are sitting, when becoming a dine-in check. */
-  @IsOptional()
-  @IsUUID()
-  tableId?: string;
 
   @IsOptional()
   @IsString()

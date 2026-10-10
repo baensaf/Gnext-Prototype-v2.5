@@ -129,7 +129,6 @@ export interface ReceiptData {
     branch_phone: string;
     order_number: string;
     order_type: string;
-    table_number?: string;
     placed_at: string;
   };
   items: Array<{

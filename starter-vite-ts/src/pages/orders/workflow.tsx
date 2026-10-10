@@ -351,7 +351,6 @@ export function OrdersWorkflowPage() {
   const [typeTarget, setTypeTarget] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>('TAKEAWAY');
   const [typeAddressId, setTypeAddressId] = useState('');
   const [typeZoneId, setTypeZoneId] = useState('');
-  const [typeTableId, setTypeTableId] = useState('');
   const [typeReason, setTypeReason] = useState('');
   const [typeError, setTypeError] = useState<string | null>(null);
   const [typeSubmitting, setTypeSubmitting] = useState(false);
@@ -709,7 +708,6 @@ export function OrdersWorkflowPage() {
     setTypeTarget(order.order_type === 'DELIVERY' ? 'TAKEAWAY' : 'DELIVERY');
     setTypeAddressId('');
     setTypeZoneId('');
-    setTypeTableId('');
     setTypeReason('');
     setTypeError(null);
     setTypeDialogOpen(true);
@@ -723,7 +721,6 @@ export function OrdersWorkflowPage() {
       await orderApi.changeOrderType(typeOrder.id, typeTarget, {
         deliveryAddressId: typeAddressId || undefined,
         deliveryZoneId: typeZoneId || undefined,
-        tableId: typeTableId || undefined,
         reason: typeReason || undefined,
         approvalRequestId,
       });
@@ -911,20 +908,13 @@ export function OrdersWorkflowPage() {
   };
 
   /**
-   * What kind of order it is and where it is: the table, the counter, or where a delivery is
+   * What kind of order it is and where it is: the counter, or where a delivery is
    * going and who has it. How far the courier has got is the Status column's to say.
    */
   const renderWhere = (order: OrderListRow) => {
     const isDelivery = order.order_type === 'DELIVERY' || !!order.delivery_state || !!order.delivery_zone_name;
     let place: React.ReactNode = null;
-    if (order.table_number) {
-      place = (
-        <>
-          {t('orders.table.tableNumber', { number: order.table_number })}
-          <VersionTag feature="orders.table" sx={{ ml: 0.5 }} />
-        </>
-      );
-    } else if (isDelivery) {
+    if (isDelivery) {
       // "No courier yet" only means something while the order is still on its way out.
       place =
         [order.delivery_zone_name, order.courier_name].filter(Boolean).join(' · ') ||
@@ -1715,9 +1705,7 @@ export function OrdersWorkflowPage() {
 
               <Typography variant="caption" color="text.secondary">
                 {t('orders.drawer.placedOn', { date: selectedDrawerOrder.placed_at ? formatCalendarDateTime(selectedDrawerOrder.placed_at) : t('orders.drawer.justNow') })}
-                {selectedDrawerOrder.table_number && ` • ${t('orders.drawer.table', { number: selectedDrawerOrder.table_number })}`}
               </Typography>
-              {selectedDrawerOrder.table_number && <VersionTag feature="orders.table" sx={{ ml: 0.5 }} />}
               {selectedDrawerOrder.aggregator_issue && (
                 <Typography variant="caption" color="warning.main" sx={{ display: 'block', fontWeight: 600 }}>
                   {t('orders.snappfood.issue', { issue: selectedDrawerOrder.aggregator_issue })}
@@ -1774,7 +1762,6 @@ export function OrdersWorkflowPage() {
                           ? `${selectedDrawerOrder.people.customer.first_name || ''} ${selectedDrawerOrder.people.customer.last_name || ''}`.trim()
                           : selectedDrawerOrder.customer_name || t('orders.drawer.walkIn')],
                         [t('orders.drawer.contactPhone'), localMobile(selectedDrawerOrder.context?.customer_mobile || selectedDrawerOrder.customer_mobile)],
-                        [t('orders.drawer.dineInTable'), selectedDrawerOrder.table_number && t('orders.drawer.table', { number: selectedDrawerOrder.table_number })],
                         [t('orders.drawer.takenBy'), selectedDrawerOrder.people?.taken_by?.display_name || selectedDrawerOrder.people?.taken_by?.username],
                         [t('orders.drawer.terminal'), selectedDrawerOrder.context?.terminal_name],
                         [t('orders.drawer.deliveryZone'), selectedDrawerOrder.context?.delivery_zone_name],
@@ -2277,18 +2264,6 @@ export function OrdersWorkflowPage() {
                 onChange={(e) => setTypeZoneId(e.target.value)}
               />
             </>
-          )}
-
-          {typeTarget === 'DINE_IN' && (
-            <TextField
-              fullWidth
-              sx={{ mb: 2 }}
-              label={t('orders.typeDialog.tableId', 'Table')}
-              placeholder={t('orders.typeDialog.tablePlaceholder', 'Optional — can be seated later')}
-              slotProps={{ input: { endAdornment: <VersionTag feature="orders.table" /> } }}
-              value={typeTableId}
-              onChange={(e) => setTypeTableId(e.target.value)}
-            />
           )}
 
           <TextField

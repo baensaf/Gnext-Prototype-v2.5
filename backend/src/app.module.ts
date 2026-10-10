@@ -25,7 +25,6 @@ import { OrderModule } from './modules/order/order.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { ApprovalModule } from './modules/approval/approval.module';
 import { RefundModule } from './modules/refund/refund.module';
-import { DineInModule } from './modules/dine-in/dine-in.module';
 import { PrintingModule } from './modules/printing/printing.module';
 import { DeliveryModule } from './modules/delivery/delivery.module';
 import { CashierModule } from './modules/cashier/cashier.module';
@@ -53,10 +52,6 @@ import { RefundRequest } from './entities/RefundRequest.entity';
 import { RefundItem } from './entities/RefundItem.entity';
 import { RefundAllocation } from './entities/RefundAllocation.entity';
 import { Refund } from './entities/Refund.entity';
-import { DiningArea } from './entities/DiningArea.entity';
-import { DiningTable } from './entities/DiningTable.entity';
-import { TableSession } from './entities/TableSession.entity';
-import { TableOccupancyEvent } from './entities/TableOccupancyEvent.entity';
 import { Printer } from './entities/Printer.entity';
 import { PrintRoute } from './entities/PrintRoute.entity';
 import { PrintJob } from './entities/PrintJob.entity';
@@ -177,7 +172,6 @@ import { ReportExportJob } from './entities/ReportExportJob.entity';
           OrderHeader, OrderItem, OrderItemOption, OrderAdjustment, OrderNote, OrderLink, OrderStateEvent, OrderSequence,
           Payment, SettlementAccount, PaymentDevice, PaymentAllocation, PaymentAttempt,
           RefundRequest, RefundItem, RefundAllocation, Refund,
-          DiningArea, DiningTable, TableSession, TableOccupancyEvent,
           PrintRoute,
           Printer, PrintJob, PrintAttempt,
           Courier, DeliveryAssignment, CourierSettlement, CourierSettlementLine,
@@ -209,7 +203,6 @@ import { ReportExportJob } from './entities/ReportExportJob.entity';
     CashierModule,
     ApprovalModule,
     RefundModule,
-    DineInModule,
     PrintingModule,
     DeliveryModule,
     KioskModule,
