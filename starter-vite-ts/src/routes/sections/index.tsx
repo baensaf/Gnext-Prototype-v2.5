@@ -49,7 +49,6 @@ import { ReportsIndexPage } from 'src/pages/reports/index-page';
 import { BranchNewPage } from 'src/pages/operations/branch-new';
 import { GeneralSettingsPage } from 'src/pages/settings/general';
 import { ImportWizardPage } from 'src/pages/tools/import-wizard';
-import { ShiftDetailPage } from 'src/pages/cashier/shift-detail';
 import { AvailabilityPage } from 'src/pages/catalog/availability';
 import { CashDrawerPage } from 'src/pages/operations/cash-drawer';
 import { PrintQueuePage } from 'src/pages/operations/print-queue';
@@ -142,6 +141,12 @@ function OrderRedirect() {
   return <Navigate to={paths.app.orders.detail(id)} replace />;
 }
 
+/** A shift's statement is its End shift page now; old links land there. */
+function ShiftRedirect() {
+  const { shiftId = '' } = useParams();
+  return <Navigate to={paths.app.cashier.shiftDetail(shiftId)} replace />;
+}
+
 /** Who may run a kiosk: a manager or above. A cashier is turned away with a way out. */
 const KIOSK_ROLES = ['MANAGER', 'OWNER', 'ADMIN', 'SUPER_ADMIN'];
 
@@ -209,7 +214,7 @@ export const routesSection: RouteObject[] = [
       { path: 'delivery/settlements/:settlementId', element: <SettlementDetailPage /> },
       { path: 'delivery/zones', element: <RequiresBranch><DeliveryPage /></RequiresBranch> },
       { path: 'cashier/shifts', element: <RequiresBranch><CashDrawerPage /></RequiresBranch> },
-      { path: 'cashier/shifts/:shiftId', element: <ShiftDetailPage /> },
+      { path: 'cashier/shifts/:shiftId', element: <ShiftRedirect /> },
       { path: 'cashier/shifts/:shiftId/end', element: <EndShiftPage /> },
       { path: 'cashier/business-days', element: <RequiresBranch><BusinessDaysPage /></RequiresBranch> },
       { path: 'payments', element: <RequiresBranch><PaymentsPage /></RequiresBranch> },

@@ -7,7 +7,8 @@ import { TenantSetting } from '../../entities/TenantSetting.entity';
  *
  * The groups here are the ones that legitimately differ between sites — local tax
  * treatment, how the register behaves, how long a cashier keeps authority over an order,
- * what a kiosk asks a customer for, and how its drawers are floated and counted.
+ * what a kiosk asks a customer for, and how its drawers are floated. The business day's
+ * cutoff is not among them: it is one chain setting (P-07).
  */
 export const BRANCH_OVERRIDABLE_SETTING_GROUPS = [
   'TAX',
@@ -16,9 +17,6 @@ export const BRANCH_OVERRIDABLE_SETTING_GROUPS = [
   'ORDER_WORKFLOW',
   'KIOSK_CUSTOMER_IDENTITY_POLICY',
   'SHIFT_POLICY',
-  // How a new courier is paid and whether a failed ride is paid: shops in one chain differ.
-  // When the business day turns over and the shop's hours: a late-night site closes later.
-  'BUSINESS_DAY',
 ];
 
 export function isBranchOverridable(key: string): boolean {

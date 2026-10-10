@@ -52,14 +52,6 @@ export class Branch {
   @Column({ type: 'uuid', nullable: true })
   archived_by: string | null;
 
-  /**
-   * The rules this branch's business day has run under (cutoff and time zone), kept so a
-   * change applies from the moment it is made and never re-dates what came before. Written
-   * only by trackBusinessDayChange; see common/utils/business-day.ts.
-   */
-  @Column({ type: 'jsonb', nullable: true })
-  business_day_timeline: Record<string, any> | null;
-
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

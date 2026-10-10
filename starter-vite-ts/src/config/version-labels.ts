@@ -75,8 +75,6 @@ export const FEATURE_LABELS = {
   'orders.snappfood': 'V3',
   'orders.headOfficeView': 'V4',
   // Shifts: in V1 the cashier enters the counted cash and closes the shift, nothing more.
-  // Business days
-  'businessDay.reopen': 'V2',
   // Card terminals and the bank accounts they settle into
   'payments.bankTransfer': 'V4',
   'payments.settlementAccounts': 'V4',

@@ -1273,7 +1273,6 @@ export class DeliveryService {
             shift_id: drawer.id,
             type: short ? 'PAID_OUT' : 'PAID_IN',
             amount: cashShortOver,
-            currency_code: drawer.currency_code,
             reason_text: `Courier ${courier?.name || settlement.courier_id} ${short ? 'short' : 'over'} on ${settlement.settlement_number}`,
             reference: settlement.settlement_number,
             posted_by: userId || null,

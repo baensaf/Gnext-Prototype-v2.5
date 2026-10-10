@@ -95,20 +95,10 @@ export interface ShiftCloseCheck {
   shiftId: string;
   branchId: string;
   businessDate: string;
-  currencyCode: string;
   /** This till's open orders. Closing leaves them open; the screen says so, nothing blocks. */
   openOrders: DayCloseOpenOrder[];
-  /**
-   * Open orders an earlier shift on this register already left open. Shown, but not asked
-   * about again: the day close answers for them.
-   */
-  carriedOrders: DayCloseOpenOrder[];
   /** Cash payments on this drawer that must be finished or cancelled before it closes. */
   pendingCash: PendingCashPayment[];
-  /** Other drawers still open at the branch on this business day. */
-  otherOpenTills: number;
-  /** Whether the branch has already closed this business day. */
-  dayClosed: boolean;
 }
 
 @Injectable()
@@ -144,7 +134,6 @@ export class ShiftService {
     if (query.terminal) qb.andWhere('s.terminal_id = :terminal', { terminal: query.terminal });
     if (query.state) qb.andWhere('s.state = :state', { state: query.state });
     if (query.businessDate) qb.andWhere('s.business_date = :businessDate', { businessDate: query.businessDate });
-    if (query.currency) qb.andWhere('s.currency_code = :currency', { currency: query.currency });
 
     qb.orderBy('s.opened_at', 'DESC');
     const page = parseInt(query.page || '1', 10);
@@ -391,11 +380,8 @@ export class ShiftService {
         });
       }
 
-      const currencyCode = dto.currencyCode || 'IRR';
-
-      // Check if an open shift already exists on terminal/currency
       const existing = await em.findOne(CashierShift, {
-        where: { tenant_id: tenantId, terminal_id: dto.terminalId, currency_code: currencyCode, state: 'OPEN' },
+        where: { tenant_id: tenantId, terminal_id: dto.terminalId, state: 'OPEN' },
       });
 
       if (existing) {
@@ -422,14 +408,10 @@ export class ShiftService {
         branch_id: terminal.branch_id,
         terminal_id: terminal.id,
         opened_by: userId || null,
-        user_id: userId || null,
         shift_number: shiftNum,
         state: 'OPEN',
-        status: 'OPEN',
-        currency_code: currencyCode,
         business_date: dateStr,
         opening_cash: openingCash,
-        opening_float: openingCash,
         expected_cash: openingCash,
       });
 
@@ -441,7 +423,6 @@ export class ShiftService {
         shift_id: savedShift.id,
         type: 'OPENING_FLOAT',
         amount: openingCash,
-        currency_code: currencyCode,
         posted_by: userId || null,
         reference: 'Opening Float',
       });
@@ -503,7 +484,6 @@ export class ShiftService {
         shift_id: shift.id,
         type: dto.type,
         amount: signedAmount,
-        currency_code: shift.currency_code,
         reason_code_id: dto.reasonCodeId || null,
         reason_text: dto.reason || dto.reasonText || null,
         reference: dto.reference || null,
@@ -639,7 +619,6 @@ export class ShiftService {
           shift_id: shift.id,
           type: 'CLOSE_ADJUSTMENT',
           amount: shortOver,
-          currency_code: shift.currency_code,
           posted_by: userId || null,
           reference: 'Shift Close Adjustment',
         });
@@ -650,9 +629,7 @@ export class ShiftService {
       shift.actual_cash = actualCash;
       shift.left_in_drawer = leftInDrawer;
       shift.short_over = shortOver;
-      shift.over_short_amount = shortOver;
       shift.state = 'CLOSED';
-      shift.status = 'CLOSED';
       shift.closed_at = new Date();
       shift.closed_by = userId || null;
 
@@ -685,7 +662,7 @@ export class ShiftService {
   /**
    * A till's open orders are the ones it rang up: stamped with this shift, or with this
    * register by an earlier shift that left them. Orders no register took — kiosk, Snappfood —
-   * are the branch's, and the day close answers for those.
+   * are the branch's, and the day's auto-close answers for those.
    */
   private async closeCheckFor(em: EntityManager, tenantId: string, shift: CashierShift): Promise<ShiftCloseCheck> {
     const orders = await em
@@ -706,12 +683,9 @@ export class ShiftService {
       .orderBy('o.placed_at', 'ASC')
       .getMany();
     const openOrders: DayCloseOpenOrder[] = [];
-    const carriedOrders: DayCloseOpenOrder[] = [];
     for (const order of orders) {
       const issue = openOrderIssue(order);
-      if (!issue || !TILL_OPEN_ORDER_ISSUES.includes(issue)) continue;
-      const carried = !!order.shift_id && order.shift_id !== shift.id;
-      (carried ? carriedOrders : openOrders).push(openOrderView(order, issue));
+      if (issue && TILL_OPEN_ORDER_ISSUES.includes(issue)) openOrders.push(openOrderView(order, issue));
     }
 
     const pendingCash: PendingCashPayment[] = await em.query(
@@ -724,32 +698,12 @@ export class ShiftService {
       [tenantId, shift.id],
     );
 
-    const activeTills = await em.count(CashierShift, {
-      where: {
-        tenant_id: tenantId,
-        branch_id: shift.branch_id,
-        business_date: shift.business_date,
-        currency_code: shift.currency_code,
-        state: 'OPEN',
-      },
-    });
-    const dayClosed: unknown[] = await em.query(
-      `SELECT 1 FROM business_day_close
-        WHERE tenant_id = $1 AND branch_id = $2 AND business_date = $3 AND currency_code = $4 AND status = 'CLOSED'
-        LIMIT 1`,
-      [tenantId, shift.branch_id, shift.business_date, shift.currency_code],
-    );
-
     return {
       shiftId: shift.id,
       branchId: shift.branch_id,
       businessDate: shift.business_date,
-      currencyCode: shift.currency_code,
       openOrders,
-      carriedOrders,
       pendingCash,
-      otherOpenTills: activeTills - (shift.state === 'CLOSED' ? 0 : 1),
-      dayClosed: dayClosed.length > 0,
     };
   }
 
@@ -798,7 +752,6 @@ export class ShiftService {
         branchId: shift.branch_id,
         terminalId: shift.terminal_id,
         state: shift.state,
-        currencyCode: shift.currency_code,
         businessDate: shift.business_date,
         openedAt: shift.opened_at,
         closedAt: shift.closed_at,

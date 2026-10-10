@@ -33,6 +33,8 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { paths } from 'src/routes/paths';
+
 import { MoneyUtil } from 'src/utils/money.util';
 import { businessToday } from 'src/utils/calendar';
 import { fDate , fTime } from 'src/utils/format-time';
@@ -167,7 +169,7 @@ export function CashDrawerPage() {
                 </Typography>
                 {stale && (
                   <Alert severity="warning" sx={{ py: 0 }}>
-                    {t('shift.card.stale', 'Left open since {{date}}. Count it down before closing the day.', {
+                    {t('shift.card.stale', 'Left open since {{date}}. Count it down so the day can close.', {
                       date: fDate(shift.business_date),
                     })}
                   </Alert>
@@ -198,12 +200,13 @@ export function CashDrawerPage() {
                       </Button>
                     </>
                   )}
-                  <Button size="small" startIcon={<ReceiptLongIcon />} onClick={() => navigate(`/app/cashier/shifts/${shift.id}`)}>
-                    {t('shift.card.statement', 'Statement')}
-                  </Button>
-                  {mayWork && (
-                    <Button size="small" color="error" variant="outlined" startIcon={<LockIcon />} onClick={() => navigate(`/app/cashier/shifts/${shift.id}/end`)} sx={{ ml: 'auto' }}>
+                  {mayWork ? (
+                    <Button size="small" color="error" variant="outlined" startIcon={<LockIcon />} onClick={() => navigate(paths.app.cashier.shiftDetail(shift.id))} sx={{ ml: 'auto' }}>
                       {t('shift.end.open', 'Review & end shift')}
+                    </Button>
+                  ) : (
+                    <Button size="small" startIcon={<ReceiptLongIcon />} onClick={() => navigate(paths.app.cashier.shiftDetail(shift.id))}>
+                      {t('shift.card.statement', 'Statement')}
                     </Button>
                   )}
                 </Stack>
@@ -318,9 +321,9 @@ export function CashDrawerPage() {
                 </TableHead>
                 <TableBody>
                   {history.map((s) => {
-                    const variance = s.short_over ?? s.over_short_amount ?? '0';
+                    const variance = s.short_over ?? '0';
                     return (
-                      <TableRow key={s.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/app/cashier/shifts/${s.id}`)}>
+                      <TableRow key={s.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(paths.app.cashier.shiftDetail(s.id))}>
                         <TableCell dir="ltr">#{s.shift_number}</TableCell>
                         <TableCell>{registerName(s.terminal_id)}</TableCell>
                         <TableCell dir="ltr">{fDate(s.business_date)}</TableCell>

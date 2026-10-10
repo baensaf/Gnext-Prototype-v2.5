@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Branch } from '../../entities/Branch.entity';
 import { BusinessDayClose } from '../../entities/BusinessDayClose.entity';
 import { CashierShift } from '../../entities/CashierShift.entity';
@@ -14,19 +14,17 @@ const LOOKBACK_DAYS = 7;
 
 export interface AutoCloseOutcome {
   businessDate: string;
-  currencyCode: string;
   outcome: 'CLOSED' | 'WAITING_FOR_SHIFTS' | 'FAILED';
   detail?: string;
 }
 
 /**
  * Closes each branch's business day by itself once the day has ended at its cutoff and every
- * shift on it has been counted and closed. Nobody has to press "Close Business Day" for the
- * date to move on or for the next shift to open; this is the bookkeeping that follows.
+ * shift on it has been counted and closed. Nobody presses "Close Business Day" for the date to
+ * move on or for the next shift to open; this is the bookkeeping that follows.
  *
- * It leaves alone: a day a manager closed or reopened (reopening is a person's decision to
- * keep it open), a day with nothing on it, a day still waiting on a drawer, and any day
- * before the branch started running this way (`since`), so nothing in the past is touched.
+ * It leaves alone: a day already closed, a day with nothing on it, a day still waiting on a
+ * drawer, and any day before the branch's first (`since`).
  */
 @Injectable()
 export class BusinessDayAutoCloseService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -43,7 +41,6 @@ export class BusinessDayAutoCloseService implements OnApplicationBootstrap, OnMo
   async processBranch(tenantId: string, branchId: string, now: Date = new Date()): Promise<AutoCloseOutcome[]> {
     const em = this.dataSource.manager;
     const clock = await loadBusinessClock(em, tenantId, branchId);
-    if (!clock.policy.autoClose) return [];
 
     const today = clock.today(now);
     let first = addDays(today, -LOOKBACK_DAYS);
@@ -51,52 +48,45 @@ export class BusinessDayAutoCloseService implements OnApplicationBootstrap, OnMo
 
     const outcomes: AutoCloseOutcome[] = [];
     for (let date = first; date < today; date = addDays(date, 1)) {
-      for (const currencyCode of await this.currenciesTradedOn(tenantId, branchId, date)) {
-        const closed = await em.findOne(BusinessDayClose, {
-          where: { tenant_id: tenantId, branch_id: branchId, business_date: date, currency_code: currencyCode },
-        });
-        if (closed) continue;
+      if (!(await this.tradedOn(tenantId, branchId, date))) continue;
+      const closed = await em.findOne(BusinessDayClose, {
+        where: { tenant_id: tenantId, branch_id: branchId, business_date: date },
+      });
+      if (closed) continue;
 
-        const openShifts = await em.count(CashierShift, {
-          where: { tenant_id: tenantId, branch_id: branchId, business_date: date, currency_code: currencyCode, state: 'OPEN' },
-        });
-        if (openShifts > 0) {
-          outcomes.push({ businessDate: date, currencyCode, outcome: 'WAITING_FOR_SHIFTS', detail: `${openShifts} shift(s) not yet closed` });
-          continue;
-        }
+      const openShifts = await em.count(CashierShift, {
+        where: { tenant_id: tenantId, branch_id: branchId, business_date: date, state: 'OPEN' },
+      });
+      if (openShifts > 0) {
+        outcomes.push({ businessDate: date, outcome: 'WAITING_FOR_SHIFTS', detail: `${openShifts} shift(s) not yet closed` });
+        continue;
+      }
 
-        try {
-          await this.businessDays.closeBusinessDay(
-            tenantId,
-            { branchId, businessDate: date, currencyCode },
-            undefined,
-            `auto-close:${branchId}:${date}`,
-            { automatic: true, ordersFrom: clock.policy.since, now },
-          );
-          outcomes.push({ businessDate: date, currencyCode, outcome: 'CLOSED' });
-        } catch (err) {
-          // A manager closing the same day at the same moment wins; anything else is logged
-          // and tried again next sweep.
-          const detail = (err as Error)?.message;
-          outcomes.push({ businessDate: date, currencyCode, outcome: 'FAILED', detail });
-          this.logger.warn(`Auto-close of ${date} at branch ${branchId} failed: ${detail}`);
-        }
+      try {
+        await this.businessDays.closeBusinessDay(tenantId, branchId, date, { ordersFrom: clock.policy.since, now });
+        outcomes.push({ businessDate: date, outcome: 'CLOSED' });
+      } catch (err) {
+        // Two sweeps on the same day at once: one wins. Anything else is logged and tried again.
+        const detail = (err as Error)?.message;
+        outcomes.push({ businessDate: date, outcome: 'FAILED', detail });
+        this.logger.warn(`Auto-close of ${date} at branch ${branchId} failed: ${detail}`);
       }
     }
     return outcomes;
   }
 
-  /** The currencies a branch sold or kept a drawer in on a day; none means nothing to close. */
-  private async currenciesTradedOn(tenantId: string, branchId: string, date: string): Promise<string[]> {
-    const rows: { currency_code: string | null }[] = await this.dataSource.query(
-      `SELECT DISTINCT currency_code FROM cashier_shift WHERE tenant_id = $1 AND branch_id = $2 AND business_date = $3
-       UNION
-       SELECT DISTINCT currency_code FROM order_header
+  /** Whether a branch kept a drawer or sold anything on a day; a day with neither has nothing to close. */
+  private async tradedOn(tenantId: string, branchId: string, date: string): Promise<boolean> {
+    const rows: unknown[] = await this.dataSource.query(
+      `SELECT 1 FROM cashier_shift WHERE tenant_id = $1 AND branch_id = $2 AND business_date = $3
+       UNION ALL
+       SELECT 1 FROM order_header
         WHERE tenant_id = $1 AND branch_id = $2 AND business_date = $3 AND deleted_at IS NULL
-          AND state NOT IN ('DRAFT')`,
+          AND state NOT IN ('DRAFT')
+       LIMIT 1`,
       [tenantId, branchId, date],
     );
-    return [...new Set(rows.map((r) => r.currency_code || 'IRR'))].sort();
+    return rows.length > 0;
   }
 
   onApplicationBootstrap() {

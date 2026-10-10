@@ -7,7 +7,6 @@ import { BusinessDayService } from '../src/modules/cashier/business-day.service'
 import { ShiftsController } from '../src/modules/cashier/shifts.controller';
 import { BusinessDaysController } from '../src/modules/cashier/business-days.controller';
 import { BRANCH_OWNED_KEY } from '../src/common/decorators/branch-owned.decorator';
-import { ROLES_KEY, MANAGER_AND_ABOVE } from '../src/common/decorators/roles.decorator';
 import { runWithTill } from '../src/common/utils/till-context';
 import { BusinessDateUtil } from '../src/common/utils/business-date.util';
 import { BusinessClock } from '../src/common/utils/business-day';
@@ -167,11 +166,11 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       expect(service.getCurrentShift).toHaveBeenLastCalledWith('t-1', undefined, 'b-downtown');
     });
 
-    it('leaves closing and reopening a business day to a manager, and reopening to its own branch', () => {
-      const proto = BusinessDaysController.prototype;
-      expect(Reflect.getMetadata(ROLES_KEY, proto.closeBusinessDay)).toEqual(MANAGER_AND_ABOVE);
-      expect(Reflect.getMetadata(ROLES_KEY, proto.reopenBusinessDay)).toEqual(MANAGER_AND_ABOVE);
-      expect(Reflect.getMetadata(BRANCH_OWNED_KEY, proto.reopenBusinessDay)).toMatchObject({ entity: BusinessDayClose });
+    it('offers no way to close or reopen a business day by hand: it closes itself', () => {
+      const proto: any = BusinessDaysController.prototype;
+      expect(proto.closeBusinessDay).toBeUndefined();
+      expect(proto.reopenBusinessDay).toBeUndefined();
+      expect(proto.getOpenOrders).toBeUndefined();
     });
 
     it("does not let a branch account read another shop's business days through ?branch=", async () => {
@@ -457,14 +456,13 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       expect(shift.state).toBe('CLOSED');
     });
 
-    it('does not ask again about orders an earlier shift already left open', async () => {
+    it('lists the orders an earlier shift on this register left open, without holding the close', async () => {
       tillOrders = [order({ id: 'yesterday', shift_id: 'shf-0', outstanding_total: '90000.0000' })];
       const shift = openShift();
       shiftRepo.findOne.mockResolvedValue(shift);
 
       await expect(shiftService.getCloseCheck('t-1', 'shf-1')).resolves.toMatchObject({
-        openOrders: [],
-        carriedOrders: [{ id: 'yesterday', issue: 'UNPAID' }],
+        openOrders: [{ id: 'yesterday', issue: 'UNPAID' }],
       });
       await shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000' }, 'cashier-1');
       expect(shift.state).toBe('CLOSED');
@@ -507,14 +505,11 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       expect(shift.state).toBe('OPEN');
     });
 
-    it('says whether this was the last till open at the branch', async () => {
+    it('finds nothing left behind at a clean till', async () => {
       shiftRepo.findOne.mockResolvedValue(openShift());
-      await expect(shiftService.getCloseCheck('t-1', 'shf-1')).resolves.toMatchObject({
-        openOrders: [],
-        pendingCash: [],
-        otherOpenTills: 0,
-        dayClosed: false,
-      });
+      await expect(shiftService.getCloseCheck('t-1', 'shf-1')).resolves.toEqual(
+        expect.objectContaining({ openOrders: [], pendingCash: [] }),
+      );
     });
   });
 
@@ -560,35 +555,13 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
     });
   });
 
-  describe('Business Day Close & Reopen Rules (R13)', () => {
-    it('should throw BadRequestException if active cashier shifts exist on business day close', async () => {
-      shiftRepo.find = jest.fn().mockResolvedValue([{ id: 'shf-open', state: 'OPEN' }]);
-
-      await expect(
-        dayService.closeBusinessDay('t-1', { branchId: 'b-1', businessDate: '2026-08-09' }),
-      ).rejects.toThrow(BadRequestException);
+  describe('Business Day Close Rules (R13)', () => {
+    it('will not close a day while a cashier shift on it is still open', async () => {
+      await expect(dayService.closeBusinessDay('t-1', 'b-1', '2026-08-09')).rejects.toThrow(BadRequestException);
     });
 
-    it('should throw BadRequestException if business day reopen gives no reason', async () => {
-      dayCloseRepo.findOne.mockResolvedValue({ id: 'day-1', tenant_id: 't-1', status: 'CLOSED' });
-
-      await expect(dayService.reopenBusinessDay('t-1', 'day-1', { reason: '   ' })).rejects.toThrow(BadRequestException);
-    });
-
-    it('reopens a closed day on a reason alone and records it', async () => {
-      const day = { id: 'day-1', tenant_id: 't-1', status: 'CLOSED', business_date: '2026-09-10' };
-      dayCloseRepo.findOne.mockResolvedValue(day);
-
-      await dayService.reopenBusinessDay('t-1', 'day-1', { reason: 'Late cash drop' }, 'manager-1');
-      expect(day.status).toBe('REOPENED');
-      expect(auditWriter.write).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'BUSINESS_DAY_REOPENED', details: expect.objectContaining({ reason: 'Late cash drop' }) }),
-      );
-    });
-
-    it('refuses to reopen a day that is not closed', async () => {
-      dayCloseRepo.findOne.mockResolvedValue({ id: 'day-1', tenant_id: 't-1', status: 'REOPENED' });
-      await expect(dayService.reopenBusinessDay('t-1', 'day-1', { reason: 'Again' })).rejects.toThrow(BadRequestException);
+    it('will not close a day that has not ended', async () => {
+      await expect(dayService.closeBusinessDay('t-1', 'b-1', BusinessClock.fromConfig().today())).rejects.toThrow(/not ended/);
     });
 
     it("stamps a shift with the till's local operating day, not the UTC one", async () => {
@@ -622,6 +595,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
         save: jest.fn(async (_entity: any, data: any) => data),
         createQueryBuilder: jest.fn(() => qb),
         query: jest.fn(async () => awaitingCourier.map((id) => ({ order_id: id }))),
+        count: jest.fn(async () => 0),
       };
       dataSource.transaction.mockImplementation(async (cb: any) => cb(em));
       dataSource.manager = em;
@@ -642,109 +616,51 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       ...overrides,
     });
 
-    it('sorts the open orders into those the close completes and those it waits on', async () => {
-      dayCloseEm([
+    it('completes the paid orders and carries over the rest', async () => {
+      const orders = [
         order({ id: 'paid-dine-in', order_type: 'DINE_IN' }),
         order({ id: 'unpaid', outstanding_total: '50000.0000' }),
         order({ id: 'draft', state: 'DRAFT', status: 'DRAFT' }),
         order({ id: 'snappfood', order_type: 'AGGREGATOR', state: 'PENDING_ACCEPTANCE', status: 'PENDING_ACCEPTANCE' }),
-        order({ id: 'delivery', order_type: 'DELIVERY', state: 'OUT_FOR_DELIVERY', status: 'OUT_FOR_DELIVERY' }),
-      ]);
-
-      const result = await dayService.getOpenOrders('t-1', { branchId: 'b-1', businessDate: '2026-09-10' });
-
-      expect(result.toComplete.map((o) => o.id)).toEqual(['paid-dine-in']);
-      expect(result.needsDecision.map((o) => [o.id, o.issue])).toEqual([
-        ['unpaid', 'UNPAID'],
-        ['draft', 'NOT_SUBMITTED'],
-        ['snappfood', 'AWAITING_ACCEPTANCE'],
         // Paid, but a courier finishes a delivery; its cash settles off that step.
-        ['delivery', 'DELIVERY_NOT_FINISHED'],
-      ]);
-    });
+        order({ id: 'delivery', order_type: 'DELIVERY', state: 'OUT_FOR_DELIVERY', status: 'OUT_FOR_DELIVERY' }),
+      ];
+      dayCloseEm(orders);
 
-    it('waits on a paid Snappfood order still waiting for one of our couriers', async () => {
-      dayCloseEm(
-        [order({ id: 'sf-own', order_type: 'AGGREGATOR', channel: 'AGGREGATOR', aggregator_expedition: 'DELIVERY' })],
-        [],
-        ['sf-own'],
+      const closed = await dayService.closeBusinessDay('t-1', 'b-1', '2026-09-10');
+
+      expect(orders.filter((o) => o.state === 'COMPLETED').map((o) => o.id)).toEqual(['paid-dine-in']);
+      expect(closed.totals).toMatchObject({ autoCompletedOrders: 1, carriedOverOrders: 4 });
+      expect(auditWriter.write).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'BUSINESS_DAY_AUTO_CLOSED',
+          details: { autoCompletedOrderIds: ['paid-dine-in'], carriedOverOrderIds: ['unpaid', 'draft', 'snappfood', 'delivery'] },
+        }),
       );
-
-      const result = await dayService.getOpenOrders('t-1', { branchId: 'b-1', businessDate: '2026-09-10' });
-
-      expect(result.toComplete).toEqual([]);
-      expect(result.needsDecision.map((o) => [o.id, o.issue])).toEqual([['sf-own', 'DELIVERY_NOT_FINISHED']]);
     });
 
-    it('will not close the day while an order still owes money, and completes nothing', async () => {
-      const paid = order({ id: 'paid' });
-      const em = dayCloseEm([paid, order({ id: 'unpaid', outstanding_total: '50000.0000' })]);
+    it('carries over a paid Snappfood order still waiting for one of our couriers', async () => {
+      const sf = order({ id: 'sf-own', order_type: 'AGGREGATOR', channel: 'AGGREGATOR', aggregator_expedition: 'DELIVERY' });
+      dayCloseEm([sf], [], ['sf-own']);
 
-      await expect(
-        dayService.closeBusinessDay('t-1', { branchId: 'b-1', businessDate: '2026-09-10' }),
-      ).rejects.toMatchObject({
-        response: {
-          code: 'OPEN_ORDERS_NEED_DECISION',
-          context: { needsDecision: [expect.objectContaining({ id: 'unpaid', issue: 'UNPAID' })] },
-        },
-      });
-      expect(paid.state).toBe('CONFIRMED');
-      expect(transitionRecorder.record).not.toHaveBeenCalled();
-      expect(em.save).not.toHaveBeenCalledWith(BusinessDayClose, expect.anything());
+      const closed = await dayService.closeBusinessDay('t-1', 'b-1', '2026-09-10');
+
+      expect(sf.state).toBe('CONFIRMED');
+      expect(closed.totals).toMatchObject({ autoCompletedOrders: 0, carriedOverOrders: 1 });
     });
 
     it('completes the paid orders nobody closed off, and records each', async () => {
       const paid = order({ id: 'paid', order_type: 'DINE_IN', state: 'CONFIRMED', status: 'CONFIRMED' });
       const em = dayCloseEm([paid], [paid]);
 
-      const closed = await dayService.closeBusinessDay('t-1', { branchId: 'b-1', businessDate: '2026-09-10' }, 'manager-1');
+      const closed = await dayService.closeBusinessDay('t-1', 'b-1', '2026-09-10');
 
       expect(paid.state).toBe('COMPLETED');
       expect(transitionRecorder.record).toHaveBeenCalledWith(
         em,
-        expect.objectContaining({ order: paid, fromState: 'CONFIRMED', action: 'COMPLETE', userId: 'manager-1' }),
+        expect.objectContaining({ order: paid, fromState: 'CONFIRMED', action: 'COMPLETE' }),
       );
       expect(closed.totals).toMatchObject({ orderCount: 1, totalSales: '120000.0000', autoCompletedOrders: 1, carriedOverOrders: 0 });
-    });
-
-    it('closes with unfinished orders carried over when the manager gives a reason', async () => {
-      const unpaid = order({ id: 'unpaid', outstanding_total: '50000.0000' });
-      dayCloseEm([unpaid]);
-
-      const closed = await dayService.closeBusinessDay(
-        't-1',
-        { branchId: 'b-1', businessDate: '2026-09-10', carryOverReason: 'Customer pays tomorrow' },
-        'manager-1',
-      );
-
-      expect(unpaid.state).toBe('CONFIRMED');
-      expect(closed.totals).toMatchObject({ carriedOverOrders: 1, carryOverReason: 'Customer pays tomorrow' });
-      expect(auditWriter.write).toHaveBeenCalledWith(
-        expect.objectContaining({
-          action: 'BUSINESS_DAY_CLOSED',
-          details: expect.objectContaining({ carriedOverOrderIds: ['unpaid'] }),
-        }),
-      );
-    });
-
-    it('does not take a blank reason as a decision to carry orders over', async () => {
-      dayCloseEm([order({ id: 'draft', state: 'DRAFT', status: 'DRAFT' })]);
-
-      await expect(
-        dayService.closeBusinessDay('t-1', { branchId: 'b-1', businessDate: '2026-09-10', carryOverReason: '   ' }),
-      ).rejects.toMatchObject({ response: { code: 'OPEN_ORDERS_NEED_DECISION' } });
-    });
-
-    it("keeps the open-order check to managers, and a branch account to its own branch", async () => {
-      expect(Reflect.getMetadata(ROLES_KEY, BusinessDaysController.prototype.getOpenOrders)).toEqual(MANAGER_AND_ABOVE);
-
-      const service = { getOpenOrders: jest.fn().mockResolvedValue({ toComplete: [], needsDecision: [] }) };
-      const controller = new BusinessDaysController(service as any);
-      await controller.getOpenOrders(
-        { branchId: 'b-central', businessDate: '2026-09-10' },
-        { tenantId: 't-1', userBranchId: 'b-downtown' } as any,
-      );
-      expect(service.getOpenOrders).toHaveBeenCalledWith('t-1', expect.objectContaining({ branchId: 'b-downtown' }));
     });
   });
 });

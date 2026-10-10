@@ -35,9 +35,6 @@ export class CashMovement {
   @Column({ type: 'numeric', precision: 19, scale: 4 })
   amount: string; // signed: positive for opening/payment/paid-in, negative for refund/paid-out
 
-  @Column({ type: 'varchar', length: 3, default: 'IRR' })
-  currency_code: string;
-
   @Column({ type: 'uuid', nullable: true })
   payment_id: string;
 

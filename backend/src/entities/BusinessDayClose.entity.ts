@@ -7,10 +7,13 @@ import {
   Unique,
 } from 'typeorm';
 
-export type BusinessDayStatus = 'CLOSED' | 'REOPENED';
-
+/**
+ * A branch's business day, closed by the system once it ended at the cutoff and every shift on
+ * it was counted. Nothing reads it as a lock: dates are stamped when things happen. It keeps the
+ * day's totals and what the close did with the orders left open.
+ */
 @Entity('business_day_close')
-@Unique(['tenant_id', 'branch_id', 'business_date', 'currency_code'])
+@Unique(['tenant_id', 'branch_id', 'business_date'])
 export class BusinessDayClose {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -24,29 +27,11 @@ export class BusinessDayClose {
   @Column({ type: 'varchar', length: 10 })
   business_date: string;
 
-  @Column({ type: 'varchar', length: 3, default: 'IRR' })
-  currency_code: string;
-
-  @Column({ type: 'varchar', length: 30, default: 'CLOSED' })
-  status: BusinessDayStatus;
-
   @Column({ type: 'jsonb', nullable: true })
   totals: any;
 
   @CreateDateColumn({ type: 'timestamptz' })
   closed_at: Date;
-
-  @Column({ type: 'uuid', nullable: true })
-  closed_by: string;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  reopened_at: Date;
-
-  @Column({ type: 'uuid', nullable: true })
-  reopened_by: string;
-
-  @Column({ type: 'uuid', nullable: true })
-  approval_request_id: string;
 
   @VersionColumn({ default: 1 })
   version: number;

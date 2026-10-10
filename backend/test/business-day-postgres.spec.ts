@@ -75,7 +75,7 @@ describe('the overnight business day (PostgreSQL)', () => {
     // Head office's rule, as the migration writes it for every chain. Written before every date
     // the tests use, so the real calendar never lands inside them.
     tehranTime('2026-09-01T12:00:00');
-    await settings.updateSetting(tenantId, 'BUSINESS_DAY', { cutoff: '04:00', opensAt: '08:00', closesAt: '04:00', autoClose: true }, 'bday-setup');
+    await settings.updateSetting(tenantId, 'BUSINESS_DAY', { cutoff: '04:00' }, 'bday-setup');
   }, 60000);
 
   afterAll(async () => {
@@ -215,31 +215,28 @@ describe('the overnight business day (PostgreSQL)', () => {
     expect(after).toEqual([expect.objectContaining({ businessDate: '2026-10-16', outcome: 'CLOSED' })]);
 
     const close = await dataSource.getRepository(BusinessDayClose).findOneOrFail({ where: { tenant_id: tenantId, branch_id: tehranBranch, business_date: '2026-10-14' } });
-    expect(close.totals).toMatchObject({ orderCount: 2, closedAutomatically: true });
-    expect(close.closed_by).toBeNull();
+    expect(close.totals).toMatchObject({ orderCount: 2 });
 
-    // Nothing is closed twice, and a day a manager reopens is left to them.
-    await businessDays.reopenBusinessDay(tenantId, close.id, { reason: 'Recount' } as any);
+    // Nothing is closed twice.
     expect(await autoClose.processBranch(tenantId, tehranBranch, new Date())).toEqual([]);
+    await expect(businessDays.closeBusinessDay(tenantId, tehranBranch, '2026-10-14')).rejects.toThrow(/already closed/);
   });
 
-  it('can be switched off for a branch', async () => {
-    await settings.updateSetting(tenantId, 'BUSINESS_DAY', { cutoff: '04:00', autoClose: false }, 'bday-off', dubaiBranch);
-    jest.setSystemTime(new Date('2026-10-18T05:00:00+04:00'));
-    expect(await autoClose.processBranch(tenantId, dubaiBranch, new Date())).toEqual([]);
+  it('keeps the cutoff chain-wide: a branch cannot set its own', async () => {
+    await expect(settings.updateSetting(tenantId, 'BUSINESS_DAY', { cutoff: '06:00' }, 'bday-branch', dubaiBranch)).rejects.toThrow(
+      /organization-wide/,
+    );
   });
 
-  it('moves a changed cutoff forward from now, never back to yesterday', async () => {
-    // At 04:30 in Tehran it is already the 18th under a 04:00 cutoff. Moving the cutoff to 05:00
-    // must not put the tills back on the 17th for half an hour.
-    tehranTime('2026-10-18T04:30:00');
-    await settings.updateSetting(tenantId, 'BUSINESS_DAY', { cutoff: '05:00', opensAt: '08:00', closesAt: '05:00', autoClose: true }, 'bday-move', tehranBranch);
-    tehranTime('2026-10-18T04:45:00');
+  it('applies a changed cutoff from the moment it is saved, without re-dating what is stored', async () => {
+    tehranTime('2026-10-18T12:00:00');
+    await settings.updateSetting(tenantId, 'BUSINESS_DAY', { cutoff: '05:00' }, 'bday-move');
     const clock = await loadBusinessClock(dataSource.manager, tenantId, tehranBranch);
     expect(clock.today()).toBe('2026-10-18');
     expect(clock.dateAt(new Date('2026-10-19T04:30:00+03:30'))).toBe('2026-10-18');
     expect(clock.dateAt(new Date('2026-10-19T05:00:00+03:30'))).toBe('2026-10-19');
-    // The night of the 14th is dated as it was.
-    expect(clock.dateAt(new Date('2026-10-15T04:30:00+03:30'))).toBe('2026-10-15');
+    // The night shift opened under the 04:00 cutoff keeps the date it was given.
+    const stored = await dataSource.getRepository(CashierShift).findOneByOrFail({ id: nightShift.id });
+    expect(stored.business_date).toBe(nightShift.business_date);
   });
 });

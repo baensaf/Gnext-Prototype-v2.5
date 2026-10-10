@@ -94,7 +94,7 @@ export class ProfilesService {
     const [summary, shifts, shiftStats, approvals, audit] = await Promise.all([
       this.orderSummary(tenantId, 'o.created_by = $2', [id]),
       this.dataSource.query(
-        `SELECT s.id, s.shift_number, s.state, s.business_date, s.opened_at, s.closed_at, s.currency_code,
+        `SELECT s.id, s.shift_number, s.state, s.business_date, s.opened_at, s.closed_at,
                 s.opening_cash, s.expected_cash, s.actual_cash, s.short_over,
                 b.name AS branch_name, t.name AS terminal_name,
                 (s.opened_by = $2) AS opened_by_user, (s.closed_by = $2) AS closed_by_user

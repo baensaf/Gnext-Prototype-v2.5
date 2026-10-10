@@ -1,5 +1,8 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
-import { DEFAULT_BUSINESS_DAY, isTimeZone, wallClock } from '../common/utils/business-day';
+import { isTimeZone, wallClock } from '../common/utils/business-day';
+
+/** The rule as it was written then; the setting has changed shape since (migration 117). */
+const DEFAULT_BUSINESS_DAY = { cutoff: '04:00', opensAt: '08:00', closesAt: '04:00', autoClose: true };
 
 /**
  * The overnight business day: a 04:00 cutoff, 08:00–04:00 opening hours, and the day closed by

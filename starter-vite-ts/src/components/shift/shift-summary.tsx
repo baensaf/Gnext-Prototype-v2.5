@@ -1,11 +1,8 @@
-import type { ButtonProps } from '@mui/material';
 import type { ShiftSalesSummary } from 'src/api/shiftApi';
 
-import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 
-import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import { Box, Stack, Button, Divider, Typography } from '@mui/material';
+import { Box, Stack, Divider, Typography } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { useCurrencyLabel } from 'src/utils/currency';
@@ -158,23 +155,5 @@ export function ShiftReport({ summary: s }: { summary: ShiftSalesSummary }) {
         {t('shift.summary.amountsIn', 'Amounts in {{currency}}', { currency })}
       </Typography>
     </Stack>
-  );
-}
-
-/** Opens the shift's End shift page, which is also its report while the shift runs. */
-export function ShiftSummaryButton({ shiftId, ...other }: { shiftId: string } & Omit<ButtonProps, 'onClick'>) {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-
-  return (
-    <Button
-      variant="outlined"
-      startIcon={<ReceiptLongIcon />}
-      onClick={() => navigate(`/app/cashier/shifts/${shiftId}/end`)}
-      {...other}
-      sx={[{ whiteSpace: 'nowrap', flexShrink: 0 }, ...(Array.isArray(other.sx) ? other.sx : [other.sx])]}
-    >
-      {t('shift.summary.open', 'Shift summary')}
-    </Button>
   );
 }

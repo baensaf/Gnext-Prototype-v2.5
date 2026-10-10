@@ -35,7 +35,7 @@ export const paths = {
     },
     cashier: {
       shifts: `${ROOTS.APP}/cashier/shifts`,
-      shiftDetail: (id: string) => `${ROOTS.APP}/cashier/shifts/${id}`,
+      shiftDetail: (id: string) => `${ROOTS.APP}/cashier/shifts/${id}/end`,
       businessDays: `${ROOTS.APP}/cashier/business-days`,
     },
     payments: `${ROOTS.APP}/payments`,
