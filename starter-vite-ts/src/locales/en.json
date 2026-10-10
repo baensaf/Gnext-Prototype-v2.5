@@ -3763,7 +3763,6 @@
       },
       "targetEntity": "Select Target Master Entity",
       "entities": {
-        "CUSTOMERS": "Customers Directory",
         "PRODUCTS": "Master Products Catalog",
         "CATEGORIES": "Menu Categories"
       },
@@ -3776,7 +3775,6 @@
       "autoMatchSuccess": "Auto-mapped {{count}} columns successfully",
       "colSource": "Source File Column",
       "colTarget": "Target System Field",
-      "colRequired": "Required",
       "colSample": "Sample Data",
       "validationSuccess": "Validation passed! {{valid}} rows ready for import.",
       "validationWarnings": "{{invalid}} rows contains errors or missing required fields.",
@@ -3786,11 +3784,6 @@
         "name_fa": "Persian Name",
         "name_en": "English Name",
         "category_code": "Category Code",
-        "first_name": "First Name",
-        "last_name": "Last Name",
-        "mobile": "Mobile Phone Number",
-        "email": "Email Address",
-        "national_id": "National ID / SSN",
         "is_active": "Active Status"
       }
     }

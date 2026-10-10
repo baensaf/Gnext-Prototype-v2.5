@@ -32,21 +32,11 @@ import {
 import { importExportApi } from 'src/api/importExportApi';
 
 import { Iconify } from 'src/components/iconify';
-import { VersionTag } from 'src/components/version-tag';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
-type ImportEntityType = 'CUSTOMERS' | 'PRODUCTS' | 'CATEGORIES';
+type ImportEntityType = 'PRODUCTS' | 'CATEGORIES';
 
 const TARGET_FIELDS: Record<ImportEntityType, { field: string; labelKey: string; required?: boolean }[]> = {
-  CUSTOMERS: [
-    { field: 'code', labelKey: 'tools.importWizard.fields.code' },
-    { field: 'first_name', labelKey: 'tools.importWizard.fields.first_name', required: true },
-    { field: 'last_name', labelKey: 'tools.importWizard.fields.last_name', required: true },
-    { field: 'mobile', labelKey: 'tools.importWizard.fields.mobile', required: true },
-    { field: 'email', labelKey: 'tools.importWizard.fields.email' },
-    { field: 'national_id', labelKey: 'tools.importWizard.fields.national_id' },
-    { field: 'is_active', labelKey: 'tools.importWizard.fields.is_active' },
-  ],
   PRODUCTS: [
     // Optional: a row without a code updates the product of the same name, or adds one.
     { field: 'code', labelKey: 'tools.importWizard.fields.code' },
@@ -64,7 +54,6 @@ const TARGET_FIELDS: Record<ImportEntityType, { field: string; labelKey: string;
 };
 
 const DEFAULT_CSV_TEMPLATES: Record<ImportEntityType, string> = {
-  CUSTOMERS: 'کد مشتری,نام,نام خانوادگی,شماره تماس,ایمیل,وضعیت\nCUST-101,علی,رضایی,09121112233,ali@example.com,فعال\nCUST-102,سارا,احمدی,09129998877,sara@example.com,فعال\nCUST-103,مریم,حسینی,invalid-phone,maryam@example.com,غیرفعال',
   PRODUCTS: 'کد کالا,نام فارسی,English Name,قیمت پایه,کد دسته بندی,وضعیت\nPROD-201,همبرگر مخصوص,Special Burger,250000,CAT-BURGER,فعال\nPROD-202,سیب زمینی سرخ کرده,French Fries,90000,CAT-SIDES,فعال\nPROD-203,پیتزا مخلوط,Mix Pizza,-10000,CAT-PIZZA,فعال',
   CATEGORIES: 'کد,عنوان دسته,Title EN,ترتیب,وضعیت\nCAT-BURGER,برگرها,Burgers,1,فعال\nCAT-SIDES,پیش غذا و پیش خوراک,Appetizers & Sides,2,فعال',
 };
@@ -235,7 +224,6 @@ export function ImportWizardPage() {
                 onChange={(e) => handleEntityChange(e.target.value as ImportEntityType)}
               >
                 <MenuItem value="PRODUCTS">{t('tools.importWizard.entities.PRODUCTS', 'Products Catalog (Products, Prices & Categories)')}</MenuItem>
-                <MenuItem value="CUSTOMERS">{t('tools.importWizard.entities.CUSTOMERS', 'Customer Directory (Profiles, Phone Numbers & Identifiers)')} <VersionTag feature="import.customers" sx={{ ml: 1 }} /></MenuItem>
                 <MenuItem value="CATEGORIES">{t('tools.importWizard.entities.CATEGORIES', 'Menu Categories (Category Codes & Ordering)')}</MenuItem>
               </TextField>
             </Grid>

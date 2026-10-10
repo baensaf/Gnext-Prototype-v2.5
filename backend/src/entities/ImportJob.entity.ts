@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
-export type ImportEntityType = 'CUSTOMERS' | 'PRODUCTS' | 'CATEGORIES';
+export type ImportEntityType = 'PRODUCTS' | 'CATEGORIES';
 export type ImportJobStatus = 'STAGED' | 'MAPPED' | 'VALIDATED' | 'COMPLETED' | 'FAILED';
 
 @Entity('import_job')

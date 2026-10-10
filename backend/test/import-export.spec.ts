@@ -108,18 +108,18 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
 
     it('should stage an import job from XLSX buffer', async () => {
       const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet('Customers');
-      sheet.addRow(['کد مشتری', 'نام', 'نام خانوادگی', 'شماره تماس']);
-      sheet.addRow(['CUST-X1', 'امیر', 'کاظمی', '09123334455']);
+      const sheet = workbook.addWorksheet('Products');
+      sheet.addRow(['کد کالا', 'نام کالا', 'قیمت']);
+      sheet.addRow(['P-X1', 'همبرگر', '250000']);
       const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
 
-      const job = await service.createStagedJobFromXlsx('test-tenant', 'CUSTOMERS', 'customers.xlsx', buffer);
+      const job = await service.createStagedJobFromXlsx('test-tenant', 'PRODUCTS', 'products.xlsx', buffer);
 
       expect(jobRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           tenant_id: 'test-tenant',
-          entity_type: 'CUSTOMERS',
-          file_name: 'customers.xlsx',
+          entity_type: 'PRODUCTS',
+          file_name: 'products.xlsx',
           status: 'STAGED',
           total_rows: 1,
         }),
@@ -129,10 +129,9 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
           row_number: 1,
           status: 'STAGED',
           raw_data: {
-            'کد مشتری': 'CUST-X1',
-            'نام': 'امیر',
-            'نام خانوادگی': 'کاظمی',
-            'شماره تماس': '09123334455',
+            'کد کالا': 'P-X1',
+            'نام کالا': 'همبرگر',
+            'قیمت': '250000',
           },
         }),
       );
@@ -153,41 +152,24 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
       ]);
     });
 
-    it('should auto-map Customer headers accurately', () => {
-      const headers = ['Customer Code', 'First Name', 'Surname', 'شماره تماس', 'Email'];
-      const mapping = service.generateAutoMapping(headers, 'CUSTOMERS');
-
-      const mappedFields = mapping.map((m) => m.mappedField);
-      expect(mappedFields).toContain('code');
-      expect(mappedFields).toContain('first_name');
-      expect(mappedFields).toContain('last_name');
-      expect(mappedFields).toContain('mobile');
-      expect(mappedFields).toContain('email');
-    });
   });
 
   describe('Job Validation (Dry Run)', () => {
-    it('should validate customer rows and capture row-level errors', async () => {
-      const job = { id: 'job-1', entity_type: 'CUSTOMERS', status: 'STAGED' };
+    it('should validate product rows and capture row-level errors', async () => {
+      const job = { id: 'job-1', entity_type: 'PRODUCTS', status: 'STAGED' };
       jobRepo.findOne.mockResolvedValue(job);
 
       const rows = [
-        { row_number: 1, raw_data: { 'First Name': 'Ali', 'Last Name': 'Rezaei', Mobile: '09121112233' } },
-        { row_number: 2, raw_data: { 'First Name': 'Invalid', 'Last Name': '', Mobile: 'invalid-phone' } },
+        { row_number: 1, raw_data: { Name: 'Burger', Price: '250000' } },
+        { row_number: 2, raw_data: { Name: '', Price: '-5' } },
       ];
       rowRepo.find.mockResolvedValue(rows);
 
-      const columnMapping = {
-        'First Name': 'first_name',
-        'Last Name': 'last_name',
-        Mobile: 'mobile',
-      };
-
-      const validatedJob = await service.validateJob('job-1', columnMapping);
+      const validatedJob = await service.validateJob('job-1', { Name: 'name_fa', Price: 'base_price' });
 
       expect(validatedJob.valid_rows).toBe(1);
       expect(validatedJob.error_rows).toBe(1);
-      expect(validatedJob.error_summary).toHaveLength(2); // Last Name required & Invalid phone
+      expect(validatedJob.error_summary).toHaveLength(2); // Name required & negative price
     });
   });
 

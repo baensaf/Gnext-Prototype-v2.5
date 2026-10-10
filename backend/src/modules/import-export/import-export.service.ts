@@ -4,12 +4,10 @@ import { Repository, DataSource, Raw } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { ImportJob, ImportEntityType } from '../../entities/ImportJob.entity';
 import { ImportRow } from '../../entities/ImportRow.entity';
-import { Customer } from '../../entities/Customer.entity';
 import { Product } from '../../entities/Product.entity';
 import { Category } from '../../entities/Category.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
-import { normalizePhone } from '../customer/customer.service';
 import { seedDemoTradingDay } from '../../seeds/demo-trading-day';
 
 export interface AutoMapResult {
@@ -19,15 +17,6 @@ export interface AutoMapResult {
 }
 
 const FIELD_DICTIONARIES: Record<ImportEntityType, Record<string, string[]>> = {
-  CUSTOMERS: {
-    code: ['code', 'customer code', 'id', 'کد مشتری', 'شناسه', 'کد'],
-    first_name: ['first_name', 'first name', 'given name', 'نام', 'نام کوچک'],
-    last_name: ['last_name', 'last name', 'surname', 'نام خانوادگی', 'فامیلی'],
-    mobile: ['mobile', 'phone', 'cell', 'telephone', 'mobile_number', 'موبایل', 'شماره تماس', 'تلفن'],
-    email: ['email', 'e-mail', 'ایمیل', 'پست الکترونیک'],
-    national_id: ['national_id', 'national code', 'national id', 'ssn', 'کد ملی', 'شناسه ملی'],
-    is_active: ['is_active', 'status', 'active', 'وضعیت', 'فعال'],
-  },
   PRODUCTS: {
     code: ['code', 'product code', 'sku', 'کد کالا', 'شناسه محصول', 'کد'],
     name_fa: ['name_fa', 'name (fa)', 'persian name', 'title', 'name', 'نام فارسی', 'نام کالا', 'عنوان'],
@@ -52,8 +41,6 @@ export class ImportExportService {
     private readonly jobRepo: Repository<ImportJob>,
     @InjectRepository(ImportRow)
     private readonly rowRepo: Repository<ImportRow>,
-    @InjectRepository(Customer)
-    private readonly customerRepo: Repository<Customer>,
     @InjectRepository(Product)
     private readonly productRepo: Repository<Product>,
     @InjectRepository(Category)
@@ -379,12 +366,7 @@ export class ImportExportService {
       });
 
       // Domain Schema Validation per Entity
-      if (job.entity_type === 'CUSTOMERS') {
-        if (!parsedData.first_name) errors.push('First Name is required');
-        if (!parsedData.last_name) errors.push('Last Name is required');
-        if (!parsedData.mobile) errors.push('Mobile phone is required');
-        else if (!/^(\+?\d{10,15}|09\d{9})$/.test(parsedData.mobile)) errors.push('Invalid phone number format');
-      } else if (job.entity_type === 'PRODUCTS') {
+      if (job.entity_type === 'PRODUCTS') {
         if (parsedData.code && String(parsedData.code).trim().length > 32) errors.push('Product Code is at most 32 characters');
         if (!parsedData.name_fa && !parsedData.name) errors.push('Product Name is required');
         if (parsedData.base_price === undefined || parsedData.base_price === '') {
@@ -461,36 +443,7 @@ export class ImportExportService {
           const data = row.parsed_data || {};
           const tenantId = job.tenant_id;
 
-          if (job.entity_type === 'CUSTOMERS') {
-            const normMobile = data.mobile ? normalizePhone(data.mobile) || data.mobile : '';
-            const customerCode = data.code || normMobile || `CUST-IMP-${Date.now().toString().slice(-6)}-${row.row_number}`;
-            let customer = await manager.findOne(Customer, { where: { tenant_id: tenantId, code: customerCode } });
-
-            const isActive = data.is_active === 'false' || data.is_active === '0' || data.is_active === 'غیرفعال' ? false : true;
-
-            if (!customer) {
-              customer = manager.create(Customer, {
-                tenant_id: tenantId,
-                code: customerCode,
-                first_name: data.first_name,
-                last_name: data.last_name,
-                mobile: normMobile || data.mobile,
-                email: data.email || null,
-                national_id: data.national_id || null,
-                is_active: isActive,
-                created_by: userId,
-              });
-            } else {
-              customer.first_name = data.first_name;
-              customer.last_name = data.last_name;
-              customer.mobile = normMobile || data.mobile;
-              if (data.email) customer.email = data.email;
-              if (data.national_id) customer.national_id = data.national_id;
-              customer.is_active = isActive;
-              customer.updated_by = userId;
-            }
-            await manager.save(customer);
-          } else if (job.entity_type === 'PRODUCTS') {
+          if (job.entity_type === 'PRODUCTS') {
             const code = String(data.code ?? '').trim().toUpperCase() || null;
             const isActive = data.is_active === 'false' || data.is_active === '0' ? false : true;
             const priceStr = MoneyUtil.format(data.base_price || '0', 4);
