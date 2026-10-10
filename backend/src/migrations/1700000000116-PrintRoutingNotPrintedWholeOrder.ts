@@ -8,8 +8,8 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * - `printer.prints_whole_order`: the printer prints every line of every order on one chit, for
  *   the person at the pass who bags it.
  */
-export class PrintRoutingNotPrintedWholeOrder1700000000109 implements MigrationInterface {
-  name = 'PrintRoutingNotPrintedWholeOrder1700000000109';
+export class PrintRoutingNotPrintedWholeOrder1700000000116 implements MigrationInterface {
+  name = 'PrintRoutingNotPrintedWholeOrder1700000000116';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`ALTER TABLE "print_route" ALTER COLUMN "printer_id" DROP NOT NULL`);
