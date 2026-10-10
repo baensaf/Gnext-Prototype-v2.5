@@ -18,7 +18,6 @@ import {
   OrderRejectDto,
   OrderOnlineReportDto,
 } from './dtos/order.dto';
-import { SplitOrderDto, TransferItemsDto } from '../dine-in/dtos/dine-in.dto';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { IncomingOrderPolicyService } from './incoming-order-policy.service';
@@ -306,24 +305,6 @@ export class OrdersController {
   async getOrderHistory(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.orderService.getOrderHistory(tenantId, id);
-  }
-
-  @Post(':id/split')
-  async splitOrder(@Param('id') id: string, @Body() body: SplitOrderDto, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || (req as any).userId;
-    const correlationId = (req as any).correlationId;
-    return await this.orderService.splitOrder(tenantId, id, body, userId, correlationId);
-  }
-
-  // The service holds the target to the source's branch.
-  @BranchOwned(OrderHeader, { body: 'sourceOrderId' })
-  @Post('transfer-items')
-  async transferItems(@Body() body: TransferItemsDto, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || (req as any).userId;
-    const correlationId = (req as any).correlationId;
-    return await this.orderService.transferItems(tenantId, body, userId, correlationId);
   }
 
   @Get(':id/guest-bill')

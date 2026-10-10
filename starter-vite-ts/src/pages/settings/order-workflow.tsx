@@ -80,7 +80,6 @@ export function OrderWorkflowSettingsPage() {
   const [enableTakeaway, setEnableTakeaway] = useState(true);
   const [enableDelivery, setEnableDelivery] = useState(true);
   const [enableAggregators, setEnableAggregators] = useState(true);
-  const [requireTableSelection, setRequireTableSelection] = useState(true);
 
   const { selectedBranchId, selectedBranch } = useBranchContext();
   // ORG while these values are still head office's, BRANCH once this location has its own.
@@ -119,7 +118,6 @@ export function OrderWorkflowSettingsPage() {
       if (workflow.enableTakeaway !== undefined) setEnableTakeaway(Boolean(workflow.enableTakeaway));
       if (workflow.enableDelivery !== undefined) setEnableDelivery(Boolean(workflow.enableDelivery));
       if (workflow.enableAggregators !== undefined) setEnableAggregators(Boolean(workflow.enableAggregators));
-      if (workflow.requireTableSelection !== undefined) setRequireTableSelection(Boolean(workflow.requireTableSelection));
     } catch (err: any) {
       setError(err?.response?.data?.message || err.detail || err.message || 'Failed to load order workflow settings');
     } finally {
@@ -144,7 +142,6 @@ export function OrderWorkflowSettingsPage() {
       enableTakeaway,
       enableDelivery,
       enableAggregators,
-      requireTableSelection,
     };
 
     try {
@@ -399,32 +396,6 @@ export function OrderWorkflowSettingsPage() {
                       slotProps={{ htmlInput: { min: 1, max: 70 } }}
                     />
                   </Stack>
-                </Paper>
-
-                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={requireTableSelection}
-                        onChange={(e) => setRequireTableSelection(e.target.checked)}
-                        color="secondary"
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography variant="subtitle2">
-                          {t('settings.orderWorkflow.requireTableLabel', 'Enforce Table Selection for Dine-In')}{' '}
-                          <VersionTag feature="settings.requireTable" />
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {t(
-                            'settings.orderWorkflow.requireTableHelp',
-                            'Cashiers must designate a floor table before confirming any Dine-In transaction.'
-                          )}
-                        </Typography>
-                      </Box>
-                    }
-                  />
                 </Paper>
               </Stack>
             </Card>

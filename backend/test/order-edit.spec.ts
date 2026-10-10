@@ -22,8 +22,6 @@ import { Refund } from '../src/entities/Refund.entity';
 import { Delivery } from '../src/entities/Delivery.entity';
 import { DeliveryZone } from '../src/entities/DeliveryZone.entity';
 import { CustomerAddress } from '../src/entities/CustomerAddress.entity';
-import { DiningTable } from '../src/entities/DiningTable.entity';
-import { TableSession } from '../src/entities/TableSession.entity';
 import { TenantSetting } from '../src/entities/TenantSetting.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { OutboxWriter } from '../src/modules/outbox/outbox-writer.service';
@@ -50,8 +48,6 @@ describe('Order edit command (spec 7.9)', () => {
   let delivery: any;
   let zone: any;
   let address: any;
-  let table: any;
-  let tableSession: any;
 
   const minutesAgo = (n: number) => new Date(Date.now() - n * 60000);
 
@@ -62,8 +58,6 @@ describe('Order edit command (spec 7.9)', () => {
     delivery = null;
     zone = null;
     address = null;
-    table = null;
-    tableSession = null;
     order = {
       id: ORDER_ID,
       tenant_id: TENANT,
@@ -133,8 +127,6 @@ describe('Order edit command (spec 7.9)', () => {
         if (entityClass === Delivery) return delivery;
         if (entityClass === DeliveryZone) return zone;
         if (entityClass === CustomerAddress) return address;
-        if (entityClass === DiningTable) return table;
-        if (entityClass === TableSession) return tableSession;
         return null;
       }),
       find: jest.fn(async (entityClass: any, opts: any) => {
@@ -501,36 +493,6 @@ describe('Order edit command (spec 7.9)', () => {
       await expect(
         service.changeOrderType(TENANT, ORDER_ID, { orderType: 'DELIVERY' }),
       ).rejects.toThrow('DELIVERY_ADDRESS_REQUIRED');
-    });
-
-    it('frees the table when a dine-in check becomes a delivery', async () => {
-      order.order_type = 'DINE_IN';
-      order.table_id = 'tbl-1';
-      order.table_number = '12';
-      order.customer_id = 'cust-1';
-      tableSession = { id: 'sess-1', table_id: 'tbl-1', status: 'OCCUPIED', closed_at: null };
-      liveZone();
-
-      await service.changeOrderType(TENANT, ORDER_ID, {
-        orderType: 'DELIVERY',
-        deliveryAddressId: 'addr-1',
-        deliveryZoneId: 'zone-1',
-      });
-
-      expect(order.table_id).toBeNull();
-      expect(tableSession.closed_at).toBeInstanceOf(Date);
-      expect(tableSession.status).toBe('AVAILABLE');
-    });
-
-    it('seats the check when a takeaway becomes dine-in', async () => {
-      order.order_type = 'TAKEAWAY';
-      table = { id: 'tbl-7', tenant_id: TENANT, table_number: '7' };
-
-      await service.changeOrderType(TENANT, ORDER_ID, { orderType: 'DINE_IN', tableId: 'tbl-7' });
-
-      expect(order.order_type).toBe('DINE_IN');
-      expect(order.table_id).toBe('tbl-7');
-      expect(order.table_number).toBe('7');
     });
 
     it('refuses to take an order off a courier who is already carrying it', async () => {

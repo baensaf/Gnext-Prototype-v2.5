@@ -16,7 +16,6 @@ export interface RenderDocOptions {
   orderType?: string;
   /** POS, KIOSK, AGGREGATOR...: where the order came from, when that matters to staff. */
   channel?: string;
-  tableNumber?: string;
   customerName?: string;
   customerMobile?: string;
   deliveryAddress?: string;
@@ -327,7 +326,6 @@ ${o.orderNotes ? `<div class="sub">توضیحات: ${this.esc(o.orderNotes)}</di
 
   private orderTypeLine(o: RenderDocOptions): string {
     const parts = [ORDER_TYPES[o.orderType || ''] || o.orderType || ''];
-    if (o.tableNumber) parts.push(`میز ${this.esc(o.tableNumber)}`);
     const channel = CHANNELS[o.channel || ''];
     if (channel && channel !== parts[0]) parts.push(channel);
     return this.fa(parts.filter(Boolean).join(' — '));

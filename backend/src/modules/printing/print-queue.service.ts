@@ -351,7 +351,6 @@ export class PrintQueueService {
       callNumber: order.call_number ?? null,
       orderType: order.order_type,
       channel: order.channel,
-      tableNumber: order.table_number || undefined,
       orderNotes: order.notes || undefined,
       placedAt: order.placed_at || order.submitted_at || new Date(),
     };

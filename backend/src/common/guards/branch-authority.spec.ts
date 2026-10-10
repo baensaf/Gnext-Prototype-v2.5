@@ -4,7 +4,6 @@ import { HEAD_OFFICE_ONLY_KEY, ROLES_KEY, MANAGER_AND_ABOVE } from '../decorator
 import { BRANCH_OWNED_KEY } from '../decorators/branch-owned.decorator';
 import { OrdersController } from '../../modules/order/order.controller';
 import { DeliveryController } from '../../modules/delivery/delivery.controller';
-import { DineInController } from '../../modules/dine-in/dine-in.controller';
 import { PrintersController } from '../../modules/printing/printers.controller';
 import { TenantController } from '../../modules/tenant/tenant.controller';
 import { PaymentController } from '../../modules/payment/payment.controller';
@@ -37,7 +36,6 @@ function authorityOf(controller: any, method: string): Handler {
 /** Equipment and layout belonging to one shop: its manager's, never the register's. */
 const SITE_CONFIG: [any, string[]][] = [
   [DeliveryController, ['createZone', 'updateZone', 'deleteZone', 'updateCourierPay']],
-  [DineInController, ['createSection', 'updateSection', 'archiveSection', 'createTable', 'updateTable', 'archiveTable']],
   [PrintersController, ['createPrinter', 'updatePrinter', 'deletePrinter', 'setRoutes', 'setKitchenDefault']],
   [TenantController, ['createTerminal', 'updateTerminal', 'archiveTerminal']],
   [PaymentController, ['createDevice']],
@@ -132,7 +130,6 @@ const BY_ID: [any, string[]][] = [
       'getSettlementStatement',
     ],
   ],
-  [DineInController, ['updateSection', 'archiveSection', 'updateTable', 'archiveTable', 'seatGuests', 'releaseTable']],
   [PrintersController, ['updatePrinter', 'deletePrinter', 'setRoutes', 'setKitchenDefault']],
   [TenantController, ['updateTerminal', 'archiveTerminal']],
 ];
@@ -151,12 +148,5 @@ describe('records name the branch they belong to', () => {
   // covers the transitions — confirming, cancelling and reopening included.
   it('every order route is covered at the class', () => {
     expect(Reflect.getMetadata(BRANCH_OWNED_KEY, OrdersController)?.entity).toBeDefined();
-  });
-
-  // A table has no branch column of its own: it belongs to a floor, and the floor belongs
-  // to a shop. Getting this wrong would read undefined and refuse everyone.
-  it('a table is judged by the floor it stands on', () => {
-    const handler = authorityOf(DineInController, 'updateTable');
-    expect(handler.branchOwned.through?.foreignKey).toBe('dining_area_id');
   });
 });

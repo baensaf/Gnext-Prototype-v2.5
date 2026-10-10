@@ -50,7 +50,6 @@ describe('BUG-01 & BUG-02 Verification Suite', () => {
         order_type: 'DINE_IN',
         customer_id: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
         coupon_code: 'DISCOUNT10',
-        table_number: 'Table-5',
         notes: 'Held draft order from POS',
         items: [
           {
@@ -81,7 +80,6 @@ describe('BUG-01 & BUG-02 Verification Suite', () => {
       const payload: OrderUpdateDto = {
         branch_id: '11111111-1111-1111-1111-111111111111',
         order_type: 'TAKEAWAY',
-        table_number: 'T-1',
       };
 
       const result = await ordersController.updateDraft('ord-123', payload, mockReq);

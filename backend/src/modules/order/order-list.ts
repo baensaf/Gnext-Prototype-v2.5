@@ -118,7 +118,6 @@ export function applyOrderFilters(
   if (query.type) qb.andWhere('o.order_type = :type', { type: query.type });
   if (query.channel) qb.andWhere('o.channel = :channel', { channel: query.channel });
   if (query.customer) qb.andWhere('o.customer_id = :customer', { customer: query.customer });
-  if (query.table) qb.andWhere('o.table_id = :table', { table: query.table });
   if (query.shift) qb.andWhere('o.shift_id = :shift', { shift: query.shift });
   if (query.terminal) qb.andWhere('o.terminal_id = :terminal', { terminal: query.terminal });
 
@@ -147,7 +146,6 @@ export function applyOrderFilters(
     const clauses = [
       'o.order_number ILIKE :like',
       'o.notes ILIKE :like',
-      'o.table_number ILIKE :like',
       customerMatchSql('like', otherPhone ? 'phoneLike' : null),
       itemMatchSql('like'),
     ];

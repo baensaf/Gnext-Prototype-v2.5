@@ -46,8 +46,6 @@ export async function runSeed() {
   const prodRepo = AppDataSource.getRepository('Product');
   const variantRepo = AppDataSource.getRepository('ProductVariant');
   const zoneRepo = AppDataSource.getRepository('DeliveryZone');
-  const diningAreaRepo = AppDataSource.getRepository('DiningArea');
-  const diningTableRepo = AppDataSource.getRepository('DiningTable');
   const courierRepo = AppDataSource.getRepository('Courier');
   const customerRepo = AppDataSource.getRepository('Customer');
   const customerPhoneRepo = AppDataSource.getRepository('CustomerPhone');
@@ -246,58 +244,8 @@ export async function runSeed() {
     await zoneRepo.update({ tenant_id: tenant.id, code, fee: from }, { fee });
   }
 
-  // 4c. Idempotent dine-in floor, one per selling site.
-  //
-  // Both floors matter now that a branch account is answered only about its own branch.
-  // The demo manager and cashier both work at Downtown, so seeding a floor for Central
-  // alone left the two accounts anybody actually signs in as looking at an empty dining
-  // room, an empty table picker and no courier to dispatch — the screens read as broken
-  // features rather than as an empty branch.
-  const floors = [
-    { branch: branchTeh, code: 'AREA-MAIN', name: 'سالن اصلی', tables: 8, prefix: 'T' },
-    { branch: branchExpress, code: 'AREA-EXPRESS', name: 'سالن ولیعصر', tables: 4, prefix: 'E' },
-  ];
-
-  let mainDiningArea: any = null;
-  for (const floor of floors) {
-    let area = await diningAreaRepo.findOne({
-      where: { tenant_id: tenant.id, branch_id: floor.branch.id, code: floor.code },
-    });
-    if (!area) {
-      area = await diningAreaRepo.save(diningAreaRepo.create({
-        tenant_id: tenant.id,
-        branch_id: floor.branch.id,
-        code: floor.code,
-        name: floor.name,
-        sort_order: 1,
-        is_active: true,
-      }));
-      console.log(`Seeded Dining Area: ${floor.name}`);
-    }
-    if (!mainDiningArea) mainDiningArea = area;
-
-    for (let index = 0; index < floor.tables; index += 1) {
-      const number = `${floor.prefix}-${String(index + 1).padStart(2, '0')}`;
-      const existing = await diningTableRepo.findOne({
-        where: { tenant_id: tenant.id, dining_area_id: area.id, code: number },
-      });
-      if (existing) continue;
-      await diningTableRepo.save(diningTableRepo.create({
-        tenant_id: tenant.id,
-        dining_area_id: area.id,
-        code: number,
-        table_number: number,
-        seating_capacity: index < 4 ? 4 : 2,
-        shape: index % 2 === 0 ? 'SQUARE' : 'CIRCLE',
-        pos_x: (index % 4) * 180,
-        pos_y: Math.floor(index / 4) * 160,
-        is_active: true,
-      }));
-    }
-  }
-
-  // One courier per selling site, for the same reason: a Downtown dispatcher with nobody
-  // to dispatch cannot demonstrate a delivery.
+  // 4c. One courier per selling site: a Downtown dispatcher with nobody to dispatch cannot
+  // demonstrate a delivery.
   const couriers = [
     { branch: branchTeh, code: 'CR-001', name: 'علی رضایی', phone: '09120000001' },
     { branch: branchExpress, code: 'CR-002', name: 'سارا احمدی', phone: '09120000002' },
@@ -957,8 +905,6 @@ async function rebrandLegacyDemo(
       ['delivery_zone', 'ZONE-CENTRAL-01', 'Central District Zone 1', 'محدوده ارسال نصرت'],
       ['delivery_zone', 'ZONE-DOWNTOWN-01', 'Downtown Express Zone 1', 'محدوده ارسال ولیعصر'],
       ['delivery_zone', 'ZONE-NORTH-01', 'Northside Zone 1', 'محدوده ارسال هروی'],
-      ['dining_area', 'AREA-MAIN', 'Main Dining Hall', 'سالن اصلی'],
-      ['dining_area', 'AREA-EXPRESS', 'Express Floor', 'سالن ولیعصر'],
       ['courier', 'CR-001', 'Ali Rezaei', 'علی رضایی'],
       ['courier', 'CR-002', 'Sara Ahmadi', 'سارا احمدی'],
     );

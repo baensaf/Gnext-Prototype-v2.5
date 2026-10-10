@@ -103,7 +103,6 @@ export interface DayCloseOpenOrder {
   state: string;
   businessDate: string | null;
   placedAt: string;
-  tableNumber: string | null;
   grandTotal: string;
   outstandingTotal: string;
   issue?: 'UNPAID' | 'NOT_SUBMITTED' | 'AWAITING_ACCEPTANCE' | 'DELIVERY_NOT_FINISHED';

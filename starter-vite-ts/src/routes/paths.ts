@@ -26,9 +26,6 @@ export const paths = {
       // An order opens in the Orders drawer.
       detail: (id: string) => `${ROOTS.APP}/orders?order=${id}`,
     },
-    dineIn: {
-      floor: `${ROOTS.APP}/dine-in/floor`,
-    },
     delivery: {
       orders: `${ROOTS.APP}/delivery/orders`,
       couriers: `${ROOTS.APP}/delivery/couriers`,

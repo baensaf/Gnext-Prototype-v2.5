@@ -67,12 +67,6 @@ const GROUPS: { titleKey: string; title: string; rows: Capability[] }[] = [
         write: { CASHIER: 'FULL', MANAGER: 'FULL', HEAD_OFFICE: 'FULL' },
       },
       {
-        path: '/app/dine-in/floor',
-        labelKey: 'rolesPage.caps.floor',
-        label: 'Seat and release tables',
-        write: { CASHIER: 'FULL', MANAGER: 'FULL', HEAD_OFFICE: 'FULL' },
-      },
-      {
         path: '/app/cashier/shifts',
         labelKey: 'rolesPage.caps.shift',
         label: 'Open, count and close a till',
@@ -114,12 +108,6 @@ const GROUPS: { titleKey: string; title: string; rows: Capability[] }[] = [
         path: '/app/operations/printers',
         labelKey: 'rolesPage.caps.printers',
         label: 'Set up printers and ticket routing',
-        write: { CASHIER: 'NONE', MANAGER: 'FULL', HEAD_OFFICE: 'FULL' },
-      },
-      {
-        path: '/app/dine-in/floor',
-        labelKey: 'rolesPage.caps.sections',
-        label: 'Lay out the dining floor',
         write: { CASHIER: 'NONE', MANAGER: 'FULL', HEAD_OFFICE: 'FULL' },
       },
       {

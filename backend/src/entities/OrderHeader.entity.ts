@@ -75,15 +75,6 @@ export class OrderHeader {
   delivery_zone_id: string;
 
   @Column({ type: 'uuid', nullable: true })
-  table_id: string;
-
-  @Column({ type: 'varchar', length: 20, nullable: true })
-  table_number: string;
-
-  @Column({ type: 'integer', nullable: true })
-  guest_count: number;
-
-  @Column({ type: 'uuid', nullable: true })
   price_group_id: string;
 
   @Column({ type: 'uuid', nullable: true })

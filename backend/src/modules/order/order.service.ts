@@ -64,13 +64,10 @@ import { Branch } from '../../entities/Branch.entity';
 import { isAfterHours } from '../../common/utils/opening-hours';
 import { Payment } from '../../entities/Payment.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
-import { DiningTable } from '../../entities/DiningTable.entity';
-import { TableSession } from '../../entities/TableSession.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { DeliveryZone } from '../../entities/DeliveryZone.entity';
 import { Delivery } from '../../entities/Delivery.entity';
 import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
-import { TableOccupancyEvent } from '../../entities/TableOccupancyEvent.entity';
 import { Refund } from '../../entities/Refund.entity';
 import { ApprovalService } from '../approval/approval.service';
 import { RefundService } from '../refund/refund.service';
@@ -80,7 +77,6 @@ import {
   resolveOrderActionConfig,
   resolveOrderEditDecision,
 } from './order-edit-policy';
-import { SplitOrderDto, TransferItemsDto } from '../dine-in/dtos/dine-in.dto';
 import {
   OrderCreateDto,
   OrderUpdateDto,
@@ -317,7 +313,7 @@ export class OrderService {
 
     const header = [
       'order_number', 'call_number', 'branch', 'placed_at', 'business_date', 'channel', 'order_type',
-      'status', 'lifecycle', 'customer', 'mobile', 'table', 'delivery_zone', 'courier', 'items',
+      'status', 'lifecycle', 'customer', 'mobile', 'delivery_zone', 'courier', 'items',
       'grand_total', 'paid_total', 'refunded_total', 'outstanding_total', 'currency', 'after_hours',
     ];
     const lines = rows.map((o) =>
@@ -333,7 +329,6 @@ export class OrderService {
         o.lifecycle,
         o.customer_name,
         o.customer_mobile,
-        o.table_number,
         o.delivery_zone_name,
         o.courier_name,
         (o.items || []).filter(isActiveLine).reduce((sum, i) => sum + Number(i.quantity || 0), 0),
@@ -561,9 +556,6 @@ export class OrderService {
         customer_address_id: dto.delivery_address_id || null,
         delivery_zone_id: dto.delivery_zone_id || null,
         delivery_fee_manual: dto.delivery_fee ?? null,
-        table_id: dto.table_id || null,
-        table_number: dto.table_number || null,
-        guest_count: dto.guest_count || null,
         coupon_code: dto.coupon_code ? dto.coupon_code.toUpperCase() : null,
         notes: dto.notes || null,
         created_by: userId || null,
@@ -625,9 +617,6 @@ export class OrderService {
       if (dto.branch_id !== undefined) order.branch_id = dto.branch_id;
       if (dto.order_type !== undefined) order.order_type = dto.order_type as any;
       if (dto.customer_id !== undefined) order.customer_id = dto.customer_id;
-      if (dto.table_id !== undefined) order.table_id = dto.table_id;
-      if (dto.table_number !== undefined) order.table_number = dto.table_number;
-      if (dto.guest_count !== undefined) order.guest_count = dto.guest_count;
       if (dto.notes !== undefined) order.notes = dto.notes;
       if (dto.coupon_code !== undefined) order.coupon_code = dto.coupon_code;
       if (dto.terminal_id !== undefined) order.terminal_id = dto.terminal_id;
@@ -1834,7 +1823,6 @@ export class OrderService {
         order_type: from,
         delivery_fee: order.delivery_fee,
         grand_total: order.grand_total,
-        table_id: order.table_id,
         delivery_zone_id: order.delivery_zone_id,
       };
 
@@ -1845,8 +1833,6 @@ export class OrderService {
         if (dto.deliveryZoneId) order.delivery_zone_id = dto.deliveryZoneId;
         // Fails with the specific missing piece, so the cashier is told what to collect.
         const deliveryContext = await this.validateDeliveryContext(tenantId, order, em, true);
-        // A check cannot be at a table and out for delivery at once.
-        await this.releaseTableForOrder(tenantId, order, em);
         // A draft gets its delivery when it is sent. One the kitchen already has needs it now,
         // or it never reaches the delivery board and nothing can finish it.
         if (order.state !== 'DRAFT' && deliveryContext) {
@@ -1858,18 +1844,6 @@ export class OrderService {
         order.delivery_zone_id = null as any;
         order.delivery_fee = '0.0000';
         order.delivery_fee_manual = null;
-
-        if (to === 'DINE_IN') {
-          if (dto.tableId) {
-            const table = await em.findOne(DiningTable, { where: { id: dto.tableId, tenant_id: tenantId } });
-            if (!table) throw new BadRequestException(`Table ${dto.tableId} not found`);
-            order.table_id = table.id;
-            order.table_number = table.table_number;
-          }
-        } else {
-          // TAKEAWAY: no table, no zone, collected at the counter.
-          await this.releaseTableForOrder(tenantId, order, em);
-        }
       }
 
       const recalculated = await this.recalculateOrderTotals(tenantId, order, em);
@@ -1941,7 +1915,6 @@ export class OrderService {
           order_type: recalculated.order_type,
           delivery_fee: recalculated.delivery_fee,
           grand_total: recalculated.grand_total,
-          table_id: recalculated.table_id,
           delivery_zone_id: recalculated.delivery_zone_id,
         },
         details: { from, to, reason: dto.reason || null, approvalRequestId: dto.approvalRequestId || null },
@@ -1962,29 +1935,6 @@ export class OrderService {
       }
     }
     return changed;
-  }
-
-  /**
-   * Let go of the table an order is sitting at, if it is sitting at one.
-   *
-   * The floor map treats a table as occupied whenever a live order names it, so clearing
-   * the order's own columns is what actually frees it; the session row is closed too, so
-   * the seating history is not left open forever.
-   */
-  private async releaseTableForOrder(tenantId: string, order: OrderHeader, em: EntityManager) {
-    if (!order.table_id) return;
-
-    const session = await em.findOne(TableSession, {
-      where: { tenant_id: tenantId, table_id: order.table_id, closed_at: IsNull() },
-    });
-    if (session) {
-      session.closed_at = new Date();
-      session.status = 'AVAILABLE';
-      await em.save(TableSession, session);
-    }
-
-    order.table_id = null as any;
-    order.table_number = null as any;
   }
 
   /** Money actually collected: succeeded payments less succeeded refunds. */
@@ -2735,300 +2685,6 @@ export class OrderService {
     return await em.save(OrderHeader, order);
   }
 
-  async splitOrder(tenantId: string, sourceOrderId: string, dto: SplitOrderDto, userId?: string, correlationId?: string) {
-    return await this.dataSource.transaction(async (em) => {
-      const lockIds = Array.from(new Set([sourceOrderId, dto.targetTableId].filter(Boolean) as string[])).sort();
-      for (const id of lockIds) {
-        if (id === sourceOrderId) {
-          await em.findOne(OrderHeader, { where: { id, tenant_id: tenantId }, lock: { mode: 'pessimistic_write' } });
-        } else {
-          await em.findOne(DiningTable, { where: { id, tenant_id: tenantId }, lock: { mode: 'pessimistic_write' } });
-        }
-      }
-
-      const sourceOrder = await em.findOne(OrderHeader, {
-        where: { id: sourceOrderId, tenant_id: tenantId },
-        relations: ['items', 'items.options'],
-      });
-      if (!sourceOrder) throw new NotFoundException(`Order ${sourceOrderId} not found`);
-      this.refuseSnappfoodChange(sourceOrder, 'split it');
-
-      if (['COMPLETED', 'CANCELLED'].includes(sourceOrder.state)) {
-        throw new BadRequestException(`Cannot split order in state ${sourceOrder.state}`);
-      }
-
-      if (!dto.lines || dto.lines.length === 0) {
-        throw new BadRequestException('At least one item line must be specified to split order');
-      }
-
-      const childOrderNumber = await this.sequenceService.generateOrderNumber(tenantId, em);
-
-      let targetTableNumber = sourceOrder.table_number;
-      if (dto.targetTableId) {
-        const targetTbl = await em.findOne(DiningTable, { where: { id: dto.targetTableId, tenant_id: tenantId } });
-        if (targetTbl) targetTableNumber = targetTbl.table_number;
-      }
-
-      const childOrder = em.create(OrderHeader, {
-        tenant_id: tenantId,
-        branch_id: sourceOrder.branch_id,
-        terminal_id: sourceOrder.terminal_id,
-        shift_id: sourceOrder.shift_id,
-        order_number: childOrderNumber,
-        // The same table's food: the kitchen and the guests already know it by this number.
-        call_number: sourceOrder.call_number ?? null,
-        channel: sourceOrder.channel,
-        order_type: 'DINE_IN',
-        state: 'DRAFT' as OrderState,
-        status: 'DRAFT',
-        currency_code: sourceOrder.currency_code,
-        quote_version: '1',
-        customer_id: sourceOrder.customer_id,
-        table_id: dto.targetTableId || sourceOrder.table_id,
-        table_number: targetTableNumber,
-        guest_count: sourceOrder.guest_count,
-        business_date: sourceOrder.business_date,
-        parent_order_id: sourceOrder.id,
-        created_by: userId || null,
-      });
-      const savedChildOrder = await em.save(OrderHeader, childOrder);
-
-      let newLineNo = 1;
-      for (const splitLine of dto.lines) {
-        const sourceItem = (sourceOrder.items || []).find((i) => i.id === splitLine.orderItemId);
-        if (!sourceItem) {
-          throw new BadRequestException(`Order item ${splitLine.orderItemId} not found on order ${sourceOrderId}`);
-        }
-
-        const splitQty = new Decimal(splitLine.quantity);
-        const currentQty = new Decimal(sourceItem.quantity);
-
-        if (splitQty.lte(0) || splitQty.gt(currentQty)) {
-          throw new BadRequestException(`Invalid split quantity ${splitLine.quantity} for item ${sourceItem.id} (current: ${sourceItem.quantity})`);
-        }
-
-        if (splitQty.equals(currentQty)) {
-          sourceItem.order_id = savedChildOrder.id;
-          sourceItem.line_number = newLineNo++;
-          await em.save(OrderItem, sourceItem);
-        } else {
-          const remainingQty = currentQty.minus(splitQty);
-          const origModifierTotal = sourceItem.modifier_total || '0.0000';
-          const splitRatio = MoneyUtil.divide(MoneyUtil.format(splitQty, 4), MoneyUtil.format(currentQty, 4), 6);
-          const newModifierTotal = MoneyUtil.multiply(origModifierTotal, splitRatio);
-          const remainingModifierTotal = MoneyUtil.subtract(origModifierTotal, newModifierTotal);
-
-          sourceItem.quantity = MoneyUtil.format(remainingQty, 4);
-          sourceItem.base_total = MoneyUtil.multiply(sourceItem.unit_price, sourceItem.quantity);
-          sourceItem.modifier_total = remainingModifierTotal;
-          sourceItem.line_total = MoneyUtil.add(sourceItem.base_total, remainingModifierTotal);
-          await em.save(OrderItem, sourceItem);
-
-          const newItem = em.create(OrderItem, {
-            tenant_id: tenantId,
-            order_id: savedChildOrder.id,
-            line_number: newLineNo++,
-            product_id: sourceItem.product_id,
-            variant_id: sourceItem.variant_id,
-            product_code: sourceItem.product_code,
-            product_name: sourceItem.product_name,
-            variant_name: sourceItem.variant_name,
-            quantity: MoneyUtil.format(splitQty, 4),
-            unit_price: sourceItem.unit_price,
-            base_total: MoneyUtil.multiply(sourceItem.unit_price, MoneyUtil.format(splitQty, 4)),
-            modifier_total: newModifierTotal,
-            discount_total: '0.0000',
-            tax_total: '0.0000',
-            packaging_total: '0.0000',
-            line_total: MoneyUtil.add(MoneyUtil.multiply(sourceItem.unit_price, MoneyUtil.format(splitQty, 4)), newModifierTotal),
-            notes: sourceItem.notes,
-            state: sourceItem.state,
-          });
-          const savedNewItem = await em.save(OrderItem, newItem);
-
-          if (sourceItem.options && sourceItem.options.length > 0) {
-            for (const opt of sourceItem.options) {
-              const newOpt = em.create(OrderItemOption, {
-                tenant_id: tenantId,
-                order_item_id: savedNewItem.id,
-                option_item_id: opt.option_item_id,
-                option_group_name: opt.option_group_name || '',
-                option_item_name: opt.option_item_name || '',
-                price_delta: opt.price_delta || '0.0000',
-              });
-              await em.save(OrderItemOption, newOpt);
-            }
-          }
-        }
-      }
-
-      const link = em.create(OrderLink, {
-        tenant_id: tenantId,
-        from_order_id: sourceOrder.id,
-        to_order_id: savedChildOrder.id,
-        link_type: 'SPLIT',
-        details: { splitLines: dto.lines },
-      });
-      await em.save(OrderLink, link);
-
-      const updatedSource = await this.recalculateOrderTotals(tenantId, sourceOrder, em);
-      const updatedChild = await this.recalculateOrderTotals(tenantId, savedChildOrder, em);
-
-      if (dto.targetTableId) {
-        const occ = em.create(TableOccupancyEvent, {
-          tenant_id: tenantId,
-          table_id: dto.targetTableId,
-          order_id: savedChildOrder.id,
-          from_table_id: sourceOrder.table_id || undefined,
-          event_type: 'SPLIT',
-          guest_count: sourceOrder.guest_count || 1,
-          occurred_by: userId || null,
-          details: { sourceOrderId: sourceOrder.id, newOrderId: savedChildOrder.id },
-        });
-        await em.save(TableOccupancyEvent, occ);
-      }
-
-      await this.auditWriter.write({
-        tenantId,
-        actorType: userId ? 'ADMIN' : 'SYSTEM',
-        actorId: userId,
-        action: 'ORDER_SPLIT',
-        entityType: 'Order',
-        entityId: sourceOrder.id,
-        correlationId,
-        details: { childOrderId: savedChildOrder.id, childOrderNumber },
-      });
-
-      return { source: updatedSource, newOrder: updatedChild };
-    });
-  }
-
-  async transferItems(tenantId: string, dto: TransferItemsDto, userId?: string, correlationId?: string) {
-    return await this.dataSource.transaction(async (em) => {
-      const sortedOrderIds = [dto.sourceOrderId, dto.targetOrderId].sort();
-      for (const id of sortedOrderIds) {
-        await em.findOne(OrderHeader, { where: { id, tenant_id: tenantId }, lock: { mode: 'pessimistic_write' } });
-      }
-
-      const sourceOrder = await em.findOne(OrderHeader, {
-        where: { id: dto.sourceOrderId, tenant_id: tenantId },
-        relations: ['items', 'items.options'],
-      });
-      const targetOrder = await em.findOne(OrderHeader, {
-        where: { id: dto.targetOrderId, tenant_id: tenantId },
-        relations: ['items', 'items.options'],
-      });
-
-      if (!sourceOrder || !targetOrder) {
-        throw new NotFoundException('Source or target order not found');
-      }
-      this.refuseSnappfoodChange(sourceOrder, 'move its lines');
-      this.refuseSnappfoodChange(targetOrder, 'add lines to it');
-
-      if (sourceOrder.branch_id !== targetOrder.branch_id || sourceOrder.currency_code !== targetOrder.currency_code) {
-        throw new BadRequestException('Source and target orders must have the same branch and currency');
-      }
-
-      if (['COMPLETED', 'CANCELLED'].includes(sourceOrder.state) || ['COMPLETED', 'CANCELLED'].includes(targetOrder.state)) {
-        throw new BadRequestException('Cannot transfer items to/from completed or cancelled orders');
-      }
-
-      let targetLineNo = (targetOrder.items || []).length + 1;
-      for (const transferLine of dto.lines) {
-        const sourceItem = (sourceOrder.items || []).find((i) => i.id === transferLine.orderItemId);
-        if (!sourceItem) {
-          throw new BadRequestException(`Item ${transferLine.orderItemId} not found on source order`);
-        }
-
-        const qtyToTransfer = new Decimal(transferLine.quantity);
-        const currentQty = new Decimal(sourceItem.quantity);
-
-        if (qtyToTransfer.lte(0) || qtyToTransfer.gt(currentQty)) {
-          throw new BadRequestException(`Invalid transfer quantity ${transferLine.quantity}`);
-        }
-
-        if (qtyToTransfer.equals(currentQty)) {
-          sourceItem.order_id = targetOrder.id;
-          sourceItem.line_number = targetLineNo++;
-          await em.save(OrderItem, sourceItem);
-        } else {
-          const remainingQty = currentQty.minus(qtyToTransfer);
-          const origModifierTotal = sourceItem.modifier_total || '0.0000';
-          const transferRatio = MoneyUtil.divide(MoneyUtil.format(qtyToTransfer, 4), MoneyUtil.format(currentQty, 4), 6);
-          const transferModifierTotal = MoneyUtil.multiply(origModifierTotal, transferRatio);
-          const remainingModifierTotal = MoneyUtil.subtract(origModifierTotal, transferModifierTotal);
-
-          sourceItem.quantity = MoneyUtil.format(remainingQty, 4);
-          sourceItem.base_total = MoneyUtil.multiply(sourceItem.unit_price, sourceItem.quantity);
-          sourceItem.modifier_total = remainingModifierTotal;
-          sourceItem.line_total = MoneyUtil.add(sourceItem.base_total, remainingModifierTotal);
-          await em.save(OrderItem, sourceItem);
-
-          const newItem = em.create(OrderItem, {
-            tenant_id: tenantId,
-            order_id: targetOrder.id,
-            line_number: targetLineNo++,
-            product_id: sourceItem.product_id,
-            variant_id: sourceItem.variant_id,
-            product_code: sourceItem.product_code,
-            product_name: sourceItem.product_name,
-            variant_name: sourceItem.variant_name,
-            quantity: MoneyUtil.format(qtyToTransfer, 4),
-            unit_price: sourceItem.unit_price,
-            base_total: MoneyUtil.multiply(sourceItem.unit_price, MoneyUtil.format(qtyToTransfer, 4)),
-            modifier_total: transferModifierTotal,
-            discount_total: '0.0000',
-            tax_total: '0.0000',
-            packaging_total: '0.0000',
-            line_total: MoneyUtil.add(MoneyUtil.multiply(sourceItem.unit_price, MoneyUtil.format(qtyToTransfer, 4)), transferModifierTotal),
-            notes: sourceItem.notes,
-            state: sourceItem.state,
-          });
-          const savedNewItem = await em.save(OrderItem, newItem);
-
-          if (sourceItem.options && sourceItem.options.length > 0) {
-            for (const opt of sourceItem.options) {
-              const newOpt = em.create(OrderItemOption, {
-                tenant_id: tenantId,
-                order_item_id: savedNewItem.id,
-                option_item_id: opt.option_item_id,
-                option_group_name: opt.option_group_name || '',
-                option_item_name: opt.option_item_name || '',
-                price_delta: opt.price_delta || '0.0000',
-              });
-              await em.save(OrderItemOption, newOpt);
-            }
-          }
-        }
-      }
-
-      const link = em.create(OrderLink, {
-        tenant_id: tenantId,
-        from_order_id: sourceOrder.id,
-        to_order_id: targetOrder.id,
-        link_type: 'TRANSFER',
-        details: { lines: dto.lines, reason: dto.reason },
-      });
-      await em.save(OrderLink, link);
-
-      const updatedSource = await this.recalculateOrderTotals(tenantId, sourceOrder, em);
-      const updatedTarget = await this.recalculateOrderTotals(tenantId, targetOrder, em);
-
-      await this.auditWriter.write({
-        tenantId,
-        actorType: userId ? 'ADMIN' : 'SYSTEM',
-        actorId: userId,
-        action: 'ORDER_ITEMS_TRANSFERRED',
-        entityType: 'Order',
-        entityId: sourceOrder.id,
-        correlationId,
-        details: { targetOrderId: targetOrder.id, reason: dto.reason },
-      });
-
-      return { source: updatedSource, target: updatedTarget };
-    });
-  }
-
   async getGuestBill(tenantId: string, id: string, locale: string = 'en') {
     const order = await this.getOrderById(tenantId, id);
     const isFa = locale === 'fa';
@@ -3076,7 +2732,6 @@ export class OrderService {
           <div class="header">
             <h2>${isFa ? 'پیش‌فاکتور میز' : 'Guest Bill'}</h2>
             <p>${isFa ? 'شماره سفارش' : 'Order'}: #${order.order_number}</p>
-            ${order.table_number ? `<p>${isFa ? 'شماره میز' : 'Table'}: ${order.table_number}</p>` : ''}
             <p>${isFa ? 'تاریخ' : 'Date'}: ${formatBusinessDateTime(new Date(), readCalendar(calendarSetting), isFa)}</p>
           </div>
           <table>
@@ -3175,7 +2830,6 @@ export class OrderService {
         branch_phone: branchPhone,
         order_number: order.order_number,
         order_type: order.order_type,
-        table_number: order.table_number || undefined,
         placed_at: order.placed_at || (order as any).created_at || new Date().toISOString(),
       },
       items,

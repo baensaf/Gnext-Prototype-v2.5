@@ -62,9 +62,6 @@ export interface OrderHeader {
   delivery_zone_id?: string;
   customer_name?: string;
   customer_mobile?: string;
-  table_id?: string;
-  table_number?: string;
-  guest_count?: number;
   coupon_code?: string;
   subtotal: string;
   subtotal_amount?: string;
@@ -365,7 +362,6 @@ export const orderApi = {
     options?: {
       deliveryAddressId?: string;
       deliveryZoneId?: string;
-      tableId?: string;
       quoteVersion?: string;
       approvalRequestId?: string;
       reason?: string;
@@ -392,16 +388,6 @@ export const orderApi = {
 
   getOrderHistory: async (id: string): Promise<any> => {
     const res = await httpClient.get(`/api/v1/orders/${id}/history`);
-    return res.data;
-  },
-
-  splitOrder: async (id: string, lines: { orderItemId: string; quantity: number | string }[], targetTableId?: string): Promise<{ source: OrderHeader; newOrder: OrderHeader }> => {
-    const res = await httpClient.post(`/api/v1/orders/${id}/split`, { lines, targetTableId });
-    return res.data;
-  },
-
-  transferItems: async (sourceOrderId: string, targetOrderId: string, lines: { orderItemId: string; quantity: number | string }[], reason?: string): Promise<{ source: OrderHeader; target: OrderHeader }> => {
-    const res = await httpClient.post('/api/v1/orders/transfer-items', { sourceOrderId, targetOrderId, lines, reason });
     return res.data;
   },
 

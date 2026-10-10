@@ -47,7 +47,7 @@ export function OpenOrderLine({ order }: { order: DayCloseOpenOrder }) {
         {order.orderNumber}
       </Link>
       <Typography variant="caption" color="text.secondary">
-        {order.tableNumber ? `${order.orderType} · ${order.tableNumber}` : order.orderType} ·{' '}
+        {order.orderType} ·{' '}
         <span dir="ltr">{fDate(order.businessDate)}</span>
       </Typography>
       <Box sx={{ flexGrow: 1 }} />
