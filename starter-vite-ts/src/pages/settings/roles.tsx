@@ -173,12 +173,6 @@ const GROUPS: { titleKey: string; title: string; rows: Capability[] }[] = [
         label: 'Open a branch, set its trading hours',
         write: { CASHIER: 'NONE', MANAGER: 'NONE', HEAD_OFFICE: 'FULL' },
       },
-      {
-        path: '/app/delivery/rollup',
-        labelKey: 'rolesPage.caps.fleetRollup',
-        label: 'See every branch’s couriers on one screen',
-        write: { CASHIER: 'NONE', MANAGER: 'NONE', HEAD_OFFICE: 'READ' },
-      },
     ],
   },
 ];

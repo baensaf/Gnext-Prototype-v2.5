@@ -15,22 +15,6 @@ export interface DeliveryZone {
   is_active: boolean;
 }
 
-export interface CourierAttendance {
-  id?: string;
-  status: 'CHECKED_IN' | 'CHECKED_OUT' | 'PAUSED';
-  availability_status: 'AVAILABLE' | 'BUSY' | 'OFF_LINE';
-  checked_in_at?: string;
-  checked_out_at?: string;
-}
-
-export interface CourierTerminalAssignment {
-  id?: string;
-  terminal_id: string;
-  terminal_name?: string;
-  assigned_at: string;
-  is_active: boolean;
-}
-
 export interface Courier {
   id: string;
   branch_id?: string;
@@ -41,20 +25,7 @@ export interface Courier {
   currency_code: string;
   status: string;
   is_active: boolean;
-  attendance?: CourierAttendance;
-  active_terminal?: CourierTerminalAssignment | null;
   active_delivery_count?: number;
-}
-
-/** The courier a new-courier form turned out to describe, sent back with a 409 `COURIER_EXISTS`. */
-export interface CourierOnFile {
-  id: string;
-  code: string;
-  name: string;
-  phone?: string | null;
-  branch_id?: string | null;
-  branch_name?: string | null;
-  is_active: boolean;
 }
 
 export interface Delivery {
@@ -66,7 +37,7 @@ export interface Delivery {
   courier_id?: string;
   courier_name?: string;
   courier_phone?: string;
-  state: 'UNASSIGNED' | 'ASSIGNED' | 'PICKED_UP' | 'EN_ROUTE' | 'DELIVERED' | 'FAILED' | 'CANCELLED';
+  state: 'UNASSIGNED' | 'ASSIGNED' | 'PICKED_UP' | 'EN_ROUTE' | 'DELIVERED' | 'CANCELLED';
   fee: string;
   currency_code: string;
   grand_total: string;
@@ -88,7 +59,6 @@ export interface Delivery {
   delivered_at?: string;
   cash_expected: string;
   mobile_pos_expected: string;
-  failure_reason?: string;
   created_at: string;
 }
 
@@ -123,44 +93,18 @@ export const deliveryApi = {
     await httpClient.delete(`/api/v1/delivery/zones/${id}`);
   },
 
-  // Couriers & Attendance
+  // Couriers
   getCouriers: async (branchId?: string): Promise<Courier[]> => {
     const res = await httpClient.get('/api/v1/delivery/couriers', { params: { branchId } });
-    return res.data;
-  },
-  getCourierById: async (id: string): Promise<Courier> => {
-    const res = await httpClient.get(`/api/v1/delivery/couriers/${id}`);
     return res.data;
   },
   createCourier: async (data: Partial<Courier>): Promise<Courier> => {
     const res = await httpClient.post('/api/v1/delivery/couriers', data);
     return res.data;
   },
-  /** Brings a courier on file at another branch over to `branchId`, keeping one record and one history. */
-  moveCourier: async (id: string, branchId?: string): Promise<Courier> => {
-    const res = await httpClient.post(`/api/v1/delivery/couriers/${id}/move`, { branch_id: branchId });
-    return res.data;
-  },
   updateCourierStatus: async (id: string, status: 'AVAILABLE' | 'ON_DELIVERY' | 'INACTIVE'): Promise<Courier> => {
     const res = await httpClient.post(`/api/v1/delivery/couriers/${id}/status`, { status });
     return res.data;
-  },
-  recordAttendance: async (data: { courier_id: string; branch_id: string; status: 'CHECKED_IN' | 'CHECKED_OUT' | 'PAUSED'; availability_status?: 'AVAILABLE' | 'BUSY' | 'OFF_LINE' }): Promise<CourierAttendance> => {
-    const res = await httpClient.post('/api/v1/delivery/couriers/attendance', data);
-    return res.data;
-  },
-  setAvailability: async (courierId: string, availability_status: 'AVAILABLE' | 'BUSY' | 'OFF_LINE'): Promise<CourierAttendance> => {
-    const res = await httpClient.post(`/api/v1/delivery/couriers/${courierId}/availability`, { availability_status });
-    return res.data;
-  },
-
-  // Terminal Assignments
-  assignTerminal: async (courierId: string, terminalId: string): Promise<CourierTerminalAssignment> => {
-    const res = await httpClient.post(`/api/v1/delivery/couriers/${courierId}/terminal-assignment`, { terminalId });
-    return res.data;
-  },
-  unassignTerminal: async (courierId: string): Promise<void> => {
-    await httpClient.delete(`/api/v1/delivery/couriers/${courierId}/terminal-assignment`);
   },
 
   // Deliveries & Board
@@ -172,7 +116,7 @@ export const deliveryApi = {
     const res = await httpClient.post(`/api/v1/delivery/orders/${orderId}`, { zoneId, addressSnapshot });
     return res.data;
   },
-  /** Names the courier and sends the order out in one step; on an order already out, swaps the rider. */
+  /** Names the courier and sends the order out in one step. */
   dispatchCourier: async (deliveryId: string, courierId: string): Promise<Delivery> => {
     const res = await httpClient.post(`/api/v1/delivery/${deliveryId}/dispatch`, { courierId });
     return res.data;
@@ -183,14 +127,6 @@ export const deliveryApi = {
   },
   completeDelivery: async (deliveryId: string, cashCollected?: string | number, posAmount?: string | number): Promise<Delivery> => {
     const res = await httpClient.post(`/api/v1/delivery/${deliveryId}/complete`, { cashCollected, posAmount });
-    return res.data;
-  },
-  failDelivery: async (deliveryId: string, reason: string): Promise<Delivery> => {
-    const res = await httpClient.post(`/api/v1/delivery/${deliveryId}/fail`, { reason });
-    return res.data;
-  },
-  requeueDelivery: async (deliveryId: string): Promise<Delivery> => {
-    const res = await httpClient.post(`/api/v1/delivery/${deliveryId}/requeue`);
     return res.data;
   },
   getEvents: async (deliveryId: string): Promise<DeliveryEvent[]> => {
@@ -223,14 +159,6 @@ export const deliveryApi = {
     const res = await httpClient.patch(`/api/v1/courier-settlements/${id}`, data);
     return res.data;
   },
-  reviewSettlement: async (id: string): Promise<any> => {
-    const res = await httpClient.post(`/api/v1/courier-settlements/${id}/review`);
-    return res.data;
-  },
-  returnSettlement: async (id: string, reason?: string): Promise<any> => {
-    const res = await httpClient.post(`/api/v1/courier-settlements/${id}/return`, { reason });
-    return res.data;
-  },
   closeSettlement: async (id: string, approvalRequestId?: string): Promise<any> => {
     const res = await httpClient.post(`/api/v1/courier-settlements/${id}/close`, { approvalRequestId });
     return res.data;
@@ -253,8 +181,8 @@ export const deliveryApi = {
     const res = await httpClient.post(`/api/v1/delivery/orders/${orderId}/assign`, { courierId, deliveryFee, tipAmount });
     return res.data;
   },
-  updateAssignmentStatus: async (assignmentId: string, status: string, failureReason?: string): Promise<any> => {
-    const res = await httpClient.post(`/api/v1/delivery/assignments/${assignmentId}/status`, { status, failureReason });
+  updateAssignmentStatus: async (assignmentId: string, status: string): Promise<any> => {
+    const res = await httpClient.post(`/api/v1/delivery/assignments/${assignmentId}/status`, { status });
     return res.data;
   },
 };

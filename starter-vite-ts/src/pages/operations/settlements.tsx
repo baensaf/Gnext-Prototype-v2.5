@@ -57,7 +57,7 @@ interface SettlementBatch {
   settlement_number: string;
   courier_name: string;
   courier_code: string;
-  status: 'DRAFT' | 'UNDER_REVIEW' | 'CLOSED' | 'REVERSED';
+  status: 'DRAFT' | 'CLOSED' | 'REVERSED';
   settlement_date: string;
   expected_cash_amount: string;
   actual_cash_amount: string;
@@ -263,7 +263,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
     return card ? t('settlements.detailModal.methodCard') : t('settlements.detailModal.methodCash');
   };
 
-  // Saves the cashier's figures. Review and close save first, so what is on screen is what closes.
+  // Saves the cashier's figures. Closing saves first, so what is on screen is what closes.
   const saveLines = async () => {
     if (!activeSettlementDetail) return;
     const linePayload = editableLines.map((l) => ({
@@ -290,19 +290,6 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
       fetchData();
     } catch {
       alert(t('settlements.errors.updateDraftFailed'));
-    }
-  };
-
-  const handleReviewSettlement = async () => {
-    if (!activeSettlementDetail) return;
-    try {
-      await saveLines();
-      const res = await axios.post(`/api/v1/delivery/settlements/${activeSettlementDetail.id}/review`);
-      setActiveSettlementDetail((prev: any) => (prev ? { ...prev, ...res.data } : res.data));
-      alert(t('settlements.alerts.movedToReview'));
-      fetchData();
-    } catch {
-      alert(t('settlements.errors.reviewFailed'));
     }
   };
 
@@ -349,8 +336,6 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
     switch (status) {
       case 'CLOSED':
         return <Chip label={t('settlements.statuses.closed')} color="success" size="small" />;
-      case 'UNDER_REVIEW':
-        return <Chip label={t('settlements.statuses.underReview')} color="warning" size="small" />;
       case 'REVERSED':
         return <Chip label={t('settlements.statuses.reversed')} color="error" size="small" />;
       default:
@@ -692,7 +677,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                 </Grid>
 
                 {/* Adjustments & Notes */}
-                {['DRAFT', 'UNDER_REVIEW'].includes(activeSettlementDetail.status) && (
+                {activeSettlementDetail.status === 'DRAFT' && (
                   <Stack direction="row" spacing={2}>
                     <TextField
                       label={t('settlements.detailModal.totalAdj')}
@@ -711,7 +696,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                   {t('settlements.detailModal.lineItemsTitle')}
                 </Typography>
-                {['DRAFT', 'UNDER_REVIEW'].includes(activeSettlementDetail.status) && (
+                {activeSettlementDetail.status === 'DRAFT' && (
                   <Typography variant="caption" color="text.secondary">
                     {t('settlements.detailModal.lineHint')}
                   </Typography>
@@ -739,7 +724,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                           <TableCell padding="checkbox">
                             <Checkbox
                               checked={line.receipt_verified}
-                              disabled={!['DRAFT', 'UNDER_REVIEW'].includes(activeSettlementDetail.status)}
+                              disabled={activeSettlementDetail.status !== 'DRAFT'}
                               onChange={() => handleLineReceiptToggle(line.id)}
                             />
                           </TableCell>
@@ -747,7 +732,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                           <TableCell>{rideStatusLabel(line.delivery_status)}</TableCell>
                           <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(lineOwed(line))} {currency}</TableCell>
                           <TableCell align="right">
-                            {['DRAFT', 'UNDER_REVIEW'].includes(activeSettlementDetail.status) ? (
+                            {activeSettlementDetail.status === 'DRAFT' ? (
                               <TextField
                                 size="small"
                                 variant="outlined"
@@ -760,7 +745,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                             )}
                           </TableCell>
                           <TableCell align="right">
-                            {['DRAFT', 'UNDER_REVIEW'].includes(activeSettlementDetail.status) ? (
+                            {activeSettlementDetail.status === 'DRAFT' ? (
                               <TextField
                                 size="small"
                                 variant="outlined"
@@ -785,13 +770,6 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
               <Button onClick={() => setDetailDialogOpen(false)}>{t('settlements.detailModal.closeWindow')}</Button>
 
               {activeSettlementDetail.status === 'DRAFT' && (
-                <Button variant="contained" color="warning" onClick={handleReviewSettlement}>
-                  {t('settlements.detailModal.submitReview')}
-                  <VersionTag feature="delivery.settlementReview" sx={{ ml: 1 }} />
-                </Button>
-              )}
-
-              {['DRAFT', 'UNDER_REVIEW'].includes(activeSettlementDetail.status) && (
                 <Button variant="contained" color="success" onClick={handleCloseSettlement}>
                   {t('settlements.detailModal.finalizeClose')}
                 </Button>

@@ -33,7 +33,6 @@ import { AccountButton } from './account-button';
 import { SignOutButton } from './sign-out-button';
 import { SettingsButton } from './settings-button';
 import { LanguagePopover } from './language-popover';
-import { NotificationsDrawer } from './notifications-drawer';
 
 // ----------------------------------------------------------------------
 
@@ -230,9 +229,6 @@ export function AccountDrawer({ data = [], sx, ...other }: AccountDrawerProps) {
 
             {/* Set once or looked at now and then, so they sit here and not in the header. */}
             <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-              {/* The alerts open their own, wider drawer on top of this one. It lives inside
-                  this drawer, so this one stays open underneath rather than unmounting it. */}
-              <NotificationsDrawer />
               <VersionLabelsButton />
               <LanguagePopover />
               {/* Appearance opens its own drawer over this one. */}

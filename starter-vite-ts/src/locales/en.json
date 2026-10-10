@@ -61,8 +61,6 @@
     "refunds": "Refunds",
     "printers": "Printers & Routes",
     "printQueue": "Print Queue",
-    "monitoring": "Operational Monitoring",
-    "fleetRollup": "Fleet Across Branches",
     "customerClubGroup": "Customer Club & Loyalty",
     "customerDiscounts": "Customer Discounts",
     "customerWallet": "Wallet & Cashback",
@@ -646,7 +644,6 @@
         "DINING_TABLE_MOVED": "Moved to another table",
         "DINING_ORDERS_MERGED": "Merged with another order",
         "ORDER_SPLIT": "Order split",
-        "ORDER_DELIVERY_FAILED": "Not delivered",
         "other": "Order changed"
       }
     },
@@ -746,20 +743,6 @@
     "activeBranch": "Active Branch",
     "refresh": "Refresh",
     "refreshing": "Refreshing…",
-    "payRules": {
-      "label": "Pay rule",
-      "FLAT": "Fixed per delivery",
-      "DELIVERY_FEE": "Delivery fee",
-      "ZONE_RATE": "Zone rate",
-      "flatAmount": "{{amount}} per delivery",
-      "zoneFallback": "Zone rate, else {{amount}}",
-      "help_FLAT": "The same amount for every delivery.",
-      "help_DELIVERY_FEE": "The zone's listed delivery fee, even when the customer got free or discounted delivery.",
-      "help_ZONE_RATE": "The courier rate set on each zone. A zone without one pays the amount below.",
-      "tipsNote": "Tips always go to the courier in full.",
-      "settlementPay": "Courier pay (kept by the courier)",
-      "settlementNet": "Cash to hand back"
-    },
     "tabs": {
       "board": "Dispatch board",
       "couriers": "Couriers & Roster",
@@ -768,34 +751,18 @@
     },
     "columns": {
       "unassigned": "Waiting for courier",
-      "needsCourier": "Needs Courier",
-      "assigned": "Assigned",
-      "readyToDepart": "Ready to Depart",
-      "enRoute": "En Route",
-      "outForDelivery": "Out for Delivery",
-      "history": "History",
-      "terminal": "Terminal"
+      "enRoute": "En Route"
     },
     "card": {
       "order": "Order",
-      "zone": "Zone",
       "fee": "Delivery fee",
-      "total": "Total",
       "courier": "Courier",
-      "phone": "Phone",
       "noPhone": "N/A",
-      "expCash": "Exp Cash",
       "toCollect": "To collect from customer",
-      "expPos": "Exp POS",
-      "compensation": "Compensation",
       "assignCourier": "Send with courier",
       "depart": "Send out",
       "departing": "Sending…",
-      "reassign": "Change courier",
       "complete": "Delivered",
-      "failed": "Not delivered",
-      "requeue": "Re-queue Delivery",
-      "customer": "Customer",
       "noCustomer": "No customer on file",
       "callNumber": "#{{number}}",
       "waiting": "{{minutes}} min",
@@ -818,34 +785,7 @@
       "title": "Courier Profiles & Roster",
       "addCourier": "Add Courier",
       "code": "Code",
-      "nameAndPhone": "Name & Phone",
-      "vehicle": "Vehicle",
-      "compensationPerDelivery": "Compensation / Delivery",
-      "attendance": "Today",
-      "availability": "Availability",
-      "mobilePosAssignment": "Mobile POS Assignment",
-      "activeLoad": "Active Load",
-      "actions": "Actions",
-      "checkIn": "Working today",
-      "checkOut": "Not working today",
-      "assignPos": "Assign POS",
-      "editPay": "Change pay rule",
-      "vehicleTypes": {
-        "motorcycle": "Motorcycle",
-        "bicycle": "Bicycle",
-        "car": "Car",
-        "onFoot": "On Foot"
-      },
-      "attendanceStatus": {
-        "checkedIn": "Working",
-        "checkedOut": "Not working",
-        "paused": "Paused"
-      },
-      "availabilityStatus": {
-        "available": "Available",
-        "busy": "Busy",
-        "offline": "Offline"
-      }
+      "nameAndPhone": "Name & Phone"
     },
     "zones": {
       "mapColumn": "Map",
@@ -857,8 +797,6 @@
       "zoneName": "Zone Name",
       "standardFee": "Standard Delivery Fee",
       "estimatedMinutes": "Estimated Minutes",
-      "courierPay": "Courier Pay",
-      "courierPayUnset": "Courier's own rate",
       "actions": "Actions",
       "edit": "Edit zone",
       "status": "Status",
@@ -873,9 +811,7 @@
         "eligibleCourier": "Eligible Courier",
         "noEligible": "No couriers are currently checked in and AVAILABLE under capacity limits.",
         "cancel": "Cancel",
-        "submit": "Send out",
-        "changeDescription": "Order #{{orderNumber}} is already out. Pick the courier who is taking it instead.",
-        "changeSubmit": "Change courier"
+        "submit": "Send out"
       },
       "complete": {
         "title": "Mark Delivered",
@@ -885,43 +821,14 @@
         "cancel": "Cancel",
         "submit": "Mark Delivered"
       },
-      "fail": {
-        "title": "Not delivered",
-        "reasonLabel": "Why was it not delivered?",
-        "cancel": "Cancel",
-        "submit": "Record"
-      },
       "addCourier": {
         "title": "Add Courier Profile",
         "code": "Courier Code",
         "name": "Courier Name",
         "phone": "Phone Number",
         "phoneHelp": "Also their username for the courier app, which they sign in to later. A courier already riding for another branch is found by this number and moved, not added twice.",
-        "vehicleType": "Vehicle Type",
-        "compensation": "Compensation per Delivery ({{currency}})",
-        "payMode": "Pay rule",
-        "compensationFlat": "Pay per delivery ({{currency}})",
-        "compensationFallback": "Pay where a zone has no courier rate ({{currency}})",
-        "payByManager": "Starts on the branch’s default pay. A manager can change it.",
         "cancel": "Cancel",
         "submit": "Save Courier"
-      },
-      "moveCourier": {
-        "title": "Courier already on file",
-        "description": "{{name}} ({{code}}) already works at {{branch}}. Move them to this branch to keep one profile and one history.",
-        "descriptionHere": "{{name}} ({{code}}) is already on this branch's books but archived. Bring them back instead of adding them twice.",
-        "otherBranch": "another branch",
-        "unsettledNote": "Cash they still owe their old branch stays there and is settled there.",
-        "cancel": "Cancel",
-        "submit": "Move to this branch",
-        "restore": "Bring back",
-        "moved": "{{name}} now works at this branch."
-      },
-      "courierPay": {
-        "title": "Pay rule for {{name}}",
-        "note": "Applies to deliveries completed from now on. Trips already paid keep their pay.",
-        "cancel": "Cancel",
-        "submit": "Save"
       },
       "editZone": {
         "title": "Edit zone {{code}}",
@@ -938,18 +845,9 @@
         "code": "Zone Code",
         "name": "Zone Name",
         "fee": "Delivery Fee ({{currency}})",
-        "courierPay": "Courier pay ({{currency}}, optional)",
-        "courierPayHelp": "Paid per trip to couriers on the zone-rate rule. Leave empty to use each courier's own rate.",
         "estimatedMinutes": "Estimated Minutes",
         "cancel": "Cancel",
         "submit": "Save Zone"
-      },
-      "assignTerminal": {
-        "title": "Assign Mobile POS Terminal",
-        "description": "Assign exclusive company mobile POS terminal to {{courierName}}",
-        "terminal": "Mobile POS Terminal",
-        "cancel": "Cancel",
-        "submit": "Save Assignment"
       }
     },
     "errors": {
@@ -957,18 +855,9 @@
       "assignFailed": "Failed to assign courier",
       "departFailed": "Failed to depart delivery",
       "completeFailed": "Failed to complete delivery",
-      "failFailed": "Failed to record delivery failure",
-      "requeueFailed": "Failed to requeue delivery",
-      "attendanceFailed": "Failed to update attendance",
-      "availabilityFailed": "Failed to set availability",
       "createCourierFailed": "Failed to create courier profile",
-      "moveCourierFailed": "Could not move the courier",
-      "updatePayFailed": "Could not save the pay rule",
       "updateZoneFailed": "Could not save the zone",
       "createZoneFailed": "Failed to create delivery zone",
-      "assignTerminalFailed": "Failed to assign mobile terminal",
-      "unassignTerminalFailed": "Failed to unassign terminal",
-      "timelineFailed": "Failed to load delivery timeline",
       "noBranch": "No active branch selected",
       "deleteZoneFailed": "Could not remove the zone"
     },
@@ -997,18 +886,15 @@
     },
     "statuses": {
       "draft": "DRAFT",
-      "underReview": "UNDER REVIEW",
       "closed": "CLOSED",
       "reversed": "REVERSED",
-      "pending": "PENDING",
-      "reviewed": "REVIEWED"
+      "pending": "PENDING"
     },
     "overview": {
       "code": "Code",
       "unsettled": "{{count}} Unsettled",
       "expectedCash": "Expected Cash:",
       "expectedPos": "Expected Mobile POS:",
-      "totalDeliveryFees": "Total Delivery Fees:",
       "startBatch": "Settle",
       "empty": "No couriers found or no active delivery assignments."
     },
@@ -1037,7 +923,6 @@
       "expectedActualCash": "Expected Cash / Actual Cash",
       "expectedActualPos": "Expected POS / Actual POS",
       "discrepancy": "Discrepancy",
-      "comp": "Comp:",
       "adj": "Adj:",
       "netSettlementTotal": "Net Settlement Total",
       "totalAdj": "Total Adjustment",
@@ -1048,7 +933,6 @@
       "status": "Status",
       "method": "Paid by",
       "closeWindow": "Close Window",
-      "submitReview": "Submit for Review",
       "finalizeClose": "Finalize & Close Settlement",
       "reverseSettlement": "Reverse Settlement",
       "toCollect": "Owed",
@@ -1078,7 +962,6 @@
     },
     "alerts": {
       "draftUpdated": "Settlement draft updated successfully.",
-      "movedToReview": "Settlement status moved to UNDER_REVIEW",
       "closed": "Settlement closed successfully!",
       "reversed": "Settlement reversed successfully."
     },
@@ -1087,10 +970,8 @@
     },
     "errors": {
       "previewFailed": "Failed to preview settlement",
-      "createFailed": "Error creating settlement",
       "detailFailed": "Failed to load settlement details",
       "updateDraftFailed": "Failed to update settlement draft",
-      "reviewFailed": "Error changing status to review",
       "closeFailed": "Error closing settlement",
       "reverseFailed": "Error reversing settlement",
       "statementFailed": "Failed to load statement payload"
@@ -1100,9 +981,7 @@
     "expectedCash": "Expected Cash",
     "actualCash": "Actual Cash",
     "variance": "Variance",
-    "confirmSettlement": "Confirm Settlement",
     "posAmount": "Mobile POS Total",
-    "compensation": "Courier Compensation/Fee",
     "netRemittance": "Net Cash Due to Merchant",
     "meta": "Settlement Information",
     "status": "Status",
@@ -1110,7 +989,6 @@
     "created": "Created At",
     "notes": "Notes",
     "actions": "Settlement Actions",
-    "review": "Mark as Reviewed",
     "close": "Close Settlement",
     "deliveries": "Included Deliveries & Orders",
     "noLines": "No individual delivery lines recorded for this settlement.",
@@ -3098,23 +2976,6 @@
     "authorized": "Manager authorization granted",
     "invalidPin": "Wrong manager PIN. {{count}} tries left."
   },
-  "rollup": {
-    "branch": "Branch",
-    "fleet": {
-      "title": "Fleet Across Branches",
-      "readOnlyNotice": "Read-only. A delivery is dispatched, re-assigned and closed out at the branch it left from. This page is here so head office can see where to phone, not to act on another shop floor.",
-      "inFlight": "In flight",
-      "late": "Running late",
-      "unassigned": "Waiting for a driver",
-      "deliveredToday": "Delivered today",
-      "failedToday": "Failed",
-      "couriersOnShift": "Drivers on shift",
-      "cashWithCouriers": "Cash out with drivers",
-      "empty": "No selling branches to report on.",
-      "loadError": "Failed to load the fleet roll-up",
-      "footnote": "Late means more than {{minutes}} minutes with a driver without arriving. Business date {{date}}."
-    }
-  },
   "printQueue": {
     "title": "Print Queue & Spooler",
     "columnJobId": "Job ID",
@@ -3161,26 +3022,7 @@
     "chit": "Chit"
   },
   "monitoring": {
-    "title": "Operational Monitoring & Health",
-    "subtitle": "Real-time telemetry, hardware state, and operational alerts",
-    "autoRefresh": "Auto Refresh (10s)",
-    "activeAlerts": "Active Alerts",
-    "criticalAlerts": "Critical Alerts",
-    "acknowledged": "Acknowledged",
-    "acknowledgeAll": "Acknowledge All",
-    "acknowledge": "Acknowledge",
-    "terminalsStatus": "Terminals Status",
-    "printersStatus": "Printers Status",
-    "refresh": "Refresh Now",
-    "filterAll": "All Severities",
-    "filterCritical": "Critical Only",
-    "filterWarning": "Warnings Only",
-    "filterInfo": "Info Only",
-    "onlineHealthy": "Online & healthy",
-    "latencyStatus": "Latency under 15 ms | database online",
-    "requiresAction": "Needs a manager now",
-    "stationsType": "POS and kiosk terminals",
-    "chainWide": "Chain-wide"
+    "refresh": "Refresh Now"
   },
   "bilingual": {
     "farsi": "Persian (FA)",
@@ -3641,8 +3483,7 @@
       "authority": "Set discount caps and approval thresholds",
       "users": "Hire, move and deactivate staff — and set their pin",
       "usersNote": "Anyone may change their own pin. Setting somebody else’s is head office’s.",
-      "branches": "Open a branch, set its trading hours",
-      "fleetRollup": "See every branch’s couriers on one screen"
+      "branches": "Open a branch, set its trading hours"
     }
   },
   "profile": {
@@ -3663,8 +3504,6 @@
       "overview": "Overview",
       "orders": "Orders",
       "credit": "Credit",
-      "settlements": "Settlements",
-      "attendance": "Attendance & terminals",
       "shiftsCash": "Shifts & cash"
     },
     "kpi": {
@@ -3724,53 +3563,6 @@
       "reason": "Reason / reference",
       "noEntries": "No credit entries yet",
       "noAccount": "This customer has no credit account."
-    },
-    "courier": {
-      "statusFailed": "Could not update the courier's shift",
-      "delivered": "Delivered",
-      "failedActive": "{{failed}} failed · {{active}} on the road",
-      "orderValue": "Completed order value",
-      "compensationEarned": "Compensation earned",
-      "unsettled": "Unsettled fees",
-      "unsettledCount": "{{count}} deliveries not settled",
-      "lastDelivery": "Last delivery",
-      "profile": "Courier",
-      "code": "Code",
-      "phone": "Phone",
-      "branch": "Branch",
-      "vehicle": "Vehicle",
-      "feePerDelivery": "Fee per delivery",
-      "today": "Today",
-      "attendanceStatus": "Attendance",
-      "availability": "Availability",
-      "checkedIn": "Checked in",
-      "checkedOut": "Checked out",
-      "activeDeliveries": "Active deliveries",
-      "terminal": "Mobile POS",
-      "assignedTerminal": "Terminal",
-      "unassigned": "Unassigned",
-      "assignedAt": "Assigned",
-      "unassignedAt": "Released",
-      "quickStatus": "Today's shift",
-      "shiftHint": "Shifts are recorded at {{branch}}, where this courier works.",
-      "checkIn": "Check in",
-      "checkOut": "Check out",
-      "setAvailable": "Available",
-      "setBusy": "Busy",
-      "discrepancyNotice": "{{count}} settlements listed · net cash discrepancy {{amount}}",
-      "settlementNumber": "Settlement",
-      "settlementDate": "Date",
-      "expectedCash": "Expected cash",
-      "actualCash": "Cash handed in",
-      "discrepancy": "Discrepancy",
-      "net": "Net",
-      "noSettlements": "No settlements yet",
-      "attendanceHistory": "Attendance history",
-      "date": "Date",
-      "noAttendance": "No attendance recorded",
-      "terminalHistory": "Terminal assignments",
-      "noTerminals": "No terminal has been assigned",
-      "current": "Current"
     },
     "user": {
       "ordersTaken": "Orders taken",

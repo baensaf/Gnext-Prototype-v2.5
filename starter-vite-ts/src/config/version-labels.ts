@@ -33,8 +33,6 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/operations/card-terminals': 'V1',
   // Branches, tills, kitchen stations and routing, printers, the print queue, branch agents
   '/app/operations': 'V1',
-  // Chain-wide health and alerts for head office
-  '/app/operations/monitoring': 'V4',
   '/app/kiosk': 'V3',
   // V1's one very basic report is the dashboard; the reports page comes in V2.
   '/app/reports': 'V2',
@@ -45,9 +43,7 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/settings/branch-overrides': 'V4',
   '/app/settings/localization': 'F',
   '/app/settings/data-reset': 'F',
-  // Full delivery is V1; head office's fleet roll-up is not.
   '/app/delivery': 'V1',
-  '/app/delivery/rollup': 'V4',
   // Categories, products with sizes, add-on groups and combos, availability (the 86 stop)
   // and the product and category import
   '/app/catalog': 'V1',
@@ -85,15 +81,7 @@ export const FEATURE_LABELS = {
   'payments.bankTransfer': 'V4',
   'payments.settlementAccounts': 'V4',
   // Delivery. Couriers belong to one branch and are on a salary: a trip pays them nothing.
-  'delivery.availability': 'V4',
-  'delivery.moveCourier': 'V4',
-  'delivery.courierDetail': 'V4',
-  // V1 dispatch: assign and send out, then settle on return. Everything else waits.
-  'delivery.failRide': 'V4',
-  'delivery.swapRider': 'V4',
-  'delivery.checkIn': 'V4',
-  'delivery.mobilePos': 'V4',
-  'delivery.settlementReview': 'V4',
+  // V1 dispatch: assign and send out, then settle on return.
   'delivery.settlementReverse': 'V2',
   // Catalog. Sizes, add-on groups and combos are V1 (2026-10-04).
   'catalog.maxPerOrder': 'V4',

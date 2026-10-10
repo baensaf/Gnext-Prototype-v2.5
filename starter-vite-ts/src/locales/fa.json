@@ -61,8 +61,6 @@
     "refunds": "مرجوعی‌ها",
     "printers": "چاپگرها و مسیریابی",
     "printQueue": "صف چاپ",
-    "monitoring": "پایش عملیاتی",
-    "fleetRollup": "ناوگان در همهٔ شعب",
     "customerClubGroup": "باشگاه مشتریان و وفاداری",
     "customerDiscounts": "تخفیف‌های اختصاصی مشتری",
     "customerWallet": "کیف پول و بازگشت وجه (کشبک)",
@@ -646,7 +644,6 @@
         "DINING_TABLE_MOVED": "جابه‌جایی میز",
         "DINING_ORDERS_MERGED": "ادغام با سفارش دیگر",
         "ORDER_SPLIT": "تقسیم سفارش",
-        "ORDER_DELIVERY_FAILED": "تحویل نشد",
         "other": "سفارش تغییر کرد"
       }
     },
@@ -746,20 +743,6 @@
     "activeBranch": "شعبه فعال",
     "refresh": "تازه‌سازی",
     "refreshing": "در حال تازه‌سازی…",
-    "payRules": {
-      "label": "قاعده‌ی دستمزد",
-      "FLAT": "مبلغ ثابت هر تحویل",
-      "DELIVERY_FEE": "کرایه‌ی تحویل",
-      "ZONE_RATE": "نرخ محدوده",
-      "flatAmount": "{{amount}} برای هر تحویل",
-      "zoneFallback": "نرخ محدوده، وگرنه {{amount}}",
-      "help_FLAT": "برای هر تحویل همان مبلغ.",
-      "help_DELIVERY_FEE": "کرایه‌ی مصوب محدوده، حتی وقتی تحویل برای مشتری رایگان یا با تخفیف بوده است.",
-      "help_ZONE_RATE": "نرخ سفیر که روی هر محدوده تعیین شده است. محدوده‌ی بدون نرخ، مبلغ زیر را می‌پردازد.",
-      "tipsNote": "انعام همیشه کامل به سفیر می‌رسد.",
-      "settlementPay": "دستمزد سفیر (نزد سفیر می‌ماند)",
-      "settlementNet": "نقد قابل تحویل"
-    },
     "tabs": {
       "board": "تابلوی ارسال",
       "couriers": "فهرست سفیران و حضور",
@@ -768,34 +751,18 @@
     },
     "columns": {
       "unassigned": "در انتظار سفیر",
-      "needsCourier": "نیازمند سفیر",
-      "assigned": "تخصیص‌یافته",
-      "readyToDepart": "آماده ارسال",
-      "enRoute": "در مسیر تحویل",
-      "outForDelivery": "در حال ارسال",
-      "history": "سوابق تحویل",
-      "terminal": "نهایی شده"
+      "enRoute": "در مسیر تحویل"
     },
     "card": {
       "order": "سفارش",
-      "zone": "محدوده",
       "fee": "هزینه ارسال",
-      "total": "مبلغ کل",
       "courier": "سفیر",
-      "phone": "تلفن",
       "noPhone": "ثبت‌نشده",
-      "expCash": "نقد مورد انتظار",
       "toCollect": "مبلغ دریافتی از مشتری",
-      "expPos": "کارت‌خوان مورد انتظار",
-      "compensation": "دستمزد",
       "assignCourier": "ارسال با سفیر",
       "depart": "ارسال",
       "departing": "در حال ارسال…",
-      "reassign": "تغییر سفیر",
       "complete": "تحویل شد",
-      "failed": "تحویل نشد",
-      "requeue": "ارسال مجدد به صف",
-      "customer": "مشتری",
       "noCustomer": "مشتری ثبت نشده",
       "callNumber": "#{{number}}",
       "waiting": "{{minutes}} دقیقه",
@@ -818,34 +785,7 @@
       "title": "فهرست و پروفایل سفیران",
       "addCourier": "افزودن سفیر",
       "code": "کد",
-      "nameAndPhone": "نام و تلفن",
-      "vehicle": "وسیله نقلیه",
-      "compensationPerDelivery": "دستمزد هر تحویل",
-      "attendance": "امروز",
-      "availability": "در دسترس بودن",
-      "mobilePosAssignment": "کارت‌خوان سیار",
-      "activeLoad": "بار فعال",
-      "actions": "عملیات",
-      "checkIn": "امروز سر کار است",
-      "checkOut": "امروز سر کار نیست",
-      "assignPos": "تخصیص کارت‌خوان",
-      "editPay": "تغییر قاعده‌ی دستمزد",
-      "vehicleTypes": {
-        "motorcycle": "موتورسیکلت",
-        "bicycle": "دوچرخه",
-        "car": "خودرو",
-        "onFoot": "پیاده"
-      },
-      "attendanceStatus": {
-        "checkedIn": "سر کار",
-        "checkedOut": "سر کار نیست",
-        "paused": "استراحت"
-      },
-      "availabilityStatus": {
-        "available": "آماده دریافت",
-        "busy": "مشغول تحویل",
-        "offline": "آفلاین"
-      }
+      "nameAndPhone": "نام و تلفن"
     },
     "zones": {
       "mapColumn": "نقشه",
@@ -857,8 +797,6 @@
       "zoneName": "نام محدوده",
       "standardFee": "کرایه مصوب",
       "estimatedMinutes": "مدت تقریبی تحویل",
-      "courierPay": "دستمزد سفیر",
-      "courierPayUnset": "نرخ خود سفیر",
       "actions": "عملیات",
       "edit": "ویرایش محدوده",
       "status": "وضعیت",
@@ -873,9 +811,7 @@
         "eligibleCourier": "سفیر واجد شرایط",
         "noEligible": "در حال حاضر هیچ سفیری حاضر و دارای ظرفیت خالی نیست.",
         "cancel": "انصراف",
-        "submit": "ارسال",
-        "changeDescription": "سفارش #{{orderNumber}} ارسال شده است. سفیری را که آن را می‌برد انتخاب کنید.",
-        "changeSubmit": "تغییر سفیر"
+        "submit": "ارسال"
       },
       "complete": {
         "title": "ثبت تحویل",
@@ -885,43 +821,14 @@
         "cancel": "انصراف",
         "submit": "ثبت تحویل"
       },
-      "fail": {
-        "title": "تحویل نشد",
-        "reasonLabel": "چرا تحویل نشد؟",
-        "cancel": "انصراف",
-        "submit": "ثبت"
-      },
       "addCourier": {
         "title": "تعریف سفیر جدید",
         "code": "کد سفیر",
         "name": "نام سفیر",
         "phone": "شماره تماس",
         "phoneHelp": "همین شماره نام کاربری سفیر در اپلیکیشن سفیر هم هست. سفیری که در شعبه‌ی دیگری کار می‌کند با همین شماره پیدا و منتقل می‌شود، نه دوباره ثبت.",
-        "vehicleType": "نوع وسیله نقلیه",
-        "compensation": "دستمزد هر تحویل ({{currency}})",
-        "payMode": "قاعده‌ی دستمزد",
-        "compensationFlat": "دستمزد هر تحویل ({{currency}})",
-        "compensationFallback": "دستمزد در محدوده‌های بدون نرخ سفیر ({{currency}})",
-        "payByManager": "با دستمزد پیش‌فرض شعبه شروع می‌شود. مدیر می‌تواند آن را تغییر دهد.",
         "cancel": "انصراف",
         "submit": "ذخیره سفیر"
-      },
-      "moveCourier": {
-        "title": "این سفیر قبلاً ثبت شده است",
-        "description": "{{name}} ({{code}}) هم‌اکنون در {{branch}} کار می‌کند. برای حفظ یک پروفایل و یک سابقه، او را به این شعبه منتقل کنید.",
-        "descriptionHere": "{{name}} ({{code}}) در همین شعبه ثبت شده ولی بایگانی است. به‌جای ثبت دوباره، او را بازگردانید.",
-        "otherBranch": "شعبه‌ی دیگری",
-        "unsettledNote": "نقدینگی تسویه‌نشده‌ی او نزد شعبه‌ی قبلی می‌ماند و همان‌جا تسویه می‌شود.",
-        "cancel": "انصراف",
-        "submit": "انتقال به این شعبه",
-        "restore": "بازگرداندن",
-        "moved": "{{name}} اکنون در این شعبه کار می‌کند."
-      },
-      "courierPay": {
-        "title": "قاعده‌ی دستمزد {{name}}",
-        "note": "برای تحویل‌هایی که از این پس تکمیل می‌شوند اعمال می‌شود. دستمزد سفرهای قبلی تغییر نمی‌کند.",
-        "cancel": "انصراف",
-        "submit": "ذخیره"
       },
       "editZone": {
         "title": "ویرایش محدوده {{code}}",
@@ -938,18 +845,9 @@
         "code": "کد محدوده",
         "name": "نام محدوده",
         "fee": "کرایه تحویل ({{currency}})",
-        "courierPay": "دستمزد سفیر ({{currency}}، اختیاری)",
-        "courierPayHelp": "برای هر سفر به سفیرانی که قاعده‌ی نرخ محدوده دارند پرداخت می‌شود. خالی بگذارید تا نرخ خود هر سفیر به کار رود.",
         "estimatedMinutes": "مدت تقریبی تحویل (دقیقه)",
         "cancel": "انصراف",
         "submit": "ذخیره محدوده"
-      },
-      "assignTerminal": {
-        "title": "تخصیص کارت‌خوان سیار به سفیر",
-        "description": "تخصیص کارت‌خوان سیار اختصاصی شرکت به {{courierName}}",
-        "terminal": "دستگاه کارت‌خوان سیار",
-        "cancel": "انصراف",
-        "submit": "ذخیره تخصیص"
       }
     },
     "errors": {
@@ -957,18 +855,9 @@
       "assignFailed": "خطا در تخصیص سفیر",
       "departFailed": "خطا در خروج سفارش تحویل",
       "completeFailed": "خطا در ثبت تکمیل تحویل",
-      "failFailed": "خطا در ثبت عدم موفقیت تحویل",
-      "requeueFailed": "خطا در قرار دادن مجدد سفارش در صف",
-      "attendanceFailed": "خطا در به‌روزرسانی حضور و غیاب",
-      "availabilityFailed": "خطا در تعیین وضعیت در دسترس بودن",
       "createCourierFailed": "خطا در ایجاد پروفایل سفیر",
-      "moveCourierFailed": "انتقال سفیر ناموفق بود",
-      "updatePayFailed": "ذخیره‌ی قاعده‌ی دستمزد ناموفق بود",
       "updateZoneFailed": "ذخیره‌ی محدوده ناموفق بود",
       "createZoneFailed": "خطا در ایجاد محدوده تحویل",
-      "assignTerminalFailed": "خطا در تخصیص پایانه سیار",
-      "unassignTerminalFailed": "خطا در حذف تخصیص پایانه",
-      "timelineFailed": "خطا در بارگذاری گاه‌شمار سفارش",
       "noBranch": "هیچ شعبه فعالی انتخاب نشده است",
       "deleteZoneFailed": "حذف محدوده ناموفق بود"
     },
@@ -997,18 +886,15 @@
     },
     "statuses": {
       "draft": "پیش‌نویس",
-      "underReview": "در حال بررسی",
       "closed": "تسویه و بسته‌شده",
       "reversed": "ابطال‌شده",
-      "pending": "در انتظار",
-      "reviewed": "بررسی‌شده"
+      "pending": "در انتظار"
     },
     "overview": {
       "code": "کد",
       "unsettled": "{{count}} تسویه‌نشده",
       "expectedCash": "نقد مورد انتظار:",
       "expectedPos": "کارت‌خوان سیار مورد انتظار:",
-      "totalDeliveryFees": "مجموع کرایه‌های تحویل:",
       "startBatch": "تسویه",
       "empty": "هیچ سفیری یافت نشد یا سفارش تحویلی فعالی وجود ندارد."
     },
@@ -1037,7 +923,6 @@
       "expectedActualCash": "نقد انتظار / نقد دریافتی",
       "expectedActualPos": "کارت‌خوان انتظار / دریافتی",
       "discrepancy": "مغایرت",
-      "comp": "دستمزد:",
       "adj": "تعدیل:",
       "netSettlementTotal": "مبلغ خالص تسویه",
       "totalAdj": "مجموع تعدیل",
@@ -1048,7 +933,6 @@
       "status": "وضعیت",
       "method": "نحوه پرداخت",
       "closeWindow": "بستن پنجره",
-      "submitReview": "ارسال جهت بازبینی",
       "finalizeClose": "نهایی‌سازی و بستن تسویه",
       "reverseSettlement": "ابطال و برگشت تسویه",
       "toCollect": "مانده سفارش",
@@ -1078,7 +962,6 @@
     },
     "alerts": {
       "draftUpdated": "پیش‌نویس تسویه‌حساب با موفقیت به‌روزرسانی شد.",
-      "movedToReview": "وضعیت تسویه به در حال بازبینی تغییر یافت.",
       "closed": "تسویه‌حساب با موفقیت بسته شد!",
       "reversed": "تسویه‌حساب با موفقیت ابطال شد."
     },
@@ -1087,10 +970,8 @@
     },
     "errors": {
       "previewFailed": "خطا در بارگذاری پیش‌نمایش تسویه‌حساب",
-      "createFailed": "خطا در ایجاد تسویه‌حساب",
       "detailFailed": "خطا در بارگذاری جزئیات تسویه‌حساب",
       "updateDraftFailed": "خطا در به‌روزرسانی پیش‌نویس تسویه‌حساب",
-      "reviewFailed": "خطا در تغییر وضعیت به بازبینی",
       "closeFailed": "خطا در بستن تسویه‌حساب",
       "reverseFailed": "خطا در ابطال تسویه‌حساب",
       "statementFailed": "خطا در بارگذاری صورت‌حساب"
@@ -1100,9 +981,7 @@
     "expectedCash": "نقد مورد انتظار",
     "actualCash": "نقد واقعی دریافتی",
     "variance": "مغایرت نقدی (کسری / مازاد)",
-    "confirmSettlement": "تایید تسویه‌حساب",
     "posAmount": "مجموع دریافتی کارت‌خوان سیار",
-    "compensation": "دستمزد و کمیسیون سفیر",
     "netRemittance": "خالص پرداختی / دریافتی فروشگاه",
     "meta": "اطلاعات تسویه‌حساب",
     "status": "وضعیت",
@@ -1110,7 +989,6 @@
     "created": "زمان ایجاد",
     "notes": "یادداشت‌ها",
     "actions": "عملیات تسویه",
-    "review": "تایید و ارسال برای بررسی",
     "close": "بستن و نهایی‌سازی تسویه",
     "deliveries": "سفارش‌ها و اقلام تحویلی مشمول",
     "noLines": "هیچ سفارش جداگانه‌ای برای این تسویه‌حساب ثبت نشده است.",
@@ -3098,23 +2976,6 @@
     "authorized": "تایید مدیر انجام شد",
     "invalidPin": "رمز مدیر اشتباه است. {{count}} بار دیگر می‌توانید امتحان کنید."
   },
-  "rollup": {
-    "branch": "شعبه",
-    "fleet": {
-      "title": "ناوگان در همهٔ شعب",
-      "readOnlyNotice": "فقط خواندنی. تخصیص پیک، جابه‌جایی و بستن یک ارسال در همان شعبه‌ای انجام می‌شود که سفارش از آن خارج شده است. این صفحه برای آن است که دفتر مرکزی بداند به کدام شعبه زنگ بزند، نه اینکه در کف شعبهٔ دیگری دخالت کند.",
-      "inFlight": "در مسیر",
-      "late": "دارای تأخیر",
-      "unassigned": "در انتظار پیک",
-      "deliveredToday": "تحویل‌شده امروز",
-      "failedToday": "ناموفق",
-      "couriersOnShift": "پیک‌های شیفت",
-      "cashWithCouriers": "وجه نقد نزد پیک‌ها",
-      "empty": "شعبهٔ فروشی برای گزارش وجود ندارد.",
-      "loadError": "بارگذاری گزارش تجمیعی ناوگان ناموفق بود",
-      "footnote": "تأخیر یعنی بیش از {{minutes}} دقیقه نزد پیک بدون تحویل. تاریخ کاری {{date}}."
-    }
-  },
   "printQueue": {
     "title": "صف چاپ و مدیریت پرینترها",
     "columnJobId": "شناسه کار",
@@ -3161,26 +3022,7 @@
     "chit": "فیش"
   },
   "monitoring": {
-    "title": "پایش عملیاتی و سلامت سیستم",
-    "subtitle": "وضعیت بلادرنگ سخت‌افزارها، ارتباطات شبکه و هشدارهای عملیاتی",
-    "autoRefresh": "به‌روزرسانی خودکار (۱۰ ثانیه)",
-    "activeAlerts": "هشدارهای فعال",
-    "criticalAlerts": "هشدارهای بحرانی",
-    "acknowledged": "بررسی‌شده",
-    "acknowledgeAll": "تایید همه هشدارها",
-    "acknowledge": "تایید و رویت",
-    "terminalsStatus": "وضعیت ترمینال‌ها",
-    "printersStatus": "وضعیت چاپگرها",
-    "refresh": "به‌روزرسانی اکنون",
-    "filterAll": "همه سطوح هشدار",
-    "filterCritical": "فقط بحرانی",
-    "filterWarning": "فقط اخطارها",
-    "filterInfo": "فقط اطلاعاتی",
-    "onlineHealthy": "آنلاین و فعال",
-    "latencyStatus": "تاخیر کمتر از ۱۵ میلی‌ثانیه | پایگاه‌داده فعال",
-    "requiresAction": "نیازمند اقدام فوری مدیر",
-    "stationsType": "پایانه‌های POS و کیوسک",
-    "chainWide": "کل زنجیره"
+    "refresh": "به‌روزرسانی اکنون"
   },
   "bilingual": {
     "farsi": "فارسی (FA)",
@@ -3641,8 +3483,7 @@
       "authority": "تعیین سقف تخفیف و آستانه‌های تأیید",
       "users": "استخدام، جابه‌جایی و غیرفعال‌سازی کارکنان — و تعیین PIN آنان",
       "usersNote": "هر کسی می‌تواند PIN خودش را تغییر دهد. تعیین PIN دیگران با دفتر مرکزی است.",
-      "branches": "افتتاح شعبه و تعیین ساعات کاری آن",
-      "fleetRollup": "مشاهده‌ی پیک‌های همه‌ی شعب در یک صفحه"
+      "branches": "افتتاح شعبه و تعیین ساعات کاری آن"
     }
   },
   "profile": {
@@ -3663,8 +3504,6 @@
       "overview": "نمای کلی",
       "orders": "سفارش‌ها",
       "credit": "اعتبار",
-      "settlements": "تسویه‌ها",
-      "attendance": "حضور و ترمینال‌ها",
       "shiftsCash": "شیفت‌ها و صندوق"
     },
     "kpi": {
@@ -3724,53 +3563,6 @@
       "reason": "علت / مرجع",
       "noEntries": "هنوز تراکنش اعتباری ندارد",
       "noAccount": "این مشتری حساب اعتباری ندارد."
-    },
-    "courier": {
-      "statusFailed": "به‌روزرسانی شیفت سفیر ناموفق بود",
-      "delivered": "تحویل‌شده",
-      "failedActive": "{{failed}} ناموفق · {{active}} در مسیر",
-      "orderValue": "ارزش سفارش‌های تکمیل‌شده",
-      "compensationEarned": "دستمزد کسب‌شده",
-      "unsettled": "کرایه‌های تسویه‌نشده",
-      "unsettledCount": "{{count}} تحویل تسویه نشده",
-      "lastDelivery": "آخرین تحویل",
-      "profile": "سفیر",
-      "code": "کد",
-      "phone": "تلفن",
-      "branch": "شعبه",
-      "vehicle": "وسیله‌ی نقلیه",
-      "feePerDelivery": "دستمزد هر تحویل",
-      "today": "امروز",
-      "attendanceStatus": "حضور",
-      "availability": "آمادگی",
-      "checkedIn": "ورود",
-      "checkedOut": "خروج",
-      "activeDeliveries": "تحویل‌های فعال",
-      "terminal": "کارت‌خوان سیار",
-      "assignedTerminal": "ترمینال",
-      "unassigned": "تخصیص داده نشده",
-      "assignedAt": "زمان تخصیص",
-      "unassignedAt": "زمان آزادسازی",
-      "quickStatus": "شیفت امروز",
-      "shiftHint": "شیفت در {{branch}}، محل کار این سفیر، ثبت می‌شود.",
-      "checkIn": "ورود به شیفت",
-      "checkOut": "پایان شیفت",
-      "setAvailable": "آماده",
-      "setBusy": "مشغول",
-      "discrepancyNotice": "{{count}} تسویه · مغایرت خالص نقدی {{amount}}",
-      "settlementNumber": "تسویه",
-      "settlementDate": "تاریخ",
-      "expectedCash": "نقد مورد انتظار",
-      "actualCash": "نقد تحویلی",
-      "discrepancy": "مغایرت",
-      "net": "خالص",
-      "noSettlements": "هنوز تسویه‌ای ندارد",
-      "attendanceHistory": "سابقه‌ی حضور",
-      "date": "تاریخ",
-      "noAttendance": "حضوری ثبت نشده",
-      "terminalHistory": "تخصیص ترمینال‌ها",
-      "noTerminals": "ترمینالی تخصیص داده نشده",
-      "current": "فعلی"
     },
     "user": {
       "ordersTaken": "سفارش‌های ثبت‌شده",
