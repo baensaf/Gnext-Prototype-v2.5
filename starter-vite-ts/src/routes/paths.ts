@@ -33,7 +33,6 @@ export const paths = {
       settlements: `${ROOTS.APP}/delivery/settlements`,
       settlementDetail: (id: string) => `${ROOTS.APP}/delivery/settlements/${id}`,
       zones: `${ROOTS.APP}/delivery/zones`,
-      audit: `${ROOTS.APP}/delivery/audit`,
       rollup: `${ROOTS.APP}/delivery/rollup`,
     },
     cashier: {

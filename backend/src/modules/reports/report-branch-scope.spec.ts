@@ -25,7 +25,7 @@ const CONFINED = [
 ];
 
 /** Cases that hold no data at all, so there is nothing to attribute. */
-const EMPTY_STUBS = ['v5-preview-inventory'];
+const EMPTY_STUBS: string[] = [];
 
 function reportCases(): Array<{ code: string; body: string }> {
   const parts = SOURCE.split(/case '([a-z0-9-]+)': \{/);

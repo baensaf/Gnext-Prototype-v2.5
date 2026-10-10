@@ -21,7 +21,6 @@ import PaymentIcon from '@mui/icons-material/Payment';
 import DownloadIcon from '@mui/icons-material/Download';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ScheduleIcon from '@mui/icons-material/Schedule';
-import CloudOffIcon from '@mui/icons-material/CloudOff';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import RestaurantIcon from '@mui/icons-material/Restaurant';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
@@ -1006,12 +1005,6 @@ export function OrdersWorkflowPage() {
                 {row.call_number}
               </Typography>
             ) : null}
-            {row.source === 'AGENT_OFFLINE' ? (
-              <Tooltip title={t('orders.table.takenOffline', 'Taken while the branch was offline')}>
-                <CloudOffIcon fontSize="small" color="action" />
-              </Tooltip>
-            ) : null}
-            {row.source === 'AGENT_OFFLINE' ? <VersionTag feature="orders.takenOffline" /> : null}
           </Stack>
           {(showOrderCode || !row.call_number) && (
             <Typography color="text.secondary" variant="caption" noWrap sx={{ display: 'block', fontFamily: 'monospace' }}>

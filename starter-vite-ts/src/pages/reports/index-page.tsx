@@ -49,7 +49,6 @@ const CATEGORY_ORDER = [
   'TAX',
   'INTEGRATION',
   'SIMULATION',
-  'V5_PREVIEW',
 ];
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -64,7 +63,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   TAX: 'Tax & Compliance',
   INTEGRATION: 'Integrations',
   SIMULATION: 'Simulation & Hardware',
-  V5_PREVIEW: 'Preview',
 };
 
 /**
