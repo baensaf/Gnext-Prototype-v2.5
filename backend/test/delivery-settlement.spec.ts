@@ -156,11 +156,11 @@ describe('DeliveryService (Courier Settlement)', () => {
     await expect(service.previewSettlement('t-1', 'c-1', ['asgn-settled'])).rejects.toThrow(ConflictException);
   });
 
-  it("deducts the couriers' pay already priced on each attempt, and expects no cash from a failed ride", async () => {
+  it('expects back what the courier collected, and no cash from a failed ride', async () => {
     courierRepo.findOne.mockResolvedValue({ id: 'c-1', name: 'Courier 1', code: 'C01' });
     assignmentRepo.find.mockResolvedValue([
-      { id: 'asgn-done', order_id: 'ord-1', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '10.00', compensation_amount: '30.00', is_settled: false },
-      { id: 'asgn-failed', order_id: 'ord-2', courier_id: 'c-1', status: 'FAILED', delivery_fee: '10.00', compensation_amount: '12.00', is_settled: false },
+      { id: 'asgn-done', order_id: 'ord-1', courier_id: 'c-1', status: 'DELIVERED', delivery_fee: '10.00', is_settled: false },
+      { id: 'asgn-failed', order_id: 'ord-2', courier_id: 'c-1', status: 'FAILED', delivery_fee: '10.00', is_settled: false },
     ]);
     orderRepo.findOne.mockImplementation(({ where }: any) => Promise.resolve({ id: where.id, total_amount: '100.00', outstanding_total: '100.00' }));
     paymentRepo.find.mockResolvedValue([{ payment_method_code: 'CASH', amount: '100.00' }]);
@@ -176,12 +176,10 @@ describe('DeliveryService (Courier Settlement)', () => {
 
     const preview = await service.previewSettlement('t-1', 'c-1');
     expect(preview.expected_cash_amount).toBe('100.00');
-    expect(preview.total_compensation_amount).toBe('42.00');
-    expect(preview.net_settlement_amount).toBe('58.00');
+    expect(preview.net_settlement_amount).toBe('100.00');
 
     const batch = await service.createSettlement('t-1', 'user-1', { courier_id: 'c-1', branch_id: 'b-1' });
-    expect(batch.total_compensation_amount).toBe('42.00');
-    expect(batch.net_settlement_amount).toBe('58.00');
+    expect(batch.net_settlement_amount).toBe('100.00');
     expect(batch.lines.find((l: any) => l.delivery_assignment_id === 'asgn-failed').expected_cash).toBe('0.00');
   });
 
@@ -256,7 +254,6 @@ describe('DeliveryService (Courier Settlement)', () => {
       actual_pos_amount: '200.00',
       cash_discrepancy_amount: '0.00',
       pos_discrepancy_amount: '0.00',
-      total_compensation_amount: '0.00',
       total_adjustment_amount: '0.00',
       net_settlement_amount: '300.00',
     };
@@ -267,12 +264,11 @@ describe('DeliveryService (Courier Settlement)', () => {
     const updated = await service.updateSettlement('t-1', 'settle-1', {
       actual_cash_amount: 90,
       actual_pos_amount: 200,
-      total_compensation_amount: 5,
     });
 
     expect(updated.cash_discrepancy_amount).toBe('-10.00');
     expect(updated.pos_discrepancy_amount).toBe('0.00');
-    expect(updated.net_settlement_amount).toBe('285.00');
+    expect(updated.net_settlement_amount).toBe('290.00');
   });
 
   it('takes the card slip entered at settlement as the card part, not as a cash shortage', async () => {
@@ -284,7 +280,6 @@ describe('DeliveryService (Courier Settlement)', () => {
       actual_cash_amount: '565000.00',
       expected_pos_amount: '0.00',
       actual_pos_amount: '0.00',
-      total_compensation_amount: '0.00',
       total_adjustment_amount: '0.00',
     };
     const line: any = { id: 'line-1', settlement_id: 'settle-1', expected_cash: '565000.00', actual_cash: '565000.00', expected_pos: '0.00', actual_pos: '0.00' };
@@ -388,23 +383,6 @@ describe('DeliveryService (Courier Settlement)', () => {
       expect(em.save).not.toHaveBeenCalledWith(CashMovement, expect.anything());
     });
 
-    // The courier keeps their pay out of what they collected. The drawer used to expect the
-    // whole collection, so every shift with deliveries closed short by exactly the pay.
-    it("takes the courier's pay back out of the drawer", async () => {
-      settlementRepo.findOne.mockResolvedValue({
-        id: 'settle-1', tenant_id: 't-1', branch_id: 'b-1', courier_id: 'c-1', settlement_number: 'SET-1',
-        status: 'UNDER_REVIEW', actual_cash_amount: '565000.00', cash_discrepancy_amount: '0.00', pos_discrepancy_amount: '0.00',
-        total_compensation_amount: '400000.00',
-      });
-
-      await service.closeSettlement('t-1', 'settle-1', 'user-1');
-
-      expect(shiftService.recordCashPaymentMovement).toHaveBeenCalledWith('t-1', 'shift-1', undefined, '565000.0000', 'user-1', em);
-      expect(em.save).toHaveBeenCalledWith(
-        CashMovement,
-        expect.objectContaining({ shift_id: 'shift-1', type: 'PAID_OUT', amount: '-400000.0000', reference: 'SET-1' }),
-      );
-    });
 
     it("records a shortage against the courier's handover, not as money the customer still owes", async () => {
       settlementRepo.findOne.mockResolvedValue({
@@ -514,9 +492,8 @@ describe('DeliveryService (Courier Settlement)', () => {
       expected_pos_amount: '200.00',
       actual_pos_amount: '200.00',
       pos_discrepancy_amount: '0.00',
-      total_compensation_amount: '15.00',
       total_adjustment_amount: '0.00',
-      net_settlement_amount: '285.00',
+      net_settlement_amount: '300.00',
     };
     settlementRepo.findOne.mockResolvedValue(settlement);
     settlementLineRepo.find.mockResolvedValue([{ id: 'line-1', order_number: 'ORD-1001' }]);
@@ -526,7 +503,7 @@ describe('DeliveryService (Courier Settlement)', () => {
 
     expect(statement.settlement_number).toBe('SET-1001');
     expect(statement.courier.name).toBe('Courier Ali');
-    expect(statement.summary.net_settlement_amount).toBe('285.00');
+    expect(statement.summary.net_settlement_amount).toBe('300.00');
     expect(statement.lines.length).toBe(1);
   });
 

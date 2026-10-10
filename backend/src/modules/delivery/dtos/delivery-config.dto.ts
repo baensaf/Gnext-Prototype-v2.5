@@ -1,5 +1,4 @@
 import { IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, Min, ValidateIf } from 'class-validator';
-import { COURIER_PAY_MODES } from '../courier-pay';
 
 /**
  * A fee or a rider's pay: a plain non-negative amount. A minus sign was stored as a credit
@@ -44,11 +43,6 @@ export class CreateZoneDto {
   @Min(1)
   estimated_minutes?: number;
 
-  /** What a courier on the zone-rate pay rule earns per trip here. */
-  @IsOptional()
-  @Matches(NON_NEGATIVE_AMOUNT, { message: 'courier_pay must be a non-negative amount' })
-  courier_pay?: string;
-
   @IsOptional()
   polygon?: any;
 
@@ -81,15 +75,6 @@ export class CreateCourierDto {
   vehicle_type?: string;
 
   @IsOptional()
-  @Matches(NON_NEGATIVE_AMOUNT, { message: 'compensation_per_delivery must be a non-negative amount' })
-  compensation_per_delivery?: string;
-
-  /** Left out, the courier starts on the branch's COURIER_PAY default. */
-  @IsOptional()
-  @IsIn(COURIER_PAY_MODES)
-  pay_mode?: string;
-
-  @IsOptional()
   @IsString()
   currency_code?: string;
 
@@ -113,22 +98,7 @@ export class UpdateZoneDto {
   @Min(1)
   estimated_minutes?: number;
 
-  /** An empty value clears the rate, so couriers on the zone-rate rule fall back to their own. */
-  @IsOptional()
-  @ValidateIf((_, value) => value !== null)
-  @Matches(NON_NEGATIVE_AMOUNT, { message: 'courier_pay must be a non-negative amount' })
-  courier_pay?: string | null;
-
   /** The zone's outline drawn on the map (GeoJSON Polygon); null clears it. */
   @IsOptional()
   polygon?: unknown;
-}
-
-export class UpdateCourierPayDto {
-  @IsIn(COURIER_PAY_MODES)
-  pay_mode: string;
-
-  @IsOptional()
-  @Matches(NON_NEGATIVE_AMOUNT, { message: 'compensation_per_delivery must be a non-negative amount' })
-  compensation_per_delivery?: string;
 }

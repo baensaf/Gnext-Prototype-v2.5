@@ -51,7 +51,7 @@ import {
 } from './order-list';
 import Decimal from 'decimal.js';
 import { MoneyUtil } from '../../common/utils/money.util';
-import { courierDeliveryFee } from '../delivery/courier-pay';
+import { courierDeliveryFee } from '../delivery/delivery-fee';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import { isAggregatorOrder } from '../../common/utils/snappfood-order.util';

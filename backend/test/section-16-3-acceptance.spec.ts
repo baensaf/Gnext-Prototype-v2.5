@@ -849,7 +849,6 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
         name: 'Ali Rostami',
         phone: '09121112233',
         vehicle_type: 'MOTORCYCLE',
-        compensation_per_delivery: '25000.0000',
       },
       correlationId,
     );
@@ -925,7 +924,6 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
             receipt_verified: true,
           },
         ],
-        total_compensation_amount: '25000.00',
       },
       correlationId,
     );

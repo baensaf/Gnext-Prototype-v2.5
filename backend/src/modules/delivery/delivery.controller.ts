@@ -8,7 +8,7 @@ import { CourierSettlement } from '../../entities/CourierSettlement.entity';
 import { Delivery } from '../../entities/Delivery.entity';
 import { DeliveryZone } from '../../entities/DeliveryZone.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
-import { CreateCourierDto, CreateZoneDto, UpdateCourierPayDto, UpdateZoneDto } from './dtos/delivery-config.dto';
+import { CreateCourierDto, CreateZoneDto, UpdateZoneDto } from './dtos/delivery-config.dto';
 
 /** A delivery has no branch column: it belongs to the shop that sold its order. */
 const BY_ORDER = { through: { entity: OrderHeader, foreignKey: 'order_id' } };
@@ -81,7 +81,7 @@ export class DeliveryController {
           detail: 'A cashier adds couriers to their own branch, and this account has none.',
         });
       }
-      data = { ...body, branch_id: ownBranchId, pay_mode: undefined, compensation_per_delivery: undefined };
+      data = { ...body, branch_id: ownBranchId };
     }
     return await this.deliveryService.createCourier(tenantId, data, correlationId, (req as any).userId);
   }
@@ -100,15 +100,6 @@ export class DeliveryController {
     const tenantId = (req as any).tenantId;
     const targetBranchId = (req as any).userBranchId ?? body?.branch_id;
     return await this.deliveryService.moveCourier(tenantId, id, targetBranchId, (req as any).userId);
-  }
-
-  /** How the courier is paid. Priced into each trip when it closes, so past trips keep their pay. */
-  @BranchOwned(Courier)
-  @Roles(...MANAGER_AND_ABOVE)
-  @Patch('couriers/:id/pay')
-  async updateCourierPay(@Param('id') id: string, @Body() body: UpdateCourierPayDto, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.deliveryService.updateCourierPay(tenantId, id, body, (req as any).userId);
   }
 
   @BranchOwned(Courier)

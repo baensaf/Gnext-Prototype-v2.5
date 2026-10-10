@@ -231,7 +231,7 @@ export function SettlementDetailPage() {
                 <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">{t('settlements.netRemittance', 'Net Cash Due to Merchant')}:</Typography>
                   <Typography sx={{ fontWeight: 700, color: 'primary.main' }} dir="ltr">
-                    {MoneyUtil.formatCurrency(settlement.net_amount || Number(settlement.actual_cash || 0) - Number(settlement.total_compensation || 0))} {currency}
+                    {MoneyUtil.formatCurrency(settlement.net_amount || settlement.actual_cash || 0)} {currency}
                   </Typography>
                 </Stack>
               </Stack>

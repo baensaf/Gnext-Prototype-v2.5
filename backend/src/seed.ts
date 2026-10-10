@@ -279,7 +279,6 @@ export async function runSeed() {
       phone: courier.phone,
       vehicle_type: 'MOTORCYCLE',
       status: 'AVAILABLE',
-      compensation_per_delivery: '0.0000',
       currency_code: 'IRR',
       is_active: true,
     }));

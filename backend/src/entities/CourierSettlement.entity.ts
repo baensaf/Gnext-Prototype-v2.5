@@ -41,8 +41,6 @@ export class CourierSettlement {
   @Column({ type: 'numeric', precision: 12, scale: 2, default: '0.00' })
   pos_discrepancy_amount: string;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, default: '0.00' })
-  total_compensation_amount: string;
 
   @Column({ type: 'numeric', precision: 12, scale: 2, default: '0.00' })
   total_adjustment_amount: string;

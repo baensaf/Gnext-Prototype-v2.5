@@ -1,4 +1,4 @@
-import { courierDeliveryFee } from '../src/modules/delivery/courier-pay';
+import { courierDeliveryFee } from '../src/modules/delivery/delivery-fee';
 
 describe('A delivery price typed at the register and the courier', () => {
   it('pays the zone fee when no price was typed', () => {
