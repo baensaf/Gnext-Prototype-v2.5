@@ -13,7 +13,6 @@ import AddCircleIcon from '@mui/icons-material/AddCircle';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import RemoveCircleIcon from '@mui/icons-material/RemoveCircle';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import {
   Box,
   Card,
@@ -44,7 +43,6 @@ import { useAuthStore } from 'src/store/useAuthStore';
 import { useBranchContext } from 'src/contexts/branch-context';
 import { isApproverRole, homePathForRole } from 'src/config/role-access';
 
-import { VersionTag } from 'src/components/version-tag';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 import { MovementDialog } from 'src/components/shift/movement-dialog';
 import { OpenShiftDialog } from 'src/components/shift/open-shift-dialog';
@@ -139,16 +137,13 @@ export function CashDrawerPage() {
   const stateLabel = (state?: string) =>
     state === 'OPEN'
       ? t('shift.state.open', 'Open')
-      : state === 'CLOSING_REVIEW'
-        ? t('shift.state.closingReview', 'In review')
-        : t('shift.state.closed', 'Closed');
+      : t('shift.state.closed', 'Closed');
 
   const renderCard = (term: Terminal) => {
     const shift = openShiftOn(term.id);
     const stmt = shift ? statements[shift.id] : undefined;
     const isThisDevice = term.id === deviceTerminalId;
     const mayWork = canManage || isThisDevice;
-    const blind = !!stmt?.blind;
     const stale = shift && shift.business_date < today();
 
     return (
@@ -161,7 +156,7 @@ export function CashDrawerPage() {
                 {term.name} <Typography component="span" variant="body2" color="text.secondary">({term.code})</Typography>
               </Typography>
               {isThisDevice && <Chip size="small" color="primary" variant="outlined" label={t('shift.card.thisDevice', 'This device')} />}
-              {shift && <Chip size="small" color={shift.state === 'OPEN' ? 'success' : 'warning'} label={stateLabel(shift.state)} />}
+              {shift && <Chip size="small" color="success" label={stateLabel(shift.state)} />}
             </Stack>
 
             {shift ? (
@@ -181,17 +176,13 @@ export function CashDrawerPage() {
                   <>
                     <Divider />
                     <Figure label={t('cashier.openingFloat', 'Opening Float')} value={MoneyUtil.formatCurrency(stmt.openingFloat)} />
-                    <Figure
-                      label={t('shift.close.cashSales', 'Cash sales')}
-                      value={blind ? '—' : MoneyUtil.formatCurrency(stmt.cashSales)}
-                    />
+                    <Figure label={t('shift.close.cashSales', 'Cash sales')} value={MoneyUtil.formatCurrency(stmt.cashSales)} />
                     <Figure label={t('shift.movement.paidIn', 'Pay in')} value={MoneyUtil.formatCurrency(stmt.paidIn)} />
                     <Figure label={t('shift.movement.paidOut', 'Pay out')} value={MoneyUtil.formatCurrency(stmt.paidOut)} />
-                    <Figure label={t('shift.movement.safeDrop', 'Safe drop')} value={MoneyUtil.formatCurrency(stmt.safeDrops)} />
                     <Figure
                       label={t('cashier.expectedCash', 'Expected Cash')}
-                      value={blind ? t('shift.card.hiddenUntilCount', 'Shown after the count') : MoneyUtil.formatCurrency(stmt.expectedCash)}
-                      color={blind ? 'text.secondary' : 'primary.main'}
+                      value={MoneyUtil.formatCurrency(stmt.expectedCash)}
+                      color="primary.main"
                     />
                   </>
                 )}
@@ -205,10 +196,6 @@ export function CashDrawerPage() {
                       <Button size="small" color="warning" startIcon={<RemoveCircleIcon />} onClick={() => setMovement({ shiftId: shift.id, type: 'PAID_OUT' })}>
                         {t('shift.movement.paidOut', 'Pay out')}
                       </Button>
-                      <Button size="small" color="info" startIcon={<AccountBalanceWalletIcon />} onClick={() => setMovement({ shiftId: shift.id, type: 'SAFE_DROP' })}>
-                        {t('shift.movement.safeDrop', 'Safe drop')}
-                      </Button>
-                      <VersionTag feature="shift.safeDrop" sx={{ alignSelf: 'center' }} />
                     </>
                   )}
                   <Button size="small" startIcon={<ReceiptLongIcon />} onClick={() => navigate(`/app/cashier/shifts/${shift.id}`)}>

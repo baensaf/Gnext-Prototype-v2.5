@@ -51,7 +51,6 @@ import { GeneralSettingsPage } from 'src/pages/settings/general';
 import { ImportWizardPage } from 'src/pages/tools/import-wizard';
 import { ShiftDetailPage } from 'src/pages/cashier/shift-detail';
 import { MonitoringPage } from 'src/pages/operations/monitoring';
-import { ShiftRollupPage } from 'src/pages/cashier/shift-rollup';
 import { AvailabilityPage } from 'src/pages/catalog/availability';
 import { CashDrawerPage } from 'src/pages/operations/cash-drawer';
 import { PrintQueuePage } from 'src/pages/operations/print-queue';
@@ -214,11 +213,10 @@ export const routesSection: RouteObject[] = [
       { path: 'delivery/settlements/:settlementId', element: <SettlementDetailPage /> },
       { path: 'delivery/zones', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },
       { path: 'delivery/rollup', element: <FleetRollupPage /> },
-      { path: 'cashier/shifts', element: <RequiresBranch rollup="/app/cashier/rollup"><CashDrawerPage /></RequiresBranch> },
+      { path: 'cashier/shifts', element: <RequiresBranch><CashDrawerPage /></RequiresBranch> },
       { path: 'cashier/shifts/:shiftId', element: <ShiftDetailPage /> },
       { path: 'cashier/shifts/:shiftId/end', element: <EndShiftPage /> },
       { path: 'cashier/business-days', element: <RequiresBranch><BusinessDaysPage /></RequiresBranch> },
-      { path: 'cashier/rollup', element: <ShiftRollupPage /> },
       { path: 'payments', element: <RequiresBranch><PaymentsPage /></RequiresBranch> },
       { path: 'refunds', element: <RequiresBranch><RefundsPage /></RequiresBranch> },
       { path: 'customer-club/discounts', element: <Navigate to="/app/discounts/customer-rates" replace /> },

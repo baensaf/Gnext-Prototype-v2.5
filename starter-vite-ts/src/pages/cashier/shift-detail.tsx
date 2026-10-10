@@ -2,8 +2,8 @@ import type { Terminal } from 'src/api/tenantApi';
 import type { CashMovement, ShiftStatement } from 'src/api/shiftApi';
 
 import { useTranslation } from 'react-i18next';
+import { useParams, useNavigate } from 'react-router';
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router';
 
 import RefreshIcon from '@mui/icons-material/Refresh';
 import HistoryIcon from '@mui/icons-material/History';
@@ -42,7 +42,6 @@ import { shiftApi } from 'src/api/shiftApi';
 import { tenantApi } from 'src/api/tenantApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 
-import { VersionTag } from 'src/components/version-tag';
 import { ShiftSummaryButton } from 'src/components/shift/shift-summary';
 
 // ----------------------------------------------------------------------
@@ -63,7 +62,7 @@ function Line({ label, value, color, strong }: { label: string; value: string; c
 /**
  * One shift's statement: where the drawer's cash came from and went, what it should have
  * held and what was counted. Read-only — a shift is worked on the Shifts page or at its
- * register. While the shift is open a cashier sees it blind, as the count will be.
+ * register.
  */
 export function ShiftDetailPage() {
   const currencyLabel = useCurrencyLabel();
@@ -72,9 +71,7 @@ export function ShiftDetailPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { branches } = useBranchContext();
-  // Head office arrives from the chain roll-up, and has no branch Shifts page to go back to.
-  const [searchParams] = useSearchParams();
-  const backPath = searchParams.get('from') === 'rollup' ? '/app/cashier/rollup' : '/app/cashier/shifts';
+  const backPath = '/app/cashier/shifts';
 
   const [statement, setStatement] = useState<ShiftStatement | null>(null);
   const [terminal, setTerminal] = useState<Terminal | null>(null);
@@ -108,7 +105,6 @@ export function ShiftDetailPage() {
       CASH_REFUND: t('shift.movementTypes.CASH_REFUND', 'Cash refund'),
       PAID_IN: t('shift.movementTypes.PAID_IN', 'Pay in'),
       PAID_OUT: t('shift.movementTypes.PAID_OUT', 'Pay out'),
-      SAFE_DROP: t('shift.movementTypes.SAFE_DROP', 'Safe drop'),
       CLOSE_ADJUSTMENT: t('shift.movementTypes.CLOSE_ADJUSTMENT', 'Difference at count'),
     })[type] || type;
 
@@ -137,7 +133,6 @@ export function ShiftDetailPage() {
   }
 
   const closed = statement.state === 'CLOSED';
-  const blind = !!statement.blind;
   const variance = statement.shortOver || '0';
   const branchName = branches.find((b) => b.id === statement.branchId)?.name || '';
   const registerLabel = terminal ? `${terminal.name} (${terminal.code})` : statement.terminalId.slice(0, 8);
@@ -163,13 +158,7 @@ export function ShiftDetailPage() {
         </Stack>
         <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1 }}>
           <Chip
-            label={
-              closed
-                ? t('shift.state.closed', 'Closed')
-                : statement.state === 'CLOSING_REVIEW'
-                  ? t('shift.state.closingReview', 'In review')
-                  : t('shift.state.open', 'Open')
-            }
+            label={closed ? t('shift.state.closed', 'Closed') : t('shift.state.open', 'Open')}
             color={closed ? 'default' : 'success'}
           />
           <ShiftSummaryButton size="small" shiftId={statement.shiftId} />
@@ -179,13 +168,6 @@ export function ShiftDetailPage() {
         </Stack>
       </Stack>
 
-      {blind && (
-        <Alert severity="info" sx={{ mb: 3 }}>
-          {t('shift.detail.blind', 'Sales, refunds and what the drawer should hold are shown once the shift has been counted down.')}{' '}
-          <VersionTag feature="shift.blindCount" />
-        </Alert>
-      )}
-
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ height: '100%' }}>
@@ -194,17 +176,12 @@ export function ShiftDetailPage() {
             <CardContent>
               <Stack spacing={1.5}>
                 <Line label={t('cashier.openingFloat', 'Opening Float')} value={MoneyUtil.formatCurrency(statement.openingFloat)} />
-                <Line label={t('shift.close.cashSales', 'Cash sales')} value={blind ? '—' : `+${MoneyUtil.formatCurrency(statement.cashSales)}`} />
-                <Line label={t('shift.close.cashRefunds', 'Cash refunds')} value={blind ? '—' : `-${MoneyUtil.formatCurrency(statement.cashRefunds)}`} />
+                <Line label={t('shift.close.cashSales', 'Cash sales')} value={`+${MoneyUtil.formatCurrency(statement.cashSales)}`} />
+                <Line label={t('shift.close.cashRefunds', 'Cash refunds')} value={`-${MoneyUtil.formatCurrency(statement.cashRefunds)}`} />
                 <Line label={t('shift.movement.paidIn', 'Pay in')} value={`+${MoneyUtil.formatCurrency(statement.paidIn)}`} />
                 <Line label={t('shift.movement.paidOut', 'Pay out')} value={`-${MoneyUtil.formatCurrency(statement.paidOut)}`} />
-                <Line label={t('shift.movement.safeDrop', 'Safe drop')} value={`-${MoneyUtil.formatCurrency(statement.safeDrops)}`} />
                 <Divider />
-                <Line
-                  strong
-                  label={t('cashier.expectedCash', 'Expected Cash')}
-                  value={blind ? '—' : MoneyUtil.formatCurrency(statement.expectedCash)}
-                />
+                <Line strong label={t('cashier.expectedCash', 'Expected Cash')} value={MoneyUtil.formatCurrency(statement.expectedCash)} />
                 <Line
                   label={t('shift.close.countedLabel', 'Counted')}
                   value={closed ? MoneyUtil.formatCurrency(statement.actualCash) : t('shift.detail.notCounted', 'Not counted yet')}

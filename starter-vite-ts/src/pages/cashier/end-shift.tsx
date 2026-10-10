@@ -2,7 +2,6 @@ import type {
   ShiftPolicy,
   ShiftStatement,
   ShiftCloseCheck,
-  ShiftCountSignoff,
   ShiftSalesSummary,
 } from 'src/api/shiftApi';
 
@@ -40,15 +39,12 @@ import { paymentApi } from 'src/api/paymentApi';
 import { useAuthStore } from 'src/store/useAuthStore';
 import { isApproverRole } from 'src/config/role-access';
 
-import { VersionTag } from 'src/components/version-tag';
 import { ShiftReport } from 'src/components/shift/shift-summary';
 import { OpenOrderLine } from 'src/components/shift/day-close-orders';
 
 // ----------------------------------------------------------------------
 
 const errorText = (err: any, fallback: string) => err?.detail || err?.response?.data?.message || err?.message || fallback;
-
-const pinProps = { maxLength: 8, style: { textAlign: 'center' as const, letterSpacing: 6 } };
 
 function Step({
   n,
@@ -94,13 +90,14 @@ function Row({ label, value, color, strong }: { label: string; value: string; co
 /**
  * Ending a shift, on one page: what the register did on the left, and on the right the steps
  * in the order they are done, each turning green. Toast's shift review works the same way. The
- * steps never move: the difference, the reason and the PIN a count may need appear under the
- * count, not on a new screen. While the shift runs the page is its report; after the close it
- * shows the result.
+ * steps never move. While the shift runs the page is its report; after the close it shows the
+ * result.
  *
- * The count is blind where the branch's policy says so: the expected cash shows once the
- * cashier has entered what they counted. What stays in the drawer for the next shift starts at
- * the policy's float (none, where the drawer is emptied at every close); the rest is handed over.
+ * The cashier counts the cash and closes: the report already shows what the drawer should hold,
+ * and the difference is stored as a number, with no reason and no manager. Orders the till left
+ * open are listed as a notice and do not stop the close. What stays in the drawer for the next
+ * shift starts at the policy's float (none, where the drawer is emptied at every close); the
+ * rest is handed over.
  */
 export function EndShiftPage() {
   const { t } = useTranslation();
@@ -116,12 +113,6 @@ export function EndShiftPage() {
 
   const [counted, setCounted] = useState('');
   const [left, setLeft] = useState<string | null>(null);
-  const [reason, setReason] = useState('');
-  const [pin, setPin] = useState('');
-  const [openOrdersPin, setOpenOrdersPin] = useState('');
-  const [signoff, setSignoff] = useState<ShiftCountSignoff | null>(null);
-  // A blind count already on record: counting again needs a manager's PIN (rials).
-  const [recordedCount, setRecordedCount] = useState<string | null>(null);
   const [result, setResult] = useState<ShiftStatement | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState<string | null>(null);
@@ -150,7 +141,6 @@ export function EndShiftPage() {
   const openOrders = check?.openOrders ?? [];
   const carriedOrders = check?.carriedOrders ?? [];
   const pendingCash = check?.pendingCash ?? [];
-  const ordersDone = openOrders.length === 0 || approver || !!openOrdersPin;
   const cashDone = !!check && pendingCash.length === 0;
 
   // What stays starts at the policy's float, never more than what was counted.
@@ -160,12 +150,12 @@ export function EndShiftPage() {
   const leftTooMuch = MoneyUtil.greaterThan(leftRials, countedRials);
   const handedOver = MoneyUtil.subtract(countedRials, leftRials);
 
-  const countReady =
-    counted !== '' &&
-    !leftTooMuch &&
-    (recordedCount === null || !!pin) &&
-    (!signoff || ((!signoff.needsReason || !!reason.trim()) && (!signoff.needsApproval || !!pin)));
-  const canClose = !!check && ordersDone && cashDone && countReady && !submitting;
+  const countReady = counted !== '' && !leftTooMuch;
+  const canClose = !!check && cashDone && countReady && !submitting;
+
+  // The difference the count will leave, from what the report says the drawer should hold.
+  const expectedRials = summary?.cash.expectedCash ?? '0';
+  const difference = counted === '' ? null : MoneyUtil.subtract(countedRials, expectedRials);
 
   const settlePayment = async (paymentId: string, action: 'take' | 'cancel') => {
     setPaymentBusy(paymentId);
@@ -189,28 +179,16 @@ export function EndShiftPage() {
       const statement = await shiftApi.closeShift(shiftId, {
         actualCash: countedRials,
         leftInDrawer: leftRials,
-        reason: reason.trim() || undefined,
-        pin: pin || undefined,
-        openOrdersPin: openOrdersPin || undefined,
       });
       setResult(statement);
       const [s, c] = await Promise.all([shiftApi.getSummary(shiftId), shiftApi.getCloseCheck(shiftId).catch(() => null)]);
       setSummary(s);
       setCheck(c);
     } catch (err: any) {
-      if (err.code === 'SHIFT_COUNT_NEEDS_SIGNOFF' && err.context) {
-        // The count is on record; what it should have been, and what closing it needs, show here.
-        setSignoff(err.context as ShiftCountSignoff);
-      } else if (err.code === 'BLIND_COUNT_RECORDED') {
-        setRecordedCount(String(err.context?.recordedCount ?? '0'));
-      } else {
-        setError(serverText(errorText(err, t('shift.close.error', 'Could not close the shift')), t));
-        if (err.code === 'SHIFT_HAS_OPEN_ORDERS' || err.code === 'SHIFT_HAS_PENDING_CASH') {
-          shiftApi.getCloseCheck(shiftId).then(setCheck).catch(() => undefined);
-          setOpenOrdersPin('');
-        }
+      setError(serverText(errorText(err, t('shift.close.error', 'Could not close the shift')), t));
+      if (err.code === 'SHIFT_HAS_PENDING_CASH') {
+        shiftApi.getCloseCheck(shiftId).then(setCheck).catch(() => undefined);
       }
-      setPin('');
     } finally {
       setSubmitting(false);
     }
@@ -224,7 +202,7 @@ export function EndShiftPage() {
 
   const renderSteps = () => (
     <Stack spacing={2.5} divider={<Divider flexItem />}>
-      <Step n={1} title={t('shift.end.stepOrders', 'Open orders')} done={ordersDone}>
+      <Step n={1} title={t('shift.end.stepOrders', 'Open orders')} done>
         {openOrders.length === 0 ? (
           <Typography variant="body2" color="text.secondary">
             {t('shift.end.noOpenOrders', 'Nothing rung up at this till is left open.')}
@@ -232,10 +210,7 @@ export function EndShiftPage() {
         ) : (
           <>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              {approver
-                ? t('shift.close.openOrdersManager', 'Settle them, or close anyway and leave them open for the next shift.')
-                : t('shift.close.openOrdersHelp', 'Settle them, or a manager PIN leaves them open for the next shift.')}{' '}
-              <VersionTag feature="shift.openOrdersPin" />
+              {t('shift.close.openOrdersManager', 'Settle them, or close anyway and leave them open for the next shift.')}
             </Typography>
             <Box sx={{ maxHeight: 200, overflowY: 'auto' }}>
               {openOrders.map((order) => (
@@ -246,17 +221,6 @@ export function EndShiftPage() {
               <Button size="small" startIcon={<RefreshIcon />} onClick={load}>
                 {t('shift.close.recheck', 'Check again')}
               </Button>
-              {!approver && (
-                <TextField
-                  size="small"
-                  type="password"
-                  label={t('shift.close.openOrdersPin', 'Manager PIN to leave them open')}
-                  value={openOrdersPin}
-                  onChange={(e) => setOpenOrdersPin(e.target.value)}
-                  slotProps={{ htmlInput: pinProps }}
-                  sx={{ flex: 1 }}
-                />
-              )}
             </Stack>
           </>
         )}
@@ -308,82 +272,25 @@ export function EndShiftPage() {
 
       <Step n={3} title={t('shift.end.stepCount', 'Count the cash')} done={countReady}>
         <Stack spacing={1.5}>
-          {summary?.blind && !signoff && (
-            <Typography variant="body2" color="text.secondary">
-              {t(
-                'shift.close.blindHelp',
-                'Count the cash in the drawer and enter the total. What it should hold is shown after you have counted.'
-              )}{' '}
-              <VersionTag feature="shift.blindCount" />
-            </Typography>
-          )}
           <TextField
             autoFocus
             label={t('shift.close.counted', 'Counted cash ({{currency}})', { currency })}
             value={amountText(counted)}
             placeholder="0"
             onChange={(e) => setCounted(amountFromText(e.target.value) || (e.target.value.trim() ? '0' : ''))}
-            // Once the difference is known the count is on record; changing it is a recount.
-            disabled={!!signoff}
             slotProps={{ htmlInput: { inputMode: 'numeric', dir: 'ltr', style: { textAlign: 'right' } } }}
           />
-          {signoff && (
-            <Box>
-              <Stack spacing={0.75} sx={{ p: 1.5, borderRadius: 1.5, bgcolor: 'background.neutral' }}>
-                <Row label={t('cashier.expectedCash', 'Expected Cash')} value={money(signoff.expectedCash)} />
-                <Row label={t('shift.close.countedLabel', 'Counted')} value={money(signoff.actualCash)} />
-                <Row
-                  strong
-                  label={t('shift.close.variance', 'Over / short')}
-                  value={money(signoff.shortOver)}
-                  color={varianceColor(signoff.shortOver)}
-                />
-              </Stack>
-              <Button
-                size="small"
-                sx={{ mt: 0.5 }}
-                onClick={() => {
-                  setSignoff(null);
-                  setReason('');
-                  setPin('');
-                }}
-              >
-                {t('shift.end.recount', 'Count again')}
-              </Button>
-            </Box>
-          )}
-          {recordedCount !== null && (
-            <Alert severity="warning">
-              {t('shift.close.recountNeedsPin', { amount: MoneyUtil.formatCurrency(recordedCount), currency })}
-            </Alert>
-          )}
-          {signoff?.needsReason && (
-            <TextField
-              required
-              multiline
-              rows={2}
-              label={t('shift.close.notes', 'Notes / reason for a difference')}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              slotProps={{ input: { endAdornment: <VersionTag feature="shift.differenceSignoff" /> } }}
-            />
-          )}
-          {(signoff?.needsApproval || recordedCount !== null) && (
-            <TextField
-              required
-              type="password"
-              label={t('approval.pinLabel', 'Manager PIN')}
-              helperText={
-                signoff?.needsApproval
-                  ? t('shift.end.overTolerance', 'Out by more than {{tolerance}}: a manager signs it off.', {
-                      tolerance: money(signoff.varianceTolerance),
-                    })
-                  : undefined
-              }
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              slotProps={{ htmlInput: pinProps }}
-            />
+          {difference !== null && (
+            <Stack spacing={0.75} sx={{ p: 1.5, borderRadius: 1.5, bgcolor: 'background.neutral' }}>
+              <Row label={t('cashier.expectedCash', 'Expected Cash')} value={money(expectedRials)} />
+              <Row label={t('shift.close.countedLabel', 'Counted')} value={money(countedRials)} />
+              <Row
+                strong
+                label={t('shift.close.variance', 'Over / short')}
+                value={money(difference)}
+                color={varianceColor(difference)}
+              />
+            </Stack>
           )}
           {counted !== '' && (
             <Stack spacing={0.75}>

@@ -27,8 +27,6 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/orders/incoming': 'V3',
   // Shifts, their statements and business days
   '/app/cashier': 'V1',
-  // Head office's view of every branch's drawers
-  '/app/cashier/rollup': 'V4',
   // In V1 money goes back only by cancelling a paid order from the Orders page.
   '/app/refunds': 'V2',
   '/app/payments': 'V1',
@@ -83,10 +81,6 @@ export const FEATURE_LABELS = {
   'orders.snappfood': 'V3',
   'orders.headOfficeView': 'V4',
   // Shifts: in V1 the cashier enters the counted cash and closes the shift, nothing more.
-  'shift.safeDrop': 'V4',
-  'shift.blindCount': 'V4',
-  'shift.differenceSignoff': 'V4',
-  'shift.openOrdersPin': 'V4',
   // Business days
   'businessDay.reopen': 'V2',
   // Card terminals and the bank accounts they settle into

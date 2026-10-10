@@ -252,18 +252,13 @@ export function useNavData(): NavSectionProps['data'] {
           path: '/app/operations/agents',
           icon: ICONS.terminal,
         },
-        // Head office reads the branches; the branches run themselves. These two are the
-        // read-only halves of screens that stay operational at the shop — a fleet you can
-        // see but not dispatch, tills you can see but not close.
+        // Head office reads the branches; the branches run themselves. This is the read-only
+        // half of a screen that stays operational at the shop — a fleet you can see but not
+        // dispatch.
         {
           title: t('nav.fleetRollup', 'Fleet Across Branches'),
           path: '/app/delivery/rollup',
           icon: ICONS.terminal,
-        },
-        {
-          title: t('nav.shiftRollup', 'Shifts Across Branches'),
-          path: '/app/cashier/rollup',
-          icon: ICONS.drawer,
         },
       ],
     },

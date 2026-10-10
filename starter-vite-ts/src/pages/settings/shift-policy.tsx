@@ -11,12 +11,9 @@ import {
   Card,
   Stack,
   Alert,
-  Switch,
   Button,
-  Divider,
   TextField,
   Typography,
-  FormControlLabel,
   CircularProgress,
 } from '@mui/material';
 
@@ -25,7 +22,6 @@ import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 import { settingsApi } from 'src/api/settingsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 
-import { VersionTag } from 'src/components/version-tag';
 import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
@@ -33,14 +29,12 @@ import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 const SHIFT_POLICY_DEFAULTS: ShiftPolicy = {
   // HAMI branches start every drawer at zero and empty it at each close.
   defaultOpeningFloat: '0',
-  varianceTolerance: '100000',
-  blindClose: true,
 };
 
 /**
- * How drawers are floated and counted. Head office sets it for the chain; a branch may keep
- * its own, like the order-editing windows. The count and the till read the same value, so
- * what is saved here is what a cashier meets at close.
+ * How drawers are floated. Head office sets it for the chain; a branch may keep its own, like
+ * the order-editing windows. The till reads the same value, so what is saved here is what a
+ * cashier is offered when a shift opens.
  */
 export function ShiftPolicySettingsPage() {
   const currencyLabel = useCurrencyLabel();
@@ -63,8 +57,6 @@ export function ShiftPolicySettingsPage() {
       const value = group?.value || {};
       setPolicy({
         defaultOpeningFloat: String(value.defaultOpeningFloat ?? SHIFT_POLICY_DEFAULTS.defaultOpeningFloat),
-        varianceTolerance: String(value.varianceTolerance ?? SHIFT_POLICY_DEFAULTS.varianceTolerance),
-        blindClose: typeof value.blindClose === 'boolean' ? value.blindClose : SHIFT_POLICY_DEFAULTS.blindClose,
       });
       setSource(group?.source || 'ORG');
     } catch (err: any) {
@@ -88,8 +80,6 @@ export function ShiftPolicySettingsPage() {
         'SHIFT_POLICY',
         {
           defaultOpeningFloat: policy.defaultOpeningFloat || '0',
-          varianceTolerance: policy.varianceTolerance || '0',
-          blindClose: policy.blindClose,
         },
         selectedBranchId || undefined
       );
@@ -170,7 +160,7 @@ export function ShiftPolicySettingsPage() {
           <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2 }}>
             <PointOfSaleIcon color="success" />
             <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              {t('settings.shiftPolicy.cardTitle', 'Opening and counting a drawer')}
+              {t('settings.shiftPolicy.cardTitle', 'Opening a drawer')}
             </Typography>
           </Stack>
 
@@ -186,48 +176,6 @@ export function ShiftPolicySettingsPage() {
               value={toToman(policy.defaultOpeningFloat)}
               onChange={(e) => setPolicy((p) => ({ ...p, defaultOpeningFloat: fromToman(e.target.value) }))}
               slotProps={{ htmlInput: { min: 0, dir: 'ltr' } }}
-            />
-
-            <TextField
-              fullWidth
-              type="number"
-              label={
-                <>
-                  {t('settings.shiftPolicy.toleranceLabel', 'Variance tolerance ({{currency}})', { currency: currencyLabel })}{' '}
-                  <VersionTag feature="shift.differenceSignoff" />
-                </>
-              }
-              helperText={t(
-                'settings.shiftPolicy.toleranceHelp',
-                'The largest over or short a drawer may close on without a manager PIN. Any difference at all still needs a reason. Zero sends every difference to a manager.'
-              )}
-              value={toToman(policy.varianceTolerance)}
-              onChange={(e) => setPolicy((p) => ({ ...p, varianceTolerance: fromToman(e.target.value) }))}
-              slotProps={{ htmlInput: { min: 0, dir: 'ltr' } }}
-            />
-
-            <Divider />
-
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={policy.blindClose}
-                  onChange={(e) => setPolicy((p) => ({ ...p, blindClose: e.target.checked }))}
-                />
-              }
-              label={
-                <Box>
-                  <Typography variant="subtitle2">
-                    {t('settings.shiftPolicy.blindLabel', 'Blind count at close')} <VersionTag feature="shift.blindCount" />
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {t(
-                      'settings.shiftPolicy.blindHelp',
-                      'A cashier counting down a drawer is not shown what it should hold, or the day’s cash sales, until they have entered their count. Managers always see it.'
-                    )}
-                  </Typography>
-                </Box>
-              }
             />
           </Stack>
         </Card>

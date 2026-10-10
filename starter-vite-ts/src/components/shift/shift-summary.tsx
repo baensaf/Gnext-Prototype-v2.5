@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import { Box, Alert, Stack, Button, Divider, Typography } from '@mui/material';
+import { Box, Stack, Button, Divider, Typography } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { useCurrencyLabel } from 'src/utils/currency';
@@ -50,8 +50,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 /**
  * What the register did in a shift: orders by type, money taken by kind of payment, refunds by
  * how they went back, and the drawer. The End shift page shows it beside the steps, so the
- * cashier closes with the figures in view. Under a blind count the cash and the sales total
- * stay hidden until the drawer is counted, as on the shift statement.
+ * cashier closes with the figures in view.
  */
 export function ShiftReport({ summary: s }: { summary: ShiftSalesSummary }) {
   const { t } = useTranslation();
@@ -82,25 +81,19 @@ export function ShiftReport({ summary: s }: { summary: ShiftSalesSummary }) {
         </Typography>
       </Box>
 
-      {s.blind && (
-        <Alert severity="info">
-          {t('shift.summary.blind', 'The sales total and the cash figures show once the drawer has been counted at close.')}
-        </Alert>
-      )}
-
       <Section title={t('shift.summary.orders', 'Orders')}>
         <Line label={t('shift.summary.orderCount', 'Orders sold')} value={String(s.orderCount)} />
         {s.byType.map((b) => (
           <Line
             key={b.type}
             label={`${ORDER_TYPE_KEYS[b.type] ? t(ORDER_TYPE_KEYS[b.type]) : b.type} (${b.count})`}
-            value={b.total === null ? '' : money(b.total)}
+            value={money(b.total)}
           />
         ))}
         {s.cancelledCount > 0 && <Line label={t('shift.summary.cancelled', 'Cancelled')} value={String(s.cancelledCount)} />}
         {positive(s.discountTotal) && <Line label={t('shift.summary.discounts', 'Discounts')} value={minus(s.discountTotal)} />}
         {positive(s.deliveryFeeTotal) && <Line label={t('shift.summary.deliveryFees', 'Delivery fees')} value={money(s.deliveryFeeTotal)} />}
-        {s.salesTotal !== null && <Line strong label={t('shift.summary.salesTotal', 'Total sales')} value={money(s.salesTotal)} />}
+        <Line strong label={t('shift.summary.salesTotal', 'Total sales')} value={money(s.salesTotal)} />
         {positive(s.unpaidTotal) && (
           <Line label={t('shift.summary.unpaid', 'Still unpaid')} value={money(s.unpaidTotal)} color="warning.main" />
         )}
@@ -138,12 +131,11 @@ export function ShiftReport({ summary: s }: { summary: ShiftSalesSummary }) {
 
       <Section title={t('shift.summary.drawer', 'Cash drawer')}>
         <Line label={t('cashier.openingFloat', 'Opening Float')} value={money(c.openingFloat)} />
-        {c.cashSales !== null && <Line label={t('shift.close.cashSales', 'Cash sales')} value={money(c.cashSales)} />}
+        <Line label={t('shift.close.cashSales', 'Cash sales')} value={money(c.cashSales)} />
         {positive(c.cashRefunds) && <Line label={t('shift.close.cashRefunds', 'Cash refunds')} value={minus(c.cashRefunds)} />}
         {positive(c.paidIn) && <Line label={t('shift.movement.paidIn', 'Pay in')} value={money(c.paidIn)} />}
         {positive(c.paidOut) && <Line label={t('shift.movement.paidOut', 'Pay out')} value={minus(c.paidOut)} />}
-        {positive(c.safeDrops) && <Line label={t('shift.movement.safeDrop', 'Safe drop')} value={minus(c.safeDrops)} />}
-        {c.expectedCash !== null && <Line strong label={t('cashier.expectedCash', 'Expected Cash')} value={money(c.expectedCash)} />}
+        <Line strong label={t('cashier.expectedCash', 'Expected Cash')} value={money(c.expectedCash)} />
         {s.closed && (
           <>
             <Line label={t('shift.close.countedLabel', 'Counted')} value={money(c.actualCash)} />

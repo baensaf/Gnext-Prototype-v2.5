@@ -63,7 +63,6 @@
     "printQueue": "Print Queue",
     "monitoring": "Operational Monitoring",
     "fleetRollup": "Fleet Across Branches",
-    "shiftRollup": "Shifts Across Branches",
     "customerClubGroup": "Customer Club & Loyalty",
     "customerDiscounts": "Customer Discounts",
     "customerWallet": "Wallet & Cashback",
@@ -1242,13 +1241,8 @@
       "title": "Close shift",
       "variance": "Over / short",
       "counted": "Counted cash ({{currency}})",
-      "notes": "Notes / reason for a difference",
       "confirm": "Close shift",
       "error": "Could not close the shift",
-      "submitCount": "Submit count",
-      "blindHelp": "Count the cash in the drawer and enter the total. What it should hold is shown after you have counted.",
-      "needsReason": "The drawer does not balance. Give a reason to close.",
-      "needsApproval": "The drawer is out by more than {{tolerance}}. A reason and a manager PIN are needed to close.",
       "countedLabel": "Counted",
       "cashSales": "Cash sales",
       "cashRefunds": "Cash refunds",
@@ -1263,9 +1257,7 @@
       "cancelPayment": "Cancel payment",
       "paymentFailed": "Could not settle the payment",
       "openOrders": "{{count}} order(s) from this till are still open",
-      "openOrdersHelp": "Settle them, or a manager PIN leaves them open for the next shift.",
       "openOrdersManager": "Settle them, or close anyway and leave them open for the next shift.",
-      "openOrdersPin": "Manager PIN to leave them open",
       "recheck": "Check again",
       "lastTillManager": "This was the last drawer open at the branch. You can close the business day now:",
       "lastTillCashier": "This was the last drawer open at the branch. A manager can now close the business day:",
@@ -1274,8 +1266,7 @@
       "skipDay": "Not now",
       "dayClosedDone": "Business day closed.",
       "dayFailed": "Could not close the business day",
-      "recountNeedsPin": "This drawer was already counted at {{amount}} {{currency}}. A recount needs a manager PIN.",
-      "carriedOrders": "{{count}} order(s) were left open by an earlier shift with a manager PIN. They stay open; the day close settles them."
+      "carriedOrders": "{{count}} order(s) were left open by an earlier shift. They stay open; the day close settles them."
     },
     "summary": {
       "open": "Shift summary",
@@ -1283,7 +1274,6 @@
       "loadError": "Could not load the shift summary",
       "openedAt": "Opened {{time}}",
       "closedAt": "Closed {{time}}",
-      "blind": "The sales total and the cash figures show once the drawer has been counted at close.",
       "orders": "Orders",
       "orderCount": "Orders sold",
       "cancelled": "Cancelled",
@@ -1332,7 +1322,6 @@
     },
     "state": {
       "open": "Open",
-      "closingReview": "In review",
       "closed": "Closed"
     },
     "card": {
@@ -1340,8 +1329,7 @@
       "noShift": "No shift open.",
       "openAtRegister": "A shift is opened at the register itself, where the float goes into the drawer.",
       "stale": "Left open since {{date}}. Count it down before closing the day.",
-      "statement": "Statement",
-      "hiddenUntilCount": "Shown after the count"
+      "statement": "Statement"
     },
     "history": {
       "title": "Closed shifts",
@@ -1352,10 +1340,8 @@
     "movement": {
       "paidIn": "Pay in",
       "paidOut": "Pay out",
-      "safeDrop": "Safe drop",
       "paidInHelp": "Cash put into the drawer that is not a sale, such as extra change.",
       "paidOutHelp": "Cash taken from the drawer and spent. Say what on.",
-      "safeDropHelp": "Cash lifted from the drawer into the safe to keep the drawer light.",
       "amount": "Amount ({{currency}})",
       "reasonCode": "Reason code",
       "note": "Note",
@@ -1368,13 +1354,11 @@
       "CASH_REFUND": "Cash refund",
       "PAID_IN": "Pay in",
       "PAID_OUT": "Pay out",
-      "SAFE_DROP": "Safe drop",
       "CLOSE_ADJUSTMENT": "Difference at count"
     },
     "detail": {
       "title": "Shift statement",
       "loadError": "Failed to load the shift",
-      "blind": "Sales, refunds and what the drawer should hold are shown once the shift has been counted down.",
       "cash": "Drawer cash",
       "shift": "Shift",
       "notCounted": "Not counted yet",
@@ -1399,8 +1383,6 @@
       "stepCash": "Unfinished cash payments",
       "noPendingCash": "Every cash payment was finished.",
       "stepCount": "Count the cash",
-      "recount": "Count again",
-      "overTolerance": "Out by more than {{tolerance}}: a manager signs it off.",
       "leaveInDrawer": "Leave in the drawer for the next shift ({{currency}})",
       "leftTooMuch": "More than was counted.",
       "handOver": "To hand over",
@@ -2592,13 +2574,9 @@
     "managerPin": "Manager PIN",
     "shiftPolicy": {
       "title": "Shift & Drawer Policy",
-      "cardTitle": "Opening and counting a drawer",
+      "cardTitle": "Opening a drawer",
       "floatLabel": "Default opening float ({{currency}})",
       "floatHelp": "Offered when a shift is opened. The cashier still enters what they actually counted into the drawer.",
-      "toleranceLabel": "Variance tolerance ({{currency}})",
-      "toleranceHelp": "The largest over or short a drawer may close on without a manager PIN. Any difference at all still needs a reason. Zero sends every difference to a manager.",
-      "blindLabel": "Blind count at close",
-      "blindHelp": "A cashier counting down a drawer is not shown what it should hold, or the day’s cash sales, until they have entered their count. Managers always see it.",
       "saveSuccess": "Shift policy saved for every branch that follows head office.",
       "loadError": "Failed to load the shift policy",
       "saveError": "Failed to save the shift policy"
@@ -2923,7 +2901,7 @@
         },
         "shiftPolicy": {
           "title": "Shift & Drawer Policy",
-          "description": "Default opening float, how far a drawer may be out before a manager signs off, and blind counting at close."
+          "description": "The opening float a new shift is offered."
         },
         "courierPay": {
           "title": "Courier Pay",
@@ -3225,26 +3203,6 @@
       "empty": "No selling branches to report on.",
       "loadError": "Failed to load the fleet roll-up",
       "footnote": "Late means more than {{minutes}} minutes with a driver without arriving. Business date {{date}}."
-    },
-    "shifts": {
-      "title": "Shifts Across Branches",
-      "readOnlyNotice": "Read-only. A drawer is opened, paid into and counted down at the register it belongs to. This page is here so head office can see which branch to ask about, not to close another shop till.",
-      "businessDate": "Business date",
-      "open": "Drawers open",
-      "closingReview": "In closing review",
-      "closed": "Closed and counted",
-      "staleOpen": "Left open from an earlier day",
-      "staleWarning": "{{count}} drawer(s) are still open on a business date that has already ended. Those tills keep accumulating against a closed day until somebody at the branch counts them down.",
-      "drawerSubtitle": "Drawers on {{date}} · read-only",
-      "noShiftsThatDay": "No drawer was opened at this branch on this day.",
-      "notTrading": "Branches with no till open",
-      "expectedCash": "Expected cash",
-      "countedCash": "Counted cash",
-      "variance": "Net over / short",
-      "worstVariance": "Worst drawer",
-      "empty": "No selling branches to report on.",
-      "loadError": "Failed to load the shift roll-up",
-      "footnote": "Over / short counts only drawers that have actually been counted, so a branch still trading reads as zero rather than as clean. \"Left open from an earlier day\" is not filtered by the date above."
     }
   },
   "printQueue": {
@@ -3774,8 +3732,7 @@
       "users": "Hire, move and deactivate staff — and set their pin",
       "usersNote": "Anyone may change their own pin. Setting somebody else’s is head office’s.",
       "branches": "Open a branch, set its trading hours",
-      "fleetRollup": "See every branch’s couriers on one screen",
-      "shiftRollup": "See every branch’s tills, and the drawers left open"
+      "fleetRollup": "See every branch’s couriers on one screen"
     }
   },
   "profile": {
