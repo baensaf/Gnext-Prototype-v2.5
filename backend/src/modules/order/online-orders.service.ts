@@ -83,7 +83,7 @@ export type OnlineBoard = {
 };
 
 /** Open states an accepted platform order passes through while the store still has it. */
-const PREPARING_STATES = ['SUBMITTED', 'CONFIRMED', 'PREPARING'];
+const ACCEPTED_STATES = ['SUBMITTED', 'CONFIRMED'];
 
 /** Branch setting holding each platform's pause: { SNAPPFOOD: { until: ISO } }. */
 export const CHANNEL_PAUSE_KEY = 'CHANNEL_PAUSE';
@@ -117,7 +117,7 @@ export class OnlineOrdersService {
 
     const [open, alerts, doneToday, policy, shiftOpen, platforms] = await Promise.all([
       this.orderRepo.find({
-        where: { tenant_id: tenantId, branch_id: branchId, channel: 'AGGREGATOR', state: In(['PENDING_ACCEPTANCE', ...PREPARING_STATES, 'READY']) },
+        where: { tenant_id: tenantId, branch_id: branchId, channel: 'AGGREGATOR', state: In(['PENDING_ACCEPTANCE', ...ACCEPTED_STATES]) },
         order: { placed_at: 'ASC' },
       }),
       // An alert stays until someone marks it seen, but not past the day it was raised.
@@ -184,7 +184,7 @@ export class OnlineOrdersService {
       order.accepted_at && order.promised_minutes
         ? new Date(new Date(order.accepted_at).getTime() + order.promised_minutes * 60000)
         : null;
-    const open = order.state === 'PENDING_ACCEPTANCE' || PREPARING_STATES.includes(order.state) || order.state === 'READY';
+    const open = order.state === 'PENDING_ACCEPTANCE' || ACCEPTED_STATES.includes(order.state);
 
     let issue: OnlineIssue | null = null;
     if (order.online_alert && !order.online_alert_seen_at) issue = order.online_alert as OnlineIssue;
@@ -306,7 +306,7 @@ export class OnlineOrdersService {
   async handOver(tenantId: string, id: string, userId?: string, correlationId?: string) {
     const { order, channel } = await this.platformOrder(tenantId, id);
     if (order.state === 'COMPLETED') return order;
-    if (![...PREPARING_STATES, 'READY'].includes(order.state)) {
+    if (!ACCEPTED_STATES.includes(order.state)) {
       throw new ConflictException({ code: 'ORDER_NOT_OPEN', message: `Order ${order.order_number} is ${order.state}` });
     }
     const fulfilment = channel.fulfilment(order);
@@ -347,7 +347,7 @@ export class OnlineOrdersService {
     order.aggregator_rider_name = nextName;
     await this.orderRepo.save(order);
 
-    if (nextStatus === 'PICKED' && [...PREPARING_STATES, 'READY'].includes(order.state) && !MoneyUtil.greaterThan(order.outstanding_total || '0', '0')) {
+    if (nextStatus === 'PICKED' && ACCEPTED_STATES.includes(order.state) && !MoneyUtil.greaterThan(order.outstanding_total || '0', '0')) {
       return this.orderService.transitionState(tenantId, order.id, 'COMPLETE', { reasonText: `Picked up by the ${channel.platform} rider` });
     }
     return order;

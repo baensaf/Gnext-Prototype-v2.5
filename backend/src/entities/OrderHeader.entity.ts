@@ -11,8 +11,6 @@ export type OrderState =
   | 'PENDING_ACCEPTANCE'
   | 'SUBMITTED'
   | 'CONFIRMED'
-  | 'PREPARING'
-  | 'READY'
   | 'OUT_FOR_DELIVERY'
   | 'COMPLETED'
   | 'CANCELLED'

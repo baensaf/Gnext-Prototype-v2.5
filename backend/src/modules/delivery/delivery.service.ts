@@ -1066,11 +1066,10 @@ export class DeliveryService {
       }
     }
 
-    // The food is back at the counter. An order that never left is where the kitchen has it,
-    // and moving it to READY would skip the kitchen.
+    // The food is back at the counter. An order that never left is where the kitchen has it.
     if (order && orderState === 'OUT_FOR_DELIVERY') {
-      order.state = 'READY';
-      order.status = 'READY';
+      order.state = 'CONFIRMED';
+      order.status = 'CONFIRMED';
       order.fulfillment_status = 'PENDING';
       await this.saveOrderTransition(tenantId, order, 'OUT_FOR_DELIVERY', 'DELIVERY_FAILED', userId, delivery.failure_reason);
     }

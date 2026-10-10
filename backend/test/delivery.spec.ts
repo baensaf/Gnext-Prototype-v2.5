@@ -118,7 +118,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
 
   it('assigns a delivery only to a courier who is working today', async () => {
     deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', state: 'UNASSIGNED' });
-    orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', state: 'READY' });
+    orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', state: 'CONFIRMED' });
     courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', name: 'Ali', is_active: true });
 
     // Scenario 1: Not checked in today
@@ -152,7 +152,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
 
   it('should transition delivery states and align parent order header', async () => {
     deliveryRepo.findOne.mockResolvedValue({ id: 'del-10', tenant_id: 't-1', order_id: 'ord-10', courier_id: 'cour-1', state: 'ASSIGNED' });
-    orderRepo.findOne.mockResolvedValue({ id: 'ord-10', tenant_id: 't-1', state: 'READY' });
+    orderRepo.findOne.mockResolvedValue({ id: 'ord-10', tenant_id: 't-1', state: 'CONFIRMED' });
     courierRepo.findOne.mockResolvedValue({ id: 'cour-1' });
 
     // Depart -> EN_ROUTE & order OUT_FOR_DELIVERY
@@ -161,7 +161,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
     expect(orderRepo.save).toHaveBeenCalledWith(expect.objectContaining({ state: 'OUT_FOR_DELIVERY' }));
     expect(transitionRecorder.record).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ tenantId: 't-1', fromState: 'READY', action: 'DISPATCH' }),
+      expect.objectContaining({ tenantId: 't-1', fromState: 'CONFIRMED', action: 'DISPATCH' }),
     );
 
     // Complete -> DELIVERED & order COMPLETED
@@ -225,7 +225,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
       { id: 'del-2', tenant_id: 't-1', order_id: 'ord-2', courier_id: null, zone_id: 'zone-1', state: 'UNASSIGNED' },
     ]);
     orderRepo.find.mockResolvedValue([
-      { id: 'ord-1', branch_id: 'branch-1', order_number: 'ORD-1', call_number: 42, state: 'READY', customer_id: 'cust-1', submitted_at: new Date('2026-09-23T10:00:00Z') },
+      { id: 'ord-1', branch_id: 'branch-1', order_number: 'ORD-1', call_number: 42, state: 'CONFIRMED', customer_id: 'cust-1', submitted_at: new Date('2026-09-23T10:00:00Z') },
       { id: 'ord-2', branch_id: 'branch-2', order_number: 'ORD-2', state: 'CONFIRMED', customer_id: null },
     ]);
     courierRepo.find.mockResolvedValue([{ id: 'cour-1', name: 'Sara', phone: '0912' }]);
@@ -246,7 +246,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
     expect(board[0]).toEqual(expect.objectContaining({
       order_number: 'ORD-1',
       call_number: 42,
-      order_state: 'READY',
+      order_state: 'CONFIRMED',
       customer_name: 'Reza Mohammadi',
       customer_phone: '+989121234567',
       courier_name: 'Sara',
@@ -266,7 +266,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
 
   it("refuses to hand one branch's order to a courier who works at another", async () => {
     deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', state: 'UNASSIGNED' });
-    orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', branch_id: 'downtown', state: 'READY' });
+    orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', branch_id: 'downtown', state: 'CONFIRMED' });
     courierRepo.findOne.mockResolvedValue({ id: 'cour-1', tenant_id: 't-1', branch_id: 'central', name: 'Ali', is_active: true });
     attendanceRepo.findOne.mockResolvedValue({ status: 'CHECKED_IN', availability_status: 'AVAILABLE' });
 
@@ -287,14 +287,14 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
       await expect(service.failDelivery('t-1', 'del-1', 'late click')).rejects.toThrow(ConflictException);
 
       expect(assignmentRepo.save).not.toHaveBeenCalled();
-      expect(orderRepo.save).not.toHaveBeenCalledWith(expect.objectContaining({ state: 'READY' }));
+      expect(orderRepo.save).not.toHaveBeenCalledWith(expect.objectContaining({ state: 'CONFIRMED' }));
     });
 
-    it('brings a failed ride back to READY with a history row, and leaves an order that never left alone', async () => {
+    it('brings a failed ride back to CONFIRMED with a history row, and leaves an order that never left alone', async () => {
       deliveryRepo.findOne.mockResolvedValue({ id: 'del-1', tenant_id: 't-1', order_id: 'ord-1', courier_id: 'cour-1', state: 'EN_ROUTE' });
       orderRepo.findOne.mockResolvedValue({ id: 'ord-1', tenant_id: 't-1', order_number: 'ORD-1', state: 'OUT_FOR_DELIVERY' });
       await service.failDelivery('t-1', 'del-1', 'Nobody home');
-      expect(orderRepo.save).toHaveBeenCalledWith(expect.objectContaining({ state: 'READY' }));
+      expect(orderRepo.save).toHaveBeenCalledWith(expect.objectContaining({ state: 'CONFIRMED' }));
       expect(transitionRecorder.record).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({ fromState: 'OUT_FOR_DELIVERY', action: 'DELIVERY_FAILED' }),
@@ -302,7 +302,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
 
       orderRepo.save.mockClear();
       deliveryRepo.findOne.mockResolvedValue({ id: 'del-2', tenant_id: 't-1', order_id: 'ord-2', courier_id: 'cour-1', state: 'ASSIGNED' });
-      orderRepo.findOne.mockResolvedValue({ id: 'ord-2', tenant_id: 't-1', order_number: 'ORD-2', state: 'PREPARING' });
+      orderRepo.findOne.mockResolvedValue({ id: 'ord-2', tenant_id: 't-1', order_number: 'ORD-2', state: 'CONFIRMED' });
       await service.failDelivery('t-1', 'del-2', 'Courier went home');
       expect(orderRepo.save).not.toHaveBeenCalled();
     });

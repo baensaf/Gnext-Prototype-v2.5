@@ -720,7 +720,7 @@ export class SimulationService {
    * The branch an incoming order belongs to. Snappfood registers a webhook per branch, so
    * an order addressed to a branch this tenant doesn't have is refused rather than filed
    * under some other branch. With no branch named (the simulator), it goes to the first
-   * restaurant; an office or commissary never takes customer orders.
+   * restaurant.
    */
   private async resolveWebhookBranch(tenantId: string, payload: any): Promise<string> {
     const branches = await this.branchRepo.find({
@@ -1295,7 +1295,7 @@ export class SimulationService {
   }
 
   // The order state each Snappfood lifecycle step leaves behind. `status` is the legacy
-  // twin of `state` that the kitchen display still reads.
+  // twin of `state`.
   private markAwaitingAcceptance(order: OrderHeader) {
     order.fulfillment_status = 'PENDING';
     order.state = 'PENDING_ACCEPTANCE';
@@ -1305,7 +1305,7 @@ export class SimulationService {
   private markAccepted(order: OrderHeader) {
     order.fulfillment_status = 'PREPARING';
     order.state = 'CONFIRMED';
-    order.status = 'KITCHEN_PREPARING';
+    order.status = 'CONFIRMED';
   }
 
   private markCancelled(order: OrderHeader) {

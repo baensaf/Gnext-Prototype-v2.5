@@ -114,13 +114,11 @@ const previousOrderDiscount = (order: OrderHeader): string => {
 const ALLOWED_TRANSITIONS: Record<OrderState, OrderState[]> = {
   DRAFT: ['SUBMITTED', 'CONFIRMED', 'CANCELLED'],
   PENDING_ACCEPTANCE: ['CONFIRMED', 'REJECTED', 'CANCELLED'],
-  // A paid order may complete from any open state: a branch that prints kitchen tickets has
-  // nothing that would ever move an order through PREPARING or READY first.
+  // A paid order may complete from any open state: kitchen tickets are printed, and nothing
+  // moves an order through a preparing or ready stage.
   SUBMITTED: ['CONFIRMED', 'COMPLETED', 'CANCELLED'],
-  CONFIRMED: ['PREPARING', 'COMPLETED', 'CANCELLED'],
-  PREPARING: ['READY', 'COMPLETED', 'CANCELLED'],
-  READY: ['OUT_FOR_DELIVERY', 'COMPLETED', 'CANCELLED'],
-  OUT_FOR_DELIVERY: ['COMPLETED', 'READY', 'CANCELLED'],
+  CONFIRMED: ['OUT_FOR_DELIVERY', 'COMPLETED', 'CANCELLED'],
+  OUT_FOR_DELIVERY: ['COMPLETED', 'CANCELLED'],
   COMPLETED: [],
   CANCELLED: ['SUBMITTED'],
   REJECTED: [],
@@ -130,7 +128,7 @@ const ALLOWED_TRANSITIONS: Record<OrderState, OrderState[]> = {
 const INCOMING_DECISIONS = ['ACCEPT', 'REJECT'];
 
 /** Open states a counter order leaves by itself once it is paid in full. */
-const PAID_TAKEAWAY_COMPLETES_FROM: OrderState[] = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY'];
+const PAID_TAKEAWAY_COMPLETES_FROM: OrderState[] = ['SUBMITTED', 'CONFIRMED'];
 
 /**
  * Order types that are done once paid. No Iranian restaurant tracks the kitchen on a screen
@@ -140,7 +138,7 @@ const PAID_TAKEAWAY_COMPLETES_FROM: OrderState[] = ['SUBMITTED', 'CONFIRMED', 'P
 const COMPLETES_WHEN_PAID = ['TAKEAWAY', 'DINE_IN', 'PICKUP'];
 
 /** States in which the kitchen has the order and has not yet handed it over. */
-const KITCHEN_HOLDS_ORDER_STATES: OrderState[] = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY'];
+const KITCHEN_HOLDS_ORDER_STATES: OrderState[] = ['SUBMITTED', 'CONFIRMED'];
 
 @Injectable()
 export class OrderService {
@@ -2561,12 +2559,6 @@ export class OrderService {
         return 'SUBMITTED';
       case 'CONFIRM':
         return 'CONFIRMED';
-      case 'START_PREPARATION':
-      case 'PREPARE':
-        return 'PREPARING';
-      case 'MARK_READY':
-      case 'READY':
-        return 'READY';
       case 'DISPATCH':
         return 'OUT_FOR_DELIVERY';
       case 'COMPLETE':

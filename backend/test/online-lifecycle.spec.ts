@@ -34,7 +34,7 @@ describe('a platform order after the store accepts it', () => {
       platformChannel: (p: any) => channelForPlatform(p, {}),
       transitionState: jest.fn((_t: string, _id: string, action: string) => {
         transitions.push(action);
-        const to: Record<string, string> = { CONFIRM: 'CONFIRMED', START_PREPARATION: 'PREPARING', MARK_READY: 'READY', COMPLETE: 'COMPLETED' };
+        const to: Record<string, string> = { CONFIRM: 'CONFIRMED', COMPLETE: 'COMPLETED' };
         saved = { ...saved, state: to[action] };
         return Promise.resolve(saved);
       }),
@@ -44,7 +44,7 @@ describe('a platform order after the store accepts it', () => {
 
   describe('Handed over', () => {
     it("completes an order a platform rider took", async () => {
-      saved = snappfood({ state: 'READY' });
+      saved = snappfood({ state: 'CONFIRMED' });
 
       const result = await service.handOver('t-1', 'order-1');
 
@@ -53,7 +53,7 @@ describe('a platform order after the store accepts it', () => {
     });
 
     it('sends an order our own courier takes to Dispatch instead', async () => {
-      saved = snappfood({ state: 'READY', aggregator_expedition: 'DELIVERY' });
+      saved = snappfood({ state: 'CONFIRMED', aggregator_expedition: 'DELIVERY' });
 
       const refused = await service.handOver('t-1', 'order-1').catch((e) => e);
 
@@ -62,7 +62,7 @@ describe('a platform order after the store accepts it', () => {
     });
 
     it('asks for the money first on a cash order the customer collects', async () => {
-      saved = snappfood({ state: 'READY', aggregator_expedition: 'PICKUP', outstanding_total: '4200000.0000' });
+      saved = snappfood({ state: 'CONFIRMED', aggregator_expedition: 'PICKUP', outstanding_total: '4200000.0000' });
 
       const refused = await service.handOver('t-1', 'order-1').catch((e) => e);
 
@@ -81,7 +81,7 @@ describe('a platform order after the store accepts it', () => {
     });
 
     it('closes the order once the rider has picked it up', async () => {
-      await service.riderUpdate('t-1', snappfood({ state: 'READY' }), 'Ali Tehrani', 'PICKED');
+      await service.riderUpdate('t-1', snappfood({ state: 'CONFIRMED' }), 'Ali Tehrani', 'PICKED');
 
       expect(transitions).toEqual(['COMPLETE']);
     });

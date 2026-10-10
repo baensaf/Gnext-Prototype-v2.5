@@ -53,7 +53,7 @@ export interface OrderHeader {
   source?: string | null;
   order_type: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY' | 'AGGREGATOR';
   channel?: string;
-  state: 'DRAFT' | 'PENDING_ACCEPTANCE' | 'SUBMITTED' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'OUT_FOR_DELIVERY' | 'COMPLETED' | 'CANCELLED' | 'REJECTED';
+  state: 'DRAFT' | 'PENDING_ACCEPTANCE' | 'SUBMITTED' | 'CONFIRMED' | 'OUT_FOR_DELIVERY' | 'COMPLETED' | 'CANCELLED' | 'REJECTED';
   status: string; // legacy alias
   currency_code: string;
   quote_version: string;
@@ -275,12 +275,6 @@ export const orderApi = {
     return res.data;
   },
 
-  startPreparation: async (id: string, data?: any): Promise<OrderHeader> => {
-    const res = await httpClient.post(`/api/v1/orders/${id}/start-preparation`, data || {});
-    return res.data;
-  },
-
-
   dispatchOrder: async (id: string, data?: any): Promise<OrderHeader> => {
     const res = await httpClient.post(`/api/v1/orders/${id}/dispatch`, data || {});
     return res.data;
@@ -406,9 +400,6 @@ export const orderApi = {
     }
     const actionMap: Record<string, string> = {
       CONFIRMED: 'confirm',
-      KITCHEN_PREPARING: 'start-preparation',
-      PREPARING: 'start-preparation',
-      READY: 'mark-ready',
       OUT_FOR_DELIVERY: 'dispatch',
       COMPLETED: 'complete',
     };

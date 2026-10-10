@@ -9,9 +9,6 @@ import { OptionGroup } from '../src/entities/OptionGroup.entity';
 import { OptionItem } from '../src/entities/OptionItem.entity';
 import { ProductOptionGroup } from '../src/entities/ProductOptionGroup.entity';
 import { PriceGroup } from '../src/entities/PriceGroup.entity';
-import { Menu } from '../src/entities/Menu.entity';
-import { MenuCategory } from '../src/entities/MenuCategory.entity';
-import { MenuProduct } from '../src/entities/MenuProduct.entity';
 import { ProductAvailability } from '../src/entities/ProductAvailability.entity';
 import { AvailabilitySchedule } from '../src/entities/AvailabilitySchedule.entity';
 import { Branch } from '../src/entities/Branch.entity';
@@ -26,9 +23,6 @@ describe('CatalogService (Unit)', () => {
   let variantRepo: any;
   let prodGroupRepo: any;
   let priceItemRepo: any;
-  let menuRepo: any;
-  let menuCatRepo: any;
-  let menuProdRepo: any;
   let availRepo: any;
   let scheduleRepo: any;
   let auditWriter: any;
@@ -51,9 +45,6 @@ describe('CatalogService (Unit)', () => {
     // manager: the category add-on lookup a new product makes (none here).
     prodGroupRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn(), create: jest.fn(), save: jest.fn(), manager: { find: jest.fn().mockResolvedValue([]) } };
     priceItemRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
-    menuRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), softRemove: jest.fn() };
-    menuCatRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
-    menuProdRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() };
     availRepo = {
       findOne: jest.fn(),
       find: jest.fn().mockResolvedValue([]),
@@ -94,9 +85,6 @@ describe('CatalogService (Unit)', () => {
         { provide: getRepositoryToken(OptionItem), useValue: itemRepo },
         { provide: getRepositoryToken(ProductOptionGroup), useValue: prodGroupRepo },
         { provide: getRepositoryToken(PriceGroup), useValue: { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() } },
-        { provide: getRepositoryToken(Menu), useValue: menuRepo },
-        { provide: getRepositoryToken(MenuCategory), useValue: menuCatRepo },
-        { provide: getRepositoryToken(MenuProduct), useValue: menuProdRepo },
         { provide: getRepositoryToken(ProductAvailability), useValue: availRepo },
         { provide: getRepositoryToken(AvailabilitySchedule), useValue: scheduleRepo },
         { provide: getRepositoryToken(Branch), useValue: { findOne: jest.fn().mockResolvedValue({ id: 'b-1', time_zone: 'Asia/Tehran' }) } },

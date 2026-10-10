@@ -150,15 +150,6 @@ export function resolveOrderEditDecision(
         ? APPROVE('OUT_FOR_DELIVERY_CANCEL_NEEDS_APPROVAL')
         : FORBID('OUT_FOR_DELIVERY_ITEMS_LOCKED');
 
-    // Spec 6.1: once a cook has picked the ticket up, every removal is an
-    // approved correction regardless of how recently the order was submitted.
-    case 'PREPARING':
-    case 'READY':
-      if (action === 'ADD_ITEM') return ALLOW('OPEN_CHECK_APPEND');
-      return APPROVE(
-        ctx.state === 'PREPARING' ? 'PREPARATION_STARTED' : 'ITEMS_READY',
-      );
-
     case 'SUBMITTED':
     case 'CONFIRMED': {
       if (action === 'ADD_ITEM') return ALLOW('OPEN_CHECK_APPEND');

@@ -220,22 +220,6 @@ export class OrdersController {
     return await this.orderService.transitionState(tenantId, id, 'CONFIRM', body, userId, correlationId);
   }
 
-  @Post(':id/start-preparation')
-  async startPreparation(@Param('id') id: string, @Body() body: OrderTransitionDto, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || (req as any).userId;
-    const correlationId = (req as any).correlationId;
-    return await this.orderService.transitionState(tenantId, id, 'START_PREPARATION', body, userId, correlationId);
-  }
-
-  @Post(':id/mark-ready')
-  async markReady(@Param('id') id: string, @Body() body: OrderTransitionDto, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || (req as any).userId;
-    const correlationId = (req as any).correlationId;
-    return await this.orderService.transitionState(tenantId, id, 'MARK_READY', body, userId, correlationId);
-  }
-
   @Post(':id/dispatch')
   async dispatchOrder(@Param('id') id: string, @Body() body: OrderTransitionDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

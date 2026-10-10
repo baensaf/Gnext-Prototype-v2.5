@@ -10,13 +10,13 @@ import { BusinessDateUtil } from '../../common/utils/business-date.util';
  */
 
 /** Order states that are still open: anything not completed, cancelled or rejected. */
-export const OPEN_ORDER_STATES = ['DRAFT', 'PENDING_ACCEPTANCE', 'SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY', 'OUT_FOR_DELIVERY'];
+export const OPEN_ORDER_STATES = ['DRAFT', 'PENDING_ACCEPTANCE', 'SUBMITTED', 'CONFIRMED', 'OUT_FOR_DELIVERY'];
 
 /** Where an order has finished; rows written straight to the table may say so only in `status`. */
 export const FINISHED_ORDER_STATES = ['COMPLETED', 'CANCELLED', 'REJECTED'];
 
 /** Open states a paid order is simply completed from when its day closes. */
-const COMPLETABLE_AT_DAY_CLOSE = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY'];
+const COMPLETABLE_AT_DAY_CLOSE = ['SUBMITTED', 'CONFIRMED'];
 
 /** Why an open order cannot just be completed when the day closes. */
 export type OpenOrderIssue = 'UNPAID' | 'NOT_SUBMITTED' | 'AWAITING_ACCEPTANCE' | 'DELIVERY_NOT_FINISHED';

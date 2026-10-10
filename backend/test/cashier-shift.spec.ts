@@ -604,7 +604,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
     });
 
     it('does not hold the close for a paid order the kitchen has not handed over', async () => {
-      tillOrders = [order({ state: 'READY' })];
+      tillOrders = [order({ state: 'CONFIRMED' })];
       const shift = openShift();
       shiftRepo.findOne.mockResolvedValue(shift);
 
@@ -861,7 +861,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
     });
 
     it('completes the paid orders nobody closed off, and records each', async () => {
-      const paid = order({ id: 'paid', order_type: 'DINE_IN', state: 'READY', status: 'READY' });
+      const paid = order({ id: 'paid', order_type: 'DINE_IN', state: 'CONFIRMED', status: 'CONFIRMED' });
       const em = dayCloseEm([paid], [paid]);
 
       const closed = await dayService.closeBusinessDay('t-1', { branchId: 'b-1', businessDate: '2026-09-10' }, 'manager-1');
@@ -869,7 +869,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       expect(paid.state).toBe('COMPLETED');
       expect(transitionRecorder.record).toHaveBeenCalledWith(
         em,
-        expect.objectContaining({ order: paid, fromState: 'READY', action: 'COMPLETE', userId: 'manager-1' }),
+        expect.objectContaining({ order: paid, fromState: 'CONFIRMED', action: 'COMPLETE', userId: 'manager-1' }),
       );
       expect(closed.totals).toMatchObject({ orderCount: 1, totalSales: '120000.0000', autoCompletedOrders: 1, carriedOverOrders: 0 });
     });
