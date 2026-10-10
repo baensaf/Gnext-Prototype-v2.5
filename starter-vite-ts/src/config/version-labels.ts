@@ -91,7 +91,6 @@ export const FEATURE_LABELS = {
   // Business days
   'businessDay.reopen': 'V2',
   // Card terminals and the bank accounts they settle into
-  'payments.onlineGateway': 'F',
   'payments.bankTransfer': 'V4',
   'payments.settlementAccounts': 'V4',
   // Delivery. Couriers belong to one branch and are on a salary: a trip pays them nothing.
@@ -126,10 +125,7 @@ export const FEATURE_LABELS = {
   // Operations
   'branches.nonSellingTypes': 'F',
   'terminals.kiosk': 'V3',
-  'printers.serial': 'F',
   'printers.simulated': 'F',
-  'printers.label': 'F',
-  'printers.fallback': 'F',
   'printQueue.simulate': 'F',
   // Reports
   'reports.savedViews': 'V4',

@@ -3567,7 +3567,6 @@
     },
     "printers": {
       "title": "Printers & Print Routing",
-      "subtitle": "Manage the branch printers. Kitchen chits follow Print routing; receipts print on each till's printer.",
       "v5PreviewBanner": "Printers with a network connection print for real through this branch's agent. Printers without one are simulated: their jobs are marked printed and nothing comes out.",
       "quickLinks": {
         "queue": "Print Queue & Jobs",
@@ -3584,10 +3583,8 @@
       "colType": "Printer Type",
       "colAddress": "Network Address",
       "colPaper": "Paper Width",
-      "colFallback": "Fallback Printer",
       "colStatus": "Status",
       "colActions": "Actions",
-      "colPrintersCount": "Printers Assigned",
       "deletePrinterTitle": "Delete Printer Device",
       "deletePrinterContent": "Are you sure you want to delete printer \"{{name}}\"? What it prints moves to the default kitchen printer, and its tills stop printing on it.",
       "createPrinterModal": "Configure Thermal / Network Printer",
@@ -3597,8 +3594,6 @@
       "formType": "Printer Type",
       "formAddress": "Simulated Address / IP Port",
       "formPaper": "Paper Width (mm)",
-      "formFallback": "Fallback Backup Printer",
-      "noneFallback": "None (No Fallback)",
       "formActive": "Device Status Active",
       "createPrinterBtn": "Create Printer Device",
       "editPrinterBtn": "Save Printer Changes",
@@ -3610,27 +3605,22 @@
       "testPrintError": "Could not send the test page.",
       "types": {
         "THERMAL_RECEIPT": "Thermal Customer Receipt (80mm)",
-        "KITCHEN_IMPACT": "Kitchen Impact / Dot Matrix (80mm)",
-        "LABEL_STICKER": "Cup / Item Label Sticker"
+        "KITCHEN_IMPACT": "Kitchen Impact / Dot Matrix (80mm)"
       },
       "connection": {
         "kind": "Connection",
         "none": "Simulated (no branch agent)",
         "tcp": "Network printer (TCP)",
         "windows": "Printer installed in Windows",
-        "serial": "Serial port",
         "host": "IP address",
         "port": "Port",
         "printerName": "Windows printer name",
         "printerNameHelp": "Exactly as it appears in Windows under Printers & scanners.",
-        "serialPort": "Serial port",
-        "baud": "Baud rate",
         "agentHelp": "Jobs for this printer go to the branch agent. While the agent is offline they wait in the print queue.",
         "agentChip": "Agent",
         "notSupported": "The branch agent cannot print through this connection yet. Connect the printer to the network and choose Network printer (TCP)."
       },
       "loadError": "Could not load the printers.",
-      "cycleError": "A printer cannot fall back to itself.",
       "createPrinterError": "Could not save the printer.",
       "ticketTemplate": "Paper template",
       "templates": {

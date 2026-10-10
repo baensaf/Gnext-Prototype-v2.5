@@ -95,7 +95,6 @@ export function PrintersPage() {
     printer_type: 'THERMAL_RECEIPT',
     simulated_address: '192.168.1.100:9100',
     paper_width_mm: 80,
-    fallback_printer_id: '',
     is_active: true,
     branch_id: '',
   });
@@ -139,7 +138,6 @@ export function PrintersPage() {
       printer_type: 'THERMAL_RECEIPT',
       simulated_address: '192.168.1.100:9100',
       paper_width_mm: 80,
-      fallback_printer_id: '',
       is_active: true,
       branch_id: getActiveBranchId(),
     });
@@ -156,7 +154,6 @@ export function PrintersPage() {
       printer_type: pr.printer_type || 'THERMAL_RECEIPT',
       simulated_address: pr.simulated_address || '192.168.1.100:9100',
       paper_width_mm: pr.paper_width_mm || 80,
-      fallback_printer_id: pr.fallback_printer_id || '',
       is_active: pr.is_active !== false,
       branch_id: (pr as any).branch_id || getActiveBranchId(),
     });
@@ -169,11 +166,6 @@ export function PrintersPage() {
   const handleSavePrinter = async () => {
     if (!printerForm.code.trim() || !printerForm.name.trim()) {
       setError(t('common.requiredFields', 'Printer code and name are required.'));
-      return;
-    }
-
-    if (editingPrinterId && printerForm.fallback_printer_id === editingPrinterId) {
-      setError(t('operations.printers.cycleError', 'Printer cannot have itself as fallback printer.'));
       return;
     }
 
@@ -343,9 +335,6 @@ export function PrintersPage() {
                     <TableCell>{t('operations.printers.colType', 'Type')}</TableCell>
                     <TableCell>{t('operations.printers.colAddress', 'Network Address')}</TableCell>
                     <TableCell>{t('operations.printers.colPaper', 'Paper Width')}</TableCell>
-                    <TableCell>
-                      {t('operations.printers.colFallback', 'Fallback Printer')} <VersionTag feature="printers.fallback" />
-                    </TableCell>
                     <TableCell>{t('operations.printers.colStatus', 'Status')}</TableCell>
                     <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
                       {t('operations.printers.colActions', 'Actions')}
@@ -353,9 +342,7 @@ export function PrintersPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {printers.map((pr) => {
-                    const fb = printers.find((p) => p.id === pr.fallback_printer_id);
-                    return (
+                  {printers.map((pr) => (
                       <TableRow key={pr.id}>
                         <TableCell><strong>{pr.code}</strong></TableCell>
                         <TableCell>{pr.name}</TableCell>
@@ -377,13 +364,6 @@ export function PrintersPage() {
                           )}
                         </TableCell>
                         <TableCell>{pr.paper_width_mm}mm</TableCell>
-                        <TableCell>
-                          {fb ? (
-                            <Chip label={fb.name} color="warning" size="small" />
-                          ) : (
-                            <Typography variant="caption" color="text.secondary">{t('operations.printers.noneFallback', 'None')}</Typography>
-                          )}
-                        </TableCell>
                         <TableCell>
                           <Chip
                             label={pr.is_active !== false ? 'ACTIVE' : 'INACTIVE'}
@@ -427,11 +407,10 @@ export function PrintersPage() {
                           </Stack>
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
+                    ))}
                   {printers.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                      <TableCell colSpan={7} align="center" sx={{ py: 5, color: 'text.secondary' }}>
                         {t('common.noRecords', 'No printers found. Click "Add Printer" to create one.')}
                       </TableCell>
                     </TableRow>
@@ -474,7 +453,6 @@ export function PrintersPage() {
               >
                 <MenuItem value="THERMAL_RECEIPT">{t('operations.printers.types.THERMAL_RECEIPT', 'Thermal Customer Receipt (80mm)')}</MenuItem>
                 <MenuItem value="KITCHEN_IMPACT">{t('operations.printers.types.KITCHEN_IMPACT', 'Kitchen Impact / Dot Matrix (80mm)')}</MenuItem>
-                <MenuItem value="LABEL_STICKER">{t('operations.printers.types.LABEL_STICKER', 'Cup / Item Label Sticker')} <VersionTag feature="printers.label" sx={{ ml: 1 }} /></MenuItem>
               </Select>
             </FormControl>
             <FormControl fullWidth>
@@ -489,9 +467,6 @@ export function PrintersPage() {
                 {/* The branch agent prints over TCP only; see Supported() in agent/internal/printing. */}
                 {savedConnKind === 'windows' && (
                   <MenuItem value="windows">{t('operations.printers.connection.windows', 'Printer installed in Windows')}</MenuItem>
-                )}
-                {savedConnKind === 'serial' && (
-                  <MenuItem value="serial">{t('operations.printers.connection.serial', 'Serial port')} <VersionTag feature="printers.serial" sx={{ ml: 1 }} /></MenuItem>
                 )}
               </Select>
             </FormControl>
@@ -535,34 +510,7 @@ export function PrintersPage() {
                 required
               />
             )}
-            {connForm.kind === 'serial' && (
-              <Stack direction="row" spacing={2}>
-                <TextField
-                  label={t('operations.printers.connection.serialPort', 'Serial port')}
-                  value={connForm.serialPort}
-                  onChange={(e) => setConnForm({ ...connForm, serialPort: e.target.value.toUpperCase() })}
-                  placeholder="COM3"
-                  slotProps={{ htmlInput: { dir: 'ltr' } }}
-                  fullWidth
-                  required
-                />
-                <FormControl sx={{ width: 160 }}>
-                  <InputLabel>{t('operations.printers.connection.baud', 'Baud rate')}</InputLabel>
-                  <Select
-                    value={connForm.baud}
-                    label={t('operations.printers.connection.baud', 'Baud rate')}
-                    onChange={(e) => setConnForm({ ...connForm, baud: String(e.target.value) })}
-                  >
-                    {BAUD_RATES.map((b) => (
-                      <MenuItem key={b} value={b}>
-                        {b}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Stack>
-            )}
-            {(connForm.kind === 'windows' || connForm.kind === 'serial') && (
+            {connForm.kind === 'windows' && (
               <Alert severity="warning">
                 {t(
                   'operations.printers.connection.notSupported',
@@ -585,24 +533,6 @@ export function PrintersPage() {
               onChange={(e) => setPrinterForm({ ...printerForm, paper_width_mm: Number(e.target.value) })}
               fullWidth
             />
-            <FormControl fullWidth>
-              <InputLabel>
-                {t('operations.printers.formFallback', 'Fallback Backup Printer')} <VersionTag feature="printers.fallback" />
-              </InputLabel>
-              <Select
-                value={printerForm.fallback_printer_id}
-                label={t('operations.printers.formFallback', 'Fallback Backup Printer')}
-                onChange={(e) => setPrinterForm({ ...printerForm, fallback_printer_id: e.target.value })}
-              >
-                <MenuItem value="">{t('operations.printers.noneFallback', 'None')}</MenuItem>
-                {printers
-                  .filter((p) => p.id !== editingPrinterId)
-                  .map((p) => (
-                    <MenuItem key={p.id} value={p.id}>{p.name} ({p.code})</MenuItem>
-                  ))}
-              </Select>
-            </FormControl>
-
             <FormControlLabel
               control={
                 <Switch
@@ -643,23 +573,17 @@ export default PrintersPage;
 // ----------------------------------------------------------------------
 
 type ConnectionForm = {
-  kind: 'none' | 'tcp' | 'windows' | 'serial';
+  kind: 'none' | 'tcp' | 'windows';
   host: string;
   port: string;
   printerName: string;
-  serialPort: string;
-  baud: string;
 };
-
-const BAUD_RATES = ['9600', '19200', '38400', '57600', '115200'];
 
 const EMPTY_CONNECTION: ConnectionForm = {
   kind: 'none',
   host: '',
   port: '9100',
   printerName: '',
-  serialPort: '',
-  baud: '9600',
 };
 
 function toConnectionForm(c?: PrinterConnection | null): ConnectionForm {
@@ -669,8 +593,6 @@ function toConnectionForm(c?: PrinterConnection | null): ConnectionForm {
       return { ...EMPTY_CONNECTION, kind: 'tcp', host: c.host, port: String(c.port) };
     case 'windows':
       return { ...EMPTY_CONNECTION, kind: 'windows', printerName: c.printer_name };
-    case 'serial':
-      return { ...EMPTY_CONNECTION, kind: 'serial', serialPort: c.port, baud: String(c.baud) };
     default:
       return EMPTY_CONNECTION;
   }
@@ -683,8 +605,6 @@ function fromConnectionForm(f: ConnectionForm): PrinterConnection | null {
       return { kind: 'tcp', host: f.host.trim(), port: Number(f.port) };
     case 'windows':
       return { kind: 'windows', printer_name: f.printerName.trim() };
-    case 'serial':
-      return { kind: 'serial', port: f.serialPort.trim(), baud: Number(f.baud) };
     default:
       return null;
   }
@@ -696,8 +616,6 @@ function describeConnection(c: PrinterConnection): string {
       return `${c.host}:${c.port}`;
     case 'windows':
       return c.printer_name;
-    case 'serial':
-      return `${c.port} @ ${c.baud}`;
     default:
       return '';
   }

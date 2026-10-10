@@ -55,11 +55,6 @@ export class CreatePrinterDto {
   paper_width_mm?: number;
 
   @IsOptional()
-  @BlankIsNothing()
-  @IsUUID()
-  fallback_printer_id?: string;
-
-  @IsOptional()
   @IsBoolean()
   is_active?: boolean;
 }
@@ -96,11 +91,6 @@ export class UpdatePrinterDto {
   @IsInt()
   @Min(1)
   paper_width_mm?: number;
-
-  @IsOptional()
-  @BlankIsNothing()
-  @IsUUID()
-  fallback_printer_id?: string;
 
   @IsOptional()
   @IsBoolean()

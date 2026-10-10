@@ -324,7 +324,6 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
         code: 'PRN-FRONT',
         name: 'Front Counter Thermal Printer',
         printer_type: 'THERMAL_RECEIPT',
-        fallback_printer_id: backupPrinterId,
         is_active: true,
       }),
     );
@@ -475,7 +474,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     expect(MoneyUtil.format(refreshedOrder?.paid_amount || '0')).toBe(MoneyUtil.format(submittedOrder.grand_total));
     expect(MoneyUtil.format(refreshedOrder?.outstanding_total || '0')).toBe('0.0000');
 
-    // Step 6: Print Failure & Fallback Printer Retry Simulation
+    // Step 6: Print Failure & Retry Simulation
     const [printJob] = await printQueueService.enqueueOrderPrintJobs(tenantId, submittedOrder.id);
     expect(printJob).toBeDefined();
 
@@ -483,13 +482,12 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     const failOutcome = await printQueueService.processSimulationOutcome(tenantId, {
       printJobId: printJob.id,
       outcome: 'FAILED',
-      useFallback: true,
     });
     expect(failOutcome.attempt.status).toBe('FAILED');
 
     // A retry goes only through the branch agent. These printers are the simulator's, so it is
     // refused with the reason rather than reported printed.
-    await expect(printQueueService.retryJob(tenantId, printJob.id, { useFallback: true })).rejects.toThrow(
+    await expect(printQueueService.retryJob(tenantId, printJob.id, {})).rejects.toThrow(
       /not connected to the branch agent/,
     );
 
@@ -1210,13 +1208,12 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     const failOutcome = await printQueueService.processSimulationOutcome(tenantId, {
       printJobId: printJob.id,
       outcome: 'FAILED',
-      useFallback: true,
     });
     expect(failOutcome.attempt.status).toBe('FAILED');
 
     // A retry goes only through the branch agent. These printers are the simulator's, so it is
     // refused with the reason rather than reported printed.
-    await expect(printQueueService.retryJob(tenantId, printJob.id, { useFallback: true })).rejects.toThrow(
+    await expect(printQueueService.retryJob(tenantId, printJob.id, {})).rejects.toThrow(
       /not connected to the branch agent/,
     );
 

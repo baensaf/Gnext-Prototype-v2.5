@@ -18,7 +18,7 @@ export class Printer {
   @Column({ type: 'varchar', length: 160 })
   name: string;
 
-  @Column({ type: 'varchar', length: 32, default: 'THERMAL_RECEIPT' }) // THERMAL_RECEIPT, KITCHEN_IMPACT, LABEL
+  @Column({ type: 'varchar', length: 32, default: 'THERMAL_RECEIPT' }) // THERMAL_RECEIPT or KITCHEN_IMPACT
   printer_type: string;
 
   @Column({ type: 'varchar', length: 128, nullable: true })
@@ -36,9 +36,6 @@ export class Printer {
 
   @Column({ type: 'boolean', default: true })
   is_active: boolean;
-
-  @Column({ type: 'uuid', nullable: true })
-  fallback_printer_id?: string;
 
   /** The branch's one printer for kitchen lines that nothing routes anywhere else. */
   @Column({ type: 'boolean', default: false })

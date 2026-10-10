@@ -585,7 +585,7 @@ export class PrintQueueService {
   // Handle simulation outcome
   async processSimulationOutcome(
     tenantId: string,
-    data: { printJobId: string; scenarioId?: string; outcome: 'SUCCESS' | 'FAILED'; useFallback?: boolean },
+    data: { printJobId: string; scenarioId?: string; outcome: 'SUCCESS' | 'FAILED' },
   ) {
     const job = await this.jobRepo.findOne({ where: { id: data.printJobId, tenant_id: tenantId } });
     if (!job) throw new NotFoundException(`Print job ${data.printJobId} not found`);
@@ -602,16 +602,7 @@ export class PrintQueueService {
     const attemptsCount = await this.attemptRepo.count({ where: { job_id: job.id } });
     const attemptNo = attemptsCount + 1;
 
-    let targetPrinterId = job.printer_id;
-
-    if (data.outcome === 'FAILED' && data.useFallback && job.printer_id) {
-      const printer = await this.printerRepo.findOne({ where: { id: job.printer_id, tenant_id: tenantId } });
-      if (printer && printer.fallback_printer_id) {
-        targetPrinterId = printer.fallback_printer_id;
-      }
-    }
-
-    const finalPrinterId = targetPrinterId || job.printer_id;
+    const finalPrinterId = job.printer_id;
     if (!finalPrinterId) {
       throw new BadRequestException('Printer ID is required for print attempt');
     }
@@ -643,7 +634,7 @@ export class PrintQueueService {
       entityType: 'PrintJob',
       entityId: job.id,
       correlationId: 'corr-print-outcome',
-      details: { outcome: data.outcome, attemptNo, targetPrinterId },
+      details: { outcome: data.outcome, attemptNo, printerId: finalPrinterId },
     });
 
     return { job: savedJob, attempt };
@@ -656,11 +647,11 @@ export class PrintQueueService {
    * connection is refused with the reason, never marked printed: the queue saying "printed"
    * for a chit that never came out is the one outcome worse than a failure.
    */
-  async retryJob(tenantId: string, jobId: string, data: { useFallback?: boolean; reason?: string }) {
+  async retryJob(tenantId: string, jobId: string, data: { reason?: string }) {
     const job = await this.jobRepo.findOne({ where: { id: jobId, tenant_id: tenantId } });
     if (!job) throw new NotFoundException(`Print job ${jobId} not found`);
 
-    const targets = await this.retryTargets(tenantId, job, data.useFallback);
+    const targets = await this.retryTargets(tenantId, job);
     const offline = targets.find((t) => !t.printer.agent_connection);
     if (offline) {
       throw new BadRequestException(
@@ -720,25 +711,17 @@ export class PrintQueueService {
   }
 
   /**
-   * Where a retry prints. A job with a printer goes back to that printer, or to its fallback
-   * when asked. A job with none — nothing was reachable when it was made — is routed again: a
+   * Where a retry prints. A job with a printer goes back to that printer. A job with none — nothing was reachable when it was made — is routed again: a
    * kitchen chit, whose lines had no printer, to the branch's default kitchen printer; any other
    * document to the printer of the till its order was taken on.
    */
-  private async retryTargets(tenantId: string, job: PrintJob, useFallback?: boolean): Promise<RoutedPrinter[]> {
+  private async retryTargets(tenantId: string, job: PrintJob): Promise<RoutedPrinter[]> {
     if (job.printer_id) {
       const current = await this.printerRepo.findOne({ where: { id: job.printer_id, tenant_id: tenantId } });
       if (!current) {
         throw new BadRequestException('The printer this job went to has been removed. Reprint the job to another printer.');
       }
-      let printer = current;
-      if (useFallback && current.fallback_printer_id) {
-        const fallback = await this.printerRepo.findOne({ where: { id: current.fallback_printer_id, tenant_id: tenantId } });
-        if (!fallback) {
-          throw new BadRequestException(`The fallback printer of ${current.name} has been removed. Reprint the job to another printer.`);
-        }
-        printer = fallback;
-      }
+      const printer = current;
       if (!printer.is_active) throw new BadRequestException(`Printer ${printer.name} is not in service`);
       return [{ printer, copies: job.copies || 1 }];
     }

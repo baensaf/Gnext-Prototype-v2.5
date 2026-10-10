@@ -175,7 +175,6 @@ export function CardTerminalsPage() {
                           color={d.device_type === 'MOBILE_POS' ? 'info' : d.device_type === 'POS_TERMINAL' ? 'primary' : 'default'}
                           size="small"
                         />
-                        {d.device_type === 'ONLINE_GATEWAY' && <VersionTag feature="payments.onlineGateway" />}
                         {d.device_type === 'BANK_TRANSFER' && <VersionTag feature="payments.bankTransfer" />}
                       </Stack>
                     </TableCell>
@@ -214,9 +213,6 @@ export function CardTerminalsPage() {
               <TextField select label="Device Type" value={devType} onChange={(e) => setDevType(e.target.value)} fullWidth>
                 <MenuItem value="POS_TERMINAL">Physical POS Terminal</MenuItem>
                 <MenuItem value="MOBILE_POS">Courier Mobile POS</MenuItem>
-                <MenuItem value="ONLINE_GATEWAY">
-                  Online Payment Gateway <VersionTag feature="payments.onlineGateway" sx={{ ml: 1 }} />
-                </MenuItem>
                 <MenuItem value="BANK_TRANSFER">
                   Bank Transfer Account <VersionTag feature="payments.bankTransfer" sx={{ ml: 1 }} />
                 </MenuItem>

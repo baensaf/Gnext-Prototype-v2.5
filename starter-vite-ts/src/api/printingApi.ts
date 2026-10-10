@@ -4,7 +4,7 @@ import { httpClient } from './httpClient';
 export type PrinterConnection =
   | { kind: 'tcp'; host: string; port: number }
   | { kind: 'windows'; printer_name: string }
-  | { kind: 'serial'; port: string; baud: number };
+;
 
 export interface PrinterDevice {
   branch_id?: string;
@@ -15,7 +15,6 @@ export interface PrinterDevice {
   simulated_address?: string;
   paper_width_mm: number;
   is_active: boolean;
-  fallback_printer_id?: string;
   /** The branch's one printer for kitchen lines nothing routes anywhere else. */
   kitchen_default?: boolean;
   agent_connection?: PrinterConnection | null;
@@ -105,11 +104,11 @@ export const printingApi = {
     const res = await httpClient.get(`/api/v1/print-jobs/${id}`);
     return res.data;
   },
-  simulatePrintOutcome: async (data: { printJobId: string; scenarioId?: string; outcome: 'SUCCESS' | 'FAILED'; useFallback?: boolean }): Promise<any> => {
+  simulatePrintOutcome: async (data: { printJobId: string; scenarioId?: string; outcome: 'SUCCESS' | 'FAILED' }): Promise<any> => {
     const res = await httpClient.post('/api/v1/simulation/printers/outcome', data);
     return res.data;
   },
-  retryPrintJob: async (id: string, data?: { scenarioId?: string; useFallback?: boolean }): Promise<any> => {
+  retryPrintJob: async (id: string, data?: { scenarioId?: string }): Promise<any> => {
     const res = await httpClient.post(`/api/v1/print-jobs/${id}/retry`, data || {});
     return res.data;
   },
